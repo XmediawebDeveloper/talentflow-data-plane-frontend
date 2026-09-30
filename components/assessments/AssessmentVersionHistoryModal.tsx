@@ -28,7 +28,6 @@ const RESULT_SEGMENTS = [
   { key: 'revoked', label: 'Revoked', swatch: 'bg-[#7c3aed] dark:bg-[#a855f7]', fill: 'fill-[#7c3aed] dark:fill-[#a855f7]' },
   { key: 'expired', label: 'Expired', swatch: 'bg-[#ed881c] dark:bg-[#d97706]', fill: 'fill-[#ed881c] dark:fill-[#d97706]' },
 ] as const;
-type SegmentKey = (typeof RESULT_SEGMENTS)[number]['key'];
 type SortKey = 'created' | 'creator' | 'status';
 /** Version Wise Results value that sums every version. */
 const ALL_VERSIONS = '__all__';
@@ -161,7 +160,6 @@ export default function AssessmentVersionHistoryModal({
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [hoverSeg, setHoverSeg] = useState<SegmentKey | null>(null);
   /* Sortable columns — Version and Created On both order by creation (newest
      first by default); Created By / Rounds / Status by name, count, status. */
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'created', dir: 'desc' });
@@ -540,8 +538,8 @@ export default function AssessmentVersionHistoryModal({
                   ) : (
                     <>
                       {/* Donut (status breakdown) + legend with counts — identity is
-                          never colour alone. The centre shows the total, or the
-                          hovered slice's count and share. */}
+                          never colour alone. Static: no hover highlighting; the
+                          centre always shows the total. */}
                       <div className="flex flex-col items-center gap-4 flex-1 justify-center">
                         <div className="relative w-[210px] h-[210px] shrink-0">
                           {donutTotal > 0 ? (
@@ -559,13 +557,11 @@ export default function AssessmentVersionHistoryModal({
                                   cornerRadius={3}
                                   stroke="none"
                                   isAnimationActive={false}
-                                  onMouseLeave={() => setHoverSeg(null)}
                                 >
                                   {RESULT_SEGMENTS.filter((seg) => sel[seg.key] > 0).map((seg) => (
                                     <Cell
                                       key={seg.key}
-                                      className={`${seg.fill} outline-none transition-opacity ${hoverSeg && hoverSeg !== seg.key ? 'opacity-40' : ''}`}
-                                      onMouseEnter={() => setHoverSeg(seg.key)}
+                                      className={`${seg.fill} outline-none pointer-events-none`}
                                     />
                                   ))}
                                 </Pie>
@@ -575,18 +571,8 @@ export default function AssessmentVersionHistoryModal({
                             <div className="w-full h-full rounded-full border-[22px] border-slate-100 dark:border-slate-800" />
                           )}
                           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center">
-                            {hoverSeg ? (
-                              <>
-                                <span className="text-3xl font-bold tabular-nums text-gray-900 dark:text-slate-50 leading-none">{sel[hoverSeg]}</span>
-                                <span className="text-xs text-gray-500 dark:text-slate-400 mt-1">{RESULT_SEGMENTS.find((seg) => seg.key === hoverSeg)?.label}</span>
-                                <span className="text-2xs text-gray-400 tabular-nums">{pct(sel[hoverSeg], donutTotal)}%</span>
-                              </>
-                            ) : (
-                              <>
-                                <span className="text-3xl font-bold tabular-nums text-gray-900 dark:text-slate-50 leading-none">{donutTotal}</span>
-                                <span className="text-xs text-gray-500 dark:text-slate-400 mt-1 leading-tight">Total<br />Candidates</span>
-                              </>
-                            )}
+                            <span className="text-3xl font-bold tabular-nums text-gray-900 dark:text-slate-50 leading-none">{donutTotal}</span>
+                            <span className="text-xs text-gray-500 dark:text-slate-400 mt-1 leading-tight">Total<br />Candidates</span>
                           </div>
                         </div>
                         {/* Legend: names in the left half, values in the right half,
@@ -596,9 +582,7 @@ export default function AssessmentVersionHistoryModal({
                           {RESULT_SEGMENTS.map((seg) => (
                             <li
                               key={seg.key}
-                              className={`grid grid-cols-2 items-center rounded transition-colors ${hoverSeg === seg.key ? 'bg-slate-100 dark:bg-slate-800' : ''}`}
-                              onMouseEnter={() => setHoverSeg(seg.key)}
-                              onMouseLeave={() => setHoverSeg(null)}
+                              className="grid grid-cols-2 items-center rounded"
                             >
                               <span className="flex items-center gap-2 min-w-0 pl-1 pr-3">
                                 <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${seg.swatch}`} />
