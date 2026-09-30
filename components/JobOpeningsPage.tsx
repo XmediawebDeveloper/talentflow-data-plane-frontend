@@ -33,6 +33,7 @@ import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { prefetchJobCandidateCounts } from '@/lib/hooks/useJobCandidateCounts';
 
 type FilterStatus = 'all' | 'published' | 'draft' | 'closed' | 'disabled' | 'archived';
 
@@ -59,6 +60,10 @@ export default function JobOpeningsPage() {
   useEffect(() => {
     setGoToPage(String(currentPage));
   }, [currentPage]);
+  // Start the cards' "assessed" / "interviewed" tally now, alongside the jobs
+  // request — JobsListing only mounts once the jobs land, so waiting for it
+  // stacked the two loads end to end.
+  useEffect(() => { prefetchJobCandidateCounts().catch(() => {}); }, []);
   const commitGoToPage = () => {
     const page = Math.round(Number(goToPage));
     if (Number.isFinite(page) && page >= 1 && page <= totalPages) {
