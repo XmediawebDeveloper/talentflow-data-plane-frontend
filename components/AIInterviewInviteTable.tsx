@@ -1,5 +1,6 @@
 'use client';
 
+import { SCORE_CELL_TEXT } from '@/lib/utils/score';
 import { useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -504,7 +505,7 @@ export const InviteSourceValue =({ inv, iconClassName }: { inv: any; iconClassNa
 const ScoreCell = ({ value, result }: { value: number | null; result: 'Pass' | 'Fail' | null }) =>
   value != null ? (
     <span className="inline-flex items-center gap-1.5">
-      <span className={`font-semibold ${value >= 60 ? 'text-success' : 'text-destructive'}`}>{value}%</span>
+      <span className={`${SCORE_CELL_TEXT} ${value >= 60 ? 'text-success' : 'text-destructive'}`}>{value}%</span>
       <ResultBadge result={result} />
     </span>
   ) : (

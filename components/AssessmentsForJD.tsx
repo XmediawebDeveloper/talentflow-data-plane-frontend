@@ -37,7 +37,7 @@ import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { formatScore } from '@/lib/utils/score';
+import { formatScore, SCORE_CELL_TEXT } from '@/lib/utils/score';
 
 interface AssessmentsForJDProps {
   jdId: string;
@@ -405,7 +405,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                       <td className="px-6 py-4">
                         <div className="text-sm">
                           {assessment.completed > 0 ? (
-                            <span className="text-gray-900 font-medium">
+                            <span className={`${SCORE_CELL_TEXT} text-gray-900`}>
                               {((assessment.passed / assessment.completed) * 100).toFixed(0)}%
                             </span>
                           ) : (
@@ -416,7 +416,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                       <td className="px-6 py-4">
                         <div className="text-sm">
                           {assessment.average_score != null ? (
-                            <span className="text-gray-900 font-medium">
+                            <span className={`${SCORE_CELL_TEXT} text-gray-900`}>
                               {formatScore(assessment.average_score)}%
                             </span>
                           ) : (
