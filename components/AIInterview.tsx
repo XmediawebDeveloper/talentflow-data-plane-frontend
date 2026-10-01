@@ -12,6 +12,7 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import AIInterviewFlowLoader from '@/components/ai-interview/AIInterviewFlowLoader';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import { DateField } from '@/components/ui/date-field';
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 import { useQuota } from '@/contexts/QuotaContext';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
@@ -2441,26 +2442,22 @@ export default function AIInterview() {
                           <label htmlFor="ai-interview-created-from" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
                             Created from
                           </label>
-                          <input
+                          <DateField
                             id="ai-interview-created-from"
-                            type="date"
                             value={customDateFrom}
                             max={customDateTo || undefined}
-                            onChange={(e) => setCustomDateFrom(e.target.value)}
-                            className={`${AI_FILTER_FIELD_CLASS} dark:[color-scheme:dark]`}
+                            onChange={setCustomDateFrom}
                           />
                         </div>
                         <div>
                           <label htmlFor="ai-interview-created-to" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
                             Created to
                           </label>
-                          <input
+                          <DateField
                             id="ai-interview-created-to"
-                            type="date"
                             value={customDateTo}
                             min={customDateFrom || undefined}
-                            onChange={(e) => setCustomDateTo(e.target.value)}
-                            className={`${AI_FILTER_FIELD_CLASS} dark:[color-scheme:dark]`}
+                            onChange={setCustomDateTo}
                           />
                         </div>
                       </>
@@ -3351,26 +3348,22 @@ export default function AIInterview() {
                               <label htmlFor="ai-invite-sent-from" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
                                 Invited from
                               </label>
-                              <input
+                              <DateField
                                 id="ai-invite-sent-from"
-                                type="date"
                                 value={inviteStatusFilters.dateFrom}
                                 max={inviteStatusFilters.dateTo || undefined}
-                                onChange={(e) => updateInviteStatusFilters({ dateFrom: e.target.value })}
-                                className={`${AI_FILTER_FIELD_CLASS} dark:[color-scheme:dark]`}
+                                onChange={(v) => updateInviteStatusFilters({ dateFrom: v })}
                               />
                             </div>
                             <div>
                               <label htmlFor="ai-invite-sent-to" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
                                 Invited to
                               </label>
-                              <input
+                              <DateField
                                 id="ai-invite-sent-to"
-                                type="date"
                                 value={inviteStatusFilters.dateTo}
                                 min={inviteStatusFilters.dateFrom || undefined}
-                                onChange={(e) => updateInviteStatusFilters({ dateTo: e.target.value })}
-                                className={`${AI_FILTER_FIELD_CLASS} dark:[color-scheme:dark]`}
+                                onChange={(v) => updateInviteStatusFilters({ dateTo: v })}
                               />
                             </div>
                           </div>

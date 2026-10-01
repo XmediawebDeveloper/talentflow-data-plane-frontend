@@ -27,6 +27,7 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { formatIST, formatISTDate, toISODateIST } from '@/lib/utils/dateUtils';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { Button } from '@/components/ui/button';
+import { DateField } from '@/components/ui/date-field';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import QuotaBadge from '@/components/ui/quota-badge';
 import ListToolbar from '@/components/ui/list-toolbar';
@@ -3011,11 +3012,11 @@ export default function ResumeScoringPage({
                     </div>
                     <div>
                       <label className={labelCls}>Scored From</label>
-                      <input type="date" value={historyScoredFrom} onChange={e => historySearch.setFilter('scoredFrom', e.target.value)} className={inputCls} />
+                      <DateField aria-label="Scored From" value={historyScoredFrom} onChange={v => historySearch.setFilter('scoredFrom', v)} />
                     </div>
                     <div>
                       <label className={labelCls}>Scored To</label>
-                      <input type="date" value={historyScoredTo} onChange={e => historySearch.setFilter('scoredTo', e.target.value)} className={inputCls} />
+                      <DateField aria-label="Scored To" value={historyScoredTo} onChange={v => historySearch.setFilter('scoredTo', v)} />
                     </div>
                     <div>
                       <label className={labelCls}>Location</label>

@@ -8,6 +8,7 @@ import { TableSkeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
+import { DateField } from '@/components/ui/date-field';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import ResultRowActions, { DownloadPdfsButton, isPhoneWidth } from './ResultRowActions';
@@ -895,19 +896,19 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             </div>
             <div className="flex-[1.4] min-w-0 basis-[320px]">
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Completion Date</label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="date"
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                <DateField
+                  aria-label="Completion date from"
                   value={search.filters.dateFrom}
-                  onChange={(e) => search.setFilter('dateFrom', e.target.value)}
-                  className="w-full min-w-0 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                  onChange={(v) => search.setFilter('dateFrom', v)}
+                  className="sm:flex-1 sm:min-w-0"
                 />
-                <span className="text-gray-400 text-sm">to</span>
-                <input
-                  type="date"
+                <span className="text-xs text-gray-400 text-center sm:text-left sm:flex-shrink-0">to</span>
+                <DateField
+                  aria-label="Completion date to"
                   value={search.filters.dateTo}
-                  onChange={(e) => search.setFilter('dateTo', e.target.value)}
-                  className="w-full min-w-0 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                  onChange={(v) => search.setFilter('dateTo', v)}
+                  className="sm:flex-1 sm:min-w-0"
                 />
               </div>
             </div>

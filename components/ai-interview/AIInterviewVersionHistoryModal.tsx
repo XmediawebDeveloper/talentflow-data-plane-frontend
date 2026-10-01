@@ -14,6 +14,7 @@ import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
 import { displayInviteScore, inviteResult, resolveInviteStatus } from '@/components/AIInterviewInviteTable';
 import { ROUND_LABELS, ROUND_SHORT_LABELS } from './AIInterviewPicker';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
+import { DateField } from '@/components/ui/date-field';
 import { jobInterviewConfigs } from './JobInterviewVersionPicker';
 
 /* ── Status palette for the results donut ─────────────────────────────
@@ -305,10 +306,10 @@ export default function AIInterviewVersionHistoryModal({
               </label>
               <div>
                 <span className="block text-xs font-medium text-gray-600 dark:text-slate-400 mb-1">Date Range</span>
-                <div className="flex items-center gap-2">
-                  <input type="date" value={dateFrom} max={dateTo || undefined} onChange={(e) => setDateFrom(e.target.value)} className={`${fieldClass} dark:[color-scheme:dark]`} aria-label="Created from" />
-                  <span className="text-xs text-gray-400">to</span>
-                  <input type="date" value={dateTo} min={dateFrom || undefined} onChange={(e) => setDateTo(e.target.value)} className={`${fieldClass} dark:[color-scheme:dark]`} aria-label="Created to" />
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                  <DateField value={dateFrom} max={dateTo || undefined} onChange={setDateFrom} className="sm:flex-1 sm:min-w-0" aria-label="Created from" />
+                  <span className="text-xs text-gray-400 text-center sm:text-left sm:flex-shrink-0">to</span>
+                  <DateField value={dateTo} min={dateFrom || undefined} onChange={setDateTo} className="sm:flex-1 sm:min-w-0" aria-label="Created to" />
                 </div>
               </div>
             </div>

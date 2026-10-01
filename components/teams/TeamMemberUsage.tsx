@@ -10,7 +10,6 @@ import {
   Briefcase,
   Loader2,
   AlertCircle,
-  Calendar,
   TrendingUp,
   Clock,
   ChevronDown,
@@ -24,6 +23,7 @@ import {
 } from '@/lib/utils/exportUtils';
 import teamService, { TeamMembersUsageSummary, TeamMemberUsage as MemberUsage } from '@/lib/services/teamService';
 import { Skeleton } from '@/components/ui/skeleton';
+import { DateField } from '@/components/ui/date-field';
 import { Team } from '@/lib/services/teamService';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -229,22 +229,21 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-gray-500" />
-            <input
-              type="date"
+            <DateField
+              aria-label="From date"
               value={fromDate}
               max={toDate}
-              onChange={(e) => setFromDate(e.target.value)}
-              className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-gray-800 focus:border-transparent outline-none"
+              onChange={setFromDate}
+              className="w-auto"
             />
             <span className="text-sm text-gray-500">to</span>
-            <input
-              type="date"
+            <DateField
+              aria-label="To date"
               value={toDate}
               min={fromDate}
               max={new Date().toISOString().split('T')[0]}
-              onChange={(e) => setToDate(e.target.value)}
-              className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-gray-800 focus:border-transparent outline-none"
+              onChange={setToDate}
+              className="w-auto"
             />
           </div>
           {membersUsage?.members && membersUsage.members.length > 0 && (

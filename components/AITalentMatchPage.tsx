@@ -50,6 +50,7 @@ import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { DateField } from '@/components/ui/date-field';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import JDVersionHistory from '@/components/JDVersionHistory';
@@ -2687,25 +2688,23 @@ export default function AITalentMatchPage({
 
                     <div>
                       <label htmlFor="candidate-matched-from" className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Last Matched From</label>
-                      <input
+                      <DateField
                         id="candidate-matched-from"
-                        type="date"
+                        aria-label="Last matched from"
                         value={candidateFilterDateFrom}
                         max={candidateFilterDateTo || undefined}
-                        onChange={(e) => candidateSearch.setFilter('dateFrom', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black bg-white dark:bg-slate-900"
+                        onChange={(v) => candidateSearch.setFilter('dateFrom', v)}
                       />
                     </div>
 
                     <div>
                       <label htmlFor="candidate-matched-to" className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Last Matched To</label>
-                      <input
+                      <DateField
                         id="candidate-matched-to"
-                        type="date"
+                        aria-label="Last matched to"
                         value={candidateFilterDateTo}
                         min={candidateFilterDateFrom || undefined}
-                        onChange={(e) => candidateSearch.setFilter('dateTo', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black bg-white dark:bg-slate-900"
+                        onChange={(v) => candidateSearch.setFilter('dateTo', v)}
                       />
                     </div>
 
@@ -3371,25 +3370,23 @@ export default function AITalentMatchPage({
 
                     <div>
                       <label htmlFor="resume-matched-from" className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Last Matched From</label>
-                      <input
+                      <DateField
                         id="resume-matched-from"
-                        type="date"
+                        aria-label="Last matched from"
                         value={candidateFilterDateFrom}
                         max={candidateFilterDateTo || undefined}
-                        onChange={(e) => candidateSearch.setFilter('dateFrom', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black bg-white dark:bg-slate-900"
+                        onChange={(v) => candidateSearch.setFilter('dateFrom', v)}
                       />
                     </div>
 
                     <div>
                       <label htmlFor="resume-matched-to" className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Last Matched To</label>
-                      <input
+                      <DateField
                         id="resume-matched-to"
-                        type="date"
+                        aria-label="Last matched to"
                         value={candidateFilterDateTo}
                         min={candidateFilterDateFrom || undefined}
-                        onChange={(e) => candidateSearch.setFilter('dateTo', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black bg-white dark:bg-slate-900"
+                        onChange={(v) => candidateSearch.setFilter('dateTo', v)}
                       />
                     </div>
 
@@ -3917,25 +3914,23 @@ export default function AITalentMatchPage({
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
                 <div>
                   <label htmlFor="history-date-from" className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Matched From</label>
-                  <input
+                  <DateField
                     id="history-date-from"
-                    type="date"
+                    aria-label="Matched from"
                     value={historyDateFrom}
                     max={historyDateTo || undefined}
-                    onChange={(e) => historySearch.setFilter('dateFrom', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black bg-white dark:bg-slate-900"
+                    onChange={(v) => historySearch.setFilter('dateFrom', v)}
                   />
                 </div>
 
                 <div>
                   <label htmlFor="history-date-to" className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Matched To</label>
-                  <input
+                  <DateField
                     id="history-date-to"
-                    type="date"
+                    aria-label="Matched to"
                     value={historyDateTo}
                     min={historyDateFrom || undefined}
-                    onChange={(e) => historySearch.setFilter('dateTo', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black bg-white dark:bg-slate-900"
+                    onChange={(v) => historySearch.setFilter('dateTo', v)}
                   />
                 </div>
 
@@ -4626,21 +4621,21 @@ export default function AITalentMatchPage({
                         </div>
                         <div className="flex-shrink-0">
                           <label className={filterLabelClass}>Date Range</label>
-                          <div className="flex items-center gap-1.5">
-                            <input
-                              type="date"
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                            <DateField
+                              aria-label="Date range from"
                               value={historyModalFilter.dateFrom}
                               max={historyModalFilter.dateTo || undefined}
-                              onChange={(e) => setHistoryModalFilter(prev => ({ ...prev, dateFrom: e.target.value }))}
-                              className={`${filterInputClass} w-[8.5rem]`}
+                              onChange={(v) => setHistoryModalFilter(prev => ({ ...prev, dateFrom: v }))}
+                              className="sm:w-[8.5rem]"
                             />
-                            <span className="text-xs text-gray-400 dark:text-slate-500 flex-shrink-0">to</span>
-                            <input
-                              type="date"
+                            <span className="text-xs text-gray-400 text-center sm:text-left sm:flex-shrink-0">to</span>
+                            <DateField
+                              aria-label="Date range to"
                               value={historyModalFilter.dateTo}
                               min={historyModalFilter.dateFrom || undefined}
-                              onChange={(e) => setHistoryModalFilter(prev => ({ ...prev, dateTo: e.target.value }))}
-                              className={`${filterInputClass} w-[8.5rem]`}
+                              onChange={(v) => setHistoryModalFilter(prev => ({ ...prev, dateTo: v }))}
+                              className="sm:w-[8.5rem]"
                             />
                           </div>
                         </div>
