@@ -688,8 +688,8 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
 
   if (showSuccess) {
     return (
-      <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4" role="dialog" aria-modal="true">
-        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-md w-full p-5 sm:p-6 text-center max-h-[calc(100dvh-2rem)] overflow-y-auto">
+      <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6" role="dialog" aria-modal="true">
+        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-md w-full p-5 sm:p-6 text-center max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto">
           {/* The same animated tick the AI Interview share popup plays. The
               static badge this popup used to show is the fallback — while the
               player loads, for reduced motion, or if the CDN never answers. */}
@@ -715,8 +715,8 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
   // Duplicate invitation error popup
   if (showDuplicateError) {
     return (
-      <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4">
-        <div className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-md w-full p-5 sm:p-6 max-h-[calc(100dvh-2rem)] flex flex-col overflow-hidden">
+      <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
+        <div className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-md w-full p-5 sm:p-6 max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
           <button
             onClick={() => {
               setShowDuplicateError(false);
@@ -728,13 +728,13 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
           >
             <X className="w-5 h-5" />
           </button>
-          <div className="shrink-0 text-center mb-4">
+          <div className="shrink-0 text-center mb-4 px-6">
             <div className="w-12 h-12 bg-warning-subtle ring-1 ring-warning-line rounded-full flex items-center justify-center mx-auto mb-3">
               <AlertTriangle className="w-6 h-6 text-warning" />
             </div>
             <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight mb-1">Invitation Already Sent</h3>
             <p className="text-gray-600 dark:text-slate-400 text-sm">
-              An invitation has already been sent to <span className="font-medium text-gray-800 dark:text-slate-100">{duplicateEmail}</span> for this assessment.
+              An invitation has already been sent to <span className="font-medium text-gray-800 dark:text-slate-100 [overflow-wrap:anywhere]">{duplicateEmail}</span> for this assessment.
             </p>
           </div>
 
@@ -764,8 +764,8 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
   }
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4">
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-3xl w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2rem)] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-3xl w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="bg-slate-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -782,9 +782,9 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-lg p-2 transition-colors shrink-0"
+            className="text-gray-400 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-lg p-1.5 transition-colors shrink-0"
            aria-label="Close">
-            <X className="w-4 h-4 sm:w-5 sm:h-5" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
@@ -1078,7 +1078,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                             onChange={(e) => updateCandidate(candidate.id, 'name', e.target.value)}
                             placeholder="e.g., John Doe"
                             readOnly={candidate.source === 'database'}
-                            className={`w-full px-2.5 sm:px-3 py-1.5 sm:py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black placeholder-gray-400 ${
+                            className={`w-full min-w-0 h-[38px] px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black placeholder-gray-400 ${
                               candidate.source === 'database' ? 'bg-gray-100 dark:bg-slate-800 cursor-not-allowed' : ''
                             }`}
                           />
@@ -1091,7 +1091,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                             onChange={(e) => updateCandidate(candidate.id, 'email', e.target.value)}
                             placeholder="e.g., john@example.com"
                             readOnly={candidate.source === 'database'}
-                            className={`w-full px-2.5 sm:px-3 py-1.5 sm:py-2 border rounded-lg text-xs sm:text-sm focus:outline-none focus:ring-2 text-black placeholder-gray-400 ${
+                            className={`w-full min-w-0 h-[38px] px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 text-black placeholder-gray-400 ${
                               candidate.source === 'database'
                                 ? 'bg-gray-100 dark:bg-slate-800 cursor-not-allowed border-gray-200 dark:border-slate-700'
                                 : candidate.email.trim() && !isValidEmail(candidate.email)
@@ -1181,7 +1181,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                         value={searchQuery}
                         onChange={e => setSearchQuery(e.target.value)}
                         placeholder="Search by name, email, or position..."
-                        className="flex-1 min-w-[10rem] px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                        className="w-full min-w-0 sm:min-w-[220px] sm:flex-1 h-[38px] px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                       />
                       <button
                         onClick={() => {
@@ -1191,7 +1191,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                             setSelectedResumes(filteredResumes.map(r => r.id));
                           }
                         }}
-                        className="px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg hover:bg-slate-100 whitespace-nowrap text-gray-700 dark:text-slate-300"
+                        className="h-[38px] shrink-0 px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg hover:bg-slate-100 whitespace-nowrap text-gray-700 dark:text-slate-300"
                       >
                         {selectedResumes.length === filteredResumes.length && filteredResumes.length > 0 ? 'Deselect All' : 'Select All'}
                       </button>
@@ -1226,7 +1226,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                               <span className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{resume.name}</span>
                               <span className="text-xs text-gray-400 dark:text-slate-500 flex-shrink-0">{resume.experience}</span>
                             </div>
-                            <div className="text-xs text-gray-500 dark:text-slate-500 truncate">{resume.email}</div>
+                            <div className="text-xs text-gray-500 dark:text-slate-500 truncate" title={resume.email}>{resume.email}</div>
                             <div className="text-xs text-gray-400 dark:text-slate-500 truncate">{resume.position}</div>
                           </div>
                         </div>
@@ -1261,7 +1261,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
               value={customMessage}
               onChange={(e) => setCustomMessage(e.target.value)}
               rows={6}
-              className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 dark:border-slate-700 rounded-lg text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue resize-none font-mono text-black placeholder-gray-400"
+              className="w-full min-w-0 px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 dark:border-slate-700 rounded-lg text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue resize-none font-mono text-black placeholder-gray-400"
               placeholder="Edit the message content here..."
             />
             <p className="text-2xs sm:text-xs text-gray-500 dark:text-slate-500 mt-1">
@@ -1276,7 +1276,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
               <select
                 value={expiryDays}
                 onChange={(e) => setExpiryDays(Number(e.target.value))}
-                className="w-full px-3 sm:px-4 py-1.5 sm:py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black"
+                className="w-full min-w-0 h-[38px] px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black"
               >
                 <option value={1}>1 day</option>
                 <option value={3}>3 days</option>

@@ -59,13 +59,13 @@ export default function AssignAssessmentModal({
     <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-3xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="flex-shrink-0 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between">
+        <div className="flex-shrink-0 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between gap-2">
           <div className="flex items-center gap-3 min-w-0 flex-1">
             <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
               <ClipboardCheck className="w-4 h-4 text-brand-blue" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Assign Assessment</h2>
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight truncate">Assign Assessment</h2>
               <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">Send assessment invitations to candidates</p>
             </div>
           </div>
@@ -81,7 +81,7 @@ export default function AssignAssessmentModal({
         </div>
 
         {/* Content */}
-        <div className="p-4 sm:p-6 overflow-y-auto flex-1">
+        <div className="p-4 sm:p-6 overflow-y-auto flex-1 min-h-0">
           {/* Selected Resumes Summary */}
           <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded-lg">
             <div className="flex items-start gap-2 sm:gap-3">
@@ -94,7 +94,7 @@ export default function AssignAssessmentModal({
                   {resumes.slice(0, 3).map(resume => (
                     <div key={resume.id} className="flex items-center gap-2 min-w-0">
                       <CheckCircle className="w-3 h-3 flex-shrink-0" />
-                      <span className="truncate">{resume.name} - {resume.email}</span>
+                      <span className="truncate" title={`${resume.name} - ${resume.email}`}>{resume.name} - {resume.email}</span>
                     </div>
                   ))}
                   {resumes.length > 3 && (
@@ -113,7 +113,7 @@ export default function AssignAssessmentModal({
               Select Assessment to Assign
             </label>
 
-            <div className="space-y-2 max-h-96 overflow-y-auto">
+            <div className="space-y-2 sm:max-h-96 sm:overflow-y-auto">
               {assessments.filter(assessment => assessment.status === 'Active' && !assessment.is_archived).map(assessment => (
                 <button
                   key={assessment.id}
@@ -131,9 +131,9 @@ export default function AssignAssessmentModal({
                       <ClipboardCheck className="w-4 h-4 sm:w-5 sm:h-5" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h4 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 mb-1">{assessment.title}</h4>
+                      <h4 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 mb-1 [overflow-wrap:anywhere]">{assessment.title}</h4>
                       <div className="flex items-center gap-2 sm:gap-4 text-xs text-gray-700 dark:text-slate-300 mb-2 flex-wrap">
-                        <span className="flex items-center gap-1">
+                        <span className="flex items-center gap-1 min-w-0 max-w-full">
                           <Target className="w-3 h-3 flex-shrink-0" />
                           <span className="truncate">{assessment.linkedJD}</span>
                         </span>

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { DateField } from '@/components/ui/date-field';
 import { toast } from 'sonner';
 import {
   FileCheck,
@@ -230,18 +231,18 @@ export default function AgreementLogs({ compact = false }: AgreementLogsProps) {
               className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm w-48 focus:ring-2 focus:ring-blue-500"
             />
 
-            <input
-              type="date"
+            <DateField
+              aria-label="Start date"
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+              onChange={setStartDate}
+              className="w-auto"
             />
             <span className="text-gray-400">to</span>
-            <input
-              type="date"
+            <DateField
+              aria-label="End date"
               value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+              onChange={setEndDate}
+              className="w-auto"
             />
 
             <button

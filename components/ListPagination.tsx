@@ -43,6 +43,35 @@ interface ListPaginationProps {
 
 const DEFAULT_PAGE_SIZE_OPTIONS = [5, 10, 20, 40, 100];
 
+/**
+ * Inside a popup, a page change lands the reader on the LIST — the table's
+ * header and first row — not on the popup's top, which put the search,
+ * filters and intro back on screen and pushed the new rows out of view.
+ *
+ * The target is an element marked `data-list-anchor` (card lists mark the spot
+ * above their first card), else the first table in the scroller; with
+ * neither, the scroller's top as before. Anything pinned inside the scroller
+ * (a sticky search/filter bar) is allowed for, so the table doesn't come to
+ * rest underneath it.
+ */
+function scrollContainerToList(container: HTMLElement) {
+  const anchor = container.querySelector<HTMLElement>('[data-list-anchor]') ?? container.querySelector<HTMLElement>('table');
+  if (!anchor) {
+    container.scrollTo({ top: 0, behavior: 'smooth' });
+    return;
+  }
+  const containerTop = container.getBoundingClientRect().top;
+  const anchorOffset = anchor.getBoundingClientRect().top - containerTop + container.scrollTop;
+  let pinnedHeight = 0;
+  container.querySelectorAll<HTMLElement>('*').forEach((el) => {
+    if (anchor.contains(el) || el.contains(anchor)) return;
+    const style = window.getComputedStyle(el);
+    if (style.position !== 'sticky' || style.top === 'auto') return;
+    pinnedHeight = Math.max(pinnedHeight, (parseFloat(style.top) || 0) + el.offsetHeight);
+  });
+  container.scrollTo({ top: Math.max(0, anchorOffset - pinnedHeight), behavior: 'smooth' });
+}
+
 export default function ListPagination({
   currentPage,
   itemsPerPage,
@@ -85,7 +114,8 @@ export default function ListPagination({
     onPageChange(page);
     const container = scrollContainerRef?.current;
     if (container) {
-      container.scrollTo({ top: 0, behavior: 'smooth' });
+      // After the new page has rendered, so the measurement is of it.
+      requestAnimationFrame(() => scrollContainerToList(container));
     } else if (typeof window !== 'undefined') {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   X, ClipboardList, MoreVertical, Eye, Pencil, History,
   ArrowUp, ArrowDown, ArrowUpDown, AlertTriangle, RefreshCw,
-  Archive, ArchiveRestore, BarChart, Play, Trash2,
+  Archive, ArchiveRestore, BarChart, Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
@@ -33,6 +33,7 @@ import ListToolbar from '@/components/ui/list-toolbar';
    renders in place exactly as before. */
 import { ListToolbarPortal } from '@/components/ui/list-toolbar-slot';
 import ListFilterPanel from '@/components/ui/list-filter-panel';
+import { DateField } from '@/components/ui/date-field';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import { assessmentService, type AssessmentResponse } from '@/lib/services/assessmentService';
 import { formatISTStamp, parseIST } from '@/lib/utils/dateUtils';
@@ -71,6 +72,15 @@ interface AssessmentRow {
   completed: number;         // completed_count   -> column 7 (candidates who completed it)
   createdAt: string;         // ISO               -> column 7
   createdSort: number;       // epoch ms, so the sort never re-parses
+  /* When this version was published, epoch ms (0 = never): the API's
+     `published_at`, or — for a published row the API returned without one —
+     its `updated_at`, the moment its status last changed. The default order. */
+  publishedSort: number;
+  /* When this version last changed (the API's `updated_at`, else
+     `created_at`), epoch ms — for a draft, when it was created or last moved
+     into / edited in Draft. The Draft tab's default order. */
+  updatedSort: number;
+  jobKey: string;            // the job every version shares (jd_short_id, else jd_id)
   createdBy: string;         //                   -> column 8
 }
 
@@ -104,6 +114,12 @@ const toRow = (a: AssessmentResponse): AssessmentRow => {
     completed: a.completed_count ?? 0,
     createdAt: a.created_at,
     createdSort: parseIST(a.created_at).getTime() || 0,
+    publishedSort: (() => {
+      const stamp = a.published_at || (raw === 'published' ? a.updated_at : undefined);
+      return stamp ? parseIST(stamp).getTime() || 0 : 0;
+    })(),
+    jobKey: a.jd_short_id || a.jd_id || `__unlinked__${a.id}`,
+    updatedSort: (a.updated_at ? parseIST(a.updated_at).getTime() : 0) || parseIST(a.created_at).getTime() || 0,
     createdBy: a.created_by_name || 'System',
   };
 };
@@ -138,7 +154,13 @@ function StatusBadge({ status }: { status: string }) {
    same roles, as the Assessment Version History panel's chips, so a V3 means
    the same thing and looks the same wherever it is read. Kept as a compact
    mono-width pill so a column of them lines up. */
-export function VersionPill({ kind, version }: { kind: 'job' | 'assessment'; version: number }) {
+export function VersionPill({ kind, version, label }: {
+  kind: 'job' | 'assessment';
+  version: number;
+  /** Shown before the number ("Job V1") where the pill stands without a
+   *  column heading to name it — a card. Omitted, the pill reads "V1". */
+  label?: string;
+}) {
   return (
     <span
       className={`inline-flex shrink-0 whitespace-nowrap items-center justify-center min-w-[2.25rem] px-1.5 py-0.5 rounded-md text-xs font-semibold tabular-nums ring-1 ${
@@ -147,7 +169,7 @@ export function VersionPill({ kind, version }: { kind: 'job' | 'assessment'; ver
           : 'text-brand-cyan bg-brand-cyan/10 ring-brand-cyan/20 dark:bg-brand-cyan/20 dark:text-cyan-200 dark:ring-brand-cyan/35'
       }`}
     >
-      V{version}
+      {label ? `${label} ` : ''}V{version}
     </span>
   );
 }
@@ -187,12 +209,15 @@ function CreatedBy({ name }: { name: string }) {
    below — a per-column descending branch is how a table ends up with one
    column that sorts backwards. */
 type SortKey =
+  /* The default order, not a column: latest publish first (see `sorted`). */
+  | 'published'
   | 'jobId' | 'jobName' | 'jobVersion' | 'assessmentVersion'
   | 'status' | 'invitations' | 'completed' | 'createdAt' | 'createdBy';
 
 const text = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
 
 const COMPARATORS: Record<SortKey, (a: AssessmentRow, b: AssessmentRow) => number> = {
+  published: (a, b) => a.publishedSort - b.publishedSort,
   jobId: (a, b) => text(a.jobId, b.jobId),
   jobName: (a, b) => text(a.jobName, b.jobName),
   jobVersion: (a, b) => a.jobVersion - b.jobVersion,
@@ -279,6 +304,10 @@ interface AllAssessmentsTableProps {
   /** Told whether the sort is at its default, so Clear Sort can disable
    *  itself when there is nothing to clear. */
   onSortDefaultChange?: (isDefault: boolean) => void;
+  /** Told how many rows this tab loaded (before search / filters), once a
+   *  load settles — so the host's tab count is the same data as the list.
+   *  `null` while loading or after a failed load. */
+  onRowCountChange?: (count: number | null) => void;
 }
 
 const fixedStatusLabel = (status?: FixedAssessmentStatus) =>
@@ -287,11 +316,13 @@ const fixedStatusLabel = (status?: FixedAssessmentStatus) =>
       : status === 'archived' ? 'Archived'
         : undefined;
 
-/* The order a tab opens in — newest first — and what Clear Sort returns to. */
-const DEFAULT_SORT_KEY: SortKey = 'createdAt';
+/* The order every tab (All / Active / Draft / Archived) opens in, and what
+   Clear Sort returns to: the most recently published assessment version
+   first. */
+const DEFAULT_SORT_KEY: SortKey = 'published';
 const DEFAULT_SORT_DIR: 'asc' | 'desc' = 'desc';
 
-export default function AllAssessmentsTable({ embedded = false, fixedStatus, title, description, clearSortSignal, onSortDefaultChange }: AllAssessmentsTableProps = {}) {
+export default function AllAssessmentsTable({ embedded = false, fixedStatus, title, description, clearSortSignal, onSortDefaultChange, onRowCountChange }: AllAssessmentsTableProps = {}) {
   const router = useRouter();
   const { isTenantAdmin, user } = useAuth();
   const canUpdateAssessment = isTenantAdmin || (user?.permissions?.canUpdateAssessments ?? false);
@@ -317,6 +348,9 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
   const [rows, setRows] = useState<AssessmentRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    onRowCountChange?.(isLoading || error ? null : rows.length);
+  }, [isLoading, error, rows.length, onRowCountChange]);
   /** Bumped by Retry to re-run the load effect. See `retry` below. */
   const [reloadToken, setReloadToken] = useState(0);
 
@@ -501,7 +535,10 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
 
     return rows.filter((row) => {
       if (q) {
-        const haystack = `${row.title} ${row.assessmentId} ${row.jobName} ${row.jobId}`.toLowerCase();
+        /* Job ID and Job Name only. `jobName` falls back to "General
+           Assessment" for an assessment with no job, which is a label, not
+           a job name — so it is searched only when there is a job. */
+        const haystack = `${row.jobId} ${row.jdId ? row.jobName : ''}`.toLowerCase();
         if (!haystack.includes(q)) return false;
       }
       if (filters.job && row.jobId !== filters.job) return false;
@@ -526,12 +563,39 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
        the array the memo hands back on the next render. Ties break on the
        creation stamp so equal values (two V1s, two Drafts) keep a stable,
        meaningful order instead of the array's incidental one. */
+    /* Latest publish first, on all four tabs alike: a row's OWN publish time,
+       then — for versions not published themselves (drafts, and every row on
+       the Draft tab) — the latest publish among its job's versions, so a job
+       that has just had a version published leads with its other versions
+       next; then creation. All three newest first. */
+    /* The Draft and Archived tabs, on the Active tab's pattern: Active leads
+       with the version most recently MOVED to Active (published); Draft and
+       Archived lead with the row most recently created or updated into that
+       status (archiving updates `updated_at`) — newest first, then creation. */
+    if (sortKey === 'published' && (fixedStatus === 'draft' || fixedStatus === 'archived')) {
+      return [...filtered].sort((a, b) => {
+        const result = (a.updatedSort - b.updatedSort) || (a.createdSort - b.createdSort);
+        return sortDir === 'asc' ? result : -result;
+      });
+    }
+    if (sortKey === 'published') {
+      const jobLatest = new Map<string, number>();
+      for (const row of filtered) {
+        if (row.publishedSort > (jobLatest.get(row.jobKey) ?? 0)) jobLatest.set(row.jobKey, row.publishedSort);
+      }
+      return [...filtered].sort((a, b) => {
+        const result = (a.publishedSort - b.publishedSort)
+          || ((jobLatest.get(a.jobKey) ?? 0) - (jobLatest.get(b.jobKey) ?? 0))
+          || (a.createdSort - b.createdSort);
+        return sortDir === 'asc' ? result : -result;
+      });
+    }
     return [...filtered].sort((a, b) => {
       const primary = compare(a, b);
       const result = primary !== 0 ? primary : b.createdSort - a.createdSort;
       return sortDir === 'asc' ? result : -result;
     });
-  }, [filtered, sortKey, sortDir]);
+  }, [filtered, sortKey, sortDir, fixedStatus]);
 
   /* Clamped on read: a shrinking result set (a new filter, a narrower search)
      leaves the page number past the end, and the rows would come back empty
@@ -643,8 +707,8 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
   /* ── Actions ─────────────────────────────────────────────────────────────
      Only what is valid for the row's status, read off the API's own status:
        Active   — Archive, View Assessment, View Results
-       Draft    — Publish (not on the All tab), Edit, View Assessment, Delete
-       Archived — Unarchive, View Assessment, View Results (once someone has
+       Draft    — Edit, View Assessment, Delete
+       Archived — Unarchive, View Assessment, Delete (Archived tab), View Results (once someone has
                   completed it)
      Edit stays Draft-only — a published assessment is edited by duplicating
      it into a new version, which is the rule the creation flow already
@@ -665,14 +729,6 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
     } finally {
       setBusyRowId(null);
     }
-  };
-
-  const publishRow = (row: AssessmentRow) => {
-    if (!canUpdateAssessment) {
-      toast.error('You do not have permission to edit assessments');
-      return;
-    }
-    void runStatusAction(row, 'publish', () => assessmentService.publish(row.id), 'Assessment published');
   };
 
   const archiveRow = async (row: AssessmentRow) => {
@@ -752,21 +808,22 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
         );
         break;
       case 'draft':
-        /* Not on the All tab: a draft there is published from the Configure
+        /* No Publish on any tab: a draft is published from the Configure
            page its Edit opens, the Total Jobs Edit's flow. */
-        if (fixedStatus) {
-          actions.push({ key: 'publish', label: 'Publish', icon: Play, iconClassName: 'text-menu-icon-activate', run: () => publishRow(row) });
-        }
         /* The All tab has its own Edit, on every row — added below. */
         if (fixedStatus && canUpdateAssessment) {
           actions.push({
             key: 'edit', label: 'Edit', icon: Pencil, iconClassName: 'text-menu-icon-edit',
-            run: () => router.push(`/recruitment/assessments/create?edit=${row.id}`),
+            /* Straight to the Configure page for this assessment — the route
+               the All tab's Edit and the page's own `handleEditAssessment`
+               use. Without `step=configure&jd_id` the create flow opened on
+               its job picker instead. */
+            run: () => router.push(`/recruitment/assessments/create?step=configure&jd_id=${row.jdId}&edit=${row.id}`),
           });
         }
-        /* Not on the All tab: a draft there is opened through Edit, on the
-           Configure page, not viewed (see `opensView`). */
-        if (fixedStatus) actions.push(view);
+        /* No View Assessment for a draft on either tab: on the All tab a
+           draft is opened through Edit, and the Draft tab's menu dropped it
+           too — Edit (to the Configure page) and Delete are its actions. */
         break;
       case 'archived':
         actions.push(
@@ -802,19 +859,20 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
         run: () => router.push(`/recruitment/assessments/create?step=configure&jd_id=${row.jdId}&edit=${row.id}`),
       });
     }
-    /* Not on the Archived tab: its menu never had it. Keyed on the tab
-       (`fixedStatus`), not the row, so an archived row listed under All keeps
-       View History there. Nor on a Draft on the All tab, whose menu is Edit
-       and Delete. */
-    if (fixedStatus !== 'archived' && (fixedStatus || row.rawStatus !== 'draft')) {
+    /* Not on the Archived tab: its menu never had it. Never on a Draft, on
+       any tab. Nor on an Active (`published`) or an Archived row on the All
+       tab — so of the All tab's rows only Completed keeps View History. */
+    if (fixedStatus !== 'archived' && row.rawStatus !== 'draft'
+      && (fixedStatus || !['published', 'archived'].includes(row.rawStatus))) {
       actions.push({
         key: 'history', label: 'View History', icon: History, iconClassName: 'text-menu-icon-secondary',
         run: () => router.push(`/recruitment/assessments/${row.id}?tab=versions`),
       });
     }
-    /* Last, as on the page's own menu: the one action that cannot be undone. */
-    if (row.rawStatus === 'draft') {
-      actions.push({ key: 'delete', label: 'Delete', icon: Trash2, iconClassName: '', destructive: true, run: () => void deleteRow(row) });
+    /* Last, as on the page's own menu: the one action that cannot be undone.
+       On every Draft, and on every row of the Archived tab. */
+    if (row.rawStatus === 'draft' || fixedStatus === 'archived') {
+      actions.push({ key: 'delete', label: 'Delete', icon: Trash2, iconClassName: 'text-destructive', destructive: true, run: () => void deleteRow(row) });
     }
     return actions;
   };
@@ -898,7 +956,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                  arrangement as the Total Jobs tab. */
               searchDebounceMs={0}
               onSearchChange={searchAndReset}
-              searchPlaceholder="Search by assessment name, ID, job name or job ID..."
+              searchPlaceholder="Search by job name or job ID..."
               onToggleFilters={() => setFiltersOpen((o) => !o)}
               filtersOpen={filtersOpen}
               activeFilterCount={activeFilterCount}
@@ -929,7 +987,10 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                   </>
                 }
               >
+                {/* `[&>button]` lifts SearchableSelect's h-9 trigger to the
+                    38px filter-field standard without touching components/ui. */}
                 <SearchableSelect
+                  className="min-w-0 [&>button]:h-[38px]"
                   label="Job"
                   value={draftFilters.job}
                   onChange={(v) => setDraftFilters((f) => ({ ...f, job: v }))}
@@ -940,6 +1001,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                   emptyMessage="No jobs match"
                 />
                 <SearchableSelect
+                  className="min-w-0 [&>button]:h-[38px]"
                   label="Job Version"
                   value={draftFilters.jobVersion}
                   onChange={(v) => setDraftFilters((f) => ({ ...f, jobVersion: v }))}
@@ -950,6 +1012,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                   emptyMessage="No versions match"
                 />
                 <SearchableSelect
+                  className="min-w-0 [&>button]:h-[38px]"
                   label="Assessment Version"
                   value={draftFilters.assessmentVersion}
                   onChange={(v) => setDraftFilters((f) => ({ ...f, assessmentVersion: v }))}
@@ -961,6 +1024,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                 />
                 {!fixedStatus && (
                   <SearchableSelect
+                    className="min-w-0 [&>button]:h-[38px]"
                     label="Status"
                     value={draftFilters.status}
                     onChange={(v) => setDraftFilters((f) => ({ ...f, status: v }))}
@@ -972,11 +1036,12 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                   />
                 )}
 
-                {/* Created On — two native date inputs, the same control the
-                    Assessments dashboard's own Created from/to pair uses, so
-                    a date range is entered the same way across the product.
-                    Each bounds the other, which is what stops a range that
-                    can never match anything. */}
+                {/* Created On — a from/to pair of custom DateField popovers.
+                    These replace native <input type="date"> because the
+                    browser's own calendar dropdown can't be clamped to the
+                    viewport, resized, or aligned to the field — it either
+                    clipped the input's text on a narrow phone or spilled the
+                    popup over surrounding content in landscape. */}
                 <div className="sm:col-span-2">
                   <label
                     htmlFor="all-assessments-created-from"
@@ -984,24 +1049,22 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                   >
                     Created On
                   </label>
-                  <div className="flex items-center gap-2">
-                    <input
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                    <DateField
                       id="all-assessments-created-from"
-                      type="date"
                       aria-label="Created from"
                       value={draftFilters.createdFrom}
                       max={draftFilters.createdTo || undefined}
-                      onChange={(e) => setDraftFilters((f) => ({ ...f, createdFrom: e.target.value }))}
-                      className="flex-1 min-w-0 h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+                      onChange={(v) => setDraftFilters((f) => ({ ...f, createdFrom: v }))}
+                      className="sm:flex-1 sm:min-w-0 h-[38px] px-2 sm:px-3 text-xs sm:text-sm"
                     />
-                    <span className="text-xs text-gray-400 flex-shrink-0">to</span>
-                    <input
-                      type="date"
+                    <span className="text-xs text-gray-400 text-center sm:text-left sm:flex-shrink-0">to</span>
+                    <DateField
                       aria-label="Created to"
                       value={draftFilters.createdTo}
                       min={draftFilters.createdFrom || undefined}
-                      onChange={(e) => setDraftFilters((f) => ({ ...f, createdTo: e.target.value }))}
-                      className="flex-1 min-w-0 h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+                      onChange={(v) => setDraftFilters((f) => ({ ...f, createdTo: v }))}
+                      className="sm:flex-1 sm:min-w-0 h-[38px] px-2 sm:px-3 text-xs sm:text-sm"
                     />
                   </div>
                 </div>

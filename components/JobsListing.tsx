@@ -30,6 +30,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import SearchableSelect from '@/components/ui/searchable-select';
+import { DateField } from '@/components/ui/date-field';
 import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
@@ -1019,20 +1020,18 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                 </div>
                 <div>
                   <label className="block text-sm text-gray-700 mb-1.5 font-medium">Posted From</label>
-                  <input
-                    type="date"
+                  <DateField
                     value={datePostedFromFilter}
-                    onChange={(e) => search.setFilter('datePostedFrom', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black"
+                    onChange={(v) => search.setFilter('datePostedFrom', v)}
+                    aria-label="Posted From"
                   />
                 </div>
                 <div>
                   <label className="block text-sm text-gray-700 mb-1.5 font-medium">Posted To</label>
-                  <input
-                    type="date"
+                  <DateField
                     value={datePostedToFilter}
-                    onChange={(e) => search.setFilter('datePostedTo', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black"
+                    onChange={(v) => search.setFilter('datePostedTo', v)}
+                    aria-label="Posted To"
                   />
                 </div>
               </div>

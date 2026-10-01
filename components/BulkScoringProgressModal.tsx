@@ -3,6 +3,7 @@ import { X, Clock, CheckCircle2, XCircle, AlertCircle, Loader2, Database, Folder
 import { useState, useEffect } from 'react';
 import ListPagination from '@/components/ListPagination';
 import { Button } from '@/components/ui/button';
+import { DateField } from '@/components/ui/date-field';
 import { useAuth } from '@/components/providers/AuthProvider';
 import api from '@/lib/services/api';
 import { toast } from 'sonner';
@@ -821,12 +822,10 @@ export default function BulkScoringProgressModal({
                     <label className="text-xs font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap shrink-0">
                       Scored From
                     </label>
-                    <input
-                      type="date"
+                    <DateField
                       value={scoredFrom}
                       max={scoredTo || undefined}
-                      onChange={(e) => setScoredFrom(e.target.value)}
-                      className="w-full min-w-0 px-2.5 py-1.5 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-900 text-black text-xs"
+                      onChange={setScoredFrom}
                     />
                   </div>
 
@@ -834,12 +833,10 @@ export default function BulkScoringProgressModal({
                     <label className="text-xs font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap shrink-0">
                       Scored To
                     </label>
-                    <input
-                      type="date"
+                    <DateField
                       value={scoredTo}
                       min={scoredFrom || undefined}
-                      onChange={(e) => setScoredTo(e.target.value)}
-                      className="w-full min-w-0 px-2.5 py-1.5 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-900 text-black text-xs"
+                      onChange={setScoredTo}
                     />
                   </div>
                 </div>

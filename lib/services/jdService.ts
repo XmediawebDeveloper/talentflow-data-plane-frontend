@@ -386,6 +386,22 @@ export interface JDVersion {
   created_at: string;
 }
 
+export interface JDStatusEvent {
+  id: string;
+  action: 'jd_disable' | 'jd_enable' | 'jd_archive' | 'jd_unarchive';
+  /** "Job Disabled" | "Job Re-enabled" | "Job Archived" | "Job Unarchived" */
+  title: string;
+  old_status?: string | null;
+  new_status?: string | null;
+  user_id?: string | null;
+  user_name?: string | null;
+  created_at: string | null;
+}
+
+export interface JDStatusHistoryResponse {
+  events: JDStatusEvent[];
+}
+
 export interface JDVersionHistoryResponse {
   jd_id: string;
   current_version: number;
@@ -991,6 +1007,19 @@ export const jdService = {
   }): Promise<JDAssessmentResultsResponse> {
     try {
       const response = await api.get<JDAssessmentResultsResponse>(`/jd/${jdId}/assessment-results`, { params });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Every Disable / Re-enable / Archive / Unarchive of a JD, newest first,
+   * each with who did it and when (audit log, read with jd:read).
+   */
+  async getStatusHistory(jdId: string): Promise<JDStatusHistoryResponse> {
+    try {
+      const response = await api.get<JDStatusHistoryResponse>(`/jd/${jdId}/status-history`);
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));

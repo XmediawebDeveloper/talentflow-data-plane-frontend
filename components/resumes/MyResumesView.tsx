@@ -983,6 +983,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
 
   // Bulk version resolution state
   const [selectedVersionedItems, setSelectedVersionedItems] = useState<Map<string, VersionedBatchItem>>(new Map());
+  // Upload History: batches whose file list dropdown is open (collapsed by default).
+  const [expandedUploadBatches, setExpandedUploadBatches] = useState<Set<string>>(new Set());
   const [isBulkResolveModalOpen, setIsBulkResolveModalOpen] = useState(false);
 
   // Apply to Job modal state
@@ -3297,6 +3299,12 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       setUploadHistoryTab('current');
       setIsUploadHistoryModalOpen(true);
       setIsUploadHistoryMinimized(false);
+      /* Close the upload dialog NOW, not when the bulk request returns — it
+         used to linger behind Upload History for the 3–5 s that took. A bulk
+         upload reports everything in Upload History; a failure to even start
+         it is toasted below, since the dialog is no longer there to show it. */
+      setIsUploadModalOpen(false);
+      setUploadTargetFolderId(undefined);
 
       // Show "Uploading..." record immediately BEFORE API call
       const tempId = `temp-${Date.now()}`;
@@ -3618,29 +3626,22 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
 
       return { success: true };
     } catch (error: any) {
+      let message = 'Failed to start bulk upload';
       // Check for read-only mode (403 Forbidden)
       if (error?.response?.status === 403) {
         const detail = error?.response?.data?.detail;
-        if (detail?.error === 'READ_ONLY_MODE') {
-          return {
-            success: false,
-            error: 'Uploads are disabled because your account is in read-only mode. Please contact your administrator.',
-          };
-        }
-        return {
-          success: false,
-          error: 'You do not have permission to upload resumes. Please contact your administrator.',
-        };
+        message = detail?.error === 'READ_ONLY_MODE'
+          ? 'Uploads are disabled because your account is in read-only mode. Please contact your administrator.'
+          : 'You do not have permission to upload resumes. Please contact your administrator.';
+      } else if (error?.response?.status === 409) {
+        // Duplicate error (409 Conflict)
+        message = error?.response?.data?.detail?.message || 'All files are duplicates';
       }
-      // Check for duplicate error (409 Conflict)
-      if (error?.response?.status === 409) {
-        const detail = error?.response?.data?.detail;
-        return {
-          success: false,
-          error: detail?.message || 'All files are duplicates',
-        };
-      }
-      return { success: false, error: 'Failed to start bulk upload' };
+      // The upload dialog closed when this started, so say it here, and drop
+      // the optimistic "Uploading N files..." placeholder that will never fill.
+      toast.error(message);
+      setUploadHistory(prev => prev.filter(r => !(String(r.id).startsWith('temp-') && r.status === 'uploading')));
+      return { success: false, error: message };
     }
   };
 
@@ -5227,9 +5228,9 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
           />
           {/* Centered Modal */}
           <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-4xl max-h-[85dvh] flex flex-col animate-in zoom-in-95 duration-200">
-              {/* Header */}
-              <div className="bg-gradient-to-r from-brand-blue/[0.06] via-brand-cyan/[0.04] to-white border-b border-gray-100 px-4 sm:px-6 py-3 sm:py-4 rounded-t-2xl">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-4xl max-h-[85dvh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+              {/* Header — plain, one hairline under it */}
+              <div className="bg-white border-b border-gray-100 px-4 sm:px-6 py-3 sm:py-4">
                 <div className="flex items-center justify-between">
                   <div className="min-w-0">
                     <h2 className="text-base sm:text-xl font-semibold text-gray-900 tracking-tight">Upload History</h2>
@@ -5258,7 +5259,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
               </div>
 
               {/* Content */}
-              <div className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6 bg-slate-50">
+              <div className="flex-1 overflow-y-auto p-3 sm:p-5 lg:p-6 bg-gray-50/70">
                 {(() => {
                   const myResumesHistory = uploadHistory.filter(r => r.source === 'my-resumes');
                   const isActive = (r: any) => r.status === 'processing' || r.pending > 0;
@@ -5356,42 +5357,42 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                             card: 'from-brand-blue/[0.08] to-brand-blue/[0.03]',
                             active: 'border-brand-blue/50 ring-2 ring-brand-blue/30 shadow-md',
                             idle: 'border-brand-blue/20',
-                            tile: 'bg-brand-blue',
+                            tile: 'bg-brand-blue/10 text-brand-blue',
                             value: 'text-brand-blue',
                           },
                           'brand-blue-2': {
                             card: 'from-brand-blue-2/[0.08] to-brand-blue-2/[0.03]',
                             active: 'border-brand-blue-2/50 ring-2 ring-brand-blue-2/30 shadow-md',
                             idle: 'border-brand-blue-2/20',
-                            tile: 'bg-brand-blue-2',
+                            tile: 'bg-brand-blue-2/10 text-brand-blue-2',
                             value: 'text-brand-blue-2',
                           },
                           'brand-cyan': {
                             card: 'from-brand-cyan/[0.08] to-brand-cyan/[0.03]',
                             active: 'border-brand-cyan/50 ring-2 ring-brand-cyan/30 shadow-md',
                             idle: 'border-brand-cyan/20',
-                            tile: 'bg-brand-cyan',
+                            tile: 'bg-brand-cyan/10 text-brand-cyan',
                             value: 'text-brand-cyan',
                           },
                           'brand-teal': {
                             card: 'from-brand-teal/[0.08] to-brand-teal/[0.03]',
                             active: 'border-brand-teal/50 ring-2 ring-brand-teal/30 shadow-md',
                             idle: 'border-brand-teal/20',
-                            tile: 'bg-brand-teal',
+                            tile: 'bg-brand-teal/10 text-brand-teal',
                             value: 'text-brand-teal',
                           },
                           'brand-orange': {
                             card: 'from-brand-orange/[0.08] to-brand-orange/[0.03]',
                             active: 'border-brand-orange/50 ring-2 ring-brand-orange/30 shadow-md',
                             idle: 'border-brand-orange/20',
-                            tile: 'bg-brand-orange',
+                            tile: 'bg-brand-orange/10 text-brand-orange',
                             value: 'text-brand-orange-deep',
                           },
                           'brand-orange-deep': {
                             card: 'from-brand-orange-deep/[0.08] to-brand-orange-deep/[0.03]',
                             active: 'border-brand-orange-deep/50 ring-2 ring-brand-orange-deep/30 shadow-md',
                             idle: 'border-brand-orange-deep/20',
-                            tile: 'bg-brand-orange-deep',
+                            tile: 'bg-brand-orange-deep/10 text-brand-orange-deep',
                             value: 'text-brand-orange-deep',
                           },
                           // Cancelled is deliberately off-palette: it's an
@@ -5400,7 +5401,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                             card: 'from-gray-100 to-gray-200/50',
                             active: 'border-gray-700 ring-2 ring-gray-400 shadow-md',
                             idle: 'border-gray-300',
-                            tile: 'bg-gray-600',
+                            tile: 'bg-gray-100 text-gray-600',
                             value: 'text-gray-800',
                           },
                         };
@@ -5409,9 +5410,9 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
 
                         if (allZero) {
                           return (
-                            <div className="flex items-center gap-3 mb-4 sm:mb-6 bg-gradient-to-br from-brand-blue/[0.08] to-brand-blue/[0.03] border border-brand-blue/20 rounded-xl p-4">
-                              <div className="w-9 h-9 bg-brand-blue rounded-lg flex items-center justify-center flex-shrink-0">
-                                <Clock className="w-4 h-4 text-white" />
+                            <div className="flex items-center gap-3 mb-4 sm:mb-6 bg-white border border-gray-200 rounded-xl p-4">
+                              <div className="w-9 h-9 bg-brand-blue/10 text-brand-blue rounded-lg flex items-center justify-center flex-shrink-0">
+                                <Clock className="w-4 h-4" />
                               </div>
                               <div className="min-w-0">
                                 <p className="text-sm font-medium text-gray-900">
@@ -5446,13 +5447,13 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                 <div
                                   key={key}
                                   onClick={() => setUploadHistoryFilter(isActive ? null : key)}
-                                  className={`bg-gradient-to-br ${t.card} border rounded-xl p-2.5 sm:p-3 lg:p-4 cursor-pointer transition-all hover:shadow-md ${isActive ? t.active : t.idle}`}
+                                  className={`bg-white border rounded-xl p-2.5 sm:p-3 lg:p-4 cursor-pointer transition-colors ${isActive ? t.active : 'border-gray-200 hover:border-gray-300'}`}
                                 >
-                                  <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 mb-1.5 sm:mb-2">
-                                    <div className={`w-6 h-6 sm:w-8 sm:h-8 ${t.tile} rounded-lg flex items-center justify-center flex-shrink-0`}>
-                                      <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
+                                  <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-2.5 mb-1.5 sm:mb-2">
+                                    <div className={`w-6 h-6 sm:w-7 sm:h-7 ${t.tile} rounded-lg flex items-center justify-center flex-shrink-0`}>
+                                      <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                                     </div>
-                                    <span className="text-2xs sm:text-xs text-gray-700 truncate">{label}</span>
+                                    <span className="text-2xs sm:text-xs text-gray-600 truncate">{label}</span>
                                   </div>
                                   <div className={`text-lg sm:text-xl lg:text-2xl font-bold tracking-tight ${t.value}`}>{value}</div>
                                 </div>
@@ -5463,12 +5464,12 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                 Hidden when nothing was attempted: 0% would read
                                 as a total failure rather than "no data". */}
                             {attemptedFiles > 0 && (
-                            <div className="bg-gradient-to-br from-brand-cyan/[0.08] to-brand-cyan/[0.03] border border-brand-cyan/20 rounded-xl p-2.5 sm:p-3 lg:p-4">
-                              <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 mb-1.5 sm:mb-2">
-                                <div className="w-6 h-6 sm:w-8 sm:h-8 bg-brand-cyan rounded-lg flex items-center justify-center flex-shrink-0">
-                                  <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
+                            <div className="bg-white border border-gray-200 rounded-xl p-2.5 sm:p-3 lg:p-4">
+                              <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-2.5 mb-1.5 sm:mb-2">
+                                <div className="w-6 h-6 sm:w-7 sm:h-7 bg-brand-cyan/10 text-brand-cyan rounded-lg flex items-center justify-center flex-shrink-0">
+                                  <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                                 </div>
-                                <span className="text-2xs sm:text-xs text-gray-700 truncate">Success Rate</span>
+                                <span className="text-2xs sm:text-xs text-gray-600 truncate">Success Rate</span>
                               </div>
                               <div className="text-lg sm:text-xl lg:text-2xl font-bold text-brand-cyan tracking-tight">{successRate}%</div>
                             </div>
@@ -5479,7 +5480,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
 
                       {/* Active Filter Indicator */}
                       {uploadHistoryFilter && (
-                        <div className="flex items-center gap-2 mb-4 px-3 py-2 bg-white border border-gray-200 rounded-lg">
+                        <div className="flex items-center gap-2 mb-4 px-3 py-2 bg-white rounded-lg shadow-sm shadow-black/[0.03]">
                           <span className="text-xs text-gray-500">Filtering by:</span>
                           <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
                             uploadHistoryFilter === 'completed' ? 'bg-brand-blue/10 text-brand-blue' :
@@ -5517,7 +5518,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                         const totalProcessed = activeBatches.reduce((sum: number, r: any) => sum + r.completed + r.errors + r.duplicated + (r.versioned || 0), 0);
                         if (totalProcessed <= 0) {
                           return (
-                            <div className="flex items-center gap-2 mb-3 sm:mb-4 px-3 sm:px-4 py-2.5 sm:py-3 bg-brand-blue/10 border border-brand-blue/20 rounded-xl animate-pulse">
+                            <div className="flex items-center gap-2 mb-3 sm:mb-4 px-3 sm:px-4 py-2.5 sm:py-3 bg-brand-blue/[0.07] rounded-xl">
                               <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-brand-blue animate-spin flex-shrink-0" />
                               <span className="text-xs sm:text-sm text-brand-blue">Processing {totalPending} resume{totalPending !== 1 ? 's' : ''}... Estimating time remaining</span>
                             </div>
@@ -5535,7 +5536,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                           ? `Approx. ${lowMins} min${lowMins !== 1 ? 's' : ''} remaining`
                           : `Approx. ${lowMins}\u2013${highMins} mins remaining`;
                         return (
-                          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-1 sm:gap-2 mb-3 sm:mb-4 px-3 sm:px-4 py-2.5 sm:py-3 bg-brand-blue/10 border border-brand-blue/20 rounded-xl">
+                          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-1 sm:gap-2 mb-3 sm:mb-4 px-3 sm:px-4 py-2.5 sm:py-3 bg-brand-blue/[0.07] rounded-xl">
                             <div className="flex items-center gap-2">
                               <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-brand-blue flex-shrink-0" />
                               <span className="text-xs sm:text-sm font-medium text-brand-blue">{etaText}</span>
@@ -5547,7 +5548,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
 
                       {/* Upload History List */}
                       {!showFullEmptyState && (
-                        <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center justify-between mb-3">
                           <h3 className="text-sm font-semibold text-gray-900">
                             {uploadHistoryTab === 'current' ? 'Active Uploads' : 'Recent Uploads'}
                           </h3>
@@ -5632,18 +5633,20 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                               return (
                                 <div
                                   key={record.id}
-                                  className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-3 sm:p-4 lg:p-5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5 transition-all duration-150 cursor-pointer"
+                                  /* One subtle border, nothing else: the card is not
+                                     clickable, so no hover lift or chevron either. */
+                                  className="bg-white border border-gray-200 rounded-xl pb-4 sm:pb-5"
                                 >
                                   {/* Header Row */}
-                                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-3 sm:mb-4 gap-2 sm:gap-3">
-                                    <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                                      <div className="w-8 h-8 sm:w-10 sm:h-10 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
-                                        <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
+                                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 px-4 sm:px-5 pt-4 sm:pt-5">
+                                    <div className="flex items-center gap-3 min-w-0">
+                                      <div className="w-9 h-9 bg-brand-blue/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                                        <FileText className="w-4 h-4 text-brand-blue" />
                                       </div>
                                       <div className="min-w-0">
-                                        <span className="font-medium text-gray-900 text-xs sm:text-sm block truncate">{record.fileName}</span>
+                                        <span className="font-semibold text-gray-900 text-sm block truncate">{record.fileName}</span>
                                         {record.date && (
-                                          <span className="text-2xs sm:text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                                          <span className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
                                             <Calendar className="w-3 h-3 flex-shrink-0" />
                                             <span className="truncate">Started {formatDateTimeIST(record.date)}</span>
                                           </span>
@@ -5662,7 +5665,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                               ? `${m}m ${s}s`
                                               : `${s}s`;
                                           return (
-                                            <span className="text-2xs sm:text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                                            <span className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
                                               <CheckCircle className="w-3 h-3 flex-shrink-0 text-brand-blue" />
                                               <span className="truncate">
                                                 Finished {formatDateTimeIST(record.completedAt)}
@@ -5674,23 +5677,22 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                         })()}
                                       </div>
                                     </div>
-                                    <div className="flex items-center gap-2 sm:gap-3 ml-10 sm:ml-0">
+                                    <div className="flex items-center gap-3 ml-12 sm:ml-0">
                                       {isUploading && (
-                                        <span className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-1 bg-brand-blue/10 text-brand-blue text-2xs sm:text-xs rounded-full border border-brand-blue/20 animate-pulse">
+                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-brand-blue/10 text-brand-blue text-xs font-medium rounded-full">
                                           <Loader2 className="w-3 h-3 animate-spin" />
-                                          Uploading...
+                                          Uploading…
                                         </span>
                                       )}
                                       {!isUploading && hasIssues && (
-                                        <span className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-1 bg-brand-orange/15 text-brand-orange-deep text-2xs sm:text-xs rounded-full border border-brand-orange/30">
+                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-brand-orange/10 text-brand-orange-deep text-xs font-medium rounded-full">
                                           <AlertCircle className="w-3 h-3 flex-shrink-0" />
-                                          <span className="hidden sm:inline">Needs Review</span>
-                                          <span className="sm:hidden">Review</span>
+                                          Needs review
                                         </span>
                                       )}
                                       {!isUploading && (
                                         <div className="text-right">
-                                          <div className={`text-base sm:text-xl font-bold tracking-tight ${
+                                          <div className={`text-xl font-bold tracking-tight leading-none tabular-nums ${
                                             percentage === 100 ? 'text-brand-blue' :
                                             percentage >= 90 ? 'text-brand-cyan' :
                                             percentage >= 70 ? 'text-brand-orange' :
@@ -5698,45 +5700,32 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                           }`}>
                                             {percentage}%
                                           </div>
-                                          <div className="text-2xs sm:text-xs text-gray-500">Success</div>
+                                          <div className="text-2xs text-gray-500 mt-1 uppercase tracking-wide">Success</div>
                                         </div>
                                       )}
-                                      <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
                                     </div>
                                   </div>
 
-                                  {/* Mini Stats */}
-                                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 sm:gap-2 mb-3 sm:mb-4">
-                                    {/* Mini stats use the same brand tones as the summary cards above */}
-                                    <div className="text-center p-1.5 sm:p-2 bg-brand-blue/[0.06] rounded-lg border border-brand-blue/15">
-                                      <div className="text-xs sm:text-sm font-semibold text-brand-blue">{record.completed}</div>
-                                      <div className="text-2xs sm:text-xs text-gray-600">Done</div>
-                                    </div>
-                                    <div className="text-center p-1.5 sm:p-2 bg-brand-orange/[0.08] rounded-lg border border-brand-orange/20">
-                                      <div className="text-xs sm:text-sm font-semibold text-brand-orange-deep">{record.duplicated}</div>
-                                      <div className="text-2xs sm:text-xs text-gray-600">Duplicates</div>
-                                    </div>
-                                    <div className="text-center p-1.5 sm:p-2 bg-brand-blue-2/[0.07] rounded-lg border border-brand-blue-2/20">
-                                      <div className="text-xs sm:text-sm font-semibold text-brand-blue-2">{record.versioned || 0}</div>
-                                      <div className="text-2xs sm:text-xs text-gray-600">Version</div>
-                                    </div>
-                                    <div className="text-center p-1.5 sm:p-2 bg-brand-orange-deep/[0.08] rounded-lg border border-brand-orange-deep/20">
-                                      <div className="text-xs sm:text-sm font-semibold text-brand-orange-deep">{record.errors}</div>
-                                      <div className="text-2xs sm:text-xs text-gray-600">Failed</div>
-                                    </div>
-                                    <div className="text-center p-1.5 sm:p-2 bg-brand-teal/[0.08] rounded-lg border border-brand-teal/20">
-                                      <div className="text-xs sm:text-sm font-semibold text-brand-teal">{record.pending}</div>
-                                      <div className="text-2xs sm:text-xs text-gray-600">Pending</div>
-                                    </div>
-                                    {/* Cancelled — previously had no tile, so cancelled files simply
-                                        disappeared from the batch summary (23 of 100, nothing failed). */}
-                                    <div className="text-center p-1.5 sm:p-2 bg-gray-100 rounded-lg border border-gray-300">
-                                      <div className="text-xs sm:text-sm font-semibold text-gray-700">{cancelledCount}</div>
-                                      <div className="text-2xs sm:text-xs text-gray-600">Cancelled</div>
-                                    </div>
+                                  {/* Outcome strip — one soft panel split by hairlines instead
+                                      of six separately bordered tiles; a number is coloured
+                                      only when something actually landed in it. */}
+                                  <div className="mx-4 sm:mx-5 mt-4 grid grid-cols-3 sm:grid-cols-6 gap-y-2 rounded-lg bg-gray-50 py-2.5 sm:divide-x sm:divide-gray-200/80">
+                                    {[
+                                      { label: 'Done', value: record.completed, tone: 'text-brand-blue' },
+                                      { label: 'Duplicates', value: record.duplicated, tone: 'text-brand-orange-deep' },
+                                      { label: 'Version', value: record.versioned || 0, tone: 'text-brand-blue-2' },
+                                      { label: 'Failed', value: record.errors, tone: 'text-destructive' },
+                                      { label: 'Pending', value: record.pending, tone: 'text-brand-teal' },
+                                      { label: 'Cancelled', value: cancelledCount, tone: 'text-gray-700' },
+                                    ].map(({ label, value, tone }) => (
+                                      <div key={label} className="text-center px-1">
+                                        <div className={`text-base font-semibold tabular-nums leading-tight ${value > 0 ? tone : 'text-gray-300'}`}>{value}</div>
+                                        <div className="text-2xs text-gray-500 mt-0.5">{label}</div>
+                                      </div>
+                                    ))}
                                   </div>
                                   {unaccountedCount > 0 && (
-                                    <div className="mb-3 flex items-start gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-2xs sm:text-xs text-amber-800">
+                                    <div className="mx-4 sm:mx-5 mt-3 flex items-start gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
                                       <AlertCircle className="mt-px h-3.5 w-3.5 flex-shrink-0" />
                                       <span>
                                         {unaccountedCount} file{unaccountedCount !== 1 ? 's' : ''} in this batch {unaccountedCount !== 1 ? 'are' : 'is'} not
@@ -5745,15 +5734,15 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                     </div>
                                   )}
 
-                                  {/* Progress Bar */}
-                                  <div className="mb-3 sm:mb-4">
-                                    <div className="flex items-center justify-between text-2xs sm:text-xs text-gray-600 mb-1 sm:mb-1.5">
-                                      <span>Progress</span>
-                                      <span>{processed} of {record.totalFiles}</span>
+                                  {/* Progress, with the time estimate right under the bar */}
+                                  <div className="px-4 sm:px-5 mt-4">
+                                    <div className="flex items-center justify-between text-xs mb-1.5">
+                                      <span className="font-medium text-gray-700">Progress</span>
+                                      <span className="text-gray-500 tabular-nums">{processed} of {record.totalFiles}</span>
                                     </div>
-                                    <div className="h-1.5 sm:h-2 bg-brand-blue/10 rounded-full overflow-hidden">
+                                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
                                       <div
-                                        className={`h-full transition-all ${
+                                        className={`h-full rounded-full transition-all ${
                                           percentage === 100 ? 'bg-brand-blue' :
                                           percentage >= 90 ? 'bg-brand-cyan' :
                                           percentage >= 70 ? 'bg-brand-orange' :
@@ -5762,83 +5751,72 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                         style={{ width: `${Math.min((processed / record.totalFiles) * 100, 100)}%` }}
                                       />
                                     </div>
-                                  </div>
-
-                                  {/* Estimated Time Remaining — only show when items are genuinely active */}
-                                  {record.pending > 0 && record.date &&
-                                   record.statuses?.some((s: any) => s.status === 'pending' || s.status === 'processing') &&
-                                   (() => {
-                                    // Cap elapsed at 10 minutes to prevent absurd ETAs when a file
-                                    // is stuck at 'processing' and the batch started hours ago.
-                                    const elapsed = Math.min(Date.now() - new Date(record.date).getTime(), 10 * 60 * 1000);
-                                    if (processed <= 0 || elapsed <= 0) {
+                                    {/* Estimated Time Remaining — only when items are genuinely active */}
+                                    {record.pending > 0 && record.date &&
+                                     record.statuses?.some((s: any) => s.status === 'pending' || s.status === 'processing') &&
+                                     (() => {
+                                      // Cap elapsed at 10 minutes to prevent absurd ETAs when a file
+                                      // is stuck at 'processing' and the batch started hours ago.
+                                      const elapsed = Math.min(Date.now() - new Date(record.date).getTime(), 10 * 60 * 1000);
+                                      if (processed <= 0 || elapsed <= 0) {
+                                        return (
+                                          <div className="flex items-center gap-1.5 mt-2 text-xs text-gray-500">
+                                            <Clock className="w-3.5 h-3.5 flex-shrink-0 text-brand-blue" />
+                                            <span>Estimating time remaining…</span>
+                                          </div>
+                                        );
+                                      }
+                                      const avgTimePerFile = elapsed / processed;
+                                      const remainingMs = record.pending * avgTimePerFile;
+                                      const lowMins = Math.max(1, Math.floor((remainingMs * 0.7) / 60000));
+                                      const highMins = Math.max(1, Math.ceil((remainingMs * 1.3) / 60000));
+                                      const etaText = lowMins === highMins
+                                        ? `Approx. ${lowMins} min${lowMins !== 1 ? 's' : ''} remaining`
+                                        : `Approx. ${lowMins}–${highMins} mins remaining`;
                                       return (
-                                        <div className="flex items-center gap-1.5 mb-3 sm:mb-4 text-2xs sm:text-xs text-blue-600">
-                                          <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
-                                          <span>Estimating time remaining...</span>
+                                        <div className="flex items-center gap-1.5 mt-2 text-xs text-gray-500">
+                                          <Clock className="w-3.5 h-3.5 flex-shrink-0 text-brand-blue" />
+                                          <span>{etaText}</span>
+                                          <span className="text-gray-300">·</span>
+                                          <span>{record.pending} file{record.pending !== 1 ? 's' : ''} left</span>
                                         </div>
                                       );
-                                    }
-                                    const avgTimePerFile = elapsed / processed;
-                                    const remainingMs = record.pending * avgTimePerFile;
-                                    const lowMins = Math.max(1, Math.floor((remainingMs * 0.7) / 60000));
-                                    const highMins = Math.max(1, Math.ceil((remainingMs * 1.3) / 60000));
-                                    const etaText = lowMins === highMins
-                                      ? `Approx. ${lowMins} min${lowMins !== 1 ? 's' : ''} remaining`
-                                      : `Approx. ${lowMins}\u2013${highMins} mins remaining`;
-                                    return (
-                                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-0.5 sm:gap-1.5 mb-3 sm:mb-4 text-2xs sm:text-xs text-blue-600 bg-blue-50 border border-blue-100 rounded-lg px-2.5 sm:px-3 py-1.5">
-                                        <div className="flex items-center gap-1.5">
-                                          <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
-                                          <span>{etaText}</span>
-                                        </div>
-                                        <span className="text-blue-400 sm:ml-auto">{record.pending} file{record.pending !== 1 ? 's' : ''} left</span>
-                                      </div>
-                                    );
-                                  })()}
+                                    })()}
+                                  </div>
 
-                                  {/* Retry / Cancel Batch actions — hidden until the optimistic
-                                      temp record is swapped for the real server batch_id, since
-                                      both endpoints require a UUID path param. */}
+                                  {/* Retry / Cancel Batch — borderless tinted buttons. Hidden
+                                      until the optimistic temp record is swapped for the real
+                                      server batch_id, since both endpoints take a UUID. */}
                                   {(isProcessing || hasErrors || isCancelled) && !isTempRecord && (
-                                    <div className="flex items-center gap-2 mb-3 sm:mb-4" onClick={e => e.stopPropagation()}>
-                                      {/* Retry — stuck in pending, failed, or cancelled (re-queues the files) */}
+                                    <div className="flex items-center gap-2 px-4 sm:px-5 mt-4" onClick={e => e.stopPropagation()}>
                                       {(isProcessing || hasErrors || isCancelled) && (
                                         <button
+                                          type="button"
                                           disabled={retryingBatches.has(record.id)}
                                           onClick={(e) => handleRetryBatch(record.id, e)}
-                                          className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
-                                            retryingBatches.has(record.id)
-                                              ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                                              : 'bg-brand-blue/10 text-brand-blue border-brand-blue/20 hover:bg-brand-blue/15'
-                                          }`}
+                                          className="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-medium rounded-lg transition-colors text-brand-blue bg-brand-blue/[0.08] hover:bg-brand-blue/[0.14] disabled:text-gray-400 disabled:bg-gray-100 disabled:cursor-not-allowed"
                                         >
-                                          <RefreshCw className={`w-3 h-3 ${retryingBatches.has(record.id) ? 'animate-spin' : ''}`} />
+                                          <RefreshCw className={`w-3.5 h-3.5 ${retryingBatches.has(record.id) ? 'animate-spin' : ''}`} />
                                           {retryingBatches.has(record.id)
-                                            ? 'Retrying...'
+                                            ? 'Retrying…'
                                             : isCancelled && !isProcessing ? `Re-queue ${cancelledCount} cancelled` : 'Retry'}
                                         </button>
                                       )}
-                                      {/* Cancel — show only while items are still pending.
-                                          type="button" so a stray Enter can't submit-activate it, and it
-                                          opens a confirmation instead of cancelling on the spot. */}
+                                      {/* Cancel — only while items are still pending. type="button"
+                                          so a stray Enter can't activate it; it opens a confirmation. */}
                                       {isProcessing && record.pending > 0 && (
                                         <button
                                           type="button"
                                           disabled={cancellingBatches.has(record.id)}
                                           onClick={(e) => handleCancelBatch(record.id, record.pending, e)}
                                           onKeyDown={(e) => {
-                                            // Space scrolls the file list; don't let it double as "cancel 77 files".
+                                            // Space scrolls the file list; it must not double as "cancel 77 files".
                                             if (e.key === ' ') e.preventDefault();
                                           }}
-                                          className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
-                                            cancellingBatches.has(record.id)
-                                              ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                                              : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
-                                          }`}
+                                          className="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-medium rounded-lg transition-colors text-destructive bg-destructive-subtle hover:brightness-95 disabled:text-gray-400 disabled:bg-gray-100 disabled:cursor-not-allowed"
                                         >
-                                          <X className="w-3 h-3" />
-                                          {cancellingBatches.has(record.id) ? 'Cancelling...' : `Cancel Batch (${record.pending} pending)`}
+                                          <X className="w-3.5 h-3.5" />
+                                          {cancellingBatches.has(record.id) ? 'Cancelling…' : `Cancel batch (${record.pending} pending)`}
                                         </button>
                                       )}
                                     </div>
@@ -5857,13 +5835,32 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                           return true;
                                         })
                                       : record.statuses;
+                                    /* The file list is a dropdown — collapsed by default so a
+                                       batch reads as its summary first. A status filter opens
+                                       it, since filtering is asking to see those files. */
+                                    const filesOpen = !!uploadHistoryFilter || expandedUploadBatches.has(record.id);
                                     return filteredStatuses.length > 0 ? (
-                                    <div className="border-t border-gray-100 pt-4">
-                                      <div className="flex items-center justify-between mb-3">
+                                    <div className="mt-4 border-t border-gray-100 pt-3 px-4 sm:px-5">
+                                      <div className={`flex items-center justify-between ${filesOpen ? 'mb-2' : ''}`}>
                                         <div className="flex items-center gap-3">
-                                          <div className="text-xs font-semibold text-gray-700">
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setExpandedUploadBatches((prev) => {
+                                                const next = new Set(prev);
+                                                if (next.has(record.id)) next.delete(record.id);
+                                                else next.add(record.id);
+                                                return next;
+                                              });
+                                            }}
+                                            disabled={!!uploadHistoryFilter}
+                                            aria-expanded={filesOpen}
+                                            className="-ml-1.5 inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-100 disabled:hover:bg-transparent disabled:cursor-default transition-colors"
+                                          >
+                                            <ChevronDown className={`w-3.5 h-3.5 text-gray-500 transition-transform ${filesOpen ? '' : '-rotate-90'}`} />
                                             Files ({filteredStatuses.length}{uploadHistoryFilter ? ` of ${record.statuses.length}` : ''})
-                                          </div>
+                                          </button>
                                           {/* Select All checkbox for versioned items */}
                                           {uploadHistoryFilter === 'versioned' && filteredStatuses.length > 0 && (() => {
                                             const versionedInBatch = filteredStatuses.filter((f: any) => f.status === 'versioned' || f.status === 'version');
@@ -5902,34 +5899,36 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                           })()}
                                         </div>
                                         <div className="flex items-center gap-2 text-xs">
-                                          <span className="flex items-center gap-1 text-green-600">
+                                          <span className="flex items-center gap-1 text-success tabular-nums" title="Done">
                                             <CheckCircle className="w-3 h-3" />
                                             {record.statuses.filter((f: any) => f.status === 'completed' || f.status === 'versioned').length}
                                           </span>
-                                          <span className="flex items-center gap-1 text-blue-600">
-                                            <Loader2 className="w-3 h-3" />
+                                          <span className="flex items-center gap-1 text-brand-blue tabular-nums" title="In progress or queued">
+                                            <Clock className="w-3 h-3" />
                                             {record.statuses.filter((f: any) => f.status === 'processing' || f.status === 'pending').length}
                                           </span>
-                                          <span className="flex items-center gap-1 text-red-600">
+                                          <span className="flex items-center gap-1 text-destructive tabular-nums" title="Failed or duplicate">
                                             <AlertCircle className="w-3 h-3" />
                                             {record.statuses.filter((f: any) => f.status === 'error' || f.status === 'duplicate' || f.status === 'duplicated').length}
                                           </span>
                                           {/* Cancelled files had no counter at all, so they were invisible here too */}
                                           {record.statuses.some((f: any) => f.status === 'cancelled' || f.status === 'discarded') && (
-                                            <span className="flex items-center gap-1 text-gray-600">
+                                            <span className="flex items-center gap-1 text-gray-500 tabular-nums" title="Cancelled">
                                               <Ban className="w-3 h-3" />
                                               {record.statuses.filter((f: any) => f.status === 'cancelled' || f.status === 'discarded').length}
                                             </span>
                                           )}
                                         </div>
                                       </div>
+                                      {filesOpen && (<>
                                       {/* Short note: cancel only for queued items */}
                                       {record.statuses.some((f: any) => f.status === 'pending' || f.status === 'error' || f.status === 'cancelled') && (
-                                        <p className="text-2xs text-gray-400 mb-2">
-                                          ℹ️ Retry is available for queued, failed &amp; cancelled files. Cancel is only available for queued files.
+                                        <p className="flex items-center gap-1.5 text-2xs text-gray-500 mb-2.5">
+                                          <Info className="w-3 h-3 flex-shrink-0 text-gray-400" />
+                                          Retry is available for queued, failed &amp; cancelled files. Cancel is only available for queued files.
                                         </p>
                                       )}
-                                      <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                                      <div className="rounded-lg border border-gray-200 divide-y divide-gray-100 max-h-72 overflow-y-auto">
                                         {filteredStatuses.map((file: any, idx: number) => {
                                           const isClickable = ['completed', 'versioned', 'duplicate', 'error'].includes(file.status);
                                           const isVersioned = file.status === 'versioned' || file.status === 'version';
@@ -5967,17 +5966,11 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                                 });
                                               }
                                             }}
-                                            className={`flex items-center gap-2 sm:gap-3 p-2 sm:p-2.5 rounded-lg border transition-all ${
-                                              isVersioned && isSelected ? 'bg-brand-blue-2/15 border-brand-blue-2/40 ring-1 ring-brand-blue-2/30' :
-                                              file.status === 'completed' ? 'bg-green-50 border-green-200 hover:bg-green-100 hover:border-green-300' :
-                                              file.status === 'versioned' ? 'bg-brand-blue-2/[0.07] border-brand-blue-2/20 hover:bg-brand-blue-2/[0.12] hover:border-brand-blue-2/30' :
-                                              file.status === 'processing' ? 'bg-brand-blue/5 border-brand-blue/20' :
-                                              file.status === 'duplicate' ? 'bg-brand-orange/[0.07] border-brand-orange/20 hover:bg-brand-orange/10 hover:border-brand-orange/30' :
-                                              file.status === 'error' ? 'bg-red-50 border-red-200 hover:bg-red-100 hover:border-red-300' :
-                                              isCancelledFile ? 'bg-gray-100 border-gray-300' :
-                                              isUnknownStatusFile ? 'bg-amber-50 border-amber-300' :
-                                              'bg-gray-50 border-gray-200'
-                                            } ${isClickable ? 'cursor-pointer' : ''}`}
+                                            className={`flex items-center gap-3 px-3 py-2.5 transition-colors ${
+                                              isVersioned && isSelected ? 'bg-brand-blue-2/[0.06]' :
+                                              isUnknownStatusFile ? 'bg-amber-50/70' :
+                                              'bg-white'
+                                            } ${isClickable ? 'cursor-pointer hover:bg-gray-50' : ''}`}
                                           >
                                             {/* Checkbox for versioned items */}
                                             {isVersioned && (
@@ -6004,58 +5997,59 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                               />
                                             )}
                                             {/* Status Icon */}
-                                            <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                                              file.status === 'completed' ? 'bg-green-500' :
-                                              file.status === 'versioned' ? 'bg-brand-blue-2' :
-                                              file.status === 'processing' ? 'bg-brand-blue' :
-                                              file.status === 'duplicate' ? 'bg-brand-orange' :
-                                              file.status === 'error' ? 'bg-red-500' :
-                                              isCancelledFile ? 'bg-gray-500' :
-                                              'bg-gray-400'
+                                            <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${
+                                              file.status === 'completed' ? 'bg-success-subtle text-success' :
+                                              file.status === 'versioned' ? 'bg-brand-blue-2/10 text-brand-blue-2' :
+                                              file.status === 'processing' ? 'bg-brand-blue/10 text-brand-blue' :
+                                              file.status === 'duplicate' ? 'bg-brand-orange/10 text-brand-orange-deep' :
+                                              file.status === 'error' ? 'bg-destructive-subtle text-destructive' :
+                                              isUnknownStatusFile ? 'bg-amber-100 text-amber-700' :
+                                              'bg-gray-100 text-gray-500'
                                             }`}>
-                                              {file.status === 'completed' && <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4 text-white" />}
-                                              {file.status === 'versioned' && <GitBranch className="w-3 h-3 sm:w-4 sm:h-4 text-white" />}
-                                              {file.status === 'processing' && <Loader2 className="w-3 h-3 sm:w-4 sm:h-4 text-white animate-spin" />}
-                                              {file.status === 'duplicate' && <Copy className="w-3 h-3 sm:w-4 sm:h-4 text-white" />}
-                                              {file.status === 'error' && <AlertCircle className="w-3 h-3 sm:w-4 sm:h-4 text-white" />}
-                                              {file.status === 'pending' && <Clock className="w-3 h-3 sm:w-4 sm:h-4 text-white animate-pulse" />}
-                                              {isCancelledFile && <Ban className="w-3 h-3 sm:w-4 sm:h-4 text-white" />}
+                                              {file.status === 'completed' && <CheckCircle className="w-3.5 h-3.5" />}
+                                              {file.status === 'versioned' && <GitBranch className="w-3.5 h-3.5" />}
+                                              {file.status === 'processing' && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                                              {file.status === 'duplicate' && <Copy className="w-3.5 h-3.5" />}
+                                              {file.status === 'error' && <AlertCircle className="w-3.5 h-3.5" />}
+                                              {file.status === 'pending' && <Clock className="w-3.5 h-3.5" />}
+                                              {isCancelledFile && <Ban className="w-3.5 h-3.5" />}
+                                              {isUnknownStatusFile && <HelpCircle className="w-3.5 h-3.5" />}
                                             </div>
                                             {/* File Info */}
                                             <div className="flex-1 min-w-0">
-                                              <div className="font-medium text-gray-900 text-2xs sm:text-sm truncate">{file.fileName}</div>
+                                              <div className="font-medium text-gray-900 text-xs sm:text-sm truncate">{file.fileName}</div>
                                               <div className="text-2xs sm:text-xs text-gray-500 mt-0.5 truncate">
-                                                {file.status === 'completed' && (file.candidateName ? `✓ ${file.candidateName}` : '✓ Uploaded successfully')}
-                                                {file.status === 'versioned' && (file.candidateName ? `↑ ${file.candidateName} - Version update detected` : '↑ Version update detected - Pending resolution')}
-                                                {file.status === 'processing' && '⚡ Processing...'}
-                                                {file.status === 'pending' && '⏳ Waiting in queue...'}
-                                                {file.status === 'duplicate' && (file.errorMessage || '⚠ Duplicate - already exists')}
-                                                {file.status === 'error' && (file.errorMessage || '✗ Failed to process')}
-                                                {isCancelledFile && (file.errorMessage || '✕ Cancelled before processing')}
-                                                {isUnknownStatusFile && `? Unrecognised status: ${String(file.status)}`}
+                                                {file.status === 'completed' && (file.candidateName || 'Uploaded successfully')}
+                                                {file.status === 'versioned' && (file.candidateName ? `${file.candidateName} · version update detected` : 'Version update detected · pending resolution')}
+                                                {file.status === 'processing' && 'Processing…'}
+                                                {file.status === 'pending' && 'Waiting in queue…'}
+                                                {file.status === 'duplicate' && (file.errorMessage || 'Duplicate · already exists')}
+                                                {file.status === 'error' && (file.errorMessage || 'Failed to process')}
+                                                {isCancelledFile && (file.errorMessage || 'Cancelled before processing')}
+                                                {isUnknownStatusFile && `Unrecognised status: ${String(file.status)}`}
                                               </div>
                                             </div>
                                             {/* Status Badge */}
-                                            <span className={`hidden sm:inline px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-2xs sm:text-xs font-semibold flex-shrink-0 ${
-                                              file.status === 'completed' ? 'bg-green-100 text-green-700' :
-                                              file.status === 'versioned' ? 'bg-brand-blue-2/15 text-brand-blue-2' :
+                                            <span className={`hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-medium flex-shrink-0 ${
+                                              file.status === 'completed' ? 'bg-success-subtle text-success' :
+                                              file.status === 'versioned' ? 'bg-brand-blue-2/10 text-brand-blue-2' :
                                               file.status === 'processing' ? 'bg-brand-blue/10 text-brand-blue' :
-                                              file.status === 'duplicate' ? 'bg-brand-orange/15 text-brand-orange-deep' :
-                                              file.status === 'error' ? 'bg-red-100 text-red-700' :
-                                              isCancelledFile ? 'bg-gray-200 text-gray-700' :
+                                              file.status === 'duplicate' ? 'bg-brand-orange/10 text-brand-orange-deep' :
+                                              file.status === 'error' ? 'bg-destructive-subtle text-destructive' :
+                                              isUnknownStatusFile ? 'bg-amber-100 text-amber-800' :
                                               'bg-gray-100 text-gray-600'
                                             }`}>
-                                              {file.status === 'completed' ? '✓ Done' :
-                                               file.status === 'versioned' ? '↑ Version' :
-                                               file.status === 'processing' ? '⚡ Running' :
-                                               file.status === 'duplicate' ? '⚠ Duplicate' :
-                                               file.status === 'error' ? '✗ Failed' :
-                                               file.status === 'cancelled' ? '✕ Cancelled' :
-                                               file.status === 'discarded' ? '✕ Discarded' :
-                                               file.status === 'pending' ? '⏳ Queued' :
+                                              {file.status === 'completed' ? 'Done' :
+                                               file.status === 'versioned' ? 'Version' :
+                                               file.status === 'processing' ? 'Running' :
+                                               file.status === 'duplicate' ? 'Duplicate' :
+                                               file.status === 'error' ? 'Failed' :
+                                               file.status === 'cancelled' ? 'Cancelled' :
+                                               file.status === 'discarded' ? 'Discarded' :
+                                               file.status === 'pending' ? 'Queued' :
                                                /* Never claim "Queued" for a status we don't understand —
                                                   that is exactly how 77 cancelled files read as queued. */
-                                               `? ${String(file.status ?? 'unknown')}`}
+                                               String(file.status ?? 'unknown')}
                                             </span>
                                             {/* Per-item Retry / Cancel — same temp-record guard as the
                                                 batch-level actions above. Without it the optimistic
@@ -6067,19 +6061,19 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                                 <button
                                                   disabled={retryingItems.has(file.id)}
                                                   onClick={(e) => handleRetryItem(record.id, file.id, e)}
-                                                  className={`p-1 rounded text-2xs font-medium transition-colors ${retryingItems.has(file.id) ? 'text-gray-400 cursor-not-allowed' : 'text-brand-blue hover:bg-brand-blue/10'}`}
+                                                  className={`w-7 h-7 inline-flex items-center justify-center rounded-md transition-colors ${retryingItems.has(file.id) ? 'text-gray-400 cursor-not-allowed' : 'text-gray-500 hover:text-brand-blue hover:bg-brand-blue/10'}`}
                                                   aria-label="Retry this file" title={file.status === 'cancelled' ? 'Re-queue this cancelled file' : 'Retry this file'}
                                                 >
-                                                  <RefreshCw className={`w-3 h-3 ${retryingItems.has(file.id) ? 'animate-spin' : ''}`} />
+                                                  <RefreshCw className={`w-3.5 h-3.5 ${retryingItems.has(file.id) ? 'animate-spin' : ''}`} />
                                                 </button>
                                                 {file.status === 'pending' && (
                                                   <button
                                                     disabled={cancellingItems.has(file.id)}
                                                     onClick={(e) => handleCancelItem(record.id, file.id, file.fileName, e)}
-                                                    className={`p-1 rounded text-2xs font-medium transition-colors ${cancellingItems.has(file.id) ? 'text-gray-400 cursor-not-allowed' : 'text-red-500 hover:bg-red-50'}`}
+                                                    className={`w-7 h-7 inline-flex items-center justify-center rounded-md transition-colors ${cancellingItems.has(file.id) ? 'text-gray-400 cursor-not-allowed' : 'text-gray-500 hover:text-destructive hover:bg-destructive-subtle'}`}
                                                     aria-label="Cancel this file (queued only)" title="Cancel this file (queued only)"
                                                   >
-                                                    <X className="w-3 h-3" />
+                                                    <X className="w-3.5 h-3.5" />
                                                   </button>
                                                 )}
                                               </div>
@@ -6088,9 +6082,10 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                         );
                                         })}
                                       </div>
+                                      </>)}
                                     </div>
                                     ) : uploadHistoryFilter ? (
-                                      <div className="border-t border-gray-100 pt-4">
+                                      <div className="mt-4 border-t border-gray-100 pt-4 px-4 sm:px-5">
                                         <p className="text-xs text-gray-400 text-center py-3">No {
                                           uploadHistoryFilter === 'completed' ? 'completed' :
                                           uploadHistoryFilter === 'duplicated' ? 'duplicate' :

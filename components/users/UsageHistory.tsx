@@ -18,7 +18,6 @@ import {
   Users,
   TrendingDown,
   Download,
-  Calendar,
   Filter,
   Search,
   RefreshCw,
@@ -59,6 +58,7 @@ import dashboardService, { SubscriptionUnits } from '@/lib/services/dashboardSer
 import { featurePermissionService, UserLimitsResponse } from '@/lib/services/featurePermissionService';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { Skeleton } from '@/components/ui/skeleton';
+import { DateField } from '@/components/ui/date-field';
 
 /* Neutral-gray table skeleton whose columns mirror a specific usage-history
    tab. `cols` is one width class (e.g. 'w-24') per column, in table order. */
@@ -1573,30 +1573,20 @@ export default function UsageHistory() {
           {/* Date Range */}
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-gray-600">From</label>
-            <div className="relative">
-              <Calendar className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-brand-blue/70" />
-              <input
-                type="date"
-                value={startDateInput}
-                max={endDateInput || defaultEndDate}
-                onChange={(e) => { setStartDateInput(e.target.value); setQuickPeriod(''); }}
-                className="text-sm border border-gray-200 rounded-lg pl-8 pr-3 py-2 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all hover:border-brand-blue/40"
-              />
-            </div>
+            <DateField
+              value={startDateInput}
+              max={endDateInput || defaultEndDate}
+              onChange={(v) => { setStartDateInput(v); setQuickPeriod(''); }}
+            />
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-gray-600">To</label>
-            <div className="relative">
-              <Calendar className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-brand-blue/70" />
-              <input
-                type="date"
-                value={endDateInput}
-                min={startDateInput || undefined}
-                max={defaultEndDate}
-                onChange={(e) => { setEndDateInput(e.target.value); setQuickPeriod(''); }}
-                className="text-sm border border-gray-200 rounded-lg pl-8 pr-3 py-2 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all hover:border-brand-blue/40"
-              />
-            </div>
+            <DateField
+              value={endDateInput}
+              min={startDateInput || undefined}
+              max={defaultEndDate}
+              onChange={(v) => { setEndDateInput(v); setQuickPeriod(''); }}
+            />
           </div>
 
           {/* Status */}

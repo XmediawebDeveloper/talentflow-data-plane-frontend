@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { FileDown, FileText, Users, Briefcase, ClipboardList, Calendar, Filter, Download, CheckSquare, Square, BarChart3, FileSpreadsheet, FileJson, Mail, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { DateField } from '@/components/ui/date-field';
 
 export default function ReportsExports() {
   const [selectedReports, setSelectedReports] = useState<string[]>([]);
@@ -251,21 +252,19 @@ export default function ReportsExports() {
             {/* Date Range */}
             <div>
               <label className="block text-sm text-gray-700 mb-2">Date From</label>
-              <input
-                type="date"
+              <DateField
                 value={dateRange.from}
-                onChange={(e) => setDateRange({ ...dateRange, from: e.target.value })}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
+                onChange={(v) => setDateRange({ ...dateRange, from: v })}
+                aria-label="Date From"
               />
             </div>
 
             <div>
               <label className="block text-sm text-gray-700 mb-2">Date To</label>
-              <input
-                type="date"
+              <DateField
                 value={dateRange.to}
-                onChange={(e) => setDateRange({ ...dateRange, to: e.target.value })}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
+                onChange={(v) => setDateRange({ ...dateRange, to: v })}
+                aria-label="Date To"
               />
             </div>
 

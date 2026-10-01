@@ -26,6 +26,7 @@ import ListPagination from './ListPagination';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import SearchableSelect from '@/components/ui/searchable-select';
+import { DateField } from '@/components/ui/date-field';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 import { useAllJobInviteTargets } from '@/lib/hooks/useAllJobInviteTargets';
@@ -36,6 +37,10 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu';
 
 /* Action menu item styling — cloned from the Job Openings page's three-dot
@@ -1438,44 +1443,33 @@ Best regards`);
   // Just the invite control itself, with no `<td>` wrapper, so the grid
   // view's card can place it next to its own View/Actions buttons instead
   // of inside a table row.
-  const renderInviteButton = (resume: ScoredResume) => {
-    // Row-scoped: for the cross-job global list this reads THIS row's own
-    // job from the bulk map: resolveAssessmentConfigured/
-    // resolveAIInterviewConfigured (see above), not the table-wide flags,
-    // which are `undefined` for that list. A single-job table's rows all
-    // resolve to the same table-wide flag, same as before this existed.
-    const rowAssessmentConfigured = resolveAssessmentConfigured(resume);
-    const rowAIInterviewConfigured = resolveAIInterviewConfigured(resume);
-    const rowCanInviteAssessment = canCreateAssessments && rowAssessmentConfigured !== false;
-    const rowCanInviteAIInterview = mayInviteAIInterview && rowAIInterviewConfigured !== false;
-    const rowInviteDisabled = !rowCanInviteAssessment && !rowCanInviteAIInterview;
-    // Always render the button rather than collapsing to a "-" placeholder
-    // when neither permission is held — the trigger stays visible and
-    // non-clickable, with its own tooltip naming the reason, matching every
-    // other disabled action on this page instead of disappearing outright.
-    const rowInviteDisabledTitle = !(canCreateAssessments || mayInviteAIInterview)
-      ? 'You do not have permission to invite candidates'
-      : 'No published assessment or AI interview for this job yet';
+  /** Which invites a row can offer. Row-scoped: for the cross-job global list
+   *  this reads THIS row's own job from the bulk map
+   *  (resolveAssessmentConfigured / resolveAIInterviewConfigured, see above),
+   *  not the table-wide flags, which are `undefined` for that list. A
+   *  single-job table's rows all resolve to the same table-wide flag. Shared
+   *  by the table's Invite button and the grid card's Actions → Invite
+   *  submenu, so the two can never offer different things. */
+  const getRowInviteGate = (resume: ScoredResume) => {
+    const rowCanInviteAssessment = canCreateAssessments && resolveAssessmentConfigured(resume) !== false;
+    const rowCanInviteAIInterview = mayInviteAIInterview && resolveAIInterviewConfigured(resume) !== false;
+    return {
+      rowCanInviteAssessment,
+      rowCanInviteAIInterview,
+      rowInviteDisabled: !rowCanInviteAssessment && !rowCanInviteAIInterview,
+      // The trigger stays visible but inert, with a tooltip naming the
+      // reason, rather than disappearing outright.
+      rowInviteDisabledTitle: !(canCreateAssessments || mayInviteAIInterview)
+        ? 'You do not have permission to invite candidates'
+        : 'No published assessment or AI interview for this job yet',
+    };
+  };
 
+  /** The Invite menu's two entries — Assessment and AI Interview. */
+  const renderInviteMenuItems = (resume: ScoredResume) => {
+    const { rowCanInviteAssessment, rowCanInviteAIInterview } = getRowInviteGate(resume);
     return (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="primary"
-            size="sm"
-            aria-label="Invite"
-            disabled={rowInviteDisabled}
-            title={rowInviteDisabled ? rowInviteDisabledTitle : 'Invite'}
-          >
-            <UserPlus className="w-3.5 h-3.5" />
-            Invite
-            <ChevronDown className="w-3 h-3" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          align="start"
-          className="w-48 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl"
-        >
+      <>
           <DropdownMenuItem
             className={scoredResumesMenuItemClass}
             /* Off unless this JD has a published assessment —
@@ -1537,6 +1531,33 @@ Best regards`);
               <Video className="w-4 h-4 text-menu-icon-share" />
               <span className={MENU_ITEM_SCALE_CLASS}>AI Interview</span>
             </DropdownMenuItem>
+      </>
+    );
+  };
+
+  const renderInviteButton = (resume: ScoredResume) => {
+    const { rowInviteDisabled, rowInviteDisabledTitle } = getRowInviteGate(resume);
+
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="primary"
+            size="sm"
+            aria-label="Invite"
+            disabled={rowInviteDisabled}
+            title={rowInviteDisabled ? rowInviteDisabledTitle : 'Invite'}
+          >
+            <UserPlus className="w-3.5 h-3.5" />
+            Invite
+            <ChevronDown className="w-3 h-3" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="start"
+          className="w-48 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl"
+        >
+          {renderInviteMenuItems(resume)}
         </DropdownMenuContent>
       </DropdownMenu>
     );
@@ -1760,22 +1781,20 @@ Best regards`);
               {/* 2. Date From */}
               <div className={FILTER_FIELD_CLASS}>
                 <label className={FILTER_LABEL_CLASS}>Date From</label>
-                <input
-                  type="date"
+                <DateField
                   value={filterDateFrom}
-                  onChange={(e) => search.setFilter('dateFrom', e.target.value)}
-                  className={FILTER_CONTROL_CLASS}
+                  onChange={(v) => search.setFilter('dateFrom', v)}
+                  aria-label="Date From"
                 />
               </div>
 
               {/* 3. Date To */}
               <div className={FILTER_FIELD_CLASS}>
                 <label className={FILTER_LABEL_CLASS}>Date To</label>
-                <input
-                  type="date"
+                <DateField
                   value={filterDateTo}
-                  onChange={(e) => search.setFilter('dateTo', e.target.value)}
-                  className={FILTER_CONTROL_CLASS}
+                  onChange={(v) => search.setFilter('dateTo', v)}
+                  aria-label="Date To"
                 />
               </div>
 
@@ -2124,7 +2143,8 @@ Best regards`);
                     >
                       View
                     </Button>
-                    {renderInviteButton(resume)}
+                    {/* Invite lives in the ⋮ menu on cards (Invite ▸ Assessment /
+                        AI Interview) rather than as its own button. */}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <button
@@ -2139,6 +2159,25 @@ Best regards`);
                         align="end"
                         className="w-52 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl"
                       >
+                        {(() => {
+                          const { rowInviteDisabled, rowInviteDisabledTitle } = getRowInviteGate(resume);
+                          return (
+                            <DropdownMenuSub>
+                              <DropdownMenuSubTrigger
+                                className={`${scoredResumesMenuItemClass} ${rowInviteDisabled ? 'text-gray-400 opacity-60' : ''}`}
+                                disabled={rowInviteDisabled}
+                                title={rowInviteDisabled ? rowInviteDisabledTitle : undefined}
+                              >
+                                <UserPlus className="w-4 h-4 text-menu-icon-share" />
+                                <span className={MENU_ITEM_SCALE_CLASS}>Invite</span>
+                              </DropdownMenuSubTrigger>
+                              <DropdownMenuSubContent className="w-44 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
+                                {renderInviteMenuItems(resume)}
+                              </DropdownMenuSubContent>
+                            </DropdownMenuSub>
+                          );
+                        })()}
+                        <DropdownMenuSeparator className="my-1 bg-gray-100" />
                         {renderActionsMenuItems(resume)}
                       </DropdownMenuContent>
                     </DropdownMenu>
