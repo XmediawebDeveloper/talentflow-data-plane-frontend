@@ -130,6 +130,9 @@ interface EventMeta {
 // are informational timeline markers the backend also omits from scoring.
 export const ADVISORY_TYPES = new Set<string>([
   'background_noise', 'voice_detected', 'session_paused', 'session_resumed',
+  // End-of-episode markers for the held attention warnings. The start event
+  // (gaze_away / multiple_faces) is the violation; these only carry duration.
+  'gaze_away_ended', 'multiple_faces_ended',
   // Infrastructure diagnostic, never the candidate's fault — must not count
   // against them, but must be visible so "no phone flags" isn't misread as
   // "we checked and found nothing".
@@ -201,6 +204,8 @@ export const EVENT_META: Record<string, EventMeta> = {
   voice_detected:   { category: 'advisory', label: 'Voice activity' },
   session_paused:   { category: 'advisory', label: 'Interview paused' },
   session_resumed:  { category: 'advisory', label: 'Interview resumed' },
+  gaze_away_ended:      { category: 'advisory', label: 'Looked back at the screen' },
+  multiple_faces_ended: { category: 'advisory', label: 'Back to one person on camera' },
 };
 
 /* ── Severity ─────────────────────────────────────────────────────────────── */
@@ -376,6 +381,7 @@ function num(x: unknown): number | null {
 const GAZE_DIR: Record<string, string> = {
   left: 'to the left', right: 'to the right', up: 'upward',
   left_up: 'up and to the left', right_up: 'up and to the right',
+  down: 'downward', left_down: 'down and to the left', right_down: 'down and to the right',
 };
 
 const TAB_METHOD: Record<string, string> = {
@@ -599,6 +605,15 @@ export function describeViolation(v: ViolationRecord): string {
       return 'The interview was paused.';
     case 'session_resumed':
       return 'The interview resumed.';
+    case 'gaze_away_ended':
+    case 'multiple_faces_ended': {
+      const secs = num(d.duration_seconds);
+      const what = v.event_type === 'gaze_away_ended' ? 'Looked back at the screen' : 'Only one person on camera again';
+      if (d.ended_by === 'interview_end') {
+        return secs != null ? `Still ongoing when the interview ended (lasted ${secs}s).` : 'Still ongoing when the interview ended.';
+      }
+      return secs != null ? `${what} after ${secs}s.` : `${what}.`;
+    }
     default:
       return '';
   }

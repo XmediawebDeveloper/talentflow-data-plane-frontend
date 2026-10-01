@@ -1219,11 +1219,14 @@ export const candidateService = {
    * Upload one webcam-recording segment (S3 multipart part = segmentIndex + 1).
    * Native fetch, not axios: no Content-Type override, no interceptor size caps.
    */
-  async uploadRecording(token: string, blob: Blob, segmentIndex = 0, isFinal = false): Promise<{ message: string; path: string | null; completed?: boolean }> {
+  async uploadRecording(token: string, blob: Blob, segmentIndex = 0, isFinal = false, recorderStartedAt?: string): Promise<{ message: string; path: string | null; completed?: boolean }> {
     const formData = new FormData();
     formData.append('file', blob, 'recording.webm');
     formData.append('segment_index', String(segmentIndex));
     formData.append('is_final', isFinal ? 'true' : 'false');
+    // When the recorder started, so a violation's timestamp can be turned into
+    // a position in the video. Sent every time; the server keeps the first.
+    if (recorderStartedAt) formData.append('recorder_started_at', recorderStartedAt);
     const headers: Record<string, string> = {};
     const sessionToken = sessionTokenManager.getToken?.();
     if (sessionToken) headers['X-Session-Token'] = sessionToken;
@@ -1236,11 +1239,12 @@ export const candidateService = {
   },
 
   /** Upload one entire-screen recording segment (same contract as uploadRecording). */
-  async uploadScreenRecording(token: string, blob: Blob, segmentIndex = 0, isFinal = false): Promise<{ message: string; path: string | null; completed?: boolean }> {
+  async uploadScreenRecording(token: string, blob: Blob, segmentIndex = 0, isFinal = false, recorderStartedAt?: string): Promise<{ message: string; path: string | null; completed?: boolean }> {
     const formData = new FormData();
     formData.append('file', blob, 'screen.webm');
     formData.append('segment_index', String(segmentIndex));
     formData.append('is_final', isFinal ? 'true' : 'false');
+    if (recorderStartedAt) formData.append('recorder_started_at', recorderStartedAt);
     const headers: Record<string, string> = {};
     const sessionToken = sessionTokenManager.getToken?.();
     if (sessionToken) headers['X-Session-Token'] = sessionToken;
