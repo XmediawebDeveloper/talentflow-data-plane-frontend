@@ -425,6 +425,17 @@ function JobDetailsContent() {
   const versionEditLocked =
     historicalVersionCheck?.id === jobId && historicalVersionCheck.isHistorical;
 
+  /* A JD at the 5-version cap, AND already in use elsewhere, can't go
+     anywhere from here: it's blocked from a direct edit (it's in use) and
+     from "Create New Version" (it's at the cap) alike. Greying the icon out
+     up front says so without requiring the click-through to the dialog to
+     find out — editing in place is still fine for a v5 JD that ISN'T in use,
+     so this only applies alongside usage, never from the version count alone. */
+  const jdUsageModules = getJDUsageModules(job?.usageStatus?.usage);
+  const atMaxVersionsInUse =
+    (job?.versionNumber ?? 1) >= 5 &&
+    (jdUsageModules.length > 0 || job?.usageStatus?.can_edit === false);
+
   const handleEdit = async (editJob: Job) => {
     if (checkingEditUsage) return;
     // Belt and braces: the button is disabled, so this only catches a
@@ -759,8 +770,14 @@ function JobDetailsContent() {
         /* Only the latest version keeps a live Edit — see
            VERSION_EDIT_LOCK_REASON above. `editDisabled` is false for it, so
            the latest version's Edit button renders exactly as it always has. */
-        editDisabled={versionEditLocked}
-        editDisabledReason={VERSION_EDIT_LOCK_REASON}
+        editDisabled={versionEditLocked || atMaxVersionsInUse}
+        editDisabledReason={
+          versionEditLocked
+            ? VERSION_EDIT_LOCK_REASON
+            : atMaxVersionsInUse
+              ? 'This JD is in use and already has 5 versions, the maximum allowed — it can’t be edited further.'
+              : VERSION_EDIT_LOCK_REASON
+        }
         onDisable={isTenantAdmin || hasPermission('canDisableJD') ? handleDisable : undefined}
         onEnable={isTenantAdmin || hasPermission('canDisableJD') ? handleEnable : undefined}
         onArchive={isTenantAdmin || hasPermission('canArchiveJD') ? handleArchive : undefined}
