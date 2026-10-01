@@ -6988,20 +6988,19 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       });
 
       // Update existing JD or create new one
-      // IMPORTANT: When editing a published JD, always create a NEW draft instead of updating
+      // Always update the SAME row/version in place when editingId exists —
+      // whether it is currently Draft or Published. No forking: the user
+      // edits exactly the version they opened, nothing else.
       console.log('[DEBUG] Save draft - editingId:', editingId, 'isEditingDraft:', isEditingDraft, 'isEditingPublished:', isEditingPublished);
       console.log('[DEBUG] jdData being saved:', { title: jdData.title, description: jdData.description?.substring(0, 100), creation_method: jdData.creation_method });
       let savedJd;
-      if (editingId && !isEditingPublished) {
-        // Only update if editing an existing DRAFT (not published)
-        console.log('[DEBUG] Updating existing draft with ID:', editingId);
+      if (editingId) {
+        console.log('[DEBUG] Updating existing JD in place:', editingId);
         savedJd = await jdService.update(editingId, jdData);
-        console.log('[DEBUG] JD updated as draft:', savedJd.id);
+        console.log('[DEBUG] JD updated:', savedJd.id);
       } else {
-        // Create new draft when:
-        // 1. No editingId (new JD)
-        // 2. Editing a published JD (create new draft version)
-        console.log('[DEBUG] Creating new draft (editingId is null or editing published JD)');
+        // No editingId at all — genuinely a new JD.
+        console.log('[DEBUG] Creating new draft (no editingId)');
         savedJd = await jdService.create(jdData);
         setEditingId(savedJd.id);  // Track the new ID in case we save again
         console.log('[DEBUG] JD created as draft:', savedJd.id);
@@ -7010,11 +7009,20 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       setIsSavingDraft(false);
       setHasUnsavedChanges(false); // Clear unsaved changes after successful save
 
+      // The backend silently refuses to move an already-Published JD to Draft
+      // via this update path (it only allows Published -> Disabled/Archived),
+      // so `savedJd.status` — what actually got persisted — is the only
+      // reliable source for this message. Branching on `isEditingPublished`
+      // (the status BEFORE the save) claimed "moved to draft" even when the
+      // JD stayed Published, which is exactly the false alarm this replaces.
+      const actuallyMovedToDraft = isEditingPublished && savedJd.status !== 'published';
       toast.success({
-        title: isEditingPublished ? 'New draft created!' : 'Draft saved!',
-        description: isEditingPublished
-          ? `A new draft version of "${jobTitle}" has been created. The original JD remains unchanged.`
-          : `"${jobTitle}" has been saved as draft.`,
+        title: actuallyMovedToDraft ? 'Moved to draft' : 'Draft saved!',
+        description: actuallyMovedToDraft
+          ? `"${jobTitle}" has been taken off Published and saved as a draft with your changes.`
+          : isEditingPublished
+            ? `"${jobTitle}" stays Published — your changes have been saved to it.`
+            : `"${jobTitle}" has been saved as draft.`,
       });
 
       // Navigate to job openings page after saving draft, unless the caller owns navigation
