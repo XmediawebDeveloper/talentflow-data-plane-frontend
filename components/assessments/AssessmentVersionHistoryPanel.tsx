@@ -490,9 +490,9 @@ export function JobStatusChip({ status, currentVersion }: { status?: string; cur
   const tone = getStatusConfig(label);
   return (
     <span
-      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs whitespace-nowrap border ${tone.bg} ${tone.text} ${tone.border}`}
+      className={`inline-flex shrink-0 items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap border ${tone.bg} ${tone.text} ${tone.border}`}
     >
-      <span className={`w-1.5 h-1.5 rounded-full ${tone.dot}`} />
+      <span className={`w-1.5 h-1.5 shrink-0 rounded-full ${tone.dot}`} />
       {label}
     </span>
   );
@@ -612,8 +612,8 @@ interface JobVersionGroup {
 export function StatusChip({ label }: { label: string }) {
   const tone = STATUS_STYLES[label] || STATUS_STYLES.Unknown;
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs ring-1 whitespace-nowrap ${tone.chip}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${tone.dot}`} />
+    <span className={`inline-flex shrink-0 items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ring-1 whitespace-nowrap ${tone.chip}`}>
+      <span className={`w-1.5 h-1.5 shrink-0 rounded-full ${tone.dot}`} />
       {label}
     </span>
   );
@@ -635,7 +635,7 @@ export function VersionChip({ kind, version }: { kind: 'job' | 'assessment'; ver
   const isJob = kind === 'job';
   return (
     <span
-      className={`px-2 py-0.5 rounded-md text-xs font-semibold whitespace-nowrap ring-1 ${
+      className={`inline-flex shrink-0 whitespace-nowrap items-center justify-center min-w-[2.25rem] px-1.5 py-0.5 rounded-md text-xs font-semibold tabular-nums ring-1 ${
         isJob
           ? 'text-brand-blue bg-brand-blue/10 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35'
           : 'text-brand-cyan bg-brand-cyan/10 ring-brand-cyan/20 dark:bg-brand-cyan/20 dark:text-cyan-200 dark:ring-brand-cyan/35'
@@ -648,7 +648,7 @@ export function VersionChip({ kind, version }: { kind: 'job' | 'assessment'; ver
 
 export function LatestBadge() {
   return (
-    <span className="px-1.5 py-0.5 rounded-md text-2xs font-semibold tracking-wide text-white bg-brand-blue ring-1 ring-white/10">
+    <span className="inline-flex shrink-0 items-center whitespace-nowrap px-1.5 py-0.5 rounded-md text-2xs font-semibold tracking-wide text-white bg-brand-blue ring-1 ring-white/10">
       Latest
     </span>
   );
@@ -1063,7 +1063,7 @@ export default function AssessmentVersionHistoryPanel({
           {/* Heading left, the host's control right - the table's own top
               corner, above the rows it acts on. */}
           <div className="px-3 sm:px-4 pt-3 pb-2 flex flex-wrap items-center justify-between gap-2">
-            <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-100">
+            <h4 className="min-w-0 text-sm font-semibold text-gray-900 dark:text-slate-100">
               Job Versions{' '}
               <span className="font-normal text-gray-500 dark:text-slate-400">({groups.length})</span>
             </h4>
@@ -1105,7 +1105,7 @@ export default function AssessmentVersionHistoryPanel({
                          sideways-scrolling table keeps every column, Actions and
                          Completed alike, fully readable at some scroll position
                          on every screen. */
-                      className={`sticky top-0 py-2 px-3 text-xs font-semibold text-gray-500 dark:text-slate-400 whitespace-nowrap bg-slate-50 dark:bg-slate-800 ${minW} z-[7] shadow-[inset_0_-1px_0_var(--raw-e5e7eb)] dark:shadow-[inset_0_-1px_0_var(--raw-334155)]`}
+                      className={`sticky top-0 px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 whitespace-nowrap bg-slate-50 dark:bg-slate-800 ${minW} z-[7] shadow-[inset_0_-1px_0_var(--raw-e5e7eb)] dark:shadow-[inset_0_-1px_0_var(--raw-334155)]`}
                     >
                       {label}
                     </th>
@@ -1171,9 +1171,9 @@ export default function AssessmentVersionHistoryPanel({
                         onClick={() => onViewJobVersion(group.jobVersionId!, group.jobVersion)}
                         aria-label={`View job V${group.jobVersion} details`}
                         title={`View job V${group.jobVersion} details`}
-                        className="px-2 flex-shrink-0"
+                        className="h-8 w-8 px-0 flex-shrink-0"
                       >
-                        <Eye className="w-3.5 h-3.5" />
+                        <Eye className="w-4 h-4" />
                       </Button>
                     ) : null;
 
@@ -1222,31 +1222,31 @@ export default function AssessmentVersionHistoryPanel({
                            poor one. Only where there is something to expand. */
                         onClick={hasAssessments ? () => toggleJobVersion(group.jobVersion) : undefined}
                       >
-                        <td className="py-3 px-3 whitespace-nowrap align-middle">
+                        <td className="px-3 sm:px-4 py-3 whitespace-nowrap align-middle">
                           <span className="inline-flex items-center gap-1.5">
                             <VersionChip kind="job" version={group.jobVersion} />
                             {group.isLatestJobVersion && <LatestBadge />}
                           </span>
                         </td>
-                        <td className="py-3 px-3 whitespace-nowrap align-middle">
+                        <td className="px-3 sm:px-4 py-3 whitespace-nowrap align-middle">
                           <JobStatusChip status={group.jobStatus} currentVersion={group.jobCurrentVersion} />
                         </td>
                         <td
-                          className="py-3 px-3 text-sm font-medium text-gray-900 dark:text-slate-100 whitespace-nowrap max-w-[180px] truncate align-middle"
+                          className="px-3 sm:px-4 py-3 text-sm font-medium text-gray-900 dark:text-slate-100 whitespace-nowrap max-w-[180px] truncate align-middle"
                           title={group.experience || ''}
                         >
                           {group.experience || <span className="text-gray-500 dark:text-slate-400">&mdash;</span>}
                         </td>
-                        <td className="py-3 px-3 whitespace-nowrap align-middle">
+                        <td className="px-3 sm:px-4 py-3 whitespace-nowrap align-middle">
                           <CreatedCell createdOn={group.createdOn} createdBy={group.createdBy} />
                         </td>
-                        <td className="py-3 px-3 whitespace-nowrap align-middle">
+                        <td className="px-3 sm:px-4 py-3 whitespace-nowrap align-middle">
                           <MetricCell value={count} label={count === 1 ? vocabulary.childSingular : vocabulary.childPlural} />
                         </td>
-                        <td className="py-3 px-3 whitespace-nowrap align-middle">
+                        <td className="px-3 sm:px-4 py-3 whitespace-nowrap align-middle">
                           <MetricCell value={group.totalInvitations} label={group.totalInvitations === 1 ? 'Invitation' : 'Invitations'} />
                         </td>
-                        <td className="py-3 px-3 whitespace-nowrap align-middle">
+                        <td className="px-3 sm:px-4 py-3 whitespace-nowrap align-middle">
                           <MetricCell value={group.totalCompleted} label={group.totalCompleted === 1 ? 'Candidate' : 'Candidates'} />
                         </td>
                         {/* Actions — an ordinary last column, reached by
@@ -1254,7 +1254,7 @@ export default function AssessmentVersionHistoryPanel({
                             NOT pinned right: an opaque pinned column overlaps the
                             Completed column beside it whenever the table is wider
                             than its host panel, clipping Completed from view. */}
-                        <td className="py-3 px-3 whitespace-nowrap align-middle">
+                        <td className="px-3 sm:px-4 py-3 whitespace-nowrap align-middle">
                           <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                             {/* The job version eye, when this surface wants it
                                 first. See `viewJobVersionPlacement`. */}
@@ -1367,7 +1367,7 @@ export default function AssessmentVersionHistoryPanel({
                                 <div className="px-3 sm:px-4 py-3 bg-slate-100/70 dark:bg-slate-800/60 border-t border-gray-200 dark:border-slate-700">
                                   <div className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden">
                                     <div className="px-3 pt-2.5 pb-1.5">
-                                      <h5 className="text-sm font-semibold text-gray-900 dark:text-slate-100">
+                                      <h5 className="min-w-0 text-sm font-semibold text-gray-900 dark:text-slate-100">
                                         {vocabulary.childVersionsHeading}{' '}
                                         <span className="font-normal text-gray-500 dark:text-slate-400">({count})</span>
                                       </h5>
@@ -1399,7 +1399,7 @@ export default function AssessmentVersionHistoryPanel({
                                             ].map(({ label, minW }) => (
                                               <th
                                                 key={label}
-                                                className={`py-2 px-3 text-xs font-semibold text-gray-500 dark:text-slate-400 whitespace-nowrap bg-slate-50 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 ${minW}`}
+                                                className={`px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 whitespace-nowrap bg-slate-50 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 ${minW}`}
                                               >
                                                 {label}
                                               </th>
@@ -1422,7 +1422,7 @@ export default function AssessmentVersionHistoryPanel({
                                                   (showsAssessmentSelect ? 1 : 0) +
                                                   (showsAssessmentActions ? 1 : 0)
                                                 }
-                                                className="py-4 px-3 text-xs text-gray-500 dark:text-slate-400"
+                                                className="px-3 sm:px-4 py-4 text-xs text-gray-500 dark:text-slate-400"
                                               >
                                                 This job version has an assessment, but its details could not be
                                                 loaded. Reopen this panel to try again.
@@ -1494,7 +1494,7 @@ export default function AssessmentVersionHistoryPanel({
                                                     the choice was made in. */}
                                                 {showsAssessmentSelect && (
                                                   <td
-                                                    className="py-2.5 px-3 whitespace-nowrap align-middle"
+                                                    className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle"
                                                     onClick={(e) => e.stopPropagation()}
                                                   >
                                                     <input
@@ -1516,37 +1516,37 @@ export default function AssessmentVersionHistoryPanel({
                                                     />
                                                   </td>
                                                 )}
-                                                <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                                                <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle">
                                                   <span className="inline-flex items-center gap-1.5">
                                                     <VersionChip kind="assessment" version={assessment.version} />
                                                     {(assessment.version ?? 1) === newestAssessmentVersion && <LatestBadge />}
                                                   </span>
                                                 </td>
-                                                <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                                                <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle">
                                                   <StatusChip label={statusLabel} />
                                                 </td>
-                                                <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                                                <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle">
                                                   <DateCell value={assessment.created_at} />
                                                 </td>
                                                 <td
-                                                  className="py-2.5 px-3 text-sm font-medium text-gray-900 dark:text-slate-100 whitespace-nowrap max-w-[160px] truncate align-middle"
+                                                  className="px-3 sm:px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-slate-100 whitespace-nowrap max-w-[160px] truncate align-middle"
                                                   title={assessment.created_by_name || ''}
                                                 >
                                                   {assessment.created_by_name || '—'}
                                                 </td>
-                                                <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                                                <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle">
                                                   {renderChildDetail ? renderChildDetail(assessment) : <RoundWeightageCell assessment={assessment} />}
                                                 </td>
                                                 {vocabulary.extraDetailColumn && (
-                                                  <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                                                  <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle">
                                                     {renderChildExtraDetail ? renderChildExtraDetail(assessment) : '—'}
                                                   </td>
                                                 )}
-                                                <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                                                <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle">
                                                   <MetricCell value={invitations} label={invitations === 1 ? 'Invitation' : 'Invitations'} />
                                                 </td>
                                                 {vocabulary.childCompletedColumn && (
-                                                  <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                                                  <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle">
                                                     {typeof assessment.completed_count === 'number'
                                                       ? <MetricCell value={assessment.completed_count} label={assessment.completed_count === 1 ? 'Candidate' : 'Candidates'} />
                                                       : <span className="text-sm text-gray-400">—</span>}
@@ -1560,7 +1560,7 @@ export default function AssessmentVersionHistoryPanel({
                                                     shifts every column right
                                                     of it out of alignment. */}
                                                 {showsAssessmentActions && (
-                                                  <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                                                  <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle">
                                                     {/* gap-1.5 matches the spacing
                                                         inside the quick-action
                                                         group, so all four
@@ -1585,9 +1585,9 @@ export default function AssessmentVersionHistoryPanel({
                                                           onClick={() => onViewAssessment(assessment)}
                                                           aria-label={`View assessment V${assessment.version ?? 1} details`}
                                                           title={`View assessment V${assessment.version ?? 1} details`}
-                                                          className="px-2 flex-shrink-0"
+                                                          className="h-8 w-8 px-0 flex-shrink-0"
                                                         >
-                                                          <Eye className="w-3.5 h-3.5" />
+                                                          <Eye className="w-4 h-4" />
                                                         </Button>
                                                       )}
                                                       {/* The host's own menu and

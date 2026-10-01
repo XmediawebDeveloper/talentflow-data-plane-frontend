@@ -36,6 +36,7 @@ import AssessmentInviteTable, {
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import JobIdBadge from '@/components/jobs/JobIdBadge';
 import LanguageLogo, { logoLabelForId } from '@/components/assessments/LanguageLogo';
 import { formatScore } from '@/lib/utils/score';
 
@@ -1405,9 +1406,9 @@ export default function AssessmentDetailsView({
               {/* Row 1: Job ID + Assessment title + Status */}
               <div className="flex flex-wrap items-center gap-2 mb-2">
                 {assessment.jd_short_id && (
-                  <span className="inline-flex items-center px-2 py-0.5 bg-blue-600 text-white rounded-md text-xs font-semibold font-mono tracking-wide">
+                  <JobIdBadge className="inline-flex items-center shrink-0">
                     {assessment.jd_short_id}
-                  </span>
+                  </JobIdBadge>
                 )}
                 {/* The JOB's own name, and nothing appended to it. The
                     literal " - Assessment" that used to follow was written
@@ -1420,7 +1421,7 @@ export default function AssessmentDetailsView({
                   {assessment.jd_title || stripVersionFromTitle(assessment.title)}
                 </h1>
                 {assessment.status && (
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs border whitespace-nowrap ${
+                  <span className={`inline-flex shrink-0 items-center px-2 py-0.5 rounded-full text-xs font-medium border whitespace-nowrap ${
                     assessment.status === 'Active'
                       ? 'bg-success-subtle text-success border-success-line'
                       : assessment.status === 'Draft'
@@ -1433,7 +1434,11 @@ export default function AssessmentDetailsView({
               </div>
 
               {/* Row 2: Rounds + Duration + Created Date + Created By + versions */}
-              <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-600 dark:text-slate-400">
+              {/* `relative` here, and only `sm:relative` on the two version
+                  switchers below: under 640px their popovers anchor to this
+                  full-width row instead of to their pill, so a pill that
+                  wrapped to the right edge cannot push its menu off-screen. */}
+              <div className="relative flex flex-wrap items-center gap-1.5 text-xs text-gray-600 dark:text-slate-400">
                 {/* No per-icon colour. The four icons inherit the row's own
                     `text-gray-600 dark:text-slate-400` through currentColor, so
                     they read as one quiet line of facts instead of four tinted
@@ -1476,7 +1481,7 @@ export default function AssessmentDetailsView({
                    * Selecting a version navigates WITHIN Assessment Details,
                    * to the assessment authored against that job version - see
                    * `handleJobVersionSelect`. It never returns to the list. */
-                  <div className="relative" ref={versionMenuRef}>
+                  <div className="sm:relative shrink-0" ref={versionMenuRef}>
                     <button
                       type="button"
                       ref={versionTriggerRef}
@@ -1508,7 +1513,7 @@ export default function AssessmentDetailsView({
                         role="menu"
                         aria-label="Job versions"
                         onKeyDown={handleVersionMenuKeyDown}
-                        className="absolute left-0 top-full mt-2 w-80 max-w-[calc(100vw-2rem)] bg-white dark:bg-slate-900 rounded-xl shadow-lg shadow-brand-blue/10 border border-gray-200 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] z-50 overflow-hidden"
+                        className="absolute left-0 top-full mt-2 w-80 max-w-full sm:max-w-[calc(100vw-1.5rem)] bg-white dark:bg-slate-900 rounded-xl shadow-lg shadow-brand-blue/10 border border-gray-200 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] z-50 overflow-hidden"
                       >
                         {/* Header - what the list is, and how long it is. */}
                         <div className="flex items-baseline justify-between gap-2 px-3 py-2">
@@ -1654,7 +1659,7 @@ export default function AssessmentDetailsView({
                      assessment blue this page uses everywhere else, labelled,
                      because two bare numbers side by side is the ambiguity the
                      Send Invite rows already spell their way out of. */
-                  <div className="relative" ref={assessmentVersionMenuRef}>
+                  <div className="sm:relative shrink-0" ref={assessmentVersionMenuRef}>
                     <button
                       type="button"
                       onClick={toggleAssessmentVersionMenu}
@@ -1676,7 +1681,7 @@ export default function AssessmentDetailsView({
                       <div
                         role="menu"
                         aria-label="Assessment versions"
-                        className="absolute left-0 top-full mt-2 w-64 max-w-[calc(100vw-2rem)] bg-white dark:bg-slate-900 rounded-xl shadow-lg shadow-brand-blue/10 border border-gray-200 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] z-50 overflow-hidden"
+                        className="absolute left-0 top-full mt-2 w-64 max-w-full sm:max-w-[calc(100vw-1.5rem)] bg-white dark:bg-slate-900 rounded-xl shadow-lg shadow-brand-blue/10 border border-gray-200 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] z-50 overflow-hidden"
                       >
                         {/* Names the job version these belong to, because that
                             is the whole rule this menu now follows: the list is
@@ -1791,7 +1796,7 @@ export default function AssessmentDetailsView({
             {/* Actions. Share keeps every one of its own rules; Edit is the
                 pencil from the reference, on the `onEdit` the route has always
                 passed. */}
-            <div className="flex items-center gap-2 flex-shrink-0 self-start">
+            <div className="flex flex-wrap items-center gap-2 flex-shrink-0 self-start">
               {onShare && canCreateAssessments && (() => {
         // Share is blocked for Archived (out of circulation) AND
         // once invites have been revoked (assessment is sealed —
@@ -1832,7 +1837,7 @@ export default function AssessmentDetailsView({
                   onClick={onEdit}
                   aria-label="Edit assessment"
                   title="Edit assessment"
-                  className="h-9 w-9 px-0 flex-shrink-0"
+                  className="h-8 w-8 px-0 flex-shrink-0"
                 >
                   <Edit2 className="w-4 h-4" />
                 </Button>
@@ -1923,7 +1928,7 @@ export default function AssessmentDetailsView({
         {activeTab === 'overview' && (
           <div className="space-y-6">
             {/* Assessment Details Section */}
-            <div className="bg-white rounded-xl border border-gray-200 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+            <div className="min-w-0 bg-white rounded-xl border border-gray-200 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
               <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-200">
                 <h3 className="text-sm sm:text-base font-medium text-gray-900 flex items-center gap-2 tracking-tight">
                   <div className="w-9 h-9 flex-shrink-0 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
@@ -1950,7 +1955,7 @@ export default function AssessmentDetailsView({
                 <div
                   role="tablist"
                   aria-label="Assessment details views"
-                  className="flex flex-wrap items-center gap-1.5 mb-4 sm:mb-6"
+                  className="flex flex-wrap items-center gap-2 mb-4 sm:mb-6"
                 >
                   {detailsSubTabs.map((sub) => {
                     const isActive = detailsSubTab === sub.id;
@@ -1961,7 +1966,7 @@ export default function AssessmentDetailsView({
                         role="tab"
                         aria-selected={isActive}
                         onClick={() => setDetailsSubTab(sub.id)}
-                        className={`rounded-lg px-3 py-2 text-xs sm:text-sm transition-colors flex items-center gap-2 ${
+                        className={`rounded-lg px-3 py-1.5 text-xs sm:text-sm whitespace-nowrap transition-colors inline-flex items-center gap-1.5 ${
                           isActive
                             ? 'bg-brand-blue/5 text-brand-blue font-medium ring-1 ring-brand-blue/20'
                             : 'text-gray-600 dark:text-slate-400 hover:bg-brand-blue/5 hover:text-brand-blue'
@@ -2097,7 +2102,7 @@ export default function AssessmentDetailsView({
                                       <div className="text-xs text-gray-600 mb-1.5 font-medium">Topics Covered</div>
                                       <div className="flex flex-wrap gap-1.5">
                                         {section.topics.map((topic: any, i: number) => (
-                                          <span key={i} className="px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs">
+                                          <span key={i} className="max-w-full [overflow-wrap:anywhere] px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs">
                                             {typeof topic === 'string' ? topic : topic?.text || JSON.stringify(topic)}
                                           </span>
                                         ))}
@@ -2111,7 +2116,7 @@ export default function AssessmentDetailsView({
                                       <div className="text-xs text-gray-600 mb-1.5 font-medium">Programming Languages</div>
                                       <div className="flex flex-wrap gap-1.5">
                                         {section.languages.map((lang, i) => (
-                                          <span key={i} className="px-2 py-0.5 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded text-xs font-mono">
+                                          <span key={i} className="max-w-full [overflow-wrap:anywhere] px-2 py-0.5 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded text-xs font-mono">
                                             {lang}
                                           </span>
                                         ))}
@@ -2192,16 +2197,18 @@ export default function AssessmentDetailsView({
                           <p className="text-sm text-gray-500">Assessment info will appear once the JD analysis is complete</p>
                         </div>
                       ) : (
-                        <div className="p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6">
-                          {/* Key Metadata Cards */}
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3 lg:gap-4">
+                        <div className="@container p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6">
+                          {/* Key Metadata Cards — stepped on the panel's own
+                              width (it sits beside the side nav), not the
+                              viewport's. */}
+                          <div className="grid grid-cols-1 @xl:grid-cols-2 @4xl:grid-cols-3 gap-4 sm:gap-5">
                             {/* Job Complexity Level */}
-                            <div className="rounded-xl border border-gray-200 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4">
+                            <div className="min-w-0 rounded-xl border border-gray-200 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4 sm:p-5">
                               <div className="flex items-center gap-2 mb-2">
                                 <div className="w-9 h-9 flex-shrink-0 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                                   <Layers className="w-4 h-4 text-brand-blue" />
                                 </div>
-                                <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Job Complexity</span>
+                                <span className="min-w-0 text-xs font-medium text-gray-500 uppercase tracking-wide">Job Complexity</span>
                               </div>
                               {assessment.jd_complexity ? (
                                 <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${complexityColor(assessment.jd_complexity)}`}>
@@ -2213,12 +2220,12 @@ export default function AssessmentDetailsView({
                             </div>
 
                             {/* Experience Level */}
-                            <div className="rounded-xl border border-gray-200 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4">
+                            <div className="min-w-0 rounded-xl border border-gray-200 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4 sm:p-5">
                               <div className="flex items-center gap-2 mb-2">
                                 <div className="w-9 h-9 flex-shrink-0 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                                   <TrendingUp className="w-4 h-4 text-brand-cyan" />
                                 </div>
-                                <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Experience Level</span>
+                                <span className="min-w-0 text-xs font-medium text-gray-500 uppercase tracking-wide">Experience Level</span>
                               </div>
                               {assessment.jd_experience_level ? (
                                 <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${expColor(assessment.jd_experience_level)}`}>
@@ -2230,27 +2237,27 @@ export default function AssessmentDetailsView({
                             </div>
 
                             {/* Primary Domain */}
-                            <div className="rounded-xl border border-gray-200 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4">
+                            <div className="min-w-0 rounded-xl border border-gray-200 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4 sm:p-5">
                               <div className="flex items-center gap-2 mb-2">
                                 <div className="w-9 h-9 flex-shrink-0 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                                   <Globe className="w-4 h-4 text-brand-blue" />
                                 </div>
-                                <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Primary Domain</span>
+                                <span className="min-w-0 text-xs font-medium text-gray-500 uppercase tracking-wide">Primary Domain</span>
                               </div>
                               {assessment.jd_primary_domain ? (
-                                <span className="text-sm font-medium text-gray-900">{assessment.jd_primary_domain}</span>
+                                <span className="text-sm font-medium text-gray-900 [overflow-wrap:anywhere]">{assessment.jd_primary_domain}</span>
                               ) : (
                                 <span className="text-sm text-gray-400">Not available</span>
                               )}
                             </div>
 
                             {/* Coding Requirement */}
-                            <div className="rounded-xl border border-gray-200 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4">
+                            <div className="min-w-0 rounded-xl border border-gray-200 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4 sm:p-5">
                               <div className="flex items-center gap-2 mb-2">
                                 <div className="w-9 h-9 flex-shrink-0 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                                   <Code className="w-4 h-4 text-brand-cyan" />
                                 </div>
-                                <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Coding Requirement</span>
+                                <span className="min-w-0 text-xs font-medium text-gray-500 uppercase tracking-wide">Coding Requirement</span>
                               </div>
                               <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${assessment.coding_enabled ? 'bg-success-subtle text-success ring-1 ring-success-line' : 'bg-slate-100 text-gray-600 ring-1 ring-gray-200'}`}>
                                 {assessment.coding_enabled ? 'Required' : 'Not Required'}
@@ -2258,12 +2265,12 @@ export default function AssessmentDetailsView({
                             </div>
 
                             {/* Eligible Programming Languages */}
-                            <div className="rounded-xl border border-gray-200 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4 sm:col-span-2">
+                            <div className="min-w-0 rounded-xl border border-gray-200 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4 sm:p-5 @xl:col-span-2">
                               <div className="flex items-center gap-2 mb-2">
                                 <div className="w-9 h-9 flex-shrink-0 rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/20 flex items-center justify-center">
                                   <Zap className="w-4 h-4 text-brand-orange-deep" />
                                 </div>
-                                <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Eligible Programming Languages</span>
+                                <span className="min-w-0 text-xs font-medium text-gray-500 uppercase tracking-wide">Eligible Programming Languages</span>
                               </div>
                               {codingLanguages.length > 0 ? (
                                 <div className="flex flex-wrap gap-2">
@@ -2300,7 +2307,7 @@ export default function AssessmentDetailsView({
                                   return (
                                     <span
                                       key={idx}
-                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20"
+                                      className="inline-flex max-w-full [overflow-wrap:anywhere] items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20"
                                     >
                                       {skillName}
                                       {level && (
@@ -2332,7 +2339,7 @@ export default function AssessmentDetailsView({
                                   return (
                                     <span
                                       key={idx}
-                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/25"
+                                      className="inline-flex max-w-full [overflow-wrap:anywhere] items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/25"
                                     >
                                       {skillName}
                                       {level && (
@@ -2373,10 +2380,10 @@ export default function AssessmentDetailsView({
                         <p className="text-xs text-gray-500">Data will appear after candidates complete the assessment</p>
                       </div>
                     ) : (
-                      <div className={`grid grid-cols-1 ${assessment.technical_enabled && assessment.coding_enabled ? 'md:grid-cols-2' : ''} gap-6`}>
+                      <div className={`grid grid-cols-1 ${assessment.technical_enabled && assessment.coding_enabled ? 'lg:grid-cols-2' : ''} gap-4 sm:gap-5`}>
                         {/* Technical Performance */}
                         {assessment.technical_enabled && (
-                          <div className="bg-slate-50 border border-gray-200 ring-1 ring-black/[0.02] rounded-xl p-4">
+                          <div className="min-w-0 bg-slate-50 border border-gray-200 ring-1 ring-black/[0.02] rounded-xl p-4 sm:p-5">
                             <h5 className="text-sm font-semibold text-gray-900 mb-4 tracking-tight">Technical Performance</h5>
                             <div className="space-y-3">
                               {(() => {
@@ -2390,7 +2397,7 @@ export default function AssessmentDetailsView({
                                   <>
                                     {/* Passed (≥70%) */}
                                     <div>
-                                      <div className="flex items-center justify-between mb-2">
+                                      <div className="flex items-center justify-between gap-2 mb-2">
                                         <span className="text-sm text-gray-700">Passed (≥70%)</span>
                                         <span className="text-sm font-semibold text-success">{pct(passed)}%</span>
                                       </div>
@@ -2404,7 +2411,7 @@ export default function AssessmentDetailsView({
 
                                     {/* Average (50-69%) */}
                                     <div>
-                                      <div className="flex items-center justify-between mb-2">
+                                      <div className="flex items-center justify-between gap-2 mb-2">
                                         <span className="text-sm text-gray-700">Average (50-69%)</span>
                                         <span className="text-sm font-semibold text-brand-orange-deep">{pct(average)}%</span>
                                       </div>
@@ -2418,7 +2425,7 @@ export default function AssessmentDetailsView({
 
                                     {/* Below Average (<50%) */}
                                     <div>
-                                      <div className="flex items-center justify-between mb-2">
+                                      <div className="flex items-center justify-between gap-2 mb-2">
                                         <span className="text-sm text-gray-700">Below Average (&lt;50%)</span>
                                         <span className="text-sm font-semibold text-destructive">{pct(below)}%</span>
                                       </div>
@@ -2438,7 +2445,7 @@ export default function AssessmentDetailsView({
 
                         {/* Coding Performance */}
                         {assessment.coding_enabled && (
-                          <div className="bg-slate-50 border border-gray-200 ring-1 ring-black/[0.02] rounded-xl p-4">
+                          <div className="min-w-0 bg-slate-50 border border-gray-200 ring-1 ring-black/[0.02] rounded-xl p-4 sm:p-5">
                             <h5 className="text-sm font-semibold text-gray-900 mb-4 tracking-tight">Coding Performance</h5>
                             <div className="space-y-3">
                               {(() => {
@@ -2452,7 +2459,7 @@ export default function AssessmentDetailsView({
                                   <>
                                     {/* Passed (≥70%) */}
                                     <div>
-                                      <div className="flex items-center justify-between mb-2">
+                                      <div className="flex items-center justify-between gap-2 mb-2">
                                         <span className="text-sm text-gray-700">Passed (≥70%)</span>
                                         <span className="text-sm font-semibold text-success">{pct(passed)}%</span>
                                       </div>
@@ -2466,7 +2473,7 @@ export default function AssessmentDetailsView({
 
                                     {/* Average (50-69%) */}
                                     <div>
-                                      <div className="flex items-center justify-between mb-2">
+                                      <div className="flex items-center justify-between gap-2 mb-2">
                                         <span className="text-sm text-gray-700">Average (50-69%)</span>
                                         <span className="text-sm font-semibold text-brand-orange-deep">{pct(average)}%</span>
                                       </div>
@@ -2480,7 +2487,7 @@ export default function AssessmentDetailsView({
 
                                     {/* Below Average (<50%) */}
                                     <div>
-                                      <div className="flex items-center justify-between mb-2">
+                                      <div className="flex items-center justify-between gap-2 mb-2">
                                         <span className="text-sm text-gray-700">Below Average (&lt;50%)</span>
                                         <span className="text-sm font-semibold text-destructive">{pct(below)}%</span>
                                       </div>
@@ -2547,8 +2554,8 @@ export default function AssessmentDetailsView({
             {/* Header — this page's card header, carrying the popup's Refresh
                 control. The popup's title block is its dialog's; the tab is
                 already labelled by the nav entry that opened it. */}
-            <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
-              <h3 className="text-sm sm:text-base font-medium text-gray-900 flex items-center gap-2 tracking-tight">
+            <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-200 flex flex-wrap items-center justify-between gap-2">
+              <h3 className="min-w-0 text-sm sm:text-base font-medium text-gray-900 flex items-center gap-2 tracking-tight">
                 <div className="w-9 h-9 flex-shrink-0 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                   <Mail className="w-4 h-4 sm:w-5 sm:h-5 text-brand-cyan" />
                 </div>
@@ -2564,7 +2571,7 @@ export default function AssessmentDetailsView({
                 disabled={inviteRefreshing || inviteLoading}
                 title="Fetch the latest invite statuses"
                 aria-label="Refresh"
-                className="w-fit"
+                className="w-fit shrink-0"
                 icon={<RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ${inviteRefreshing ? 'animate-spin' : ''}`} />}
               >
                 <span className="hidden sm:inline-block min-w-[5.5rem] text-left">
@@ -2578,7 +2585,10 @@ export default function AssessmentDetailsView({
                 summary, so selecting a bucket narrows the table without
                 collapsing the other cards. */}
             <InviteStatCards
-              gridClassName="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-1 sm:gap-2 lg:gap-3"
+              /* Phone: one swipeable row with full labels — the Assessments
+                 page's Invite Status popup treatment; three to a row cut every
+                 label short. */
+              gridClassName="flex gap-2 overflow-x-auto scrollbar-hide [&>*]:shrink-0 [&>*]:min-w-[6.75rem] sm:grid sm:grid-cols-4 lg:grid-cols-7 sm:gap-3 sm:overflow-visible sm:[&>*]:min-w-0"
               activeStatus={inviteFilters.status}
               onSelect={(status) => {
                 setInviteFilters({ ...inviteFilters, status });
@@ -2597,16 +2607,16 @@ export default function AssessmentDetailsView({
 
             {/* Why most rows do not navigate — the popup's banner, verbatim. */}
             <div className="px-2.5 sm:px-6 pt-2 sm:pt-3 flex-shrink-0">
-              <div className="flex items-center gap-2.5 rounded-xl bg-brand-blue/[0.08] border border-brand-blue/20 px-3 py-2.5">
+              <div className="flex flex-wrap items-center gap-2.5 rounded-xl bg-brand-blue/[0.08] border border-brand-blue/20 px-3 py-2.5">
                 <Info className="w-4 h-4 text-brand-blue flex-shrink-0" />
-                <p className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+                <p className="min-w-0 flex-1 text-xs sm:text-sm text-gray-700 dark:text-slate-300">
                   <span className="font-semibold">Note:</span> Results are available only for candidates with Completed and Terminated status. Other candidates&rsquo; results are not available.
                 </p>
                 {/* Completion rate lives here, not in the card row: the row is
                     the status FILTER and this was the one tile that filtered
                     nothing. Same placement and treatment as the AI interview
                     tracker (2026-09-30). */}
-                <span className="ml-auto flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
+                <span className="ml-auto flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
                   <TrendingUp className="w-3.5 h-3.5" />
                   {inviteStats.total > 0 ? Math.round((inviteStats.completed / inviteStats.total) * 100) : 0}% Completion
                 </span>
@@ -2901,12 +2911,12 @@ export default function AssessmentDetailsView({
                             <div className="flex-1 min-w-0">
                               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-0.5 sm:gap-0">
                                 <div className="min-w-0">
-                                  <span className="font-medium text-gray-900 text-xs sm:text-sm">{activity.candidate_name || 'Unknown'}</span>
+                                  <span className="font-medium text-gray-900 text-xs sm:text-sm [overflow-wrap:anywhere]">{activity.candidate_name || 'Unknown'}</span>
                                   <span className="text-gray-500 ml-1 sm:ml-2 text-xs sm:text-sm">{info.label}</span>
                                 </div>
                                 <span className="text-xs sm:text-sm text-gray-500 sm:shrink-0">{formattedDate}</span>
                               </div>
-                              <p className="text-xs sm:text-sm text-gray-600 mt-0.5 truncate">{activity.candidate_email}</p>
+                              <p className="text-xs sm:text-sm text-gray-600 mt-0.5 truncate" title={activity.candidate_email}>{activity.candidate_email}</p>
                               {showScores && (
                                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-2">
                                   {assessment.technical_enabled && activity.technical_score != null && (
@@ -2922,7 +2932,7 @@ export default function AssessmentDetailsView({
                                     </div>
                                   )}
                                   {activity.passed != null && (
-                                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${activity.passed ? 'bg-success-subtle text-success ring-1 ring-success-line' : 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line'}`}>
+                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${activity.passed ? 'bg-success-subtle text-success ring-1 ring-success-line' : 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line'}`}>
                                       {activity.passed ? 'Passed' : 'Failed'}
                                     </span>
                                   )}
@@ -3015,11 +3025,11 @@ export default function AssessmentDetailsView({
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mb-1">
-                            <h4 className="text-sm sm:text-base font-semibold text-gray-900 tracking-tight">
+                            <h4 className="min-w-0 text-sm sm:text-base font-semibold text-gray-900 tracking-tight">
                               Version {version.version} {version.version === 1 ? 'Published' : 'Updated'}
                             </h4>
                             {isCurrentVersion && (
-                              <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 text-xs font-medium rounded w-fit">
+                              <span className="inline-flex items-center w-fit shrink-0 px-2 py-0.5 bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 text-xs font-medium rounded-full whitespace-nowrap">
                                 Current Version
                               </span>
                             )}
@@ -3031,7 +3041,7 @@ export default function AssessmentDetailsView({
                           {/* User & Date Info */}
                           <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-700 mb-1 flex-wrap">
                             <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 flex-shrink-0" />
-                            <span className="font-medium">{version.changed_by_name || 'Unknown User'}</span>
+                            <span className="font-medium min-w-0 [overflow-wrap:anywhere]">{version.changed_by_name || 'Unknown User'}</span>
                             <span className="text-gray-400">•</span>
                             <span className="text-gray-600">Lead Recruiter</span>
                           </div>
@@ -3062,7 +3072,7 @@ export default function AssessmentDetailsView({
                               {assessment.title && (
                                 <li className="text-xs sm:text-sm text-gray-700 flex items-start gap-1.5 sm:gap-2">
                                   <span className="text-brand-blue mt-0.5">•</span>
-                                  <span>Linked to job posting: {stripVersionFromTitle(assessment.title)}</span>
+                                  <span className="min-w-0 [overflow-wrap:anywhere]">Linked to job posting: {stripVersionFromTitle(assessment.title)}</span>
                                 </li>
                               )}
                               <li className="text-xs sm:text-sm text-gray-700 flex items-start gap-1.5 sm:gap-2">
@@ -3095,7 +3105,7 @@ export default function AssessmentDetailsView({
                 {/* The nav entry's own label, so the panel cannot be
                     headed one thing while the tab that opens it says
                     another. */}
-                <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">{siblingVersionsTabLabel}</h3>
+                <h3 className="min-w-0 truncate text-sm sm:text-base font-medium text-gray-900 tracking-tight">{siblingVersionsTabLabel}</h3>
                 {/* Which job version these belong to, in the marker the
                     header's Assessment Versions popover already uses — the
                     list is that job version's assessments and nothing else,
@@ -3174,41 +3184,41 @@ export default function AssessmentDetailsView({
                         <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-brand-cyan shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10 flex items-center justify-center flex-shrink-0">
                           <span className="text-white font-bold text-xs sm:text-sm">V{sibling.version || 1}</span>
                         </div>
-                        <div className="flex-1 min-w-0">
+                        <div className="@container flex-1 min-w-0">
                           <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2 mb-1.5">
                             <h4 className="min-w-0 text-sm sm:text-base font-semibold text-gray-900 tracking-tight truncate">
                               {stripVersionFromTitle(sibling.title || '') || sibling.short_id || 'Untitled assessment'}
                               {sibling.version ? ` - Version ${sibling.version}` : ''}
                             </h4>
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusChipClass}`}>
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${statusChipClass}`}>
                                 {statusLabel}
                               </span>
                               {isThis && (
-                                <span className="px-2 py-0.5 bg-brand-blue text-white shadow-sm shadow-brand-blue/25 text-xs font-medium rounded">
+                                <span className="inline-flex items-center px-2 py-0.5 bg-brand-blue text-white shadow-sm shadow-brand-blue/25 text-xs font-medium rounded-full whitespace-nowrap">
                                   Viewing
                                 </span>
                               )}
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs sm:text-sm text-gray-700 mt-2">
+                          <div className="grid grid-cols-1 @md:grid-cols-2 gap-x-4 gap-y-1 text-xs sm:text-sm text-gray-700 mt-2">
                             <div className="flex items-center gap-1.5 min-w-0">
                               <Users className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
                               <span className="shrink-0">Created by</span>
                               <span className="font-medium truncate">{sibling.created_by_name || 'Unknown'}</span>
                             </div>
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5 min-w-0">
                               <Calendar className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
-                              <span>{formatIST(sibling.created_at)}</span>
+                              <span className="truncate">{formatIST(sibling.created_at)}</span>
                             </div>
                             <div className="flex items-center gap-1.5">
                               <Clock className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
                               <span>{sibling.duration_minutes || assessment.duration_minutes || 30} min</span>
                             </div>
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5 min-w-0">
                               <FileText className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
-                              <span>{enabledSections}</span>
+                              <span className="truncate">{enabledSections}</span>
                             </div>
                             <div className="flex items-center gap-1.5">
                               <Users className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
@@ -3249,7 +3259,7 @@ export default function AssessmentDetailsView({
                             onClick={() => setPreviewVersion(sibling)}
                             title="Preview configure settings"
                             aria-label={`Preview configure settings for Version ${sibling.version || 1}`}
-                            className="flex-shrink-0 px-2"
+                            className="h-8 w-8 px-0 flex-shrink-0"
                           >
                             <Eye className="w-4 h-4" />
                           </Button>
