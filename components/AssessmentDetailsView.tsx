@@ -60,10 +60,8 @@ interface AssessmentDetailsViewProps {
   isReloading?: boolean;
   currentIndex?: number;
   totalCount?: number;
-  /** Called with the vertical tab open right now, so the host can open the
-   *  neighbouring assessment on that same tab rather than on Overview. */
-  onPrev?: (activeTab: string) => void;
-  onNext?: (activeTab: string) => void;
+  onPrev?: () => void;
+  onNext?: () => void;
   /**
    * Overrides the default Assessments trail. Set when this page is reached from
    * a JD (Job Details → Assessment → Create on a job that already has one), so
@@ -1368,8 +1366,8 @@ export default function AssessmentDetailsView({
           <RecordPager
             currentIndex={currentIndex}
             totalCount={totalCount}
-            onPrev={onPrev ? () => onPrev(activeTab) : undefined}
-            onNext={onNext ? () => onNext(activeTab) : undefined}
+            onPrev={onPrev}
+            onNext={onNext}
           />
         ) : undefined}
       />
