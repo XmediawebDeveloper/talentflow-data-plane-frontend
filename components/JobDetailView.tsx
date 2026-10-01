@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowLeft, ChevronRight, MapPin, Calendar, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, BarChart3, MessageSquare, FileText, Search, Paperclip, Loader2, AlertCircle, Info, ArrowRight, Zap, ClipboardList, Video } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, MapPin, Calendar, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, BarChart3, MessageSquare, FileText, Search, Paperclip, Loader2, AlertCircle, Info, ArrowRight, Zap, ClipboardList, Video } from 'lucide-react';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { Job } from '@/lib/types/types';
@@ -9,6 +9,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { jdService, JDLineageVersion, JDUsageStatus, JDVersion } from '@/lib/services/jdService';
+import api from '@/lib/services/api';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import { formatJobVersionLabel } from '@/lib/utils/jobOpeningDisplay';
 import SkillsList from '@/components/ui/SkillsList';
@@ -16,6 +17,7 @@ import { Tooltip } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
 import TabEmptyState from '@/components/ui/tab-empty-state';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
+import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
 import AITalentMatchConfirmModal from './AITalentMatchConfirmModal';
 import ResumeUploadModal from './ResumeUploadModal';
 import ResumeVersionsModal from './ResumeVersionsModal';
@@ -1440,6 +1442,161 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     return () => { cancelled = true; };
   }, [aiInterviewConfig?.id]);
 
+  /* JD status history for Recent Activity — Disabled, Re-enabled, Archived,
+     Unarchived — read from the audit log, since `job.status` only holds the
+     CURRENT status. Re-enable and unarchive go through the generic
+     `PUT /jd/{id}` status update rather than an endpoint of their own, so an
+     entry is classified by its action name AND by any status change in its
+     details. `null` = not loaded (no audit access, or the request failed):
+     the panel then falls back to the current-status row it always showed. */
+  /* The JD's own last-update time, fetched fresh — the fallback status row's
+     date when the audit log has nothing for this JD (the `job` prop can
+     arrive without `updated_at`, which left that row "N/A" at the bottom). */
+  const [jdLastUpdatedAt, setJdLastUpdatedAt] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    if (!job.id) return;
+    let cancelled = false;
+    jdService.get(job.id)
+      .then((jd) => { if (!cancelled) setJdLastUpdatedAt(jd.updated_at); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [job.id, job.status]);
+  const [jdStatusHistory, setJdStatusHistory] = useState<
+    { id: string; kind: 'Disabled' | 'Re-enabled' | 'Archived' | 'Unarchived'; at: string; by?: string }[] | null
+  >(null);
+  useEffect(() => {
+    if (!job.id) return;
+    let cancelled = false;
+    const lower = (v: unknown) => (typeof v === 'string' ? v.toLowerCase() : '');
+    type StatusKind = 'Disabled' | 'Re-enabled' | 'Archived' | 'Unarchived';
+    /** An entry that NAMES its transition — by action/label, or a status it
+     *  explicitly moves the JD to/from. */
+    const explicitKind = (log: any): StatusKind | null => {
+      const action = lower(`${log.action || ''} ${log.action_label || ''}`);
+      const d = log.details || {};
+      if (/unarchiv|restor/.test(action)) return 'Unarchived';
+      if (/archiv/.test(action)) return 'Archived';
+      if (/disabl/.test(action)) return 'Disabled';
+      if (/(^|[\s_-])(re[\s_-]?)?enabl/.test(action)) return 'Re-enabled';
+      const next = lower(d.new_status ?? d.to_status ?? d.changes?.status?.new ?? d.changes?.status?.[1] ?? d.status);
+      const prev = lower(d.old_status ?? d.previous_status ?? d.from_status ?? d.changes?.status?.old ?? d.changes?.status?.[0]);
+      if (next === 'archived') return 'Archived';
+      if (next === 'disabled') return 'Disabled';
+      if (next === 'published' && prev === 'archived') return 'Unarchived';
+      if (next === 'published' && prev === 'disabled') return 'Re-enabled';
+      return null;
+    };
+    /** Re-enable and unarchive have no endpoint of their own: both are
+     *  `PUT /jd/{id}` with status 'published', so the audit log records an
+     *  ordinary JD update/publish that may not say what the JD came back FROM.
+     *  Such an entry — a publish, or an update that set/touched `status` —
+     *  is read in sequence: right after a Disable it is the Re-enable, right
+     *  after an Archive the Unarchive. */
+    const bringsJdBack = (log: any): boolean => {
+      const action = lower(`${log.action || ''} ${log.action_label || ''}`);
+      const d = log.details || {};
+      if (/publish/.test(action)) return true;
+      const next = lower(d.new_status ?? d.to_status ?? d.changes?.status?.new ?? d.changes?.status?.[1] ?? d.status);
+      if (next === 'published' || next === 'active') return true;
+      const changedFields = d.changed_fields ?? d.updated_fields ?? d.fields_updated ?? d.fields ?? (d.changes && typeof d.changes === 'object' ? Object.keys(d.changes) : []);
+      return Array.isArray(changedFields) && changedFields.some((f: unknown) => lower(f) === 'status');
+    };
+    /* `/audits` filters by `action`, `entity_type`, user and date — NOT by
+       entity id. So: read the real action names from /audits/actions/list,
+       query every JD and status action from the JD's creation on, and keep
+       only entries that point at THIS JD. */
+    const STATUS_ACTION = /archiv|unarchiv|restor|disabl|enabl/i;
+    const JD_ACTION = /(^|_)(jd|job)|job.?desc|status/i;
+    const pointsAtThisJd = (log: any) => {
+      const d = log.details || {};
+      return [log.entity_id, d.jd_id, d.job_description_id, d.id].some((v) => v === job.id);
+    };
+    (async () => {
+      try {
+        const actionsRes = await api.get('/audits/actions/list');
+        const actions: { value: string; label?: string }[] = actionsRes.data?.actions || [];
+        const wanted = actions
+          .filter((a) => STATUS_ACTION.test(`${a.value} ${a.label || ''}`) || JD_ACTION.test(`${a.value} ${a.label || ''}`))
+          .map((a) => a.value);
+        const startDate = job.created_at || job.postedDate;
+        const pages = await Promise.all(wanted.map((action) =>
+          api.get('/audits', {
+            params: { action, page: 1, page_size: 100, ...(startDate ? { start_date: new Date(startDate).toISOString() } : {}) },
+          }).then((r) => (r.data?.items || []) as any[]).catch(() => [] as any[]),
+        ));
+        if (cancelled) return;
+        const seen = new Set<string>();
+        const entries = pages.flat()
+          .filter((log) => pointsAtThisJd(log) && !!(log.created_at || log.timestamp) && !seen.has(log.id) && seen.add(log.id))
+          .sort((a, b) => new Date(a.created_at || a.timestamp).getTime() - new Date(b.created_at || b.timestamp).getTime());
+        // Walk oldest-first, remembering whether the JD is currently switched off.
+        const rows: { id: string; kind: StatusKind; at: string; by?: string }[] = [];
+        let offBy: 'Disabled' | 'Archived' | null = null;
+        /* Last resort for an update logged with no status detail at all: the
+           FIRST JD update after a Disable/Archive, used only once the JD is
+           known to have come back — a later Disable/Archive follows it, or the
+           JD is Published now. */
+        let firstUpdateWhileOff: any = null;
+        const pushBack = (log: any) => {
+          if (!offBy) return;
+          rows.push({ id: log.id, kind: offBy === 'Disabled' ? 'Re-enabled' : 'Unarchived', at: log.created_at || log.timestamp, by: log.user_name || undefined });
+          offBy = null;
+          firstUpdateWhileOff = null;
+        };
+        entries.forEach((log) => {
+          const kind = explicitKind(log);
+          if (!kind) {
+            if (offBy && bringsJdBack(log)) pushBack(log);
+            else if (offBy && !firstUpdateWhileOff) firstUpdateWhileOff = log;
+            return;
+          }
+          if ((kind === 'Disabled' || kind === 'Archived') && offBy && firstUpdateWhileOff) pushBack(firstUpdateWhileOff);
+          if (kind === 'Re-enabled' || kind === 'Unarchived') firstUpdateWhileOff = null;
+          offBy = kind === 'Disabled' || kind === 'Archived' ? kind : null;
+          rows.push({ id: log.id, kind, at: log.created_at || log.timestamp, by: log.user_name || undefined });
+        });
+        if (offBy && firstUpdateWhileOff && job.status === 'Published') pushBack(firstUpdateWhileOff);
+        /* Re-enable / unarchive is a plain `PUT /jd/{id}` status update, which
+           the backend does not write to the audit log at all. So when the log
+           ends on a Disable/Archive but the JD is Published NOW, it was brought
+           back after that entry — and that status save is the JD's last update,
+           so its `updated_at` is when. A re-enable BETWEEN two disables leaves
+           no trace anywhere and cannot be shown until the backend audits it. */
+        if (offBy && job.status === 'Published') {
+          try {
+            const jd: any = await jdService.get(job.id);
+            const backAt: string | undefined = jd?.updated_at;
+            const lastOff = rows[rows.length - 1];
+            if (!cancelled && backAt && (!lastOff || new Date(backAt).getTime() >= new Date(lastOff.at).getTime())) {
+              const byName = [jd.updated_by_name, jd.modified_by_name, jd.status_changed_by_name]
+                .find((v: unknown): v is string => typeof v === 'string' && v.trim() !== '');
+              rows.push({
+                id: `inferred-${offBy}-${backAt}`,
+                kind: offBy === 'Disabled' ? 'Re-enabled' : 'Unarchived',
+                at: backAt,
+                by: byName,
+              });
+            }
+          } catch { /* no inferred row */ }
+        }
+        /* Dev-only diagnostics: what the audit log actually holds for this JD,
+           so the status matching above can be checked against real entries. */
+        if (process.env.NODE_ENV !== 'production') {
+          console.info('[RecentActivity] audit actions queried:', wanted);
+          console.info('[RecentActivity] audit entries for this JD:', entries.map((e) => ({
+            action: e.action, label: e.action_label, entity_type: e.entity_type, entity_id: e.entity_id,
+            at: e.created_at || e.timestamp, by: e.user_name, details: e.details,
+          })));
+          console.info('[RecentActivity] status rows built:', rows);
+        }
+        setJdStatusHistory(rows);
+      } catch {
+        if (!cancelled) setJdStatusHistory(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [job.id, job.status]);
+
   // Fetch assessment results on component mount (only if plan includes assessment)
   useEffect(() => {
     if (job.id && hasPlanFeature('assessment')) {
@@ -1491,6 +1648,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           overallRating10: item.overall_rating_10,
           scoredDate: item.created_at || new Date().toISOString(),
           scoredBy: item.scored_by || item.scored_by_name || 'System',
+          // Identifies one scoring trigger, where the API sends it — Recent
+          // Activity counts triggers, not resumes.
+          batchId: item.batch_id || item.scoring_batch_id || undefined,
           // Was missing here — every row on this tab fell back to
           // getScoringSourceLabel's default bucket regardless of where it was
           // actually scored from, since `source` never made it onto the
@@ -1759,6 +1919,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   };
 
   const [activeTab, setActiveTab] = useState<'overview' | 'scored-resumes' | 'assessment-results' | 'ai-talent-match' | 'ai-interview-results'>(initialTab || 'overview');
+  // Recent Activity panel — 10 events per page.
+  const [activityPage, setActivityPage] = useState(1);
+  const ACTIVITY_PAGE_SIZE = 10;
 
   /* ---- Where you are, kept in the URL -------------------------------------
      The open tab and the open candidate are both React state, so a refresh used
@@ -1987,7 +2150,16 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
 
   const handleAIMatchComplete = (results: any[]) => {
     setShowAIMatchPanel(false);
-    toast.success(`AI Talent Match completed! Found ${results.length} matching candidates.`);
+    /* A re-run that finds the same candidates as before says so, rather than
+       repeating "Found 15 matching candidates" as if they were new. */
+    const knownResumeIds = new Set(aiMatchCandidates.map((c) => c.resumeId));
+    const newCount = results.filter((r) => r?.resumeId && !knownResumeIds.has(r.resumeId)).length;
+    // Only what THIS run newly matched — no running total.
+    if (newCount === 0) {
+      toast.info('AI Talent Match completed — no new matching candidates found.');
+    } else {
+      toast.success(`AI Talent Match completed! Found ${newCount} new matching candidate${newCount === 1 ? '' : 's'}.`);
+    }
     fetchAiMatchData();
     setActiveTab('ai-talent-match');
   };
@@ -3783,11 +3955,11 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   every later one "Republished" (no version number on the
                   title: a republish is that same JD's own version going out
                   again, not a new artifact worth numbering here).
-                - Resume Scored: one row per scored resume, from its own
-                  scored_by_name + scoredDate.
-                - AI Talent Match Run: one row per session (no "who" field
-                  exists on AIMatchSessionResponse at all, so date-only →
-                  "System").
+                - Resume Scored: one row per scoring TRIGGER, counting the
+                  resumes that trigger scored (see below).
+                - AI Talent Match Run: one row per session, counting only
+                  that run's NEW matches; the runner's name shows once the
+                  API sends one, "System" until then.
                 - Assessment Created: one row per Assessment record, from its
                   own created_by_name + created_at + version.
                 - AI Interview Created: one row, versioned from the config's
@@ -3827,68 +3999,153 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                     events.push({ key: 'jd-republished', dot: 'bg-purple-500', title: 'Job Republished', date: job.updated_at, by: job.postedBy });
                   }
                 }
-                if (job.status === 'Archived') {
-                  events.push({ key: 'archived', dot: 'bg-brand-orange', title: 'Job Archived', date: job.updated_at });
-                }
-                if (job.status === 'Disabled') {
-                  events.push({ key: 'disabled', dot: 'bg-destructive', title: 'Job Disabled', date: job.updated_at });
-                }
-                scoredResumes.forEach((r: any, i: number) => {
-                  events.push({
-                    key: `scored-${r.id || i}`,
-                    dot: 'bg-blue-500',
-                    // A count, not the candidate's name — each row already
-                    // represents exactly one scoring event, so this is always
-                    // "(1)", matching Assessment Created (Vn)'s own
-                    // "parenthesized number" shape.
-                    title: 'Resume Scored (1)',
-                    date: r.scoredDate,
-                    by: r.scoredBy,
+                /* JD status changes — every Disabled / Re-enabled / Archived /
+                   Unarchived from the audit log, each its own event with who
+                   and when. Without audit access (or with no such entries
+                   yet) it falls back to the one row the current status
+                   implies. */
+                const STATUS_DOT: Record<string, string> = {
+                  Disabled: 'bg-destructive', 'Re-enabled': 'bg-success', Archived: 'bg-brand-orange', Unarchived: 'bg-brand-teal',
+                };
+                if (jdStatusHistory && jdStatusHistory.length > 0) {
+                  jdStatusHistory.forEach((h) => {
+                    events.push({ key: `status-${h.id}`, dot: STATUS_DOT[h.kind], title: `Job ${h.kind}`, date: h.at, by: h.by });
                   });
-                });
-                aiMatchSessions.forEach((s) => {
-                  events.push({
-                    key: `ai-match-${s.id}`,
-                    dot: 'bg-brand-cyan',
-                    title: `AI Talent Match Run (${s.total_matches ?? 0} Matched)`,
-                    date: s.created_at,
+                } else {
+                  // The current status only — dated by the JD's last update;
+                  // with no date at all it is pinned to the top below, since
+                  // it is the job's present state, not its oldest event.
+                  const statusDate = job.updated_at || jdLastUpdatedAt;
+                  if (job.status === 'Archived') {
+                    events.push({ key: 'archived', dot: 'bg-brand-orange', title: 'Job Archived', date: statusDate });
+                  }
+                  if (job.status === 'Disabled') {
+                    events.push({ key: 'disabled', dot: 'bg-destructive', title: 'Job Disabled', date: statusDate });
+                  }
+                }
+                /* ONE row per resume-scoring TRIGGER — like AI Talent Match
+                   Run, each trigger is its own event (who, when), and its
+                   count is the resumes THAT trigger scored, never a running
+                   total: "Resume Scored (10)" at 2:30 pm, "Resume Scored (5)"
+                   at 4:00 pm. A trigger is the API's batch id where it sends
+                   one; otherwise the resumes one trigger scores land
+                   back-to-back, so a new trigger starts wherever the same
+                   person's scorings are more than 2 minutes apart. Each row is
+                   dated by that trigger's latest scoring. */
+                {
+                  const TRIGGER_GAP_MS = 2 * 60 * 1000;
+                  type ScoringTrigger = { key: string; by: string; batchId?: string; count: number; lastTime: number; lastDate?: string };
+                  const openTriggerByScorer = new Map<string, ScoringTrigger>();
+                  const triggers: ScoringTrigger[] = [];
+                  [...scoredResumes]
+                    .sort((a: any, b: any) => new Date(a.scoredDate || 0).getTime() - new Date(b.scoredDate || 0).getTime())
+                    .forEach((r: any, i: number) => {
+                      const scorer = r.scoredBy || 'System';
+                      const time = new Date(r.scoredDate || 0).getTime();
+                      const open = openTriggerByScorer.get(scorer);
+                      const sameTrigger = !!open && (
+                        open.batchId && r.batchId ? open.batchId === r.batchId : time - open.lastTime <= TRIGGER_GAP_MS
+                      );
+                      if (open && sameTrigger) {
+                        open.count += 1;
+                        open.lastTime = time;
+                        open.lastDate = r.scoredDate;
+                      } else {
+                        const trigger: ScoringTrigger = {
+                          key: `scored-${r.batchId || r.id || i}`,
+                          by: scorer,
+                          batchId: r.batchId,
+                          count: 1,
+                          lastTime: time,
+                          lastDate: r.scoredDate,
+                        };
+                        triggers.push(trigger);
+                        openTriggerByScorer.set(scorer, trigger);
+                      }
+                    });
+                  triggers.forEach((t) => {
+                    events.push({ key: t.key, dot: 'bg-blue-500', title: `Resume Scored (${t.count})`, date: t.lastDate, by: t.by });
                   });
-                });
+                }
+                /* ONE row per AI Talent Match RUN — several users run it, so
+                   each run stays its own event (who, when). The count is
+                   what THAT run newly matched, not its running total: 15 at
+                   2:30 pm, then 10 new at 3:00 pm after 10 more resumes were
+                   uploaded — not "(15 Matched)", "(25 Matched)". Worked out
+                   oldest-first from each session's own result resume ids; a
+                   session listed without its results falls back to its
+                   total. Sessions carry no "who" field yet, so the name is
+                   read where the API sends one and is "System" otherwise. */
+                const seenMatchedResumeIds = new Set<string>();
+                [...aiMatchSessions]
+                  .sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime())
+                  .forEach((s) => {
+                    const resultIds = (s.results || []).map((r) => r.resume_id).filter(Boolean);
+                    let title: string;
+                    if (resultIds.length === 0) {
+                      title = `AI Talent Match Run (${s.total_matches ?? 0} Matched)`;
+                    } else {
+                      const newCount = resultIds.filter((id) => !seenMatchedResumeIds.has(id)).length;
+                      resultIds.forEach((id) => seenMatchedResumeIds.add(id));
+                      // Only the run's NEW matches — never a running total.
+                      title = `AI Talent Match Run (${newCount} Matched)`;
+                    }
+                    // Who ran it — a NAME only; a bare user id (uuid) is not
+                    // shown, it would read as gibberish in place of a name.
+                    const raw = s as unknown as Record<string, unknown>;
+                    const runBy = [raw.created_by_name, raw.run_by_name, raw.triggered_by_name, raw.user_name, raw.created_by]
+                      .find((v): v is string => typeof v === 'string' && v.trim() !== '' && !/^[0-9a-f-]{32,36}$/i.test(v));
+                    events.push({
+                      key: `ai-match-${s.id}`,
+                      dot: 'bg-brand-cyan',
+                      title,
+                      date: s.created_at,
+                      by: runBy,
+                    });
+                  });
                 jdAssessments.forEach((a: any) => {
                   events.push({
                     key: `assessment-${a.id}`,
                     dot: 'bg-indigo-500',
-                    title: `Assessment Created (V${a.version ?? 1})`,
+                    // V1 is the assessment's creation; every later record
+                    // for this JD is a new version of it.
+                    title: (a.version ?? 1) > 1 ? `Assessment Version Created (V${a.version})` : 'Assessment Created (V1)',
                     date: a.created_at,
                     by: a.created_by_name,
                   });
                 });
                 if (aiInterviewConfig) {
-                  // "Created" is definitionally the FIRST version — the
-                  // config's version history can hold many later entries
-                  // (every edit/republish adds one), and taking the latest of
-                  // those showed "Created (V7)" for a config edited six times
-                  // since. The earliest entry (falling back to 1, since a
-                  // config with no history yet is still at its first version)
-                  // is the one this title actually means.
-                  const createdVersion = aiInterviewVersionHistory.length > 0
-                    ? Math.min(...aiInterviewVersionHistory.map(v => v.version))
-                    : 1;
+                  /* ONE row: AI Interview has a single version for now. Its
+                     version-history endpoint adds an entry for every edit or
+                     republish of the config, so listing those would show
+                     "Version Created (V2…V7)" for versions that don't exist.
+                     The earliest entry is the creation; credited to whoever
+                     that entry records, else the config's creator. */
+                  const firstEntry = aiInterviewVersionHistory.length > 0
+                    ? aiInterviewVersionHistory.reduce((a, b) => (b.version < a.version ? b : a))
+                    : undefined;
                   events.push({
                     key: 'ai-interview',
                     dot: 'bg-pink-500',
-                    title: `AI Interview Created (V${createdVersion})`,
+                    title: `AI Interview Created (V${firstEntry?.version ?? 1})`,
                     date: aiInterviewConfig.created_at,
-                    by: aiInterviewConfig.created_by_name,
+                    by: aiInterviewConfig.created_by_name || firstEntry?.changed_by_name,
                   });
                 }
 
-                events.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+                // Newest first; an undated row (only ever the current-status
+                // fallback) is the job's present state, so it goes first, not last.
+                const sortTime = (e: { date?: string }) => (e.date ? new Date(e.date).getTime() : Number.POSITIVE_INFINITY);
+                events.sort((a, b) => sortTime(b) - sortTime(a));
 
                 if (events.length === 0) {
                   return <div className="text-sm text-gray-500 dark:text-slate-500 italic">No recent activity</div>;
                 }
-                return events.map((e) => (
+                const activityTotalPages = Math.max(1, Math.ceil(events.length / ACTIVITY_PAGE_SIZE));
+                const safeActivityPage = Math.min(activityPage, activityTotalPages);
+                const pageEvents = events.slice((safeActivityPage - 1) * ACTIVITY_PAGE_SIZE, safeActivityPage * ACTIVITY_PAGE_SIZE);
+                return (<>
+                {pageEvents.map((e) => (
                   <div key={e.key} className="flex gap-3">
                     <div className={`w-2 h-2 ${e.dot} rounded-full mt-1.5 flex-shrink-0`}></div>
                     <div>
@@ -3905,7 +4162,40 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                       </div>
                     </div>
                   </div>
-                ));
+                ))}
+                {events.length > ACTIVITY_PAGE_SIZE && (
+                  /* Compact pager — the shared Pagination is built for
+                     full-width tables and overflows this narrow sidebar. */
+                  <div className="pt-3 border-t border-gray-100 dark:border-slate-800 flex items-center justify-between gap-2 text-xs text-gray-500 dark:text-slate-400">
+                    <span className="tabular-nums">
+                      {(safeActivityPage - 1) * ACTIVITY_PAGE_SIZE + 1}–{Math.min(safeActivityPage * ACTIVITY_PAGE_SIZE, events.length)} of {events.length}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setActivityPage(safeActivityPage - 1)}
+                        disabled={safeActivityPage <= 1}
+                        aria-label="Previous activity page"
+                        className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 hover:bg-brand-blue/5 hover:text-brand-blue disabled:opacity-40 disabled:pointer-events-none transition-colors"
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5" />
+                      </button>
+                      <span className="px-1.5 tabular-nums text-gray-700 dark:text-slate-300">
+                        <span className="font-semibold text-brand-blue">{safeActivityPage}</span> / {activityTotalPages}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setActivityPage(safeActivityPage + 1)}
+                        disabled={safeActivityPage >= activityTotalPages}
+                        aria-label="Next activity page"
+                        className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 hover:bg-brand-blue/5 hover:text-brand-blue disabled:opacity-40 disabled:pointer-events-none transition-colors"
+                      >
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+                </>);
               })()}
             </div>
           </div>
@@ -4120,6 +4410,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               // Reads like the AI Interview module's own results page: its
               // status cards, bulk actions and Job ID, no Job Details toolbar.
               showStats
+              hideJobVersion
               jdShortId={job.job_id}
               emptyStateAction={aiInterviewEmptyActions}
               configId={aiInterviewConfig.id}
@@ -5134,17 +5425,15 @@ function AIMatchTabContent({
                           onViewCandidate(candidate);
                         }
                       }}
-                      className="text-left bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/20 hover:-translate-y-0.5 transition-all p-4 flex flex-col gap-3 cursor-pointer"
+                      className={`group relative text-left bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/20 hover:-translate-y-0.5 transition-all p-4 flex flex-col gap-3 cursor-pointer ${gridCardSelectedClass(selectedIds.has(candidate.resumeId))}`}
                     >
+                      <GridCardSelect
+                        selected={selectedIds.has(candidate.resumeId)}
+                        onToggle={() => toggleSelect(candidate.resumeId)}
+                        label={candidate.name || 'candidate'}
+                        selectionActive={selectedIds.size > 0}
+                      />
                       <div className="flex items-start gap-2.5">
-                        <input
-                          type="checkbox"
-                          aria-label={`Select ${candidate.name || 'candidate'}`}
-                          checked={selectedIds.has(candidate.resumeId)}
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={() => toggleSelect(candidate.resumeId)}
-                          className="mt-1.5 flex-shrink-0 rounded border-gray-300"
-                        />
                         <div className="w-9 h-9 rounded-full bg-gray-200 dark:bg-slate-800 flex items-center justify-center text-sm text-gray-700 dark:text-slate-300 font-medium flex-shrink-0">
                           {(candidate.name || 'U').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
                         </div>

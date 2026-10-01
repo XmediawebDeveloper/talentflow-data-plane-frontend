@@ -30,7 +30,7 @@ import {
   ViewFullHistoryLink,
   InvitationHistoryDialog,
 } from '@/components/AssessmentInviteActions';
-import { formatScore } from '@/lib/utils/score';
+import { formatScore, SCORE_CELL_TEXT } from '@/lib/utils/score';
 
 /* This popup is deliberately READ-ONLY beyond Resend/Copy Link, matching the
    AI Interview module's Job-Details tracker: Edit (name+email, revoked-only)
@@ -691,7 +691,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                                 const v = invitation.technical_score;
                                 return (
                                   <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
-                                    <span className={`font-medium ${v >= 70 ? 'text-brand-blue' : 'text-red-600'}`}>
+                                    <span className={`${SCORE_CELL_TEXT} ${v >= 70 ? 'text-brand-blue' : 'text-red-600'}`}>
                                       {Math.round(v)}%
                                     </span>
                                     <span className={`text-2xs font-medium px-1.5 py-0.5 rounded ring-1 ${v >= 70 ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' : 'bg-red-50 text-red-600 ring-red-200'}`}>
@@ -714,7 +714,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                                 const v = invitation.coding_score;
                                 return (
                                   <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
-                                    <span className={`font-medium ${v >= 70 ? 'text-brand-blue' : 'text-red-600'}`}>
+                                    <span className={`${SCORE_CELL_TEXT} ${v >= 70 ? 'text-brand-blue' : 'text-red-600'}`}>
                                       {Math.round(v)}%
                                     </span>
                                     <span className={`text-2xs font-medium px-1.5 py-0.5 rounded ring-1 ${v >= 70 ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' : 'bg-red-50 text-red-600 ring-red-200'}`}>

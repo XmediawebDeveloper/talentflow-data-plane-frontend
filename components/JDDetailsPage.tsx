@@ -1,5 +1,6 @@
 'use client';
 
+import { SCORE_CELL_TEXT } from '@/lib/utils/score';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { ArrowLeft, MapPin, Calendar, Clock, Briefcase, CheckCircle2, FileText, Users, Edit2, Archive, Building2, GraduationCap, User, History, ChevronDown, ChevronUp, Monitor, Search, ChevronLeft, ChevronRight, CheckCircle, XCircle, AlertCircle, Mail, Phone, ClipboardList } from 'lucide-react';
 import { useState, useEffect } from 'react';
@@ -391,22 +392,22 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
                         {getStatusBadge(item.status, item.passed)}
                       </td>
                       <td className="px-4 py-4 text-center">
-                        <span className={`font-medium ${getScoreColor(item.hr_score)}`}>
+                        <span className={`${SCORE_CELL_TEXT} ${getScoreColor(item.hr_score)}`}>
                           {item.hr_score !== null ? `${item.hr_score}%` : '-'}
                         </span>
                       </td>
                       <td className="px-4 py-4 text-center">
-                        <span className={`font-medium ${getScoreColor(item.technical_score)}`}>
+                        <span className={`${SCORE_CELL_TEXT} ${getScoreColor(item.technical_score)}`}>
                           {item.technical_score !== null ? `${item.technical_score}%` : '-'}
                         </span>
                       </td>
                       <td className="px-4 py-4 text-center">
-                        <span className={`font-medium ${getScoreColor(item.coding_score)}`}>
+                        <span className={`${SCORE_CELL_TEXT} ${getScoreColor(item.coding_score)}`}>
                           {item.coding_score !== null ? `${item.coding_score}%` : '-'}
                         </span>
                       </td>
                       <td className="px-4 py-4 text-center">
-                        <span className={`font-semibold ${getScoreColor(item.overall_score)}`}>
+                        <span className={`${SCORE_CELL_TEXT} ${getScoreColor(item.overall_score)}`}>
                           {item.overall_score !== null ? `${item.overall_score}%` : '-'}
                         </span>
                       </td>
@@ -723,7 +724,7 @@ function ScoredResumesTab({ jdId }: { jdId: string }) {
                         {getMatchBadge(item.match_status)}
                       </td>
                       <td className="px-4 py-4 text-center">
-                        <span className="font-semibold text-gray-900">
+                        <span className={`${SCORE_CELL_TEXT} text-gray-900`}>
                           {item.overall_score !== null ? `${item.overall_score}%` : '-'}
                         </span>
                       </td>

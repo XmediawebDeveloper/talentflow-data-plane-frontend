@@ -1,3 +1,4 @@
+import { SCORE_CELL_TEXT } from '@/lib/utils/score';
 import { Mail, Phone, Calendar, Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, ClipboardList, Share2, Paperclip, FileText, FileSpreadsheet, MoreVertical, Award, ChevronDown, ChevronRight, Video, BarChart3 } from 'lucide-react';
 import { matchBadgeClass, MATCH_SCORE_TEXT_CLASS, normalizeMatchResult, formatOverallScore, formatOverallScoreValue } from '@/lib/utils/matchStatus';
 import { truncateJobTitle } from '@/lib/utils/jobOpeningDisplay';
@@ -9,6 +10,7 @@ import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
+import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import InviteShareModal from './InviteShareModal';
 import InviteToAIInterviewFlow from './InviteToAIInterviewFlow';
@@ -1369,7 +1371,7 @@ Best regards`);
       // own separate (and previously inconsistent) scale.
       return (
         <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
-          <div className={`text-xl font-semibold ${
+          <div className={`${SCORE_CELL_TEXT} ${
             MATCH_SCORE_TEXT_CLASS[normalizeMatchResult(resume.matchStatus) ?? 'No Match']
           }`}>
             {formatOverallScoreValue(resume.overallRating10, resume.scorePercentage)}
@@ -2065,19 +2067,15 @@ Best regards`);
                 <div
                   key={resume.id}
                   onClick={(e) => handleRowClick(resume.id, e)}
-                  className="text-left bg-white rounded-xl border border-gray-200 hover:shadow-md hover:border-[var(--border-dark)] hover:-translate-y-0.5 transition-all p-4 flex flex-col gap-3 cursor-pointer"
+                  className={`group relative text-left bg-white rounded-xl border border-gray-200 hover:shadow-md hover:border-[var(--border-dark)] hover:-translate-y-0.5 transition-all p-4 flex flex-col gap-3 cursor-pointer ${gridCardSelectedClass(selectedResumes.includes(resume.id))}`}
                 >
+                  <GridCardSelect
+                    selected={selectedResumes.includes(resume.id)}
+                    onToggle={() => handleSelectResume(resume.id)}
+                    label={resume.candidateName || 'candidate'}
+                    selectionActive={selectedResumes.length > 0}
+                  />
                   <div className="flex items-start gap-2.5">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleSelectResume(resume.id); }}
-                      className="p-1 -m-1 hover:bg-gray-100 rounded flex-shrink-0"
-                    >
-                      {selectedResumes.includes(resume.id) ? (
-                        <CheckSquare className="w-4 h-4 text-gray-800" />
-                      ) : (
-                        <Square className="w-4 h-4 text-gray-400" />
-                      )}
-                    </button>
                     <div className="w-9 h-9 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-semibold text-sm flex-shrink-0">
                       {(resume.candidateName || 'C')[0].toUpperCase()}
                     </div>

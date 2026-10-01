@@ -8,13 +8,15 @@ import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import TabEmptyState from '@/components/ui/tab-empty-state';
 import Pagination from '@/components/Pagination';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
+import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
+import TimelineStamps from '@/components/ui/timeline-stamps';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { formatISTWithSeconds } from '@/lib/utils/dateUtils';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import { InviteSourceValue } from '@/components/AIInterviewInviteTable';
-import { formatScore } from '@/lib/utils/score';
+import { formatScore, SCORE_CELL_TEXT } from '@/lib/utils/score';
 
 // AS-24: localStorage key for column preferences (v2 with new columns)
 // v3: Result Status split into Score + Result, Completed became Status —
@@ -922,7 +924,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                           return (
                             <td key={col.id} className="py-3 px-4">
                               <div className="flex items-center gap-2">
-                                <span className={`text-sm ${getScoreColor(result.scorePercentage)}`}>
+                                <span className={`${SCORE_CELL_TEXT} ${getScoreColor(result.scorePercentage)}`}>
                                   {formatScore(result.scorePercentage)}%
                                 </span>
                                 <span className="text-xs text-gray-400">
@@ -943,7 +945,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                           return (
                             <td key={col.id} className="py-3 px-4 text-center">
                               <div className="flex flex-col items-center gap-1">
-                                <span className={`text-lg font-semibold ${scoringDone && techPct !== null ? (techPct >= 70 ? 'text-success' : 'text-destructive') : 'text-gray-400'}`}>
+                                <span className={`${SCORE_CELL_TEXT} ${scoringDone && techPct !== null ? (techPct >= 70 ? 'text-success' : 'text-destructive') : 'text-gray-400'}`}>
                                   {scoringDone && techPct !== null ? `${Math.round(techPct)}%` : '—'}
                                 </span>
                                 {scoringDone && techPct !== null && (
@@ -962,7 +964,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                           return (
                             <td key={col.id} className="py-3 px-4 text-center">
                               <div className="flex flex-col items-center gap-1">
-                                <span className={`text-lg font-semibold ${scoringDone && codingPct !== null ? (codingPct >= 70 ? 'text-success' : 'text-destructive') : 'text-gray-400'}`}>
+                                <span className={`${SCORE_CELL_TEXT} ${scoringDone && codingPct !== null ? (codingPct >= 70 ? 'text-success' : 'text-destructive') : 'text-gray-400'}`}>
                                   {scoringDone && codingPct !== null ? `${Math.round(codingPct)}%` : '—'}
                                 </span>
                                 {scoringDone && codingPct !== null && (
@@ -1193,19 +1195,15 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                   tabIndex={0}
                   onClick={openDetail}
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(); } }}
-                  className={`text-left bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/20 hover:-translate-y-0.5 transition-all p-4 flex flex-col gap-3 ${status === 'Pending' ? 'cursor-default' : 'cursor-pointer'}`}
+                  className={`group relative text-left bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/20 hover:-translate-y-0.5 transition-all p-4 flex flex-col gap-3 ${status === 'Pending' ? 'cursor-default' : 'cursor-pointer'} ${gridCardSelectedClass(selectedResults.includes(result.id))}`}
                 >
+                  <GridCardSelect
+                    selected={selectedResults.includes(result.id)}
+                    onToggle={() => handleSelectResult(result.id)}
+                    label={result.candidateName || 'candidate'}
+                    selectionActive={selectedResults.length > 0}
+                  />
                   <div className="flex items-start gap-2.5">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleSelectResult(result.id); }}
-                      className="p-1 -m-1 hover:bg-brand-blue/10 rounded flex-shrink-0"
-                    >
-                      {selectedResults.includes(result.id) ? (
-                        <CheckSquare className="w-4 h-4 text-brand-blue" />
-                      ) : (
-                        <Square className="w-4 h-4 text-gray-400" />
-                      )}
-                    </button>
                     <div className="w-9 h-9 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-semibold text-sm flex-shrink-0">
                       {(result.candidateName || 'U')[0].toUpperCase()}
                     </div>
@@ -1251,10 +1249,11 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                     </div>
                   )}
 
-                  <div className="flex items-center justify-between text-xs text-gray-500 pt-2 border-t border-gray-100">
-                    <span>{result.duration || (result.completionTime ? `${result.completionTime} min` : '—')}</span>
-                    <span className="truncate">{result.completedDate || '—'}</span>
-                  </div>
+                  <TimelineStamps
+                    className="text-gray-500 pt-2 border-t border-gray-100"
+                    startedAt={result.started_at} completedAt={result.completed_at} format={formatTimelineDate}
+                    duration={result.duration || (result.completionTime ? `${result.completionTime} min` : null)}
+                  />
 
                   {status !== 'Pending' && (
                     <div
