@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 import type { SearchableSelectOption } from '@/components/ui/searchable-select';
+import { DateField } from '@/components/ui/date-field';
 
 /**
  * The fields the Invitation Status and Candidate Results filter panels are
@@ -68,24 +69,22 @@ export function FilterDateRange({
 }) {
   return (
     <FilterField id={`${idPrefix}-from`} label={label}>
-      <div className="flex items-center gap-2">
-        <input
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+        <DateField
           id={`${idPrefix}-from`}
-          type="date"
           aria-label={`${label} from`}
           value={from}
           max={to || undefined}
-          onChange={(e) => onFromChange(e.target.value)}
-          className={`${FILTER_FIELD_CLASS} min-w-0 dark:[color-scheme:dark]`}
+          onChange={onFromChange}
+          className="sm:flex-1 sm:min-w-0"
         />
-        <span className="text-xs text-gray-400 flex-shrink-0">to</span>
-        <input
-          type="date"
+        <span className="text-xs text-gray-400 text-center sm:text-left sm:flex-shrink-0">to</span>
+        <DateField
           aria-label={`${label} to`}
           value={to}
           min={from || undefined}
-          onChange={(e) => onToChange(e.target.value)}
-          className={`${FILTER_FIELD_CLASS} min-w-0 dark:[color-scheme:dark]`}
+          onChange={onToChange}
+          className="sm:flex-1 sm:min-w-0"
         />
       </div>
     </FilterField>

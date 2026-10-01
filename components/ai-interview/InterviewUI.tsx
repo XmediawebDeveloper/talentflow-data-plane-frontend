@@ -3847,7 +3847,30 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // running through it. `activeStreakStartRef` = when the current unbroken run
   // of active frames began (null when the last frame was inactive).
   const activeStreakStartRef = useRef<number | null>(null);
-  const SUSTAINED_ACTIVE_MS = 3000; // TEST (was 400): ~3s of continuous voice before reset
+  const SUSTAINED_ACTIVE_MS = 3000; // TEST (was 400): the 3s speech window
+  // 3s WINDOW RULE (replaces "3s unbroken"): speech counts when, within the
+  // last SUSTAINED_ACTIVE_MS, at least SUSTAINED_VOICE_MS of frames were voice.
+  // The unbroken version broke on every pause > STREAK_DIP_GRACE_MS, which
+  // normal speech has between phrases — worst on quiet wired/BT headsets whose
+  // frames dip under the threshold more often. Result: continuous speech never
+  // reset the silence clock and the "Are you done?" popup kept appearing while
+  // the candidate was talking. A noise blip (cough, door, one word) still can't
+  // fill half a 3s window.
+  const SUSTAINED_VOICE_MS = 1500;
+  // Voice frames inside the current window: [timestamp, ms credited].
+  const inTurnVoiceWindowRef = useRef<Array<[number, number]>>([]);
+  const onsetVoiceWindowRef = useRef<Array<[number, number]>>([]);
+  const vadPrevFrameAtRef = useRef<number | null>(null);
+  // Adds this frame (if voice) to a window buffer, drops entries older than
+  // SUSTAINED_ACTIVE_MS, and returns the voice ms left in the window.
+  const voiceMsInWindow = (buf: Array<[number, number]>, nowMs: number, frameMs: number, isVoice: boolean): number => {
+    if (isVoice) buf.push([nowMs, frameMs]);
+    const cutoff = nowMs - SUSTAINED_ACTIVE_MS;
+    while (buf.length && buf[0][0] < cutoff) buf.shift();
+    let total = 0;
+    for (const [, ms] of buf) total += ms;
+    return total;
+  };
   // Dip tolerance ("hangover") for the active streak. Natural speech is not a
   // solid block of above-threshold frames — there are ~50-150ms gaps between
   // words, unstressed syllables, and after plosives that dip BELOW the
@@ -7811,10 +7834,23 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         }
 
         const speechConfirmThreshold = Math.max(silenceThresholdRef.current, possibleSpeechThreshold);
+        // Real elapsed time of this analyser frame (clamped so a stalled tab
+        // can't credit a long gap as voice). Shared by both 3s windows.
+        const _frameMs = vadPrevFrameAtRef.current == null
+          ? 0
+          : Math.min(nowMs - vadPrevFrameAtRef.current, 250);
+        vadPrevFrameAtRef.current = nowMs;
         if (suppressNewSpeechDetection && !speechDetectedRef.current) {
           // Bina's echo must not pre-charge the 3s onset window.
           speechFrameCountRef.current = 0;
         }
+        // speechFrameCountRef === 0 marks a fresh onset window (turn start,
+        // Bina speaking, etc. all zero it), so drop any stale onset credit.
+        if (speechFrameCountRef.current === 0) onsetVoiceWindowRef.current = [];
+        const _onsetVoice = !speechDetectedRef.current && avgLevel > speechConfirmThreshold && voiceLike;
+        const _onsetVoiceMs = speechDetectedRef.current
+          ? 0
+          : voiceMsInWindow(onsetVoiceWindowRef.current, nowMs, _frameMs, _onsetVoice);
         if (!speechDetectedRef.current && avgLevel > speechConfirmThreshold && voiceLike) {
           // Onset window: SPEECH_ONSET_CONFIRM_MS of voice, measured in time,
           // tolerating inter-word dips up to STREAK_DIP_GRACE_MS — the same
@@ -7831,8 +7867,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           onsetLastVoiceAtRef.current = nowMs;
           speechFrameCountRef.current++;
           silenceStartRef.current = null;
-          const _onsetMs = nowMs - onsetStreakStartRef.current;
-          if (_onsetMs >= SPEECH_ONSET_CONFIRM_MS && !suppressNewSpeechDetection) {
+          // 3s window rule (see SUSTAINED_VOICE_MS): enough voice inside the
+          // last SPEECH_ONSET_CONFIRM_MS, pauses between phrases allowed.
+          if (_onsetVoiceMs >= SUSTAINED_VOICE_MS && !suppressNewSpeechDetection) {
             console.log('[INTERVIEW-DEBUG] Speech DETECTED (VAD)', {
               questionTimerSeconds: questionTimerSecondsRef.current,
               questionNumber: questionNumberRef.current,
@@ -7862,11 +7899,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           }
         } else {
           if (!speechDetectedRef.current) {
-            // Short inter-word dip keeps the onset window alive; a real gap
-            // (> STREAK_DIP_GRACE_MS since the last voice frame) restarts it.
+            // Pauses are handled by the 3s window itself; only a full window of
+            // silence (> SUSTAINED_ACTIVE_MS since the last voice frame) starts over.
             if (
               onsetLastVoiceAtRef.current == null ||
-              (nowMs - onsetLastVoiceAtRef.current) > STREAK_DIP_GRACE_MS
+              (nowMs - onsetLastVoiceAtRef.current) > SUSTAINED_ACTIVE_MS
             ) {
               speechFrameCountRef.current = 0;
             }
@@ -7942,7 +7979,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             const _streakMs = activeStreakStartRef.current == null
               ? 0
               : (nowMs - activeStreakStartRef.current);
-            const _sustained = _frameIsActive && _streakMs >= SUSTAINED_ACTIVE_MS;
+            void _streakMs; // streak kept for the dip bookkeeping; the reset uses the window rule
+            const _inTurnVoiceMs = voiceMsInWindow(inTurnVoiceWindowRef.current, nowMs, _frameMs, _frameIsActive);
+            const _sustained = _frameIsActive && _inTurnVoiceMs >= SUSTAINED_VOICE_MS;
 
             // AII14 popup dismissal — counts SPEECH_RESUME_CONFIRM_MS of VAD
             // speech frames (cumulative, pauses allowed) straight from this
@@ -8034,9 +8073,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 // cut early.
                 const noiseHoldingTurn =
                   avgLevel > softVoiceFloor && voiceLike && !strongVoiceRecent;
+                // Anchor to the LATEST real speech: the last strong frame OR the
+                // last clock reset by real speech, whichever is newer. Using only
+                // lastStrong put the anchor >15s back during quiet (headset)
+                // speech that resets the clock without strong frames, so the
+                // first soft frame raised the popup instantly mid-answer.
                 const silenceSince =
                   noiseHoldingTurn
-                    ? lastStrong
+                    ? Math.max(lastStrong, lastMeaningfulAudioAtRef.current ?? lastStrong)
                     : transcriptLedTurn
                       ? (lastLiveTranscriptUpdateAtRef.current ?? lastMeaningfulAudioAtRef.current ?? speechDetectedAtRef.current ?? nowMs)
                       : (lastMeaningfulAudioAtRef.current ?? speechDetectedAtRef.current ?? nowMs);

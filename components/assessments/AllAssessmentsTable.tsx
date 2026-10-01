@@ -33,6 +33,7 @@ import ListToolbar from '@/components/ui/list-toolbar';
    renders in place exactly as before. */
 import { ListToolbarPortal } from '@/components/ui/list-toolbar-slot';
 import ListFilterPanel from '@/components/ui/list-filter-panel';
+import { DateField } from '@/components/ui/date-field';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import { assessmentService, type AssessmentResponse } from '@/lib/services/assessmentService';
 import { formatISTStamp, parseIST } from '@/lib/utils/dateUtils';
@@ -1035,11 +1036,12 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                   />
                 )}
 
-                {/* Created On — two native date inputs, the same control the
-                    Assessments dashboard's own Created from/to pair uses, so
-                    a date range is entered the same way across the product.
-                    Each bounds the other, which is what stops a range that
-                    can never match anything. */}
+                {/* Created On — a from/to pair of custom DateField popovers.
+                    These replace native <input type="date"> because the
+                    browser's own calendar dropdown can't be clamped to the
+                    viewport, resized, or aligned to the field — it either
+                    clipped the input's text on a narrow phone or spilled the
+                    popup over surrounding content in landscape. */}
                 <div className="sm:col-span-2">
                   <label
                     htmlFor="all-assessments-created-from"
@@ -1047,24 +1049,22 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                   >
                     Created On
                   </label>
-                  <div className="flex items-center gap-2">
-                    <input
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                    <DateField
                       id="all-assessments-created-from"
-                      type="date"
                       aria-label="Created from"
                       value={draftFilters.createdFrom}
                       max={draftFilters.createdTo || undefined}
-                      onChange={(e) => setDraftFilters((f) => ({ ...f, createdFrom: e.target.value }))}
-                      className="flex-1 min-w-0 h-[38px] px-2 sm:px-3 text-xs sm:text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+                      onChange={(v) => setDraftFilters((f) => ({ ...f, createdFrom: v }))}
+                      className="sm:flex-1 sm:min-w-0 h-[38px] px-2 sm:px-3 text-xs sm:text-sm"
                     />
-                    <span className="text-xs text-gray-400 flex-shrink-0">to</span>
-                    <input
-                      type="date"
+                    <span className="text-xs text-gray-400 text-center sm:text-left sm:flex-shrink-0">to</span>
+                    <DateField
                       aria-label="Created to"
                       value={draftFilters.createdTo}
                       min={draftFilters.createdFrom || undefined}
-                      onChange={(e) => setDraftFilters((f) => ({ ...f, createdTo: e.target.value }))}
-                      className="flex-1 min-w-0 h-[38px] px-2 sm:px-3 text-xs sm:text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+                      onChange={(v) => setDraftFilters((f) => ({ ...f, createdTo: v }))}
+                      className="sm:flex-1 sm:min-w-0 h-[38px] px-2 sm:px-3 text-xs sm:text-sm"
                     />
                   </div>
                 </div>

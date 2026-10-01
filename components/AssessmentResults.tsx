@@ -35,6 +35,7 @@ import { currentResultReturnTo, rememberResultReturn, resultReturnQuery } from '
 import { Badge } from '@/components/ui/badge';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListFilterPanel from '@/components/ui/list-filter-panel';
+import { DateField } from '@/components/ui/date-field';
 import { InviteSourceValue } from '@/components/AIInterviewInviteTable';
 import { timelineEvents } from '@/components/AssessmentInviteActions';
 import { toOneDecimalScore, SCORE_CELL_TEXT } from '@/lib/utils/score';
@@ -2151,27 +2152,23 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               {/* Date range — From / To, each bounding the other. */}
               <div className="sm:col-span-2">
                 <label htmlFor="assessment-results-date-from" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Date</label>
-                <div className="flex flex-col min-[400px]:flex-row min-[400px]:items-center gap-2">
-                  <input
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                  <DateField
                     id="assessment-results-date-from"
-                    type="date"
                     value={dateFrom}
                     max={dateTo || undefined}
-                    onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1); }}
-                    className="w-full min-w-0 h-[38px] px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue min-[400px]:flex-1"
-                    title="From date"
+                    onChange={(v) => { setDateFrom(v); setCurrentPage(1); }}
                     aria-label="Filter from date"
+                    className="h-[38px] sm:flex-1 sm:min-w-0"
                   />
-                  <span className="text-xs text-gray-400 flex-shrink-0">to</span>
-                  <input
+                  <span className="text-xs text-gray-400 text-center sm:text-left sm:flex-shrink-0">to</span>
+                  <DateField
                     id="assessment-results-date-to"
-                    type="date"
                     value={dateTo}
                     min={dateFrom || undefined}
-                    onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1); }}
-                    className="w-full min-w-0 h-[38px] px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue min-[400px]:flex-1"
-                    title="To date"
+                    onChange={(v) => { setDateTo(v); setCurrentPage(1); }}
                     aria-label="Filter to date"
+                    className="h-[38px] sm:flex-1 sm:min-w-0"
                   />
                 </div>
               </div>

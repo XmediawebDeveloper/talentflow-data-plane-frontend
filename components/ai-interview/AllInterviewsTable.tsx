@@ -20,6 +20,7 @@ import ListPagination from '@/components/ListPagination';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import SearchableSelect, { type SearchableSelectOption } from '@/components/ui/searchable-select';
 import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
+import { DateField } from '@/components/ui/date-field';
 import { aiInterviewService, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { formatISTStamp, parseIST } from '@/lib/utils/dateUtils';
 import { useDebounce } from '@/lib/hooks/useDebounce';
@@ -822,24 +823,22 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
                 >
                   Created On
                 </label>
-                <div className="flex items-center gap-2">
-                  <input
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                  <DateField
                     id="all-interviews-created-from"
-                    type="date"
                     aria-label="Created from"
                     value={draftFilters.createdFrom}
                     max={draftFilters.createdTo || undefined}
-                    onChange={(e) => setDraftFilters((f) => ({ ...f, createdFrom: e.target.value }))}
-                    className="flex-1 min-w-0 h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+                    onChange={(v) => setDraftFilters((f) => ({ ...f, createdFrom: v }))}
+                    className="sm:flex-1 sm:min-w-0"
                   />
-                  <span className="text-xs text-gray-400 flex-shrink-0">to</span>
-                  <input
-                    type="date"
+                  <span className="text-xs text-gray-400 text-center sm:text-left sm:flex-shrink-0">to</span>
+                  <DateField
                     aria-label="Created to"
                     value={draftFilters.createdTo}
                     min={draftFilters.createdFrom || undefined}
-                    onChange={(e) => setDraftFilters((f) => ({ ...f, createdTo: e.target.value }))}
-                    className="flex-1 min-w-0 h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+                    onChange={(v) => setDraftFilters((f) => ({ ...f, createdTo: v }))}
+                    className="sm:flex-1 sm:min-w-0"
                   />
                 </div>
               </div>

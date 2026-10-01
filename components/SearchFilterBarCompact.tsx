@@ -2,6 +2,7 @@
 
 import { Search, X, ChevronDown, SlidersHorizontal, Calendar, MapPin, Building2, Clock, GraduationCap, Briefcase, ChevronRight, Upload, Users, Loader2 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
+import { DateField } from '@/components/ui/date-field';
 
 interface SearchFilterBarProps {
   searchQuery: string;
@@ -433,25 +434,21 @@ export default function SearchFilterBarCompact({
                     <div className="px-3 sm:px-5 pb-3 sm:pb-4">
                       <label className="block text-2xs sm:text-xs text-gray-600 mb-1 sm:mb-1.5">Upload Date Range</label>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
-                        <input
-                          type="date"
+                        <DateField
+                          aria-label="Upload date from"
                           value={tempFilters.uploadDateRange?.start || ''}
-                          onChange={(e) => setTempFilters({
+                          onChange={(v) => setTempFilters({
                             ...tempFilters,
-                            uploadDateRange: { ...tempFilters.uploadDateRange, start: e.target.value || null }
+                            uploadDateRange: { ...tempFilters.uploadDateRange, start: v || null }
                           })}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 bg-gray-50 text-black"
-                          placeholder="dd-mm-yyyy"
                         />
-                        <input
-                          type="date"
+                        <DateField
+                          aria-label="Upload date to"
                           value={tempFilters.uploadDateRange?.end || ''}
-                          onChange={(e) => setTempFilters({
+                          onChange={(v) => setTempFilters({
                             ...tempFilters,
-                            uploadDateRange: { ...tempFilters.uploadDateRange, end: e.target.value || null }
+                            uploadDateRange: { ...tempFilters.uploadDateRange, end: v || null }
                           })}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 bg-gray-50 text-black"
-                          placeholder="dd-mm-yyyy"
                         />
                       </div>
                     </div>

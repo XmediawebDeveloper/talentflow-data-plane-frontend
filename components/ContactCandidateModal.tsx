@@ -1,6 +1,7 @@
 import { X, Mail, Phone, Calendar, Clock, Send, FileText, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { DateField } from '@/components/ui/date-field';
 
 interface ContactCandidateModalProps {
   candidateName: string;
@@ -267,11 +268,10 @@ export default function ContactCandidateModal({
                 <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
                   Interview Date
                 </label>
-                <input
-                  type="date"
+                <DateField
+                  aria-label="Interview Date"
                   value={scheduleDate}
-                  onChange={(e) => setScheduleDate(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                  onChange={setScheduleDate}
                   min={new Date().toISOString().split('T')[0]}
                 />
               </div>

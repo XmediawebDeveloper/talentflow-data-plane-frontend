@@ -3,6 +3,7 @@
 import { Search, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useDebounce } from '@/lib/hooks/useDebounce';
+import { DateField } from '@/components/ui/date-field';
 
 export interface InviteFilterState {
   search: string;
@@ -199,20 +200,18 @@ export default function InviteFilterBar({
           </select>
         ))}
 
-        <input
-          type="date"
+        <DateField
           value={filters.dateFrom}
-          onChange={(e) => onChange({ ...filters, dateFrom: e.target.value })}
-          className="min-w-0 max-[399px]:col-span-2 h-[38px] rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 sm:px-3 text-xs sm:text-sm text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue"
+          onChange={(v) => onChange({ ...filters, dateFrom: v })}
+          className="min-w-0 max-[399px]:col-span-2 h-[38px] px-2 sm:px-3 text-xs sm:text-sm"
           aria-label="Invite date from"
         />
 
-        <input
-          type="date"
+        <DateField
           value={filters.dateTo}
           min={filters.dateFrom || undefined}
-          onChange={(e) => onChange({ ...filters, dateTo: e.target.value })}
-          className="min-w-0 max-[399px]:col-span-2 h-[38px] rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 sm:px-3 text-xs sm:text-sm text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue"
+          onChange={(v) => onChange({ ...filters, dateTo: v })}
+          className="min-w-0 max-[399px]:col-span-2 h-[38px] px-2 sm:px-3 text-xs sm:text-sm"
           aria-label="Invite date to"
         />
 

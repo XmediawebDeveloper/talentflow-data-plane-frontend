@@ -47,6 +47,7 @@ import { useQuota } from '@/contexts/QuotaContext';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { TableSkeleton } from '@/components/ui/skeleton';
+import { DateField } from '@/components/ui/date-field';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -1829,27 +1830,19 @@ export default function AuditTrailPage() {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-medium text-gray-500 dark:text-slate-500 mb-1.5">Start Date</label>
-                      <div className="relative">
-                        <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500 pointer-events-none" />
-                        <input
-                          type="date"
-                          value={exportStartDate}
-                          onChange={e => setExportStartDate(e.target.value)}
-                          className="w-full pl-9 pr-3 py-2.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl text-sm text-gray-900 dark:text-slate-50 focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all"
-                        />
-                      </div>
+                      <DateField
+                        aria-label="Start Date"
+                        value={exportStartDate}
+                        onChange={setExportStartDate}
+                      />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-500 dark:text-slate-500 mb-1.5">End Date</label>
-                      <div className="relative">
-                        <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500 pointer-events-none" />
-                        <input
-                          type="date"
-                          value={exportEndDate}
-                          onChange={e => setExportEndDate(e.target.value)}
-                          className="w-full pl-9 pr-3 py-2.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl text-sm text-gray-900 dark:text-slate-50 focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all"
-                        />
-                      </div>
+                      <DateField
+                        aria-label="End Date"
+                        value={exportEndDate}
+                        onChange={setExportEndDate}
+                      />
                     </div>
                   </div>
                 )}

@@ -26,6 +26,7 @@ import ListCountBadge from '@/components/ui/list-count-badge';
 import { ListToolbarPortal } from '@/components/ui/list-toolbar-slot';
 import { Button } from '@/components/ui/button';
 import ListPagination from '@/components/ListPagination';
+import { DateField } from '@/components/ui/date-field';
 import consentService, { ConsentLog, ConsentAuditLog } from '@/lib/services/consentService';
 import { assessmentService } from '@/lib/services/assessmentService';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
@@ -322,16 +323,14 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
                 <label htmlFor="consent-from" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
                   Consented from
                 </label>
-                <input
+                <DateField
                   id="consent-from"
-                  type="date"
                   value={startDate}
                   max={endDate || undefined}
-                  onChange={(e) => {
-                    setStartDate(e.target.value);
+                  onChange={(v) => {
+                    setStartDate(v);
                     setPage(0);
                   }}
-                  className={FILTER_FIELD}
                 />
               </div>
 
@@ -339,16 +338,14 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
                 <label htmlFor="consent-to" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
                   Consented to
                 </label>
-                <input
+                <DateField
                   id="consent-to"
-                  type="date"
                   value={endDate}
                   min={startDate || undefined}
-                  onChange={(e) => {
-                    setEndDate(e.target.value);
+                  onChange={(v) => {
+                    setEndDate(v);
                     setPage(0);
                   }}
-                  className={FILTER_FIELD}
                 />
               </div>
             </ListFilterPanel>

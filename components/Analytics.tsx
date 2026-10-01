@@ -58,7 +58,10 @@ export default function Analytics() {
       <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Reports' }, { label: 'Performance Reports' }]} />
       {/* Header */}
       <div className="mb-8">
-        <div className="flex items-center justify-between mb-3">
+        {/* flex-col below sm: at 390px the icon+title block and the
+            select+button block used to share one row, leaving "Export
+            Report" squeezed down to "Exp" before it hit the viewport edge. */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl flex items-center justify-center shadow-lg">
               <BarChart3 className="w-7 h-7 text-white" />
@@ -74,7 +77,7 @@ export default function Analytics() {
             <select
               value={timeRange}
               onChange={(e) => setTimeRange(e.target.value)}
-              className="px-4 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white dark:bg-slate-900 text-sm"
+              className="flex-1 sm:flex-initial min-w-0 px-4 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white dark:bg-slate-900 text-sm"
             >
               <option value="7days">Last 7 days</option>
               <option value="30days">Last 30 days</option>
@@ -116,7 +119,7 @@ export default function Analytics() {
       </div>
 
       {/* Key Metrics Grid - Recruiter Focused */}
-      <div className="grid grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
         {/* My Active Jobs */}
         <div className="bg-white dark:bg-slate-900 rounded-xl shadow-lg border border-gray-200 dark:border-slate-700 p-6 hover:shadow-xl transition-all">
           <div className="flex items-center justify-between mb-4">
@@ -170,7 +173,7 @@ export default function Analytics() {
       </div>
 
       {/* Secondary Metrics - Recruiter Pipeline */}
-      <div className="grid grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-10 h-10 bg-gray-100 dark:bg-slate-800 rounded-lg flex items-center justify-center">
@@ -221,7 +224,7 @@ export default function Analytics() {
       </div>
 
       {/* Charts Section */}
-      <div className="grid grid-cols-2 gap-6 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
         {/* My Applications Over Time */}
         <div className="bg-white dark:bg-slate-900 rounded-xl shadow-lg border border-gray-200 dark:border-slate-700 p-6">
           <div className="flex items-center justify-between mb-6">
@@ -393,7 +396,7 @@ export default function Analytics() {
       </div>
 
       {/* Performance Insights */}
-      <div className="grid grid-cols-2 gap-6 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
         {/* Response Time Analysis */}
         <div className="bg-white dark:bg-slate-900 rounded-xl shadow-lg border border-gray-200 dark:border-slate-700 p-6">
           <h3 className="text-lg text-gray-900 dark:text-slate-50 font-medium mb-6">Response Time Analysis</h3>
@@ -474,7 +477,7 @@ export default function Analytics() {
       </div>
 
       {/* Application Sources for My Jobs */}
-      <div className="grid grid-cols-2 gap-6 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
         <div className="bg-white dark:bg-slate-900 rounded-xl shadow-lg border border-gray-200 dark:border-slate-700 p-6">
           <div className="mb-6">
             <h3 className="text-lg text-gray-900 dark:text-slate-50 font-medium">Application Sources</h3>

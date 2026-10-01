@@ -18,6 +18,7 @@ import ListEmptyState from '@/components/ui/list-empty-state';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import { DateField } from '@/components/ui/date-field';
 import { formatScore } from '@/lib/utils/score';
 
 type CategoryFilter = 'all' | 'assessment_lifecycle' | 'candidate_activity';
@@ -442,24 +443,24 @@ export default function AssessmentAuditTrail() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 <div>
                   <label htmlFor="audit-date-from" className="block text-sm text-gray-700 mb-1.5 font-medium">Date From</label>
-                  <input
+                  <DateField
                     id="audit-date-from"
-                    type="date"
+                    aria-label="Date From"
                     value={search.draftFilters.dateFrom}
                     max={search.draftFilters.dateTo || undefined}
-                    onChange={(e) => search.setDraftFilter('dateFrom', e.target.value)}
-                    className="w-full min-w-0 h-[38px] px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black"
+                    onChange={(v) => search.setDraftFilter('dateFrom', v)}
+                    className="min-w-0 h-[38px]"
                   />
                 </div>
                 <div>
                   <label htmlFor="audit-date-to" className="block text-sm text-gray-700 mb-1.5 font-medium">Date To</label>
-                  <input
+                  <DateField
                     id="audit-date-to"
-                    type="date"
+                    aria-label="Date To"
                     value={search.draftFilters.dateTo}
                     min={search.draftFilters.dateFrom || undefined}
-                    onChange={(e) => search.setDraftFilter('dateTo', e.target.value)}
-                    className="w-full min-w-0 h-[38px] px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black"
+                    onChange={(v) => search.setDraftFilter('dateTo', v)}
+                    className="min-w-0 h-[38px]"
                   />
                 </div>
               </div>

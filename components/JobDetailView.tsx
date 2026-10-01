@@ -8,8 +8,7 @@ import type { User, Tenant } from '@/lib/types/tenant';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
-import { jdService, JDLineageVersion, JDUsageStatus, JDVersion } from '@/lib/services/jdService';
-import api from '@/lib/services/api';
+import { jdService, JDLineageVersion, JDStatusEvent, JDUsageStatus, JDVersion } from '@/lib/services/jdService';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import { formatJobVersionLabel } from '@/lib/utils/jobOpeningDisplay';
 import SkillsList from '@/components/ui/SkillsList';
@@ -1442,15 +1441,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     return () => { cancelled = true; };
   }, [aiInterviewConfig?.id]);
 
-  /* JD status history for Recent Activity — Disabled, Re-enabled, Archived,
-     Unarchived — read from the audit log, since `job.status` only holds the
-     CURRENT status. Re-enable and unarchive go through the generic
-     `PUT /jd/{id}` status update rather than an endpoint of their own, so an
-     entry is classified by its action name AND by any status change in its
-     details. `null` = not loaded (no audit access, or the request failed):
-     the panel then falls back to the current-status row it always showed. */
   /* The JD's own last-update time, fetched fresh — the fallback status row's
-     date when the audit log has nothing for this JD (the `job` prop can
+     date when there is no status history for this JD (the `job` prop can
      arrive without `updated_at`, which left that row "N/A" at the bottom). */
   const [jdLastUpdatedAt, setJdLastUpdatedAt] = useState<string | undefined>(undefined);
   useEffect(() => {
@@ -1461,139 +1453,18 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       .catch(() => {});
     return () => { cancelled = true; };
   }, [job.id, job.status]);
-  const [jdStatusHistory, setJdStatusHistory] = useState<
-    { id: string; kind: 'Disabled' | 'Re-enabled' | 'Archived' | 'Unarchived'; at: string; by?: string }[] | null
-  >(null);
+  /* JD status history for Recent Activity — every Disabled / Re-enabled /
+     Archived / Unarchived, with who and when, straight from
+     GET /jd/{id}/status-history (the backend audits each real status
+     transition with the JD's id and old/new status). `null` = not loaded
+     (request failed): the panel then falls back to the current-status row. */
+  const [jdStatusHistory, setJdStatusHistory] = useState<JDStatusEvent[] | null>(null);
   useEffect(() => {
     if (!job.id) return;
     let cancelled = false;
-    const lower = (v: unknown) => (typeof v === 'string' ? v.toLowerCase() : '');
-    type StatusKind = 'Disabled' | 'Re-enabled' | 'Archived' | 'Unarchived';
-    /** An entry that NAMES its transition — by action/label, or a status it
-     *  explicitly moves the JD to/from. */
-    const explicitKind = (log: any): StatusKind | null => {
-      const action = lower(`${log.action || ''} ${log.action_label || ''}`);
-      const d = log.details || {};
-      if (/unarchiv|restor/.test(action)) return 'Unarchived';
-      if (/archiv/.test(action)) return 'Archived';
-      if (/disabl/.test(action)) return 'Disabled';
-      if (/(^|[\s_-])(re[\s_-]?)?enabl/.test(action)) return 'Re-enabled';
-      const next = lower(d.new_status ?? d.to_status ?? d.changes?.status?.new ?? d.changes?.status?.[1] ?? d.status);
-      const prev = lower(d.old_status ?? d.previous_status ?? d.from_status ?? d.changes?.status?.old ?? d.changes?.status?.[0]);
-      if (next === 'archived') return 'Archived';
-      if (next === 'disabled') return 'Disabled';
-      if (next === 'published' && prev === 'archived') return 'Unarchived';
-      if (next === 'published' && prev === 'disabled') return 'Re-enabled';
-      return null;
-    };
-    /** Re-enable and unarchive have no endpoint of their own: both are
-     *  `PUT /jd/{id}` with status 'published', so the audit log records an
-     *  ordinary JD update/publish that may not say what the JD came back FROM.
-     *  Such an entry — a publish, or an update that set/touched `status` —
-     *  is read in sequence: right after a Disable it is the Re-enable, right
-     *  after an Archive the Unarchive. */
-    const bringsJdBack = (log: any): boolean => {
-      const action = lower(`${log.action || ''} ${log.action_label || ''}`);
-      const d = log.details || {};
-      if (/publish/.test(action)) return true;
-      const next = lower(d.new_status ?? d.to_status ?? d.changes?.status?.new ?? d.changes?.status?.[1] ?? d.status);
-      if (next === 'published' || next === 'active') return true;
-      const changedFields = d.changed_fields ?? d.updated_fields ?? d.fields_updated ?? d.fields ?? (d.changes && typeof d.changes === 'object' ? Object.keys(d.changes) : []);
-      return Array.isArray(changedFields) && changedFields.some((f: unknown) => lower(f) === 'status');
-    };
-    /* `/audits` filters by `action`, `entity_type`, user and date — NOT by
-       entity id. So: read the real action names from /audits/actions/list,
-       query every JD and status action from the JD's creation on, and keep
-       only entries that point at THIS JD. */
-    const STATUS_ACTION = /archiv|unarchiv|restor|disabl|enabl/i;
-    const JD_ACTION = /(^|_)(jd|job)|job.?desc|status/i;
-    const pointsAtThisJd = (log: any) => {
-      const d = log.details || {};
-      return [log.entity_id, d.jd_id, d.job_description_id, d.id].some((v) => v === job.id);
-    };
-    (async () => {
-      try {
-        const actionsRes = await api.get('/audits/actions/list');
-        const actions: { value: string; label?: string }[] = actionsRes.data?.actions || [];
-        const wanted = actions
-          .filter((a) => STATUS_ACTION.test(`${a.value} ${a.label || ''}`) || JD_ACTION.test(`${a.value} ${a.label || ''}`))
-          .map((a) => a.value);
-        const startDate = job.created_at || job.postedDate;
-        const pages = await Promise.all(wanted.map((action) =>
-          api.get('/audits', {
-            params: { action, page: 1, page_size: 100, ...(startDate ? { start_date: new Date(startDate).toISOString() } : {}) },
-          }).then((r) => (r.data?.items || []) as any[]).catch(() => [] as any[]),
-        ));
-        if (cancelled) return;
-        const seen = new Set<string>();
-        const entries = pages.flat()
-          .filter((log) => pointsAtThisJd(log) && !!(log.created_at || log.timestamp) && !seen.has(log.id) && seen.add(log.id))
-          .sort((a, b) => new Date(a.created_at || a.timestamp).getTime() - new Date(b.created_at || b.timestamp).getTime());
-        // Walk oldest-first, remembering whether the JD is currently switched off.
-        const rows: { id: string; kind: StatusKind; at: string; by?: string }[] = [];
-        let offBy: 'Disabled' | 'Archived' | null = null;
-        /* Last resort for an update logged with no status detail at all: the
-           FIRST JD update after a Disable/Archive, used only once the JD is
-           known to have come back — a later Disable/Archive follows it, or the
-           JD is Published now. */
-        let firstUpdateWhileOff: any = null;
-        const pushBack = (log: any) => {
-          if (!offBy) return;
-          rows.push({ id: log.id, kind: offBy === 'Disabled' ? 'Re-enabled' : 'Unarchived', at: log.created_at || log.timestamp, by: log.user_name || undefined });
-          offBy = null;
-          firstUpdateWhileOff = null;
-        };
-        entries.forEach((log) => {
-          const kind = explicitKind(log);
-          if (!kind) {
-            if (offBy && bringsJdBack(log)) pushBack(log);
-            else if (offBy && !firstUpdateWhileOff) firstUpdateWhileOff = log;
-            return;
-          }
-          if ((kind === 'Disabled' || kind === 'Archived') && offBy && firstUpdateWhileOff) pushBack(firstUpdateWhileOff);
-          if (kind === 'Re-enabled' || kind === 'Unarchived') firstUpdateWhileOff = null;
-          offBy = kind === 'Disabled' || kind === 'Archived' ? kind : null;
-          rows.push({ id: log.id, kind, at: log.created_at || log.timestamp, by: log.user_name || undefined });
-        });
-        if (offBy && firstUpdateWhileOff && job.status === 'Published') pushBack(firstUpdateWhileOff);
-        /* Re-enable / unarchive is a plain `PUT /jd/{id}` status update, which
-           the backend does not write to the audit log at all. So when the log
-           ends on a Disable/Archive but the JD is Published NOW, it was brought
-           back after that entry — and that status save is the JD's last update,
-           so its `updated_at` is when. A re-enable BETWEEN two disables leaves
-           no trace anywhere and cannot be shown until the backend audits it. */
-        if (offBy && job.status === 'Published') {
-          try {
-            const jd: any = await jdService.get(job.id);
-            const backAt: string | undefined = jd?.updated_at;
-            const lastOff = rows[rows.length - 1];
-            if (!cancelled && backAt && (!lastOff || new Date(backAt).getTime() >= new Date(lastOff.at).getTime())) {
-              const byName = [jd.updated_by_name, jd.modified_by_name, jd.status_changed_by_name]
-                .find((v: unknown): v is string => typeof v === 'string' && v.trim() !== '');
-              rows.push({
-                id: `inferred-${offBy}-${backAt}`,
-                kind: offBy === 'Disabled' ? 'Re-enabled' : 'Unarchived',
-                at: backAt,
-                by: byName,
-              });
-            }
-          } catch { /* no inferred row */ }
-        }
-        /* Dev-only diagnostics: what the audit log actually holds for this JD,
-           so the status matching above can be checked against real entries. */
-        if (process.env.NODE_ENV !== 'production') {
-          console.info('[RecentActivity] audit actions queried:', wanted);
-          console.info('[RecentActivity] audit entries for this JD:', entries.map((e) => ({
-            action: e.action, label: e.action_label, entity_type: e.entity_type, entity_id: e.entity_id,
-            at: e.created_at || e.timestamp, by: e.user_name, details: e.details,
-          })));
-          console.info('[RecentActivity] status rows built:', rows);
-        }
-        setJdStatusHistory(rows);
-      } catch {
-        if (!cancelled) setJdStatusHistory(null);
-      }
-    })();
+    jdService.getStatusHistory(job.id)
+      .then((res) => { if (!cancelled) setJdStatusHistory(res.events || []); })
+      .catch(() => { if (!cancelled) setJdStatusHistory(null); });
     return () => { cancelled = true; };
   }, [job.id, job.status]);
 
@@ -3965,12 +3836,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                 - AI Interview Created: one row, versioned from the config's
                   own /ai-interview/{id}/version-history (AIInterviewResponse
                   carries no version of its own).
-                - Job Archived / Disabled: `job.status` only holds the CURRENT
-                  status, with no history of past transitions, so these can
-                  only ever contribute at most one row each (date-only →
-                  "System"), and "Unarchived"/"Re-enabled" never appear — a JD
-                  back in Published state is indistinguishable from one that
-                  was never archived/disabled. */}
+                - Job Disabled / Re-enabled / Archived / Unarchived: one row
+                  per audited status transition from /jd/{id}/status-history,
+                  with the user who made it and when. */}
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4">
             <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 mb-3">Recent Activity</h3>
             <div className="space-y-3">
@@ -4000,27 +3868,32 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   }
                 }
                 /* JD status changes — every Disabled / Re-enabled / Archived /
-                   Unarchived from the audit log, each its own event with who
-                   and when. Without audit access (or with no such entries
-                   yet) it falls back to the one row the current status
-                   implies. */
+                   Unarchived, each its own event with who and when, from
+                   GET /jd/{id}/status-history. If the JD is Disabled/Archived
+                   now but its newest audited event doesn't say so (the change
+                   predates status auditing, or the history failed to load),
+                   the current status is still shown as one row dated by the
+                   JD's last update. */
                 const STATUS_DOT: Record<string, string> = {
-                  Disabled: 'bg-destructive', 'Re-enabled': 'bg-success', Archived: 'bg-brand-orange', Unarchived: 'bg-brand-teal',
+                  jd_disable: 'bg-destructive', jd_enable: 'bg-success', jd_archive: 'bg-brand-orange', jd_unarchive: 'bg-brand-teal',
                 };
-                if (jdStatusHistory && jdStatusHistory.length > 0) {
-                  jdStatusHistory.forEach((h) => {
-                    events.push({ key: `status-${h.id}`, dot: STATUS_DOT[h.kind], title: `Job ${h.kind}`, date: h.at, by: h.by });
+                (jdStatusHistory || []).forEach((h) => {
+                  events.push({
+                    key: `status-${h.id}`,
+                    dot: STATUS_DOT[h.action] || 'bg-gray-400',
+                    title: h.title,
+                    date: h.created_at || undefined,
+                    by: h.user_name || undefined,
                   });
-                } else {
-                  // The current status only — dated by the JD's last update;
-                  // with no date at all it is pinned to the top below, since
-                  // it is the job's present state, not its oldest event.
-                  const statusDate = job.updated_at || jdLastUpdatedAt;
-                  if (job.status === 'Archived') {
-                    events.push({ key: 'archived', dot: 'bg-brand-orange', title: 'Job Archived', date: statusDate });
-                  }
-                  if (job.status === 'Disabled') {
-                    events.push({ key: 'disabled', dot: 'bg-destructive', title: 'Job Disabled', date: statusDate });
+                });
+                {
+                  const latestAuditedStatus = jdStatusHistory?.[0]?.new_status?.toLowerCase();
+                  const currentStatus = job.status === 'Archived' ? 'archived' : job.status === 'Disabled' ? 'disabled' : null;
+                  if (currentStatus && latestAuditedStatus !== currentStatus) {
+                    const statusDate = job.updated_at || jdLastUpdatedAt;
+                    events.push(currentStatus === 'archived'
+                      ? { key: 'archived', dot: 'bg-brand-orange', title: 'Job Archived', date: statusDate }
+                      : { key: 'disabled', dot: 'bg-destructive', title: 'Job Disabled', date: statusDate });
                   }
                 }
                 /* ONE row per resume-scoring TRIGGER — like AI Talent Match

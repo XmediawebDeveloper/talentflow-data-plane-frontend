@@ -39,6 +39,7 @@ import AssessmentInviteTable, {
 } from '@/components/assessments/AssessmentInviteTable';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListFilterPanel from '@/components/ui/list-filter-panel';
+import { DateField } from '@/components/ui/date-field';
 /* The one position every tab's search row lands in. See the note on the
    component: the toolbar itself was already shared, but each tab drew it
    somewhere else, so switching tabs moved the search box. */
@@ -6261,13 +6262,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       <label htmlFor="assessment-created-from" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
                         Created from
                       </label>
-                      <input
+                      <DateField
                         id="assessment-created-from"
-                        type="date"
                         value={filterCreatedFrom}
                         max={filterCreatedTo || undefined}
-                        onChange={(e) => assessmentListSearch.setFilter('createdFrom', e.target.value)}
-                        className="w-full min-w-0 px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-black dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
+                        onChange={(v) => assessmentListSearch.setFilter('createdFrom', v)}
+                        className="min-w-0"
                       />
                     </div>
 
@@ -6275,13 +6275,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       <label htmlFor="assessment-created-to" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
                         Created to
                       </label>
-                      <input
+                      <DateField
                         id="assessment-created-to"
-                        type="date"
                         value={filterCreatedTo}
                         min={filterCreatedFrom || undefined}
-                        onChange={(e) => assessmentListSearch.setFilter('createdTo', e.target.value)}
-                        className="w-full min-w-0 px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-black dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
+                        onChange={(v) => assessmentListSearch.setFilter('createdTo', v)}
+                        className="min-w-0"
                       />
                     </div>
                 </ListFilterPanel>
@@ -6654,13 +6653,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             <label htmlFor="result-completed-from" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
                               Completed from
                             </label>
-                            <input
+                            <DateField
                               id="result-completed-from"
-                              type="date"
                               value={filterResultFrom}
                               max={filterResultTo || undefined}
-                              onChange={(e) => completedCandidatesSearch.setFilter('completedFrom', e.target.value)}
-                              className="w-full min-w-0 px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-black dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
+                              onChange={(v) => completedCandidatesSearch.setFilter('completedFrom', v)}
+                              className="min-w-0"
                             />
                           </div>
 
@@ -6668,13 +6666,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             <label htmlFor="result-completed-to" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
                               Completed to
                             </label>
-                            <input
+                            <DateField
                               id="result-completed-to"
-                              type="date"
                               value={filterResultTo}
                               min={filterResultFrom || undefined}
-                              onChange={(e) => completedCandidatesSearch.setFilter('completedTo', e.target.value)}
-                              className="w-full min-w-0 px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-black dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
+                              onChange={(v) => completedCandidatesSearch.setFilter('completedTo', v)}
+                              className="min-w-0"
                             />
                           </div>
                         </ListFilterPanel>
@@ -7266,16 +7263,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             <label htmlFor="invite-sent-from" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
                               Invited from
                             </label>
-                            <input
+                            <DateField
                               id="invite-sent-from"
-                              type="date"
                               value={inviteStatusFilters.dateFrom}
                               max={inviteStatusFilters.dateTo || undefined}
-                              onChange={(e) => {
-                                setInviteStatusFilters({ ...inviteStatusFilters, dateFrom: e.target.value });
+                              onChange={(v) => {
+                                setInviteStatusFilters({ ...inviteStatusFilters, dateFrom: v });
                                 setInviteStatusPage(1);
                               }}
-                              className="w-full min-w-0 px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-black dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
+                              className="min-w-0"
                             />
                           </div>
 
@@ -7283,16 +7279,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             <label htmlFor="invite-sent-to" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
                               Invited to
                             </label>
-                            <input
+                            <DateField
                               id="invite-sent-to"
-                              type="date"
                               value={inviteStatusFilters.dateTo}
                               min={inviteStatusFilters.dateFrom || undefined}
-                              onChange={(e) => {
-                                setInviteStatusFilters({ ...inviteStatusFilters, dateTo: e.target.value });
+                              onChange={(v) => {
+                                setInviteStatusFilters({ ...inviteStatusFilters, dateTo: v });
                                 setInviteStatusPage(1);
                               }}
-                              className="w-full min-w-0 px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-black dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
+                              className="min-w-0"
                             />
                           </div>
                         </ListFilterPanel>
