@@ -215,6 +215,10 @@ export const mapJDToJob = (jd: JDListRow): Job => ({
   requiredMatch: jd.required_match || 70,
   department: jd.department,
   industry_type: jd.industry_type,
+  salary_min: jd.salary_min,
+  salary_max: jd.salary_max,
+  salary_currency: jd.salary_currency,
+  compensation_type: jd.compensation_type,
   experience: formatJobExperienceText({
     jobLevel: jd.job_level || jd.experience_level,
     experienceMin: jd.experience_min,
@@ -451,7 +455,7 @@ export const buildAssessmentJobList = (
   return reps;
 };
 
-export type JobSortBy = 'date' | 'applicants' | 'title' | 'status' | 'industry';
+export type JobSortBy = 'date' | 'applicants' | 'assessed' | 'interviewed' | 'title' | 'status' | 'industry';
 export type JobSortOrder = 'asc' | 'desc';
 
 /** The listing's sort. 'desc' inverts the natural order (newest/largest first). */
@@ -469,6 +473,12 @@ export const sortJobs = (list: Job[], sortBy: JobSortBy, sortOrder: JobSortOrder
       }
       case 'applicants':
         comparison = (a.applicants || 0) - (b.applicants || 0);
+        break;
+      case 'assessed':
+        comparison = (a.assessed || 0) - (b.assessed || 0);
+        break;
+      case 'interviewed':
+        comparison = (a.interviewed || 0) - (b.interviewed || 0);
         break;
       case 'title':
         comparison = a.title.localeCompare(b.title);
@@ -579,16 +589,23 @@ export const jobSearchMatcher = (query: string): ((job: Job) => boolean) => {
  * already-fetched Job-shaped siblings rather than a fresh lineage fetch — two
  * different input shapes needing the identical rule so the button's guess
  * never drifts from what the table it opens actually shows.
+ *
+ * `includeInactive`: the job PICKER's version list (choosing what to score
+ * against) shows every archived/disabled version — greyed out, unselectable —
+ * so a recruiter can see a version was taken out of service rather than have
+ * it silently missing. The scored-history views leave it off and keep the
+ * "only if it was ever scored" rule.
  */
 export const isVersionVisibleForScoring = (
   status: string | undefined,
   versionId: string,
   versionApplicants: Record<string, number> | undefined,
+  includeInactive = false,
 ): boolean => {
   const normalized = (status || '').toLowerCase();
   if (normalized === 'draft') return false;
   if (normalized === 'archived' || normalized === 'disabled') {
-    return (versionApplicants?.[versionId] ?? 0) > 0;
+    return includeInactive || (versionApplicants?.[versionId] ?? 0) > 0;
   }
   return true;
 };
@@ -627,6 +644,9 @@ export const resolveVersionHistoryRows = (
      * same as a genuinely empty one here.
      */
     versionApplicants?: Record<string, number>;
+    /** Under `publishedOnly`, keep every archived/disabled version (see
+     *  isVersionVisibleForScoring) — the job picker's version list. */
+    includeInactive?: boolean;
   },
 ): ResolvedVersionRow[] => {
   const lineageVersions = versions ?? [];
@@ -648,7 +668,7 @@ export const resolveVersionHistoryRows = (
          there. Gated behind an option rather than applied everywhere: Job
          Openings' own history is a job's full edit trail, where a draft in
          progress is exactly what a recruiter expects to see. */
-      if (options?.publishedOnly && !isVersionVisibleForScoring(v.status, v.id, options.versionApplicants)) {
+      if (options?.publishedOnly && !isVersionVisibleForScoring(v.status, v.id, options.versionApplicants, options.includeInactive)) {
         return false;
       }
       return true;

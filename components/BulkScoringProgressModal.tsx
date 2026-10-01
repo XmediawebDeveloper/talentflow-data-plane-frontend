@@ -1,3 +1,4 @@
+import { SCORE_CELL_TEXT } from '@/lib/utils/score';
 import { X, Clock, CheckCircle2, XCircle, AlertCircle, Loader2, Database, FolderOpen, Target, TrendingUp, RotateCcw, Minus, Maximize2, RefreshCw, SlidersHorizontal, ChevronDown, Eye, ClipboardList } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import ListPagination from '@/components/ListPagination';
@@ -53,9 +54,9 @@ export interface ScoringProgressItem {
 // Score text colours, matched to the three Match Result badge colours so the
 // number and the verdict beside it read as one statement.
 const SCORE_TEXT_CLASS: Record<string, string> = {
-  'Exact Match': 'text-base font-semibold text-success',
-  'Partial Match': 'text-base font-semibold text-brand-orange-deep',
-  'No Match': 'text-base font-semibold text-destructive',
+  'Exact Match': 'text-success',
+  'Partial Match': 'text-brand-orange-deep',
+  'No Match': 'text-destructive',
 };
 
 interface BulkScoringProgressModalProps {
@@ -1013,7 +1014,7 @@ export default function BulkScoringProgressModal({
                             {/* Same three colours the Match Result badge uses,
                                 so the number and the verdict read as one. */}
                             {item.score !== undefined && item.matchResult ? (
-                              <span className={SCORE_TEXT_CLASS[item.matchResult]}>{formatOverallScoreValue(item.overallRating10, item.score)}</span>
+                              <span className={`${SCORE_CELL_TEXT} ${SCORE_TEXT_CLASS[item.matchResult]}`}>{formatOverallScoreValue(item.overallRating10, item.score)}</span>
                             ) : (
                               <span className="text-sm text-gray-400 dark:text-slate-500">&mdash;</span>
                             )}
@@ -1120,7 +1121,7 @@ export default function BulkScoringProgressModal({
                       </div>
                       {item.matchResult ? getMatchResultBadge(item.matchResult, item.score) : null}
                       {showScoreColumn && item.score !== undefined && item.matchResult && (
-                        <span className={SCORE_TEXT_CLASS[item.matchResult]}>{formatOverallScore(item.overallRating10, item.score)}</span>
+                        <span className={`text-base font-semibold ${SCORE_TEXT_CLASS[item.matchResult]}`}>{formatOverallScore(item.overallRating10, item.score)}</span>
                       )}
                       {item.resumeId && (
                         <Button

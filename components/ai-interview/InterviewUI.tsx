@@ -1062,7 +1062,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   const [preTurnCountdown, setPreTurnCountdown] = useState<number | null>(null);
   const preTurnCountdownRef = useRef<number | null>(null);
   const preTurnCountdownTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const PRE_TURN_COUNTDOWN_FROM = 3; // seconds (per user story: "3..2..1…You may speak now")
+  const PRE_TURN_COUNTDOWN_FROM = 3; // numbers shown: 3..2..1
+  // How long each number stays up. 1.25s (was 1s) so the slow shine animation
+  // (cdShine) has room; the whole get-ready step is 3.75s. The animation length
+  // below is tied to this value.
+  const PRE_TURN_TICK_MS = 1250;
   // Assigned in a useEffect (like startRecordingInternalRef) so finalizePlayback
   // and message handlers always call the freshest closure.
   const runPreTurnCountdownRef = useRef<(onComplete: () => void) => void>(() => {});
@@ -2345,13 +2349,69 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     // No-op: we never blocked the interview, so nothing to restore.
   }, []);
 
+  // ── Held attention warnings (gaze_away / multiple_faces) ────────────────
+  // These no longer go through emitEvent's 2s toast + 8s cooldown. Each
+  // occurrence is an EPISODE: the warning stays on screen until the candidate
+  // looks back / is alone again, then disappears; the next occurrence shows it
+  // again (no cooldown). Every episode is logged to the recruiter timeline:
+  //   start -> `gaze_away` / `multiple_faces` (counts as the violation)
+  //   end   -> `gaze_away_ended` / `multiple_faces_ended` (info, not scored)
+  // paired by episode_id and carrying the duration.
+  type AttentionKind = 'gaze_away' | 'multiple_faces';
+  interface AttentionEpisode { id: string; startedAt: number; details: Record<string, any> }
+  const attentionEpisodesRef = useRef<Partial<Record<AttentionKind, AttentionEpisode>>>({});
+  const [attentionWarnings, setAttentionWarnings] = useState<Partial<Record<AttentionKind, string>>>({});
+
+  const startAttentionEpisode = useCallback((kind: AttentionKind, details: Record<string, any>, message: string) => {
+    if (attentionEpisodesRef.current[kind]) return; // already open; detector only fires on the edge anyway
+    const startedAt = Date.now();
+    const id = `${kind}-${startedAt}-${Math.random().toString(36).slice(2, 8)}`;
+    attentionEpisodesRef.current[kind] = { id, startedAt, details };
+    setAttentionWarnings(prev => ({ ...prev, [kind]: message }));
+    candidateAIInterviewService.reportProctorEvent(token, {
+      event_type: kind,
+      timestamp: new Date(startedAt).toISOString(),
+      details: { ...details, episode_id: id, started_at: new Date(startedAt).toISOString() },
+    }).catch(() => { /* best-effort */ });
+  }, [token]);
+
+  const endAttentionEpisode = useCallback((kind: AttentionKind, endedBy: 'restored' | 'interview_end') => {
+    const ep = attentionEpisodesRef.current[kind];
+    if (!ep) return;
+    delete attentionEpisodesRef.current[kind];
+    setAttentionWarnings(prev => { const next = { ...prev }; delete next[kind]; return next; });
+    const endedAt = Date.now();
+    const durationMs = Math.max(0, endedAt - ep.startedAt);
+    candidateAIInterviewService.reportProctorEvent(token, {
+      event_type: `${kind}_ended`,
+      timestamp: new Date(endedAt).toISOString(),
+      details: {
+        ...ep.details,
+        episode_id: ep.id,
+        started_at: new Date(ep.startedAt).toISOString(),
+        ended_at: new Date(endedAt).toISOString(),
+        duration_ms: durationMs,
+        duration_seconds: Math.round(durationMs / 1000),
+        ended_by: endedBy,
+      },
+    }).catch(() => { /* best-effort */ });
+  }, [token]);
+
   const handleMultipleFaces = useCallback((count: number) => {
-    emitEvent('multiple_faces', { face_count: count });
-  }, [emitEvent]);
+    startAttentionEpisode('multiple_faces', { face_count: count }, 'Please ensure you are alone.');
+  }, [startAttentionEpisode]);
+
+  const handleMultipleFacesCleared = useCallback(() => {
+    endAttentionEpisode('multiple_faces', 'restored');
+  }, [endAttentionEpisode]);
 
   const handleGazeAway = useCallback((direction: string) => {
-    emitEvent('gaze_away', { direction });
-  }, [emitEvent]);
+    startAttentionEpisode('gaze_away', { direction }, 'Please keep your attention on the screen.');
+  }, [startAttentionEpisode]);
+
+  const handleGazeRestored = useCallback(() => {
+    endAttentionEpisode('gaze_away', 'restored');
+  }, [endAttentionEpisode]);
 
   // Distinct (event_type:object_class) keys already screenshotted this session —
   // see handleObjectDetected below. A ref (not state) so tracking it never
@@ -2462,8 +2522,23 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     onFaceMissing: handleFaceMissing,
     onFaceRestored: handleFaceRestored,
     onMultipleFaces: handleMultipleFaces,
+    onMultipleFacesCleared: handleMultipleFacesCleared,
     onGazeAway: handleGazeAway,
+    onGazeRestored: handleGazeRestored,
   });
+
+  // Close any open attention episode when detection stops (interview ending /
+  // camera gone) or on unmount, so its duration is still logged.
+  const faceDetectionActive = isConnected && webcamReady;
+  useEffect(() => {
+    if (faceDetectionActive && !isClosing) return;
+    endAttentionEpisode('gaze_away', 'interview_end');
+    endAttentionEpisode('multiple_faces', 'interview_end');
+  }, [faceDetectionActive, isClosing, endAttentionEpisode]);
+  useEffect(() => () => {
+    endAttentionEpisode('gaze_away', 'interview_end');
+    endAttentionEpisode('multiple_faces', 'interview_end');
+  }, [endAttentionEpisode]);
 
   // Stable video-ready callback: use the stable setVideoElement methods from each hook
   // (both are useCallback([], []) — same ref across renders) so handleVideoReady
@@ -8220,7 +8295,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       preTurnCountdownTimerRef.current = setInterval(() => {
         n -= 1;
         if (n >= 1) {
-          // Show 4, 3, 2, 1 — one per second (5 was shown immediately above).
+          // Show 2, 1 — one per PRE_TURN_TICK_MS (3 was shown immediately above).
           preTurnCountdownRef.current = n;
           setPreTurnCountdown(n);
         } else {
@@ -8233,7 +8308,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           setPreTurnCountdown(null);
           try { onComplete(); } catch { /* no-op */ }
         }
-      }, 1000);
+      }, PRE_TURN_TICK_MS);
     };
   });
 
@@ -9798,7 +9873,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         <div className="w-[40%] flex-shrink-0 flex flex-col bg-[var(--raw-0f1117)] overflow-hidden" style={{ borderRight: '1px solid rgba(255,255,255,0.06)' }}>
 
           {/* ── Top half: BINA AI Avatar ── */}
-          <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+          {/* Inset card with rounded corners, matching the webcam frame below
+              (mx-3 + rounded-xl). */}
+          <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden mx-3 mt-3 rounded-xl">
             {/* Label */}
             <div className="absolute top-3 left-3 z-10 flex items-center gap-1.5">
               <div className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse shrink-0" />
@@ -9947,6 +10024,32 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 </div>
               )}
 
+              {/* Held attention warnings: stay up for the whole episode and clear
+                  once the candidate looks back / is alone again. Top of the
+                  camera tile, so they never cover the question or timer. */}
+              {(attentionWarnings.multiple_faces || attentionWarnings.gaze_away) && !isClosing && (
+                <div className="absolute top-10 left-2 right-2 z-20 flex flex-col gap-1.5 pointer-events-none" role="status" aria-live="polite">
+                  {attentionWarnings.multiple_faces && (
+                    <div className="flex items-start gap-2 rounded-lg bg-red-600/90 backdrop-blur-sm ring-1 ring-red-300/60 px-3 py-2 shadow-lg">
+                      <span className="mt-1 w-2 h-2 rounded-full bg-white animate-pulse shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-white text-xs font-bold leading-tight">Multiple Faces Detected</p>
+                        <p className="text-white/90 text-2xs leading-snug">{attentionWarnings.multiple_faces}</p>
+                      </div>
+                    </div>
+                  )}
+                  {attentionWarnings.gaze_away && (
+                    <div className="flex items-start gap-2 rounded-lg bg-amber-400/95 backdrop-blur-sm ring-1 ring-amber-200/60 px-3 py-2 shadow-lg">
+                      <span className="mt-1 w-2 h-2 rounded-full bg-gray-900 animate-pulse shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-gray-900 text-xs font-bold leading-tight">Looking Away Detected</p>
+                        <p className="text-gray-900/85 text-2xs leading-snug">{attentionWarnings.gaze_away}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Face detection ellipse */}
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[55%] w-16 h-24 border border-dashed border-purple-500/25 rounded-[50%] animate-pulse pointer-events-none" />
 
@@ -9987,7 +10090,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         </div>
 
         {/* ════ RIGHT PANEL: Chat (fills remaining width) ════ */}
-        <div className="flex-1 flex flex-col min-w-0 bg-white">
+        {/* Inset card with rounded corners, matching the webcam frame. */}
+        <div className="flex-1 flex flex-col min-w-0 bg-white m-3 rounded-xl overflow-hidden">
 
           {/* Header — single light sky-blue color (was a purple→pink gradient).
               Foreground darkened to sky/slate so text stays readable on the
@@ -10049,7 +10153,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 <button
                   onClick={() => setShowEndConfirm(true)}
                   disabled={!isConnected}
-                  className="flex items-center gap-1 px-2.5 py-1.5 bg-white/60 hover:bg-white/80 disabled:opacity-50 disabled:cursor-not-allowed text-sky-900 rounded-lg border border-white/70 transition-all duration-200 font-semibold text-xs"
+                  className="flex items-center gap-1 px-2.5 py-1.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg border border-red-700 shadow-sm transition-all duration-200 font-semibold text-xs"
                 >
                   <LogOut className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">End</span>
@@ -10346,25 +10450,52 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               const _sec = `${num} second${num === 1 ? '' : 's'}`;
               const title = isPre ? 'Get ready to answer' : 'Are you done with your response?';
               const subtitle = isPre
-                ? 'You may speak now.'   // AII14 AC1 wording
+                ? ''   // pre-turn: no bottom chip, title only (was 'You may speak now.')
                 : isLastQ
                   ? `Ending the interview in ${_sec}. If you’re not done with your response, kindly speak up.`
                   : `Moving on to the next question in ${_sec}. If you’re not done with your response, kindly speak up.`;
-              const accent = isPre ? 'text-emerald-300' : 'text-amber-300';
-              const ring = isPre ? 'ring-emerald-400/40' : 'ring-amber-400/40';
+              const accent = isPre ? 'text-sky-300' : 'text-amber-300';
+              const ring = 'ring-amber-400/40'; // only the silence countdown keeps its circle
               return (
                 <div className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 z-[104] flex flex-col items-center justify-center px-4">
-                  <style>{`@keyframes cdPulse {0%{opacity:0;transform:scale(0.5)}22%{opacity:1;transform:scale(1.08)}68%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(0.85)}}`}</style>
+                  {/* cdShine (pre-turn, "H2"): sky-blue digit, no circle, slow fade-in
+                      with a light band sweeping across it. Spread over the full
+                      number (PRE_TURN_TICK_MS) so it reads slow and calm. */}
+                  <style>{`@keyframes cdPulse {0%{opacity:0;transform:scale(0.5)}22%{opacity:1;transform:scale(1.08)}68%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(0.85)}}
+@keyframes cdShine {0%{opacity:0;transform:scale(0.97);background-position:100% 0,0 0}10%{background-position:100% 0,0 0}40%{opacity:1;transform:scale(1)}92%{opacity:1;background-position:0% 0,0 0}100%{opacity:0.15;background-position:0% 0,0 0}}`}</style>
                   <div className="flex flex-col items-center text-center">
                     {/* Title in a dark chip so it reads on the light chat background */}
                     <div className={`mb-3 px-4 py-1.5 rounded-full bg-black/75 backdrop-blur-sm ring-1 ring-white/10 text-sm sm:text-base font-bold ${accent} shadow-lg`}>{title}</div>
-                    <div
-                      key={`${isPre ? 'p' : 's'}-${num}`}
-                      className={`flex items-center justify-center w-36 h-36 sm:w-48 sm:h-48 rounded-full bg-black/70 backdrop-blur-md ring-4 ${ring} shadow-2xl`}
-                      style={{ animation: 'cdPulse 1s ease-in-out' }}
-                    >
-                      <span className={`font-bold tabular-nums ${accent}`} style={{ fontSize: '5rem', lineHeight: 1 }}>{num}</span>
-                    </div>
+                    {isPre ? (
+                      <div
+                        key={`p-${num}`}
+                        className="flex items-center justify-center w-36 h-36 sm:w-48 sm:h-48"
+                      >
+                        <span
+                          className="font-extrabold tabular-nums"
+                          style={{
+                            fontSize: '5rem',
+                            lineHeight: 1,
+                            color: 'transparent',
+                            background:
+                              'linear-gradient(110deg, transparent 40%, #d6f1ff 50%, transparent 60%) 100% 0 / 300% 100% no-repeat, ' +
+                              'linear-gradient(135deg, #0284c7 20%, #0369a1 80%)',
+                            WebkitBackgroundClip: 'text',
+                            backgroundClip: 'text',
+                            filter: 'drop-shadow(0 0 10px rgba(255,255,255,0.95)) drop-shadow(0 2px 8px rgba(2,132,199,0.25))',
+                            animation: `cdShine ${PRE_TURN_TICK_MS}ms ease-in-out both`,
+                          }}
+                        >{num}</span>
+                      </div>
+                    ) : (
+                      <div
+                        key={`s-${num}`}
+                        className={`flex items-center justify-center w-36 h-36 sm:w-48 sm:h-48 rounded-full bg-black/70 backdrop-blur-md ring-4 ${ring} shadow-2xl`}
+                        style={{ animation: 'cdPulse 1s ease-in-out' }}
+                      >
+                        <span className={`font-bold tabular-nums ${accent}`} style={{ fontSize: '5rem', lineHeight: 1 }}>{num}</span>
+                      </div>
+                    )}
                     {!isPre && !isLastQ && (
                       <button
                         type="button"
@@ -10376,7 +10507,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                     )}
                     {/* Subtitle in a dark chip — plain white text was invisible on
                         the light chat background (reported). */}
-                    <div className="mt-3 max-w-sm px-3.5 py-2 rounded-xl bg-black/75 backdrop-blur-sm ring-1 ring-white/10 text-white text-xs sm:text-sm leading-snug shadow-lg">{subtitle}</div>
+                    {/* Pre-turn shows only the top "Get ready to answer" chip. */}
+                    {!isPre && (
+                      <div className="mt-3 max-w-sm px-3.5 py-2 rounded-xl bg-black/75 backdrop-blur-sm ring-1 ring-white/10 text-white text-xs sm:text-sm leading-snug shadow-lg">{subtitle}</div>
+                    )}
                   </div>
                 </div>
               );

@@ -1314,6 +1314,11 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     }
   }, []);
 
+  /* When the recorders started, ISO. Both start in the same tick, so one
+     stamp serves both; it is the anchor the recruiter's Integrity tab uses to
+     turn a violation's clock time into a position in the video. */
+  const recorderStartedAtRef = useRef<string | null>(null);
+
   const startScreenRecorder = useCallback(() => {
     const stream = screenStreamRef.current;
     if (!stream || screenRecorderRef.current) return;
@@ -1328,7 +1333,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     const micTracks = getRecordingMicTracks(streamRef.current);
     const recorder = new SegmentedRecorder({
       stream: new MediaStream([track, ...micTracks]),
-      upload: (blob, idx, isFinal) => candidateService.uploadScreenRecording(token, blob, idx, isFinal),
+      upload: (blob, idx, isFinal) => candidateService.uploadScreenRecording(token, blob, idx, isFinal, recorderStartedAtRef.current ?? undefined),
       storageKey: `tf_as_rec_seg_screen_${token}`,
       label: 'AS-ScreenRecording',
       videoBitsPerSecond: 300_000,
@@ -1660,6 +1665,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       console.log(`[AS-Recording] step=${step}: holding recorders until the camera stream is ready`);
       return;
     }
+    if (!recorderStartedAtRef.current) recorderStartedAtRef.current = new Date().toISOString();
     console.log(`[AS-Recording] step=${step}: starting recorders`, {
       camera: cameraRecordingEnabled && !cameraRecorderRef.current,
       screen: screenRecordingRequired && !screenRecorderRef.current,
@@ -1684,7 +1690,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
         tracks.push(...getRecordingMicTracks(cameraStream));
         const recorder = new SegmentedRecorder({
           stream: new MediaStream(tracks),
-          upload: (blob, idx, isFinal) => candidateService.uploadRecording(token, blob, idx, isFinal),
+          upload: (blob, idx, isFinal) => candidateService.uploadRecording(token, blob, idx, isFinal, recorderStartedAtRef.current ?? undefined),
           storageKey: `tf_as_rec_seg_cam_${token}`,
           label: 'AS-CameraRecording',
           videoBitsPerSecond: 200_000,

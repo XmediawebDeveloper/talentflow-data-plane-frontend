@@ -27,7 +27,7 @@ import ListFilterPanel from '@/components/ui/list-filter-panel';
 import { DateField } from '@/components/ui/date-field';
 import { InviteSourceValue } from '@/components/AIInterviewInviteTable';
 import { timelineEvents } from '@/components/AssessmentInviteActions';
-import { toOneDecimalScore } from '@/lib/utils/score';
+import { toOneDecimalScore, SCORE_CELL_TEXT } from '@/lib/utils/score';
 import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
 import Pagination from '@/components/Pagination';
 
@@ -2558,7 +2558,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                                 was confusing because 69% rendered gray even
                                 though it failed the 70% threshold. Now color
                                 matches the Pass/Fail outcome consistently. */}
-                            <span className={`text-lg font-semibold ${candidate.tech_score !== undefined ? (candidate.tech_score >= passingThreshold ? 'text-success' : 'text-destructive') : 'text-gray-400'}`}>
+                            <span className={`${SCORE_CELL_TEXT} ${candidate.tech_score !== undefined ? (candidate.tech_score >= passingThreshold ? 'text-success' : 'text-destructive') : 'text-gray-400'}`}>
                               {candidate.tech_score !== undefined ? `${candidate.tech_score}%` : '-'}
                             </span>
                             {candidate.tech_score !== undefined && (
@@ -2572,7 +2572,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       {isColumnEnabled('codingScore') && assessmentDetails?.coding_enabled && (
                         <td className="px-4 py-4 text-center">
                           <div className="flex items-center justify-center gap-2">
-                            <span className={`text-lg font-semibold ${candidate.coding_score !== undefined ? (candidate.coding_score >= passingThreshold ? 'text-success' : 'text-destructive') : 'text-gray-400'}`}>
+                            <span className={`${SCORE_CELL_TEXT} ${candidate.coding_score !== undefined ? (candidate.coding_score >= passingThreshold ? 'text-success' : 'text-destructive') : 'text-gray-400'}`}>
                               {candidate.coding_score !== undefined ? `${candidate.coding_score}%` : '-'}
                             </span>
                             {candidate.coding_score !== undefined && (

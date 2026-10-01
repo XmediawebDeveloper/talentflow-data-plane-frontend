@@ -179,6 +179,9 @@ interface JobVersionHistoryPanelProps {
   statusOverrides?: Record<string, string>;
   /** Drop still-drafted versions from the chain — see resolveVersionHistoryRows. */
   publishedOnly?: boolean;
+  /** With `publishedOnly`: still list every archived/disabled version
+   *  (unselectable) instead of only those that were scored. */
+  includeInactiveVersions?: boolean;
   /**
    * Render the job role as plain text instead of a link to Job Details.
    *
@@ -236,6 +239,7 @@ export default function JobVersionHistoryPanel({
   staticRows = false,
   statusOverrides,
   publishedOnly = false,
+  includeInactiveVersions = false,
   plainTitle = false,
   extraColumns = [],
   stickyVersionColumn = false,
@@ -280,6 +284,7 @@ export default function JobVersionHistoryPanel({
     excludeId: onSelectVersion && !keepLatestWhenSelectable ? job.id : undefined,
     publishedOnly,
     versionApplicants,
+    includeInactive: includeInactiveVersions,
   });
 
   return (
@@ -394,7 +399,9 @@ export default function JobVersionHistoryPanel({
                 const selectable = selectableByRule && !selectionDisabled;
                 const notSelectableReason = selectionDisabled
                   ? selectionDisabledReason
-                  : hostVeto ?? 'Only published versions can receive candidates';
+                  : hostVeto ?? (versionPlainStatus === 'Disabled' || versionPlainStatus === 'Archived'
+                    ? `This version is ${versionPlainStatus} — only published versions can be selected`
+                    : 'Only published versions can receive candidates');
 
                 return (
                   /* NO transform on the row itself: a transformed <tr> becomes

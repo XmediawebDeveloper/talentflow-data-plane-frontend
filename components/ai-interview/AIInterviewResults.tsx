@@ -1,5 +1,6 @@
 'use client';
 
+import { SCORE_CELL_TEXT } from '@/lib/utils/score';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListEmptyState from '@/components/ui/list-empty-state';
@@ -8,6 +9,8 @@ import { TableSkeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
+import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
+import TimelineStamps from '@/components/ui/timeline-stamps';
 import { DateField } from '@/components/ui/date-field';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
@@ -55,6 +58,10 @@ interface AIInterviewResultsProps {
    *  the Job Version / Interview Version columns, filters and export columns
    *  are left out. */
   hideVersionDetails?: boolean;
+  /** Opened from a job's own details page: the job version is already fixed
+   *  by the page, so the Job Version column and filter are left out while
+   *  Interview Version stays. */
+  hideJobVersion?: boolean;
   /** When provided (embedded case), clicking a candidate opens their details
    *  inline via this callback (passing the session id and the ordered list of
    *  currently-visible session ids for Prev/Next) instead of navigating to the
@@ -219,7 +226,7 @@ const DEFAULT_RESULT_STATUS = 'all';
 const RESULT_STATUSES = new Set(['in_progress', 'completed', 'terminated']);
 const isResultStatus = (v: unknown) => RESULT_STATUS_OPTIONS.some((o) => o.value === v);
 
-export default function AIInterviewResults({ configId, configTitle, jdTitle, jdShortId, embedded = false, showStats, hideVersionDetails = false, onViewCandidate, breadcrumbItems, toolbarActions, emptyStateAction, jobVersion: jobVersionProp, interviewVersion: interviewVersionProp }: AIInterviewResultsProps) {
+export default function AIInterviewResults({ configId, configTitle, jdTitle, jdShortId, embedded = false, showStats, hideVersionDetails = false, hideJobVersion = false, onViewCandidate, breadcrumbItems, toolbarActions, emptyStateAction, jobVersion: jobVersionProp, interviewVersion: interviewVersionProp }: AIInterviewResultsProps) {
   const router = useRouter();
   const [sessions, setSessions] = useState<AIInterviewResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -522,6 +529,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
   // Columns modal and the export all drop them together.
   const [columns, setColumns] = useState(() => RESULT_COLUMNS
     .filter((c) => !hideVersionDetails || (c.id !== 'jobVersion' && c.id !== 'interviewVersion'))
+    .filter((c) => !hideJobVersion || c.id !== 'jobVersion')
     .map((c) => ({ id: c.id as string, label: c.label as string, enabled: true })));
   const [showColumnModal, setShowColumnModal] = useState(false);
   const enabledColumns = columns.filter((c) => c.enabled);
@@ -914,6 +922,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             </div>
             {!hideVersionDetails && (
             <>
+            {!hideJobVersion && (
             <div className="flex-1 min-w-0 basis-[180px]">
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Job Version</label>
               <select
@@ -926,6 +935,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                 {jobVersion != null && <option value={String(jobVersion)}>V{jobVersion}</option>}
               </select>
             </div>
+            )}
             <div className="flex-1 min-w-0 basis-[180px]">
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Interview Version</label>
               <select
@@ -1000,12 +1010,22 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                 const sc = session.status === 'in_progress' ? session.skill_coverage : undefined;
                 const scTotal = sc ? sc.covered.length + sc.medium_covered.length + sc.low_covered.length + sc.uncovered.length : 0;
                 const scCoveredPct = sc && scTotal > 0 ? Math.round(((sc.covered.length + sc.medium_covered.length) / scTotal) * 100) : 0;
+                const score = displayInviteScore(session);
+                const result = inviteResult(session, score);
+                const passed = result ? result === 'Pass' : (score ?? 0) >= 60;
+                const isSelected = selected.has(session.id);
                 return (
                   <button
                     key={session.id}
                     onClick={() => handleViewDetails(session)}
-                    className="text-left bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/20 hover:-translate-y-0.5 transition-all p-4 flex flex-col gap-3"
+                    className={`group relative text-left bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/20 hover:-translate-y-0.5 transition-all p-4 flex flex-col gap-3 ${gridCardSelectedClass(isSelected)}`}
                   >
+                    <GridCardSelect
+                      selected={isSelected}
+                      onToggle={() => toggleSelected(session)}
+                      label={session.candidate_name || 'candidate'}
+                      selectionActive={selected.size > 0}
+                    />
                     <div className="flex items-start gap-2.5">
                       <div className="w-9 h-9 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-semibold text-sm flex-shrink-0">
                         {(session.candidate_name || 'U')[0].toUpperCase()}
@@ -1025,10 +1045,18 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                       )}
                     </div>
 
-                    {col('inviteSource') && inviteSourceLabel(session) && (
-                      <p className="text-xs text-gray-600">
-                        <InviteSourceValue inv={session} iconClassName="w-3 h-3" />
-                      </p>
+                    {((col('inviteSource') && inviteSourceLabel(session)) || (col('interviewVersion') && interviewVersion != null)) && (
+                      <div className="flex items-center justify-between gap-2 text-xs text-gray-600">
+                        {col('inviteSource') && inviteSourceLabel(session) ? (
+                          <InviteSourceValue inv={session} iconClassName="w-3 h-3" />
+                        ) : <span />}
+                        {col('interviewVersion') && interviewVersion != null && (
+                          <span className="inline-flex items-center gap-1 shrink-0">
+                            Interview
+                            <VersionPill kind="interview" version={interviewVersion} />
+                          </span>
+                        )}
+                      </div>
                     )}
 
                     <div>
@@ -1065,19 +1093,38 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                       )}
                     </div>
 
-                    {displayInviteScore(session) != null && (
-                      <div className="flex items-center gap-2">
-                        <span className={`font-semibold text-sm shrink-0 ${displayInviteScore(session)! >= 60 ? 'text-success' : 'text-destructive'}`}>
-                          {displayInviteScore(session)}%
-                        </span>
-                        <ResultBadge result={inviteResult(session, displayInviteScore(session))} />
+                    {score != null && (
+                      /* Score panel: a calm neutral number, the verdict pill
+                         beside it, and a bar against the 60% pass mark so the
+                         distance from passing reads at a glance. */
+                      <div className="rounded-lg bg-gray-50 ring-1 ring-gray-100 px-3 py-2.5">
+                        <div className="flex items-end justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-2xs font-medium uppercase tracking-wide text-gray-500">Score</p>
+                            <p className="text-xl font-semibold leading-tight tabular-nums text-gray-900">
+                              {score}<span className="text-sm font-medium text-gray-400">%</span>
+                            </p>
+                          </div>
+                          <ResultBadge result={result} />
+                        </div>
+                        <div className="relative mt-2 h-1.5 rounded-full bg-gray-200">
+                          <div
+                            className={`h-full rounded-full ${passed ? 'bg-success' : 'bg-destructive'}`}
+                            style={{ width: `${Math.max(Math.min(score, 100), 2)}%` }}
+                          />
+                          <span
+                            className="absolute -top-0.5 h-2.5 w-px bg-gray-400"
+                            style={{ left: '60%' }}
+                            title="Pass mark: 60%"
+                          />
+                        </div>
                       </div>
                     )}
 
-                    <div className="flex items-center justify-between text-xs text-gray-500 pt-2 border-t border-gray-100">
-                      <span>{formatDuration(session)}</span>
-                      <span>{session.completed_at ? formatIST(session.completed_at) : session.started_at ? formatIST(session.started_at) : '—'}</span>
-                    </div>
+                    <TimelineStamps
+                      className="text-gray-500 pt-2 border-t border-gray-100"
+                      startedAt={session.started_at} completedAt={session.completed_at} format={formatIST} duration={formatDuration(session)}
+                    />
 
                     <div
                       onClick={(e) => { e.stopPropagation(); handleViewDetails(session); }}
@@ -1282,7 +1329,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                         {col('score') && (
                           <td className="px-4 py-3 whitespace-nowrap">
                             {displayInviteScore(session) != null ? (
-                              <span className={`font-semibold text-sm ${displayInviteScore(session)! >= 60 ? 'text-success' : 'text-destructive'}`}>
+                              <span className={`${SCORE_CELL_TEXT} ${displayInviteScore(session)! >= 60 ? 'text-success' : 'text-destructive'}`}>
                                 {displayInviteScore(session)}%
                               </span>
                             ) : (

@@ -71,6 +71,7 @@ function AccessBlockedError({
       case 'INSUFFICIENT_UNITS':
         return <CreditCard className="w-12 h-12 sm:w-16 sm:h-16 text-brand-orange-deep" />;
       case 'UNAUTHORIZED':
+      case 'USER_NOT_AUTHORIZED':
         return <ShieldX className="w-12 h-12 sm:w-16 sm:h-16 text-brand-orange" />;
       case 'UNAUTHENTICATED':
         return <LogIn className="w-12 h-12 sm:w-16 sm:h-16 text-brand-blue" />;
@@ -90,6 +91,7 @@ function AccessBlockedError({
       case 'INSUFFICIENT_UNITS':
         return 'Insufficient Units';
       case 'UNAUTHORIZED':
+      case 'USER_NOT_AUTHORIZED':
         return 'User Not Authorized';
       case 'UNAUTHENTICATED':
         return 'Authentication Required';
@@ -127,6 +129,7 @@ function AccessBlockedError({
           </button>
         );
       case 'UNAUTHORIZED':
+      case 'USER_NOT_AUTHORIZED':
         return (
           <button onClick={() => window.location.href = 'mailto:support@talentflow.com'} className={accentClass}>
             Contact Admin
@@ -457,7 +460,7 @@ function JDCreationContent() {
     const checkAccess = async () => {
       try {
         console.log('[JD] Checking access pre-conditions...');
-        const result = await jdService.accessCheck();
+        const result = await jdService.accessCheck(jdId || undefined);
         console.log('[JD] Access check result:', result);
         setAccessCheck(result);
 

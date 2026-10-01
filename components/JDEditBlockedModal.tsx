@@ -34,6 +34,10 @@ interface JDEditBlockedModalProps {
   /** For a host already showing that JD's Job Details page: switch its tab
    *  in place (a same-page `?tab=` push would be overwritten by the page). */
   onOpenJobTab?: (tab: JobDetailsTab) => void;
+  /** This JD's lineage is already at the 5-version cap — "Create New Version"
+   *  would fail on the backend anyway, so it is disabled here and the reason
+   *  shown up front, rather than letting the click round-trip to an error. */
+  atMaxVersions?: boolean;
 }
 
 /** The Job Details tab each usage module lives on. */
@@ -55,6 +59,7 @@ export default function JDEditBlockedModal({
   onCreateNewJD,
   jdId,
   onOpenJobTab,
+  atMaxVersions = false,
 }: JDEditBlockedModalProps) {
   const router = useRouter();
 
@@ -209,6 +214,26 @@ export default function JDEditBlockedModal({
             </div>
           </div>
 
+          {atMaxVersions && (
+            <div className="rounded-lg border border-red-200 dark:border-red-500/30 bg-red-50/60 dark:bg-red-500/5 p-3">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-full bg-red-100 dark:bg-red-500/15 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-xs font-semibold text-red-700 dark:text-red-400">
+                    Maximum versions reached
+                  </h4>
+                  <p className="text-xs text-gray-600 dark:text-slate-400 leading-relaxed mt-0.5">
+                    This JD already has 5 versions, the maximum allowed. &quot;Create New
+                    Version&quot; is unavailable for it — use &quot;Create New JD&quot; instead
+                    to start an independent one.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Spells out what each footer button actually does — the two
               differ in a way the labels alone don't convey: one starts an
               unrelated JD, the other carries this one's content forward. */}
@@ -255,7 +280,8 @@ export default function JDEditBlockedModal({
           <Button
             variant="primary"
             onClick={onCreateNewVersion}
-            disabled={creating}
+            disabled={creating || atMaxVersions}
+            title={atMaxVersions ? 'This JD has reached the maximum of 5 versions' : undefined}
           >
             {creating ? (
               <>
