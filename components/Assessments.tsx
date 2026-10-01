@@ -5677,26 +5677,43 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             (Track enabled), which is the rule `handleEditAssessment` itself
             enforces. Archived stays read-only, as everywhere else. */}
         {(() => {
+          // At MAX_ASSESSMENT_VERSIONS, the next edit-and-republish would be
+          // version 6 — the backend's publish_assessment hard-blocks that
+          // (see talentflow-data-plane-backend/app/services/assessment.py).
+          // Greyed like the other blocks below, but deliberately NOT folded
+          // into `editDisabled` / the native `disabled` attribute: a disabled
+          // button eats the click, so there'd be no way to find out WHY short
+          // of hovering for the title tooltip. Same fix as the JD edit icon
+          // (job-details/page.tsx) — the click is how a recruiter learns the
+          // reason and stays clickable for it.
+          const atVersionCap = (assessment.version ?? 1) >= MAX_ASSESSMENT_VERSIONS;
           const editReason = !canUpdateAssessment
             ? 'You do not have permission to edit assessments'
             : hasBeenShared
             ? 'Cannot edit — this assessment has already been sent to candidates'
             : assessment.status === 'Archived'
             ? 'Archived assessments cannot be edited'
+            : atVersionCap
+            ? `This assessment already has ${MAX_ASSESSMENT_VERSIONS} versions, the maximum allowed — it can’t be edited further.`
             : '';
-          const editDisabled = !!editReason;
+          const editDisabled = !canUpdateAssessment || hasBeenShared || assessment.status === 'Archived';
+          const editGreyed = editDisabled || atVersionCap;
           return (
             <button
               onClick={() => {
                 if (editDisabled) return;
                 setOpenMenuId(null);
+                if (atVersionCap) {
+                  toast.error('Maximum versions reached', { description: editReason });
+                  return;
+                }
                 handleEditAssessment(assessment);
               }}
               disabled={editDisabled}
               title={editReason || `Edit assessment V${assessment.version ?? 1}`}
-              className={itemClass(editDisabled)}
+              className={itemClass(editGreyed)}
             >
-              <Pencil className={iconClass(editDisabled, 'text-menu-icon-edit')} />
+              <Pencil className={iconClass(editGreyed, 'text-menu-icon-edit')} />
               <span className={MENU_ITEM_SCALE_CLASS}>Edit</span>
             </button>
           );
