@@ -137,7 +137,7 @@ export default function InviteFilterBar({
     : extraSelects.length === 1
       ? 'lg:grid-cols-[minmax(0,1fr)_160px_140px_150px_150px_auto]'
       : 'lg:grid-cols-[minmax(0,1fr)_170px_160px_160px_auto]';
-  const selectClass = 'min-w-0 h-10 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue';
+  const selectClass = 'min-w-0 h-[38px] rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue';
 
   return (
     <div className="px-2.5 sm:px-6 py-3 border-b border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900/40">
@@ -153,7 +153,7 @@ export default function InviteFilterBar({
             value={localSearch}
             onChange={(e) => setLocalSearch(e.target.value)}
             placeholder={searchPlaceholder}
-            className="w-full h-10 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 pl-9 pr-9 text-sm text-gray-900 dark:text-slate-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue"
+            className="w-full h-[38px] rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 pl-9 pr-9 text-sm text-gray-900 dark:text-slate-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue"
           />
           {localSearch && (
             <button
@@ -173,7 +173,7 @@ export default function InviteFilterBar({
         <select
           value={filters.status}
           onChange={(e) => onChange({ ...filters, status: e.target.value })}
-          className="col-span-2 md:col-span-1 min-w-0 h-10 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue"
+          className="col-span-2 md:col-span-1 min-w-0 h-[38px] rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue"
         >
           {statusOptions.map((option) => (
             <option key={option.value} value={option.value}>
@@ -203,7 +203,7 @@ export default function InviteFilterBar({
           type="date"
           value={filters.dateFrom}
           onChange={(e) => onChange({ ...filters, dateFrom: e.target.value })}
-          className="min-w-0 h-10 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue"
+          className="min-w-0 max-[399px]:col-span-2 h-[38px] rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 sm:px-3 text-xs sm:text-sm text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue"
           aria-label="Invite date from"
         />
 
@@ -212,7 +212,7 @@ export default function InviteFilterBar({
           value={filters.dateTo}
           min={filters.dateFrom || undefined}
           onChange={(e) => onChange({ ...filters, dateTo: e.target.value })}
-          className="min-w-0 h-10 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue"
+          className="min-w-0 max-[399px]:col-span-2 h-[38px] rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 sm:px-3 text-xs sm:text-sm text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue"
           aria-label="Invite date to"
         />
 
@@ -220,7 +220,7 @@ export default function InviteFilterBar({
           type="button"
           onClick={handleClear}
           disabled={!hasActiveFilters}
-          className="col-span-2 md:col-span-1 h-10 px-4 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-medium text-gray-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+          className="col-span-2 md:col-span-1 h-[38px] px-3 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-medium text-gray-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
         >
           Clear Filters
         </button>

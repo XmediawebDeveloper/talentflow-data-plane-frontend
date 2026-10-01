@@ -6,12 +6,9 @@ import {
   FileCheck,
   RefreshCw,
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   Calendar,
   Monitor,
   Globe,
-  User,
   Shield,
   CheckCircle,
   XCircle,
@@ -28,7 +25,11 @@ import ListCountBadge from '@/components/ui/list-count-badge';
    mounts this `compact`, with no filter row at all, so it is unaffected. */
 import { ListToolbarPortal } from '@/components/ui/list-toolbar-slot';
 import { Button } from '@/components/ui/button';
+import ListPagination from '@/components/ListPagination';
 import consentService, { ConsentLog, ConsentAuditLog } from '@/lib/services/consentService';
+import { assessmentService } from '@/lib/services/assessmentService';
+import JobIdBadge from '@/components/jobs/JobIdBadge';
+import { VersionPill } from '@/components/assessments/AllAssessmentsTable';
 import { formatIST } from '@/lib/utils/dateUtils';
 
 interface ConsentLogsProps {
@@ -43,7 +44,7 @@ interface ConsentLogsProps {
    A literal string, not a template, so Tailwind's scanner can still see the
    class names. */
 const FILTER_FIELD =
-  'w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg ' +
+  'w-full min-w-0 h-[38px] px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg ' +
   'bg-white dark:bg-slate-900 text-black dark:text-slate-100 ' +
   'focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40';
 
@@ -57,6 +58,39 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
 
   // Filters
   const [featureFilter, setFeatureFilter] = useState<string>(defaultFeature);
+
+  /* JD ID and Assessment Version, for the Assessments page's copy of this
+     list. A consent log names its assessment (`feature_context_id`) but
+     carries neither field, so each assessment on screen is read once from
+     /assessments/{id} — the record Candidate Results takes the same two
+     fields from (`jd_short_id`, `version`). Cached by id across pages; a
+     failed read stays `null` and its cells show a dash. */
+  const showAssessmentColumns = defaultFeature === 'ASSESSMENT';
+  const [assessmentMeta, setAssessmentMeta] = useState<Record<string, { jdShortId?: string; jdTitle?: string; version?: number } | null>>({});
+  useEffect(() => {
+    if (!showAssessmentColumns) return;
+    const ids = [...new Set(
+      logs
+        .filter((log) => log.feature_name === 'ASSESSMENT' && log.feature_context_id)
+        .map((log) => log.feature_context_id as string),
+    )].filter((id) => !(id in assessmentMeta));
+    if (ids.length === 0) return;
+    let cancelled = false;
+    Promise.allSettled(ids.map((id) => assessmentService.get(id))).then((results) => {
+      if (cancelled) return;
+      setAssessmentMeta((prev) => {
+        const next = { ...prev };
+        results.forEach((result, i) => {
+          next[ids[i]] = result.status === 'fulfilled'
+            ? { jdShortId: result.value.jd_short_id, jdTitle: result.value.jd_title, version: result.value.version }
+            : null;
+        });
+        return next;
+      });
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [logs, showAssessmentColumns]);
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [emailFilter, setEmailFilter] = useState<string>('');
   const [startDate, setStartDate] = useState<string>('');
@@ -86,7 +120,7 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
 
   // Pagination
   const [page, setPage] = useState(0);
-  const [limit] = useState(20);
+  const [limit, setLimit] = useState(showAssessmentColumns ? 10 : 20);
 
   /* `emailFilter` joins the dependency list. It has been in this component's
      state since it was written and was passed to the API, but no control ever
@@ -95,7 +129,7 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
      search box writes it now, debounced, exactly like every other tab's. */
   useEffect(() => {
     loadLogs();
-  }, [page, featureFilter, statusFilter, emailFilter, startDate, endDate]);
+  }, [page, limit, featureFilter, statusFilter, emailFilter, startDate, endDate]);
 
   const loadLogs = async () => {
     setIsLoading(true);
@@ -155,23 +189,6 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
     setPage(0);
   };
 
-  const totalPages = Math.ceil(total / limit);
-
-  // 1-based text for the Go-to-page input — page itself stays 0-based.
-  const [goToPage, setGoToPage] = useState(String(page + 1));
-  useEffect(() => {
-    setGoToPage(String(page + 1));
-  }, [page]);
-
-  const commitGoToPage = () => {
-    const target = Math.round(Number(goToPage));
-    if (Number.isFinite(target) && target >= 1 && target <= totalPages) {
-      setPage(target - 1);
-    } else {
-      setGoToPage(String(page + 1));
-    }
-  };
-
   /* Whether a filter is what emptied the list, which decides which flavour of
      the shared empty state shows. `featureFilter` counts only when the user
      moved it off the value this tab was mounted with — the Assessments page
@@ -224,7 +241,7 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
           <button
             onClick={loadLogs}
             disabled={isLoading}
-            className="p-1.5 sm:p-2 shrink-0 self-start text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+            className="h-8 w-8 sm:h-9 sm:w-9 inline-flex items-center justify-center shrink-0 self-start text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
           >
             <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
@@ -365,61 +382,90 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
           onReset={clearFilters}
         />
       ) : (
-        <div className="overflow-x-auto tf-table-shell">
-          <table className="w-full min-w-[640px]">
-            <thead className="bg-gray-50">
+        <div className="overflow-x-auto">
+          {/* Every column on screen at every width, the table scrolling
+              sideways instead. No height cap and no vertical scroller: the
+              page's rows show in full and the pagination below reaches the
+              rest. */}
+          <table className={`w-full table-auto ${showAssessmentColumns ? 'min-w-[1200px]' : 'min-w-[960px]'}`}>
+            <thead className="[&_th]:bg-slate-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Assessment
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Candidate
-                </th>
-                <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-2xs sm:text-xs font-medium text-gray-500 uppercase">
-                  Feature
-                </th>
-                <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-2xs sm:text-xs font-medium text-gray-500 uppercase">
-                  Status
-                </th>
-                <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-2xs sm:text-xs font-medium text-gray-500 uppercase hidden md:table-cell">
-                  Device
-                </th>
-                <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-2xs sm:text-xs font-medium text-gray-500 uppercase hidden md:table-cell">
-                  IP Address
-                </th>
-                <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-2xs sm:text-xs font-medium text-gray-500 uppercase">
-                  Date
-                </th>
+                {showAssessmentColumns && <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">JD ID</th>}
+                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">{showAssessmentColumns ? 'Job Role' : 'Assessment'}</th>
+                {showAssessmentColumns && <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Assessment Version</th>}
+                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Candidate</th>
+                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Feature</th>
+                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Status</th>
+                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Device</th>
+                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">IP Address</th>
+                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Date</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
-              {logs.map((log) => (
-                <tr key={log.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3">
-                    <div>
-                      {log.assessment_sequence_number && (
-                        <p className="text-xs font-medium text-gray-500">
-                          AS-{String(log.assessment_sequence_number).padStart(3, '0')}
-                        </p>
+            <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
+              {logs.map((log) => {
+                const meta = log.feature_context_id ? assessmentMeta[log.feature_context_id] : undefined;
+                const initials = log.candidate_name
+                  ?.split(' ')
+                  .map((n) => n[0])
+                  .join('')
+                  .toUpperCase()
+                  .slice(0, 2) || '??';
+                return (
+                <tr key={log.id} className="transition-colors hover:bg-gray-50 dark:hover:bg-slate-800">
+                  {showAssessmentColumns && (
+                    <td className="px-3 sm:px-4 py-4 align-middle whitespace-nowrap">
+                      {meta?.jdShortId ? (
+                        <JobIdBadge>{meta.jdShortId}</JobIdBadge>
+                      ) : (
+                        <span className="text-xs text-gray-400">—</span>
                       )}
-                      <p className="text-sm text-gray-900">
-                        {log.assessment_title || '—'}
-                      </p>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <User className="w-4 h-4 text-gray-400" />
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">
+                    </td>
+                  )}
+                  {/* Job Role on the Assessments page: the job's own title
+                      (`jd_title` on the assessment record), not the
+                      assessment's "Doctor - Assessment" title. Until that
+                      record has loaded, or if it cannot be read, the
+                      assessment title up to its first " - ". Elsewhere the
+                      assessment title as it was. No AS- number either way. */}
+                  {(() => {
+                    const label = showAssessmentColumns
+                      ? meta?.jdTitle || (log.assessment_title || '').split(' - ')[0].trim()
+                      : log.assessment_title;
+                    return (
+                      <td className="px-3 sm:px-4 py-4 align-middle">
+                        <span
+                          className="block max-w-[16rem] truncate text-sm font-medium text-gray-900 dark:text-slate-50"
+                          title={label || undefined}
+                        >
+                          {label || '—'}
+                        </span>
+                      </td>
+                    );
+                  })()}
+                  {showAssessmentColumns && (
+                    <td className="px-3 sm:px-4 py-4 align-middle whitespace-nowrap">
+                      {meta?.version ? (
+                        <VersionPill kind="assessment" version={meta.version} />
+                      ) : (
+                        <span className="text-xs text-gray-400">—</span>
+                      )}
+                    </td>
+                  )}
+                  <td className="px-3 sm:px-4 py-4 align-middle">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-medium text-xs flex-shrink-0">
+                        {initials}
+                      </div>
+                      <div className="min-w-0 max-w-[240px]">
+                        <p className="font-medium text-gray-900 dark:text-slate-50 text-sm truncate" title={log.candidate_name || 'Unknown'}>
                           {log.candidate_name || 'Unknown'}
                         </p>
-                        <p className="text-2xs sm:text-xs text-gray-500 truncate">{log.candidate_email}</p>
+                        <p className="text-xs text-gray-500 dark:text-slate-500 truncate" title={log.candidate_email}>{log.candidate_email}</p>
                       </div>
                     </div>
                   </td>
-                  <td className="px-3 sm:px-4 py-2.5 sm:py-3">
-                    <span className={`px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-2xs sm:text-xs font-medium ${
+                  <td className="px-3 sm:px-4 py-4 align-middle whitespace-nowrap">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${
                       log.feature_name === 'ASSESSMENT'
                         ? 'bg-blue-100 text-blue-700'
                         : 'bg-purple-100 text-purple-700'
@@ -427,103 +473,64 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
                       {log.feature_name === 'ASSESSMENT' ? 'Assessment' : 'AI Interview'}
                     </span>
                   </td>
-                  <td className="px-3 sm:px-4 py-2.5 sm:py-3">
-                    <div className="flex items-center gap-1">
-                      {log.consent_status ? (
-                        <>
-                          <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-success" />
-                          <span className="text-xs sm:text-sm text-success">Accepted</span>
-                        </>
-                      ) : (
-                        <>
-                          <XCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-destructive" />
-                          <span className="text-xs sm:text-sm text-destructive">Declined</span>
-                        </>
-                      )}
+                  <td className="px-3 sm:px-4 py-4 align-middle whitespace-nowrap">
+                    {log.consent_status ? (
+                      <div className="flex items-center gap-2 text-sm text-success">
+                        <CheckCircle className="w-4 h-4 flex-shrink-0" />
+                        Accepted
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-sm text-destructive">
+                        <XCircle className="w-4 h-4 flex-shrink-0" />
+                        Declined
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-3 sm:px-4 py-4 align-middle whitespace-nowrap">
+                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
+                      <Monitor className="w-4 h-4 flex-shrink-0" />
+                      {log.device_type || 'Unknown'} / {log.browser_name || 'Unknown'}
                     </div>
                   </td>
-                  <td className="px-3 sm:px-4 py-2.5 sm:py-3 hidden md:table-cell">
-                    <div className="flex items-center gap-1.5">
-                      <Monitor className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                      <span className="text-xs sm:text-sm text-gray-600 truncate">
-                        {log.device_type || 'Unknown'} / {log.browser_name || 'Unknown'}
-                      </span>
+                  <td className="px-3 sm:px-4 py-4 align-middle whitespace-nowrap">
+                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
+                      <Globe className="w-4 h-4 flex-shrink-0" />
+                      {log.ip_address}
                     </div>
                   </td>
-                  <td className="px-3 sm:px-4 py-2.5 sm:py-3 hidden md:table-cell">
-                    <div className="flex items-center gap-1.5">
-                      <Globe className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                      <span className="text-xs sm:text-sm text-gray-600">{log.ip_address}</span>
-                    </div>
-                  </td>
-                  <td className="px-3 sm:px-4 py-2.5 sm:py-3">
-                    <div className="flex items-center gap-1">
-                      <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" />
-                      <span className="text-2xs sm:text-sm text-gray-600 whitespace-nowrap">
-                        {new Date(log.created_at).toLocaleDateString()}
-                      </span>
+                  <td className="px-3 sm:px-4 py-4 align-middle whitespace-nowrap">
+                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
+                      <Calendar className="w-4 h-4 flex-shrink-0" />
+                      {new Date(log.created_at).toLocaleDateString()}
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
       )}
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="px-3 sm:px-6 py-3 sm:py-4 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-0">
-          <p className="text-xs sm:text-sm text-gray-500">
-            Showing {page * limit + 1} to {Math.min((page + 1) * limit, total)} of {total}
-          </p>
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Go to</span>
-              <input
-                type="number"
-                min={1}
-                max={totalPages}
-                value={goToPage}
-                onChange={(e) => setGoToPage(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.currentTarget.blur();
-                    commitGoToPage();
-                  }
-                }}
-                onBlur={commitGoToPage}
-                aria-label="Go to page"
-                className="w-14 h-8 sm:h-9 px-2 text-sm text-center border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-gray-900"
-              />
-            </div>
-            <button
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              disabled={page === 0}
-              className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
-              aria-label="Previous page" title="Previous page"
-            >
-              <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            </button>
-            <span className="text-sm font-medium text-gray-700 px-1 whitespace-nowrap">
-              <span className="text-brand-blue font-semibold">{page + 1}</span> / {totalPages}
-            </span>
-            <button
-              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-              disabled={page >= totalPages - 1}
-              className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
-              aria-label="Next page" title="Next page"
-            >
-              <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            </button>
-          </div>
-        </div>
+      {/* Candidate Results / Draft / Archived pagination — the shared
+          ListPagination, under the table. Hidden while there are no rows,
+          as on those tabs. The page stays 0-based here for the API's offset;
+          the pager is 1-based. */}
+      {logs.length > 0 && (
+        <ListPagination
+          currentPage={page + 1}
+          itemsPerPage={limit}
+          totalItems={total}
+          onPageChange={(next) => setPage(next - 1)}
+          onItemsPerPageChange={(size) => { setLimit(size); setPage(0); }}
+          itemLabel="consent logs"
+        />
       )}
 
       {/* Detail Modal */}
       {selectedLog && showAuditTrail && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex min-h-full items-center justify-center p-2 sm:p-4">
+          <div className="flex min-h-full items-center justify-center p-3 sm:p-6">
             <div
               className="fixed inset-0 bg-gray-500 bg-opacity-75"
               onClick={() => {
@@ -531,7 +538,7 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
                 setShowAuditTrail(false);
               }}
             />
-            <div className="relative bg-white rounded-lg shadow-xl max-w-[95vw] sm:max-w-2xl w-full max-h-[85dvh] flex flex-col overflow-hidden mx-2 sm:mx-0">
+            <div className="relative bg-white rounded-lg shadow-xl max-w-[95vw] sm:max-w-2xl w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[85dvh] flex flex-col overflow-hidden">
               <div className="flex-shrink-0 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 flex items-center justify-between">
                 <h3 className="text-sm sm:text-lg font-semibold text-gray-900">Consent Log Details</h3>
                 <button
@@ -546,7 +553,7 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
                 </button>
               </div>
               <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-3 sm:py-4 space-y-3 sm:space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 [&>div]:min-w-0">
                   <div>
                     <p className="text-xs sm:text-sm text-gray-500">Candidate</p>
                     <p className="text-sm sm:text-base font-medium text-gray-900 break-all">{selectedLog.candidate_email}</p>
@@ -569,11 +576,11 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
                   </div>
                   <div>
                     <p className="text-xs sm:text-sm text-gray-500">IP Address</p>
-                    <p className="text-sm sm:text-base font-medium text-gray-900">{selectedLog.ip_address}</p>
+                    <p className="text-sm sm:text-base font-medium text-gray-900 [overflow-wrap:anywhere]">{selectedLog.ip_address}</p>
                   </div>
                   <div>
                     <p className="text-xs sm:text-sm text-gray-500">Device</p>
-                    <p className="text-sm sm:text-base font-medium text-gray-900">
+                    <p className="text-sm sm:text-base font-medium text-gray-900 [overflow-wrap:anywhere]">
                       {selectedLog.device_type} / {selectedLog.browser_name} {selectedLog.browser_version}
                     </p>
                   </div>

@@ -542,7 +542,7 @@ export function InvitationActionsMenu({ actions, extraItems, className }: {
         <button
           aria-label="Actions"
           title="Actions"
-          className="p-1.5 text-gray-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-gray-700 dark:hover:text-slate-200 rounded transition-colors"
+          className="h-8 w-8 shrink-0 inline-flex items-center justify-center text-gray-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-gray-700 dark:hover:text-slate-200 rounded-md transition-colors"
         >
           <MoreVertical className="w-4 h-4" />
         </button>
@@ -580,7 +580,7 @@ export function InvitationActionButtons({ actions }: { actions: RowAction[] }) {
           onClick={(e) => { e.stopPropagation(); run(); }}
           disabled={disabled}
           title={title || label}
-          className={`flex items-center gap-1 px-2 py-1 text-2xs font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+          className={`flex shrink-0 items-center gap-1 px-2 py-1 text-2xs font-medium whitespace-nowrap rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
             destructive
               ? 'text-destructive bg-destructive-subtle ring-1 ring-destructive-line hover:bg-destructive-subtle'
               : 'border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
@@ -667,21 +667,21 @@ export function EditInvitationModal({ target, onClose, getAssessmentId, onSaved 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4 sm:p-6">
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-md">
-        <div className="px-5 sm:px-6 pt-5 sm:pt-6 pb-3 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between">
-          <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Edit Invitation</h3>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-3 sm:p-6">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-1.5rem)] flex flex-col overflow-hidden">
+        <div className="shrink-0 px-4 sm:px-6 pt-4 sm:pt-6 pb-3 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between gap-2">
+          <h3 className="min-w-0 truncate text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Edit Invitation</h3>
           <Button
             variant="secondary"
             size="sm"
             onClick={() => { if (!saving) onClose(); }}
             aria-label="Close"
-            className="px-2"
+            className="px-2 shrink-0"
           >
             <X className="w-5 h-5" />
           </Button>
         </div>
-        <div className="px-5 sm:px-6 py-4 space-y-4">
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-4 space-y-4">
           <p className="text-sm text-gray-500 dark:text-slate-500">
             Update the candidate's details below. Saving will send them a fresh invitation link automatically.
           </p>
@@ -691,7 +691,7 @@ export function EditInvitationModal({ target, onClose, getAssessmentId, onSaved 
               type="text"
               value={form.candidate_name}
               onChange={(e) => setForm((f) => ({ ...f, candidate_name: e.target.value }))}
-              className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+              className="w-full min-w-0 h-[38px] px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
             />
           </div>
           <div>
@@ -701,7 +701,7 @@ export function EditInvitationModal({ target, onClose, getAssessmentId, onSaved 
               value={form.candidate_email}
               onChange={(e) => setForm((f) => ({ ...f, candidate_email: e.target.value }))}
               aria-invalid={emailError ? 'true' : undefined}
-              className={`w-full px-3 py-2 text-sm border bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 ${
+              className={`w-full min-w-0 h-[38px] px-3 py-2 text-sm border bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 ${
                 emailError
                   ? 'border-destructive focus:ring-destructive/30 focus:border-destructive'
                   : 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/30 focus:border-brand-blue'
@@ -710,7 +710,7 @@ export function EditInvitationModal({ target, onClose, getAssessmentId, onSaved 
             {emailError && <p className="mt-1 text-xs text-destructive">{emailError}</p>}
           </div>
         </div>
-        <div className="px-5 sm:px-6 py-4 border-t border-gray-100 dark:border-slate-700/60 flex items-center justify-end gap-2">
+        <div className="shrink-0 px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-wrap items-center justify-end gap-2">
           <Button
             variant="primary"
             size="md"
