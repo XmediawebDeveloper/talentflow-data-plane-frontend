@@ -170,11 +170,11 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-6">
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-4xl w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-4xl w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="bg-slate-50 dark:bg-slate-950 border-b border-gray-100 dark:border-slate-700/60 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
+        <div className="bg-slate-50 dark:bg-slate-950 border-b border-gray-100 dark:border-slate-700/60 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3 flex-shrink-0">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
             <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
               <Edit2 className="w-5 h-5 text-brand-blue" />
             </div>
@@ -196,11 +196,11 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-6">
           {/* Basic Information */}
           <div className="mb-6">
-            <h3 className="text-lg text-gray-900 dark:text-slate-50 tracking-tight mb-4 flex items-center gap-2">
-              <FileText className="w-5 h-5 text-brand-blue" />
+            <h3 className="text-base sm:text-lg text-gray-900 dark:text-slate-50 tracking-tight mb-4 flex items-center gap-2">
+              <FileText className="w-5 h-5 text-brand-blue flex-shrink-0" />
               Basic Information
             </h3>
 
@@ -217,27 +217,27 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
                     setEditedAssessment({ ...editedAssessment, title: e.target.value });
                     setErrors({ ...errors, title: null });
                   }}
-                  className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue ${
+                  className={`w-full min-w-0 h-[38px] px-3 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue ${
                     errors.title ? 'border-destructive' : 'border-gray-200 dark:border-slate-700'
                   }`}
                   placeholder="e.g., Senior Software Engineer Technical Assessment"
                 />
                 {errors.title && (
                   <p className="text-sm text-destructive mt-1 flex items-center gap-1">
-                    <AlertCircle className="w-4 h-4" />
+                    <AlertCircle className="w-4 h-4 flex-shrink-0" />
                     {errors.title}
                   </p>
                 )}
               </div>
 
               {/* Duration and Questions */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm text-gray-700 dark:text-slate-300 mb-2">
                     Duration <span className="text-destructive">*</span>
                   </label>
                   <div className="relative">
-                    <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-slate-500" />
+                    <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
                     <input
                       type="text"
                       value={editedAssessment.duration}
@@ -245,7 +245,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
                         setEditedAssessment({ ...editedAssessment, duration: e.target.value });
                         setErrors({ ...errors, duration: null });
                       }}
-                      className={`w-full pl-10 pr-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue ${
+                      className={`w-full min-w-0 h-[38px] pl-9 pr-3 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue ${
                         errors.duration ? 'border-destructive' : 'border-gray-200 dark:border-slate-700'
                       }`}
                       placeholder="e.g., 60 min"
@@ -264,20 +264,20 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
                     type="number"
                     value={editedAssessment.questions}
                     onChange={(e) => setEditedAssessment({ ...editedAssessment, questions: parseInt(e.target.value) || 0 })}
-                    className="w-full px-4 py-2.5 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                    className="w-full min-w-0 h-[38px] px-3 text-sm border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                     placeholder="e.g., 25"
                   />
                 </div>
               </div>
 
               {/* Type and Status */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm text-gray-700 dark:text-slate-300 mb-2">Type</label>
                   <select
                     value={editedAssessment.type}
                     onChange={(e) => setEditedAssessment({ ...editedAssessment, type: e.target.value })}
-                    className="w-full px-4 py-2.5 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                    className="w-full min-w-0 h-[38px] px-3 text-sm border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                   >
                     <option value="Technical">Technical</option>
                     <option value="Behavioral">Behavioral</option>
@@ -292,7 +292,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
                   <select
                     value={editedAssessment.status}
                     onChange={(e) => setEditedAssessment({ ...editedAssessment, status: e.target.value })}
-                    className="w-full px-4 py-2.5 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                    className="w-full min-w-0 h-[38px] px-3 text-sm border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                   >
                     <option value="Draft">Draft</option>
                     <option value="Active">Active</option>
@@ -306,9 +306,9 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
 
           {/* Sections */}
           <div className="mb-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg text-gray-900 dark:text-slate-50 tracking-tight flex items-center gap-2">
-                <Award className="w-5 h-5 text-brand-blue" />
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+              <h3 className="text-base sm:text-lg text-gray-900 dark:text-slate-50 tracking-tight flex items-center gap-2 min-w-0">
+                <Award className="w-5 h-5 text-brand-blue flex-shrink-0" />
                 Assessment Sections
               </h3>
               <Button
@@ -323,19 +323,19 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
             {editedAssessment.sections.length > 0 ? (
               <div className="space-y-4">
                 {editedAssessment.sections.map((section: any, index: number) => (
-                  <div key={index} className="border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] rounded-lg p-4 hover:border-brand-blue/30 transition-colors">
-                    <div className="flex items-start gap-4">
+                  <div key={index} className="border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] rounded-lg p-3 sm:p-4 hover:border-brand-blue/30 transition-colors">
+                    <div className="flex items-start gap-2 sm:gap-4">
                       <div className="w-8 h-8 bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg flex items-center justify-center text-white font-medium flex-shrink-0">
                         {index + 1}
                       </div>
                       
-                      <div className="flex-1 space-y-3">
-                        <div className="grid grid-cols-2 gap-3">
+                      <div className="flex-1 min-w-0 space-y-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <input
                             type="text"
                             value={section.name}
                             onChange={(e) => updateSection(index, 'name', e.target.value)}
-                            className="px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                            className="w-full min-w-0 h-[38px] px-3 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                             placeholder="Section name"
                           />
                           <div className="grid grid-cols-2 gap-2">
@@ -344,7 +344,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
                                 type="number"
                                 value={section.percentage}
                                 onChange={(e) => updateSection(index, 'percentage', parseInt(e.target.value) || 0)}
-                                className="w-full px-3 py-2 pr-8 border border-gray-200 dark:border-slate-700 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                                className="w-full min-w-0 h-[38px] px-3 pr-8 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                                 placeholder="Weight"
                               />
                               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500 dark:text-slate-500">%</span>
@@ -353,7 +353,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
                               type="number"
                               value={section.questionCount}
                               onChange={(e) => updateSection(index, 'questionCount', parseInt(e.target.value) || 0)}
-                              className="px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                              className="w-full min-w-0 h-[38px] px-3 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                               placeholder="Questions"
                             />
                           </div>
@@ -362,7 +362,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
                         <textarea
                           value={section.description || ''}
                           onChange={(e) => updateSection(index, 'description', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                          className="w-full min-w-0 px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                           rows={2}
                           placeholder="Section description (optional)"
                         />
@@ -370,7 +370,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
 
                       <button
                         onClick={() => deleteSection(index)}
-                        className="p-2 text-destructive hover:bg-destructive-subtle rounded-lg transition-colors"
+                        className="h-8 w-8 inline-flex items-center justify-center flex-shrink-0 text-destructive hover:bg-destructive-subtle rounded-lg transition-colors"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -379,7 +379,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
                 ))}
               </div>
             ) : (
-              <div className="border-2 border-dashed border-gray-200 dark:border-slate-700 rounded-lg p-8 text-center bg-slate-50 dark:bg-slate-950">
+              <div className="border-2 border-dashed border-gray-200 dark:border-slate-700 rounded-lg p-5 sm:p-8 text-center bg-slate-50 dark:bg-slate-950">
                 <Award className="w-12 h-12 text-gray-400 dark:text-slate-500 mx-auto mb-3" />
                 <p className="text-gray-600 dark:text-slate-400 mb-3">No sections added yet</p>
                 <Button
@@ -394,7 +394,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
           </div>
 
           {/* Warning */}
-          <div className="bg-brand-orange/10 border border-brand-orange/20 ring-1 ring-brand-orange/20 rounded-lg p-4">
+          <div className="bg-brand-orange/10 border border-brand-orange/20 ring-1 ring-brand-orange/20 rounded-lg p-3 sm:p-4">
             <div className="flex items-start gap-2">
               <AlertCircle className="w-5 h-5 text-brand-orange-deep flex-shrink-0 mt-0.5" />
               <div className="text-sm text-brand-orange-deep">

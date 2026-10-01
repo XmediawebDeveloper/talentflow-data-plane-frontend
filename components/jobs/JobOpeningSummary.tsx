@@ -38,13 +38,14 @@ type JobWithListingExtras = Job & {
 };
 
 /**
- * Experience, posted date, author, last update, applicants — the five facts the
- * Job Openings list carries under a job's headline.
+ * Posted date, author, last update, applicants — the facts the Job Openings
+ * list carries under a job's headline. (Experience moved to the primary row,
+ * ahead of industry type — see <JobOpeningPrimaryItems>.)
  *
  * Its own component so a surface can control how they lay out without a second
  * copy of the fields drifting from this one.
  *
- * `singleLine` keeps all five on one horizontal row instead of wrapping onto
+ * `singleLine` keeps all of them on one horizontal row instead of wrapping onto
  * several: `flex-nowrap` plus inherited `whitespace-nowrap`, with the row
  * scrolling inside itself when it genuinely cannot fit rather than clipping.
  * Off by default — the Job Openings list wraps them, and it stays that way.
@@ -54,12 +55,6 @@ type JobWithListingExtras = Job & {
 function JobOpeningMetaItems({ job }: { job: Job }) {
   return (
     <>
-      {job.experience && (
-        <span className="flex items-center gap-1.5">
-          <TrendingUp className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-          {job.experience}
-        </span>
-      )}
       {job.postedDate && (
         <span className="flex items-center gap-1.5">
           <Calendar className="w-4 h-4 text-gray-400 dark:text-slate-500" />
@@ -103,10 +98,16 @@ function JobOpeningMetaItems({ job }: { job: Job }) {
   );
 }
 
-/** Role / industry / location / employment type / work mode, as items. */
+/** Experience / industry / location / employment type / work mode, as items. */
 function JobOpeningPrimaryItems({ job }: { job: Job }) {
   return (
     <>
+      {job.experience && (
+        <span className="flex items-center gap-1.5">
+          <TrendingUp className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+          {job.experience}
+        </span>
+      )}
       <span className="flex items-center gap-1.5">
         <Building2 className="w-4 h-4 text-gray-400 dark:text-slate-500" />
         {formatIndustryType(job.industry_type)}
@@ -167,13 +168,13 @@ interface JobOpeningSummaryProps {
   /** Keep that row on one horizontal line — see <JobOpeningMeta>. */
   metaSingleLine?: boolean;
   /**
-   * Same treatment for the role / industry / location / type row above it.
+   * Same treatment for the experience / industry / location / type row above it.
    * Off by default: the Job Openings list wraps it.
    */
   infoSingleLine?: boolean;
   /**
-   * Draw BOTH info rows as one line — role, industry, location, type, work
-   * mode, experience, dates, author and applicants in a single nowrap row that
+   * Draw BOTH info rows as one line — experience, industry, location, type, work
+   * mode, dates, author and applicants in a single nowrap row that
    * scrolls if it has to. The AI Interview wizard's header uses it, where the
    * card shares its width with action buttons and two stacked rows made the
    * card twice as tall as what it was describing. Implies `infoSingleLine`.
@@ -185,8 +186,8 @@ interface JobOpeningSummaryProps {
 
 /**
  * A job opening as the Job Openings list renders it: the badge row (JD id,
- * title, status, AI/Manual, vN), then role/location/type, then
- * experience/dates/author/applicants, then salary + skills.
+ * title, status, AI/Manual, vN), then experience/role/location/type, then
+ * dates/author/applicants, then salary + skills.
  *
  * The one implementation behind both the Job Openings list rows and the Apply
  * to Job dialog's "Select a Job Opening" list, so the dialog cannot drift into
@@ -256,7 +257,7 @@ export default function JobOpeningSummary({
         </div>
       ) : (
         <>
-          {/* Primary Info Row 1 - Role / Industry / Location / Employment / Mode */}
+          {/* Primary Info Row 1 - Experience / Industry / Location / Employment / Mode */}
           <div
             className={`flex items-center text-sm text-gray-600 dark:text-slate-400 mb-1.5 ${
               infoSingleLine ? SINGLE_LINE_ROW : 'flex-wrap gap-x-3 gap-y-1.5'
@@ -265,7 +266,7 @@ export default function JobOpeningSummary({
             <JobOpeningPrimaryItems job={job} />
           </div>
 
-          {/* Primary Info Row 2 - Experience / Dates / Posted By / Applicants */}
+          {/* Primary Info Row 2 - Dates / Posted By / Applicants */}
           {showMetaRow && (
             <div className="mb-2">
               <JobOpeningMeta job={job} singleLine={metaSingleLine} />

@@ -59,8 +59,8 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 mb-1 flex-wrap">
-                <h2 className="text-base sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Assessment Preview</h2>
-                <span className="px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-2xs sm:text-xs flex items-center gap-1">
+                <h2 className="text-base sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight min-w-0 truncate">Assessment Preview</h2>
+                <span className="px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-2xs sm:text-xs flex items-center gap-1 flex-shrink-0 whitespace-nowrap">
                   <Sparkles className="w-3 h-3" />
                   Configuration View
                 </span>
@@ -141,7 +141,7 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
           <div className="bg-slate-50 dark:bg-slate-800/50 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] rounded-lg p-4 sm:p-6 mb-4 sm:mb-6">
             <div className="flex items-start gap-2 sm:gap-3 mb-3 sm:mb-4">
               <BarChart className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue flex-shrink-0" />
-              <div>
+              <div className="min-w-0">
                 <h3 className="font-semibold text-gray-900 dark:text-slate-50 text-sm sm:text-base mb-1 tracking-tight">Evaluation & Scoring Logic</h3>
                 <p className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">
                   How candidates will be evaluated when taking this assessment
@@ -156,7 +156,7 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
                   <div className="flex items-center gap-2 mb-2 flex-wrap">
                     <Users className="w-4 h-4 text-brand-blue flex-shrink-0" />
                     <h4 className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-slate-50">HR Section</h4>
-                    <span className="ml-auto px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded text-2xs sm:text-xs font-medium">
+                    <span className="ml-auto px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded text-2xs sm:text-xs font-medium whitespace-nowrap flex-shrink-0">
                       Not Scored
                     </span>
                   </div>
@@ -179,7 +179,7 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
                           ? 'Technical'
                           : 'Coding'}
                     </h4>
-                    <span className="ml-auto px-2 py-0.5 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded text-2xs sm:text-xs font-medium">
+                    <span className="ml-auto px-2 py-0.5 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded text-2xs sm:text-xs font-medium whitespace-nowrap flex-shrink-0">
                       Scored
                     </span>
                   </div>
@@ -216,22 +216,22 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
                     {section.name === 'HR' && <Users className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue flex-shrink-0" />}
                     {section.name === 'Technical' && <Brain className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue flex-shrink-0" />}
                     {section.name === 'Coding' && <Code className="w-4 h-4 sm:w-5 sm:h-5 text-brand-cyan flex-shrink-0" />}
-                    <div>
+                    <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="font-semibold text-gray-900 dark:text-slate-50 text-sm sm:text-base">{section.name} Section</h3>
                         {section.scoringType === 'informational' ? (
-                          <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-1 ring-gray-200 dark:ring-slate-700 rounded text-2xs sm:text-xs font-medium">
+                          <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-1 ring-gray-200 dark:ring-slate-700 rounded text-2xs sm:text-xs font-medium whitespace-nowrap">
                             Informational Only
                           </span>
                         ) : (
-                          <span className="px-2 py-0.5 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded text-2xs sm:text-xs font-medium">
+                          <span className="px-2 py-0.5 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded text-2xs sm:text-xs font-medium whitespace-nowrap">
                             Scored (0-10 scale)
                           </span>
                         )}
                       </div>
                     </div>
                   </div>
-                  <div className="flex sm:flex-col items-center sm:items-end gap-2 sm:gap-1">
+                  <div className="flex sm:flex-col items-center sm:items-end gap-2 sm:gap-1 flex-shrink-0">
                     <div className="text-xl sm:text-2xl font-semibold text-brand-blue">{section.percentage}%</div>
                     {section.scoringType === 'scored' && (
                       <span className="text-2xs sm:text-xs text-brand-cyan">Counts to PASS/FAIL</span>
@@ -261,7 +261,7 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
                     <div className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Programming Languages:</div>
                     <div className="flex flex-wrap gap-1.5 sm:gap-2">
                       {section.languages.map((lang: string, lidx: number) => (
-                        <span key={lidx} className="inline-flex items-center gap-1.5 px-2 sm:px-3 py-0.5 sm:py-1 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded-lg text-xs sm:text-sm">
+                        <span key={lidx} className="inline-flex items-center gap-1.5 px-2 sm:px-3 py-0.5 sm:py-1 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded-lg text-xs sm:text-sm max-w-full [overflow-wrap:anywhere]">
                           <LanguageLogo language={logoLabelForId(lang, lang)} size="sm" />
                           {lang}
                         </span>

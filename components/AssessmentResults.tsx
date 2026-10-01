@@ -1,9 +1,20 @@
-import { ArrowLeft, User, Clock, Award, XCircle, ChevronUp, FileText, TrendingUp, Briefcase, AlertCircle, Info, Filter, Layers, ArrowUpDown, Loader2, Phone, BarChart3, SlidersHorizontal, Columns3, Trash2, Users, Download, X, Play, CheckSquare, Eye } from 'lucide-react';
+import { ArrowLeft, User, Clock, Award, XCircle, ChevronUp, FileText, TrendingUp, AlertCircle, Info, Filter, Layers, ArrowUpDown, Loader2, BarChart3, SlidersHorizontal, Columns3, Trash2, Users, Download, X, Play, CheckSquare, Eye, ArrowUp, ArrowDown, MoreVertical } from 'lucide-react';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { assessmentService, jdService } from '@/lib/services';
 import { formatISTDate, formatISTWithSeconds } from '@/lib/utils/dateUtils';
 import JobIdBadge from './jobs/JobIdBadge';
+/* The All Assessments table's version pill and ⋮ menu, so this table reads as
+   the same table system. */
+import { VersionPill } from '@/components/assessments/AllAssessmentsTable';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
+import CandidateResultCard, { CANDIDATE_RESULT_CARD_ICON_ACTION_CLASS } from '@/components/assessments/CandidateResultCard';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import {
@@ -29,7 +40,9 @@ import { InviteSourceValue } from '@/components/AIInterviewInviteTable';
 import { timelineEvents } from '@/components/AssessmentInviteActions';
 import { toOneDecimalScore, SCORE_CELL_TEXT } from '@/lib/utils/score';
 import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
-import Pagination from '@/components/Pagination';
+import ListPagination from '@/components/ListPagination';
+import ListCountBadge from '@/components/ui/list-count-badge';
+import ListViewToggle, { type ListDisplayMode } from '@/components/ui/list-view-toggle';
 
 interface AssessmentResultsProps {
   /**
@@ -197,6 +210,14 @@ interface QuestionResult {
   type: 'multiple-choice' | 'text' | 'coding';
 }
 
+/* The time a result is ordered by — the Candidate Results tab's key
+   (`loadAllCompletedCandidates` on the Assessments page): when the attempt was
+   completed, else when it was created. The full timestamp, never the
+   formatted `completedDate`, which is a day with no time and, for a candidate
+   who never started, not a date at all. */
+const resultOrderTime = (c: { completed_at?: string; created_at?: string }) =>
+  new Date(c.completed_at || c.created_at || 0).getTime();
+
 export default function AssessmentResults({ onBack, assessmentId, assessmentTitle, assessmentVersion, jdTitle, jdId, jdShortId, jdVersion, jobVersionScope = null, assessmentVersionScope = null, embedded = false, openOnTotalCandidates = false, canDownloadPDF = false, canBatchDownload = false, prevId, nextId, currentIndex, totalCount }: AssessmentResultsProps) {
   const router = useRouter();
   const dialog = useGlobalDialog();
@@ -226,7 +247,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   // filters, and the candidate table. Mirrors the Job Openings page pattern
   // — a fresh visit lands on cards; clicking a stat card drills into the list
   // with the matching status filter applied.
-  const [pageView, setPageView] = useState<'cards' | 'list'>(openOnTotalCandidates ? 'list' : 'cards');
+  /* Opens on the list, always — every arrival, not only Total Candidates. */
+  const [pageView, setPageView] = useState<'cards' | 'list'>('list');
+  /* List (the table) or Grid (the candidate cards). Display only: both draw
+     the same page of the same filtered rows, with the same selection. */
+  const [displayMode, setDisplayMode] = useState<ListDisplayMode>('list');
   const openCandidateList = (filter: 'all' | 'Completed' | 'In Progress' | 'Terminated' | 'Pending') => {
     setStatusFilter(filter);
     setCurrentPage(1);
@@ -1061,15 +1086,13 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             };
           }));
 
-          /* Newest first, across the merged set. Attempts arrive grouped by
-             assessment, and the column sort below is stable, so without a base
-             order the rows of one version would sit in a block above another's
-             whenever the sort key ties. */
-          mapped.sort((a, b) => {
-            const at = new Date(a.completed_at || a.started_at || a.created_at || 0).getTime();
-            const bt = new Date(b.completed_at || b.started_at || b.created_at || 0).getTime();
-            return bt - at;
-          });
+          /* Newest first, across the merged set — on the Candidate Results
+             tab's own key (`resultOrderTime`: completed_at, else created_at),
+             so a candidate sits in the same relative place on both. Attempts
+             arrive grouped by assessment, and the column sort below is stable,
+             so without a base order the rows of one version would sit in a
+             block above another's whenever the sort key ties. */
+          mapped.sort((a, b) => resultOrderTime(b) - resultOrderTime(a));
           setCandidateResults(mapped);
 
           /* Stats over the whole scoped set, from the mapped rows so
@@ -1475,25 +1498,14 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     }
   };
 
-  const getScoreColor = (percentage: number) => {
-    if (percentage >= 80) return 'text-success';
-    if (percentage >= 60) return 'text-brand-blue';
-    if (percentage >= 40) return 'text-brand-orange-deep';
-    return 'text-destructive';
-  };
-
   const passingThreshold = assessmentDetails?.passing_threshold ?? 70;
 
+  /* The overall score a card shows: only once the attempt is completed AND
+     scored, so an unscored attempt reads as a dash rather than 0%. Its
+     Pass / Fail is the card's own, against `passingThreshold`. */
   const getMobileOverallScore = (candidate: CandidateResult) => {
     if (candidate.status !== 'Completed' || candidate.scoring_status !== 'completed') return null;
     return candidate.percentage;
-  };
-
-  const getMobilePassFail = (candidate: CandidateResult) => {
-    const overallScore = getMobileOverallScore(candidate);
-    if (overallScore === null) return null;
-    const passingThreshold = assessmentDetails?.passing_threshold ?? 70;
-    return overallScore >= passingThreshold ? 'Pass' : 'Fail';
   };
 
   // Reset to page 1 when filters change (MUST be before any early returns)
@@ -1510,12 +1522,24 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   }
 
   // AS-23: Handle sort toggle
+  /* Sorting, as the All Assessments table does it: the column headers sort,
+     the default is newest first (the Candidate Results tab's order), and Clear
+     Sort — shown only while the sort is off that default — puts back the sort
+     and nothing else. */
+  const isDefaultSort = sortField === 'date' && sortDirection === 'desc';
+  const clearSort = () => {
+    setSortField('date');
+    setSortDirection('desc');
+  };
+
   const handleSort = (field: 'name' | 'score' | 'status' | 'date') => {
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
       setSortField(field);
-      setSortDirection('desc');
+      /* A new column opens in its most useful direction, the All Assessments
+         rule: dates and scores largest-first, names and statuses A-Z. */
+      setSortDirection(field === 'date' || field === 'score' ? 'desc' : 'asc');
     }
     // Note: Page reset handled by filter change effect above
   };
@@ -1592,7 +1616,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
         comparison = a.status.localeCompare(b.status);
         break;
       case 'date':
-        comparison = new Date(a.completedDate).getTime() - new Date(b.completedDate).getTime();
+        comparison = resultOrderTime(a) - resultOrderTime(b);
         break;
     }
     return sortDirection === 'asc' ? comparison : -comparison;
@@ -1644,7 +1668,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     );
   };
 
-  const stickyHeaderClass = 'bg-slate-50';
+  /* No tint: the All Assessments header is the shell's own white (globals.css
+     `.tf-table-shell thead th`). */
+  const stickyHeaderClass = '';
   /* Previous / Next open another results page. While Total Candidates is the
      list on screen, the link carries `view=total` so that page opens on Total
      Candidates too, rather than falling back to the bare cards. Any other
@@ -1749,7 +1775,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 Results sit in the Candidate Results toolbar, after More
                 Filters. The cards view has no toolbar, so it keeps them here. */}
             {pageView !== 'list' && (
-            <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 flex-shrink-0">
               {/* AS-26: Bulk PDF Download Button — only for users with download_pdf permission */}
               {canBatchDownload && selectedRows.length > 0 && (
                 <Button
@@ -1758,9 +1784,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   disabled={downloadingBulkPDF}
                   className="whitespace-nowrap"
                   icon={downloadingBulkPDF ? (
-                    <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
+                    <Loader2 className="w-4 h-4 animate-spin" />
                   ) : (
-                    <Download className="w-4 h-4 sm:w-5 sm:h-5" />
+                    <Download className="w-4 h-4" />
                   )}
                 >
                   <span className="hidden sm:inline">{downloadingBulkPDF ? 'Downloading...' : `Download PDFs (${selectedRows.length})`}</span>
@@ -1771,7 +1797,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 variant="primary"
                 onClick={() => setShowExportModal(true)}
                 className="whitespace-nowrap"
-                icon={<FileText className="w-4 h-4 sm:w-5 sm:h-5" />}
+                icon={<FileText className="w-4 h-4" />}
               >
                 Export
               </Button>
@@ -1825,38 +1851,15 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                dropdown at the head of the controls, beside More Filters. Same
                state, same values the API's status filter matches on; only the
                'Pending' label reads "Not Started". Default All Candidates. */
+            /* Order: Search → Customize Columns → All Candidates → More
+               Filters → Download PDF → Export → List / Grid. */
             leadingActions={
-              <select
-                id="assessment-results-status-filter"
-                aria-label="Filter candidates by status"
-                value={statusFilter}
-                onChange={(e) => {
-                  setStatusFilter(e.target.value as 'all' | 'Completed' | 'In Progress' | 'Pending');
-                  setCurrentPage(1);
-                }}
-                className={`h-[38px] w-auto max-w-full px-3 text-sm font-medium rounded-lg border cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-blue/40 transition-all ${
-                  statusFilter !== 'all'
-                    ? 'bg-brand-blue/10 text-brand-blue border-brand-blue/20'
-                    : 'bg-brand-blue/5 text-gray-700 border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue'
-                }`}
-              >
-                <option value="all">All Candidates</option>
-                <option value="In Progress">In Progress</option>
-                <option value="Completed">Completed</option>
-                <option value="Pending">{PENDING_STATUS_LABEL}</option>
-              </select>
-            }
-            onToggleFilters={() => setShowMoreFilters((open) => !open)}
-            filtersOpen={showMoreFilters}
-            activeFilterCount={activeFilterCount}
-            filtersApplied={activeFilterCount > 0}
-            afterFiltersActions={
-              /* AS-24: Customize Columns — its own button, right of More
-                 Filters, rather than a field inside that panel. Same toggle,
-                 same picker. The picker opens from the button's right edge, at every
-                 width: once the row wraps, the button sits mid-row beside
-                 Filters, where a left-anchored menu ran off a 320–375px
-                 screen (measured). */
+              <>
+              {/* AS-24: Customize Columns — its own button, the first control after
+                 the search, rather than a field inside the More Filters panel.
+                 Same toggle, same picker. As the row's first control the
+                 picker opens from the button's LEFT edge, so on a wrapped
+                 320–375px row it runs into the screen rather than off it. */}
               <div className="relative">
                 <Button
                   variant="secondary"
@@ -1880,7 +1883,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       id="assessment-results-column-selector"
                       role="dialog"
                       aria-label="Select visible result columns"
-                      className="absolute right-0 top-full mt-2 w-56 sm:w-64 max-w-[calc(100vw-1.5rem)] bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-2 z-20 max-h-80 sm:max-h-96 overflow-y-auto"
+                      className="absolute left-0 top-full mt-2 w-56 sm:w-64 max-w-[calc(100vw-1.5rem)] bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-2 z-20 max-h-80 sm:max-h-96 overflow-y-auto"
                     >
                       <div className="px-3 sm:px-4 py-2 border-b border-gray-100">
                         <div className="text-xs sm:text-sm font-medium text-gray-900">Select Columns</div>
@@ -1906,7 +1909,31 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   </>
                 )}
               </div>
+              <select
+                id="assessment-results-status-filter"
+                aria-label="Filter candidates by status"
+                value={statusFilter}
+                onChange={(e) => {
+                  setStatusFilter(e.target.value as 'all' | 'Completed' | 'In Progress' | 'Pending');
+                  setCurrentPage(1);
+                }}
+                className={`h-[38px] w-full sm:w-auto sm:min-w-[9rem] sm:max-w-[16rem] px-3 text-sm font-medium rounded-lg border cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-blue/40 transition-all ${
+                  statusFilter !== 'all'
+                    ? 'bg-brand-blue/10 text-brand-blue border-brand-blue/20'
+                    : 'bg-brand-blue/5 text-gray-700 border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue'
+                }`}
+              >
+                <option value="all">All Candidates</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Completed">Completed</option>
+                <option value="Pending">{PENDING_STATUS_LABEL}</option>
+              </select>
+              </>
             }
+            onToggleFilters={() => setShowMoreFilters((open) => !open)}
+            filtersOpen={showMoreFilters}
+            activeFilterCount={activeFilterCount}
+            filtersApplied={activeFilterCount > 0}
             className="mb-0"
           >
             {/* AS-26: Bulk PDF download — only for users with the download_pdf
@@ -1940,6 +1967,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             >
               Export
             </Button>
+            {/* The shared List / Grid switch — the row's last, far-right
+                control. */}
+            <ListViewToggle value={displayMode} onChange={setDisplayMode} />
           </ListToolbar>
 
           {showMoreFilters && (
@@ -1978,7 +2008,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       setSelectedRows([]);
                     }}
                     disabled={!jobVersionsLoaded}
-                    className="w-full min-w-0 h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                    className="w-full min-w-0 h-[38px] px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     <option value="all">All Versions</option>
                     {jobVersionScopes.map(scope => (
@@ -2002,7 +2032,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       setSelectedRows([]);
                     }}
                     disabled={!jobVersionsLoaded}
-                    className="w-full min-w-0 h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed truncate"
+                    className="w-full min-w-0 h-[38px] px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed truncate"
                   >
                     <option value="all">All Assessments</option>
                     {assessmentOptions.map(option => (
@@ -2026,7 +2056,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       setSelectedRows([]);
                     }}
                     disabled={!jobVersionsLoaded}
-                    className="w-full min-w-0 h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                    className="w-full min-w-0 h-[38px] px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     <option value="all">All Assessment Versions</option>
                     {assessmentVersionOptions.map(version => (
@@ -2048,7 +2078,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     setStatusFilter(e.target.value as 'all' | 'Completed' | 'In Progress' | 'Terminated' | 'Pending');
                     setCurrentPage(1);
                   }}
-                  className="w-full min-w-0 h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+                  className="w-full min-w-0 h-[38px] px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
                 >
                   <option value="all">All</option>
                   <option value="Completed">Completed</option>
@@ -2068,7 +2098,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     setPassFailFilter(e.target.value as 'all' | 'pass' | 'fail');
                     setCurrentPage(1);
                   }}
-                  className="w-full min-w-0 h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+                  className="w-full min-w-0 h-[38px] px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
                 >
                   <option value="all">All</option>
                   <option value="pass">Pass</option>
@@ -2088,7 +2118,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       setRoundFilters(prev => value === 'all' ? { ...prev, technical: undefined } : { ...prev, technical: value });
                       setCurrentPage(1);
                     }}
-                    className="w-full min-w-0 h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+                    className="w-full min-w-0 h-[38px] px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
                   >
                     <option value="all">All</option>
                     <option value="50-70">50-70%</option>
@@ -2109,7 +2139,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       setRoundFilters(prev => value === 'all' ? { ...prev, coding: undefined } : { ...prev, coding: value });
                       setCurrentPage(1);
                     }}
-                    className="w-full min-w-0 h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+                    className="w-full min-w-0 h-[38px] px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
                   >
                     <option value="all">All</option>
                     <option value="50-70">50-70%</option>
@@ -2129,7 +2159,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     max={dateTo || undefined}
                     onChange={(v) => { setDateFrom(v); setCurrentPage(1); }}
                     aria-label="Filter from date"
-                    className="sm:flex-1 sm:min-w-0"
+                    className="h-[38px] sm:flex-1 sm:min-w-0"
                   />
                   <span className="text-xs text-gray-400 text-center sm:text-left sm:flex-shrink-0">to</span>
                   <DateField
@@ -2138,7 +2168,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     min={dateFrom || undefined}
                     onChange={(v) => { setDateTo(v); setCurrentPage(1); }}
                     aria-label="Filter to date"
-                    className="sm:flex-1 sm:min-w-0"
+                    className="h-[38px] sm:flex-1 sm:min-w-0"
                   />
                 </div>
               </div>
@@ -2147,8 +2177,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
         </div>
 
         {/* Candidates Results Table */}
-        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
-          <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 bg-slate-50 flex items-center justify-between gap-2">
+        <div className="rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden bg-white dark:bg-slate-900">
+          {/* Wraps: at 320–375px the count badge (nowrap) and Clear Sort do not
+              fit beside the heading, so they drop under it rather than
+              overflowing the card. */}
+          <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
               <h2 className="truncate text-sm sm:text-base font-medium text-gray-900 tracking-tight">Candidate Results</h2>
               {isFetching && (
@@ -2161,21 +2194,37 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 no label to say what it is. Both parts stay on one line
                 (`whitespace-nowrap`) and the group never shrinks, so on a phone
                 the heading gives way before the numbers do. */}
-            <div className="flex items-center gap-2 flex-shrink-0 text-xs sm:text-sm text-gray-500">
-              {selectedRows.length > 0 && (
-                <>
-                  <span className="whitespace-nowrap">{selectedRows.length} selected</span>
-                  <span aria-hidden="true" className="text-gray-300">·</span>
-                </>
+            {/* The shared ListCountBadge — the candidates the current search
+                and filters leave, of every result loaded, plus how many are
+                ticked — and Clear Sort beside it: the All Assessments button
+                (its pill, icon and title), shown only while the sort is off
+                its default, resetting only the sort. */}
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
+              <ListCountBadge
+                filtered={totalItems}
+                total={displayResults.length}
+                noun="candidate"
+                selected={selectedRows.length}
+              />
+              {!isDefaultSort && (
+                <button
+                  type="button"
+                  onClick={clearSort}
+                  title="Return the table to its default order"
+                  className="px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all whitespace-nowrap inline-flex items-center gap-1.5 bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue"
+                >
+                  <ArrowUpDown className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  Clear Sort
+                </button>
               )}
-              <span className="whitespace-nowrap">
-                {totalItems} {totalItems === 1 ? 'candidate' : 'candidates'}
-              </span>
             </div>
           </div>
-          <div className="xl:hidden divide-y divide-gray-100">
+          {/* Grid view: the Candidate Results card (the shared
+              CandidateResultCard), in that tab's grid, at every width. */}
+          <div className={displayMode === 'grid' ? '@container/result-cards p-4 sm:p-5' : 'hidden'}>
+            <div className="grid grid-cols-1 @xl/result-cards:grid-cols-2 @4xl/result-cards:grid-cols-3 @7xl/result-cards:grid-cols-4 gap-4 sm:gap-5">
             {paginatedCandidates.length === 0 ? (
-              <div className="px-6 py-12 text-center">
+              <div className="col-span-full px-6 py-12 text-center">
                 <div className="flex flex-col items-center">
                   <Users className="w-12 h-12 text-gray-300 mb-3" />
                   {searchQuery || Object.keys(roundFilters).length > 0 || statusFilter !== 'all' || passFailFilter !== 'all' ? (
@@ -2192,140 +2241,63 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 </div>
               </div>
             ) : (
-              paginatedCandidates.map((candidate) => {
-                const overallScore = getMobileOverallScore(candidate);
-                const passFail = getMobilePassFail(candidate);
-                return (
-                  <div
-                    key={candidate.id}
-                    onClick={() => viewCandidateDetails(candidate)}
-                    className="p-4 space-y-3 cursor-pointer hover:bg-brand-blue/5 transition-colors"
-                    role="article"
-                    aria-label={`Candidate result for ${candidate.name || 'Unknown'}`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <input
-                        type="checkbox"
-                        checked={selectedRows.includes(candidate.id)}
-                        onChange={(e) => handleSelectRow(candidate.id, e.target.checked)}
-                        onClick={(e) => e.stopPropagation()}
-                        className="mt-1 w-4 h-4 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <div className="w-9 h-9 rounded-full bg-brand-blue ring-1 ring-white/10 shadow-sm shadow-brand-blue/25 flex items-center justify-center text-white text-xs shrink-0">
-                                {(candidate.name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2)}
-                              </div>
-                              <div className="min-w-0">
-                                <div className="text-sm font-medium text-gray-900 truncate">{candidate.name || 'Unknown'}</div>
-                                <div className="text-xs text-gray-500 truncate">{candidate.email || '-'}</div>
-                              </div>
-                            </div>
-                          </div>
-                          <Badge variant={getStatusVariant(candidate.status)} className="shrink-0">
-                            {statusLabel(candidate.status)}
-                          </Badge>
-                        </div>
-
-                        <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                          <div className="rounded-lg bg-gray-50 p-2 col-span-2">
-                            <div className="text-gray-500">JD</div>
-                            <div className="text-gray-800 truncate">{jdTitle || 'N/A'}</div>
-                          </div>
-                          <div className="rounded-lg bg-gray-50 p-2">
-                            <div className="text-gray-500">Score</div>
-                            <div className={overallScore !== null ? `font-semibold ${getScoreColor(overallScore)}` : 'text-gray-400'}>
-                              {overallScore !== null ? `${overallScore}%` : '-'}
-                            </div>
-                          </div>
-                          <div className="rounded-lg bg-gray-50 p-2">
-                            <div className="text-gray-500">Pass / Fail</div>
-                            {passFail ? (
-                              <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium mt-1 ${passFail === 'Pass' ? 'bg-success-subtle text-success' : 'bg-destructive-subtle text-destructive'}`}>
-                                {passFail}
-                              </span>
-                            ) : (
-                              <div className="text-gray-400">-</div>
-                            )}
-                          </div>
-                          <div className="rounded-lg bg-gray-50 p-2">
-                            <div className="text-gray-500">Date</div>
-                            <div className="text-gray-700">{candidate.completedDate}</div>
-                          </div>
-                          <div className="rounded-lg bg-gray-50 p-2">
-                            <div className="text-gray-500">CID</div>
-                            <div className="font-mono text-brand-blue">{candidate.candidateDisplayId || '-'}</div>
-                          </div>
-                          <div className="rounded-lg bg-gray-50 p-2">
-                            <div className="text-gray-500">Invite Source</div>
-                            <div className="text-gray-700 mt-1">
-                              <InviteSourceValue inv={{ invite_source: candidate.inviteSource }} iconClassName="w-3 h-3" />
-                            </div>
-                          </div>
-                          <div className="rounded-lg bg-gray-50 p-2">
-                            <div className="text-gray-500">Duration</div>
-                            <div className="text-gray-700">{candidate.duration}</div>
-                          </div>
-                          {assessmentDetails?.technical_enabled && (
-                            <div className="rounded-lg bg-gray-50 p-2">
-                              <div className="text-gray-500">Tech</div>
-                              <div className={candidate.tech_score !== undefined ? (candidate.tech_score >= passingThreshold ? 'text-success' : 'text-destructive') : 'text-gray-400'}>
-                                {candidate.tech_score !== undefined ? `${candidate.tech_score}%` : '-'}
-                              </div>
-                            </div>
-                          )}
-                          {assessmentDetails?.coding_enabled && (
-                            <div className="rounded-lg bg-gray-50 p-2">
-                              <div className="text-gray-500">Coding</div>
-                              <div className={candidate.coding_score !== undefined ? (candidate.coding_score >= passingThreshold ? 'text-success' : 'text-destructive') : 'text-gray-400'}>
-                                {candidate.coding_score !== undefined ? `${candidate.coding_score}%` : '-'}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        {candidate.phone && (
-                          <div className="mt-2 text-xs text-gray-500">Phone: {candidate.phone}</div>
-                        )}
-
-                        <div className="mt-3 flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => viewCandidateDetails(candidate)}
-                            className="w-9 h-9 px-0"
-                            title="View Details"
-                            aria-label={`View details for ${candidate.name || 'candidate'}`}
-                          >
-                            <Eye className="w-3.5 h-3.5 shrink-0" />
-                          </Button>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => handleDownloadPDF(candidate.id, candidate.candidateDisplayId)}
-                            disabled={downloadingPDF === candidate.id}
-                            className="w-9 h-9 px-0"
-                            title="Download PDF Report"
-                            aria-label={`Download PDF report for ${candidate.name || 'candidate'}`}
-                          >
-                            {downloadingPDF === candidate.id ? (
-                              <Loader2 className="w-3 h-3 animate-spin" />
-                            ) : (
-                              <Download className="w-3 h-3" />
-                            )}
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
+              paginatedCandidates.map((candidate) => (
+                <CandidateResultCard
+                  key={candidate.id}
+                  name={candidate.name}
+                  email={candidate.email}
+                  cid={candidate.candidateDisplayId}
+                  jobShortId={jdShortId}
+                  jobTitle={jdTitle}
+                  jobVersion={candidate.jobVersion}
+                  assessmentVersion={candidate.assessmentVersion}
+                  statusBadge={
+                    <Badge variant={getStatusVariant(candidate.status)} className="shrink-0">
+                      {statusLabel(candidate.status)}
+                    </Badge>
+                  }
+                  /* Only the rounds this assessment runs, as the table's
+                     score columns. */
+                  scores={[
+                    { label: 'Overall Score', value: getMobileOverallScore(candidate) },
+                    ...(assessmentDetails?.technical_enabled ? [{ label: 'Tech Score', value: candidate.tech_score }] : []),
+                    ...(assessmentDetails?.coding_enabled ? [{ label: 'Coding Score', value: candidate.coding_score }] : []),
+                  ]}
+                  passMark={passingThreshold}
+                  inviteSource={<InviteSourceValue inv={{ invite_source: candidate.inviteSource }} iconClassName="w-3 h-3" />}
+                  phone={candidate.phone}
+                  duration={candidate.duration}
+                  date={candidate.completedDate}
+                  onOpen={() => viewCandidateDetails(candidate)}
+                  selection={{
+                    checked: selectedRows.includes(candidate.id),
+                    onChange: (checked) => handleSelectRow(candidate.id, checked),
+                  }}
+                  actions={
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadPDF(candidate.id, candidate.candidateDisplayId)}
+                      disabled={downloadingPDF === candidate.id}
+                      className={CANDIDATE_RESULT_CARD_ICON_ACTION_CLASS}
+                      title="Download PDF Report"
+                      aria-label={`Download PDF report for ${candidate.name || 'candidate'}`}
+                    >
+                      {downloadingPDF === candidate.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Download className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  }
+                />
+              ))
             )}
+            </div>
           </div>
 
-          <div className="hidden xl:block tf-table-shell">
+          {/* List view: the table, at every width (the shell scrolls
+              sideways where it does not fit). */}
+          <div className={displayMode === 'grid' ? 'hidden' : 'tf-table-shell'}>
             {/* 2264px + the Assessment Version column's own w-40 (160px).
                 The table is `table-fixed` over fixed per-column widths, so the
                 floor has to grow with the columns — left at 2264 the browser
@@ -2340,123 +2312,162 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 lay out means nothing to be wide for: the table becomes as wide
                 as the shell, `TABLE_EMPTY_PANEL_CLASS` centres in it, and the scrollbar
                 goes away. */}
-            <table className={`w-full [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap [&_td]:align-middle ${paginatedCandidates.length === 0 ? '' : 'min-w-[2424px] table-fixed'}`}>
+            <table className={`w-full text-sm border-collapse [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap [&_td]:align-middle ${paginatedCandidates.length === 0 ? '' : 'min-w-[2424px] table-fixed'}`}>
+              {/* The All Assessments header: white, one rule under it,
+                  uppercase semibold labels, each sortable column a button
+                  with its ArrowUpDown / ArrowUp / ArrowDown. The column widths
+                  stay — the table is `table-fixed` over them. */}
               {paginatedCandidates.length > 0 && (
-              <thead className="bg-slate-50 border-b border-gray-100">
-                <tr>
-                  <th className={`px-4 py-3 w-10 tf-sticky-col-left ${stickyHeaderClass}`}>
+              <thead>
+                <tr className="border-b border-gray-200 dark:border-slate-700">
+                  <th scope="col" className={`px-3 py-2.5 w-10 tf-sticky-col-left ${stickyHeaderClass}`}>
                     <input
                       type="checkbox"
                       checked={selectedRows.length === paginatedCandidates.length && paginatedCandidates.length > 0}
                       onChange={(e) => handleSelectAll(e.target.checked)}
+                      aria-label="Select all candidates on this page"
                       className="w-4 h-4 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
                     />
                   </th>
                   {isColumnEnabled('candidate') && (
                     <th
-                      className={`w-64 text-left px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-brand-blue/5 ${stickyHeaderClass}`}
-                      onClick={() => handleSort('name')}
+                      scope="col"
+                      aria-sort={sortField === 'name' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+                      className={`w-64 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${stickyHeaderClass}`}
                     >
-                      <div className="flex items-center gap-1">
-                        Candidate
-                        <ArrowUpDown className={`w-3 h-3 ${sortField === 'name' ? 'text-brand-blue' : 'text-gray-400'}`} />
-                      </div>
+                      {(() => {
+                        const SortIcon = sortField !== 'name' ? ArrowUpDown : sortDirection === 'asc' ? ArrowUp : ArrowDown;
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => handleSort('name')}
+                            className={`inline-flex items-center gap-1.5 group transition-colors hover:text-brand-blue ${sortField === 'name' ? 'text-brand-blue' : ''}`}
+                            title="Sort by Candidate"
+                          >
+                            Candidate
+                            <SortIcon className={`w-3.5 h-3.5 flex-shrink-0 transition-opacity ${sortField === 'name' ? 'opacity-100' : 'opacity-40 group-hover:opacity-100'}`} />
+                          </button>
+                        );
+                      })()}
                     </th>
                   )}
                   {isColumnEnabled('timeline') && (
-                    /* Sorts by date. The Completed column used to own that
-                       control and has been removed; Timeline is where those
-                       dates live now, and `date` is still the default sort, so
-                       without this there was no way back to it (2026-09-30). */
                     <th
-                      className={`w-96 text-left px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-brand-blue/5 ${stickyHeaderClass}`}
-                      onClick={() => handleSort('date')}
+                      scope="col"
+                      aria-sort={sortField === 'date' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+                      className={`w-96 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${stickyHeaderClass}`}
                     >
-                      <div className="flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        Timeline
-                        <ArrowUpDown className={`w-3 h-3 ${sortField === 'date' ? 'text-brand-blue' : 'text-gray-400'}`} />
-                      </div>
+                      {(() => {
+                        const SortIcon = sortField !== 'date' ? ArrowUpDown : sortDirection === 'asc' ? ArrowUp : ArrowDown;
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => handleSort('date')}
+                            className={`inline-flex items-center gap-1.5 group transition-colors hover:text-brand-blue ${sortField === 'date' ? 'text-brand-blue' : ''}`}
+                            title="Sort by Timeline"
+                          >
+                            Timeline
+                            <SortIcon className={`w-3.5 h-3.5 flex-shrink-0 transition-opacity ${sortField === 'date' ? 'opacity-100' : 'opacity-40 group-hover:opacity-100'}`} />
+                          </button>
+                        );
+                      })()}
                     </th>
                   )}
                   {isColumnEnabled('status') && (
                     <th
-                      className={`w-28 text-center px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-brand-blue/5 ${stickyHeaderClass}`}
-                      onClick={() => handleSort('status')}
+                      scope="col"
+                      aria-sort={sortField === 'status' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+                      className={`w-28 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${stickyHeaderClass}`}
                     >
-                      <div className="flex items-center justify-center gap-1">
-                        Status
-                        <ArrowUpDown className={`w-3 h-3 ${sortField === 'status' ? 'text-brand-blue' : 'text-gray-400'}`} />
-                      </div>
+                      {(() => {
+                        const SortIcon = sortField !== 'status' ? ArrowUpDown : sortDirection === 'asc' ? ArrowUp : ArrowDown;
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => handleSort('status')}
+                            className={`inline-flex items-center gap-1.5 group transition-colors hover:text-brand-blue ${sortField === 'status' ? 'text-brand-blue' : ''}`}
+                            title="Sort by Status"
+                          >
+                            Status
+                            <SortIcon className={`w-3.5 h-3.5 flex-shrink-0 transition-opacity ${sortField === 'status' ? 'opacity-100' : 'opacity-40 group-hover:opacity-100'}`} />
+                          </button>
+                        );
+                      })()}
                     </th>
                   )}
                   {isColumnEnabled('techScore') && assessmentDetails?.technical_enabled && (
                     <th
-                      className={`w-28 text-center px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-brand-blue/5 ${stickyHeaderClass}`}
-                      onClick={() => handleSort('score')}
+                      scope="col"
+                      aria-sort={sortField === 'score' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+                      className={`w-28 text-right px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${stickyHeaderClass}`}
                     >
-                      <div className="flex items-center justify-center gap-1">
-                        Tech Score
-                        <ArrowUpDown className={`w-3 h-3 ${sortField === 'score' ? 'text-brand-blue' : 'text-gray-400'}`} />
-                      </div>
+                      {(() => {
+                        const SortIcon = sortField !== 'score' ? ArrowUpDown : sortDirection === 'asc' ? ArrowUp : ArrowDown;
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => handleSort('score')}
+                            className={`inline-flex items-center gap-1.5 group transition-colors hover:text-brand-blue flex-row-reverse ${sortField === 'score' ? 'text-brand-blue' : ''}`}
+                            title="Sort by Tech Score"
+                          >
+                            Tech Score
+                            <SortIcon className={`w-3.5 h-3.5 flex-shrink-0 transition-opacity ${sortField === 'score' ? 'opacity-100' : 'opacity-40 group-hover:opacity-100'}`} />
+                          </button>
+                        );
+                      })()}
                     </th>
                   )}
                   {isColumnEnabled('codingScore') && assessmentDetails?.coding_enabled && (
                     <th
-                      className={`w-28 text-center px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-brand-blue/5 ${stickyHeaderClass}`}
-                      onClick={() => handleSort('score')}
+                      scope="col"
+                      aria-sort={sortField === 'score' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+                      className={`w-32 text-right px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${stickyHeaderClass}`}
                     >
-                      <div className="flex items-center justify-center gap-1">
-                        Coding Score
-                        <ArrowUpDown className={`w-3 h-3 ${sortField === 'score' ? 'text-brand-blue' : 'text-gray-400'}`} />
-                      </div>
+                      {(() => {
+                        const SortIcon = sortField !== 'score' ? ArrowUpDown : sortDirection === 'asc' ? ArrowUp : ArrowDown;
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => handleSort('score')}
+                            className={`inline-flex items-center gap-1.5 group transition-colors hover:text-brand-blue flex-row-reverse ${sortField === 'score' ? 'text-brand-blue' : ''}`}
+                            title="Sort by Coding Score"
+                          >
+                            Coding Score
+                            <SortIcon className={`w-3.5 h-3.5 flex-shrink-0 transition-opacity ${sortField === 'score' ? 'opacity-100' : 'opacity-40 group-hover:opacity-100'}`} />
+                          </button>
+                        );
+                      })()}
                     </th>
                   )}
                   {isColumnEnabled('duration') && (
-                    <th className={`w-28 text-center px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>Duration</th>
+                    <th scope="col" className={`w-28 text-right px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${stickyHeaderClass}`}>Duration</th>
                   )}
                   {isColumnEnabled('inviteSource') && (
-                    <th className={`w-36 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>Invite Source</th>
+                    <th scope="col" className={`w-36 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${stickyHeaderClass}`}>Invite Source</th>
                   )}
                   {isColumnEnabled('phone') && (
-                    <th className={`w-36 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>
-                      <div className="flex items-center gap-1">
-                        <Phone className="w-3 h-3" />
-                        Phone
-                      </div>
-                    </th>
+                    <th scope="col" className={`w-36 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${stickyHeaderClass}`}>Phone</th>
                   )}
                   {isColumnEnabled('cid') && (
-                    <th className={`w-24 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>CID</th>
+                    <th scope="col" className={`w-24 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${stickyHeaderClass}`}>CID</th>
                   )}
                   {isColumnEnabled('jdId') && (
-                    <th className={`w-28 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>JD ID</th>
+                    <th scope="col" className={`w-28 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${stickyHeaderClass}`}>JD ID</th>
                   )}
                   {isColumnEnabled('jdTitle') && (
-                    <th className={`w-56 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>
-                      <div className="flex items-center gap-1">
-                        <Briefcase className="w-3 h-3" />
-                        Job Title
-                      </div>
-                    </th>
+                    <th scope="col" className={`w-56 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${stickyHeaderClass}`}>Job Title</th>
                   )}
                   {isColumnEnabled('jobVersion') && (
-                    <th className={`w-28 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>Job Version</th>
+                    <th scope="col" className={`w-28 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${stickyHeaderClass}`}>Job Version</th>
                   )}
                   {isColumnEnabled('assessmentVersion') && (
-                    /* `w-40` rather than the Job Version column's `w-28`: the
-                       heading is half again as long, the table lays out on fixed
-                       column widths, and every th here is `whitespace-nowrap` —
-                       so a cell too narrow for its own heading spills over the
-                       column instead of wrapping inside it. 160px holds
-                       "Assessment Version" at text-xs with the px-4 gutters. */
-                    <th className={`w-40 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>Assessment Version</th>
+                    <th scope="col" className={`w-40 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${stickyHeaderClass}`}>Assessment Version</th>
                   )}
-                  <th className={`w-32 text-center px-4 py-3 text-xs text-gray-600 tf-sticky-col ${stickyHeaderClass}`}>Actions</th>
+                  <th scope="col" className={`w-20 text-right px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 tf-sticky-col ${stickyHeaderClass}`}>Actions</th>
                 </tr>
               </thead>
               )}
-              <tbody className="divide-y divide-gray-100">
+              <tbody>
                 {paginatedCandidates.length === 0 ? (
                   <tr>
                     <td colSpan={enabledColumnsCount + 2} className="p-0">
@@ -2495,34 +2506,35 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       key={candidate.id}
                       onClick={() => viewCandidateDetails(candidate)}
                       data-row-selected={selectedRows.includes(candidate.id)}
-                      className={`hover:bg-brand-blue/5 transition-colors cursor-pointer ${selectedRows.includes(candidate.id) ? 'bg-brand-blue/5' : ''}`}
+                      className={`border-b border-gray-100 dark:border-slate-700/60 last:border-b-0 cursor-pointer transition-colors hover:bg-brand-blue/5 dark:hover:bg-brand-blue/10 ${selectedRows.includes(candidate.id) ? 'bg-brand-blue/5 dark:bg-brand-blue/10' : ''}`}
                     >
-                      <td className="px-4 py-4 tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-3 py-2.5 tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
                           checked={selectedRows.includes(candidate.id)}
                           onChange={(e) => handleSelectRow(candidate.id, e.target.checked)}
+                          aria-label={`Select ${candidate.name || 'candidate'}`}
                           className="w-4 h-4 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
                         />
                       </td>
                       {isColumnEnabled('candidate') && (
-                        <td className="px-4 py-4">
-                          <div className="flex min-w-0 items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-brand-blue ring-1 ring-white/10 shadow-sm shadow-brand-blue/25 flex shrink-0 items-center justify-center text-white text-xs">
+                        <td className="px-3 py-2.5">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <div className="h-6 w-6 rounded-full bg-brand-blue ring-1 ring-white/10 shadow-sm shadow-brand-blue/25 flex shrink-0 items-center justify-center text-white text-2xs font-semibold">
                               {(candidate.name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2)}
                             </div>
                             {/* Name over email, one identity cell — the same
                                 shape the invite tracker uses, which is what
                                 let the separate Email column go. */}
                             <div className="min-w-0">
-                              <div className="truncate text-sm text-gray-900 font-medium" title={candidate.name || 'Unknown'}>{candidate.name || 'Unknown'}</div>
-                              <div className="truncate text-xs text-gray-500" title={candidate.email || ''}>{candidate.email || '-'}</div>
+                              <div className="truncate font-medium text-gray-900 dark:text-slate-50" title={candidate.name || 'Unknown'}>{candidate.name || 'Unknown'}</div>
+                              <div className="truncate text-xs text-gray-500 dark:text-slate-400" title={candidate.email || ''}>{candidate.email || '-'}</div>
                             </div>
                           </div>
                         </td>
                       )}
                       {isColumnEnabled('timeline') && (
-                        <td className="px-4 py-4 overflow-hidden text-xs text-gray-500">
+                        <td className="px-3 py-2.5 overflow-hidden text-xs text-gray-500 dark:text-slate-400">
                           {/* One event per line, in chronological order — the events
                               read as a timeline rather than a single run-on row. */}
                           <div className="flex min-w-0 flex-col gap-1 overflow-hidden" title={getTimelineSummary(candidate)}>
@@ -2544,15 +2556,15 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         </td>
                       )}
                       {isColumnEnabled('status') && (
-                        <td className="px-4 py-4 text-center">
+                        <td className="px-3 py-2.5">
                           <Badge variant={getStatusVariant(candidate.status)}>
                             {statusLabel(candidate.status)}
                           </Badge>
                         </td>
                       )}
                       {isColumnEnabled('techScore') && assessmentDetails?.technical_enabled && (
-                        <td className="px-4 py-4 text-center">
-                          <div className="flex items-center justify-center gap-2">
+                        <td className="px-3 py-2.5 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
                             {/* Tech Score: green when ≥ threshold, red below.
                                 The 4-band gradient (red/yellow/gray/green)
                                 was confusing because 69% rendered gray even
@@ -2570,8 +2582,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         </td>
                       )}
                       {isColumnEnabled('codingScore') && assessmentDetails?.coding_enabled && (
-                        <td className="px-4 py-4 text-center">
-                          <div className="flex items-center justify-center gap-2">
+                        <td className="px-3 py-2.5 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
                             <span className={`${SCORE_CELL_TEXT} ${candidate.coding_score !== undefined ? (candidate.coding_score >= passingThreshold ? 'text-success' : 'text-destructive') : 'text-gray-400'}`}>
                               {candidate.coding_score !== undefined ? `${candidate.coding_score}%` : '-'}
                             </span>
@@ -2584,25 +2596,25 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         </td>
                       )}
                       {isColumnEnabled('duration') && (
-                        <td className="px-4 py-4 text-center">
-                          <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
-                            <Clock className="w-4 h-4" />
+                        <td className="px-3 py-2.5 text-right">
+                          <div className="flex items-center justify-end gap-1.5 text-gray-600 dark:text-slate-400 tabular-nums">
+                            <Clock className="w-3.5 h-3.5 shrink-0" />
                             {candidate.duration}
                           </div>
                         </td>
                       )}
                       {isColumnEnabled('inviteSource') && (
-                        <td className="px-4 py-4 text-sm text-gray-700 whitespace-nowrap">
+                        <td className="px-3 py-2.5 text-gray-700 dark:text-slate-300 whitespace-nowrap">
                           <InviteSourceValue inv={{ invite_source: candidate.inviteSource }} iconClassName="w-3.5 h-3.5" />
                         </td>
                       )}
                       {isColumnEnabled('phone') && (
-                        <td className="px-4 py-4">
-                          <div className="truncate text-sm text-gray-600" title={candidate.phone || '-'}>{candidate.phone || '-'}</div>
+                        <td className="px-3 py-2.5">
+                          <div className="truncate text-gray-600 dark:text-slate-400" title={candidate.phone || '-'}>{candidate.phone || '-'}</div>
                         </td>
                       )}
                       {isColumnEnabled('cid') && (
-                        <td className="px-4 py-4 whitespace-nowrap">
+                        <td className="px-3 py-2.5 whitespace-nowrap">
                           <span className="inline-flex items-center whitespace-nowrap text-xs font-mono font-medium bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 px-2 py-1 rounded">
                             {candidate.candidateDisplayId || '-'}
                           </span>
@@ -2611,17 +2623,17 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       {isColumnEnabled('jdId') && (
                         /* Every version of a job shares one Job ID, so the
                            page's own is every row's — under All Versions too. */
-                        <td className="px-4 py-4">
+                        <td className="px-3 py-2.5">
                           {jdShortId ? (
-                            <JobIdBadge className="inline-flex items-center">{jdShortId}</JobIdBadge>
+                            <JobIdBadge>{jdShortId}</JobIdBadge>
                           ) : (
-                            <span className="text-sm text-gray-400">-</span>
+                            <span className="text-xs text-gray-400">—</span>
                           )}
                         </td>
                       )}
                       {isColumnEnabled('jdTitle') && (
-                        <td className="px-4 py-4">
-                          <div className="truncate text-sm text-gray-600" title={jdTitle || 'N/A'}>
+                        <td className="px-3 py-2.5">
+                          <div className="truncate font-medium text-gray-900 dark:text-slate-50" title={jdTitle || 'N/A'}>
                             {jdTitle || 'N/A'}
                           </div>
                         </td>
@@ -2629,13 +2641,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       {isColumnEnabled('jobVersion') && (
                         /* The version of the assessment this attempt came from —
                            stamped per row, so All Versions shows a mix. */
-                        <td className="px-4 py-4">
+                        <td className="px-3 py-2.5">
                           {candidate.jobVersion != null ? (
-                            <span className="inline-flex items-center whitespace-nowrap text-xs font-medium bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 px-2 py-1 rounded">
-                              v{candidate.jobVersion}
-                            </span>
+                            <VersionPill kind="job" version={candidate.jobVersion} />
                           ) : (
-                            <span className="text-sm text-gray-400">-</span>
+                            <span className="text-xs text-gray-400">—</span>
                           )}
                         </td>
                       )}
@@ -2647,44 +2657,48 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                            without a second shape. A row whose assessment record
                            carries no version shows a dash — never an invented
                            v1. */
-                        <td className="px-4 py-4">
+                        <td className="px-3 py-2.5">
                           {candidate.assessmentVersion != null ? (
-                            <span className="inline-flex items-center whitespace-nowrap text-xs font-medium bg-brand-cyan/5 text-brand-cyan ring-1 ring-brand-cyan/20 px-2 py-1 rounded">
-                              v{candidate.assessmentVersion}
-                            </span>
+                            <VersionPill kind="assessment" version={candidate.assessmentVersion} />
                           ) : (
-                            <span className="text-sm text-gray-400">-</span>
+                            <span className="text-xs text-gray-400">—</span>
                           )}
                         </td>
                       )}
-                      <td className="px-2 sm:px-4 py-4 tf-sticky-col" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-center gap-1.5 sm:gap-2 flex-nowrap">
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => viewCandidateDetails(candidate)}
-                            className="w-9 h-9 px-0"
-                            title="View Details"
-                            aria-label={`View details for ${candidate.name || 'candidate'}`}
-                          >
-                            <Eye className="w-3.5 h-3.5 shrink-0" />
-                          </Button>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => handleDownloadPDF(candidate.id, candidate.candidateDisplayId)}
-                            disabled={downloadingPDF === candidate.id}
-                            className="w-9 h-9 px-0"
-                            title="Download PDF Report"
-                            aria-label={`Download PDF report for ${candidate.name || 'candidate'}`}
-                          >
-                            {downloadingPDF === candidate.id ? (
-                              <Loader2 className="w-3 h-3 animate-spin flex-shrink-0" />
-                            ) : (
-                              <Download className="w-3 h-3 flex-shrink-0" />
-                            )}
-                          </Button>
-                        </div>
+                      {/* The All Assessments ⋮ menu: same trigger, same Radix
+                          menu (it escapes the scroll shell), the row's two
+                          actions as its items. */}
+                      <td className="px-3 py-2.5 text-right tf-sticky-col" onClick={(e) => e.stopPropagation()}>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              type="button"
+                              className="h-8 w-8 inline-flex items-center justify-center rounded-md text-gray-500 dark:text-slate-400 hover:bg-brand-blue/10 hover:text-brand-blue transition-colors focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+                              aria-label={`Actions for ${candidate.name || 'candidate'}`}
+                              title="Actions"
+                            >
+                              <MoreVertical className="w-4 h-4" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuItem className="gap-2" onClick={() => viewCandidateDetails(candidate)}>
+                              <Eye className="w-4 h-4 text-menu-icon-view" />
+                              <span className={MENU_ITEM_SCALE_CLASS}>View Details</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="gap-2"
+                              disabled={downloadingPDF === candidate.id}
+                              onClick={() => handleDownloadPDF(candidate.id, candidate.candidateDisplayId)}
+                            >
+                              {downloadingPDF === candidate.id ? (
+                                <Loader2 className="w-4 h-4 animate-spin text-menu-icon-download" />
+                              ) : (
+                                <Download className="w-4 h-4 text-menu-icon-download" />
+                              )}
+                              <span className={MENU_ITEM_SCALE_CLASS}>Download PDF Report</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </td>
                     </tr>
                   ))
@@ -2693,16 +2707,16 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             </table>
           </div>
 
-          {/* AS-23: Pagination Controls — components/Pagination, the
-              reference bar. */}
+          {/* AS-23: Pagination — the All Assessments tab's ListPagination,
+              under both views. */}
           {totalItems > 0 && (
-            <Pagination
+            <ListPagination
               currentPage={safePage}
-              totalPages={totalPages}
-              totalItems={totalItems}
               itemsPerPage={pageSize}
+              totalItems={totalItems}
               onPageChange={setCurrentPage}
               onItemsPerPageChange={(size) => { setPageSize(size); setCurrentPage(1); }}
+              itemLabel="candidates"
             />
           )}
         </div>
@@ -2714,11 +2728,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       {/* Export Format & Scope Selection Modal */}
       {showExportModal && (
         <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
-          <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
             {/* Step 1: Format Selection */}
             {exportStep === 'format' && (
               <>
-                <div className="flex items-center justify-between gap-3 p-4 sm:p-5 border-b border-gray-100 bg-gray-50">
+                <div className="shrink-0 flex items-center justify-between gap-3 p-4 sm:p-5 border-b border-gray-100 bg-gray-50">
                   <div className="flex min-w-0 items-center gap-3">
                     <div className="w-10 h-10 shrink-0 rounded-xl bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center">
                       <FileText className="w-5 h-5 text-white" />
@@ -2735,11 +2749,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     }}
                     className="inline-flex h-8 w-8 shrink-0 items-center justify-center text-gray-400 hover:text-brand-blue rounded-md hover:bg-brand-blue/5 transition-colors"
                    aria-label="Close">
-                    <X className="w-4 h-4 sm:w-5 sm:h-5" />
+                    <X className="w-4 h-4" />
                   </button>
                 </div>
 
-                <div className="p-4 sm:p-5">
+                <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5">
                   <p className="text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4">Choose export format:</p>
 
                   <div className="space-y-2.5 sm:space-y-3">
@@ -2771,7 +2785,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   </div>
                 </div>
 
-                <div className="flex items-center justify-end gap-3 p-4 sm:p-5 border-t border-gray-100">
+                <div className="shrink-0 flex flex-wrap items-center justify-end gap-2 p-4 sm:p-5 border-t border-gray-100">
                 </div>
               </>
             )}
@@ -2779,7 +2793,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             {/* Step 2: Scope Selection */}
             {exportStep === 'scope' && (
               <>
-                <div className="flex items-center justify-between gap-3 p-4 sm:p-5 border-b border-gray-100 bg-gray-50">
+                <div className="shrink-0 flex items-center justify-between gap-3 p-4 sm:p-5 border-b border-gray-100 bg-gray-50">
                   <div className="flex min-w-0 items-center gap-3">
                     <div className="w-10 h-10 shrink-0 rounded-xl bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center">
                       <Layers className="w-5 h-5 text-white" />
@@ -2798,11 +2812,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     }}
                     className="inline-flex h-8 w-8 shrink-0 items-center justify-center text-gray-400 hover:text-brand-blue rounded-md hover:bg-brand-blue/5 transition-colors"
                    aria-label="Close">
-                    <X className="w-4 h-4 sm:w-5 sm:h-5" />
+                    <X className="w-4 h-4" />
                   </button>
                 </div>
 
-                <div className="p-4 sm:p-5">
+                <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5">
                   <p className="text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4">
                     {areColumnsCustomized()
                       ? 'Export scope (with selected columns):'
@@ -2882,7 +2896,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between gap-3 p-4 sm:p-5 border-t border-gray-100">
+                <div className="shrink-0 flex flex-wrap items-center justify-between gap-2 p-4 sm:p-5 border-t border-gray-100">
                   <Button
                     variant="secondary"
                     size="sm"

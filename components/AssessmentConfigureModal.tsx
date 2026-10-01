@@ -70,12 +70,12 @@ export default function AssessmentConfigureModal({
   if (!isOpen || !assessment?.id || !assessment?.jd_id) return null;
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-6">
+    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6">
       {/* Wider than this app's other dialogs because the Configure step is a
           two-column layout at `lg`; below that it stacks as it does on the
           page. The panel owns the scrolling, which is why the step renders
           without its own scroll container inside a popup. */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-2xl lg:max-w-6xl w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-2xl lg:max-w-6xl w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
         {/* Header — the house dialog header: tile, title, one line of context,
             close. It names the step and the job, which is what the page's own
             heading says, so the body does not repeat it. */}
@@ -92,11 +92,11 @@ export default function AssessmentConfigureModal({
                   cannot change anything here" is stated rather than left to be
                   discovered by pressing a control that does not respond. */}
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-base sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight">
+                <h2 className="text-base sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight min-w-0 truncate">
                   Configure Assessment
                 </h2>
                 {readOnly && (
-                  <span className="px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-2xs sm:text-xs flex items-center gap-1 flex-shrink-0">
+                  <span className="px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-2xs sm:text-xs flex items-center gap-1 flex-shrink-0 whitespace-nowrap">
                     <Eye className="w-3 h-3" />
                     View only
                   </span>

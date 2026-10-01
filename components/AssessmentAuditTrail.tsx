@@ -449,6 +449,7 @@ export default function AssessmentAuditTrail() {
                     value={search.draftFilters.dateFrom}
                     max={search.draftFilters.dateTo || undefined}
                     onChange={(v) => search.setDraftFilter('dateFrom', v)}
+                    className="min-w-0 h-[38px]"
                   />
                 </div>
                 <div>
@@ -459,13 +460,14 @@ export default function AssessmentAuditTrail() {
                     value={search.draftFilters.dateTo}
                     min={search.draftFilters.dateFrom || undefined}
                     onChange={(v) => search.setDraftFilter('dateTo', v)}
+                    className="min-w-0 h-[38px]"
                   />
                 </div>
               </div>
 
               {/* Panel footer: "Done" applies the selection and reveals the
                   toolbar Clear - same flow as job-openings. */}
-              <div className="mt-4 pt-3 border-t border-brand-blue/10 flex items-center justify-end gap-2">
+              <div className="mt-4 pt-3 border-t border-brand-blue/10 flex flex-wrap items-center justify-end gap-2">
                 <Button
                   variant="primary"
                   size="sm"
@@ -552,7 +554,7 @@ export default function AssessmentAuditTrail() {
                         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1 sm:gap-4">
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1">
-                              <h4 className={`text-sm sm:text-base font-medium ${colors.text}`}>
+                              <h4 className={`min-w-0 text-sm sm:text-base font-medium [overflow-wrap:anywhere] ${colors.text}`}>
                                 {activity.title}
                               </h4>
                               <span className={`text-2xs sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full ${
@@ -706,24 +708,24 @@ export default function AssessmentAuditTrail() {
           own filters already decide what goes in the file, so there is no
           scope question to ask after the format. */}
       {showExportModal && (
-        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-          <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto">
+        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
+          <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto">
             <div className="flex items-center justify-between gap-3 p-4 sm:p-5 border-b border-gray-100 bg-gray-50">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 shrink-0 rounded-xl bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center">
                   <FileText className="w-5 h-5 text-white" />
                 </div>
-                <div>
-                  <h3 className="text-base sm:text-lg font-medium text-gray-900 tracking-tight">Export Activity Logs</h3>
+                <div className="min-w-0">
+                  <h3 className="text-base sm:text-lg font-medium text-gray-900 tracking-tight truncate">Export Activity Logs</h3>
                   <p className="text-xs sm:text-sm text-gray-500 mt-1">Choose format</p>
                 </div>
               </div>
               <button
                 onClick={() => setShowExportModal(false)}
-                className="p-1 text-gray-400 hover:text-brand-blue rounded-md hover:bg-brand-blue/5 transition-colors"
+                className="p-1.5 shrink-0 text-gray-400 hover:text-brand-blue rounded-md hover:bg-brand-blue/5 transition-colors"
                 aria-label="Close"
               >
-                <X className="w-4 h-4 sm:w-5 sm:h-5" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
