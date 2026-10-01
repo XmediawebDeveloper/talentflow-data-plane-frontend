@@ -728,6 +728,7 @@ function JobDetailsContent() {
         modules={editBlock?.modules ?? []}
         reason={editBlock?.reason}
         jdId={jobId || undefined}
+        atMaxVersions={(job.versionNumber ?? 1) >= 5}
         onOpenJobTab={(tab) => {
           setEditBlock(null);
           setTabOverride({ tab, n: Date.now() });

@@ -152,3 +152,24 @@ export const formatSalaryRange = ({
 
   return `Up to ${formatSalaryAmount(maxValue, currency)}`;
 };
+
+/**
+ * The JD's pay period, worded for display next to a salary range — "/ year",
+ * "/ month", "/ hour", "/ day". Mirrors the four `compensation_type` values
+ * the backend stores (hourly | daily | monthly | yearly); an unrecognized or
+ * absent value is returned as-is rather than guessed at.
+ */
+export const formatCompensationPeriod = (compensationType?: string | null): string => {
+  switch (compensationType) {
+    case 'yearly':
+      return 'year';
+    case 'monthly':
+      return 'month';
+    case 'hourly':
+      return 'hour';
+    case 'daily':
+      return 'day';
+    default:
+      return compensationType || '';
+  }
+};

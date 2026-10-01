@@ -215,6 +215,10 @@ export const mapJDToJob = (jd: JDListRow): Job => ({
   requiredMatch: jd.required_match || 70,
   department: jd.department,
   industry_type: jd.industry_type,
+  salary_min: jd.salary_min,
+  salary_max: jd.salary_max,
+  salary_currency: jd.salary_currency,
+  compensation_type: jd.compensation_type,
   experience: formatJobExperienceText({
     jobLevel: jd.job_level || jd.experience_level,
     experienceMin: jd.experience_min,

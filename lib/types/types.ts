@@ -72,6 +72,10 @@ export interface Job {
   requiredMatch: number;
   department?: string;
   industry_type?: string;
+  salary_min?: number | null;
+  salary_max?: number | null;
+  salary_currency?: string;
+  compensation_type?: string; // hourly, daily, monthly, yearly
   experience?: string;
   experience_min?: number; // Minimum years of experience
   experience_max?: number; // Maximum years of experience
