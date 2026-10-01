@@ -60,6 +60,26 @@ const PRACTICE_CLOSING_MESSAGE =
 // The practice mock mirrors it so the candidate sees the exact same countdown.
 const PRACTICE_LIMIT_SECONDS = 120;
 
+// Pre-turn "Get ready to answer" 3-2-1 before the mic opens — same as the live
+// interview (InterviewUI PRE_TURN_COUNTDOWN_FROM / PRE_TURN_TICK_MS).
+const PRE_TURN_COUNTDOWN_FROM = 3;
+const PRE_TURN_TICK_MS = 1250;
+
+// "Are you done with your response?" popup — same rules as the live interview
+// (InterviewUI AII14 + the 3s speech windows): speech counts only after ~3s of
+// voice (inter-word dips up to 0.4s allowed); the popup appears after 15s of
+// silence following that speech, closes after 3s of total speech, and never
+// ends the answer by itself. Practice has its own lightweight detector (RMS +
+// voice-band share of the mic analyser) because it has no live VAD pipeline.
+const DONE_CONFIRM_SILENCE_MS = 15000;
+const SPEECH_SUSTAIN_MS = 3000;
+const SPEECH_DIP_GRACE_MS = 400;
+const SPEECH_RESUME_CONFIRM_MS = 3000;
+const VAD_POLL_MS = 100;
+const MIN_SPEECH_RMS = 0.03;      // byte time-domain RMS; quiet room ≈ 0.005–0.01
+const AMBIENT_LEARN_CAP = 0.04;   // never learn louder than this as "room noise"
+const VOICE_BAND_MIN_RATIO = 0.35;
+
 // Format seconds → "M:SS" for the interview-style countdown timer.
 function fmtMMSS(totalSeconds: number): string {
   const s = Math.max(0, Math.floor(totalSeconds));
@@ -226,6 +246,7 @@ export default function StepSamplePractice({
   // True after the candidate clicks Next and Bina plays the sign-off — stops
   // the auto-record-on-question-end from re-opening the mic.
   const [practiceDone, setPracticeDone] = useState(false);
+  const [doneConfirm, setDoneConfirm] = useState(false);
   const practiceDoneRef = useRef(false);
   // Accumulated seconds the candidate has spent ANSWERING (excludes time while
   // Bina is speaking) — drives the 2-min countdown and survives Repeat.
@@ -269,6 +290,33 @@ export default function StepSamplePractice({
   const audioMimeTypeUsedRef = useRef('');
   const hasAutoSpokeRef = useRef(false);
   const startRecordingRef = useRef<() => void>(() => {});
+  // Pre-turn countdown (3→1) shown after Bina finishes, before the mic opens.
+  const [preTurnCountdown, setPreTurnCountdown] = useState<number | null>(null);
+  const preTurnTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const cancelPreTurnCountdown = useCallback(() => {
+    if (preTurnTimerRef.current) {
+      clearInterval(preTurnTimerRef.current);
+      preTurnTimerRef.current = null;
+    }
+    setPreTurnCountdown(null);
+  }, []);
+  const runPreTurnCountdown = useCallback((onComplete: () => void) => {
+    cancelPreTurnCountdown();
+    let n = PRE_TURN_COUNTDOWN_FROM;
+    setPreTurnCountdown(n);
+    preTurnTimerRef.current = setInterval(() => {
+      n -= 1;
+      if (n >= 1) {
+        setPreTurnCountdown(n);
+      } else {
+        cancelPreTurnCountdown();
+        onComplete();
+      }
+    }, PRE_TURN_TICK_MS);
+  }, [cancelPreTurnCountdown]);
+  useEffect(() => () => {
+    if (preTurnTimerRef.current) clearInterval(preTurnTimerRef.current);
+  }, []);
   const periodicTranscriptionRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const periodicTranscriptionInFlightRef = useRef(false);
   const recordingStartTimeRef = useRef<number | null>(null);
@@ -503,14 +551,15 @@ export default function StepSamplePractice({
       utterance.volume = 1.0;
       if (voice) utterance.voice = voice;
 
-      utterance.onstart = () => setAiSpeaking(true);
+      utterance.onstart = () => { cancelPreTurnCountdown(); setAiSpeaking(true); };
       // When Bina finishes the question, AUTO-OPEN the mic (no manual Start
       // button) — just like the real interview's "your turn, speak now". Guarded
       // so the practice-complete sign-off never re-opens the mic.
       utterance.onend = () => {
         setAiSpeaking(false);
         if (!practiceDoneRef.current) {
-          setTimeout(() => { if (!practiceDoneRef.current) startRecordingRef.current?.(); }, 150);
+          // 3-2-1 "Get ready to answer" first, then open the mic (live parity).
+          runPreTurnCountdown(() => { if (!practiceDoneRef.current) startRecordingRef.current?.(); });
         }
       };
       utterance.onerror = (e) => {
@@ -562,7 +611,7 @@ export default function StepSamplePractice({
         window.speechSynthesis.removeEventListener('voiceschanged', onVoicesChanged);
       }, 3000);
     }
-  }, []);
+  }, [cancelPreTurnCountdown, runPreTurnCountdown]);
 
   // Keep ref in sync with liveTranscript state (avoids stale-closure issues in callbacks)
   useEffect(() => { liveTranscriptRef.current = liveTranscript; }, [liveTranscript]);
@@ -986,10 +1035,11 @@ export default function StepSamplePractice({
   // sign-off. Marks the practice done so the mic doesn't auto-reopen.
   const handlePracticeNext = useCallback(() => {
     practiceDoneRef.current = true;
+    cancelPreTurnCountdown();
     setPracticeDone(true);
     if (isRecording) stopRecordingAndTranscribe();
     speakClosing();
-  }, [isRecording, stopRecordingAndTranscribe, speakClosing]);
+  }, [isRecording, stopRecordingAndTranscribe, speakClosing, cancelPreTurnCountdown]);
 
   // Start the practice — Bina speaks the greeting + question NOW (in the click's
   // user-gesture context so browsers don't block TTS). onend then auto-opens the
@@ -1038,6 +1088,105 @@ export default function StepSamplePractice({
       handlePracticeNext();
     }
   }, [answerElapsed, practiceDone, handlePracticeNext]);
+
+  // "Are you done?" detector — runs only while the answer window is open and
+  // Bina is silent. Re-armed from scratch each time the window (re)opens.
+  useEffect(() => {
+    if (!isRecording || aiSpeaking || practiceDone) {
+      setDoneConfirm(false);
+      return;
+    }
+    const analyser = analyserRef.current;
+    if (!analyser) return;
+    const timeBuf = new Uint8Array(analyser.fftSize);
+    const freqBuf = new Uint8Array(analyser.frequencyBinCount);
+    const binHz = analyser.context.sampleRate / analyser.fftSize;
+    const lowBin = Math.max(1, Math.floor(200 / binHz));
+    const highBin = Math.min(freqBuf.length - 1, Math.ceil(3400 / binHz));
+
+    let ambient = 0.008;
+    let speechStarted = false;
+    let streakStart: number | null = null;
+    let lastActiveAt: number | null = null;
+    let silenceSince = 0;
+    let popup = false;
+    let accum = 0;
+    let lastTick = Date.now();
+
+    const iv = setInterval(() => {
+      const now = Date.now();
+      const dt = Math.min(now - lastTick, 250);
+      lastTick = now;
+
+      analyser.getByteTimeDomainData(timeBuf);
+      let sum = 0;
+      for (let i = 0; i < timeBuf.length; i++) {
+        const v = (timeBuf[i] - 128) / 128;
+        sum += v * v;
+      }
+      const rms = Math.sqrt(sum / timeBuf.length);
+      analyser.getByteFrequencyData(freqBuf);
+      let band = 0;
+      let total = 0;
+      for (let i = 1; i < freqBuf.length; i++) {
+        total += freqBuf[i];
+        if (i >= lowBin && i <= highBin) band += freqBuf[i];
+      }
+      const voiceLike = total > 12 ? band / total >= VOICE_BAND_MIN_RATIO : false;
+      const active = voiceLike && rms > Math.max(MIN_SPEECH_RMS, ambient * 2.2);
+
+      // Same streak rule as live: dips up to SPEECH_DIP_GRACE_MS keep it alive.
+      if (active) {
+        if (streakStart == null || lastActiveAt == null || now - lastActiveAt > SPEECH_DIP_GRACE_MS) {
+          streakStart = now;
+        }
+        lastActiveAt = now;
+      } else if (lastActiveAt != null && now - lastActiveAt > SPEECH_DIP_GRACE_MS) {
+        streakStart = null;
+      }
+      const sustained = active && streakStart != null && now - streakStart >= SPEECH_SUSTAIN_MS;
+
+      if (!speechStarted) {
+        // Learn the room's noise level until the candidate starts speaking.
+        if (!active && rms < AMBIENT_LEARN_CAP) {
+          ambient = ambient * (rms > ambient ? 0.95 : 0.9) + rms * (rms > ambient ? 0.05 : 0.1);
+        }
+        if (sustained) {
+          speechStarted = true;
+          silenceSince = now;
+        }
+        return;
+      }
+
+      if (popup) {
+        // Close after SPEECH_RESUME_CONFIRM_MS of total speech, then restart
+        // the 15s window from now.
+        if (active) {
+          accum += dt;
+          if (accum >= SPEECH_RESUME_CONFIRM_MS) {
+            popup = false;
+            accum = 0;
+            silenceSince = now;
+            streakStart = null;
+            setDoneConfirm(false);
+          }
+        }
+        return;
+      }
+
+      if (sustained) silenceSince = now;
+      if (now - silenceSince >= DONE_CONFIRM_SILENCE_MS) {
+        popup = true;
+        accum = 0;
+        setDoneConfirm(true);
+      }
+    }, VAD_POLL_MS);
+
+    return () => {
+      clearInterval(iv);
+      setDoneConfirm(false);
+    };
+  }, [isRecording, aiSpeaking, practiceDone]);
 
   // Keep the chat thread pinned to the bottom as new content appears — Bina
   // speaking, "Your turn", the transcript, and the sign-off — so the latest
@@ -1132,11 +1281,12 @@ export default function StepSamplePractice({
 
         {/* 2-Column Grid — LEFT: Bina avatar + your webcam · RIGHT: chat.
             Mirrors the real interview screen (kept inside this panel, not fullscreen). */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-0 divide-y lg:divide-y-0 lg:divide-x divide-white/[0.06]">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-0">
         {/* ── Left: Bina avatar (top) + your webcam (bottom) ── */}
-        <div className="lg:col-span-1 flex flex-col bg-[var(--raw-0a1020)] divide-y divide-white/[0.06]">
+        <div className="lg:col-span-1 flex flex-col bg-[var(--raw-0a1020)]">
           {/* Bina avatar */}
-          <div data-tour="linda" className="relative flex-1 flex flex-col items-center justify-center p-5 gap-2.5" style={{ minHeight: '220px' }}>
+          {/* Inset card with rounded corners, matching the webcam frame (live parity). */}
+          <div data-tour="linda" className="relative flex-1 flex flex-col items-center justify-center p-5 gap-2.5 mx-3 mt-3 rounded-xl bg-white/[0.04] overflow-hidden" style={{ minHeight: '220px' }}>
             <div className="absolute top-3 left-3 flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-[var(--raw-a78bfa)] animate-pulse" />
               <span className="text-2xs font-medium tracking-wide uppercase text-[var(--raw-64748b)]">Bina · AI Interviewer</span>
@@ -1208,7 +1358,8 @@ export default function StepSamplePractice({
         </div>
 
         {/* ── Right: chat thread + controls ── */}
-        <div className="relative lg:col-span-2 flex flex-col bg-[var(--raw-060d1a)]" style={{ minHeight: '360px' }}>
+        {/* Inset card with rounded corners, matching the webcam frame (live parity). */}
+        <div className="relative lg:col-span-2 flex flex-col bg-[var(--raw-060d1a)] m-3 rounded-xl overflow-hidden" style={{ minHeight: '360px' }}>
           {/* Bottom-centered status banner (matches the real interview): red
               "Hold on — Bina is speaking" while she talks, green "Your turn"
               while the mic is open. Floats above the control bar. */}
@@ -1243,6 +1394,59 @@ export default function StepSamplePractice({
             );
           })()}
 
+          {/* Pre-turn "Get ready to answer" 3-2-1 — same as the live interview
+              (H2 shine, no circle, PRE_TURN_TICK_MS per number). Lighter sky
+              shades than live because this chat panel is dark. */}
+          {preTurnCountdown != null && (
+            <div className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center justify-center px-4">
+              <style>{`@keyframes cdShine {0%{opacity:0;transform:scale(0.97);background-position:100% 0,0 0}10%{background-position:100% 0,0 0}40%{opacity:1;transform:scale(1)}92%{opacity:1;background-position:0% 0,0 0}100%{opacity:0.15;background-position:0% 0,0 0}}`}</style>
+              <div className="mb-3 px-4 py-1.5 rounded-full bg-black/75 backdrop-blur-sm ring-1 ring-white/10 text-sm sm:text-base font-bold text-sky-300 shadow-lg">Get ready to answer</div>
+              <div key={`p-${preTurnCountdown}`} className="flex items-center justify-center w-36 h-36 sm:w-48 sm:h-48">
+                <span
+                  className="font-extrabold tabular-nums"
+                  style={{
+                    fontSize: '5rem',
+                    lineHeight: 1,
+                    color: 'transparent',
+                    background:
+                      'linear-gradient(110deg, transparent 40%, #ffffff 50%, transparent 60%) 100% 0 / 300% 100% no-repeat, ' +
+                      'linear-gradient(135deg, #7dd3fc 20%, #38bdf8 80%)',
+                    WebkitBackgroundClip: 'text',
+                    backgroundClip: 'text',
+                    filter: 'drop-shadow(0 2px 12px rgba(56,189,248,0.35))',
+                    animation: `cdShine ${PRE_TURN_TICK_MS}ms ease-in-out both`,
+                  }}
+                >{preTurnCountdown}</span>
+              </div>
+            </div>
+          )}
+          {/* "Are you done with your response?" — same popup as the live
+              interview. It never ends the answer: keep speaking to close it, or
+              Submit to finish the practice (same as the Next button). */}
+          {doneConfirm && !practiceDone && (
+            <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center justify-center px-4">
+              <div className="pointer-events-auto w-full max-w-sm rounded-2xl bg-black/80 backdrop-blur-md ring-1 ring-amber-400/40 shadow-2xl px-5 py-4 text-center">
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                  <p className="text-base font-bold text-amber-300">Are you done with your response?</p>
+                </div>
+                <p className="text-xs sm:text-sm text-white/90 leading-snug mb-4">
+                  If you are not done, please speak up to continue your response.
+                  If you have completed your answer, click Submit to finish the practice.
+                </p>
+                <div className="flex items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handlePracticeNext}
+                    className="inline-flex items-center gap-1.5 px-5 py-2 rounded-full bg-emerald-500 text-white text-sm font-semibold shadow-lg hover:bg-emerald-600 transition-colors"
+                  >
+                    Submit
+                  </button>
+                </div>
+                <p className="mt-3 text-2xs text-white/60">Still recording — just keep speaking to continue.</p>
+              </div>
+            </div>
+          )}
           {/* Start-practice gate — Bina stays silent until the candidate clicks
               Start (also gives TTS a user gesture). Sits over the chat panel. */}
           {!started && (

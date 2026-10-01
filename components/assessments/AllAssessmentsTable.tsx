@@ -5,7 +5,10 @@ import { useRouter } from 'next/navigation';
 import {
   X, ClipboardList, MoreVertical, Eye, Pencil, History,
   ArrowUp, ArrowDown, ArrowUpDown, AlertTriangle, RefreshCw,
+  Archive, ArchiveRestore, BarChart, Play, Trash2,
 } from 'lucide-react';
+import { toast } from 'sonner';
+import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -58,6 +61,7 @@ interface AssessmentRow {
   assessmentId: string;      // AS-022, the assessment's own human id (searched, not a column)
   title: string;
   jobId: string;             // JD-014            -> column 1
+  jdId: string;              // jd_id, the JD row's UUID (Edit's Configure route)
   jobName: string;           // "Senior Java …"   -> column 2
   jobVersion: number;        // jd_version        -> column 3
   assessmentVersion: number; // version           -> column 4
@@ -90,6 +94,7 @@ const toRow = (a: AssessmentResponse): AssessmentRow => {
     assessmentId: a.short_id || '',
     title: a.title || 'Untitled assessment',
     jobId: a.jd_short_id || '',
+    jdId: a.jd_id || '',
     jobName: a.jd_title || 'General Assessment',
     jobVersion: a.jd_version ?? 1,
     assessmentVersion: a.version ?? 1,
@@ -290,6 +295,8 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
   const router = useRouter();
   const { isTenantAdmin, user } = useAuth();
   const canUpdateAssessment = isTenantAdmin || (user?.permissions?.canUpdateAssessments ?? false);
+  const canDeleteAssessment = isTenantAdmin || (user?.permissions?.canDeleteAssessments ?? false);
+  const dialog = useGlobalDialog();
   const fixedLabel = fixedStatusLabel(fixedStatus);
   /* Both lines of the page header. Read only when this table is on its OWN
      route — see the header block below, which `embedded` drops whole. On the
@@ -329,7 +336,8 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>(DEFAULT_SORT_DIR);
 
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  /* Total Jobs' starting size (the Assessments page's assessmentItemsPerPage). */
+  const [pageSize, setPageSize] = useState(10);
 
   /* Clear Sort. The first value is whatever the signal was when this tab
      mounted, so arriving on a tab never clears anything — only a click does. */
@@ -415,6 +423,11 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
     setError(null);
     setReloadToken((t) => t + 1);
   };
+
+  /* After a status action: the same load, without the skeleton, so the row
+     picks up its new status in place (or leaves a status tab it no longer
+     belongs on) and the table does not flash empty in between. */
+  const refreshRows = () => setReloadToken((t) => t + 1);
 
   /* ── Filter option lists ─────────────────────────────────────────────────
      Derived from the loaded rows, so a dropdown can only ever offer a value
@@ -628,38 +641,187 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
   };
 
   /* ── Actions ─────────────────────────────────────────────────────────────
-     Only what is valid for the row's status. Edit is Draft-only — a published
-     assessment is edited by duplicating it into a new version, which is the
-     rule the creation flow already enforces — and is additionally gated on the
-     same `canUpdateAssessments` permission the dashboard's edit path checks,
-     so the menu cannot offer an action the next screen refuses. */
+     Only what is valid for the row's status, read off the API's own status:
+       Active   — Archive, View Assessment, View Results
+       Draft    — Publish (not on the All tab), Edit, View Assessment, Delete
+       Archived — Unarchive, View Assessment, View Results (once someone has
+                  completed it)
+     Edit stays Draft-only — a published assessment is edited by duplicating
+     it into a new version, which is the rule the creation flow already
+     enforces. Each status change is the one the Assessments page's own menu
+     makes (same endpoint, same confirm, same permission, same toast), and a
+     row runs one at a time. */
+  const [busyRowId, setBusyRowId] = useState<string | null>(null);
+
+  const runStatusAction = async (row: AssessmentRow, verb: string, action: () => Promise<unknown>, success: string) => {
+    setBusyRowId(row.id);
+    try {
+      await action();
+      toast.success(success);
+      refreshRows();
+    } catch (err) {
+      console.error(`Failed to ${verb} assessment:`, err);
+      toast.error(`Failed to ${verb} assessment: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setBusyRowId(null);
+    }
+  };
+
+  const publishRow = (row: AssessmentRow) => {
+    if (!canUpdateAssessment) {
+      toast.error('You do not have permission to edit assessments');
+      return;
+    }
+    void runStatusAction(row, 'publish', () => assessmentService.publish(row.id), 'Assessment published');
+  };
+
+  const archiveRow = async (row: AssessmentRow) => {
+    if (!canDeleteAssessment) {
+      toast.error('You do not have permission to archive assessments');
+      return;
+    }
+    if (!await dialog.confirm({ title: 'Archive Assessment', message: 'Archive this assessment? It will be moved to the archived section.', variant: 'warning', confirmText: 'Archive' })) return;
+    void runStatusAction(row, 'archive', () => assessmentService.update(row.id, { status: 'archived' }), 'Assessment archived');
+  };
+
+  /* No dedicated unarchive endpoint exists for assessments: Archive is a
+     status write through PUT /assessments/{id}, so Unarchive is the same
+     write back to `published` — the Active status Archive is offered from. */
+  const unarchiveRow = (row: AssessmentRow) => {
+    if (!canDeleteAssessment) {
+      toast.error('You do not have permission to unarchive assessments');
+      return;
+    }
+    void runStatusAction(row, 'unarchive', () => assessmentService.update(row.id, { status: 'published' }), 'Assessment restored to Active');
+  };
+
+  /* The page's own delete rules: drafts only (the endpoint's), and never once
+     a candidate has been invited. */
+  const deleteRow = async (row: AssessmentRow) => {
+    if (!canDeleteAssessment) {
+      toast.error('You do not have permission to delete assessments');
+      return;
+    }
+    if (row.invitations > 0 || row.completed > 0) {
+      toast.error('Cannot delete — candidates have already been invited to this assessment');
+      return;
+    }
+    if (!await dialog.confirm({
+      title: 'Delete Assessment',
+      message: 'Are you sure you want to delete this assessment?\nThis action cannot be undone.',
+      variant: 'delete',
+      confirmText: 'Delete Assessment',
+      item: { label: 'ASSESSMENT', name: row.title },
+      warningNote: 'Deleting this assessment will permanently remove it and cannot be restored.',
+    })) return;
+    void runStatusAction(row, 'delete', () => assessmentService.delete(row.id), 'Assessment deleted');
+  };
+
+  type RowAction = {
+    key: string;
+    label: string;
+    icon: typeof Eye;
+    iconClassName: string;
+    run: () => void;
+    destructive?: boolean;
+    /** Shown in the menu's own disabled state, reason on hover. */
+    disabled?: boolean;
+    title?: string;
+  };
+
   const rowActions = (row: AssessmentRow) => {
     /* `iconClassName` is the ⋮-menu icon token for the action — the
        `text-menu-icon-*` set the Invitation Status tab's menu colours its
        icons with (globals.css), so View reads the same blue there and here. */
-    const actions: { key: string; label: string; icon: typeof Eye; iconClassName: string; run: () => void }[] = [
-      {
-        key: 'view', label: 'View', icon: Eye, iconClassName: 'text-menu-icon-view',
-        run: () => router.push(`/recruitment/assessments/${row.id}`),
-      },
-    ];
-    if (row.rawStatus === 'draft' && canUpdateAssessment) {
-      actions.push({
+    const view: RowAction = {
+      key: 'view', label: 'View Assessment', icon: Eye, iconClassName: 'text-menu-icon-view',
+      run: () => router.push(`/recruitment/assessments/${row.id}`),
+    };
+    const results: RowAction = {
+      key: 'results', label: 'View Results', icon: BarChart, iconClassName: 'text-menu-icon-score',
+      run: () => router.push(`/recruitment/assessments/${row.id}/results`),
+    };
+
+    const actions: RowAction[] = [];
+    switch (row.rawStatus) {
+      case 'published':
+        actions.push(
+          { key: 'archive', label: 'Archive', icon: Archive, iconClassName: 'text-menu-icon-archive', run: () => void archiveRow(row) },
+          view,
+          results,
+        );
+        break;
+      case 'draft':
+        /* Not on the All tab: a draft there is published from the Configure
+           page its Edit opens, the Total Jobs Edit's flow. */
+        if (fixedStatus) {
+          actions.push({ key: 'publish', label: 'Publish', icon: Play, iconClassName: 'text-menu-icon-activate', run: () => publishRow(row) });
+        }
+        /* The All tab has its own Edit, on every row — added below. */
+        if (fixedStatus && canUpdateAssessment) {
+          actions.push({
+            key: 'edit', label: 'Edit', icon: Pencil, iconClassName: 'text-menu-icon-edit',
+            run: () => router.push(`/recruitment/assessments/create?edit=${row.id}`),
+          });
+        }
+        /* Not on the All tab: a draft there is opened through Edit, on the
+           Configure page, not viewed (see `opensView`). */
+        if (fixedStatus) actions.push(view);
+        break;
+      case 'archived':
+        actions.push(
+          { key: 'unarchive', label: 'Unarchive', icon: ArchiveRestore, iconClassName: 'text-menu-icon-archive', run: () => unarchiveRow(row) },
+          view,
+        );
+        if (row.completed > 0) actions.push(results);
+        break;
+      default:
+        // Completed (`closed`): nothing to change, only to read.
+        actions.push(view);
+        if (row.completed > 0) actions.push(results);
+    }
+    /* All tab: Edit on every row, following Track — the invitations sent
+       (`invitations_count`) are what enable Track, so while none have gone
+       out Edit is open, and once one has it is shown disabled. Permission and
+       the Archived read-only rule gate it as they do everywhere else. */
+    if (!fixedStatus) {
+      const editReason = !canUpdateAssessment
+        ? 'You do not have permission to edit assessments'
+        : row.invitations > 0
+          ? 'Cannot edit — this assessment has already been sent to candidates'
+          : row.rawStatus === 'archived'
+            ? 'Archived assessments cannot be edited'
+            : '';
+      actions.splice(actions.indexOf(view) + 1, 0, {
         key: 'edit', label: 'Edit', icon: Pencil, iconClassName: 'text-menu-icon-edit',
-        run: () => router.push(`/recruitment/assessments/create?edit=${row.id}`),
+        disabled: !!editReason,
+        title: editReason || undefined,
+        /* The Total Jobs Edit's route (`handleEditAssessment` on the
+           Assessments page), so both open the same Configure page with the
+           same assessment loaded. */
+        run: () => router.push(`/recruitment/assessments/create?step=configure&jd_id=${row.jdId}&edit=${row.id}`),
       });
     }
-    /* Not on the Archived tab: its menu is View only. Keyed on the tab
+    /* Not on the Archived tab: its menu never had it. Keyed on the tab
        (`fixedStatus`), not the row, so an archived row listed under All keeps
-       View History there. */
-    if (fixedStatus !== 'archived') {
+       View History there. Nor on a Draft on the All tab, whose menu is Edit
+       and Delete. */
+    if (fixedStatus !== 'archived' && (fixedStatus || row.rawStatus !== 'draft')) {
       actions.push({
         key: 'history', label: 'View History', icon: History, iconClassName: 'text-menu-icon-secondary',
         run: () => router.push(`/recruitment/assessments/${row.id}?tab=versions`),
       });
     }
+    /* Last, as on the page's own menu: the one action that cannot be undone. */
+    if (row.rawStatus === 'draft') {
+      actions.push({ key: 'delete', label: 'Delete', icon: Trash2, iconClassName: '', destructive: true, run: () => void deleteRow(row) });
+    }
     return actions;
   };
+
+  /* Whether a row click opens View Assessment — every row but a Draft on
+     the All tab, which has no View Assessment (see `rowActions`). */
+  const opensView = (row: AssessmentRow) => !!fixedStatus || row.rawStatus !== 'draft';
 
   const columnCount = COLUMNS.length + 1; // + Actions
   /* Whether the table has data rows to lay out — and so whether its header
@@ -1002,8 +1164,8 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                     pageRows.map((row) => (
                       <tr
                         key={row.id}
-                        onClick={() => router.push(`/recruitment/assessments/${row.id}`)}
-                        className="border-b border-gray-100 dark:border-slate-700/60 last:border-b-0 cursor-pointer transition-colors hover:bg-brand-blue/5 dark:hover:bg-brand-blue/10"
+                        onClick={opensView(row) ? () => router.push(`/recruitment/assessments/${row.id}`) : undefined}
+                        className={`border-b border-gray-100 dark:border-slate-700/60 last:border-b-0 ${opensView(row) ? 'cursor-pointer' : ''} transition-colors hover:bg-brand-blue/5 dark:hover:bg-brand-blue/10`}
                       >
                         {/* 1. Job ID — secondary by design: the chip is the
                             house Job Openings badge, which reads as a
@@ -1103,8 +1265,14 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                               </button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-44">
-                              {rowActions(row).map(({ key, label, icon: Icon, iconClassName, run }) => (
-                                <DropdownMenuItem key={key} onClick={run} className="gap-2">
+                              {rowActions(row).map(({ key, label, icon: Icon, iconClassName, run, destructive, disabled, title }) => (
+                                <DropdownMenuItem
+                                  key={key}
+                                  onClick={run}
+                                  disabled={disabled || busyRowId === row.id}
+                                  title={title}
+                                  className={`gap-2${destructive ? ' text-destructive focus:text-destructive' : ''}`}
+                                >
                                   <Icon className={`w-4 h-4 ${iconClassName}`} />
                                   <span className={MENU_ITEM_SCALE_CLASS}>{label}</span>
                                 </DropdownMenuItem>
@@ -1131,7 +1299,6 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
               onItemsPerPageChange={setPageSize}
               itemLabel="assessments"
               scrollContainerRef={scrollRef}
-              showFirstLast
             />
           )}
         </div>

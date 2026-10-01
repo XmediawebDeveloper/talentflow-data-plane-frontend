@@ -510,8 +510,12 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
   // the status cards and the toolbar Result dropdown aren't in its count,
   // so they're checked here too — otherwise a Pass / Fail pick (or a status
   // card) with no matches hid the whole bar and left no way back.
+  // "Nothing to list" means no result sessions (In Progress / Completed /
+  // Terminated) — not no invitations: invited-only candidates never appear in
+  // this list, so counting them showed "No candidates match" with no filter on.
+  const resultSessionCount = summary.completed + summary.inProgress + summary.terminated;
   const isUnstarted = !isLoading && sessions.length === 0 && !search.isNarrowed && !resultFilter
-    && !search.appliedQuery && summary.all === 0;
+    && !search.appliedQuery && statusFilter === 'all' && resultSessionCount === 0;
 
   // Without the version columns in the list at all, the table, the Customize
   // Columns modal and the export all drop them together.
@@ -970,7 +974,9 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
           <TabEmptyState
             icon={Users}
             title="No AI Interview Results"
-            description="Invite candidates to this interview to see their sessions here."
+            description={summary.all > 0
+              ? 'Results appear here once an invited candidate starts their interview.'
+              : 'Invite candidates to this interview to see their sessions here.'}
             action={emptyStateAction ?? undefined}
           />
         ) : paginatedSessions.length === 0 ? (

@@ -27,7 +27,9 @@ export interface ListEmptyStateProps {
   emptyTitle: string;
   /** Supporting line for the genuinely-empty case. */
   emptyDescription?: string;
-  /** Clears search + filters. Renders the Reset button when provided. */
+  /** No longer rendered — the "Reset search and filters" button was removed;
+   *  the toolbar's own search/filter controls clear the list. Kept so callers
+   *  still compile. */
   onReset?: () => void;
   /** Optional call to action for the genuinely-empty case (e.g. "Create"). */
   action?: React.ReactNode;
@@ -47,7 +49,6 @@ export default function ListEmptyState({
   entityLabel,
   emptyTitle,
   emptyDescription,
-  onReset,
   action,
   className,
   imageSrc,
@@ -85,15 +86,6 @@ export default function ListEmptyState({
           <p className="text-sm text-gray-500 dark:text-slate-400">
             Try a different search, or clear what you have narrowed by.
           </p>
-          {onReset && (
-            <button
-              type="button"
-              onClick={onReset}
-              className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
-            >
-              Reset search and filters
-            </button>
-          )}
         </>
       ) : (
         <>

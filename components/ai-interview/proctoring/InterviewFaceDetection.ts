@@ -21,6 +21,8 @@ interface UseInterviewFaceDetectionConfig {
   onFaceMissing?: () => void;
   onFaceRestored?: () => void;
   onMultipleFaces?: (count: number) => void;
+  /** Multiple-faces episode ended (back to one face, or a confirmed no-face stretch). */
+  onMultipleFacesCleared?: () => void;
   onGazeAway?: (direction: string) => void;
   onGazeRestored?: () => void;
 }
@@ -63,7 +65,22 @@ export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConf
   // real face — filters small spurious boxes.
   const MIN_FACE_BOX_AREA = 0.025;
   const FRAMES_GAZE_AWAY = 3;
-  const FRAMES_GAZE_RESTORED = 2;
+  // 1 check (<=2s at the 2s gaze cadence): the "looking away" warning is held on
+  // screen for the whole episode, so it should clear promptly once they look back.
+  const FRAMES_GAZE_RESTORED = 1;
+
+  // Looking DOWN (notes / phone on the desk). Unlike left/right/up this can't
+  // use a fixed threshold: webcams usually sit ABOVE the screen, so a candidate
+  // reading the screen already tilts slightly down, and the amount differs per
+  // setup. So we learn each candidate's own neutral pitch first and flag only a
+  // clear drop below it.
+  //   pitch ratio = where the nose tip sits between forehead (0) and chin (1),
+  //   normalised by face height so distance from the camera doesn't matter.
+  // Looking down pushes the projected nose tip toward the chin → ratio rises.
+  const DOWN_BASELINE_SAMPLES = 8;     // ~16s of forward-facing frames (2s cadence)
+  const LOOK_DOWN_RATIO_DELTA = 0.10;  // rise above the candidate's own neutral
+  const downBaselineSamplesRef = useRef<number[]>([]);
+  const downBaselineRef = useRef<number | null>(null);
 
   // Load a CDN script tag (idempotent — skips if already loaded)
   const loadScript = (src: string): Promise<void> =>
@@ -127,6 +144,13 @@ export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConf
             faceMissingCountRef.current++;
             faceRestoredCountRef.current = 0;
             multipleFacesCountRef.current = 0;
+            // A confirmed no-face stretch also ends any multiple-faces episode,
+            // so 2 faces → no face → 2 faces raises a fresh alert. Previously
+            // only a 1-face frame re-armed it and the second episode was lost.
+            if (faceMissingCountRef.current >= FRAMES_FACE_MISSING && lastMultipleFacesStateRef.current) {
+              lastMultipleFacesStateRef.current = false;
+              callbacksRef.current?.onMultipleFacesCleared?.();
+            }
             if (lastFaceStateRef.current && faceMissingCountRef.current >= FRAMES_FACE_MISSING) {
               lastFaceStateRef.current = false;
               isFaceDetectedRef.current = false;
@@ -142,7 +166,10 @@ export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConf
               isFaceDetectedRef.current = true;
               callbacksRef.current?.onFaceRestored?.();
             }
-            if (lastMultipleFacesStateRef.current) lastMultipleFacesStateRef.current = false;
+            if (lastMultipleFacesStateRef.current) {
+              lastMultipleFacesStateRef.current = false;
+              callbacksRef.current?.onMultipleFacesCleared?.();
+            }
             faceCountRef.current = 1;
           } else {
             multipleFacesCountRef.current++;
@@ -197,11 +224,39 @@ export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConf
               const faceMidY = (forehead.y + chin.y) / 2;
               const noseVerticalOffset = noseTip.y - faceMidY;
 
-              const isLookingAway = Math.abs(noseOffset) > 0.06 || noseVerticalOffset < -0.08;
+              const isTurned = Math.abs(noseOffset) > 0.06;
+              const isUp = noseVerticalOffset < -0.08;
+
+              // Pitch ratio for looking-down (see DOWN_BASELINE_SAMPLES).
+              const faceHeight = chin.y - forehead.y;
+              const pitchRatio = faceHeight > 0.05 ? (noseTip.y - forehead.y) / faceHeight : null;
+              let isDown = false;
+              if (pitchRatio != null) {
+                if (downBaselineRef.current == null) {
+                  // Calibrate only on frames where the candidate is facing the
+                  // screen, so the baseline is their normal reading posture.
+                  if (!isTurned && !isUp) {
+                    const samples = downBaselineSamplesRef.current;
+                    samples.push(pitchRatio);
+                    if (samples.length >= DOWN_BASELINE_SAMPLES) {
+                      const sorted = [...samples].sort((a, b) => a - b);
+                      downBaselineRef.current = sorted[Math.floor(sorted.length / 2)];
+                      console.log("[INTERVIEW_FACE_DETECTION] Look-down baseline set", {
+                        baseline: Number(downBaselineRef.current.toFixed(3)),
+                      });
+                    }
+                  }
+                } else {
+                  isDown = pitchRatio - downBaselineRef.current > LOOK_DOWN_RATIO_DELTA;
+                }
+              }
+
+              const isLookingAway = isTurned || isUp || isDown;
 
               let gazeDirection = "";
-              if (Math.abs(noseOffset) > 0.06) gazeDirection = noseOffset > 0 ? "right" : "left";
-              if (noseVerticalOffset < -0.08) gazeDirection = gazeDirection ? `${gazeDirection}_up` : "up";
+              if (isTurned) gazeDirection = noseOffset > 0 ? "right" : "left";
+              if (isUp) gazeDirection = gazeDirection ? `${gazeDirection}_up` : "up";
+              else if (isDown) gazeDirection = gazeDirection ? `${gazeDirection}_down` : "down";
 
               if (isLookingAway) {
                 gazeAwayCountRef.current++;
