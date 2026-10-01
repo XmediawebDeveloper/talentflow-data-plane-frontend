@@ -18,6 +18,12 @@ const badgeVariants = cva(
         // text everywhere else — no more teal "success" or raw red/amber.
         destructive:
           "ring-destructive-line bg-destructive-subtle text-destructive-strong [a&]:hover:bg-destructive-subtle/70",
+        /* Solid red — white on a filled block. For the one status that should
+           stop a recruiter rather than blend into the row: a terminated
+           attempt. The subtle `destructive` above stays the default for
+           everything else. */
+        destructiveSolid:
+          "ring-destructive bg-destructive text-white [a&]:hover:bg-destructive/90",
         outline:
           "text-gray-700 ring-gray-200 bg-white [a&]:hover:bg-brand-cyan/[0.04] [a&]:hover:text-brand-blue [a&]:hover:ring-brand-blue/30",
         success:

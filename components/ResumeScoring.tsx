@@ -1,3 +1,4 @@
+import { SCORE_CELL_TEXT } from '@/lib/utils/score';
 import { ArrowLeft, Star, TrendingUp, Award, Briefcase, CheckCircle, AlertCircle, ChevronDown, ChevronUp, FileText, Eye } from 'lucide-react';
 import { Resume, Job } from '@/lib/types/types';
 import { useState } from 'react';
@@ -338,7 +339,7 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-center gap-2">
                           {getScoreIcon(result.matchType)}
-                          <span className="text-base font-semibold text-gray-900">{result.score}%</span>
+                          <span className={`${SCORE_CELL_TEXT} text-gray-900`}>{result.score}%</span>
                         </div>
                       </td>
                       <td className="px-4 py-3">

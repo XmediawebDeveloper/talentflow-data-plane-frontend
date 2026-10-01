@@ -276,6 +276,11 @@ export interface AIInterviewResponse {
   revoked_by?: string | null;
   jd_short_id?: string;  // JD's short display ID e.g. "JD-003", injected by list endpoint
   jd_industry_type?: string;
+  // Child-session counts for this config, batch-aggregated server-side at
+  // list time — lets callers sum these directly instead of calling
+  // /invitations per config per status.
+  completed_count?: number;
+  terminated_count?: number;
   // JD freshness — set by single-config GET endpoint; null on list responses.
   // True when the linked JD was updated (version bumped or skills changed)
   // AFTER this interview config was created. Recruiter UI should warn the

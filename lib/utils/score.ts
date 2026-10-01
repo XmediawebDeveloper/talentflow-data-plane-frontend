@@ -30,3 +30,11 @@ export function formatScore(value: number | string | null | undefined): string {
   const score = toOneDecimalScore(value);
   return Number.isInteger(score) ? String(score) : score.toFixed(1);
 }
+
+/**
+ * Type style for a score number in any list / table cell, so a Score column
+ * reads the same in every module (AI Interview, Assessments, Scored Resumes,
+ * invite tables, …). Colour stays with each caller — only size and weight are
+ * shared. Grid cards, detail pages and stat cards size their scores on their own.
+ */
+export const SCORE_CELL_TEXT = 'text-sm font-semibold tabular-nums';

@@ -1,11 +1,13 @@
 'use client';
 
+import { SCORE_CELL_TEXT } from '@/lib/utils/score';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import ResultRowActions, { DownloadPdfsButton, isPhoneWidth } from './ResultRowActions';
 import ListEmptyState from '@/components/ui/list-empty-state';
+import TimelineStamps from '@/components/ui/timeline-stamps';
 import { useRouter } from 'next/navigation';
 import {
   ChevronLeft, ChevronRight, Eye, Users, CheckCircle, XCircle,
@@ -17,6 +19,7 @@ import { toast } from 'sonner';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
+import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
@@ -206,16 +209,16 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
   );
 
   /**
-   * One request per config, fanned out in parallel. There is no cross-config
-   * sessions endpoint, and the per-interview view's endpoint is scoped to a
-   * config id — so this is the aggregation the Assessments tab does too. A
-   * config whose sessions fail to load contributes nothing rather than sinking
-   * the whole tab.
+   * One tenant-wide call (paginated), not one request per config per status.
+   * This used to fan out `configs.length × 2` unthrottled requests — hundreds
+   * on a tenant with many AI-interview configs — because there was no
+   * cross-config sessions endpoint. `GET /ai-interview` (`aiInterviewService
+   * .list`) already covers every session tenant-wide, so asking it once for
+   * `status=completed,terminated` returns the same rows the old per-config
+   * loop assembled by hand.
    *
    * Completed AND Terminated — the two states with a result to show (a
-   * terminated interview has its partial evaluation). One request per status
-   * per config, in parallel, rather than pulling every invite / in-progress /
-   * expired row across every config just to filter them back out here.
+   * terminated interview has its partial evaluation).
    */
   const loadAllSessions = useCallback(async () => {
     setIsLoading(true);
@@ -227,6 +230,7 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
         setRows([]);
         return;
       }
+      const configById = new Map(configs.map((c) => [c.id, c]));
 
       /* Interview version — the Nth config created against a given job
        * version (jd_id), oldest first. Same derivation as the All Interviews
@@ -248,39 +252,43 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
           .forEach((config, index) => ordinalByConfigId.set(config.id, index + 1));
       }
 
-      const perConfig = await Promise.all(
-        configs.map(async (config) => {
-          try {
-            const [completed, terminated] = await Promise.all(
-              (['completed', 'terminated'] as const).map((status) =>
-                aiInterviewService.getConfigInvitations(config.id, { page: 1, page_size: 1000, compact: true, status })
-                  // A failed status fetch drops only that status, not the config.
-                  .catch(() => ({ items: [] as AIInterviewResponse[] })),
-              ),
-            );
-            return [...(completed.items ?? []), ...(terminated.items ?? [])].map((session): CandidateSessionRow => ({
-              ...session,
-              _config_id: config.id,
-              // jd_title first, matching how the interview cards on this page
-              // are labelled, so the column reads the same as the list above it.
-              _config_title: config.jd_title || config.position || 'Untitled',
-              _job_id: config.jd_short_id || '',
-              _job_version: config.jd_version ?? 1,
-              _interview_version: ordinalByConfigId.get(config.id) ?? 1,
-            }));
-          } catch {
-            return [];
-          }
-        })
-      );
+      // Paginated — a mature tenant can have more completed/terminated
+      // sessions than fit on one page.
+      const sessions: AIInterviewResponse[] = [];
+      for (let page = 1; page <= 40; page += 1) {
+        const res = await aiInterviewService
+          .list({ status: 'completed,terminated', page, page_size: 1000 })
+          .catch(() => ({ items: [] as AIInterviewResponse[], total: 0 }));
+        const items = res.items ?? [];
+        sessions.push(...items);
+        if (items.length < 1000 || sessions.length >= (res.total ?? sessions.length)) break;
+      }
 
-      // Newest first — completed sessions lead, then whatever started or was
-      // invited most recently.
-      const merged = perConfig.flat().sort((a, b) => {
-        const ta = new Date(a.completed_at || a.started_at || a.created_at || 0).getTime();
-        const tb = new Date(b.completed_at || b.started_at || b.created_at || 0).getTime();
-        return tb - ta;
-      });
+      // A session's config may be archived (excluded from `configs`, which
+      // only lists non-archived by default) — drop it, matching the old
+      // behaviour of only ever iterating non-archived configs.
+      const merged = sessions
+        .filter((session) => session.config_id && configById.has(session.config_id))
+        .map((session): CandidateSessionRow => {
+          const config = configById.get(session.config_id as string)!;
+          return {
+            ...session,
+            _config_id: config.id,
+            // jd_title first, matching how the interview cards on this page
+            // are labelled, so the column reads the same as the list above it.
+            _config_title: config.jd_title || config.position || 'Untitled',
+            _job_id: config.jd_short_id || '',
+            _job_version: config.jd_version ?? 1,
+            _interview_version: ordinalByConfigId.get(config.id) ?? 1,
+          };
+        })
+        // Newest first — completed sessions lead, then whatever started or
+        // was invited most recently.
+        .sort((a, b) => {
+          const ta = new Date(a.completed_at || a.started_at || a.created_at || 0).getTime();
+          const tb = new Date(b.completed_at || b.started_at || b.created_at || 0).getTime();
+          return tb - ta;
+        });
 
       setRows(merged);
       // Page is NOT reset here — it may have just been restored (see
@@ -311,9 +319,8 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshSignal]);
 
-  // Filtering is client-side: the rows are already all in memory, and the
-  // per-config endpoint can't filter across configs anyway. Keyed off the
-  // APPLIED query so the list doesn't rebuild on every keystroke.
+  // Filtering is client-side: the rows are already all in memory. Keyed off
+  // the APPLIED query so the list doesn't rebuild on every keystroke.
   const filteredRows = useMemo(() => {
     const query = search.appliedQuery.trim().toLowerCase();
     const f = search.filters;
@@ -713,12 +720,19 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4">
               {pageRows.map((row) => {
                 const risk = getProctoringRisk(row);
+                const isSelected = selectedKeys.has(rowKey(row));
                 return (
                   <button
                     key={`${row._config_id}-${row.id}`}
                     onClick={() => openSession(row)}
-                    className="text-left bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/20 hover:-translate-y-0.5 transition-all p-4 flex flex-col gap-3"
+                    className={`group relative text-left bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/20 hover:-translate-y-0.5 transition-all p-4 flex flex-col gap-3 ${gridCardSelectedClass(isSelected)}`}
                   >
+                    <GridCardSelect
+                      selected={isSelected}
+                      onToggle={() => toggleSelected(row)}
+                      label={row.candidate_name || 'candidate'}
+                      selectionActive={selectedKeys.size > 0}
+                    />
                     <div className="flex items-start gap-2.5">
                       <div className="w-9 h-9 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-semibold text-sm flex-shrink-0">
                         {(row.candidate_name || 'U')[0].toUpperCase()}
@@ -772,10 +786,10 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                       </div>
                     )}
 
-                    <div className="flex items-center justify-between text-xs text-gray-500 dark:text-slate-500 pt-2 border-t border-gray-100 dark:border-slate-800">
-                      <span>{formatDuration(row)}</span>
-                      <span>{row.completed_at ? formatIST(row.completed_at) : row.started_at ? formatIST(row.started_at) : '—'}</span>
-                    </div>
+                    <TimelineStamps
+                      className="text-gray-500 dark:text-slate-500 pt-2 border-t border-gray-100 dark:border-slate-800"
+                      startedAt={row.started_at} completedAt={row.completed_at} format={formatIST} duration={formatDuration(row)}
+                    />
 
                     <div
                       onClick={(e) => { e.stopPropagation(); openSession(row); }}
@@ -987,7 +1001,7 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                         {col('score') && (
                           <td className="px-4 py-3 whitespace-nowrap">
                             {mhsScore(row) != null ? (
-                              <span className={`font-medium text-xs ${mhsScore(row)! >= 60 ? 'text-success' : 'text-destructive'}`}>
+                              <span className={`${SCORE_CELL_TEXT} ${mhsScore(row)! >= 60 ? 'text-success' : 'text-destructive'}`}>
                                 {mhsScore(row)}%
                               </span>
                             ) : (
@@ -1002,11 +1016,7 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                         )}
                         {col('timeline') && (
                           <td className="px-4 py-3 whitespace-nowrap text-gray-600 dark:text-slate-400">
-                            <div className="flex flex-col gap-0.5 text-xs">
-                              <span><span className="text-gray-400 dark:text-slate-500">Started at:</span> {row.started_at ? formatIST(row.started_at) : '—'}</span>
-                              <span><span className="text-gray-400 dark:text-slate-500">Completed at:</span> {row.completed_at ? formatIST(row.completed_at) : '—'}</span>
-                              <span><span className="text-gray-400 dark:text-slate-500">Duration:</span> {formatDuration(row)}</span>
-                            </div>
+                            <TimelineStamps startedAt={row.started_at} completedAt={row.completed_at} format={formatIST} duration={formatDuration(row)} />
                           </td>
                         )}
                         {col('proctoring') && (

@@ -126,7 +126,7 @@ import {
   type JobAssessmentHierarchy,
 } from '@/lib/utils/jobAssessmentHierarchy';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
-import { formatScore } from '@/lib/utils/score';
+import { formatScore, SCORE_CELL_TEXT } from '@/lib/utils/score';
 
 
 /** What the version-history helpers below read off an assessment row — the
@@ -2080,7 +2080,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     return (
       <td className="px-3 sm:px-4 py-3 align-middle text-sm text-center">
         <div className="flex flex-col items-center gap-0.5">
-          <span className={`font-medium ${passed ? 'text-brand-blue' : 'text-destructive'}`}>
+          <span className={`${SCORE_CELL_TEXT} ${passed ? 'text-brand-blue' : 'text-destructive'}`}>
             {formatScore(score)}%
           </span>
           <span className={`text-2xs font-medium px-1.5 py-0.5 rounded ring-1 ${passed ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' : 'bg-destructive-subtle text-destructive ring-destructive-line'}`}>
@@ -9609,7 +9609,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2 rounded-xl bg-brand-blue/[0.08] border border-brand-blue/20 px-3 py-2.5">
                 <Info className="w-4 h-4 text-brand-blue flex-shrink-0 self-start sm:self-center mt-0.5 sm:mt-0" />
                 <p className="min-w-0 flex-1 basis-48 text-xs sm:text-sm text-gray-700 dark:text-slate-300">
-                  <span className="font-semibold">Note:</span> Results are available only for candidates with Complete status. Other candidates&rsquo; results are not available.
+                  <span className="font-semibold">Note:</span> Results are available only for candidates with Completed and Terminated status. Other candidates&rsquo; results are not available.
                 </p>
                 {/* Completion rate lives here, not in the card row: the row is
                     the status FILTER and this was the one tile that filtered
@@ -9951,7 +9951,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 <td className="px-3 sm:px-4 py-3 align-top text-sm text-center">
                                   {techReady ? (
                                     <div className="flex flex-col items-center gap-0.5">
-                                      <span className={`font-medium ${invitation.technical_score >= 70 ? 'text-brand-blue' : 'text-destructive'}`}>
+                                      <span className={`${SCORE_CELL_TEXT} ${invitation.technical_score >= 70 ? 'text-brand-blue' : 'text-destructive'}`}>
                                         {formatScore(invitation.technical_score)}%
                                       </span>
                                       <span className={`text-2xs font-medium px-1.5 py-0.5 rounded ring-1 ${invitation.technical_score >= 70 ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' : 'bg-destructive-subtle text-destructive ring-destructive-line'}`}>
@@ -9973,7 +9973,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 <td className="px-3 sm:px-4 py-3 align-top text-sm text-center">
                                   {codingReady ? (
                                     <div className="flex flex-col items-center gap-0.5">
-                                      <span className={`font-medium ${invitation.coding_score >= 70 ? 'text-brand-blue' : 'text-destructive'}`}>
+                                      <span className={`${SCORE_CELL_TEXT} ${invitation.coding_score >= 70 ? 'text-brand-blue' : 'text-destructive'}`}>
                                         {formatScore(invitation.coding_score)}%
                                       </span>
                                       <span className={`text-2xs font-medium px-1.5 py-0.5 rounded ring-1 ${invitation.coding_score >= 70 ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' : 'bg-destructive-subtle text-destructive ring-destructive-line'}`}>

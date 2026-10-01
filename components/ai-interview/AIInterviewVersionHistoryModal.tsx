@@ -402,7 +402,7 @@ export default function AIInterviewVersionHistoryModal({
                             <td className="px-3 py-2 text-center" onClick={(e) => e.stopPropagation()}>
                               <button
                                 type="button"
-                                onClick={() => router.push(`/recruitment/ai-interviews/${c.id}`)}
+                                onClick={() => router.push(`/recruitment/ai-interviews/${c.id}?tab=results`)}
                                 title="View interview"
                                 aria-label={`View interview ${labelOf(c)}`}
                                 className="w-8 h-8 inline-flex items-center justify-center rounded-lg border border-gray-200 dark:border-slate-700 text-gray-500 hover:text-brand-blue hover:border-brand-blue/30 hover:bg-brand-blue/5 transition-colors"
@@ -417,14 +417,14 @@ export default function AIInterviewVersionHistoryModal({
                   </table>
                 </div>
 
-                {/* Completion / Pass / Fail rate — for the version picked in
+                {/* Completion / Pass / Fail / Terminated rate — for the version picked in
                     Version Wise Results (a row click picks it too). */}
                 {sel && (
                   <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 p-4">
                     <div className="text-xs text-gray-500 dark:text-slate-400 mb-3">
                       Rates for <span className="font-semibold text-gray-700 dark:text-slate-300">{showAll ? 'All Versions' : selected ? labelOf(selected) : ''}</span>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-4">
                       {[
                         { label: 'Completion Rate', hint: 'Completed ÷ all candidates (revoked excluded)', value: pct(sel.completed, sel.total),
                           sub: `${sel.completed} of ${sel.total} completed`, bar: 'bg-success', text: 'text-success' },
@@ -432,6 +432,8 @@ export default function AIInterviewVersionHistoryModal({
                           sub: `${sel.pass} of ${sel.pass + sel.fail} passed`, bar: 'bg-brand-blue', text: 'text-brand-blue' },
                         { label: 'Fail Rate', hint: 'Failed ÷ scored completions (Must-Have < 60%)', value: pct(sel.fail, sel.pass + sel.fail),
                           sub: `${sel.fail} of ${sel.pass + sel.fail} failed`, bar: 'bg-destructive', text: 'text-destructive' },
+                        { label: 'Terminated Rate', hint: 'Terminated ÷ all candidates (revoked excluded)', value: pct(sel.terminated, sel.total),
+                          sub: `${sel.terminated} of ${sel.total} terminated`, bar: 'bg-[#b91c1c] dark:bg-[#e11d48]', text: 'text-[#b91c1c] dark:text-[#e11d48]' },
                       ].map((r) => (
                         <div key={r.label}>
                           <div className="flex items-center justify-between">

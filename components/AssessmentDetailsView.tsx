@@ -260,6 +260,15 @@ export default function AssessmentDetailsView({
     ? (requestedTab as DetailsTab)
     : 'overview';
   const [activeTab, setActiveTab] = useState<DetailsTab>(initialTab);
+  /* The route keeps this view mounted when it moves to another assessment
+     (Version History's eye icon opens a version on `?tab=results` from
+     inside this page), so a newly requested tab is applied on that move. */
+  useEffect(() => {
+    if (requestedTab && deepLinkableTabs.includes(requestedTab as DetailsTab)) {
+      setActiveTab(requestedTab as DetailsTab);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestedTab, assessment.id]);
   /* WHICH of Assessment Details' two horizontal views is open. Configure
      Details — the rounds, Technical / Coding / HR — unless the reader asked
      for `?tab=info`, which is what keeps the old deep link working. */
@@ -2601,7 +2610,7 @@ export default function AssessmentDetailsView({
               <div className="flex flex-wrap items-center gap-2.5 rounded-xl bg-brand-blue/[0.08] border border-brand-blue/20 px-3 py-2.5">
                 <Info className="w-4 h-4 text-brand-blue flex-shrink-0" />
                 <p className="min-w-0 flex-1 text-xs sm:text-sm text-gray-700 dark:text-slate-300">
-                  <span className="font-semibold">Note:</span> Results are available only for candidates with Complete status. Other candidates&rsquo; results are not available.
+                  <span className="font-semibold">Note:</span> Results are available only for candidates with Completed and Terminated status. Other candidates&rsquo; results are not available.
                 </p>
                 {/* Completion rate lives here, not in the card row: the row is
                     the status FILTER and this was the one tile that filtered

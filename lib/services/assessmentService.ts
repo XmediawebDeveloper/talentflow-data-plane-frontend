@@ -338,6 +338,15 @@ export interface DetailedResultResponse {
   candidate_phone?: string;
   assessment_title: string;
   started_at?: string;
+  /** When the BROWSER started recording — the anchor for a violation's
+   *  "video time". Not started_at: recording begins on the share-bar gate. */
+  recording_started_at?: string | null;
+  /** The attempt's own lifecycle state ('in_progress' | 'completed' |
+   *  'terminated' | …). A terminated attempt is never scored, so
+   *  scoring_status alone cannot tell it apart from one still being marked. */
+  attempt_status?: string | null;
+  /** Set when the attempt ended without completing. */
+  terminated_at?: string | null;
   completed_at?: string;
   time_spent_seconds?: number;
   overall_score?: number;

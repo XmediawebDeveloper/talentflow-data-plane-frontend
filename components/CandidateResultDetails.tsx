@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronLeft, ChevronRight, User, UserX, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, Briefcase, AlertCircle, Info, Loader2, ShieldAlert, Eye, Clipboard, MousePointer, Volume2, Monitor, Maximize, Activity, Camera } from 'lucide-react';
+import { ChevronLeft, ChevronRight, User, UserX, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, Briefcase, AlertCircle, Info, Loader2, ShieldAlert, Eye, Clipboard, MousePointer, Volume2, Monitor, Maximize, Activity, Camera, Play } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback, type ComponentType } from 'react';
 import { useRouter } from 'next/navigation';
 import { assessmentService, DetailedResultResponse, InvitationResponse, QuestionEvaluation, RoundScore } from '@/lib/services';
@@ -72,7 +72,7 @@ interface CandidateBasicInfo {
   completedDate: string;
   duration: string;
   percentage: number;
-  status: 'Completed' | 'In Progress' | 'Pending';
+  status: 'Completed' | 'In Progress' | 'Terminated' | 'Pending';
   sections: {
     name: string;
     score: number;
@@ -329,6 +329,23 @@ export default function CandidateResultDetails({
   // Candidate Insights, the first menu item; the Insights tab is always in the
   // menu, so this holds on first paint, direct load and refresh alike.
   const [overviewTab, setOverviewTab] = useState<string>('candidate-insights');
+  /* What the header badge says. A TERMINATED attempt never gets scored, so its
+     scoring_status is 'pending' for good — reading the badge off scoring_status
+     alone labelled a terminated candidate "Pending" (2026-10-01). */
+  const resultStatusOf = (
+    details?: { scoring_status?: string; attempt_status?: string | null; terminated_at?: string | null; completed_at?: string } | null,
+  ): 'Completed' | 'In Progress' | 'Terminated' | 'Pending' | null => {
+    if (!details) return null;
+    if (details.attempt_status === 'terminated' || (details.terminated_at && !details.completed_at)) return 'Terminated';
+    if (details.scoring_status === 'completed') return 'Completed';
+    if (details.scoring_status === 'processing') return 'In Progress';
+    if (details.scoring_status === 'pending') return 'Pending';
+    return null;
+  };
+  /* Violation -> recording. The nonce makes a repeat click on the SAME row
+     seek again: the player watches `key`, not `seconds`. */
+  const [recordingSeek, setRecordingSeek] = useState<{ seconds: number; key: number } | null>(null);
+  const seekNonceRef = useRef(0);
   /* The pair of views under the View JD menu item. Same two the
      assessment's own page offers, so a recruiter reading a result sees the job
      and the assessment exactly as they would there. */
@@ -491,14 +508,7 @@ export default function CandidateResultDetails({
         }
 
         // Map to candidate data
-        let status: 'Completed' | 'In Progress' | 'Pending' = 'In Progress';
-        if (details.scoring_status === 'completed') {
-          status = 'Completed';
-        } else if (details.scoring_status === 'processing') {
-          status = 'In Progress';
-        } else if (details.scoring_status === 'pending') {
-          status = 'Pending';
-        }
+        const status = resultStatusOf(details) ?? 'In Progress';
 
         // Map section scores directly from stored backend round scores.
         const sections = details.round_scores.map(round => {
@@ -788,9 +798,7 @@ export default function CandidateResultDetails({
         if (details.scoring_status !== 'processing') {
           // Scoring done — update all state and stop polling
           setDetailedResult(details);
-          let status: 'Completed' | 'In Progress' | 'Pending' = 'In Progress';
-          if (details.scoring_status === 'completed') status = 'Completed';
-          else if (details.scoring_status === 'pending') status = 'Pending';
+          const status = resultStatusOf(details) ?? 'In Progress';
           const sections = details.round_scores.map(round => {
             const questionsForRound = details.question_evaluations.filter(
               q => q.round_type === round.round_type
@@ -840,6 +848,44 @@ export default function CandidateResultDetails({
   const recordingForCandidate = recordingLoad?.key === candidateId ? recordingLoad : null;
   const candidateRecording = recordingForCandidate?.candidate ?? EMPTY_RECORDING_SOURCE;
   const screenRecording = recordingForCandidate?.screen ?? EMPTY_RECORDING_SOURCE;
+
+  /* The anchor a violation's "video time" is measured from: when the BROWSER
+     started recording. Deliberately not started_at — both recorders begin on
+     the hide-share-bar gate, before /start, so started_at would put every
+     offset early by the length of that gate. Older attempts have no anchor
+     stored; they fall back to started_at, which is the best available. */
+  const recordingAnchor = detailedResult?.recording_started_at || detailedResult?.started_at;
+  const hasAnyRecording = !!(candidateRecording.available || screenRecording.available);
+
+  const videoOffsetSeconds = (ts?: string): number | null => {
+    if (!ts || !recordingAnchor) return null;
+    const at = new Date(ts).getTime();
+    const from = new Date(recordingAnchor).getTime();
+    if (Number.isNaN(at) || Number.isNaN(from)) return null;
+    const off = Math.floor((at - from) / 1000);
+    return off < 0 ? null : off;
+  };
+  const formatVideoOffset = (sec: number | null): string => {
+    if (sec == null) return '—';
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const ss = sec % 60;
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return h > 0 ? `${h}:${pad(m)}:${pad(ss)}` : `${m}:${pad(ss)}`;
+  };
+  /* Jump: arm the player, then show the Recording tab. The player switches
+     itself to Screen View on a seek (see RecordingPlayer). */
+  const jumpToRecording = (seconds: number) => {
+    seekNonceRef.current += 1;
+    setRecordingSeek({ seconds, key: seekNonceRef.current });
+    // Both, exactly as handleDetailTabClick does for a question tab — the
+    // Recording panel renders off activeTab unless the tab is also the
+    // current detail tab.
+    setOverviewTab('recording');
+    setActiveTab('recording');
+    scrollDetailContentToTop();
+  };
+
   // Merges into this candidate's entry, starting it fresh if the entry is a
   // previous candidate's.
   const updateRecording = useCallback((forCandidate: string, kind: RecordingKind, patch: Partial<RecordingSource>) => {
@@ -926,10 +972,13 @@ export default function CandidateResultDetails({
   };
 
   // Canonical status → Badge variant (shared mapping so statuses don't drift).
-  const getStatusVariant = (status: string): 'success' | 'info' | 'warning' | 'muted' | 'destructive' => {
+  const getStatusVariant = (status: string): 'success' | 'info' | 'warning' | 'muted' | 'destructive' | 'destructiveSolid' => {
     switch (status) {
       case 'Completed': return 'success';
       case 'In Progress': return 'info';
+      // Solid red, not the subtle fill the other statuses use: a terminated
+      // attempt is the one state a recruiter must not skim past.
+      case 'Terminated': return 'destructiveSolid';
       case 'Pending': return 'warning';
       case 'Failed':
       case 'Abandoned': return 'destructive';
@@ -1256,14 +1305,9 @@ export default function CandidateResultDetails({
                       badge. `shrink-0` so a long name truncates, not the
                       badge. */}
                   {(() => {
-                    let displayStatus = candidateData?.status || 'In Progress';
-                    if (detailedResult && detailedResult.scoring_status === 'completed') {
-                      displayStatus = 'Completed';
-                    } else if (detailedResult && detailedResult.scoring_status === 'processing') {
-                      displayStatus = 'In Progress';
-                    } else if (detailedResult && detailedResult.scoring_status === 'pending') {
-                      displayStatus = 'Pending';
-                    }
+                    const displayStatus = resultStatusOf(detailedResult)
+                      || candidateData?.status
+                      || 'In Progress';
                     return (
                       <Badge variant={getStatusVariant(displayStatus)} className="shrink-0 whitespace-nowrap px-2 py-0.5 rounded-full text-xs font-medium">
                         {displayStatus}
@@ -2800,6 +2844,7 @@ export default function CandidateResultDetails({
                       onDownload={(kind) => assessmentService.logRecordingDownload(assessmentId, candidateId, kind)}
                       onCandidateError={() => updateRecording(candidateId, 'candidate', { error: true })}
                       onScreenError={() => updateRecording(candidateId, 'screen', { error: true })}
+                      seekRequest={recordingSeek}
                     />
                   </div>
                 )}
@@ -3250,22 +3295,24 @@ export default function CandidateResultDetails({
                            S.No / Event / Timestamp / Severity / Count column grid,
                            in the same bordered container, with a few skeleton rows. */
                         <div className="border border-gray-200 dark:border-slate-700 rounded-xl overflow-x-auto">
-                          <div className="grid min-w-[560px] grid-cols-[40px_2fr_1fr_1fr_80px] bg-slate-50 border-b border-gray-100 px-4 py-2">
+                          <div className="grid min-w-[660px] grid-cols-[40px_2fr_1fr_1fr_1fr_80px] bg-slate-50 border-b border-gray-100 px-4 py-2">
                             <Skeleton className="h-3 w-8" />
                             <Skeleton className="h-3 w-16" />
                             <Skeleton className="h-3 w-16" />
                             <Skeleton className="h-3 w-14" />
+                            <Skeleton className="h-3 w-14" />
                             <Skeleton className="h-3 w-10 justify-self-center" />
                           </div>
-                          <div className="min-w-[560px] divide-y divide-gray-100">
+                          <div className="min-w-[660px] divide-y divide-gray-100">
                             {Array.from({ length: 6 }).map((_, i) => (
-                              <div key={i} className="grid grid-cols-[40px_2fr_1fr_1fr_80px] items-center px-4 py-3">
+                              <div key={i} className="grid grid-cols-[40px_2fr_1fr_1fr_1fr_80px] items-center px-4 py-3">
                                 <Skeleton className="h-3 w-5" />
                                 <div className="flex items-center gap-2">
                                   <Skeleton className="h-4 w-4 rounded" />
                                   <Skeleton className="h-4 w-40" />
                                 </div>
                                 <Skeleton className="h-3 w-16" />
+                                <Skeleton className="h-3 w-12" />
                                 <Skeleton className="h-5 w-16 rounded" />
                                 <Skeleton className="h-5 w-7 rounded-full justify-self-center" />
                               </div>
@@ -3289,16 +3336,17 @@ export default function CandidateResultDetails({
                         <div className="border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden">
                           <div className="overflow-x-auto">
                           {/* Table header */}
-                          <div className="grid min-w-[560px] grid-cols-[40px_2fr_1fr_1fr_80px] bg-slate-50 border-b border-gray-100 px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                          <div className="grid min-w-[660px] grid-cols-[40px_2fr_1fr_1fr_1fr_80px] bg-slate-50 border-b border-gray-100 px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">
                             <span>S.No</span>
                             <span>Event</span>
                             <span>Timestamp</span>
+                            <span>Video Time</span>
                             <span>Severity</span>
                             <span className="text-center">Count</span>
                           </div>
 
                           {/* Rows — current page only */}
-                          <div className="min-w-[560px] divide-y divide-gray-100">
+                          <div className="min-w-[660px] divide-y divide-gray-100">
                             {eventsPageItems.map((row, idx) => {
                               const globalIdx = (eventsPage - 1) * EVENTS_PER_PAGE + idx + 1;
 
@@ -3348,7 +3396,7 @@ export default function CandidateResultDetails({
                               return (
                                 <div
                                   key={`${row.minuteKey}__${row.event_type}`}
-                                  className={`grid grid-cols-[40px_2fr_1fr_1fr_80px] items-center px-4 py-3 text-sm ${cfg.bg}`}
+                                  className={`grid grid-cols-[40px_2fr_1fr_1fr_1fr_80px] items-center px-4 py-3 text-sm ${cfg.bg}`}
                                 >
                                   {/* S.No */}
                                   <span className="text-gray-400 text-xs font-medium">{globalIdx}</span>
@@ -3361,6 +3409,28 @@ export default function CandidateResultDetails({
 
                                   {/* Timestamp — minute only */}
                                   <span className="text-gray-600 text-xs font-mono">{timeStr}</span>
+
+                                  {/* Video Time — where this sits in the
+                                      recording. Clickable only when we can
+                                      compute an offset AND there is a video to
+                                      seek into; otherwise it is plain text, so
+                                      nothing looks clickable and does nothing. */}
+                                  {(() => {
+                                    const off = videoOffsetSeconds(row.timestamp);
+                                    const seekable = off != null && hasAnyRecording;
+                                    return seekable ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => jumpToRecording(off)}
+                                        title="Play the recording from this moment"
+                                        className="inline-flex w-fit items-center gap-1 text-brand-blue hover:underline underline-offset-2 text-xs font-mono"
+                                      >
+                                        <Play className="w-3 h-3" />{formatVideoOffset(off)}
+                                      </button>
+                                    ) : (
+                                      <span className="text-gray-400 text-xs font-mono">{formatVideoOffset(off)}</span>
+                                    );
+                                  })()}
 
                                   {/* Severity */}
                                   <span className={`inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded text-xs font-semibold w-fit ${severityBadge}`}>

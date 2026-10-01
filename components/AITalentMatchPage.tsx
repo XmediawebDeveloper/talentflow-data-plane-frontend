@@ -51,6 +51,7 @@ import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
+import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import JDVersionHistory from '@/components/JDVersionHistory';
 
@@ -3456,7 +3457,8 @@ export default function AITalentMatchPage({
               </div>
             ) : matchDisplayMode === 'grid' ? (
               <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {/* p-2 leaves room for each card's corner select seal. */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-2">
                 {paginatedAllResumeRows.map(({ key, row, job }) => {
                   const scored = row.resumeId ? allScoredResumeIds.has(row.resumeId) : false;
                   return (
@@ -3471,17 +3473,15 @@ export default function AITalentMatchPage({
                           openCandidateResume(row, sortedAllResumeRows.map(entry => entry.row));
                         }
                       }}
-                      className="text-left bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/20 hover:-translate-y-0.5 transition-all p-4 flex flex-col gap-3 cursor-pointer"
+                      className={`group relative text-left bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/20 hover:-translate-y-0.5 transition-all p-4 flex flex-col gap-3 cursor-pointer ${gridCardSelectedClass(selectedAllResumeKeys.has(key))}`}
                     >
+                      <GridCardSelect
+                        selected={selectedAllResumeKeys.has(key)}
+                        onToggle={() => toggleAllResumeSelected(key)}
+                        label={row.name || 'candidate'}
+                        selectionActive={selectedAllResumeKeys.size > 0}
+                      />
                       <div className="flex items-start gap-2.5">
-                        <input
-                          type="checkbox"
-                          aria-label={`Select ${row.name || 'candidate'}`}
-                          checked={selectedAllResumeKeys.has(key)}
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={() => toggleAllResumeSelected(key)}
-                          className="mt-1.5 flex-shrink-0"
-                        />
                         <div className="w-9 h-9 rounded-full bg-gray-200 dark:bg-slate-800 flex items-center justify-center text-xs text-gray-700 dark:text-slate-300 font-medium flex-shrink-0">
                           {(row.name || 'U').split(' ').map(n => n[0]).join('').toUpperCase()}
                         </div>

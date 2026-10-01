@@ -129,6 +129,7 @@ export default function JobOpeningsPage() {
     reason?: string;
     jobId?: string;
     creating?: boolean;
+    versionNumber?: number;
   }>({ open: false, jobTitle: '', modules: [] });
   const [deleteWarningDialog, setDeleteWarningDialog] = useState<{
     open: boolean;
@@ -403,6 +404,7 @@ export default function JobOpeningsPage() {
           modules,
           reason: usageStatus?.edit_restriction_reason,
           creating: false,
+          versionNumber: job.versionNumber,
         });
         return;
       }
@@ -744,6 +746,7 @@ export default function JobOpeningsPage() {
         reason={editWarningDialog.reason}
         jdId={editWarningDialog.jobId}
         creating={!!editWarningDialog.creating}
+        atMaxVersions={(editWarningDialog.versionNumber ?? 1) >= 5}
         onClose={() => setEditWarningDialog({ open: false, jobTitle: '', modules: [] })}
         onCreateNewVersion={handleCreateNewVersion}
       />

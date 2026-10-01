@@ -10,9 +10,11 @@ import { aiInterviewService } from '@/lib/services/aiInterviewService';
  *
  * The JD list endpoint carries neither number, so both are tallied here:
  *  - assessed    — each assessment's `completed_count`, summed by its jd_id.
- *  - interviewed — each AI interview config's completed + terminated sessions
- *                  (the same two statuses the Candidate Results tab lists),
- *                  read as the `total` of a page_size-1 page, summed by jd_id.
+ *  - interviewed — each AI interview config's `completed_count` +
+ *                  `terminated_count`, summed by its jd_id. Both fields are
+ *                  batch-aggregated server-side (one GROUP BY query per page
+ *                  of configs), so this costs the same one paginated list
+ *                  call as `assessed` — no per-config follow-up requests.
  *
  * `null` until the first tally lands, so the cards show nothing rather than a
  * misleading 0. After that the cached tally shows at once (see below). A
@@ -22,8 +24,6 @@ export type JobCandidateCounts = Record<string, { assessed: number; interviewed:
 
 const PAGE_SIZE = 100;
 const MAX_PAGES = 20;
-/** Per-config session totals are fetched this many at a time. */
-const CONCURRENCY = 6;
 
 async function paginate<T>(
   fetchPage: (page: number) => Promise<{ items?: T[]; total?: number }>,
@@ -36,17 +36,6 @@ async function paginate<T>(
     if (items.length < PAGE_SIZE || all.length >= (res.total ?? all.length)) break;
   }
   return all;
-}
-
-async function mapPooled<T>(items: T[], fn: (item: T) => Promise<void>) {
-  let next = 0;
-  const worker = async () => {
-    while (next < items.length) {
-      const item = items[next++];
-      await fn(item);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, items.length) }, worker));
 }
 
 async function loadAssessed(): Promise<Record<string, number>> {
@@ -64,23 +53,18 @@ async function loadAssessed(): Promise<Record<string, number>> {
 async function loadInterviewed(): Promise<Record<string, number>> {
   const byJd: Record<string, number> = {};
   try {
+    // completed_count / terminated_count are batch-aggregated server-side
+    // (one GROUP BY query for the whole page) and come back on every config
+    // already — summing them here costs zero extra requests, unlike the old
+    // per-config-per-status fan-out (2 requests × every config tenant-wide).
     const configs = await paginate((page) =>
       aiInterviewService.listConfigs({ page, page_size: PAGE_SIZE, compact: true }),
     );
-    // Drafts have no sessions yet — skip their requests.
-    const withSessions = configs.filter((c) => c.jd_id && c.status !== 'draft');
-    await mapPooled(withSessions, async (config) => {
-      const totals = await Promise.all(
-        (['completed', 'terminated'] as const).map((status) =>
-          aiInterviewService
-            .getConfigInvitations(config.id, { page: 1, page_size: 1, compact: true, status })
-            .then((res) => res.total || 0)
-            .catch(() => 0),
-        ),
-      );
-      const jdId = config.jd_id as string;
-      byJd[jdId] = (byJd[jdId] || 0) + totals[0] + totals[1];
-    });
+    for (const config of configs) {
+      if (!config.jd_id) continue;
+      const jdId = config.jd_id;
+      byJd[jdId] = (byJd[jdId] || 0) + (config.completed_count || 0) + (config.terminated_count || 0);
+    }
   } catch { /* no interviews source — every job reads 0 */ }
   return byJd;
 }

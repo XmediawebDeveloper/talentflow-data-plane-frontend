@@ -19,6 +19,7 @@ import {
   collapseToLatestVersions,
   groupByLineage,
   sortJobs,
+  type JobSortBy,
 } from '@/lib/utils/jobOpeningDisplay';
 import { Button } from '@/components/ui/button';
 import JobOpeningSummary from '@/components/jobs/JobOpeningSummary';
@@ -237,7 +238,7 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
   
 
   // Sort and Bulk Actions states
-  const [sortBy, setSortBy] = useState<'date' | 'applicants' | 'title' | 'status' | 'industry'>('date');
+  const [sortBy, setSortBy] = useState<JobSortBy>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [selectedJobs, setSelectedJobs] = useState<Set<string>>(new Set());
   const [showBulkActions, setShowBulkActions] = useState(false);
@@ -337,7 +338,7 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
         datePostedFrom: typeof s.datePostedFromFilter === 'string' ? s.datePostedFromFilter : '',
         datePostedTo: typeof s.datePostedToFilter === 'string' ? s.datePostedToFilter : '',
       });
-      if (typeof s.sortBy === 'string') setSortBy(s.sortBy as 'date' | 'applicants' | 'title' | 'status' | 'industry');
+      if (typeof s.sortBy === 'string') setSortBy(s.sortBy as JobSortBy);
       if (s.sortOrder === 'asc' || s.sortOrder === 'desc') setSortOrder(s.sortOrder);
       if (typeof s.currentPage === 'number') setCurrentPage(forceListView ? 1 : s.currentPage);
       if (typeof s.itemsPerPage === 'number') setItemsPerPage(s.itemsPerPage);
@@ -447,34 +448,24 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
            matchesApplicants && matchesCreationMethod;
   });
 
-  /* ── One row per job, not one per version ─────────────────────
+  /* ── One row per job on "All Jobs" — one row per MATCHING version on a status tab ──
      Every version of a JD is its own row in the API response (its own id,
-     sharing the lineage's human-readable `job_id`), so a job republished twice
-     arrived here three times and the list read as duplicates.
+     sharing the lineage's human-readable `job_id`).
 
-     Keyed on `job_id` because that is what the lineage shares; rows without one
-     (drafts that never got an ID) fall back to their own id and so stay
-     individual. "Latest" is the highest version_number present — read from the
-     data, never assumed to be first or last in the response.
+     "All Jobs" collapses to one row per job_id (the latest version), so a job
+     republished twice doesn't read as duplicates there.
 
-     ── A job's status is its LATEST version's status ──────────────────
-     Collapse FIRST, then apply the pill to the one row that represents the job.
-     That is the same rule `getPublishedJobs` uses for the stat tiles, so the
-     tile and the list it opens can no longer disagree — the Published tile
-     reading 83 while the pill showed "85 of 132" was these two steps running in
-     the opposite order.
-
-     The previous order (filter, then collapse, then fall back to the fetched
-     version history) kept a job under any pill ANY of its versions matched. A
-     published v2 under a re-drafted v3 therefore counted as both published and
-     draft, so the pills summed past the total, and the count drifted upward as
-     the per-job lineage requests landed. A job being re-drafted over a
-     published version now appears under Draft only — the state it is actually
-     in — and the tiles' "N versions" half is what surfaces the published
-     version still sitting underneath it. */
+     ── A status tab shows whichever version actually had that status ──
+     Filter FIRST, then collapse WITHIN the matches — so a JD with v1 Published
+     and v2 Disabled shows its v1 row under the Published tab AND its v2 row
+     under the Disabled tab, each the version that was really in that state.
+     (Deliberate: a job can therefore appear under more than one tab at once,
+     and the stat tiles above — which still count distinct jobs by their LATEST
+     version only — can disagree with a tab's row count. That's intentional
+     here, not the bug this comment used to warn about.) */
   const statusSelectedJobs = statusFilter === 'all'
     ? collapseToLatestVersions(criteriaMatchedJobs)
-    : collapseToLatestVersions(criteriaMatchedJobs).filter(job => matchesStatusFilter(job, statusFilter));
+    : collapseToLatestVersions(criteriaMatchedJobs.filter(job => matchesStatusFilter(job, statusFilter)));
 
   const dedupedJobs = statusSelectedJobs;
 
@@ -489,7 +480,19 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
   const distinctJobs = Array.from(allVersionGroups.values(), bucket => bucket[0]);
 
   // Apply sorting to filtered jobs
-  const sortedJobs = sortJobs(dedupedJobs, sortBy, sortOrder);
+  // Assessed/interviewed counts come from the candidate-counts hook, not the
+  // JD payload, so attach them before sorting on either.
+  const sortedJobs = sortJobs(
+    (sortBy === 'assessed' || sortBy === 'interviewed') && candidateCounts
+      ? dedupedJobs.map(job => ({
+          ...job,
+          assessed: candidateCounts[job.id]?.assessed ?? 0,
+          interviewed: candidateCounts[job.id]?.interviewed ?? 0,
+        }))
+      : dedupedJobs,
+    sortBy,
+    sortOrder,
+  );
 
   // Debug: Log sorted jobs order - show first 5 with their departments
   console.log('Sorted by:', sortBy, 'Order:', sortOrder);
@@ -1197,13 +1200,15 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                     <select
                       value={sortBy}
                       onChange={(e) => {
-                        const value = e.target.value as 'date' | 'applicants' | 'title' | 'status' | 'industry';
+                        const value = e.target.value as JobSortBy;
                         setSortBy(value);
                       }}
                       className="appearance-none h-8 pl-3 pr-8 bg-transparent rounded-full focus:outline-none focus:ring-2 focus:ring-brand-blue/40 text-sm font-medium text-gray-800 cursor-pointer"
                     >
                       <option value="date">Date Posted</option>
                       <option value="applicants">Applicants</option>
+                      <option value="assessed">Assessed</option>
+                      <option value="interviewed">Interviewed</option>
                       <option value="title">Job Title</option>
                       <option value="status">Status</option>
                       <option value="industry">Industry Type</option>
@@ -1243,12 +1248,24 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                    rows: a republished JD arrives as several rows sharing the
                    same job_id and the same v1, and a raw row count read those
                    duplicates as "multiple versions", putting View Versions on
-                   single-version jobs. */
-                const distinctVersionCount = new Set(
-                  (allVersionGroups.get(versionKey) ?? [job]).map((sibling) => sibling.versionNumber ?? 1),
-                ).size;
-                const hasVersionHistory =
-                  (job.versionNumber ?? 1) > 1 || distinctVersionCount > 1;
+                   single-version jobs.
+
+                   On a specific status tab (not "All Jobs"), the button is
+                   scoped further: a job's lineage can have several versions
+                   overall but only ONE of them matching the active tab (e.g.
+                   v1 Published / v2 Draft, viewed on the Published tab) — the
+                   card already shows that one version in full, so expanding it
+                   would just repeat the same row. Counted from siblings that
+                   match the tab's status, not the whole lineage. */
+                const lineageSiblings = allVersionGroups.get(versionKey) ?? [job];
+                const hasVersionHistory = statusFilter === 'all'
+                  ? (job.versionNumber ?? 1) > 1 ||
+                    new Set(lineageSiblings.map((sibling) => sibling.versionNumber ?? 1)).size > 1
+                  : new Set(
+                      lineageSiblings
+                        .filter((sibling) => matchesStatusFilter(sibling, statusFilter))
+                        .map((sibling) => sibling.versionNumber ?? 1),
+                    ).size > 1;
 
                 return (
                   <div
@@ -1293,26 +1310,44 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                           content row. */}
                       <div className="flex flex-col items-end justify-between gap-2 self-stretch flex-shrink-0">
                       <div className="flex flex-wrap gap-2 items-start justify-end">
-                        {/* Edit Button - icon only. Shown on every row for a
-                            consistent action set; the handler governs behavior. */}
-                        {onEditJob && (
-                          <Button
-                            variant="secondary"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (!canUpdateJd) {
-                                toast.error('You do not have permission to edit job descriptions');
-                                return;
+                        {/* Edit Button - icon only. Shown on every row except
+                            Archived/Disabled ones — those are already retired,
+                            so there is nothing on them to edit in place.
+                            Greyed out (not hidden) once a lineage has reached
+                            5 versions — that is the cap on how many versions
+                            one JD can have. */}
+                        {onEditJob && job.status !== 'Archived' && job.status !== 'Disabled' && (() => {
+                          const atMaxVersions = (job.versionNumber ?? 1) >= 5;
+                          return (
+                            <Button
+                              variant="secondary"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (atMaxVersions) {
+                                  toast.error('This JD has reached the maximum of 5 versions and cannot be edited further.');
+                                  return;
+                                }
+                                if (!canUpdateJd) {
+                                  toast.error('You do not have permission to edit job descriptions');
+                                  return;
+                                }
+                                onEditJob(job);
+                              }}
+                              aria-disabled={!canUpdateJd || atMaxVersions}
+                              className={`h-9 w-9 p-0 rounded-md ${!canUpdateJd || atMaxVersions ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              aria-label="Edit"
+                              title={
+                                atMaxVersions
+                                  ? 'Maximum of 5 versions reached'
+                                  : !canUpdateJd
+                                    ? 'You do not have permission to edit job descriptions'
+                                    : 'Edit'
                               }
-                              onEditJob(job);
-                            }}
-                            aria-disabled={!canUpdateJd}
-                            className={`h-9 w-9 p-0 rounded-md ${!canUpdateJd ? 'opacity-50 cursor-not-allowed' : ''}`}
-                            aria-label="Edit" title={!canUpdateJd ? 'You do not have permission to edit job descriptions' : 'Edit'}
-                          >
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                        )}
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                          );
+                        })()}
 
                         {/* View Button - icon only. Shown on every row for a
                             consistent action set. */}
@@ -1547,7 +1582,13 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                       <div onClick={(e) => e.stopPropagation()}>
                         <JobVersionHistoryPanel
                           job={job}
-                          versions={versionLineage.lineages[versionKey]}
+                          versions={
+                            statusFilter === 'all'
+                              ? versionLineage.lineages[versionKey]
+                              : versionLineage.lineages[versionKey]?.filter(
+                                  (v) => (v.status || '').toLowerCase() === statusFilter.toLowerCase()
+                                )
+                          }
                           loading={versionLineage.isLoading(versionKey)}
                           versionDetails={versionLineage.versionDetails}
                           versionApplicants={versionLineage.versionApplicants}
