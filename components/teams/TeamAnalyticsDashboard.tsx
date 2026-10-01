@@ -10,7 +10,6 @@ import {
   ClipboardCheck,
   Upload,
   Briefcase,
-  Calendar,
   AlertCircle,
   Download,
 } from 'lucide-react';
@@ -20,6 +19,7 @@ import {
   TEAM_USAGE_COLUMNS,
 } from '@/lib/utils/exportUtils';
 import { Button } from '@/components/ui/button';
+import { DateField } from '@/components/ui/date-field';
 import {
   BarChart,
   Bar,
@@ -283,23 +283,22 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
           </div>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <Calendar className="w-4 h-4 text-gray-500 dark:text-slate-500" />
-            <input
-              type="date"
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+            <DateField
+              aria-label="Analytics date from"
               value={fromDate}
               max={toDate}
-              onChange={(e) => setFromDate(e.target.value)}
-              className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+              onChange={(v) => setFromDate(v)}
+              className="sm:flex-1 sm:min-w-0"
             />
-            <span className="text-sm text-gray-500 dark:text-slate-500">to</span>
-            <input
-              type="date"
+            <span className="text-xs text-gray-400 text-center sm:text-left sm:flex-shrink-0">to</span>
+            <DateField
+              aria-label="Analytics date to"
               value={toDate}
               min={fromDate}
               max={new Date().toISOString().split('T')[0]}
-              onChange={(e) => setToDate(e.target.value)}
-              className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+              onChange={(v) => setToDate(v)}
+              className="sm:flex-1 sm:min-w-0"
             />
           </div>
           {teamsUsage?.teams && teamsUsage.teams.length > 0 && (

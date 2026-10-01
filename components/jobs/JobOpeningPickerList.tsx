@@ -404,7 +404,7 @@ export default function JobOpeningPickerList({
           </div>
         )}
 
-        <div ref={listAnchorRef} className="scroll-mt-4" aria-hidden="true" />
+        <div ref={listAnchorRef} data-list-anchor className="scroll-mt-4" aria-hidden="true" />
 
         {currentJobs.length > 0 ? (
           <div className="space-y-2 sm:space-y-3">

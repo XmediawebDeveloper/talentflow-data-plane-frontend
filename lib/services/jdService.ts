@@ -606,11 +606,16 @@ export const jdService = {
 
   /**
    * JD01 & JD03: Pre-flight access check for JD module
-   * Validates all pre-conditions before allowing JD access/creation
+   * Validates all pre-conditions before allowing JD access/creation.
+   * Pass `jdId` when this gates opening an EXISTING JD to edit — the backend
+   * then checks can_update_jd instead of can_create_jd, since a role can be
+   * granted Edit without Create.
    */
-  async accessCheck(): Promise<JDAccessCheckResponse> {
+  async accessCheck(jdId?: string): Promise<JDAccessCheckResponse> {
     try {
-      const response = await api.get<JDAccessCheckResponse>('/jd/access-check');
+      const response = await api.get<JDAccessCheckResponse>('/jd/access-check', {
+        params: jdId ? { jd_id: jdId } : undefined,
+      });
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));

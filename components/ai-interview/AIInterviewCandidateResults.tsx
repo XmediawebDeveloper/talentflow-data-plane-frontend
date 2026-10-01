@@ -209,16 +209,16 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
   );
 
   /**
-   * One request per config, fanned out in parallel. There is no cross-config
-   * sessions endpoint, and the per-interview view's endpoint is scoped to a
-   * config id — so this is the aggregation the Assessments tab does too. A
-   * config whose sessions fail to load contributes nothing rather than sinking
-   * the whole tab.
+   * One tenant-wide call (paginated), not one request per config per status.
+   * This used to fan out `configs.length × 2` unthrottled requests — hundreds
+   * on a tenant with many AI-interview configs — because there was no
+   * cross-config sessions endpoint. `GET /ai-interview` (`aiInterviewService
+   * .list`) already covers every session tenant-wide, so asking it once for
+   * `status=completed,terminated` returns the same rows the old per-config
+   * loop assembled by hand.
    *
    * Completed AND Terminated — the two states with a result to show (a
-   * terminated interview has its partial evaluation). One request per status
-   * per config, in parallel, rather than pulling every invite / in-progress /
-   * expired row across every config just to filter them back out here.
+   * terminated interview has its partial evaluation).
    */
   const loadAllSessions = useCallback(async () => {
     setIsLoading(true);
@@ -230,6 +230,7 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
         setRows([]);
         return;
       }
+      const configById = new Map(configs.map((c) => [c.id, c]));
 
       /* Interview version — the Nth config created against a given job
        * version (jd_id), oldest first. Same derivation as the All Interviews
@@ -251,39 +252,43 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
           .forEach((config, index) => ordinalByConfigId.set(config.id, index + 1));
       }
 
-      const perConfig = await Promise.all(
-        configs.map(async (config) => {
-          try {
-            const [completed, terminated] = await Promise.all(
-              (['completed', 'terminated'] as const).map((status) =>
-                aiInterviewService.getConfigInvitations(config.id, { page: 1, page_size: 1000, compact: true, status })
-                  // A failed status fetch drops only that status, not the config.
-                  .catch(() => ({ items: [] as AIInterviewResponse[] })),
-              ),
-            );
-            return [...(completed.items ?? []), ...(terminated.items ?? [])].map((session): CandidateSessionRow => ({
-              ...session,
-              _config_id: config.id,
-              // jd_title first, matching how the interview cards on this page
-              // are labelled, so the column reads the same as the list above it.
-              _config_title: config.jd_title || config.position || 'Untitled',
-              _job_id: config.jd_short_id || '',
-              _job_version: config.jd_version ?? 1,
-              _interview_version: ordinalByConfigId.get(config.id) ?? 1,
-            }));
-          } catch {
-            return [];
-          }
-        })
-      );
+      // Paginated — a mature tenant can have more completed/terminated
+      // sessions than fit on one page.
+      const sessions: AIInterviewResponse[] = [];
+      for (let page = 1; page <= 40; page += 1) {
+        const res = await aiInterviewService
+          .list({ status: 'completed,terminated', page, page_size: 1000 })
+          .catch(() => ({ items: [] as AIInterviewResponse[], total: 0 }));
+        const items = res.items ?? [];
+        sessions.push(...items);
+        if (items.length < 1000 || sessions.length >= (res.total ?? sessions.length)) break;
+      }
 
-      // Newest first — completed sessions lead, then whatever started or was
-      // invited most recently.
-      const merged = perConfig.flat().sort((a, b) => {
-        const ta = new Date(a.completed_at || a.started_at || a.created_at || 0).getTime();
-        const tb = new Date(b.completed_at || b.started_at || b.created_at || 0).getTime();
-        return tb - ta;
-      });
+      // A session's config may be archived (excluded from `configs`, which
+      // only lists non-archived by default) — drop it, matching the old
+      // behaviour of only ever iterating non-archived configs.
+      const merged = sessions
+        .filter((session) => session.config_id && configById.has(session.config_id))
+        .map((session): CandidateSessionRow => {
+          const config = configById.get(session.config_id as string)!;
+          return {
+            ...session,
+            _config_id: config.id,
+            // jd_title first, matching how the interview cards on this page
+            // are labelled, so the column reads the same as the list above it.
+            _config_title: config.jd_title || config.position || 'Untitled',
+            _job_id: config.jd_short_id || '',
+            _job_version: config.jd_version ?? 1,
+            _interview_version: ordinalByConfigId.get(config.id) ?? 1,
+          };
+        })
+        // Newest first — completed sessions lead, then whatever started or
+        // was invited most recently.
+        .sort((a, b) => {
+          const ta = new Date(a.completed_at || a.started_at || a.created_at || 0).getTime();
+          const tb = new Date(b.completed_at || b.started_at || b.created_at || 0).getTime();
+          return tb - ta;
+        });
 
       setRows(merged);
       // Page is NOT reset here — it may have just been restored (see
@@ -314,9 +319,8 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshSignal]);
 
-  // Filtering is client-side: the rows are already all in memory, and the
-  // per-config endpoint can't filter across configs anyway. Keyed off the
-  // APPLIED query so the list doesn't rebuild on every keystroke.
+  // Filtering is client-side: the rows are already all in memory. Keyed off
+  // the APPLIED query so the list doesn't rebuild on every keystroke.
   const filteredRows = useMemo(() => {
     const query = search.appliedQuery.trim().toLowerCase();
     const f = search.filters;

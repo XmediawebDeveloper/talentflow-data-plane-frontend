@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import type { Job } from '@/lib/types/types';
 import { formatISTDate } from '@/lib/utils/dateUtils';
+import { formatSalaryRange, formatCompensationPeriod } from '@/lib/utils/salary';
 import {
   formatEmploymentType,
   formatIndustryType,
@@ -106,12 +107,6 @@ function JobOpeningMetaItems({ job }: { job: Job }) {
 function JobOpeningPrimaryItems({ job }: { job: Job }) {
   return (
     <>
-      {job.department && (
-        <span className="flex items-center gap-1.5">
-          <Briefcase className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-          {job.department}
-        </span>
-      )}
       <span className="flex items-center gap-1.5">
         <Building2 className="w-4 h-4 text-gray-400 dark:text-slate-500" />
         {formatIndustryType(job.industry_type)}
@@ -119,6 +114,12 @@ function JobOpeningPrimaryItems({ job }: { job: Job }) {
       <span className="flex items-center gap-1.5">
         <MapPin className="w-4 h-4 text-gray-400 dark:text-slate-500" />
         {job.location && job.location.trim() ? job.location : '-'}
+      </span>
+      <span className="flex items-center gap-1.5">
+        Salary {formatSalaryRange({ min: job.salary_min, max: job.salary_max, currency: job.salary_currency }) || '-'}
+        {(job.salary_min || job.salary_max) && job.compensation_type
+          ? ` / ${formatCompensationPeriod(job.compensation_type)}`
+          : ''}
       </span>
       <span className="flex items-center gap-1.5">
         <Briefcase className="w-4 h-4 text-gray-400 dark:text-slate-500" />
@@ -230,20 +231,20 @@ export default function JobOpeningSummary({
         >
           {job.title}
         </h3>
-        <span className={`px-2 py-0.5 rounded-full text-xs ${statusConfig.bg} ${statusConfig.text} border ${statusConfig.border} flex items-center gap-1.5 flex-shrink-0`}>
-          <div className={`w-1.5 h-1.5 rounded-full ${statusConfig.dot}`}></div>
-          {displayStatus}
-        </span>
-        <span className={`px-2 py-0.5 rounded-full text-xs ${creationMethodConfig.bg} ${creationMethodConfig.text} border ${creationMethodConfig.border} flex items-center gap-1.5 flex-shrink-0`}>
-          <div className={`w-1.5 h-1.5 rounded-full ${creationMethodConfig.dot}`}></div>
-          {creationMethodConfig.label}
-        </span>
         {job.versionNumber && job.versionNumber >= 1 && (
           <span className="px-2 py-0.5 rounded-full text-xs bg-gray-50 text-gray-700 border border-gray-200 flex items-center gap-1.5 flex-shrink-0 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
             <div className="w-1.5 h-1.5 rounded-full bg-gray-500"></div>
             v{job.versionNumber}
           </span>
         )}
+        <span className={`px-2 py-0.5 rounded-full text-xs ${creationMethodConfig.bg} ${creationMethodConfig.text} border ${creationMethodConfig.border} flex items-center gap-1.5 flex-shrink-0`}>
+          <div className={`w-1.5 h-1.5 rounded-full ${creationMethodConfig.dot}`}></div>
+          {creationMethodConfig.label}
+        </span>
+        <span className={`px-2 py-0.5 rounded-full text-xs ${statusConfig.bg} ${statusConfig.text} border ${statusConfig.border} flex items-center gap-1.5 flex-shrink-0`}>
+          <div className={`w-1.5 h-1.5 rounded-full ${statusConfig.dot}`}></div>
+          {displayStatus}
+        </span>
         {trailingBadges}
       </div>
 

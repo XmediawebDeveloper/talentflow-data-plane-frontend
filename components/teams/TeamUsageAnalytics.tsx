@@ -2,7 +2,7 @@
 
 import {
   Users, BarChart3, ChevronDown, ChevronRight,
-  Loader2, Download, Calendar, FileText, ClipboardCheck, Upload,
+  Loader2, Download, FileText, ClipboardCheck, Upload,
 } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import teamService, {
@@ -15,6 +15,7 @@ import {
   UNIT_TYPE_NAMES,
 } from '@/lib/services/unitPoolService';
 import { toast } from '@/components/ui/enhanced-toast';
+import { DateField } from '@/components/ui/date-field';
 import { formatISTDate, formatIST } from '@/lib/utils/dateUtils';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
@@ -672,22 +673,21 @@ export default function TeamUsageAnalytics() {
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-            <input
-              type="date"
+            <DateField
+              aria-label="From date"
               value={fromDate}
               max={toDate}
-              onChange={e => setFromDate(e.target.value)}
-              className="px-3 py-1.5 border border-gray-300 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-gray-500"
+              onChange={setFromDate}
+              className="w-auto"
             />
             <span className="text-sm text-gray-500 dark:text-slate-500">to</span>
-            <input
-              type="date"
+            <DateField
+              aria-label="To date"
               value={toDate}
               min={fromDate}
               max={new Date().toISOString().split('T')[0]}
-              onChange={e => setToDate(e.target.value)}
-              className="px-3 py-1.5 border border-gray-300 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-gray-500"
+              onChange={setToDate}
+              className="w-auto"
             />
           </div>
           <div className="relative" ref={exportMenuRef}>
