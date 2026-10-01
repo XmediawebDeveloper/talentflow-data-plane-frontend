@@ -1,11 +1,13 @@
 'use client';
 
+import { SCORE_CELL_TEXT } from '@/lib/utils/score';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import ResultRowActions, { DownloadPdfsButton, isPhoneWidth } from './ResultRowActions';
 import ListEmptyState from '@/components/ui/list-empty-state';
+import TimelineStamps from '@/components/ui/timeline-stamps';
 import { useRouter } from 'next/navigation';
 import {
   ChevronLeft, ChevronRight, Eye, Users, CheckCircle, XCircle,
@@ -17,6 +19,7 @@ import { toast } from 'sonner';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
+import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
@@ -713,12 +716,19 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4">
               {pageRows.map((row) => {
                 const risk = getProctoringRisk(row);
+                const isSelected = selectedKeys.has(rowKey(row));
                 return (
                   <button
                     key={`${row._config_id}-${row.id}`}
                     onClick={() => openSession(row)}
-                    className="text-left bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/20 hover:-translate-y-0.5 transition-all p-4 flex flex-col gap-3"
+                    className={`group relative text-left bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/20 hover:-translate-y-0.5 transition-all p-4 flex flex-col gap-3 ${gridCardSelectedClass(isSelected)}`}
                   >
+                    <GridCardSelect
+                      selected={isSelected}
+                      onToggle={() => toggleSelected(row)}
+                      label={row.candidate_name || 'candidate'}
+                      selectionActive={selectedKeys.size > 0}
+                    />
                     <div className="flex items-start gap-2.5">
                       <div className="w-9 h-9 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-semibold text-sm flex-shrink-0">
                         {(row.candidate_name || 'U')[0].toUpperCase()}
@@ -772,10 +782,10 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                       </div>
                     )}
 
-                    <div className="flex items-center justify-between text-xs text-gray-500 dark:text-slate-500 pt-2 border-t border-gray-100 dark:border-slate-800">
-                      <span>{formatDuration(row)}</span>
-                      <span>{row.completed_at ? formatIST(row.completed_at) : row.started_at ? formatIST(row.started_at) : '—'}</span>
-                    </div>
+                    <TimelineStamps
+                      className="text-gray-500 dark:text-slate-500 pt-2 border-t border-gray-100 dark:border-slate-800"
+                      startedAt={row.started_at} completedAt={row.completed_at} format={formatIST} duration={formatDuration(row)}
+                    />
 
                     <div
                       onClick={(e) => { e.stopPropagation(); openSession(row); }}
@@ -987,7 +997,7 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                         {col('score') && (
                           <td className="px-4 py-3 whitespace-nowrap">
                             {mhsScore(row) != null ? (
-                              <span className={`font-medium text-xs ${mhsScore(row)! >= 60 ? 'text-success' : 'text-destructive'}`}>
+                              <span className={`${SCORE_CELL_TEXT} ${mhsScore(row)! >= 60 ? 'text-success' : 'text-destructive'}`}>
                                 {mhsScore(row)}%
                               </span>
                             ) : (
@@ -1002,11 +1012,7 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                         )}
                         {col('timeline') && (
                           <td className="px-4 py-3 whitespace-nowrap text-gray-600 dark:text-slate-400">
-                            <div className="flex flex-col gap-0.5 text-xs">
-                              <span><span className="text-gray-400 dark:text-slate-500">Started at:</span> {row.started_at ? formatIST(row.started_at) : '—'}</span>
-                              <span><span className="text-gray-400 dark:text-slate-500">Completed at:</span> {row.completed_at ? formatIST(row.completed_at) : '—'}</span>
-                              <span><span className="text-gray-400 dark:text-slate-500">Duration:</span> {formatDuration(row)}</span>
-                            </div>
+                            <TimelineStamps startedAt={row.started_at} completedAt={row.completed_at} format={formatIST} duration={formatDuration(row)} />
                           </td>
                         )}
                         {col('proctoring') && (

@@ -451,7 +451,7 @@ export default function JobOpeningPickerList({
                  that applicant-count prefetch. */
               const visibleVersionCount = new Set(
                 lineageSiblings
-                  .filter(sibling => isVersionVisibleForScoring(sibling.status, sibling.id, versionLineage.versionApplicants))
+                  .filter(sibling => isVersionVisibleForScoring(sibling.status, sibling.id, versionLineage.versionApplicants, true))
                   .map(sibling => sibling.versionNumber ?? 1),
               ).size;
               const hasVersionHistory = visibleVersionCount > 1;
@@ -660,6 +660,10 @@ export default function JobOpeningPickerList({
                       selectionDisabledReason={reason}
                       radioGroupName={radioGroupName}
                       publishedOnly
+                      /* Every archived/disabled version is listed, greyed
+                         out and unselectable, so a recruiter sees it was
+                         taken out of service instead of it going missing. */
+                      includeInactiveVersions
                     />
                   )}
                 </div>

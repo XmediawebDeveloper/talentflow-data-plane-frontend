@@ -19,6 +19,7 @@ import {
   collapseToLatestVersions,
   groupByLineage,
   sortJobs,
+  type JobSortBy,
 } from '@/lib/utils/jobOpeningDisplay';
 import { Button } from '@/components/ui/button';
 import JobOpeningSummary from '@/components/jobs/JobOpeningSummary';
@@ -237,7 +238,7 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
   
 
   // Sort and Bulk Actions states
-  const [sortBy, setSortBy] = useState<'date' | 'applicants' | 'title' | 'status' | 'industry'>('date');
+  const [sortBy, setSortBy] = useState<JobSortBy>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [selectedJobs, setSelectedJobs] = useState<Set<string>>(new Set());
   const [showBulkActions, setShowBulkActions] = useState(false);
@@ -337,7 +338,7 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
         datePostedFrom: typeof s.datePostedFromFilter === 'string' ? s.datePostedFromFilter : '',
         datePostedTo: typeof s.datePostedToFilter === 'string' ? s.datePostedToFilter : '',
       });
-      if (typeof s.sortBy === 'string') setSortBy(s.sortBy as 'date' | 'applicants' | 'title' | 'status' | 'industry');
+      if (typeof s.sortBy === 'string') setSortBy(s.sortBy as JobSortBy);
       if (s.sortOrder === 'asc' || s.sortOrder === 'desc') setSortOrder(s.sortOrder);
       if (typeof s.currentPage === 'number') setCurrentPage(forceListView ? 1 : s.currentPage);
       if (typeof s.itemsPerPage === 'number') setItemsPerPage(s.itemsPerPage);
@@ -489,7 +490,19 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
   const distinctJobs = Array.from(allVersionGroups.values(), bucket => bucket[0]);
 
   // Apply sorting to filtered jobs
-  const sortedJobs = sortJobs(dedupedJobs, sortBy, sortOrder);
+  // Assessed/interviewed counts come from the candidate-counts hook, not the
+  // JD payload, so attach them before sorting on either.
+  const sortedJobs = sortJobs(
+    (sortBy === 'assessed' || sortBy === 'interviewed') && candidateCounts
+      ? dedupedJobs.map(job => ({
+          ...job,
+          assessed: candidateCounts[job.id]?.assessed ?? 0,
+          interviewed: candidateCounts[job.id]?.interviewed ?? 0,
+        }))
+      : dedupedJobs,
+    sortBy,
+    sortOrder,
+  );
 
   // Debug: Log sorted jobs order - show first 5 with their departments
   console.log('Sorted by:', sortBy, 'Order:', sortOrder);
@@ -1197,13 +1210,15 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                     <select
                       value={sortBy}
                       onChange={(e) => {
-                        const value = e.target.value as 'date' | 'applicants' | 'title' | 'status' | 'industry';
+                        const value = e.target.value as JobSortBy;
                         setSortBy(value);
                       }}
                       className="appearance-none h-8 pl-3 pr-8 bg-transparent rounded-full focus:outline-none focus:ring-2 focus:ring-brand-blue/40 text-sm font-medium text-gray-800 cursor-pointer"
                     >
                       <option value="date">Date Posted</option>
                       <option value="applicants">Applicants</option>
+                      <option value="assessed">Assessed</option>
+                      <option value="interviewed">Interviewed</option>
                       <option value="title">Job Title</option>
                       <option value="status">Status</option>
                       <option value="industry">Industry Type</option>

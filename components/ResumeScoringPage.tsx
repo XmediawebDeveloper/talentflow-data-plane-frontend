@@ -1,5 +1,6 @@
 "use client";
 
+import { SCORE_CELL_TEXT } from '@/lib/utils/score';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { WorkInProgressIcon } from '@/components/icons/nav-icons';
 import { Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, TrendingUp, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, Loader2, Square, CheckSquare, Building2, Calendar, Users, ChevronDown, ChevronsUpDown, MoreVertical, Info, PieChart, RefreshCw, Layers, ClipboardList } from 'lucide-react';
@@ -4127,7 +4128,7 @@ export default function ResumeScoringPage({
                                 <td className="py-2.5 px-3 text-center font-semibold text-success bg-success-subtle/60">{g.exactCount}</td>
                                 <td className="py-2.5 px-3 text-center font-semibold text-brand-orange-deep bg-orange-50/60 dark:bg-orange-500/10 dark:text-orange-400">{g.partialCount}</td>
                                 <td className="py-2.5 px-3 text-center font-semibold text-destructive bg-destructive-subtle/60">{g.noMatchCount}</td>
-                                <td className="py-2.5 px-3 font-bold text-brand-blue">{Math.round(g.totalScore / g.count)}</td>
+                                <td className={`py-2.5 px-3 ${SCORE_CELL_TEXT} text-brand-blue`}>{Math.round(g.totalScore / g.count)}</td>
                                 <td className="py-2.5 px-3 text-right">
                                   {/* Always a direct link to this session's JD scoring page
                                       (filtered to this day) — never an inline expand/collapse,
@@ -4239,15 +4240,17 @@ export default function ResumeScoringPage({
           Select Job Description
         </label>
 
-        {/* Drafts, closed, archived and disabled jobs still show in the list
-            below (showAllStatuses) so none go silently missing — this just
-            explains up front why most of them can't be picked. */}
+        {/* The list below is the Job Openings page's own published set: a job
+            is listed only when its LATEST version is Published, so a job the
+            Job Descriptions list shows as Draft is never offered here. It
+            used to fall back to an older published version (showAllStatuses),
+            which listed re-drafted jobs as Published and scorable. */}
         <div className="mb-3 flex items-start gap-2 rounded-lg bg-brand-blue/[0.06] border border-brand-blue/20 px-3 py-2.5">
           <Info className="w-4 h-4 text-brand-blue flex-shrink-0 mt-0.5" />
           <div className="min-w-0">
             <p className="text-xs font-semibold text-gray-900 dark:text-slate-100">Job Eligibility</p>
             <p className="mt-0.5 text-xs text-gray-700 dark:text-slate-300">
-              Only Published and Republished jobs can be scored. A job is shown here by its latest published version — if a newer version is a Draft, the last published one is shown instead. Disabled or Archived jobs cannot be scored.
+              Only jobs whose latest version is Published or Republished are listed — the same jobs as the Published filter in Job Descriptions. A job is unavailable here until its latest version is Published, so a job with a newer Draft, Disabled or Archived version is not listed. Under View Versions, Disabled and Archived versions are shown for reference but cannot be selected.
             </p>
           </div>
         </div>
@@ -4265,7 +4268,6 @@ export default function ResumeScoringPage({
           }}
           proceedDisabled={!canRunScoring}
           proceedLabel="Select Resumes"
-          showAllStatuses
         />
 
       </div>

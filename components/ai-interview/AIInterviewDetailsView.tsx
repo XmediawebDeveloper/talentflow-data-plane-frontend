@@ -173,6 +173,11 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   // permission so both entry points across the app agree on one gate.
   const canShareAIInterviews = isTenantAdmin || !!user?.permissions?.canInviteAIInterviews;
   const [activeTab, setActiveTab] = useState<'overview' | 'activity' | 'versions' | 'viewjd' | 'results' | 'invites'>(initialTab ?? 'overview');
+  // The page stays mounted when the URL moves to another version (Version
+  // History's eye icon, from inside this view), so re-apply the requested tab.
+  useEffect(() => {
+    if (initialTab) setActiveTab(initialTab);
+  }, [initialTab, config.id]);
   /* Interview Details' own sub-tabs — Configure Details (what the tab used to
      show outright) and Interview Info (the former standalone "AI Interview
      Info" sidebar item, folded in here since it's the same JD-derived
