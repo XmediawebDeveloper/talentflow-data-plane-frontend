@@ -1,6 +1,7 @@
-import { Search, Filter, X, ChevronDown, SlidersHorizontal, Calendar, MapPin, Building2, Clock, GraduationCap, Briefcase, HelpCircle, Info, Loader2 } from 'lucide-react';
+import { Search, Filter, X, ChevronDown, SlidersHorizontal, MapPin, Building2, Clock, GraduationCap, Briefcase, HelpCircle, Info, Loader2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useDebounce } from '@/lib/hooks/useDebounce';
+import { DateField } from '@/components/ui/date-field';
 
 interface SearchFilterBarProps {
   searchQuery: string;
@@ -412,80 +413,68 @@ export default function SearchFilterBar({
             {/* Upload Date Range */}
             <div>
               <label className="flex items-center gap-2 text-sm text-gray-900 mb-3">
-                <Calendar className="w-4 h-4 text-gray-500" />
                 Upload Date
               </label>
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-xs text-gray-600 mb-1">From</label>
-                  <input
-                    type="date"
-                    value={tempFilters.uploadDateRange?.start || ''}
-                    onChange={(e) => setTempFilters({
-                      ...tempFilters,
-                      uploadDateRange: {
-                        ...tempFilters.uploadDateRange,
-                        start: e.target.value
-                      }
-                    })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-600"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-600 mb-1">To</label>
-                  <input
-                    type="date"
-                    value={tempFilters.uploadDateRange?.end || ''}
-                    onChange={(e) => setTempFilters({
-                      ...tempFilters,
-                      uploadDateRange: {
-                        ...tempFilters.uploadDateRange,
-                        end: e.target.value
-                      }
-                    })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-600"
-                  />
-                </div>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                <DateField
+                  aria-label="Upload date from"
+                  value={tempFilters.uploadDateRange?.start || ''}
+                  onChange={(v) => setTempFilters({
+                    ...tempFilters,
+                    uploadDateRange: {
+                      ...tempFilters.uploadDateRange,
+                      start: v
+                    }
+                  })}
+                  className="sm:flex-1 sm:min-w-0"
+                />
+                <span className="text-xs text-gray-400 text-center sm:text-left sm:flex-shrink-0">to</span>
+                <DateField
+                  aria-label="Upload date to"
+                  value={tempFilters.uploadDateRange?.end || ''}
+                  onChange={(v) => setTempFilters({
+                    ...tempFilters,
+                    uploadDateRange: {
+                      ...tempFilters.uploadDateRange,
+                      end: v
+                    }
+                  })}
+                  className="sm:flex-1 sm:min-w-0"
+                />
               </div>
             </div>
 
             {/* Last Updated Date Range */}
             <div>
               <label className="flex items-center gap-2 text-sm text-gray-900 mb-3">
-                <Calendar className="w-4 h-4 text-gray-500" />
                 Last Updated
               </label>
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-xs text-gray-600 mb-1">From</label>
-                  <input
-                    type="date"
-                    value={tempFilters.lastUpdatedRange?.start || ''}
-                    onChange={(e) => setTempFilters({
-                      ...tempFilters,
-                      lastUpdatedRange: {
-                        ...tempFilters.lastUpdatedRange,
-                        start: e.target.value
-                      }
-                    })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-600"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-600 mb-1">To</label>
-                  <input
-                    type="date"
-                    value={tempFilters.lastUpdatedRange?.end || ''}
-                    onChange={(e) => setTempFilters({
-                      ...tempFilters,
-                      lastUpdatedRange: {
-                        ...tempFilters.lastUpdatedRange,
-                        end: e.target.value
-                      }
-                    })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-600"
-                  />
-                </div>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                <DateField
+                  aria-label="Last updated from"
+                  value={tempFilters.lastUpdatedRange?.start || ''}
+                  onChange={(v) => setTempFilters({
+                    ...tempFilters,
+                    lastUpdatedRange: {
+                      ...tempFilters.lastUpdatedRange,
+                      start: v
+                    }
+                  })}
+                  className="sm:flex-1 sm:min-w-0"
+                />
+                <span className="text-xs text-gray-400 text-center sm:text-left sm:flex-shrink-0">to</span>
+                <DateField
+                  aria-label="Last updated to"
+                  value={tempFilters.lastUpdatedRange?.end || ''}
+                  onChange={(v) => setTempFilters({
+                    ...tempFilters,
+                    lastUpdatedRange: {
+                      ...tempFilters.lastUpdatedRange,
+                      end: v
+                    }
+                  })}
+                  className="sm:flex-1 sm:min-w-0"
+                />
               </div>
             </div>
 

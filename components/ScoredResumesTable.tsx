@@ -26,6 +26,7 @@ import ListPagination from './ListPagination';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import SearchableSelect from '@/components/ui/searchable-select';
+import { DateField } from '@/components/ui/date-field';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 import { useAllJobInviteTargets } from '@/lib/hooks/useAllJobInviteTargets';
@@ -1780,22 +1781,20 @@ Best regards`);
               {/* 2. Date From */}
               <div className={FILTER_FIELD_CLASS}>
                 <label className={FILTER_LABEL_CLASS}>Date From</label>
-                <input
-                  type="date"
+                <DateField
                   value={filterDateFrom}
-                  onChange={(e) => search.setFilter('dateFrom', e.target.value)}
-                  className={FILTER_CONTROL_CLASS}
+                  onChange={(v) => search.setFilter('dateFrom', v)}
+                  aria-label="Date From"
                 />
               </div>
 
               {/* 3. Date To */}
               <div className={FILTER_FIELD_CLASS}>
                 <label className={FILTER_LABEL_CLASS}>Date To</label>
-                <input
-                  type="date"
+                <DateField
                   value={filterDateTo}
-                  onChange={(e) => search.setFilter('dateTo', e.target.value)}
-                  className={FILTER_CONTROL_CLASS}
+                  onChange={(v) => search.setFilter('dateTo', v)}
+                  aria-label="Date To"
                 />
               </div>
 

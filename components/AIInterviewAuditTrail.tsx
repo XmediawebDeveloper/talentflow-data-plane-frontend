@@ -13,6 +13,7 @@ import ListToolbar from '@/components/ui/list-toolbar';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import { Skeleton } from '@/components/ui/skeleton';
+import { DateField } from '@/components/ui/date-field';
 import { Button } from '@/components/ui/button';
 
 type CategoryFilter = 'all' | 'config_lifecycle' | 'candidate_activity';
@@ -228,24 +229,22 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal }: AI
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <div>
             <label htmlFor="audit-date-from" className="block text-sm text-gray-700 mb-1.5 font-medium">Date From</label>
-            <input
+            <DateField
               id="audit-date-from"
-              type="date"
+              aria-label="Date From"
               value={search.draftFilters.dateFrom}
               max={search.draftFilters.dateTo || undefined}
-              onChange={(e) => search.setDraftFilter('dateFrom', e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
+              onChange={(v) => search.setDraftFilter('dateFrom', v)}
             />
           </div>
           <div>
             <label htmlFor="audit-date-to" className="block text-sm text-gray-700 mb-1.5 font-medium">Date To</label>
-            <input
+            <DateField
               id="audit-date-to"
-              type="date"
+              aria-label="Date To"
               value={search.draftFilters.dateTo}
               min={search.draftFilters.dateFrom || undefined}
-              onChange={(e) => search.setDraftFilter('dateTo', e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
+              onChange={(v) => search.setDraftFilter('dateTo', v)}
             />
           </div>
         </div>

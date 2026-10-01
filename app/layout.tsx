@@ -134,6 +134,14 @@ export default function RootLayout({
                   {children}
                   <Toaster
                     position="top-right"
+                    // Sonner's own default top offset (16px) sits inside the
+                    // app header's own space (h-14/h-16/lg:h-[72px], static
+                    // not fixed, but still occupying the viewport's top edge
+                    // on initial load) — toasts rendered right after a page
+                    // mounts collided with the notification bell, avatar, and
+                    // plan-quota badge. 88px clears the tallest (lg) header
+                    // plus a margin, on every breakpoint.
+                    offset={{ top: '88px', right: '16px' }}
                     richColors
                     closeButton
                     expand={false}
