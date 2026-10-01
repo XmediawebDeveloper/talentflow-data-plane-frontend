@@ -1585,7 +1585,16 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                             statusFilter === 'all'
                               ? versionLineage.lineages[versionKey]
                               : versionLineage.lineages[versionKey]?.filter(
-                                  (v) => (v.status || '').toLowerCase() === statusFilter.toLowerCase()
+                                  /* The cached lineage can be older than the status tab
+                                     being viewed — e.g. this version was archived just now,
+                                     but the lineage fetched before that still says
+                                     "published". Resolve `versionStatusOverrides` first (the
+                                     same per-version-id override JobVersionHistoryPanel's own
+                                     rows read via `statusOverrides`) so a version just moved
+                                     into this tab doesn't get filtered OUT of it on stale
+                                     data — the exact gap that showed "No versions recorded for
+                                     this job." right after archiving/disabling/republishing. */
+                                  (v) => (versionStatusOverrides?.[v.id] || v.status || '').toLowerCase() === statusFilter.toLowerCase()
                                 )
                           }
                           loading={versionLineage.isLoading(versionKey)}
