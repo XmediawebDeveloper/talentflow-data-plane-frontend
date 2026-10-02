@@ -72,6 +72,11 @@ const ACTIVITY_COLORS: Record<string, { bg: string; text: string; icon: string; 
 export default function AssessmentAuditTrail() {
   const [activities, setActivities] = useState<CombinedAuditActivity[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  /* A failed load used to be swallowed into console.log, leaving the tab
+     showing "No activity yet" — indistinguishable from a tenant that genuinely
+     has none, which is how a 500 here went unnoticed while Export Logs (which
+     surfaces its error) was the only visible symptom. */
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [stats, setStats] = useState({
     total_lifecycle_events: 0,
     total_candidate_events: 0,
@@ -125,6 +130,7 @@ export default function AssessmentAuditTrail() {
   const loadAuditTrail = async () => {
     setIsLoading(true);
     try {
+      setLoadError(null);
       const response = await assessmentService.getCombinedAuditTrail({
         category: categoryFilter === 'all' ? undefined : categoryFilter,
         search: searchTerm || undefined,
@@ -151,7 +157,14 @@ export default function AssessmentAuditTrail() {
       }
       console.log('[TalentFlow] Loaded combined audit trail');
     } catch (error) {
-      console.log('[TalentFlow] Failed to load combined audit trail:', error);
+      console.error('[TalentFlow] Failed to load combined audit trail:', error);
+      setActivities([]);
+      setTotal(0);
+      setLoadError(
+        error instanceof Error && error.message
+          ? error.message
+          : 'Could not load the activity log.',
+      );
     } finally {
       setIsLoading(false);
     }
@@ -515,6 +528,22 @@ export default function AssessmentAuditTrail() {
                   </div>
                 </div>
               ))}
+            </div>
+          ) : loadError ? (
+            /* An error is NOT an empty list — say so, and offer the retry,
+               rather than claiming the tenant has no activity. */
+            <div className="py-10 sm:py-14 text-center">
+              <AlertTriangle className="w-8 h-8 text-brand-orange-deep mx-auto mb-3" />
+              <p className="text-sm font-medium text-gray-900 mb-1">Could not load the activity log</p>
+              <p className="text-xs sm:text-sm text-gray-600 mb-4">{loadError}</p>
+              <button
+                type="button"
+                onClick={() => loadAuditTrail()}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-brand-blue/30 text-brand-blue bg-white hover:bg-brand-blue/5 transition-colors text-sm"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Try again
+              </button>
             </div>
           ) : activities.length === 0 ? (
             <ListEmptyState

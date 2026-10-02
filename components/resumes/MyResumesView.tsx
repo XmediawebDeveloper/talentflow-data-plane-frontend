@@ -3912,14 +3912,12 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
               <h1 className="text-lg sm:text-xl font-semibold text-gray-900 tracking-tight">My Resume Database</h1>
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
                 {totalItems} Resumes
+                {typeof totalIncludingVersions === 'number' && totalIncludingVersions > totalItems && (
+                  <> ({totalIncludingVersions - totalItems} versions)</>
+                )}
               </span>
             </div>
-            <p className="text-xs sm:text-sm text-gray-600">
-              Resumes uploaded by you
-              {typeof totalIncludingVersions === 'number' && totalIncludingVersions > totalItems && (
-                <span className="text-gray-400"> · {totalIncludingVersions} incl. version history</span>
-              )}
-            </p>
+            <p className="text-xs sm:text-sm text-gray-600">Resumes uploaded by you</p>
           </div>
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
