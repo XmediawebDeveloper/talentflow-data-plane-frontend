@@ -553,8 +553,13 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
 
   const confirmBulkArchive = () => {
     if (!onUpdateJobStatus) return;
-    selectedJobs.forEach(jobId => {
-      onUpdateJobStatus(jobId, 'Archived');
+    /* Same eligibility rule as the per-row Archive Job action: a Draft has
+       nothing published to retire, and an already-Archived job is a no-op. */
+    const jobsToArchive = sortedJobs.filter(
+      job => selectedJobs.has(job.id) && job.status !== 'Draft' && job.status !== 'Archived',
+    );
+    jobsToArchive.forEach(job => {
+      onUpdateJobStatus(job.id, 'Archived');
     });
     setBulkArchiveOpen(false);
     setSelectedJobs(new Set());
@@ -684,10 +689,23 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
      Published's job count goes through the shared `getPublishedJobs`, the same
      call the Apply to Job dialog counts and lists from — so that dialog cannot
      report a different number of published jobs from this card. */
-  const versionsOf = (isCounted: (representative: Job) => boolean) =>
+  const versionsOf = (
+    isCounted: (representative: Job) => boolean,
+    /* Optional per-ROW filter, applied inside an already-matched lineage.
+       Without it (Published/Archived below) every row in the lineage counts,
+       which is what keeps "versions" describing the SAME lineages as "jobs" —
+       see the comment above. Drafts uses it: a draft lineage forked from an
+       older Published version, or one with an old abandoned draft from
+       before a later edit, would otherwise count that other-status row as a
+       "draft version" even though it isn't one. This still can't leak across
+       lineages the way a plain row-status count would (archived rows inside
+       a published lineage, etc.) — it only narrows WITHIN a lineage that
+       already passed `isCounted`. */
+    rowFilter?: (row: Job) => boolean,
+  ) =>
     Array.from(allVersionGroups.values())
       .filter(bucket => isCounted(bucket[0]))
-      .reduce((sum, bucket) => sum + bucket.length, 0);
+      .reduce((sum, bucket) => sum + (rowFilter ? bucket.filter(rowFilter).length : bucket.length), 0);
   const stats = {
     total: distinctJobs.length,
     published: getPublishedJobs(jobs).length,
@@ -697,7 +715,7 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
     totalApplicants: distinctJobs.reduce((sum, j) => sum + (j.applicants || 0), 0),
     totalVersions: jobs.length,
     publishedVersions: versionsOf(j => j.status === 'Published'),
-    draftVersions: versionsOf(j => j.status === 'Draft'),
+    draftVersions: versionsOf(j => j.status === 'Draft', v => v.status === 'Draft'),
     archivedVersions: versionsOf(j => j.status === 'Archived'),
   };
 
@@ -1464,8 +1482,10 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                                   <span className={MENU_ITEM_SCALE_CLASS}>Re-enable JD</span>
                                 </button>
                               )}
-                              {/* Archive Job */}
-                              {job.status !== 'Archived' && onArchiveJob && (
+                              {/* Archive Job — not offered on a Draft: there is
+                                  nothing published to retire, Delete already
+                                  covers removing a draft outright. */}
+                              {job.status !== 'Archived' && job.status !== 'Draft' && onArchiveJob && (
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -1577,7 +1597,7 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                         Click is stopped here — the card itself opens the job,
                         and a click meant for a version must not be read as a
                         click on the row behind it. */}
-                    {versionsExpanded && (
+                    {versionsExpanded && hasVersionHistory && (
                       <div onClick={(e) => e.stopPropagation()}>
                         <JobVersionHistoryPanel
                           job={job}
@@ -1701,8 +1721,9 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                                     <span className={MENU_ITEM_SCALE_CLASS}>Re-enable JD</span>
                                   </DropdownMenuItem>
                                 )}
-                                {/* Archive Job */}
-                                {versionJob.status !== 'Archived' && onArchiveJob && (
+                                {/* Archive Job — not offered on a Draft version, same
+                                    reasoning as the main card menu above. */}
+                                {versionJob.status !== 'Archived' && versionJob.status !== 'Draft' && onArchiveJob && (
                                   <DropdownMenuItem
                                     onSelect={(e) => {
                                       if (!canArchiveJd) {
