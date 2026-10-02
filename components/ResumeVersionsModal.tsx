@@ -479,7 +479,6 @@ export default function ResumeVersionsModal({
             resumeId={previewVersion.id}
             title={`Version ${previewVersion.version}`}
             subtitle={previewVersion.file_name}
-            text={previewVersion.extracted_text}
             onClose={() => setPreviewVersion(null)}
           />
         </div>

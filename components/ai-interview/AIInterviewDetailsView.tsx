@@ -2,13 +2,14 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { useAuth } from '@/lib/hooks/useAuth';
 import {
-  ArrowLeft, ChevronLeft, Video, Clock, Users, Calendar, CheckCircle, Play, Mail,
-  XCircle, Copy, Trash2, Archive, ArchiveRestore, GitBranch,
+  ArrowLeft, ChevronLeft, Video, Clock, Users, Calendar, CheckCircle, Mail,
+  Copy, Trash2, Archive, ArchiveRestore, GitBranch,
   Loader2, RefreshCw, Briefcase, Globe, ChevronRight, ChevronDown, Check, Brain, Sparkles,
   Layers, Pencil, Zap, Timer, FileText, Settings, CheckCircle2, Download,
-  QrCode, AlertCircle, ExternalLink, BarChart, UserRound,
+  QrCode, AlertCircle, ExternalLink, BarChart, UserRound, Eye, User as UserIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
@@ -20,8 +21,8 @@ import JDOverviewSections from '@/components/jobs/JDOverviewSections';
 import { Button } from '@/components/ui/button';
 import type {
   AIInterviewResponse,
-  AIInterviewVersionHistoryItem,
   AIInterviewHRQuestion,
+  AIInterviewAuditActivity,
 } from '@/lib/services/aiInterviewService';
 import CandidateResultsView from './CandidateResultsView';
 import AIInterviewResults from './AIInterviewResults';
@@ -29,13 +30,17 @@ import ShareAIInterviewModal from './ShareAIInterviewModal';
 import AIInterviewTrackInvitesModal from '../AIInterviewTrackInvitesModal';
 import { QuestionDistributionPopover } from './QuestionDistributionPopover';
 import { PROXY_INTEGRITY_VERIFICATION_ENABLED } from '@/lib/constants/featureFlags';
-import { formatIST, formatISTDate, formatISTTime, parseIST } from '@/lib/utils/dateUtils';
-import { displayInviteScore, inviteResult, ResultBadge } from '@/components/AIInterviewInviteTable';
+import { formatIST, parseIST } from '@/lib/utils/dateUtils';
 import { getPriorityLabel } from '@/lib/constants/aiInterviewPriority';
 import { modeFromConfig, modeFromDuration } from '@/lib/constants/aiInterviewMode';
 import PageBreadcrumb, { type BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import RecordPager from '@/components/RecordPager';
 import { Skeleton } from '@/components/ui/skeleton';
+
+/* The Version History tab's eye opens a version's configuration in the same
+   read-only dialog used elsewhere. Loaded lazily: that dialog renders this
+   view itself (configureOnly), so a static import would be circular. */
+const ConfigurePreviewDialog = dynamic(() => import('./ConfigurePreviewDialog'), { ssr: false });
 
 const ROUND_LABELS: Record<string, string> = {
   hr: 'HR',
@@ -159,9 +164,21 @@ interface AIInterviewDetailsViewProps {
   configureOnly?: boolean;
   /** Tab to open on — e.g. 'results' when reached from "View Results". */
   initialTab?: 'overview' | 'activity' | 'versions' | 'viewjd' | 'results' | 'invites';
+  /**
+   * A DRAFT interview opened on its own page: every region greyed out and
+   * inert except Continue Editing, which stays live and highlighted — the
+   * Assessments page's draft lock (`AssessmentDetailsView`'s `draftLocked`).
+   */
+  draftLocked?: boolean;
 }
 
-export default function AIInterviewDetailsView({ config, onBack, onRefresh, currentIndex, totalCount, onPrev, onNext, breadcrumbItems, configureOnly = false, initialTab }: AIInterviewDetailsViewProps) {
+export default function AIInterviewDetailsView({ config, onBack, onRefresh, currentIndex, totalCount, onPrev, onNext, breadcrumbItems, configureOnly = false, initialTab, draftLocked = false }: AIInterviewDetailsViewProps) {
+  /* Greyed and out of reach — `inert` takes pointer, keyboard and assistive
+     tech; the classes are the visual state. Per region, so Continue Editing,
+     nested among them, can stay live. */
+  const draftLockProps = draftLocked
+    ? { inert: true as const, 'aria-disabled': true, className: 'opacity-50 grayscale select-none' }
+    : { className: '' };
   const router = useRouter();
   const { user, isTenantAdmin } = useAuth();
   const canCreateAIInterviews = isTenantAdmin || !!user?.permissions?.canCreateAIInterviews;
@@ -194,8 +211,21 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   const [activityLoading, setActivityLoading] = useState(false);
 
   // Version History
-  const [versionHistory, setVersionHistory] = useState<AIInterviewVersionHistoryItem[]>([]);
-  const [versionsLoading, setVersionsLoading] = useState(false);
+  /* Version History — every interview version authored against this job
+     version (the Assessments page's Version History, for interviews). The
+     rows are `siblingConfigsByJdId`'s bucket; completed counts are asked for
+     per version when the tab opens, since the config list carries none. */
+  const [versionCompleted, setVersionCompleted] = useState<Record<string, number>>({});
+  const versionCompletedRequested = useRef<Set<string>>(new Set());
+  const [previewVersionId, setPreviewVersionId] = useState<string | null>(null);
+
+  /* Recent Activity — the Job Description page's Recent Activity, for this
+     interview: one row per EVENT, newest first. The interview's own lifecycle
+     (created, published / republished, updated, archived, re-enabled, …) comes
+     from the audit trail scoped to this config; candidate events (invited,
+     started, completed, …) from its sessions, which open the candidate. */
+  const [lifecycleEvents, setLifecycleEvents] = useState<AIInterviewAuditActivity[] | null>(null);
+  const [activityPage, setActivityPage] = useState(1);
 
   /* Header's Job Version dropdown — the Assessment Details header's "Manage
      Jobs · V{n}" pill: the linked JD's own version lineage. A row is only
@@ -309,18 +339,6 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
     }
   }, [config.id]);
 
-  const loadVersionHistory = useCallback(async () => {
-    setVersionsLoading(true);
-    try {
-      const result = await aiInterviewService.getVersionHistory(config.id);
-      setVersionHistory(result.items);
-    } catch (error) {
-      console.error('Failed to load version history:', error);
-    } finally {
-      setVersionsLoading(false);
-    }
-  }, [config.id]);
-
   // Always load activity on mount (needed for invite count in header)
   useEffect(() => {
     if (configureOnly) return;
@@ -328,8 +346,45 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   }, [loadActivity, configureOnly]);
 
   useEffect(() => {
-    if (activeTab === 'versions') loadVersionHistory();
-  }, [activeTab, loadVersionHistory]);
+    if (configureOnly || activeTab !== 'activity') return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const items: AIInterviewAuditActivity[] = [];
+        for (let page = 1; page <= 20; page += 1) {
+          const res = await aiInterviewService.getAuditTrail({
+            config_id: config.id, category: 'config_lifecycle', page, page_size: 100,
+          });
+          items.push(...(res.items || []));
+          if ((res.items || []).length < 100 || items.length >= (res.total ?? items.length)) break;
+        }
+        // Scoped server-side; filtered again in case the endpoint ignores config_id.
+        if (!cancelled) setLifecycleEvents(items.filter((e) => !e.config_id || e.config_id === config.id));
+      } catch {
+        if (!cancelled) setLifecycleEvents([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [activeTab, config.id, configureOnly]);
+
+  /** This job version's interviews, oldest first — V1 is the original. */
+  const jobVersionInterviews = useMemo(() => {
+    const bucket = config.jd_id ? siblingConfigsByJdId.get(config.jd_id) : undefined;
+    return [...(bucket ?? [])].sort(
+      (a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime(),
+    );
+  }, [siblingConfigsByJdId, config.jd_id]);
+
+  useEffect(() => {
+    if (activeTab !== 'versions') return;
+    jobVersionInterviews.forEach((v) => {
+      if (versionCompletedRequested.current.has(v.id)) return;
+      versionCompletedRequested.current.add(v.id);
+      aiInterviewService.getConfigInvitations(v.id, { page: 1, page_size: 1, compact: true })
+        .then((res) => setVersionCompleted((prev) => ({ ...prev, [v.id]: res.completed || 0 })))
+        .catch(() => { versionCompletedRequested.current.delete(v.id); });
+    });
+  }, [activeTab, jobVersionInterviews]);
 
   // Job Version dropdown's list — fetched once, the first time it's opened.
   const ensureJobVersionsLoaded = useCallback(() => {
@@ -1150,7 +1205,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
       <div className="mb-4">
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-brand-blue/30 dark:border-brand-blue/40 ring-1 ring-brand-blue/10 dark:ring-brand-blue/20 shadow-sm shadow-brand-blue/10 p-4 sm:p-5">
           <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3">
-            <div className="flex-1 min-w-0">
+            <div {...draftLockProps} className={`flex-1 min-w-0 ${draftLockProps.className}`}>
               {/* Row 1: JD-151  Title  Status. The JD ID leads, in the badge
                   every list uses for it — it replaced the AI-### interview id
                   here, and with it the "Linked to JD-###" fact below. */}
@@ -1364,12 +1419,13 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   aria-disabled={!canUpdateAIInterviews}
                   title={!canUpdateAIInterviews ? 'You do not have permission to edit AI interviews' : ''}
                   icon={<Pencil className="w-3.5 h-3.5 flex-shrink-0" />}
-                  className={`gap-1.5 px-3 sm:px-4 min-h-[40px] text-xs sm:text-sm ${!canUpdateAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  className={`gap-1.5 px-3 sm:px-4 min-h-[40px] text-xs sm:text-sm ${!canUpdateAIInterviews ? 'opacity-50 cursor-not-allowed' : ''} ${draftLocked ? 'ring-2 ring-brand-blue/40 shadow-md shadow-brand-blue/20' : ''}`}
                 >
                   <span className="hidden sm:inline">Continue Editing</span>
                   <span className="sm:hidden">Edit</span>
                 </Button>
               )}
+              <div {...draftLockProps} className={draftLocked ? `flex items-center gap-2 ${draftLockProps.className}` : 'contents'}>
               <Button
                 variant="secondary"
                 size="sm"
@@ -1391,6 +1447,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   <RefreshCw className="w-4 h-4" />
                 </Button>
               )}
+              </div>
             </div>
           </div>
         </div>
@@ -1407,7 +1464,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
           the same buttons — a fixed side column there left a phone's table
           ~150px wide. From md it is the side column again, narrower until xl
           so the Results table keeps its width on laptops. */}
-      <div className="grid grid-cols-1 items-start gap-3 md:grid-cols-[200px_minmax(0,1fr)] md:gap-4 lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[260px_minmax(0,1fr)] xl:gap-6">
+      <div {...draftLockProps} className={`grid grid-cols-1 items-start gap-3 md:grid-cols-[200px_minmax(0,1fr)] md:gap-4 lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[260px_minmax(0,1fr)] xl:gap-6 ${draftLockProps.className}`}>
         <aside className="md:sticky md:top-20 self-start bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
           <nav className="p-2 sm:p-3" aria-label="Interview details sections">
             <div className="grid grid-cols-2 sm:grid-cols-3 md:flex md:flex-col gap-1.5">
@@ -1706,208 +1763,298 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
           )}
 
 
-          {/* Recent Activity Tab */}
-          {activeTab === 'activity' && (
-            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-6">
-              <TabHeading icon={Clock} title="Recent Activity" />
-              {activityLoading ? (
-                <div className="space-y-3">
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <div key={i} className="flex items-center gap-4 p-4 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg">
-                      <Skeleton className="w-5 h-5 rounded-full flex-shrink-0" />
-                      <div className="flex-1 min-w-0 space-y-2">
-                        <div className="flex items-center gap-2">
-                          <Skeleton className="h-4 w-32" />
-                          <Skeleton className="h-5 w-20 rounded-full" />
+          {/* Recent Activity Tab — the Job Description page's Recent Activity
+              panel for this interview: every event its own row (a coloured
+              dot, the title, a Clock-tagged date/time and a User-tagged name),
+              merged and sorted newest first, ten to a page. */}
+          {activeTab === 'activity' && (() => {
+            interface ActivityEvent { key: string; dot: string; title: string; date?: string; by?: string; sessionId?: string }
+            const events: ActivityEvent[] = [];
+
+            const LIFECYCLE_DOT: Record<string, string> = {
+              config_created: 'bg-brand-blue',
+              config_published: 'bg-success',
+              config_republished: 'bg-purple-500',
+              config_updated: 'bg-purple-500',
+              config_archived: 'bg-brand-orange',
+              config_unarchived: 'bg-brand-teal',
+              config_restored: 'bg-brand-teal',
+              config_enabled: 'bg-success',
+              config_disabled: 'bg-destructive',
+              config_deleted: 'bg-destructive',
+            };
+            (lifecycleEvents || []).forEach((e) => {
+              events.push({
+                key: `life-${e.id}`,
+                dot: LIFECYCLE_DOT[e.activity_type] || 'bg-gray-400',
+                title: e.title || e.activity_type.replace(/^config_/, 'Interview ').replace(/_/g, ' '),
+                date: e.timestamp,
+                by: e.actor_name,
+              });
+            });
+            // The creation row, when the audit trail has none for it.
+            if (lifecycleEvents && !lifecycleEvents.some((e) => e.activity_type === 'config_created')) {
+              events.push({ key: 'created', dot: 'bg-brand-blue', title: 'AI Interview Created', date: config.created_at, by: config.created_by_name });
+            }
+
+            recentActivity.forEach((inv: any) => {
+              const who = inv.candidate_name || inv.candidate_email || 'Candidate';
+              const base = { sessionId: inv.id, by: inv.invited_by_name || inv.created_by_name };
+              events.push({ ...base, key: `inv-${inv.id}`, dot: 'bg-indigo-500', title: `Candidate Invited - ${who}`, date: inv.invitation_sent_at || inv.created_at });
+              if (inv.started_at) events.push({ key: `start-${inv.id}`, sessionId: inv.id, by: who, dot: 'bg-brand-orange', title: `Interview Started - ${who}`, date: inv.started_at });
+              if (inv.completed_at) {
+                const terminated = inv.status === 'terminated';
+                events.push({
+                  key: `done-${inv.id}`, sessionId: inv.id, by: who,
+                  dot: terminated ? 'bg-destructive' : 'bg-success',
+                  title: `${terminated ? 'Interview Terminated' : 'Interview Completed'} - ${who}`,
+                  date: inv.completed_at,
+                });
+              }
+              if (inv.status === 'revoked') events.push({ ...base, key: `revoke-${inv.id}`, dot: 'bg-destructive', title: `Invitation Revoked - ${who}`, date: inv.revoked_at || inv.updated_at });
+              if (inv.status === 'expired') events.push({ key: `expire-${inv.id}`, sessionId: inv.id, dot: 'bg-orange-500', title: `Invitation Expired - ${who}`, date: inv.expires_at, by: 'System' });
+            });
+
+            const sortTime = (e: { date?: string }) => (e.date ? new Date(e.date).getTime() : 0);
+            events.sort((a, b) => sortTime(b) - sortTime(a));
+
+            const ACTIVITY_PAGE_SIZE = 10;
+            const totalPages = Math.max(1, Math.ceil(events.length / ACTIVITY_PAGE_SIZE));
+            const safePage = Math.min(activityPage, totalPages);
+            const pageEvents = events.slice((safePage - 1) * ACTIVITY_PAGE_SIZE, safePage * ACTIVITY_PAGE_SIZE);
+            const sessionIds = recentActivity.map((a: any) => a.id);
+            const loading = activityLoading || lifecycleEvents === null;
+
+            return (
+              <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-6">
+                <TabHeading icon={Clock} title="Recent Activity" />
+                {loading && events.length === 0 ? (
+                  <div className="space-y-4">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <div key={i} className="flex gap-3">
+                        <Skeleton className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0" />
+                        <div className="flex-1 space-y-1.5">
+                          <Skeleton className="h-4 w-56" />
+                          <Skeleton className="h-3 w-40" />
                         </div>
-                        <Skeleton className="h-3 w-40" />
                       </div>
-                      <div className="flex items-center gap-4 flex-shrink-0">
-                        <Skeleton className="h-3 w-20" />
-                        <Skeleton className="h-4 w-4" />
+                    ))}
+                  </div>
+                ) : events.length === 0 ? (
+                  <div className="text-sm text-gray-500 italic">No recent activity</div>
+                ) : (
+                  <div className="space-y-3">
+                    {pageEvents.map((e) => {
+                      const body = (
+                        <>
+                          <div className={`w-2 h-2 ${e.dot} rounded-full mt-1.5 flex-shrink-0`} />
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm text-gray-900 truncate">{e.title}</div>
+                            <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500">
+                              <span className="inline-flex items-center gap-1">
+                                <Clock className="w-3 h-3" strokeWidth={1.75} />
+                                {e.date ? formatIST(e.date) : 'N/A'}
+                              </span>
+                              <span className="inline-flex items-center gap-1">
+                                <UserIcon className="w-3 h-3" strokeWidth={1.75} />
+                                {e.by || 'System'}
+                              </span>
+                            </div>
+                          </div>
+                          {e.sessionId && <ChevronRight className="w-4 h-4 text-brand-blue flex-shrink-0 mt-0.5" />}
+                        </>
+                      );
+                      return e.sessionId ? (
+                        <button
+                          key={e.key}
+                          type="button"
+                          onClick={() => handleCandidateClick(e.sessionId!, sessionIds)}
+                          className="w-full flex gap-3 text-left rounded-lg -mx-2 px-2 py-1 hover:bg-brand-blue/5 transition-colors"
+                        >
+                          {body}
+                        </button>
+                      ) : (
+                        <div key={e.key} className="flex gap-3 px-0 py-1">{body}</div>
+                      );
+                    })}
+                    {events.length > ACTIVITY_PAGE_SIZE && (
+                      <div className="pt-3 border-t border-gray-100 flex items-center justify-between gap-2 text-xs text-gray-500">
+                        <span className="tabular-nums">
+                          {(safePage - 1) * ACTIVITY_PAGE_SIZE + 1}–{Math.min(safePage * ACTIVITY_PAGE_SIZE, events.length)} of {events.length}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setActivityPage(safePage - 1)}
+                            disabled={safePage <= 1}
+                            aria-label="Previous activity page"
+                            className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-gray-200 text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue disabled:opacity-40 disabled:pointer-events-none transition-colors"
+                          >
+                            <ChevronLeft className="w-3.5 h-3.5" />
+                          </button>
+                          <span className="px-1.5 tabular-nums text-gray-700">
+                            <span className="font-semibold text-brand-blue">{safePage}</span> / {totalPages}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setActivityPage(safePage + 1)}
+                            disabled={safePage >= totalPages}
+                            aria-label="Next activity page"
+                            className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-gray-200 text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue disabled:opacity-40 disabled:pointer-events-none transition-colors"
+                          >
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Version History Tab — every interview version created for THIS
+              job version, as the Assessments page's Version History lists an
+              assessment's versions: V1 is the original, the rest re-authored
+              against the same job version. The one open here is marked. */}
+          {activeTab === 'versions' && (
+            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 tf-round-edges">
+              <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
+                <div className="flex flex-wrap items-center gap-2.5 mb-1">
+                  <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                    <Layers className="w-4 h-4 text-brand-blue" />
+                  </div>
+                  <h2 className="text-base font-semibold text-gray-900 tracking-tight">Version History</h2>
+                  {config.jd_id && (
+                    <span className="text-2xs text-gray-500">Job V{config.jd_version ?? 1}</span>
+                  )}
+                </div>
+                <p className="text-sm text-gray-600">
+                  {config.jd_id
+                    ? `Every interview version created for Job V${config.jd_version ?? 1} (V1 is the original).`
+                    : 'All versions of this interview (V1 is the original).'}
+                </p>
+              </div>
+              {!config.jd_id ? (
+                <div className="px-6 py-12 text-center">
+                  <Layers className="w-12 h-12 text-brand-blue/30 mx-auto mb-3" />
+                  <p className="text-gray-600 mb-1 text-sm">No linked job version</p>
+                  <p className="text-sm text-gray-500">Interview versions are grouped by the job version they were created for</p>
+                </div>
+              ) : jobVersionInterviews.length === 0 ? (
+                <div className="p-6 space-y-4">
+                  {Array.from({ length: 2 }).map((_, i) => (
+                    <div key={i} className="rounded-xl border border-gray-100 bg-white p-4 ring-1 ring-black/[0.02]">
+                      <div className="flex items-start gap-4">
+                        <Skeleton className="w-12 h-12 rounded-full flex-shrink-0" />
+                        <div className="flex-1 min-w-0 space-y-2">
+                          <Skeleton className="h-5 w-56" />
+                          <Skeleton className="h-4 w-full max-w-md" />
+                          <Skeleton className="h-4 w-full max-w-sm" />
+                        </div>
                       </div>
                     </div>
                   ))}
                 </div>
-              ) : recentActivity.length === 0 ? (
-                <div className="text-center py-12">
-                  <div className="w-20 h-20 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
-                    <Users className="w-10 h-10 text-brand-blue" />
-                  </div>
-                  <p className="text-gray-700 font-medium mb-2">No candidate activity yet</p>
-                  <p className="text-sm text-gray-500">Invite candidates to see their activity here</p>
-                </div>
               ) : (
-                <div className="space-y-3">
-                  {recentActivity.map((activity) => {
-                    const statusIcon = () => {
-                      switch (activity.status) {
-                        case 'completed': return <CheckCircle className="w-5 h-5 text-success" />;
-                        case 'in_progress': return <Play className="w-5 h-5 text-brand-orange-deep" />;
-                        case 'invited': return <Mail className="w-5 h-5 text-brand-blue" />;
-                        case 'cancelled': return <XCircle className="w-5 h-5 text-destructive" />;
-                        default: return <Mail className="w-5 h-5 text-gray-400" />;
-                      }
-                    };
+                <div className="p-6 space-y-4">
+                  {jobVersionInterviews.map((version, idx) => {
+                    const isThis = version.id === config.id;
+                    const versionNumber = idx + 1;
+                    const statusRaw = String(version.status || '').toLowerCase();
+                    const isLive = ['published', 'invited', 'consent_pending', 'system_check', 'in_progress', 'scheduled'].includes(statusRaw);
+                    const statusLabel = isLive ? 'Active' : getStatusLabel(statusRaw) || 'Draft';
+                    const statusChipClass = isLive
+                      ? 'bg-success-subtle text-success-strong ring-1 ring-success-line'
+                      : statusRaw === 'archived'
+                      ? 'bg-gray-100 text-gray-700 ring-1 ring-gray-200'
+                      : statusRaw === 'completed'
+                      ? 'bg-blue-100 text-blue-800 ring-1 ring-blue-200'
+                      : 'bg-warning-subtle text-warning-strong ring-1 ring-warning-line';
+                    const rounds = (version.rounds_config || [])
+                      .filter((r: any) => r.enabled !== false)
+                      .map((r: any) => ROUND_LABELS[r.type] || r.type)
+                      .join(', ') || '—';
+                    const mode = modeFromConfig(version.special_instructions, version.duration_minutes) === 'fixed' ? 'Timed' : 'Conversational';
+                    const completed = versionCompleted[version.id];
 
                     return (
                       <div
-                        key={activity.id}
-                        onClick={() => handleCandidateClick(activity.id, recentActivity.map(a => a.id))}
-                        className="flex items-center gap-4 p-4 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg cursor-pointer hover:bg-brand-blue/5 hover:ring-brand-blue/20 transition-colors"
+                        key={version.id}
+                        className={`rounded-xl border p-4 ring-1 ring-black/[0.02] ${
+                          isThis ? 'border-brand-blue/40 bg-brand-blue/5' : 'border-gray-100 bg-white'
+                        }`}
                       >
-                        <div className="flex-shrink-0">{statusIcon()}</div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-gray-900 truncate">
-                              {activity.candidate_name || 'Unknown'}
-                            </span>
-                            <Badge variant={getStatusVariant(activity.status)}>
-                              {getStatusLabel(activity.status)}
-                            </Badge>
+                        <div className="flex items-start gap-4">
+                          <div className="w-12 h-12 rounded-full bg-brand-cyan shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10 flex items-center justify-center flex-shrink-0">
+                            <span className="text-white font-bold text-sm">V{versionNumber}</span>
                           </div>
-                          <div className="text-sm text-gray-500 truncate">{activity.candidate_email}</div>
-                          {/* Score + Pass/Fail — the same Must-Have % and
-                              result the invite tables show; only once scored. */}
-                          {(() => {
-                            const score = displayInviteScore(activity);
-                            if (score == null) return null;
-                            return (
-                              <div className="flex items-center gap-2 mt-1.5">
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-slate-50 ring-1 ring-gray-200 text-gray-600">
-                                  Score:
-                                  <span className={`font-semibold ${score >= 60 ? 'text-success' : 'text-destructive'}`}>{score}%</span>
+                          <div className="@container flex-1 min-w-0">
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2 mb-1.5">
+                              <h4 className="min-w-0 text-base font-semibold text-gray-900 tracking-tight truncate">
+                                {version.jd_title || version.position || 'Interview'} - Version {versionNumber}
+                              </h4>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${statusChipClass}`}>
+                                  {statusLabel}
                                 </span>
-                                <ResultBadge result={inviteResult(activity, score)} />
+                                {isThis && (
+                                  <span className="inline-flex items-center px-2 py-0.5 bg-brand-blue text-white shadow-sm shadow-brand-blue/25 text-xs font-medium rounded-full whitespace-nowrap">
+                                    Viewing
+                                  </span>
+                                )}
                               </div>
-                            );
-                          })()}
-                        </div>
-                        <div className="flex items-center gap-4 flex-shrink-0">
-                          {/* Time above the date. */}
-                          <div className="text-xs text-gray-400 text-right leading-snug">
-                            <div>{formatISTTime(activity.completed_at || activity.started_at || activity.created_at).toLowerCase()}</div>
-                            <div>{formatISTDate(activity.completed_at || activity.started_at || activity.created_at)}</div>
+                            </div>
+
+                            <div className="grid grid-cols-1 @md:grid-cols-2 gap-x-4 gap-y-1 text-sm text-gray-700 mt-2">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <Users className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+                                <span className="shrink-0">Created by</span>
+                                <span className="font-medium truncate">{version.created_by_name || 'Unknown'}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <Calendar className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+                                <span className="truncate">{version.created_at ? formatIST(version.created_at) : '—'}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <Clock className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+                                <span>{version.duration_minutes || 30} min · {mode}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <FileText className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+                                <span className="truncate">{rounds}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <Mail className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+                                <span>{version.invitations_count || 0} invited</span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <CheckCircle className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+                                <span>{completed == null ? '—' : completed} completed</span>
+                              </div>
+                            </div>
                           </div>
-                          <ChevronRight className="w-4 h-4 text-brand-blue" />
+
+                          {/* Preview this version's configuration, read-only. */}
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setPreviewVersionId(version.id)}
+                            title="Preview configure settings"
+                            aria-label={`Preview configure settings for Version ${versionNumber}`}
+                            className="h-8 w-8 px-0 flex-shrink-0"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
                         </div>
                       </div>
                     );
                   })}
                 </div>
               )}
-            </div>
-          )}
-
-          {/* Version History Tab */}
-          {activeTab === 'versions' && (
-            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 tf-round-edges">
-              <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
-                <div className="flex items-center gap-2.5 mb-1">
-                  <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
-                    <Layers className="w-4 h-4 text-brand-blue" />
-                  </div>
-                  <h2 className="text-base font-semibold text-gray-900 tracking-tight">Version History</h2>
-                </div>
-                <p className="text-sm text-gray-600">Complete timeline of all changes made to this interview</p>
-              </div>
-              {versionsLoading ? (
-                <div className="p-6 space-y-6">
-                  {Array.from({ length: 3 }).map((_, i) => (
-                    <div key={i} className="flex items-start gap-4">
-                      <Skeleton className="w-12 h-12 rounded-full flex-shrink-0" />
-                      <div className="flex-1 min-w-0 space-y-2">
-                        <Skeleton className="h-5 w-48" />
-                        <Skeleton className="h-4 w-64" />
-                        <Skeleton className="h-4 w-40" />
-                        <Skeleton className="h-4 w-52" />
-                        <Skeleton className="h-20 w-full rounded-lg mt-2" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : versionHistory.length === 0 ? (
-                <div className="px-6 py-12 text-center">
-                  <div className="w-20 h-20 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
-                    <Clock className="w-10 h-10 text-brand-blue" />
-                  </div>
-                  <p className="text-gray-700 font-medium mb-1 text-sm">No version history available</p>
-                  <p className="text-sm text-gray-500">Version history will appear when the interview is edited</p>
-                </div>
-              ) : (
-                <div className="p-6 space-y-6">
-                  {(() => {
-                    const minVersion = Math.min(...versionHistory.map(v => v.version));
-                    return versionHistory.map((version, idx) => {
-                    const isCurrentVersion = idx === 0;
-                    const isFirstVersion = version.version === minVersion;
-                    const versionDate = formatIST(version.created_at);
-                    return (
-                      <div key={version.id} className="space-y-4">
-                        <div className="flex items-start gap-4">
-                          <div className="w-12 h-12 bg-brand-cyan rounded-full flex items-center justify-center flex-shrink-0 shadow-md shadow-brand-cyan/25 ring-1 ring-white/20">
-                            <span className="text-white font-bold text-sm">V{version.version}</span>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mb-1">
-                              <h4 className="text-base font-semibold text-gray-900 tracking-tight">
-                                Version {version.version} {isFirstVersion ? 'Published' : 'Updated'}
-                              </h4>
-                              {isCurrentVersion && (
-                                <span className="px-2.5 py-1 bg-brand-blue text-white text-xs font-medium rounded shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 w-fit">
-                                  Current Version
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-sm text-gray-600 mb-3">
-                              {isFirstVersion ? 'Initial interview configuration created' : (version.change_summary || 'Interview configuration updated')}
-                            </p>
-                            <div className="flex items-center gap-2 text-sm text-gray-700 mb-1">
-                              <Users className="w-4 h-4 text-brand-blue flex-shrink-0" />
-                              <span className="font-medium">{version.changed_by_name || 'Unknown User'}</span>
-                              <span className="text-gray-400">•</span>
-                              <span className="text-gray-600">Lead Recruiter</span>
-                            </div>
-                            <div className="flex items-center gap-2 text-sm text-gray-600 mb-4">
-                              <Calendar className="w-4 h-4 text-brand-blue flex-shrink-0" />
-                              <span>Published on {versionDate} IST (UTC+5:30)</span>
-                            </div>
-                            <div className="bg-gradient-to-br from-brand-blue/5 to-brand-cyan/5 border border-gray-100 ring-1 ring-brand-blue/10 rounded-lg p-4">
-                              <div className="text-sm font-medium text-gray-900 mb-3">
-                                {version.version === 1 ? 'Initial Configuration:' : 'Updated Configuration:'}
-                              </div>
-                              <ul className="space-y-2">
-                                {version.rounds_config && version.rounds_config.filter((r: any) => r.enabled !== false).length > 0 && (
-                                  <li className="text-sm text-gray-700 flex items-start gap-2">
-                                    <span className="text-brand-blue mt-0.5">•</span>
-                                    <span>Interview rounds: {version.rounds_config.filter((r: any) => r.enabled !== false).map((r: any) => ROUND_LABELS[r.type] || r.type).join(', ')}</span>
-                                  </li>
-                                )}
-                                <li className="text-sm text-gray-700 flex items-start gap-2">
-                                  <span className="text-brand-blue mt-0.5">•</span>
-                                  <span>Duration set to {version.duration_minutes || config.duration_minutes || 30} min</span>
-                                </li>
-                                {version.jd_title && (
-                                  <li className="text-sm text-gray-700 flex items-start gap-2">
-                                    <span className="text-brand-blue mt-0.5">•</span>
-                                    <span>Linked to job posting: {version.jd_title}</span>
-                                  </li>
-                                )}
-                                {version.total_questions && (
-                                  <li className="text-sm text-gray-700 flex items-start gap-2">
-                                    <span className="text-brand-blue mt-0.5">•</span>
-                                    <span>Total questions: {version.total_questions}</span>
-                                  </li>
-                                )}
-                              </ul>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  });
-                  })()}
-                </div>
+              {previewVersionId && (
+                <ConfigurePreviewDialog configId={previewVersionId} onClose={() => setPreviewVersionId(null)} />
               )}
             </div>
           )}

@@ -2266,6 +2266,18 @@ export default function ResumeScoringPage({
               </div>
 
               <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full sm:w-auto sm:flex-shrink-0">
+                {/* Go to JD — opens the job, at the version this page is
+                    scoring against (`jobId` is that version's JD id, and
+                    follows the version switcher). */}
+                <Button
+                  variant="secondary"
+                  onClick={() => router.push(`/recruitment/job-details?id=${encodeURIComponent(selectedHistoryItem.jobId)}`)}
+                  title="Open this job version"
+                  icon={<Briefcase className="w-4 h-4" />}
+                  className="w-full sm:w-auto"
+                >
+                  Go to JD
+                </Button>
                 {/* Prev/Next — placed before the Score New Resumes action */}
                 <Button
                   variant="primary"
@@ -3343,6 +3355,13 @@ export default function ResumeScoringPage({
                           >
                             {item.jobTitle}
                           </h3>
+                          {/* Version badge */}
+                          {displayVersionNumber && displayVersionNumber >= 1 && (
+                            <span className="inline-flex h-7 items-center px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 gap-1.5 flex-shrink-0">
+                              <div className="w-1.5 h-1.5 rounded-full bg-gray-500 dark:bg-slate-500"></div>
+                              v{displayVersionNumber}
+                            </span>
+                          )}
                           {/* Status badge */}
                           {(() => {
                             const s = (item.jdStatus || 'published').toLowerCase();
@@ -3362,13 +3381,6 @@ export default function ResumeScoringPage({
                               </span>
                             );
                           })()}
-                          {/* Version badge */}
-                          {displayVersionNumber && displayVersionNumber >= 1 && (
-                            <span className="inline-flex h-7 items-center px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 gap-1.5 flex-shrink-0">
-                              <div className="w-1.5 h-1.5 rounded-full bg-gray-500 dark:bg-slate-500"></div>
-                              v{displayVersionNumber}
-                            </span>
-                          )}
                           {/* History icon button */}
                           <Button
                             variant="secondary"

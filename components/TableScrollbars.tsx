@@ -591,9 +591,20 @@ export default function TableScrollbars() {
              frame after the popover closes. */
           const stripMidY = stripTop + X_GUTTER / 2;
           const X_OCCLUSION_SAMPLES = 8;
+          /* A resize handle on a neighbouring panel (e.g. FolderTree's, which
+             deliberately straddles its own border by a few px either side so
+             it's grabbable right at the divider — see `-right-1 w-2` there)
+             sits exactly on the shell's edge without covering any of its real
+             content. Sampling the track's bare edge finds that handle and
+             mistakes it for an occluder, hiding the bar on every table beside
+             such a panel. Insetting the sampled range clears it while a genuine
+             full-width occluder (a dialog, the sticky breadcrumb) still covers
+             every inset sample same as before. */
+          const EDGE_INSET = 8;
+          const sampledWidth = Math.max(0, trackWidth - EDGE_INSET * 2);
           let xOccluded = false;
           for (let i = 0; i <= X_OCCLUSION_SAMPLES; i++) {
-            const sampleX = trackLeft + (trackWidth * i) / X_OCCLUSION_SAMPLES;
+            const sampleX = trackLeft + EDGE_INSET + (sampledWidth * i) / X_OCCLUSION_SAMPLES;
             if (!isShellAt(sampleX, stripMidY)) {
               xOccluded = true;
               break;

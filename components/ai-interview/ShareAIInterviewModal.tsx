@@ -1224,7 +1224,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                               <Info className="w-3 h-3 flex-shrink-0" />
                               <span>
                                 <span className="font-semibold">Note:</span>{' '}
-                                {pending} unit{pending > 1 ? 's' : ''} held by active invitations — released automatically when links expire.
+                                {pending} unit{pending > 1 ? 's' : ''} held by active invitations — freed when an invite expires or you revoke it.
                               </span>
                             </p>
                           )}
