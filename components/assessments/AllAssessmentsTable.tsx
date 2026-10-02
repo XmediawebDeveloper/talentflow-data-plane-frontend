@@ -42,6 +42,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { Button } from '@/components/ui/button';
+import { useArchiveAssessmentConfirm } from '@/components/assessments/ArchiveAssessmentModal';
 import { PAGER_LIST_PARAM, rememberAssessmentPagerOrder, type AssessmentPagerList } from '@/lib/utils/assessmentPagerList';
 
 /* Same batch size and same reason as the Assessments dashboard's own list: the
@@ -329,6 +330,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
   const canUpdateAssessment = isTenantAdmin || (user?.permissions?.canUpdateAssessments ?? false);
   const canDeleteAssessment = isTenantAdmin || (user?.permissions?.canDeleteAssessments ?? false);
   const dialog = useGlobalDialog();
+  const { confirmArchive, archiveConfirmModal } = useArchiveAssessmentConfirm();
   const fixedLabel = fixedStatusLabel(fixedStatus);
   /* Both lines of the page header. Read only when this table is on its OWN
      route — see the header block below, which `embedded` drops whole. On the
@@ -737,7 +739,11 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
       toast.error('You do not have permission to archive assessments');
       return;
     }
-    if (!await dialog.confirm({ title: 'Archive Assessment', message: 'Archive this assessment? It will be moved to the archived section.', variant: 'warning', confirmText: 'Archive' })) return;
+    if (!await confirmArchive({
+      title: `${row.jobName || row.title || 'Untitled'} - Assessment`,
+      version: row.assessmentVersion,
+      createdAt: row.createdAt,
+    })) return;
     void runStatusAction(row, 'archive', () => assessmentService.update(row.id, { status: 'archived' }), 'Assessment archived');
   };
 
@@ -1383,6 +1389,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
           )}
         </div>
       </div>
+      {archiveConfirmModal}
     </div>
   );
 }

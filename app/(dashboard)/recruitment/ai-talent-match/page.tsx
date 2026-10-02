@@ -88,6 +88,11 @@ interface Job {
   /** ISO timestamp — "View Versions" tie-breaks same-version-number siblings
    *  by recency, the same way groupByLineage does everywhere else. */
   createdAt?: string;
+  /** JD salary, for the Matched Jobs rows' details line. */
+  salaryMin?: number | null;
+  salaryMax?: number | null;
+  salaryCurrency?: string;
+  compensationType?: string;
 }
 
 interface MatchHistory {
@@ -97,6 +102,8 @@ interface MatchHistory {
   matchedAt: Date;
   totalMatches: number;
   matchedCandidates: any[];
+  /** Who ran the match, when the sessions API sends it. */
+  matchedByName?: string;
 }
 
 // Transform JD API response to Job format for the component
@@ -131,6 +138,10 @@ function transformJDToJob(jd: JDResponse): Job {
     postedDate: mapped.postedDate,
     creationMethod: mapped.creation_method,
     createdAt: mapped.created_at,
+    salaryMin: mapped.salary_min,
+    salaryMax: mapped.salary_max,
+    salaryCurrency: mapped.salary_currency,
+    compensationType: mapped.compensation_type,
   };
 }
 
@@ -259,6 +270,7 @@ export default function AITalentMatchRoute() {
             matchedAt: new Date(session.created_at),
             totalMatches: session.total_matches,
             matchedCandidates: [],
+            matchedByName: session.created_by_name || undefined,
           };
         });
 

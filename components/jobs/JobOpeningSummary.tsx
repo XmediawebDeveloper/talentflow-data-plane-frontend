@@ -98,8 +98,10 @@ function JobOpeningMetaItems({ job }: { job: Job }) {
   );
 }
 
-/** Experience / industry / location / employment type / work mode, as items. */
-function JobOpeningPrimaryItems({ job }: { job: Job }) {
+/** Experience / industry / location / employment type / work mode, as items.
+ *  Exported so a list that is not a Job Openings row (AI Talent Match's
+ *  Matched Jobs) can print the same JD details line. */
+export function JobOpeningPrimaryItems({ job }: { job: Job }) {
   return (
     <>
       {job.experience && (

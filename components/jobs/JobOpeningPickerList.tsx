@@ -89,6 +89,18 @@ export interface JobOpeningPickerListProps {
    */
   showAllStatuses?: boolean;
   /**
+   * The Job Descriptions page's All Jobs listing, drafts left out: each
+   * lineage by its latest NON-DRAFT version, whatever that version's status.
+   * A Disabled / Archived job is listed — so it does not silently go missing —
+   * but greyed out and unselectable, with the reason on hover; only a
+   * Published one can be picked from its card. Its Version History still
+   * offers any older Published version, and shows Disabled / Archived ones
+   * greyed (drafts stay hidden there too). A lineage with only drafts is left
+   * off. Takes precedence over `showAllStatuses`. Off by default — every
+   * other host keeps its existing listing.
+   */
+  excludeDraftsOnly?: boolean;
+  /**
    * Anchor placed immediately above the first job card, for a host that wants
    * to scroll this list to the top of the screen when it opens (Resume
    * Scoring's "Score Resumes" does). Sits above the cards rather than on the
@@ -117,6 +129,7 @@ export default function JobOpeningPickerList({
   proceedLabel = 'Select Resumes',
   proceedDisabled = false,
   showAllStatuses = false,
+  excludeDraftsOnly = false,
   listAnchorRef,
 }: JobOpeningPickerListProps) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -268,6 +281,15 @@ export default function JobOpeningPickerList({
      Applied BEFORE the search, so a query can never promote an older version to
      stand in for its lineage. */
   const listedJobs = useMemo(() => {
+    if (excludeDraftsOnly) {
+      const reps: Job[] = [];
+      versionGroups.forEach(bucket => {
+        // Newest-version-first, so the first non-draft is the latest one.
+        const latestNonDraft = bucket.find(v => v.status !== 'Draft');
+        if (latestNonDraft) reps.push(latestNonDraft);
+      });
+      return reps;
+    }
     if (!showAllStatuses) return getPublishedJobs(allVersions);
     const reps: Job[] = [];
     versionGroups.forEach(bucket => {
@@ -277,7 +299,7 @@ export default function JobOpeningPickerList({
       if (latestPublished) reps.push(latestPublished);
     });
     return reps;
-  }, [allVersions, showAllStatuses, versionGroups]);
+  }, [allVersions, showAllStatuses, excludeDraftsOnly, versionGroups]);
 
   const filteredJobs = useMemo(
     () => listedJobs.filter(matchesSearch),
@@ -346,7 +368,7 @@ export default function JobOpeningPickerList({
                 describes exactly what is listed. */}
             {sortedJobs.length > 0 && (
               <span className="ml-2 font-normal text-gray-500 dark:text-slate-400">
-                &mdash; {sortedJobs.length} available
+                &mdash; {sortedJobs.length} {excludeDraftsOnly ? `job${sortedJobs.length === 1 ? '' : 's'}` : 'available'}
               </span>
             )}
             {loadingJobs && (
@@ -428,10 +450,15 @@ export default function JobOpeningPickerList({
                  a draft), so every row reaching this point is already
                  eligible to be picked directly. */
               const blockedByOtherPick = !!selection && !lineageSelected;
-              const selectable = !blockedByOtherPick;
-              const reason = blockedByOtherPick
-                ? 'Only one job can be picked at a time — clear the current selection to choose this one'
-                : undefined;
+              /* `excludeDraftsOnly` lists Disabled / Archived jobs too; those
+                 are shown but cannot be picked from their card. */
+              const inactiveJob = excludeDraftsOnly && job.status !== 'Published';
+              const selectable = !blockedByOtherPick && !inactiveJob;
+              const reason = inactiveJob
+                ? `This job is ${String(job.status).toLowerCase()} — it can't be selected`
+                : blockedByOtherPick
+                  ? 'Only one job can be picked at a time — clear the current selection to choose this one'
+                  : undefined;
 
               /* Every version in this lineage, not just the published one
                  represented here — what Version History below lists,
@@ -465,7 +492,7 @@ export default function JobOpeningPickerList({
                   title={selectable ? undefined : reason}
                   aria-disabled={!selectable}
                   className={`rounded-lg border-2 p-3 sm:p-4 transition-all ${
-                    blockedByOtherPick
+                    blockedByOtherPick || inactiveJob
                       ? 'bg-gray-50 dark:bg-slate-800/40 border-gray-200 dark:border-slate-700 opacity-60'
                       : lineageSelected
                         ? 'bg-brand-blue/5 border-brand-blue/40 shadow-sm shadow-brand-blue/10'
@@ -480,7 +507,7 @@ export default function JobOpeningPickerList({
                         clicks. */}
                     <label
                       className={`flex items-center pt-1 ${selectable ? 'cursor-pointer' : 'cursor-not-allowed'}`}
-                      title={selectable ? `Select the latest version (v${job.versionNumber ?? 1})` : undefined}
+                      title={selectable ? `Select the latest version (v${job.versionNumber ?? 1})` : reason}
                     >
                       <input
                         type="radio"
@@ -702,7 +729,7 @@ export default function JobOpeningPickerList({
           <div className="text-center py-8 sm:py-12 text-gray-500 dark:text-slate-500">
             <Briefcase className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 text-gray-400 dark:text-slate-500" />
             <p className="text-xs sm:text-sm">
-              {showAllStatuses
+              {showAllStatuses || excludeDraftsOnly
                 ? (searchQuery ? 'No jobs found matching your search' : 'No jobs available')
                 : (searchQuery ? 'No published jobs found matching your search' : 'No published jobs available')}
             </p>
@@ -727,7 +754,7 @@ export default function JobOpeningPickerList({
           totalItems={sortedJobs.length}
           onPageChange={setCurrentPage}
           onItemsPerPageChange={setItemsPerPage}
-          itemLabel="published jobs"
+          itemLabel={excludeDraftsOnly ? 'jobs' : 'published jobs'}
           scrollContainerRef={scrollContainerRef}
         />
       )}
