@@ -11,6 +11,9 @@ import AssessmentConfigureModal from '@/components/AssessmentConfigureModal';
 import { assessmentService } from '@/lib/services';
 import FeatureGate from '@/components/shared/FeatureGate';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { jobLineageKey, orderTotalJobs } from '@/lib/utils/assessmentJobOrder';
+import { PAGER_LIST_PARAM, parseAssessmentPagerList, readAssessmentPagerOrder } from '@/lib/utils/assessmentPagerList';
+import { toast } from 'sonner';
 
 /**
  * Mirrors AssessmentDetailsView's real shell: scrolling bg-slate-50 main,
@@ -82,6 +85,25 @@ function AssessmentDetailsSkeleton() {
   );
 }
 
+/** The Total Jobs list's fetch batch (`FULL_SET_BATCH_SIZE` in Assessments.tsx). */
+const TOTAL_JOBS_BATCH_SIZE = 100;
+
+/** The query Prev / Next carries on: `tab` (none for the default tab), and the
+ *  list being paged through, so the next record pages through the same one. */
+const pagerQuery = (tab?: string, list?: string | null) => {
+  const params = new URLSearchParams();
+  if (tab && tab !== 'overview') params.set('tab', tab);
+  if (list) params.set(PAGER_LIST_PARAM, list);
+  const query = params.toString();
+  return query ? `?${query}` : '';
+};
+
+/* The assessment id Prev / Next is on its way to. Module scope, not state or a
+   ref: the route remounts this page for each `[id]`, so only the module
+   outlives the move. Read once by the Draft toast on arrival, then cleared, so
+   a re-render, refetch or direct visit never repeats it. */
+let pagerArrivalFor: string | null = null;
+
 function AssessmentDetailsContent() {
   const params = useParams();
   const router = useRouter();
@@ -101,52 +123,71 @@ function AssessmentDetailsContent() {
   const [assessment, setAssessment] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  /* Prev / Next steps between JOBS, one stop per job.
+  /* Prev / Next steps between JOBS, one stop per job, in EXACTLY the order
+   * and with exactly the rows the Assessments page's Total Jobs list shows.
    *
-   * This held every assessment id the account has, so on a job with three
-   * versions Next walked V1 → V2 → V3 before ever reaching the next job -
-   * paging through versions of the thing you were already looking at. The
-   * version selector in the header is what moves between a job's versions;
-   * this pager moves between jobs.
+   * One stop per job because the version selector in the header is what moves
+   * between a job's versions; this pager moves between jobs.
    *
-   * One entry per job LINEAGE, keyed the way every other surface on this page
-   * keys one (`jd_short_id`, falling back to `jd_id`, then the row's own id so
-   * an unlinked assessment stays its own stop rather than collapsing into a
-   * shared "no job" bucket). The id kept for each job is its newest
-   * assessment - the same row the Total Jobs list shows for that job - so
-   * paging lands where the list would.
+   * The order is not worked out here. It used to be: this page kept the raw
+   * API order and picked each job's newest assessment, while Total Jobs sorts
+   * by latest publish and never lets a draft stand for a job that has a
+   * published version - so the job Total Jobs lists first read "2 / 71" here.
+   * Both now call `orderTotalJobs` (lib/utils/assessmentJobOrder) over the
+   * same set - the full, unfiltered assessment list, fetched in the same
+   * batches - so position, count, Prev and Next all come from that one list.
    */
   const [allAssessmentIds, setAllAssessmentIds] = useState<string[]>([]);
+  /* Every assessment id in the list -> the job stop it belongs to. Only the
+     job's Total Jobs row IS a stop, so opening any other version - most often
+     an older one already sent to candidates, since those are duplicated
+     rather than edited - found itself nowhere in `allAssessmentIds`: index -1,
+     "0 / N", and both Prev and Next dead. This places such a version at its
+     job's stop instead, so the pager works from every version. */
+  const [jobStopByAssessmentId, setJobStopByAssessmentId] = useState<Record<string, number>>({});
+
+  /* Opened from one of the Assessments page's tables - All, Active, Draft or
+     Archived (`?list=…-assessments`): page through THAT table's records -
+     every version its own stop, in the order it was showing (see
+     lib/utils/assessmentPagerList) - so "X / N" counts that tab's
+     assessments, not jobs. Falls back to Total Jobs when that order is not to
+     hand (another browser tab, cleared storage) or no longer holds this one. */
+  const pagerList = parseAssessmentPagerList(searchParams.get(PAGER_LIST_PARAM));
 
   useEffect(() => {
     const fetchAllIds = async () => {
       try {
-        const probe: any = await assessmentService.list({ page_size: 1, page: 1 });
-        const probeItems: any[] = Array.isArray(probe) ? probe : (probe.items ?? []);
-        const total: number = (probe && typeof probe === 'object' && 'total' in probe ? probe.total : probeItems.length) ?? probeItems.length;
-        const res: any = total > 0
-          ? await assessmentService.list({ page_size: total, page: 1 })
-          : probe;
-        const items: any[] = Array.isArray(res) ? res : (res.items ?? []);
-        /* Collapse to one stop per job, keeping each job's newest assessment
-           and the order the list returned them in - so the pager runs in the
-           same order as the Total Jobs list rather than re-sorting under it. */
-        const byJob = new Map<string, (typeof items)[number]>();
-        for (const row of items) {
-          const key = row?.jd_short_id || row?.jd_id || `__unlinked__:${row?.id}`;
-          const current = byJob.get(key);
-          const isNewer =
-            !current ||
-            (row?.jd_version ?? 0) > (current?.jd_version ?? 0) ||
-            ((row?.jd_version ?? 0) === (current?.jd_version ?? 0) &&
-              (row?.version ?? 0) > (current?.version ?? 0));
-          if (isNewer) byJob.set(key, row);
+        if (pagerList) {
+          const order = readAssessmentPagerOrder(pagerList);
+          if (order?.includes(assessmentId)) {
+            setAllAssessmentIds(order);
+            setJobStopByAssessmentId({});
+            return;
+          }
         }
-        setAllAssessmentIds([...byJob.values()].map((a: any) => a.id));
+        /* The Total Jobs fetch (`loadAssessmentsPage`): every assessment, no
+           status or other filter, in batches of the size it pages by. */
+        const items: any[] = [];
+        for (let page = 1; ; page++) {
+          const batch: any = await assessmentService.list({ page, page_size: TOTAL_JOBS_BATCH_SIZE });
+          const rows: any[] = Array.isArray(batch) ? batch : (batch?.items ?? []);
+          items.push(...rows);
+          const total: number = (Array.isArray(batch) ? undefined : batch?.total) ?? items.length;
+          if (rows.length < TOTAL_JOBS_BATCH_SIZE || items.length >= total) break;
+        }
+        const stops = orderTotalJobs(items.filter((row) => row?.id));
+        const stopIndexByKey = new Map(stops.map((row, index) => [jobLineageKey(row), index]));
+        const stopById: Record<string, number> = {};
+        for (const row of items) {
+          const index = row?.id ? stopIndexByKey.get(jobLineageKey(row)) : undefined;
+          if (index != null) stopById[row.id] = index;
+        }
+        setAllAssessmentIds(stops.map((row) => row.id));
+        setJobStopByAssessmentId(stopById);
       } catch { /* ignore */ }
     };
     fetchAllIds();
-  }, []);
+  }, [pagerList, assessmentId]);
 
   // Modal states
   const [showShareModal, setShowShareModal] = useState(false);
@@ -246,36 +287,49 @@ function AssessmentDetailsContent() {
   }, [assessmentId]);
 
   /**
-   * A DRAFT does not belong on this page, whoever sent it here.
+   * DRAFT assessments, decided by the assessment's own status (`status` off
+   * `assessmentService.get`, mapped above) - never the job's. Prev / Next page
+   * through assessments of every status, so they land on drafts as readily as
+   * on an Active one; every other status opens normally.
    *
-   * This view is the published reading of an assessment — invitations,
-   * analytics, candidate results, version history. A draft has none of those
-   * and cannot be finished from here, so landing on it showed a page of empty
-   * panels with no way back into editing.
-   *
-   * Enforced on the ROUTE rather than only in the callers that link here,
-   * because a draft reaches this URL in ways no caller controls: a bookmark, a
-   * shared link, the browser Back button, a refresh, or a version panel's row
-   * on a page that has not been updated. Redirects to the same draft page the
-   * Edit action opens (`create?step=configure&edit=<id>`) — one page for
-   * drafts, not a second one written for this route.
-   *
-   * `replace`, so Back returns to wherever the user came from rather than to
-   * this URL, which would bounce them straight here again. Gated on `jd_id`:
-   * the configure form is scoped to a job, so an assessment without one has no
-   * draft page to open and stays here rather than being sent to a URL that
-   * cannot resolve.
+   * No popup. The page opens with every region greyed out and inert
+   * except the header's Edit pencil, which stays live and highlighted
+   * (`draftLocked` on the view), and arriving by Prev / Next says why in a
+   * toast. This replaced a redirect that sent drafts off to the create flow,
+   * which took Prev / Next with it.
    */
-  useEffect(() => {
-    if (isLoading || !assessment) return;
-    if (assessment.status !== 'Draft' || !assessment.jd_id) return;
-    router.replace(
-      `/recruitment/assessments/create?step=configure`
-      + `&jd_id=${encodeURIComponent(assessment.jd_id)}`
-      + `&edit=${encodeURIComponent(assessment.id)}`,
-    );
-  }, [isLoading, assessment, router]);
+  const isDraftLocked = assessment?.status === 'Draft';
 
+  /* Once per Prev / Next arrival, and only once the record for THIS route has
+     loaded - so the toast names the version the API returned, and a stale
+     record still on screen mid-switch cannot trigger it. */
+  useEffect(() => {
+    if (isLoading || !assessment || assessment.id !== assessmentId) return;
+    if (pagerArrivalFor !== assessmentId) return;
+    pagerArrivalFor = null;
+    if (assessment.status !== 'Draft') return;
+    toast.warning(
+      assessment.version
+        ? `Assessment Version V${assessment.version} is currently in Draft. Please publish it before using it.`
+        : 'This Assessment Version is currently in Draft. Please publish it before using it.',
+    );
+  }, [isLoading, assessment, assessmentId]);
+
+  /* ARCHIVED - the page opens normally (Unarchive replaces the Edit pencil in
+     the header) and says so in a toast on every arrival: Prev, Next or the URL
+     itself. Once per assessment per visit - the ref outlives re-renders and
+     refetches, and the route remounts this page for the next `[id]`. */
+  const archivedToastShownFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (isLoading || !assessment || assessment.id !== assessmentId) return;
+    /* Decided on the FIRST load of this assessment only, so archiving it in
+       place with the header's Archive icon is not then announced as an
+       arrival on an archived one. */
+    if (archivedToastShownFor.current === assessment.id) return;
+    archivedToastShownFor.current = assessment.id;
+    if (assessment.status !== 'Archived') return;
+    toast.info('This Assessment Version is currently Archived. Please unarchive it to continue.');
+  }, [isLoading, assessment, assessmentId]);
   // jd_id comes from the fetched assessment rather than the URL — the JD this
   // assessment belongs to is the authoritative link target.
   const jdId = assessment?.jd_id || '';
@@ -322,13 +376,6 @@ function AssessmentDetailsContent() {
     }
   };
 
-  /* Held on the loader while the draft redirect above lands. Rendering the
-     details view for the frame in between is the glitch this avoids — the
-     published page flashing up for an assessment that is on its way to the
-     draft page. */
-  const redirectingToDraft =
-    !isLoading && !!assessment && assessment.status === 'Draft' && !!assessment.jd_id;
-
   /* THE FULL-PAGE LOADER IS FOR THE FIRST LOAD ONLY.
    *
    * `tf-loader-page` is a 60dvh flex box holding a spinner, so returning it
@@ -344,12 +391,8 @@ function AssessmentDetailsContent() {
    * the spinner on the version row being opened - rather than by blanking
    * everything. Only an arrival with nothing to show yet gets the full-page
    * loader, which is the case it was written for.
-   *
-   * `redirectingToDraft` still takes it, mounted or not: that is a route
-   * change about to happen, not a version switch, and the page it is leaving
-   * must not sit there looking interactive.
    */
-  if ((isLoading && !assessment) || redirectingToDraft) {
+  if (isLoading && !assessment) {
     return <AssessmentDetailsSkeleton />;
   }
 
@@ -373,6 +416,26 @@ function AssessmentDetailsContent() {
     );
   }
 
+  /* The neighbour opens on the vertical tab open now, via the same `?tab=`
+     deep link the view already reads (an unknown or unavailable tab falls
+     back to Assessment Details there). The default tab keeps the bare URL. */
+  const currentIndex = allAssessmentIds.includes(assessmentId)
+    ? allAssessmentIds.indexOf(assessmentId)
+    : jobStopByAssessmentId[assessmentId] ?? -1;
+  const goTo = (targetId: string, tab?: string) => {
+    pagerArrivalFor = targetId;
+    router.replace(`/recruitment/assessments/${targetId}${pagerQuery(tab, pagerList)}`);
+  };
+  const goPrev = currentIndex > 0
+    ? (tab?: string) => goTo(allAssessmentIds[currentIndex - 1], tab)
+    : undefined;
+  const goNext = currentIndex >= 0 && currentIndex < allAssessmentIds.length - 1
+    ? (tab?: string) => goTo(allAssessmentIds[currentIndex + 1], tab)
+    : undefined;
+  /* The header Edit icon: the Configure popup, or the plain edit dialog for an
+     assessment with no job to configure against. */
+  const handleEdit = () => (assessment.jd_id ? setShowConfigureModal(true) : setShowEditModal(true));
+
   return (
     // No wrapper chrome here — AssessmentDetailsView owns its own <main> +
     // max-w-[1400px] + padded card (same as JobDetailView). Wrapping it again
@@ -388,24 +451,21 @@ function AssessmentDetailsContent() {
              visible reporting is the per-row spinner in the version menu. */
           isReloading={isLoading}
           onBack={handleBack}
-          onEdit={() => (assessment.jd_id ? setShowConfigureModal(true) : setShowEditModal(true))}
+          onEdit={handleEdit}
           onPreview={() => setShowPreviewModal(true)}
           onShare={canInvite ? () => setShowShareModal(true) : undefined}
           onViewResults={handleViewResults}
           onRefresh={fetchAssessment}
-          currentIndex={allAssessmentIds.indexOf(assessmentId)}
+          currentIndex={currentIndex}
           totalCount={allAssessmentIds.length}
-          onPrev={allAssessmentIds.indexOf(assessmentId) > 0
-            ? () => router.replace(`/recruitment/assessments/${allAssessmentIds[allAssessmentIds.indexOf(assessmentId) - 1]}`)
-            : undefined}
-          onNext={allAssessmentIds.indexOf(assessmentId) >= 0 && allAssessmentIds.indexOf(assessmentId) < allAssessmentIds.length - 1
-            ? () => router.replace(`/recruitment/assessments/${allAssessmentIds[allAssessmentIds.indexOf(assessmentId) + 1]}`)
-            : undefined}
+          onPrev={goPrev}
+          onNext={goNext}
           breadcrumbItems={breadcrumbItems}
           /* This route does not carry a Version History tab. The assessment's
              own versions are still reachable here through the version badge in
              the header; the vertical nav no longer repeats them. */
           showVersionHistory={false}
+          draftLocked={isDraftLocked}
         />
 
         {/* Modals */}
