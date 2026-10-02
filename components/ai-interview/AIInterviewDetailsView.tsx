@@ -20,7 +20,6 @@ import JDOverviewSections from '@/components/jobs/JDOverviewSections';
 import { Button } from '@/components/ui/button';
 import type {
   AIInterviewResponse,
-  AIInterviewVersionHistoryItem,
   AIInterviewHRQuestion,
 } from '@/lib/services/aiInterviewService';
 import CandidateResultsView from './CandidateResultsView';
@@ -194,8 +193,6 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   const [activityLoading, setActivityLoading] = useState(false);
 
   // Version History
-  const [versionHistory, setVersionHistory] = useState<AIInterviewVersionHistoryItem[]>([]);
-  const [versionsLoading, setVersionsLoading] = useState(false);
 
   /* Header's Job Version dropdown — the Assessment Details header's "Manage
      Jobs · V{n}" pill: the linked JD's own version lineage. A row is only
@@ -309,27 +306,11 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
     }
   }, [config.id]);
 
-  const loadVersionHistory = useCallback(async () => {
-    setVersionsLoading(true);
-    try {
-      const result = await aiInterviewService.getVersionHistory(config.id);
-      setVersionHistory(result.items);
-    } catch (error) {
-      console.error('Failed to load version history:', error);
-    } finally {
-      setVersionsLoading(false);
-    }
-  }, [config.id]);
-
   // Always load activity on mount (needed for invite count in header)
   useEffect(() => {
     if (configureOnly) return;
     loadActivity();
   }, [loadActivity, configureOnly]);
-
-  useEffect(() => {
-    if (activeTab === 'versions') loadVersionHistory();
-  }, [activeTab, loadVersionHistory]);
 
   // Job Version dropdown's list — fetched once, the first time it's opened.
   const ensureJobVersionsLoaded = useCallback(() => {
@@ -1799,8 +1780,21 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
             </div>
           )}
 
-          {/* Version History Tab */}
-          {activeTab === 'versions' && (
+          {/* Version History Tab — same model as the Assessment Details page:
+              one card per INTERVIEW VERSION authored against this job version
+              (V1 is the original; V2 onwards are duplicates), oldest = V1, the
+              same numbering as the header's "Interview Version" badge. The
+              per-save revision timeline (getVersionHistory) is no longer shown
+              here. */}
+          {activeTab === 'versions' && (() => {
+            const siblings = config.jd_id
+              ? [...(siblingConfigsByJdId.get(config.jd_id) || [])].sort(
+                  (a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime(),
+                )
+              : [];
+            const rows = siblings.length > 0 ? siblings : [config];
+            const loading = !!config.jd_id && siblingConfigsByJdId.size === 0;
+            return (
             <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 tf-round-edges">
               <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
                 <div className="flex items-center gap-2.5 mb-1">
@@ -1808,123 +1802,125 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     <Layers className="w-4 h-4 text-brand-blue" />
                   </div>
                   <h2 className="text-base font-semibold text-gray-900 tracking-tight">Version History</h2>
+                  <span className="text-2xs text-gray-500">Job V{config.jd_version ?? 1}</span>
                 </div>
-                {/* Named "Version History" to match the Assessment module. The
-                    header badge (Interview Version) is a different number:
-                    which interview this is for the job version. */}
                 <p className="text-sm text-gray-600">
-                  Every change saved to Interview Version V{interviewVersionOrdinal} of this job, newest first
+                  Every interview version created for Job V{config.jd_version ?? 1} (V1 is the original; V2 onwards are duplicates).
                 </p>
               </div>
-              {versionsLoading ? (
-                <div className="p-6 space-y-6">
-                  {Array.from({ length: 3 }).map((_, i) => (
-                    <div key={i} className="flex items-start gap-4">
-                      <Skeleton className="w-12 h-12 rounded-full flex-shrink-0" />
-                      <div className="flex-1 min-w-0 space-y-2">
-                        <Skeleton className="h-5 w-48" />
-                        <Skeleton className="h-4 w-64" />
-                        <Skeleton className="h-4 w-40" />
-                        <Skeleton className="h-4 w-52" />
-                        <Skeleton className="h-20 w-full rounded-lg mt-2" />
+              {loading ? (
+                <div className="p-6 space-y-4">
+                  {Array.from({ length: 2 }).map((_, i) => (
+                    <div key={i} className="rounded-xl border border-gray-100 bg-white p-4 ring-1 ring-black/[0.02]">
+                      <div className="flex items-start gap-4">
+                        <Skeleton className="w-12 h-12 rounded-full flex-shrink-0" />
+                        <div className="flex-1 min-w-0 space-y-2">
+                          <Skeleton className="h-5 w-64" />
+                          <Skeleton className="h-3.5 w-48" />
+                          <Skeleton className="h-3.5 w-40" />
+                        </div>
                       </div>
                     </div>
                   ))}
                 </div>
-              ) : versionHistory.length === 0 ? (
-                <div className="px-6 py-12 text-center">
-                  <div className="w-20 h-20 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
-                    <Clock className="w-10 h-10 text-brand-blue" />
-                  </div>
-                  <p className="text-gray-700 font-medium mb-1 text-sm">No version history available</p>
-                  <p className="text-sm text-gray-500">Version history will appear when the interview is edited</p>
-                </div>
               ) : (
-                <div className="p-6 space-y-6">
-                  {(() => {
-                    const minVersion = Math.min(...versionHistory.map(v => v.version));
-                    return versionHistory.map((version, idx) => {
-                    const isCurrentVersion = idx === 0;
-                    const isFirstVersion = version.version === minVersion;
-                    const versionDate = formatIST(version.created_at);
+                <div className="p-6 space-y-4">
+                  {rows.map((sibling, idx) => {
+                    const versionNo = idx + 1;
+                    const isThis = sibling.id === config.id;
+                    const rounds = (sibling.rounds_config || [])
+                      .filter((r: any) => r.enabled !== false)
+                      .map((r: any) => ROUND_LABELS[r.type] || r.type)
+                      .join(', ') || '—';
+                    const statusRaw = String(sibling.status || '').toLowerCase();
+                    const statusLabel = statusRaw === 'published' ? 'Active'
+                      : statusRaw === 'archived' ? 'Archived'
+                      : statusRaw === 'closed' ? 'Completed'
+                      : 'Draft';
+                    const statusChipClass = statusRaw === 'published'
+                      ? 'bg-success-subtle text-success-strong ring-1 ring-success-line'
+                      : statusRaw === 'archived'
+                      ? 'bg-gray-100 text-gray-700 ring-1 ring-gray-200'
+                      : statusRaw === 'closed'
+                      ? 'bg-blue-100 text-blue-800 ring-1 ring-blue-200'
+                      : 'bg-warning-subtle text-warning-strong ring-1 ring-warning-line';
+                    const s: any = sibling;
                     return (
-                      <div key={version.id} className="space-y-4">
+                      <div
+                        key={sibling.id}
+                        className={`rounded-xl border p-4 ring-1 ring-black/[0.02] ${
+                          isThis ? 'border-brand-blue/40 bg-brand-blue/5' : 'border-gray-100 bg-white'
+                        }`}
+                      >
                         <div className="flex items-start gap-4">
-                          {/* V, matching Assessment's Version History. This counts
-                               changes to this one interview (created, published,
-                               post-publish edits); the header's "Interview Version"
-                               badge is a separate number. */}
-                          <div className="w-12 h-12 bg-brand-cyan rounded-full flex items-center justify-center flex-shrink-0 shadow-md shadow-brand-cyan/25 ring-1 ring-white/20">
-                            <span className="text-white font-bold text-sm">V{version.version}</span>
+                          <div className="w-12 h-12 rounded-full bg-brand-cyan shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10 flex items-center justify-center flex-shrink-0">
+                            <span className="text-white font-bold text-sm">V{versionNo}</span>
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mb-1">
-                              <h4 className="text-base font-semibold text-gray-900 tracking-tight">
-                                Version {version.version} {
-                                  /config published/i.test(version.change_summary || '') ? 'Published'
-                                  : isFirstVersion ? 'Created'
-                                  : /archived/i.test(version.change_summary || '') ? (/unarchived/i.test(version.change_summary || '') ? 'Unarchived' : 'Archived')
-                                  : 'Updated'
-                                }
+                          <div className="@container flex-1 min-w-0">
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2 mb-1.5">
+                              <h4 className="min-w-0 text-base font-semibold text-gray-900 tracking-tight truncate">
+                                {sibling.position || sibling.jd_title || 'Untitled interview'} - Version {versionNo}
                               </h4>
-                              {isCurrentVersion && (
-                                <span className="px-2.5 py-1 bg-brand-blue text-white text-xs font-medium rounded shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 w-fit">
-                                  Current
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${statusChipClass}`}>
+                                  {statusLabel}
                                 </span>
-                              )}
-                            </div>
-                            <p className="text-sm text-gray-600 mb-3">
-                              {isFirstVersion ? 'Initial interview configuration created' : (version.change_summary || 'Interview configuration updated')}
-                            </p>
-                            <div className="flex items-center gap-2 text-sm text-gray-700 mb-1">
-                              <Users className="w-4 h-4 text-brand-blue flex-shrink-0" />
-                              <span className="font-medium">{version.changed_by_name || 'Unknown User'}</span>
-                              <span className="text-gray-400">•</span>
-                              <span className="text-gray-600">Lead Recruiter</span>
-                            </div>
-                            <div className="flex items-center gap-2 text-sm text-gray-600 mb-4">
-                              <Calendar className="w-4 h-4 text-brand-blue flex-shrink-0" />
-                              <span>{/config published/i.test(version.change_summary || '') ? 'Published' : 'Saved'} on {versionDate} IST (UTC+5:30)</span>
-                            </div>
-                            <div className="bg-gradient-to-br from-brand-blue/5 to-brand-cyan/5 border border-gray-100 ring-1 ring-brand-blue/10 rounded-lg p-4">
-                              <div className="text-sm font-medium text-gray-900 mb-3">
-                                {isFirstVersion ? 'Initial Configuration:' : 'Updated Configuration:'}
+                                {isThis && (
+                                  <span className="inline-flex items-center px-2 py-0.5 bg-brand-blue text-white shadow-sm shadow-brand-blue/25 text-xs font-medium rounded-full whitespace-nowrap">
+                                    Viewing
+                                  </span>
+                                )}
                               </div>
-                              <ul className="space-y-2">
-                                {version.rounds_config && version.rounds_config.filter((r: any) => r.enabled !== false).length > 0 && (
-                                  <li className="text-sm text-gray-700 flex items-start gap-2">
-                                    <span className="text-brand-blue mt-0.5">•</span>
-                                    <span>Interview rounds: {version.rounds_config.filter((r: any) => r.enabled !== false).map((r: any) => ROUND_LABELS[r.type] || r.type).join(', ')}</span>
-                                  </li>
-                                )}
-                                <li className="text-sm text-gray-700 flex items-start gap-2">
-                                  <span className="text-brand-blue mt-0.5">•</span>
-                                  <span>Duration set to {version.duration_minutes || config.duration_minutes || 30} min</span>
-                                </li>
-                                {version.jd_title && (
-                                  <li className="text-sm text-gray-700 flex items-start gap-2">
-                                    <span className="text-brand-blue mt-0.5">•</span>
-                                    <span>Linked to job posting: {version.jd_title}</span>
-                                  </li>
-                                )}
-                                {version.total_questions && (
-                                  <li className="text-sm text-gray-700 flex items-start gap-2">
-                                    <span className="text-brand-blue mt-0.5">•</span>
-                                    <span>Total questions: {version.total_questions}</span>
-                                  </li>
-                                )}
-                              </ul>
+                            </div>
+                            <div className="grid grid-cols-1 @md:grid-cols-2 gap-x-4 gap-y-1 text-sm text-gray-700 mt-2">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <Users className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+                                <span className="shrink-0">Created by</span>
+                                <span className="font-medium truncate">{s.created_by_name || 'Unknown'}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <Calendar className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+                                <span className="truncate">{formatIST(sibling.created_at)}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <Clock className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+                                <span>{sibling.duration_minutes || 30} min</span>
+                              </div>
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <FileText className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+                                <span className="truncate">{rounds}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <Users className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+                                <span>{s.invitations_count || 0} invited</span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <CheckCircle className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+                                <span>{s.completed_count || 0} completed</span>
+                              </div>
                             </div>
                           </div>
+                          {!isThis && (
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => router.push(`/recruitment/ai-interviews/${sibling.id}`)}
+                              aria-label={`Open Version ${versionNo}`}
+                              title={`Open Version ${versionNo}`}
+                            >
+                              <ExternalLink className="w-4 h-4" />
+                            </Button>
+                          )}
                         </div>
                       </div>
                     );
-                  });
-                  })()}
+                  })}
                 </div>
               )}
             </div>
-          )}
+            );
+          })()}
 
           {/* View JD Tab — the linked job description, read-only, the same
               components (and so the same reading) the Job Details page and
