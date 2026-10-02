@@ -36,6 +36,18 @@ interface ResumeTextPreviewModalProps {
   onClose: () => void;
 }
 
+/** A blob is a real PDF if it starts with the `%PDF` magic bytes — the same
+ *  check the duplicate-resolution preview uses, since the preview/download
+ *  endpoints below can return either a PDF or the original Word file. */
+async function isPdfBlob(blob: Blob): Promise<boolean> {
+  try {
+    const header = await blob.slice(0, 5).text();
+    return header.startsWith('%PDF');
+  } catch {
+    return false;
+  }
+}
+
 /** Lines treated as résumé section headings, so the preview keeps its shape. */
 const SECTION_HEADERS = [
   'experience', 'work experience', 'employment', 'professional experience',
@@ -67,29 +79,87 @@ export default function ResumeTextPreviewModal({
   zIndexClassName = 'z-50',
   onClose,
 }: ResumeTextPreviewModalProps) {
-  /* A stored résumé is previewed from the `extracted_text` the server holds,
-     which is what produces the formatted page — name, section headings,
-     bullets. A file the server has never seen has no such record, so its text
-     is pulled out of the file here in the browser and rendered through the
-     very same branch, giving "New Resume (Uploading)" the identical format to
-     "Existing Resume" beside it.
+  /* A stored résumé is previewed from its actual file — PDF shown inline,
+     Word rendered through docx-preview — fetched below via the `preview`
+     endpoint (falling back to `download`). `extracted_text` is now only the
+     last-resort fallback, for the rare case neither endpoint returns
+     something renderable (e.g. a corrupted upload): reconstructing a page
+     from extracted text loses the original's real formatting, which is what
+     made this preview look wrong regardless of the source file's format.
 
-     `extractFailed` is the escape hatch: an old binary .doc, or a scanned PDF
-     with no text layer, renders as the document itself instead. */
+     A file the server has never seen has no stored file to fetch, so its
+     text is pulled out of the file here in the browser instead, rendered
+     through the same extracted-text branch, giving "New Resume (Uploading)"
+     the same format as "Existing Resume" beside it. `extractFailed` is the
+     escape hatch there: an old binary .doc, or a scanned PDF with no text
+     layer, renders as the document itself instead. */
   const [extractFailed, setExtractFailed] = useState(false);
   const hasLocalFile = !!localFile;
-  const documentMode = !text && (hasLocalFile ? extractFailed : !!documentUrl);
+  const isStoredResumeOnly = !text && !documentUrl && !localFile && !!resumeId;
+  const [resolvedPdfUrl, setResolvedPdfUrl] = useState<string | null>(null);
+  const [resolvedDocxBlob, setResolvedDocxBlob] = useState<Blob | null>(null);
+  const [documentFetchDone, setDocumentFetchDone] = useState(false);
+  const effectiveDocumentUrl = documentUrl || resolvedPdfUrl;
+  /* A caller-supplied `documentUrl` (a local file already identified as a
+     real PDF — see DuplicateResumeModal's `isPdf` check) wins immediately,
+     same as a resolved one: there's no reason to wait on text extraction, or
+     prefer it, when the actual file is already known renderable. */
+  const documentMode = !text && (!!documentUrl || (hasLocalFile ? extractFailed : (!!effectiveDocumentUrl || !!resolvedDocxBlob)));
   const [content, setContent] = useState(text || '');
-  const [loading, setLoading] = useState(
-    !text && (hasLocalFile || (!documentUrl && !!resumeId))
-  );
+  const [loading, setLoading] = useState(!text && (hasLocalFile || isStoredResumeOnly));
   const docxContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isStoredResumeOnly) return;
+    let cancelled = false;
+    let objectUrl: string | null = null;
+
+    const resolveBlob = async (blob: Blob) => {
+      if (await isPdfBlob(blob)) {
+        objectUrl = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+        if (cancelled) return false;
+        setResolvedPdfUrl(objectUrl);
+      } else {
+        if (cancelled) return false;
+        setResolvedDocxBlob(blob);
+      }
+      return true;
+    };
+
+    (async () => {
+      let resolved = false;
+      try {
+        resolved = await resolveBlob(await resumeService.preview(resumeId!));
+      } catch {
+        try {
+          resolved = await resolveBlob(await resumeService.download(resumeId!));
+        } catch {
+          resolved = false;
+        }
+      }
+      if (cancelled) return;
+      // Only clear loading on success — on failure, leave it true so the
+      // skeleton persists seamlessly into the extracted_text fallback below,
+      // which clears it once that settles.
+      if (resolved) setLoading(false);
+      setDocumentFetchDone(true);
+    })();
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) window.URL.revokeObjectURL(objectUrl);
+    };
+  }, [isStoredResumeOnly, resumeId]);
 
   useEffect(() => {
     if (text || documentMode || !resumeId) {
       if (text) setContent(text);
       return;
     }
+    // Wait for the real-document fetch above to settle before falling back
+    // to extracted_text, so a slow-but-successful preview never loses a race
+    // against the fallback and gets replaced by the worse rendering.
+    if (isStoredResumeOnly && !documentFetchDone) return;
     let cancelled = false;
     setLoading(true);
     resumeService
@@ -106,7 +176,7 @@ export default function ResumeTextPreviewModal({
     return () => {
       cancelled = true;
     };
-  }, [resumeId, text, documentMode]);
+  }, [resumeId, text, documentMode, isStoredResumeOnly, documentFetchDone]);
 
   /* docx-preview is imported inside this handler, not at the top of the file.
      It reaches for the DOM as it loads, which is why every other component that
@@ -180,6 +250,12 @@ export default function ResumeTextPreviewModal({
     if (localFile && extractFailed && !documentUrl) renderDocx(localFile);
   }, [localFile, extractFailed, documentUrl, renderDocx]);
 
+  /* A stored résumé whose fetched file turned out to be a Word document
+     (the preview/download endpoints didn't convert it to PDF). */
+  useEffect(() => {
+    if (resolvedDocxBlob) renderDocx(resolvedDocxBlob);
+  }, [resolvedDocxBlob, renderDocx]);
+
   const handleDownload = async () => {
     if (onDownload) {
       onDownload();
@@ -245,7 +321,7 @@ export default function ResumeTextPreviewModal({
         {/* Document */}
         <div className="flex-1 overflow-y-auto bg-gray-100 p-4 sm:p-6">
           {documentMode ? (
-            documentUrl ? (
+            effectiveDocumentUrl ? (
               /* Two things made this read as a raw file viewer rather than the
                  clean page the existing-resume preview shows:
                  - h-[70dvh] iframe inside a min-h-full card left a band of empty
@@ -256,7 +332,7 @@ export default function ResumeTextPreviewModal({
                    controls), hidden with #toolbar=0&navpanes=0. */
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 max-w-2xl mx-auto h-full overflow-hidden">
                 <iframe
-                  src={`${documentUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
+                  src={`${effectiveDocumentUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
                   className="w-full h-full border-0"
                   title={title}
                 />

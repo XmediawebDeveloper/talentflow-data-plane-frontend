@@ -81,6 +81,20 @@ export interface JobVersionLineage {
    * every render — a no-op once each id has landed.
    */
   ensureVersionApplicants: (versionIds: string[]) => void;
+  /**
+   * Authoritative version counts per JD id, from GET /jd/version-counts.
+   *
+   * The number a job row shows must not depend on whether a panel has been
+   * opened or a prefetch has landed — that is exactly how the row and the
+   * panel beneath it came to disagree. `active` excludes Draft versions (what
+   * the panel lists); `total` counts every version. Unset means not loaded.
+   */
+  versionCounts: Record<string, { total: number; active: number }>;
+  /**
+   * Load counts for these JD ids, skipping any already known or in flight.
+   * Batched into ONE request per call. Safe on every render.
+   */
+  ensureVersionCounts: (jdIds: string[]) => void;
 }
 
 export function useJobVersionLineage(): JobVersionLineage {
@@ -99,6 +113,10 @@ export function useJobVersionLineage(): JobVersionLineage {
      below — a ref so a request starting/finishing does not itself trigger a
      re-render. */
   const versionApplicantsInFlight = useRef<Set<string>>(new Set());
+  const [versionCounts, setVersionCounts] = useState<Record<string, { total: number; active: number }>>({});
+  /* Same reasoning as the two refs above: in-flight tracking must not re-render
+     the list. One entry per JD id, cleared when its batch settles. */
+  const versionCountsInFlight = useRef<Set<string>>(new Set());
 
   /* Deliberately not cached the way the JD record is: scoring a resume changes
      this number, so it is re-counted every time the panel is opened. A failure
@@ -201,6 +219,39 @@ export function useJobVersionLineage(): JobVersionLineage {
     [filterLineages],
   );
 
+  const ensureVersionCounts = useCallback(
+    (jdIds: string[]) => {
+      const wanted = Array.from(new Set(jdIds.filter(Boolean))).filter(
+        (id) => versionCounts[id] === undefined && !versionCountsInFlight.current.has(id),
+      );
+      if (wanted.length === 0) return;
+      wanted.forEach((id) => versionCountsInFlight.current.add(id));
+      jdService
+        .getVersionCounts(wanted)
+        .then((counts) => {
+          setVersionCounts(prev => {
+            const next = { ...prev };
+            wanted.forEach((id) => {
+              /* An id the server did not answer for (deleted, or not this
+                 tenant's) is cached as a family of one rather than left unset,
+                 so it is not re-requested on every render. */
+              next[id] = counts[id] ?? { total: 1, active: 1 };
+            });
+            return next;
+          });
+        })
+        .catch(() => {
+          /* Left UNSET on failure — unlike the id-missing case above, a failed
+             request is not evidence about the job, and the row falls back to
+             counting the lineage it holds rather than being pinned to a wrong 1. */
+        })
+        .finally(() => {
+          wanted.forEach((id) => versionCountsInFlight.current.delete(id));
+        });
+    },
+    [versionCounts],
+  );
+
   const toggle = useCallback(
     (key: string, jobId: string) => {
       const wasExpanded = expandedKeys.has(key);
@@ -231,6 +282,8 @@ export function useJobVersionLineage(): JobVersionLineage {
   );
 
   return {
+    versionCounts,
+    ensureVersionCounts,
     expandedKeys,
     isExpanded: (key: string) => expandedKeys.has(key),
     lineages,
