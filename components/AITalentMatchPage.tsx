@@ -3655,12 +3655,16 @@ export default function AITalentMatchPage({
                           <td className="py-3 px-4 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
                             {row.location ? row.location : <span className="text-gray-400 dark:text-slate-500">-</span>}
                           </td>
-                          <td className="py-3 px-4 align-middle min-w-[220px]">
-                            <div className="flex flex-wrap gap-1">
+                          <td className="py-3 px-4 align-middle min-w-[220px] max-w-[260px]">
+                            {/* One chip shown in full, the rest collapse into
+                                "+N more" — flex-nowrap so a row with more/longer
+                                skills than another never grows taller than it. */}
+                            <div className="flex flex-nowrap items-center gap-1 overflow-hidden">
                               <SkillsList
                                 skills={row.best.skills}
-                                chipClassName="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-brand-blue/10 text-brand-blue border border-brand-blue/20 whitespace-nowrap"
-                                moreClassName="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs text-brand-blue font-medium whitespace-nowrap hover:bg-brand-blue/10 transition-colors cursor-pointer"
+                                max={1}
+                                chipClassName="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-brand-blue/10 text-brand-blue border border-brand-blue/20 min-w-0 shrink truncate max-w-[160px]"
+                                moreClassName="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs text-brand-blue font-medium whitespace-nowrap hover:bg-brand-blue/10 transition-colors cursor-pointer shrink-0"
                               />
                             </div>
                           </td>
@@ -5328,12 +5332,16 @@ export default function AITalentMatchPage({
                     <td className="px-4 py-3 text-sm text-gray-700 dark:text-slate-300">
                       {candidate.location ? candidate.location : <span className="text-gray-400 dark:text-slate-500">-</span>}
                     </td>
-                    <td className="px-4 py-4">
-                      <div className="flex flex-wrap gap-1">
+                    <td className="px-4 py-4 min-w-[220px] max-w-[260px]">
+                      {/* One chip shown in full, the rest collapse into "+N
+                          more" — flex-nowrap so a row with more/longer skills
+                          than another never grows taller than it. */}
+                      <div className="flex flex-nowrap items-center gap-1 overflow-hidden">
                         <SkillsList
                           skills={candidate.skills}
-                          chipClassName="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-brand-blue/10 text-brand-blue border border-brand-blue/20"
-                          moreClassName="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs text-brand-blue font-medium hover:bg-brand-blue/10 transition-colors cursor-pointer"
+                          max={1}
+                          chipClassName="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-brand-blue/10 text-brand-blue border border-brand-blue/20 min-w-0 shrink truncate max-w-[160px]"
+                          moreClassName="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs text-brand-blue font-medium hover:bg-brand-blue/10 transition-colors cursor-pointer shrink-0"
                         />
                       </div>
                     </td>
