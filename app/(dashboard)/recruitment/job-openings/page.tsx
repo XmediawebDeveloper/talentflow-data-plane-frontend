@@ -372,6 +372,7 @@ export default function JobOpeningsPage() {
       setJobs(prev => prev.map(job =>
         job.id === jobId ? { ...job, status: mapStatus(status) } : job
       ));
+      markVersionStatus(jobId, status.toLowerCase());
       toast.success('Job status updated');
     } catch (error) {
       toast.error('Failed to update job status');
@@ -452,6 +453,7 @@ export default function JobOpeningsPage() {
       setJobs(prev => prev.map(j =>
         j.id === job.id ? { ...j, status: 'Published', postedDate: new Date().toISOString() } : j
       ));
+      markVersionStatus(job.id, 'published');
       toast.success(`"${job.title}" is now live!`);
     } catch (error: any) {
       // Check if this is a quota exceeded error
