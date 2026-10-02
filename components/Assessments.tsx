@@ -19,6 +19,7 @@ import ShareAssessmentModal from './ShareAssessmentModal';
 import AssessmentAuditTrail from './AssessmentAuditTrail';
 import ConsentLogs from './compliance/ConsentLogs';
 import AssessmentPreviewModal from './AssessmentPreviewModal';
+import AssessmentConfigureModal from './AssessmentConfigureModal';
 import AssessmentEditModal from './AssessmentEditModal';
 import JDVersionHistoryModal from '@/components/JDVersionHistoryModal';
 import AssessmentDetailsView from './AssessmentDetailsView';
@@ -128,6 +129,7 @@ import {
 } from '@/lib/utils/jobAssessmentHierarchy';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import { formatScore, SCORE_CELL_TEXT } from '@/lib/utils/score';
+import { useArchiveAssessmentConfirm } from '@/components/assessments/ArchiveAssessmentModal';
 import { jobLineageKey, collapseByLineage as collapseJobLineages, orderTotalJobs } from '@/lib/utils/assessmentJobOrder';
 
 
@@ -408,6 +410,10 @@ const FLAT_ASSESSMENT_TABLE_CONFIG = {
   archived: { fixedStatus: 'archived' },
 } satisfies Record<FlatAssessmentTab, { fixedStatus?: 'published' | 'draft' | 'archived' }>;
 
+/** What the Send Invite picker's preview needs of an assessment: its id, and
+ *  the job the Configure form lays itself out from. */
+type PickerPreviewAssessment = { id: string; jd_id?: string; [key: string]: unknown };
+
 /** A completed attempt, tagged with the assessment it belongs to. */
 type CandidateResultRow = AssessmentAttemptResponse & {
   _assessment_id: string;
@@ -452,6 +458,7 @@ const RESULTS_RETURN_PAGE_KEY = 'assessments:resultsReturnPage';
 export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDCreation, autoOpenCreate, preSelectedJdId, preSelectedJdTitle, initialListTab }: AssessmentsProps) {
   const router = useRouter();
   const dialog = useGlobalDialog();
+  const { confirmArchive, archiveConfirmModal } = useArchiveAssessmentConfirm();
   const { user, isTenantAdmin, hasPermissionCode } = useAuth();
 
   // Permission checks for CRUD operations (bypass for tenant admin)
@@ -476,6 +483,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
      The default stays 'all', so which tab the page opens on is unchanged. */
   const [activeTab, setActiveTab] = useState<AssessmentPageTab>(initialListTab ?? 'all');
+  /* All / Active / Draft / Archived list view — the AI Interviews page's
+     `configListViewMode`. 'ungrouped' (default) is the flat table, one row
+     per version, as these tabs have always shown; 'grouped' is the Total
+     Jobs job list — one row per job, its other versions behind View
+     Versions — narrowed to this tab's status (All: every status). Total
+     Jobs has no toggle: it is the grouped list already. */
+  const [statusListViewMode, setStatusListViewMode] = useState<'grouped' | 'ungrouped'>('ungrouped');
   /* Two-step view: 'cards' shows only the 3 stat tiles; 'list' shows tabs +
      filters + assessments list.
      'cards' unless the arrival named a tab (`initialListTab`), which is the
@@ -555,6 +569,30 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const invitePickerScrollRef = useRef<HTMLDivElement | null>(null);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [selectedAssessmentForPreview, setSelectedAssessmentForPreview] = useState<any>(null);
+  /* The Send Invite picker's eye: the Configure Assessment form, read-only —
+     the view the assessment details page's own version preview opens. A popup
+     there because the picker is itself a dialog mid-choice, and navigating
+     away would throw the choice away. Everywhere else, View opens the
+     assessment details page (see `openAssessmentDetailsPage`). */
+  const [configurePreviewAssessment, setConfigurePreviewAssessment] = useState<PickerPreviewAssessment | null>(null);
+  /** Preview inside the Send Invite picker. The Configure form is scoped to a
+   *  job, so an assessment with no `jd_id` keeps the older preview modal,
+   *  which needs none. */
+  const previewAssessmentInPicker = (mapped: PickerPreviewAssessment) => {
+    if (mapped?.jd_id) {
+      setConfigurePreviewAssessment(mapped);
+      return;
+    }
+    setSelectedAssessmentForPreview(mapped);
+    setShowPreviewModal(true);
+  };
+  /** View, from the list: the assessment details page — the complete reading
+   *  of an assessment, with its actions. The Total Jobs list saves which job
+   *  had View Versions open and which version was picked
+   *  (`useListStatePersistence`), so Back lands where the reader left. */
+  const openAssessmentDetailsPage = (assessmentId: string) => {
+    router.push(`/recruitment/assessments/${assessmentId}`);
+  };
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedAssessmentForEdit, setSelectedAssessmentForEdit] = useState<any>(null);
   /* The ASSESSMENT version picked inside the Job Versions panel, per JOB.
@@ -1593,6 +1631,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
          again. Keyed per job, so several jobs keep their own place. */
       expandedJobVersionsByJob,
       selectedAssessmentVersionByJob,
+      statusListViewMode,
     },
     (s) => {
       /* An arrival that NAMED its tab (`initialListTab`, from `?tab=`) beats
@@ -1638,6 +1677,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           setSelectedAssessmentVersionByJob(restored);
         }
         if (typeof s.assessmentCurrentPage === 'number') setAssessmentCurrentPage(s.assessmentCurrentPage);
+        if (s.statusListViewMode === 'grouped' || s.statusListViewMode === 'ungrouped') setStatusListViewMode(s.statusListViewMode);
         if (typeof s.assessmentSearch === 'string') assessmentListSearch.setQuery(s.assessmentSearch);
         assessmentListSearch.setFilters({
           type:
@@ -3765,7 +3805,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
   // Archive assessment
   const handleArchiveAssessment = async (assessmentId: string) => {
-    if (!await dialog.confirm({ title: 'Archive Assessment', message: 'Archive this assessment? It will be moved to the archived section.', variant: 'warning', confirmText: 'Archive' })) return;
+    const target = apiAssessments.find((a) => a.id === assessmentId);
+    if (!await confirmArchive({
+      title: `${target?.jd_title || target?.title || 'Untitled'} - Assessment`,
+      version: target?.version,
+      createdAt: target?.created_at,
+      durationMinutes: target?.duration_minutes,
+    })) return;
 
     try {
       await assessmentService.update(assessmentId, { status: 'archived' as any });
@@ -4903,14 +4949,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
            screen. */
         const displayedRows = assessmentLineages[jdId] ?? getOptimisticAssessmentRows(jdId);
         const hasRowsToShow = !!assessmentLineages[jdId] || displayedRows.length > 0;
-        /* The page's own preview modal, against the assessment that row IS.
-           Same component the list's Preview action opens, so there is one
-           assessment-details view in the app and this is it. */
+        /* The Send Invite picker's eye on a version row: a read-only preview
+           over the picker (see `previewAssessmentInPicker`). */
         const viewAssessmentVersion = (version: { id: string }) => {
           const raw = displayedRows.find((v) => v.id === version.id);
           if (!raw) return;
-          setSelectedAssessmentForPreview(mapAssessmentFromApi(raw, 0));
-          setShowPreviewModal(true);
+          previewAssessmentInPicker(mapAssessmentFromApi(raw, 0));
         };
         return (
         <div onClick={(e) => e.stopPropagation()}>
@@ -5088,7 +5132,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 mapped,
                 `version:${version.id}`,
                 'compact',
-                renderAssessmentRowMenuItems(mapped, () => viewAssessmentVersion(version)),
+                /* View Details: the assessment details page, not a popup. */
+                renderAssessmentRowMenuItems(mapped, () => openAssessmentDetailsPage(version.id)),
               );
             }}
           />
@@ -5156,8 +5201,23 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const jobCompletedCountsToFetch = [
     ...new Set(visibleAssessments.flatMap(getJobAssessmentIds)),
   ].filter((id) => completedCandidatesByAssessment[id] === undefined);
+  /* All / Active / Draft / Archived take the Grouped/Ungrouped toggle; on
+     Grouped they fall through to the job list below instead of the flat
+     table. */
+  const hasListViewToggle = isFlatAssessmentTab(activeTab);
+  const showFlatAssessmentTable = hasListViewToggle && statusListViewMode !== 'grouped';
+  /* The toggle's counts, off the same loaded set either view is drawn from
+     (this tab's status, all of it on All): every assessment record for
+     Ungrouped, one per job (`collapsedAssessments`, the job list's own rows)
+     for Grouped. Held back while the tab's set is loading rather than showing
+     the previous tab's figures. */
+  /** Every job in this tab's loaded set, before search and filters. */
+  const allJobsCount = collapseByLineage(assessments).length;
+  const listViewCounts = isLoading
+    ? null
+    : { ungrouped: filteredAssessments.length, grouped: collapsedAssessments.length };
   const activeTabOwnsListContent =
-    isFlatAssessmentTab(activeTab) ||
+    showFlatAssessmentTable ||
     ['completed-candidates', 'invitation-status', 'settings'].includes(activeTab);
 
   /* `assessmentListEmpty` stood here — the "this tab has no rows on screen"
@@ -6116,10 +6176,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 filtersApplied={assessmentFiltersActive}
                 onClearFilters={clearAssessmentFilters}
                 className="mb-0"
+                /* JOBS, as the noun says - the rows this list draws
+                   (`collapsedAssessments`) of every job in the loaded set.
+                   It counted assessment records, so a Grouped view of 71
+                   jobs read "107 of 107 jobs". */
                 countBadge={
                   <ListCountBadge
-                    filtered={filteredAssessments.length}
-                    total={assessments.length}
+                    filtered={collapsedAssessments.length}
+                    total={allJobsCount}
                     noun="job"
                   />
                 }
@@ -6345,7 +6409,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     appear-when-there-is-something-to-undo rule as the
                     toolbar's Reset. Puts the sort back to its default and
                     nothing else: search and filters stay as they are. */}
-                {isFlatAssessmentTab(activeTab) && sortedAssessmentTab === activeTab && (
+                {showFlatAssessmentTable && sortedAssessmentTab === activeTab && (
                   <button
                     type="button"
                     onClick={() => setClearAssessmentSortSignal((n) => n + 1)}
@@ -6377,6 +6441,44 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           );
         })()}
 
+        {/* Grouped/Ungrouped — All/Active/Draft/Archived, the AI Interviews
+            page's control. Ungrouped (the default) is the flat table, one row
+            per version; Grouped is the job list, one row per job with its
+            other versions behind View Versions. Each option carries its count
+            in the tab-pill treatment: the figure in parentheses, a shade
+            lighter. */}
+        {hasListViewToggle && (
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-sm text-gray-600 dark:text-slate-400">View:</span>
+            <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+              {([
+                { key: 'ungrouped', label: 'Ungrouped' },
+                { key: 'grouped', label: 'Grouped' },
+              ] as const).map((mode) => {
+                const isActive = statusListViewMode === mode.key;
+                return (
+                  <button
+                    key={mode.key}
+                    type="button"
+                    aria-pressed={isActive}
+                    onClick={() => setStatusListViewMode(mode.key)}
+                    className={`px-2.5 sm:px-3 py-1.5 min-h-[32px] rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 whitespace-nowrap ${
+                      isActive
+                        ? 'bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/20 text-brand-blue'
+                        : 'text-gray-600 dark:text-slate-400 hover:text-brand-blue'
+                    }`}
+                  >
+                    {mode.label}
+                    {listViewCounts && (
+                      <span className="ml-1 tabular-nums opacity-70">({listViewCounts[mode.key].toLocaleString()})</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* The list itself. Same card as before — it simply no longer
             carries the tab strip in its header. */}
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
@@ -6394,7 +6496,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 which is where All / Active / Draft already start since their
                 own headings came off. */}
 
-            {isFlatAssessmentTab(activeTab) ? (() => {
+            {showFlatAssessmentTable && isFlatAssessmentTab(activeTab) ? (() => {
               const config = FLAT_ASSESSMENT_TABLE_CONFIG[activeTab];
               return (
                 <AllAssessmentsTable
@@ -9100,11 +9202,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                           {assessment.created_by_name || 'System'}
                                         </td>
                                         <td className="px-3 py-2.5 align-middle text-center tf-sticky-col" onClick={(e) => e.stopPropagation()}>
-                                          {/* The page's own assessment preview — the one a
-                                              Grouped card's version panel opens. */}
+                                          {/* The picker's preview — the same read-only
+                                              Configure view its Grouped version panel
+                                              opens (`previewAssessmentInPicker`). */}
                                           <button
                                             type="button"
-                                            onClick={() => { setSelectedAssessmentForPreview(assessment); setShowPreviewModal(true); }}
+                                            onClick={() => previewAssessmentInPicker(assessment)}
                                             className="h-8 w-8 inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-slate-700 text-gray-600 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-brand-blue/10 hover:text-brand-blue hover:border-brand-blue/40 transition-colors"
                                             aria-label="Preview assessment"
                                             title="Preview"
@@ -9345,6 +9448,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         />
       )}
       
+      {/* The Send Invite picker's preview — read-only Configure Assessment.
+          Renders nothing while no row is being previewed. */}
+      <AssessmentConfigureModal
+        isOpen={!!configurePreviewAssessment}
+        onClose={() => setConfigurePreviewAssessment(null)}
+        assessment={configurePreviewAssessment}
+        readOnly
+      />
+
       {/* Preview Assessment Modal */}
       {showPreviewModal && selectedAssessmentForPreview && (
         <AssessmentPreviewModal
@@ -10103,6 +10215,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         getAssessmentId={getInviteAssessmentId}
         onRevoked={refreshInviteSurfaces}
       />
+      {archiveConfirmModal}
+
       <EditInvitationModal
         target={editInviteTarget}
         onClose={() => setEditInviteTarget(null)}

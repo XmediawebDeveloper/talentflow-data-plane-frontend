@@ -1,4 +1,4 @@
-import { RefreshCw, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Users, FileText, Award, Calendar, TrendingUp, Edit2, Eye, Mail, BarChart, Share2, Download, Copy, Archive, ArchiveRestore, Trash2, Play, PauseCircle, CheckCircle, XCircle, AlertCircle, Briefcase, Link2, Code, MessageSquare, Cpu, User, ExternalLink, Info, Layers, Loader2, Monitor, Ban, Sliders, Globe, Zap, Star } from 'lucide-react';
+import { RefreshCw, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Users, FileText, Award, Calendar, TrendingUp, Edit2, Eye, Mail, BarChart, Share2, Download, Copy, Archive, ArchiveRestore, Trash2, Play, PauseCircle, CheckCircle, XCircle, AlertCircle, Briefcase, Link2, Code, MessageSquare, Cpu, User, ExternalLink, Info, Layers, Loader2, Monitor, Ban, Sliders, Globe, Zap, Star, Shield } from 'lucide-react';
 import { Fragment, useState, useMemo, useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
@@ -8,12 +8,13 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { assessmentService, jdService } from '@/lib/services';
 import type { JDLineageVersion } from '@/lib/services/jdService';
 import type { AssessmentResponse, JDResponse } from '@/lib/services';
+import type { CombinedAuditActivity } from '@/lib/services/assessmentService';
 import { stripVersionFromTitle, isAssessmentRevoked } from '@/lib/utils/assessmentUtils';
-import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { toast } from 'sonner';
 import { formatIST } from '@/lib/utils/dateUtils';
 import PageBreadcrumb, { type BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import RecordPager from '@/components/RecordPager';
+import { useArchiveAssessmentConfirm } from '@/components/assessments/ArchiveAssessmentModal';
 import AssessmentConfigureModal from '@/components/AssessmentConfigureModal';
 import AssessmentResults from '@/components/AssessmentResults';
 import JDOverviewSections from '@/components/jobs/JDOverviewSections';
@@ -213,6 +214,58 @@ const fetchJobVersionAssessments = async (jdId: string): Promise<AssessmentRespo
 };
 
 
+/**
+ * The assessment's own lifecycle moments for the Recent Activity tab, off the
+ * lifecycle audit trail (`getCombinedAuditTrail`, category
+ * `assessment_lifecycle` - the Activity Logs tab's source):
+ *
+ *   assessment_published  the FIRST one is "published"; every later one is
+ *                         the assessment edited and published again
+ *   assessment_archived   archived
+ *   assessment_activated  unarchived (restored to Active) - the event the
+ *                         Activity Logs tab already names for it; an
+ *                         `assessment_updated` whose own text says it was
+ *                         unarchived / restored counts too, since Unarchive is
+ *                         a status write through the update endpoint
+ *
+ * Anything else in the trail (drafts, plain edits, deletes) is not one of the
+ * four and stays out. Rows for another assessment are dropped as well, should
+ * the endpoint return any.
+ */
+function toLifecycleEvents(items: CombinedAuditActivity[], assessmentId: string): any[] {
+  const ownItems = items
+    .filter((item) => !item.assessment_id || item.assessment_id === assessmentId)
+    .filter((item) => item.timestamp)
+    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  let publishedSeen = false;
+  const events: any[] = [];
+  for (const item of ownItems) {
+    const type = item.activity_type as string;
+    let eventType: string | null = null;
+    if (type === 'assessment_published') {
+      eventType = publishedSeen ? 'lc_republished' : 'lc_first_published';
+      publishedSeen = true;
+    } else if (type === 'assessment_archived') {
+      eventType = 'lc_archived';
+    } else if (
+      type === 'assessment_activated'
+      || (type === 'assessment_updated' && /unarchiv|restor/i.test(`${item.title || ''} ${item.description || ''}`))
+    ) {
+      eventType = 'lc_unarchived';
+    }
+    if (!eventType) continue;
+    events.push({
+      id: `lifecycle-${item.id}`,
+      _lifecycle: true,
+      _eventType: eventType,
+      _eventAt: item.timestamp,
+      actor_name: item.actor_name,
+      actor_email: item.actor_email,
+    });
+  }
+  return events;
+}
+
 export default function AssessmentDetailsView({
   assessment,
   onBack,
@@ -238,7 +291,7 @@ export default function AssessmentDetailsView({
     : { className: '' };
   const router = useRouter();
   const searchParams = useSearchParams();
-  const dialog = useGlobalDialog();
+  const { confirmArchive, archiveConfirmModal } = useArchiveAssessmentConfirm();
   const { isTenantAdmin, user, hasPermissionCode } = useAuth();
   const canCreateAssessments = isTenantAdmin || (user?.permissions?.canCreateAssessments ?? false);
   /* The All Assessments table's Unarchive gate (`canDeleteAssessments`), so the
@@ -260,7 +313,12 @@ export default function AssessmentDetailsView({
       toast.error('You do not have permission to archive assessments');
       return;
     }
-    if (!await dialog.confirm({ title: 'Archive Assessment', message: 'Archive this assessment? It will be moved to the archived section.', variant: 'warning', confirmText: 'Archive' })) return;
+    if (!await confirmArchive({
+      title: `${assessment.jd_title || stripVersionFromTitle(assessment.title) || 'Untitled'} - Assessment`,
+      version: assessment.version,
+      createdAt: assessment.created_at,
+      durationMinutes: assessment.duration_minutes,
+    })) return;
     setIsArchiving(true);
     try {
       await assessmentService.update(assessment.id, { status: 'archived' });
@@ -807,6 +865,19 @@ export default function AssessmentDetailsView({
   const activityRows =
     activityCache && activityCache.assessmentId === assessment?.id ? activityCache.events : null;
   const recentActivity = activityRows ?? [];
+  /* The ASSESSMENT's own lifecycle - first published, edited & published,
+     archived, unarchived - from the lifecycle audit trail (Settings > Activity
+     Logs' source), held apart from `recentActivity` because the invite stat
+     cards bucket that list as candidates. Merged with it only for the Recent
+     Activity tab's feed, newest first. */
+  const [lifecycleCache, setLifecycleCache] = useState<{ assessmentId: string; events: any[] } | null>(null);
+  const lifecycleEvents =
+    lifecycleCache && lifecycleCache.assessmentId === assessment?.id ? lifecycleCache.events : [];
+  const activityFeed = lifecycleEvents.length
+    ? [...recentActivity, ...lifecycleEvents].sort(
+        (a, b) => new Date(b._eventAt).getTime() - new Date(a._eventAt).getTime(),
+      )
+    : recentActivity;
   const activityPending = activityLoading || activityRows === null;
 
   /* ── INVITATION STATUS ───────────────────────────────────────────────
@@ -1136,8 +1207,18 @@ export default function AssessmentDetailsView({
          cache nothing reads, rather than overwriting the newer one. */
       const requestedFor = assessment.id;
       setActivityLoading(true);
+      /* Lifecycle rows alongside, never in the way: a failed or missing audit
+         trail leaves the candidate timeline exactly as it was. */
+      const lifecycleRequest = assessmentService
+        .getCombinedAuditTrail({ category: 'assessment_lifecycle', assessment_id: requestedFor, page_size: 200 })
+        .then((res) => res?.items ?? [])
+        .catch(() => [] as CombinedAuditActivity[]);
       try {
-        const response = await assessmentService.listInvitations(requestedFor, { page_size: 200 });
+        const [response, lifecycleItems] = await Promise.all([
+          assessmentService.listInvitations(requestedFor, { page_size: 200 }),
+          lifecycleRequest,
+        ]);
+        setLifecycleCache({ assessmentId: requestedFor, events: toLifecycleEvents(lifecycleItems, requestedFor) });
         const invitations = response?.items || [];
         const events: any[] = [];
         const _now = Date.now();
@@ -2057,11 +2138,27 @@ export default function AssessmentDetailsView({
             {/* Assessment Details Section */}
             <div className="min-w-0 bg-white rounded-xl border border-gray-200 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
               <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-200">
-                <h3 className="text-sm sm:text-base font-medium text-gray-900 flex items-center gap-2 tracking-tight">
+                <h3 className="text-sm sm:text-base font-medium text-gray-900 flex flex-wrap items-center gap-2 tracking-tight">
                   <div className="w-9 h-9 flex-shrink-0 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                     <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
                   </div>
-                  Assessment Details
+                  <span className="min-w-0">Assessment Details</span>
+                  {/* Proctoring on or off, from the record's own
+                      `proctoring_enabled` - the read-only Configure view's
+                      chip, so the setting reads the same in both places.
+                      Omitted when the record does not say. */}
+                  {typeof assessment.proctoring_enabled === 'boolean' && (
+                    <span
+                      className={`px-2 py-0.5 rounded text-2xs sm:text-xs font-normal flex items-center gap-1 flex-shrink-0 whitespace-nowrap ring-1 ${
+                        assessment.proctoring_enabled
+                          ? 'bg-success-subtle text-success ring-success-line'
+                          : 'bg-slate-100 text-gray-600 ring-gray-200'
+                      }`}
+                    >
+                      <Shield className="w-3 h-3" />
+                      Proctoring {assessment.proctoring_enabled ? 'Enabled' : 'Disabled'}
+                    </span>
+                  )}
                 </h3>
               </div>
 
@@ -2243,8 +2340,14 @@ export default function AssessmentDetailsView({
                                       <div className="text-xs text-gray-600 mb-1.5 font-medium">Programming Languages</div>
                                       <div className="flex flex-wrap gap-1.5">
                                         {section.languages.map((lang, i) => (
-                                          <span key={i} className="max-w-full [overflow-wrap:anywhere] px-2 py-0.5 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded text-xs font-mono">
-                                            {lang}
+                                          /* Each language's own mark, as on the
+                                             Assessment Info view's chips and the
+                                             Configure page's Coding card. */
+                                          <span key={i} className="inline-flex max-w-full min-w-0 items-center gap-1.5 [overflow-wrap:anywhere] px-2 py-0.5 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded text-xs font-mono">
+                                            <span className="shrink-0 inline-flex">
+                                              <LanguageLogo language={logoLabelForId(lang, lang)} size="sm" />
+                                            </span>
+                                            <span className="min-w-0">{lang}</span>
                                           </span>
                                         ))}
                                       </div>
@@ -2951,16 +3054,16 @@ export default function AssessmentDetailsView({
                   </div>
                 ))}
               </div>
-            ) : recentActivity.length === 0 ? (
+            ) : activityFeed.length === 0 ? (
               <div className="px-3 sm:px-4 lg:px-6 py-8 sm:py-12 text-center">
                 <Calendar className="w-8 h-8 sm:w-12 sm:h-12 text-brand-blue/30 mx-auto mb-2 sm:mb-3" />
                 <p className="text-gray-600 mb-1 text-sm">No activity recorded yet</p>
                 <p className="text-xs sm:text-sm text-gray-500">Activity will appear here as candidates take the assessment</p>
               </div>
             ) : (() => {
-              const totalPages = Math.max(1, Math.ceil(recentActivity.length / ACTIVITY_PAGE_SIZE));
+              const totalPages = Math.max(1, Math.ceil(activityFeed.length / ACTIVITY_PAGE_SIZE));
               const startIdx = (activityPage - 1) * ACTIVITY_PAGE_SIZE;
-              const pageItems = recentActivity.slice(startIdx, startIdx + ACTIVITY_PAGE_SIZE);
+              const pageItems = activityFeed.slice(startIdx, startIdx + ACTIVITY_PAGE_SIZE);
               // Open a completed candidate's result details. Stores the ordered
               // list of completed candidates (with a resolvable attempt_id) so
               // the details view offers Prev/Next between them — mirrors the
@@ -2995,6 +3098,14 @@ export default function AssessmentDetailsView({
                       // Terminated.
                       const getActivityInfo = () => {
                         switch (activity._eventType) {
+                          case 'lc_first_published':
+                            return { icon: Globe, color: 'text-success bg-success-subtle ring-1 ring-success-line', label: 'Assessment published' };
+                          case 'lc_republished':
+                            return { icon: Edit2, color: 'text-brand-cyan bg-brand-cyan/10 ring-1 ring-brand-cyan/20', label: 'Assessment edited & published' };
+                          case 'lc_archived':
+                            return { icon: Archive, color: 'text-brand-orange-deep bg-brand-orange/10 ring-1 ring-brand-orange/20', label: 'Assessment archived' };
+                          case 'lc_unarchived':
+                            return { icon: ArchiveRestore, color: 'text-success bg-success-subtle ring-1 ring-success-line', label: 'Assessment unarchived' };
                           case 'completed':
                             return { icon: CheckCircle, color: 'text-success bg-success-subtle ring-1 ring-success-line', label: 'Completed assessment' };
                           case 'terminated':
@@ -3038,12 +3149,32 @@ export default function AssessmentDetailsView({
                             <div className="flex-1 min-w-0">
                               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-0.5 sm:gap-0">
                                 <div className="min-w-0">
-                                  <span className="font-medium text-gray-900 text-xs sm:text-sm [overflow-wrap:anywhere]">{activity.candidate_name || 'Unknown'}</span>
-                                  <span className="text-gray-500 ml-1 sm:ml-2 text-xs sm:text-sm">{info.label}</span>
+                                  {activity._lifecycle ? (
+                                    /* A lifecycle row is about the assessment,
+                                       not a candidate: the event leads, then
+                                       who did it. */
+                                    <>
+                                      <span className="font-medium text-gray-900 text-xs sm:text-sm">{info.label}</span>
+                                      {activity.actor_name && (
+                                        <span className="text-gray-500 ml-1 sm:ml-2 text-xs sm:text-sm [overflow-wrap:anywhere]">by {activity.actor_name}</span>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span className="font-medium text-gray-900 text-xs sm:text-sm [overflow-wrap:anywhere]">{activity.candidate_name || 'Unknown'}</span>
+                                      <span className="text-gray-500 ml-1 sm:ml-2 text-xs sm:text-sm">{info.label}</span>
+                                    </>
+                                  )}
                                 </div>
                                 <span className="text-xs sm:text-sm text-gray-500 sm:shrink-0">{formattedDate}</span>
                               </div>
-                              <p className="text-xs sm:text-sm text-gray-600 mt-0.5 truncate" title={activity.candidate_email}>{activity.candidate_email}</p>
+                              {activity._lifecycle ? (
+                                activity.actor_email && (
+                                  <p className="text-xs sm:text-sm text-gray-600 mt-0.5 truncate" title={activity.actor_email}>{activity.actor_email}</p>
+                                )
+                              ) : (
+                                <p className="text-xs sm:text-sm text-gray-600 mt-0.5 truncate" title={activity.candidate_email}>{activity.candidate_email}</p>
+                              )}
                               {showScores && (
                                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-2">
                                   {assessment.technical_enabled && activity.technical_score != null && (
@@ -3073,10 +3204,10 @@ export default function AssessmentDetailsView({
                   </div>
 
                   {/* Pagination — 10 events per page. */}
-                  {recentActivity.length > ACTIVITY_PAGE_SIZE && (
+                  {activityFeed.length > ACTIVITY_PAGE_SIZE && (
                     <div className="px-3 sm:px-4 lg:px-6 py-3 border-t border-gray-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs sm:text-sm text-gray-600">
                       <span>
-                        Showing {startIdx + 1}–{Math.min(startIdx + ACTIVITY_PAGE_SIZE, recentActivity.length)} of {recentActivity.length}
+                        Showing {startIdx + 1}–{Math.min(startIdx + ACTIVITY_PAGE_SIZE, activityFeed.length)} of {activityFeed.length}
                       </span>
                       <InlinePageNav
                         page={activityPage}
@@ -3470,6 +3601,8 @@ export default function AssessmentDetailsView({
       </div>
       </div>
       </div>
+
+      {archiveConfirmModal}
 
       {/* Resend confirmation — regenerates the token and invalidates the old
           link. Same wording, tone and variant as the Track Invites popup's. */}
