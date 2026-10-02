@@ -560,8 +560,13 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
 
   const confirmBulkArchive = () => {
     if (!onUpdateJobStatus) return;
-    selectedJobs.forEach(jobId => {
-      onUpdateJobStatus(jobId, 'Archived');
+    /* Same eligibility rule as the per-row Archive Job action: a Draft has
+       nothing published to retire, and an already-Archived job is a no-op. */
+    const jobsToArchive = sortedJobs.filter(
+      job => selectedJobs.has(job.id) && job.status !== 'Draft' && job.status !== 'Archived',
+    );
+    jobsToArchive.forEach(job => {
+      onUpdateJobStatus(job.id, 'Archived');
     });
     setBulkArchiveOpen(false);
     setSelectedJobs(new Set());
@@ -664,31 +669,6 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
   const uniqueIndustries = Array.from(new Set(jobs.map(job => job.industry_type).filter(Boolean))).sort(byName);
 
   // Calculate stats
-  /* Every tile carries TWO numbers about ONE set of jobs:
-
-       jobs     — one per lineage, whose status is read from its LATEST version.
-                  The same figure the rows below and the "of N jobs" badge show.
-       versions — how many saved versions those same jobs are made of. A job
-                  republished twice is 1 job and 3 versions.
-
-     Both must describe the SAME lineages or the pair is nonsense. `versionsOf`
-     therefore selects whole lineages on their representative — the identical
-     test the job count uses — and sums their sizes.
-
-     It replaces a per-ROW status count (`jobs.filter(matchesStatusFilter(...))`)
-     that was wrong in both directions at once: it EXCLUDED the published and
-     draft versions of an archived job, so it under-reported that job's history,
-     and it INCLUDED archived versions belonging to jobs whose latest version is
-     published — jobs that the Archived pill does not list at all. "3 jobs,
-     7 versions" over a list of 3 rows was that: the 7 spanned more lineages
-     than the 3 it sat beside.
-
-     Caveat worth knowing: `jobs` is the list response, which does not
-     necessarily carry every version of every lineage — "View Versions" fetches
-     the authoritative history per job from the lineage endpoint. So this counts
-     the versions the page HAS, and an expanded row may show more.
-
-     */
   /* Each status card IS its tab's filter — clicking it opens that tab — so its
      number must be exactly the row count that tab shows (filters aside).
      They used to disagree: the cards counted a job only when its LATEST
@@ -1487,8 +1467,10 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                                   <span className={MENU_ITEM_SCALE_CLASS}>Re-enable JD</span>
                                 </button>
                               )}
-                              {/* Archive Job */}
-                              {job.status !== 'Archived' && onArchiveJob && (
+                              {/* Archive Job — not offered on a Draft: there is
+                                  nothing published to retire, Delete already
+                                  covers removing a draft outright. */}
+                              {job.status !== 'Archived' && job.status !== 'Draft' && onArchiveJob && (
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -1600,7 +1582,7 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                         Click is stopped here — the card itself opens the job,
                         and a click meant for a version must not be read as a
                         click on the row behind it. */}
-                    {versionsExpanded && (
+                    {versionsExpanded && hasVersionHistory && (
                       <div onClick={(e) => e.stopPropagation()}>
                         <JobVersionHistoryPanel
                           job={job}
@@ -1724,8 +1706,9 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                                     <span className={MENU_ITEM_SCALE_CLASS}>Re-enable JD</span>
                                   </DropdownMenuItem>
                                 )}
-                                {/* Archive Job */}
-                                {versionJob.status !== 'Archived' && onArchiveJob && (
+                                {/* Archive Job — not offered on a Draft version, same
+                                    reasoning as the main card menu above. */}
+                                {versionJob.status !== 'Archived' && versionJob.status !== 'Draft' && onArchiveJob && (
                                   <DropdownMenuItem
                                     onSelect={(e) => {
                                       if (!canArchiveJd) {
