@@ -1,4 +1,4 @@
-import { RefreshCw, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Users, FileText, Award, Calendar, TrendingUp, Edit2, Eye, Mail, BarChart, Share2, Download, Copy, Archive, Trash2, Play, PauseCircle, CheckCircle, XCircle, AlertCircle, Briefcase, Link2, Code, MessageSquare, Cpu, User, ExternalLink, Info, Layers, Loader2, Monitor, Ban, Sliders, Globe, Zap, Star } from 'lucide-react';
+import { RefreshCw, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Users, FileText, Award, Calendar, TrendingUp, Edit2, Eye, Mail, BarChart, Share2, Download, Copy, Archive, ArchiveRestore, Trash2, Play, PauseCircle, CheckCircle, XCircle, AlertCircle, Briefcase, Link2, Code, MessageSquare, Cpu, User, ExternalLink, Info, Layers, Loader2, Monitor, Ban, Sliders, Globe, Zap, Star } from 'lucide-react';
 import { Fragment, useState, useMemo, useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
@@ -47,7 +47,7 @@ interface AssessmentDetailsViewProps {
   onPreview: () => void;
   onShare?: () => void;
   onViewResults: () => void;
-  onRefresh?: () => void;
+  onRefresh?: () => void | Promise<void>;
   /**
    * A DIFFERENT record is being fetched while this one stays on screen.
    *
@@ -60,16 +60,23 @@ interface AssessmentDetailsViewProps {
   isReloading?: boolean;
   currentIndex?: number;
   totalCount?: number;
-  /** Called with the vertical tab open right now, so the host can open the
-   *  neighbouring assessment on that same tab rather than on Overview. */
-  onPrev?: (activeTab: string) => void;
-  onNext?: (activeTab: string) => void;
+  /** Called with the vertical tab open now, so the host can land the
+   *  neighbouring record on that same tab (`?tab=`). */
+  onPrev?: (tab: string) => void;
+  onNext?: (tab: string) => void;
   /**
    * Overrides the default Assessments trail. Set when this page is reached from
    * a JD (Job Details → Assessment → Create on a job that already has one), so
    * the breadcrumb stays anchored to that job instead of resetting.
    */
   breadcrumbItems?: BreadcrumbCrumb[];
+  /**
+   * A DRAFT assessment: everything on the page is shown greyed out and
+   * non-interactive except the Edit pencil, which stays live and highlighted
+   * as the one way on. The breadcrumb row (with Prev / Next) is left usable
+   * so a reader paging through assessments is not stranded on a draft.
+   */
+  draftLocked?: boolean;
   /**
    * Whether the vertical nav offers Version History.
    *
@@ -221,12 +228,68 @@ export default function AssessmentDetailsView({
   onNext,
   breadcrumbItems,
   showVersionHistory = true,
+  draftLocked = false,
 }: AssessmentDetailsViewProps) {
+  /* Greyed and out of reach - `inert` takes pointer, keyboard and assistive
+     tech; the classes are the visual state. Applied per region rather than
+     once on the page so the Edit pencil, nested among them, can stay live. */
+  const draftLockProps = draftLocked
+    ? { inert: true as const, 'aria-disabled': true, className: 'opacity-50 grayscale select-none' }
+    : { className: '' };
   const router = useRouter();
   const searchParams = useSearchParams();
   const dialog = useGlobalDialog();
   const { isTenantAdmin, user, hasPermissionCode } = useAuth();
   const canCreateAssessments = isTenantAdmin || (user?.permissions?.canCreateAssessments ?? false);
+  /* The All Assessments table's Unarchive gate (`canDeleteAssessments`), so the
+     action is offered here to exactly who it is offered to there. */
+  const canUnarchiveAssessments = isTenantAdmin || (user?.permissions?.canDeleteAssessments ?? false);
+  const isArchivedAssessment = assessment.status === 'Archived';
+  const [isUnarchiving, setIsUnarchiving] = useState(false);
+  /* The All Assessments table's Unarchive, as is: no dedicated endpoint, a
+     status write back to `published` on this assessment's id, same toast. The
+     route refetches, so the header and every tab redraw off the record the API
+     now returns rather than a local patch. */
+  const [isArchiving, setIsArchiving] = useState(false);
+  /* The All Assessments table's / Assessments page's Archive, as is: same
+     confirm, same status write to `archived`, same permission and toast, then
+     the route refetches - so the header swaps to Unarchive off the record the
+     API returns. */
+  const handleArchive = async () => {
+    if (!canUnarchiveAssessments) {
+      toast.error('You do not have permission to archive assessments');
+      return;
+    }
+    if (!await dialog.confirm({ title: 'Archive Assessment', message: 'Archive this assessment? It will be moved to the archived section.', variant: 'warning', confirmText: 'Archive' })) return;
+    setIsArchiving(true);
+    try {
+      await assessmentService.update(assessment.id, { status: 'archived' });
+      toast.success('Assessment archived');
+      await onRefresh?.();
+    } catch (err) {
+      console.error('Failed to archive assessment:', err);
+      toast.error(`Failed to archive assessment: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setIsArchiving(false);
+    }
+  };
+  const handleUnarchive = async () => {
+    if (!canUnarchiveAssessments) {
+      toast.error('You do not have permission to unarchive assessments');
+      return;
+    }
+    setIsUnarchiving(true);
+    try {
+      await assessmentService.update(assessment.id, { status: 'published' });
+      toast.success('Assessment restored to Active');
+      await onRefresh?.();
+    } catch (err) {
+      console.error('Failed to unarchive assessment:', err);
+      toast.error(`Failed to unarchive assessment: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setIsUnarchiving(false);
+    }
+  };
   /* Read the same way the results ROUTE reads them, so a recruiter who can
      download a report from that page can download it from this tab — the tab
      renders that page's own component, and a permission that disagreed between
@@ -1404,7 +1467,7 @@ export default function AssessmentDetailsView({
       <div className="mb-5">
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-brand-blue/30 dark:border-brand-blue/40 ring-1 ring-brand-blue/10 dark:ring-brand-blue/20 shadow-sm shadow-brand-blue/10 p-4 sm:p-5">
           <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3">
-            <div className="flex-1 min-w-0">
+            <div {...draftLockProps} className={`flex-1 min-w-0 ${draftLockProps.className}`}>
               {/* Row 1: Job ID + Assessment title + Status */}
               <div className="flex flex-wrap items-center gap-2 mb-2">
                 {assessment.jd_short_id && (
@@ -1819,6 +1882,7 @@ export default function AssessmentDetailsView({
           : '';
         const disabled = !!blockedReason;
         return (
+          <div {...draftLockProps} className={draftLockProps.className || 'contents'}>
           <Button
             variant="primary"
             size="sm"
@@ -1829,21 +1893,70 @@ export default function AssessmentDetailsView({
           >
             Share
           </Button>
+          </div>
         );
               })()}
-              {onEdit && canCreateAssessments && (
+              {/* Archive / Unarchive, icon-only, directly beside Share - the
+                  Edit pencil's own button shape, and the glyphs the All
+                  Assessments table's menu uses for the same two actions.
+                  Active offers Archive; Archived offers Unarchive (and has no
+                  pencil - an archived assessment is restored, not edited). */}
+              {assessment.status === 'Active' && canUnarchiveAssessments && (
                 <Button
                   type="button"
                   variant="secondary"
                   size="sm"
-                  onClick={onEdit}
-                  aria-label="Edit assessment"
-                  title="Edit assessment"
+                  onClick={handleArchive}
+                  disabled={isArchiving}
+                  aria-label="Archive assessment"
+                  title="Archive assessment"
                   className="h-8 w-8 px-0 flex-shrink-0"
+                >
+                  {isArchiving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Archive className="w-4 h-4" />}
+                </Button>
+              )}
+              {isArchivedAssessment && canUnarchiveAssessments && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleUnarchive}
+                  disabled={isUnarchiving}
+                  aria-label="Unarchive assessment"
+                  title="Unarchive assessment"
+                  className="h-8 w-8 px-0 flex-shrink-0"
+                >
+                  {isUnarchiving ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArchiveRestore className="w-4 h-4" />}
+                </Button>
+              )}
+              {onEdit && canCreateAssessments && !isArchivedAssessment && (() => {
+                /* The Assessments page's own edit rule (`handleEditAssessment`):
+                   an Active assessment that has gone out to even one candidate
+                   is locked, so every candidate sits the same questions. Read
+                   off THIS version's `invitations_count` from the API - the
+                   route is one assessment version, not the job - with the All
+                   Assessments table's reason. */
+                const editLocked =
+                  assessment.status === 'Active' && (assessment.invitations_count ?? 0) > 0;
+                return (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={editLocked ? undefined : onEdit}
+                  disabled={editLocked}
+                  aria-label="Edit assessment"
+                  title={editLocked
+                    ? 'Cannot edit — this assessment has already been sent to candidates'
+                    : draftLocked ? 'Edit this draft assessment' : 'Edit assessment'}
+                  /* On a draft the one live control on the page: the same
+                     pencil, lifted with a brand ring so it reads as the way on. */
+                  className={`h-8 w-8 px-0 flex-shrink-0 ${draftLocked ? 'ring-2 ring-brand-blue/40 text-brand-blue shadow-md shadow-brand-blue/20' : ''}`}
                 >
                   <Edit2 className="w-4 h-4" />
                 </Button>
-              )}
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -1866,7 +1979,7 @@ export default function AssessmentDetailsView({
           (`overflow-x-auto scrollbar-hide`), so with six tabs the last of them
           was off-screen and undiscoverable at anything under a wide desktop.
           Stacked vertically they are all visible at once. */}
-      <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-[180px_minmax(0,1fr)] sm:gap-4 md:grid-cols-[220px_minmax(0,1fr)] lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-6">
+      <div {...draftLockProps} className={`grid grid-cols-1 items-start gap-3 sm:grid-cols-[180px_minmax(0,1fr)] sm:gap-4 md:grid-cols-[220px_minmax(0,1fr)] lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-6 ${draftLockProps.className}`}>
         <aside className="min-w-0 sm:sticky sm:top-20 sm:self-start bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
           <nav className="p-2 sm:p-3" aria-label="Assessment details sections">
             <div className="grid grid-cols-2 gap-1.5 sm:flex sm:flex-col">
@@ -1876,7 +1989,19 @@ export default function AssessmentDetailsView({
                   <button
                     key={tab.id}
                     type="button"
-                    onClick={() => setActiveTab(tab.id)}
+                    onClick={() => {
+                      setActiveTab(tab.id);
+                      /* Prev / Next land here with `?tab=`. Once the URL names
+                         a tab, keep it naming the one actually open, so a
+                         refresh or Back / Forward onto this entry does not
+                         reopen the tab the reader has since left. Not a
+                         navigation: Next.js integrates `replaceState`. */
+                      if (requestedTab && requestedTab !== tab.id && typeof window !== 'undefined') {
+                        const params = new URLSearchParams(window.location.search);
+                        params.set('tab', tab.id);
+                        window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
+                      }
+                    }}
                     aria-current={isActive ? 'page' : undefined}
                     className={`w-full min-w-0 rounded-lg px-2.5 sm:px-3 py-2.5 text-left text-xs sm:text-sm transition-colors flex items-center gap-2 ${
                       isActive

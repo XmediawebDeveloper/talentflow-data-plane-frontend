@@ -765,7 +765,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
 
   return (
     <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-3xl w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-[1050px] w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="bg-slate-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -1257,16 +1257,19 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
               <label className="text-xs sm:text-sm text-gray-900 dark:text-slate-50 font-medium">Email Message</label>
               <span className="text-2xs sm:text-xs text-brand-blue font-medium">✓ Live preview</span>
             </div>
-            <textarea
-              value={customMessage}
-              onChange={(e) => setCustomMessage(e.target.value)}
-              rows={6}
-              className="w-full min-w-0 px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 dark:border-slate-700 rounded-lg text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue resize-none font-mono text-black placeholder-gray-400"
-              placeholder="Edit the message content here..."
-            />
-            <p className="text-2xs sm:text-xs text-gray-500 dark:text-slate-500 mt-1">
-              Use <code className="bg-slate-100 px-1 rounded">[Candidate Name]</code> as a placeholder.
-            </p>
+            <div className="p-3 sm:p-4 border border-gray-200 dark:border-slate-700 rounded-xl bg-gray-50/60 dark:bg-slate-800/30">
+              <div className="relative h-full rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 shadow-sm transition-shadow focus-within:ring-2 focus-within:ring-brand-blue/30">
+                <span aria-hidden="true" className="pointer-events-none absolute -top-[2px] -right-[2px] w-7 h-7 border-t-4 border-r-4 border-brand-blue rounded-tr-lg" />
+                <span aria-hidden="true" className="pointer-events-none absolute -bottom-[2px] -left-[2px] w-7 h-7 border-b-4 border-l-4 border-brand-blue rounded-bl-lg" />
+                <textarea
+                  value={customMessage}
+                  onChange={(e) => setCustomMessage(e.target.value)}
+                  rows={6}
+                  className="block w-full px-8 sm:px-16 lg:px-24 py-6 sm:py-8 bg-transparent text-left text-sm leading-7 text-gray-700 dark:text-slate-200 placeholder-gray-400 focus:outline-none resize-none"
+                  placeholder="Edit the message content here..."
+                />
+              </div>
+            </div>
           </div>
 
           {/* Settings */}

@@ -61,7 +61,10 @@ function DetailsContent() {
   // Prev/Next navigation: AssessmentResults stores the visible candidate list
   // in sessionStorage when the user opens the details view, so the user can
   // step through candidates without going back to the list every time.
-  const [navList, setNavList] = useState<{ id: string; cid: string }[]>([]);
+  /* `aid` - the entry's own assessment - is set by lists that span
+     assessments (the Candidate Results tab); lists within one assessment
+     leave it off and page under this route's. */
+  const [navList, setNavList] = useState<{ id: string; cid: string; aid?: string }[]>([]);
   useEffect(() => {
     try {
       const stored = sessionStorage.getItem('assessmentResultNavList');
@@ -73,8 +76,8 @@ function DetailsContent() {
   const next = navIndex >= 0 && navIndex < navList.length - 1 ? navList[navIndex + 1] : null;
   // Carries the origin across Prev/Next — without it, paging to the next
   // candidate would silently re-add the assessment crumb mid-session.
-  const buildNavUrl = (entry: { id: string; cid: string }) =>
-    `/recruitment/assessments/${assessmentId}/results/details?candidate_id=${entry.id}${entry.cid ? `&cid=${encodeURIComponent(entry.cid)}` : ''}` +
+  const buildNavUrl = (entry: { id: string; cid: string; aid?: string }) =>
+    `/recruitment/assessments/${entry.aid || assessmentId}/results/details?candidate_id=${entry.id}${entry.cid ? `&cid=${encodeURIComponent(entry.cid)}` : ''}` +
     (fromCandidateResults ? '&from=candidate-results' : '') +
     // Prev / Next keep the way back, so paging never loses it.
     resultReturnQuery(returnTo, returnLabel);
