@@ -110,7 +110,7 @@ import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import QuotaBadge from '@/components/ui/quota-badge';
 import AllAssessmentsTable, { VersionPill } from '@/components/assessments/AllAssessmentsTable';
-import AssessmentVersionHistoryPanel, { type AssessmentVersionRow, VersionChip } from '@/components/assessments/AssessmentVersionHistoryPanel';
+import AssessmentVersionHistoryPanel, { type AssessmentVersionRow, VersionChip, jobVersionDisplayStatus } from '@/components/assessments/AssessmentVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import { latestVersionNumber } from '@/lib/utils/jobOpeningDisplay';
 /* The Job Opening → Job Version → Assessment retrieval, as one implementation
@@ -1286,7 +1286,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
    * a promise callback, so a landing lineage re-renders the badge and nothing
    * else.
    */
-  const { ensureFilterLineages: ensureJobLineages } = jdLineage;
+  const { ensureFilterLineages: ensureJobLineages, ensureVersionCounts } = jdLineage;
   useEffect(() => {
     /* Keyed by the lineage, not the row: every version of a job resolves to
        the same history, so JD-080 is fetched once however many of its
@@ -1316,6 +1316,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     // already queued (the stats call) claim a connection slot first.
     const timer = setTimeout(() => {
       ensureJobLineages([...targets].map(([key, jobId]) => ({ key, jobId })));
+      /* ONE request for every job on the page, not one per job — the count the
+         row prints comes from here rather than from whichever lineage happened
+         to have landed. Same deferred tick, for the reason above. */
+      ensureVersionCounts([...targets.values()]);
     }, 0);
     return () => clearTimeout(timer);
   }, [apiAssessments, ensureJobLineages]);
@@ -4512,15 +4516,42 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   };
 
   /**
-   * How many versions this job has.
+   * How many versions this job has — the figure the row prints beside Layers.
    *
-   * The fetched lineage is the authority and is what the version panel lists,
-   * so the row's count and the panel's row count agree. Until it lands (or if
-   * the fetch failed) the highest known version number stands in — the same
-   * number the LATEST badge is decided from, via the existing helper.
+   * MUST equal the "Job Versions (N)" heading of the panel that opens beneath
+   * it. Two things used to break that:
+   *
+   *   1. the panel drops DRAFT job versions when `hideDraftJobVersions` is set
+   *      (it is, outside select mode), while this counted the raw lineage — a
+   *      job with a draft read "3 Job Versions" above a panel listing 2;
+   *   2. the lineage it counted was whatever had loaded, so the same row could
+   *      answer differently before and after the panel was opened.
+   *
+   * So the count now comes from /jd/version-counts, which answers both
+   * readings for every job on the page in one request, and `includeDrafts` is
+   * passed the same flag the panel is given. The lineage (filtered the same
+   * way) is the fallback while that is in flight, and the highest known
+   * version number only if neither is available.
    */
-  const getJobVersionCount = (assessment: { jd_id?: string; jd_short_id?: string; jd_version?: number }) =>
-    getJobLineageRows(assessment)?.length ?? getLatestJobVersion(assessment);
+  const getJobVersionCount = (
+    assessment: { jd_id?: string; jd_short_id?: string; jd_version?: number },
+    includeDrafts = false,
+  ) => {
+    const counts = assessment.jd_id ? jdLineage.versionCounts[assessment.jd_id] : undefined;
+    if (counts) return includeDrafts ? counts.total : counts.active;
+
+    const rows = getJobLineageRows(assessment);
+    if (rows?.length) {
+      if (includeDrafts) return rows.length;
+      /* Same test the panel filters by, so the fallback cannot disagree with
+         it either: the DISPLAYED status, not the raw one. */
+      const visible = rows.filter(
+        (row) => jobVersionDisplayStatus(row.status, row.current_version) !== 'Draft',
+      );
+      return visible.length || rows.length;
+    }
+    return getLatestJobVersion(assessment);
+  };
 
   /**
    * Invitations sent for a JOB - what the Job List's Track button is gated on.
@@ -4588,11 +4619,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
        call site is untouched; Send Invite passes its own so the figures on a
        picker row describe the assessments the picker is offering. */
     totalsByLineage: ReturnType<typeof buildJobRowTotals> = jobRowTotals,
+    /* Whether Draft job versions count — the picker's panel lists them, the
+       Job List's does not. Passed through from the row so the figure always
+       describes the panel that opens under it. */
+    includeDraftJobVersions = false,
   ) => {
     const totals = totalsByLineage.get(lineageKeyOf(assessment))
       ?? { assessments: 0, invitations: 0, completed: 0 };
     return [
-      { key: 'job-versions', icon: Layers, iconClass: 'text-brand-blue', value: getJobVersionCount(assessment), label: 'Job Versions' },
+      { key: 'job-versions', icon: Layers, iconClass: 'text-brand-blue', value: getJobVersionCount(assessment, includeDraftJobVersions), label: 'Job Versions' },
       { key: 'assessments', icon: ClipboardList, iconClass: 'text-brand-cyan', value: totals.assessments, label: 'Assessments' },
       { key: 'invitations', icon: Send, iconClass: 'text-brand-orange', value: totals.invitations, label: 'Invitations Sent' },
       /* Completed is the one metric here that is NOT read from `totals`. The
@@ -4817,7 +4852,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         {/* Totals for the job. Two columns on a phone, four in a
             divided row once there is width for them. */}
         <div className="grid grid-cols-2 gap-x-2 gap-y-3 sm:grid-cols-4 sm:gap-x-0 sm:gap-y-0 @4xl/job-row:flex-1 @4xl/job-row:min-w-0">
-          {getJobRowMetrics(assessment, totals).map(({ key, icon: MetricIcon, iconClass, value, label }) => (
+          {/* `selectMode` is exactly what the panel below is given as
+              `hideDraftJobVersions`, so the row's Job Versions figure and the
+              panel's "Job Versions (N)" heading count the same versions. */}
+          {getJobRowMetrics(assessment, totals, selectMode).map(({ key, icon: MetricIcon, iconClass, value, label }) => (
             <div
               key={key}
               className="min-w-0 sm:px-3 sm:border-l sm:border-gray-100 dark:sm:border-slate-700/60 sm:first:border-l-0 sm:first:pl-0"

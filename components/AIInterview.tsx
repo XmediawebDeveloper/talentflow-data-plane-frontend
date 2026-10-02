@@ -54,6 +54,7 @@ import AssessmentVersionHistoryPanel, {
   ASSESSMENT_VOCABULARY,
   type AssessmentVersionRow,
   type VersionHistoryVocabulary,
+  jobVersionDisplayStatus,
 } from '@/components/assessments/AssessmentVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
@@ -1575,17 +1576,37 @@ export default function AIInterview() {
         .catch(() => { completedCountsRequested.current.delete(c.id); });
     });
   };
-  /** Job versions: the fetched lineage once loaded, else the newest known version. */
+  /**
+   * How many versions this job has — the figure beside Layers on the row, and
+   * it must equal the "Job Versions (N)" heading of the panel that opens under
+   * it.
+   *
+   * It used to fall back to `max(jd_version)` across the loaded configs, which
+   * is the highest version NUMBER rather than a count: a job whose V1 was
+   * deleted, or whose interviews were all authored against V3, reported 3 while
+   * the panel listed fewer. And the lineage it preferred was only there once a
+   * panel had been opened, so the same row could answer differently before and
+   * after a click.
+   *
+   * /jd/version-counts answers it for every job on the page in one request.
+   * `active` excludes Draft versions — the panel is given
+   * `hideDraftJobVersions` below, so the two agree. The loaded lineage,
+   * filtered the same way, covers the moment before that lands.
+   */
   const getJobVersionCount = (config: AIInterviewResponse) => {
+    const counts = config.jd_id ? jdLineage.versionCounts[config.jd_id] : undefined;
+    if (counts) return counts.active;
+
     const fetched = config.jd_id ? jdLineage.lineages[config.jd_id] : undefined;
-    if (fetched?.length) return fetched.length;
-    const key = configLineageKeyOf(config);
-    return Math.max(
-      1,
-      ...[...configs, ...archivedConfigs]
-        .filter((c) => configLineageKeyOf(c) === key)
-        .map((c) => c.jd_version ?? 1),
-    );
+    if (fetched?.length) {
+      const visible = fetched.filter(
+        (row) => jobVersionDisplayStatus(row.status, row.current_version) !== 'Draft',
+      );
+      return visible.length || fetched.length;
+    }
+    /* Nothing authoritative yet: one version is the only honest floor — a
+       version NUMBER is not a count, which is what the old fallback got wrong. */
+    return 1;
   };
   /** The job's most-invited interview — what the row's Track opens. */
   const getJobTrackTarget = (config: AIInterviewResponse) => {
@@ -1617,6 +1638,12 @@ export default function AIInterview() {
     if (!visibleLineageKeys) return;
     const keys = new Set(visibleLineageKeys.split('|'));
     requestCompletedCounts([...configs, ...archivedConfigs].filter((c) => keys.has(configLineageKeyOf(c))));
+    /* The authoritative "Job Versions" figure for the jobs on this page, in ONE
+       request — so the row prints the same number whether or not its version
+       panel has ever been opened. See getJobVersionCount. */
+    jdLineage.ensureVersionCounts(
+      paginatedConfigs.map((c) => c.jd_id).filter((id): id is string => !!id),
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visibleLineageKeys, configs, archivedConfigs]);
   /* ── View Versions: interview configs as the version panel's child rows ──
@@ -2914,6 +2941,13 @@ export default function AIInterview() {
                             onClick={(e) => e.stopPropagation()}
                           >
                             <AssessmentVersionHistoryPanel
+                              /* Same rule the Assessments Job List panel uses:
+                                 a Draft is not yet a version of the job, and
+                                 the row's count beside Layers reads `active`
+                                 for exactly this reason. Without it the two
+                                 modules answered "how many versions" with
+                                 different numbers for the same job. */
+                              hideDraftJobVersions
                               jobVersions={jdLineage.lineages[config.jd_id]}
                               jobVersionDetails={jdLineage.versionDetails}
                               assessments={interviewVersionRows(config.jd_id, versionStatusFilterForTab)}
