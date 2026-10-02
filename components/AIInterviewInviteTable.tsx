@@ -549,6 +549,9 @@ export interface AIInterviewInviteTableProps {
    */
   jobVersion?: number;
   interviewVersion?: number;
+  /** A job-wide Track popup spans several interviews: the same two columns,
+   *  read per row from `_jd_version` / `_interview_version` instead. */
+  showRowVersions?: boolean;
 
   /** Bulk selection. Omit both to render no checkbox column at all. */
   selectedIds?: Set<string>;
@@ -581,6 +584,7 @@ export default function AIInterviewInviteTable({
   showJobColumn = false,
   jobVersion,
   interviewVersion,
+  showRowVersions = false,
   selectedIds,
   onToggleSelect,
   isSelectable,
@@ -778,8 +782,8 @@ export default function AIInterviewInviteTable({
                   {inv.candidate_cid && (
                     <p className="text-2xs font-medium text-gray-600 dark:text-slate-400 truncate">
                       {inv.candidate_cid}
-                      {jobVersion != null && <span className="text-gray-400 dark:text-slate-500"> &middot; Job V{jobVersion}</span>}
-                      {interviewVersion != null && <span className="text-gray-400 dark:text-slate-500"> &middot; Interview V{interviewVersion}</span>}
+                      {(jobVersion ?? (showRowVersions ? inv._jd_version : undefined)) != null && <span className="text-gray-400 dark:text-slate-500"> &middot; Job V{jobVersion ?? inv._jd_version}</span>}
+                      {(interviewVersion ?? (showRowVersions ? inv._interview_version : undefined)) != null && <span className="text-gray-400 dark:text-slate-500"> &middot; Interview V{interviewVersion ?? inv._interview_version}</span>}
                     </p>
                   )}
                   {showJobColumn && inv._config_title && (
@@ -909,10 +913,10 @@ export default function AIInterviewInviteTable({
               <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">CID</th>
               <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Candidate</th>
               {/* Track popup only: Job Version, then Interview Version. */}
-              {jobVersion != null && (
+              {(jobVersion != null || showRowVersions) && (
                 <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Job Version</th>
               )}
-              {interviewVersion != null && (
+              {(interviewVersion != null || showRowVersions) && (
                 <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Interview Version</th>
               )}
               {/* Four columns, not one compound cell — the Candidate Results
@@ -985,14 +989,18 @@ export default function AIInterviewInviteTable({
                     </div>
                   </td>
 
-                  {jobVersion != null && (
+                  {(jobVersion != null || showRowVersions) && (
                     <td className="py-3 px-4 align-middle whitespace-nowrap">
-                      <VersionPill kind="job" version={jobVersion} />
+                      {(jobVersion ?? inv._jd_version) != null
+                        ? <VersionPill kind="job" version={jobVersion ?? inv._jd_version} />
+                        : <span className="text-gray-400 dark:text-slate-500">—</span>}
                     </td>
                   )}
-                  {interviewVersion != null && (
+                  {(interviewVersion != null || showRowVersions) && (
                     <td className="py-3 px-4 align-middle whitespace-nowrap">
-                      <VersionPill kind="interview" version={interviewVersion} />
+                      {(interviewVersion ?? inv._interview_version) != null
+                        ? <VersionPill kind="interview" version={interviewVersion ?? inv._interview_version} />
+                        : <span className="text-gray-400 dark:text-slate-500">—</span>}
                     </td>
                   )}
 
