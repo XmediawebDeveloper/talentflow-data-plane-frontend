@@ -5486,12 +5486,16 @@ function AIMatchTabContent({
                         })()}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">{candidate.location || '—'}</td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <div className="flex flex-nowrap items-center gap-1">
+                      <td className="px-4 py-3 min-w-[220px] max-w-[260px]">
+                        {/* One chip shown in full, the rest collapse into "+N
+                            more" — the same treatment every skills column in
+                            a table uses, so no row reads taller than another. */}
+                        <div className="flex flex-nowrap items-center gap-1 overflow-hidden">
                           <SkillsList
                             skills={candidate.skills}
-                            chipClassName="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full border border-blue-200 whitespace-nowrap"
-                            moreClassName="px-2 py-0.5 text-xs text-blue-600 font-medium rounded-full hover:bg-blue-50 transition-colors cursor-pointer whitespace-nowrap"
+                            max={1}
+                            chipClassName="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full border border-blue-200 min-w-0 shrink truncate max-w-[160px]"
+                            moreClassName="px-2 py-0.5 text-xs text-blue-600 font-medium rounded-full hover:bg-blue-50 transition-colors cursor-pointer whitespace-nowrap shrink-0"
                           />
                         </div>
                       </td>
