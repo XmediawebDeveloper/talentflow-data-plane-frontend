@@ -85,6 +85,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalResumes, setTotalResumes] = useState(0);
+  const [totalIncludingVersions, setTotalIncludingVersions] = useState<number | undefined>(undefined);
   const [pageSize] = useState(25);
 
   // Track if initial load is done
@@ -284,6 +285,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
       setFolders(convertedFolders);
       setTotalPages(resumeResponse.total_pages || 1);
       setTotalResumes(resumeResponse.total || 0);
+      setTotalIncludingVersions(resumeResponse.total_including_versions);
     } catch (error) {
       console.error('Failed to fetch data:', error);
       toast.error('Failed to load resume database');
@@ -1019,6 +1021,9 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
             </div>
             <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
               Search and filter resumes shared across your organization
+              {typeof totalIncludingVersions === 'number' && totalIncludingVersions > totalResumes && (
+                <span className="text-gray-400"> · {totalIncludingVersions} incl. version history</span>
+              )}
             </p>
           </div>
         </div>
