@@ -1417,7 +1417,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                 { key: 'results', label: 'Results', icon: BarChart },
                 { key: 'activity', label: 'Recent Activity', icon: Clock },
                 { key: 'viewjd', label: 'View JD', icon: Briefcase },
-                { key: 'versions', label: 'Revision History', icon: Layers },
+                { key: 'versions', label: 'Version History', icon: Layers },
               ] as { key: typeof activeTab; label: string; icon: typeof FileText }[]).map((t) => {
                 const isActive = activeTab === t.key;
                 return (
@@ -1807,12 +1807,11 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                     <Layers className="w-4 h-4 text-brand-blue" />
                   </div>
-                  <h2 className="text-base font-semibold text-gray-900 tracking-tight">Revision History</h2>
+                  <h2 className="text-base font-semibold text-gray-900 tracking-tight">Version History</h2>
                 </div>
-                {/* Names the two numbers apart on the one screen that shows
-                    both: the header badge is the INTERVIEW VERSION (which
-                    interview this is for the job version), these are its
-                    REVISIONS (each save of it). */}
+                {/* Named "Version History" to match the Assessment module. The
+                    header badge (Interview Version) is a different number:
+                    which interview this is for the job version. */}
                 <p className="text-sm text-gray-600">
                   Every change saved to Interview Version V{interviewVersionOrdinal} of this job, newest first
                 </p>
@@ -1851,22 +1850,22 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     return (
                       <div key={version.id} className="space-y-4">
                         <div className="flex items-start gap-4">
-                          {/* R, not V. `AIInterviewVersionHistory.version` counts
-                               SAVES of this one config — it reached 11 here while
-                               the header's "Interview Version · V1" (the ordinal
-                               among configs authored against this job version,
-                               the number the results table, invite table and list
-                               all print) was still 1. Two different quantities
-                               both labelled "Version" on one screen is the whole
-                               bug; this timeline owns the revision counter, so it
-                               says Revision. */}
+                          {/* V, matching Assessment's Version History. This counts
+                               changes to this one interview (created, published,
+                               post-publish edits); the header's "Interview Version"
+                               badge is a separate number. */}
                           <div className="w-12 h-12 bg-brand-cyan rounded-full flex items-center justify-center flex-shrink-0 shadow-md shadow-brand-cyan/25 ring-1 ring-white/20">
-                            <span className="text-white font-bold text-sm">R{version.version}</span>
+                            <span className="text-white font-bold text-sm">V{version.version}</span>
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mb-1">
                               <h4 className="text-base font-semibold text-gray-900 tracking-tight">
-                                Revision {version.version} {isFirstVersion ? 'Published' : 'Updated'}
+                                Version {version.version} {
+                                  /config published/i.test(version.change_summary || '') ? 'Published'
+                                  : isFirstVersion ? 'Created'
+                                  : /archived/i.test(version.change_summary || '') ? (/unarchived/i.test(version.change_summary || '') ? 'Unarchived' : 'Archived')
+                                  : 'Updated'
+                                }
                               </h4>
                               {isCurrentVersion && (
                                 <span className="px-2.5 py-1 bg-brand-blue text-white text-xs font-medium rounded shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 w-fit">
@@ -1885,7 +1884,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                             </div>
                             <div className="flex items-center gap-2 text-sm text-gray-600 mb-4">
                               <Calendar className="w-4 h-4 text-brand-blue flex-shrink-0" />
-                              <span>Published on {versionDate} IST (UTC+5:30)</span>
+                              <span>{/config published/i.test(version.change_summary || '') ? 'Published' : 'Saved'} on {versionDate} IST (UTC+5:30)</span>
                             </div>
                             <div className="bg-gradient-to-br from-brand-blue/5 to-brand-cyan/5 border border-gray-100 ring-1 ring-brand-blue/10 rounded-lg p-4">
                               <div className="text-sm font-medium text-gray-900 mb-3">
