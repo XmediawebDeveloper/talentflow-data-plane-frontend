@@ -64,7 +64,7 @@ export default function AssessmentConfigureModal({
      reads the JD's skills, experience and coding requirements to lay itself
      out — so an assessment with no job behind it has nothing to configure.
      Callers fall back to the plain edit dialog in that case, the same way the
-     route's draft redirect is gated on `jd_id`. */
+     details page's Draft gate does for its Activate. */
   const assessmentCreationRef = useRef<AssessmentCreationHandle>(null);
 
   if (!isOpen || !assessment?.id || !assessment?.jd_id) return null;
