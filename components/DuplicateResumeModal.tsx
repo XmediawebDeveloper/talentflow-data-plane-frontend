@@ -5,7 +5,9 @@ import { useState, useEffect, useMemo, ComponentType } from 'react';
 import { resumeService } from '@/lib/services';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
+import { extractLocalResumeText } from '@/lib/utils/localResumeText';
 import ResumeTextPreviewModal from './ResumeTextPreviewModal';
+import VersionCompareModal, { type CompareVersion } from './VersionCompareModal';
 
 // Maximum number of versions allowed per resume
 const MAX_VERSIONS_PER_RESUME = 5;
@@ -64,8 +66,13 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
   const [currentVersionIndex] = useState(0);
   const [resolutions, setResolutions] = useState<Map<number, 'discard' | 'overwrite' | 'version'>>(new Map());
   const [selectedAction, setSelectedAction] = useState<'discard' | 'overwrite' | 'version' | null>(null);
-  // Toggles the field-by-field diff table below the comparison cards.
-  const [showCompare, setShowCompare] = useState(false);
+  /* The side-by-side document diff — same popup the resume detail page's
+     version history opens, so "what actually changed" reads identically
+     whether it's two versions of one resume or a new upload against the one
+     on file. Built from each side's extracted text, fetched on demand since
+     the duplicate payload only carries metadata. */
+  const [comparePair, setComparePair] = useState<{ older: CompareVersion; newer: CompareVersion } | null>(null);
+  const [loadingCompare, setLoadingCompare] = useState(false);
   /* Resolving hits the server (overwrite/version uploads), so the parent keeps
      this modal mounted until that finishes. Rather than a "Processing
      duplicate resolution..." toast floating over the dialog, the Confirm
@@ -134,6 +141,28 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
     });
   };
 
+  /* Existing side reads from the stored record's extracted_text, same as any
+     other version diff. New side has no record yet, so its text is pulled
+     out of the file itself in the browser — the same path the preview popup
+     uses for a refused upload. Either side silently contributes '' on
+     failure (a scanned PDF, an unreadable .doc): VersionCompareModal already
+     renders that as "no content to compare" rather than erroring the dialog. */
+  const openComparison = async (dup: DuplicateFile) => {
+    setLoadingCompare(true);
+    try {
+      const [existingText, newText] = await Promise.all([
+        resumeService.get(dup.existingResume.id).then(d => d?.extracted_text || '').catch(() => ''),
+        extractLocalResumeText(dup.file).catch(() => ''),
+      ]);
+      setComparePair({
+        older: { label: 'Existing Resume', name: dup.existingResume.file_name, text: existingText },
+        newer: { label: 'New Resume (Uploading)', name: dup.file.name, text: newText },
+      });
+    } finally {
+      setLoadingCompare(false);
+    }
+  };
+
   const closePreview = () => {
     if (preview?.kind === 'new' && preview.url) {
       window.URL.revokeObjectURL(preview.url);
@@ -181,6 +210,17 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
         onClose={closePreview}
       />
     )
+  ) : null;
+
+  // Same stacking reasoning as the preview overlay above.
+  const compareOverlay = comparePair ? (
+    <VersionCompareModal
+      older={comparePair.older}
+      newer={comparePair.newer}
+      highlightMode="matches"
+      zIndexClassName="z-[80]"
+      onClose={() => setComparePair(null)}
+    />
   ) : null;
 
   // Auto-resolve exact duplicates as 'discard' on mount
@@ -397,6 +437,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
         </div>
       </div>
       {previewOverlay}
+      {compareOverlay}
       </>
     );
   }
@@ -464,15 +505,18 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
             </div>
           </div>
 
-          {/* Compare Selected — toggles a field-by-field diff table for the
-              comparison cards below. */}
+          {/* Opens the two resumes side by side, as documents — same diff
+              popup the resume detail page's version history uses — rather
+              than a table of metadata fields, which a candidate's actual
+              content never showed up in. */}
           <div className="mb-6 flex justify-end">
             <button
-              onClick={() => setShowCompare(v => !v)}
-              className="px-4 py-2 text-sm font-medium text-brand-blue border border-brand-blue/30 rounded-lg hover:bg-brand-blue/5 transition-colors flex items-center gap-2 cursor-pointer"
+              onClick={() => openComparison(currentDuplicate)}
+              disabled={loadingCompare}
+              className="px-4 py-2 text-sm font-medium text-brand-blue border border-brand-blue/30 rounded-lg hover:bg-brand-blue/5 transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              <GitBranch className="w-4 h-4" />
-              {showCompare ? 'Hide Comparison' : 'Compare Selected'}
+              {loadingCompare ? <Loader2 className="w-4 h-4 animate-spin" /> : <GitBranch className="w-4 h-4" />}
+              Compare Resumes
             </button>
           </div>
 
@@ -536,65 +580,6 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
                     Preview New
                   </button>
                 </div>
-              </div>
-            );
-          })()}
-
-          {showCompare && (() => {
-            const existing = currentDuplicate.existingResume;
-            const existingLocation = existing.folder_path || existing.folder_name || 'root';
-            const uploadLocation = targetFolderPath || existingLocation;
-            const rows: { label: string; existingValue: string; newValue: string }[] = [
-              { label: 'Candidate', existingValue: existing.candidate_name, newValue: existing.candidate_name },
-              { label: 'Email', existingValue: existing.email, newValue: existing.email },
-              { label: 'Location', existingValue: existingLocation, newValue: uploadLocation },
-              { label: 'Upload Date', existingValue: formatISTDate(existing.upload_date), newValue: uploadAttemptedAt },
-              { label: 'Upload By', existingValue: existingUploaders[existing.id] || '-', newValue: currentUserName },
-              { label: 'File Name', existingValue: existing.file_name, newValue: currentDuplicate.file.name },
-              { label: 'File Size', existingValue: formatFileSize(existing.file_size), newValue: formatFileSize(currentDuplicate.file.size) },
-            ];
-
-            return (
-              <div className="mb-6 border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300">
-                      <th className="px-4 py-2.5 text-left font-medium">Field</th>
-                      <th className="px-4 py-2.5 text-left font-medium">Existing Resume</th>
-                      <th className="px-4 py-2.5 text-left font-medium">New Resume</th>
-                      <th className="px-4 py-2.5 text-left font-medium">Match?</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
-                    {rows.map(row => {
-                      const isSame = row.existingValue === row.newValue;
-                      return (
-                        <tr key={row.label}>
-                          <td className="px-4 py-2.5 text-gray-500 dark:text-slate-400 whitespace-nowrap">{row.label}</td>
-                          <td className="px-4 py-2.5 text-gray-900 dark:text-slate-50 break-words">{row.existingValue || '-'}</td>
-                          <td className="px-4 py-2.5 text-gray-900 dark:text-slate-50 break-words">{row.newValue || '-'}</td>
-                          <td className="px-4 py-2.5 whitespace-nowrap">
-                            {isSame ? (
-                              <span className="inline-flex items-center gap-1 text-green-600">
-                                <Check className="w-3.5 h-3.5" /> Same
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 text-red-600">
-                                <X className="w-3.5 h-3.5" /> Different
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    {existing.version > 1 && (
-                      <tr>
-                        <td className="px-4 py-2.5 text-gray-500 dark:text-slate-400 whitespace-nowrap">Version</td>
-                        <td className="px-4 py-2.5 text-gray-900 dark:text-slate-50" colSpan={3}>v{existing.version}</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
               </div>
             );
           })()}
@@ -785,6 +770,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
 
     {/* Inline Preview Modal */}
     {previewOverlay}
+    {compareOverlay}
     </>
   );
 }
