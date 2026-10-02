@@ -232,6 +232,10 @@ export default function AIInterview() {
   const [configs, setConfigs] = useState<AIInterviewResponse[]>([]);
   const [archivedConfigs, setArchivedConfigs] = useState<AIInterviewResponse[]>([]);
   const [stats, setStats] = useState<AIInterviewStatsResponse | null>(null);
+  /* Completed + Terminated sessions — the same rows Candidate Results lists
+     (a terminated interview still has its partial report). `stats.completed`
+     alone left the card short of that list's count. */
+  const [interviewedCount, setInterviewedCount] = useState<number | null>(null);
   const [settings, setSettings] = useState<AIInterviewSettingsResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -285,6 +289,25 @@ export default function AIInterview() {
      narrow it. Source does narrow: see loadInvitations. */
   const [trackerJobVersionFilter, setTrackerJobVersionFilter] = useState('');
   const [trackerVersionFilter, setTrackerVersionFilter] = useState('');
+  /* A job row's Track covers EVERY interview of that job, so its cards add up
+     to the row's Invitations Sent / Completed. Null for a single interview's
+     tracker (a version row). Each entry carries its versions, worked out when
+     the popup opens. Mirrored into refs because the loaders below are stable
+     callbacks that read them at call time. */
+  type TrackerScopeEntry = { config: AIInterviewResponse; jobVersion: number; interviewVersion: number };
+  const [trackerJobScope, setTrackerJobScope] = useState<TrackerScopeEntry[] | null>(null);
+  const trackerJobScopeRef = useRef<TrackerScopeEntry[] | null>(null);
+  const trackerVersionFiltersRef = useRef({ job: '', interview: '' });
+  // Declared ahead of the loader effects, so the refs are current when they run.
+  useEffect(() => {
+    trackerJobScopeRef.current = trackerJobScope;
+    trackerVersionFiltersRef.current = { job: trackerJobVersionFilter, interview: trackerVersionFilter };
+  }, [trackerJobScope, trackerJobVersionFilter, trackerVersionFilter]);
+  /** The job-wide scope `configId` belongs to, or null for a one-interview tracker. */
+  const trackerScopeFor = (configId: string) => {
+    const scope = trackerJobScopeRef.current;
+    return scope && scope.some((entry) => entry.config.id === configId) ? scope : null;
+  };
   const [trackerSourceFilter, setTrackerSourceFilter] = useState('');
   const [trackerResultFilter, setTrackerResultFilter] = useState('');
   // See handleViewInvitations.
@@ -360,6 +383,10 @@ export default function AIInterview() {
   /** Completed-session count per interview config — filled when its job's
    *  versions are opened (see the effect beside `interviewVersionRows`). */
   const [completedCounts, setCompletedCounts] = useState<Record<string, number>>({});
+  /* Invitation totals per interview, from the same unfiltered invitations
+     summary the Track popup reads — the list's `invitations_count` can drift
+     from it, so the job row and version rows prefer this once it lands. */
+  const [invitationTotals, setInvitationTotals] = useState<Record<string, number>>({});
   const completedCountsRequested = useRef<Set<string>>(new Set());
   /* The chosen interview version, one per job, exactly as the Assessments Job
      List holds its own pick (`selectedAssessmentVersionByJob`): the panel's
@@ -567,6 +594,15 @@ export default function AIInterview() {
       } catch (statsError) {
         console.error('Failed to load AI interview stats:', statsError);
       }
+
+      try {
+        // Same query Candidate Results loads; only the total is needed, so one row will do.
+        const interviewedRes = await aiInterviewService.list({ status: 'completed,terminated', page: 1, page_size: 1 });
+        setInterviewedCount(typeof interviewedRes.total === 'number' ? interviewedRes.total : null);
+      } catch (countError) {
+        console.error('Failed to load interviewed count:', countError);
+        setInterviewedCount(null);
+      }
     } catch (error) {
       setConfigs([]);
       if (error instanceof Error) {
@@ -647,21 +683,25 @@ export default function AIInterview() {
          card disagree with the rows it filters to: the remainder also holds
          expired and system_check sessions. Asking the endpoint for each bucket
          directly keeps the numbers and the filtered table in step. */
-      const [result, invitedOnly, revokedOnly, expiredOnly] = await Promise.all([
-        aiInterviewService.getConfigInvitations(configId, { page: 1, page_size: 1, compact: true }),
-        aiInterviewService.getConfigInvitations(configId, { page: 1, page_size: 1, compact: true, status: 'invited' }),
-        aiInterviewService.getConfigInvitations(configId, { page: 1, page_size: 1, compact: true, status: 'revoked' }),
-        aiInterviewService.getConfigInvitations(configId, { page: 1, page_size: 1, compact: true, status: 'expired' }),
-      ]);
+      // A job-wide tracker sums the same four calls over each of its interviews.
+      const ids = trackerScopeFor(configId)?.map((entry) => entry.config.id) ?? [configId];
+      const perConfig = await Promise.all(ids.map((id) => Promise.all([
+        aiInterviewService.getConfigInvitations(id, { page: 1, page_size: 1, compact: true }),
+        aiInterviewService.getConfigInvitations(id, { page: 1, page_size: 1, compact: true, status: 'invited' }),
+        aiInterviewService.getConfigInvitations(id, { page: 1, page_size: 1, compact: true, status: 'revoked' }),
+        aiInterviewService.getConfigInvitations(id, { page: 1, page_size: 1, compact: true, status: 'expired' }),
+      ])));
+      const sum = (pick: (calls: (typeof perConfig)[number]) => number | undefined) =>
+        perConfig.reduce((acc, calls) => acc + (pick(calls) || 0), 0);
       setInvitationOverview({
-        total: result.total || 0,
-        invited: invitedOnly.total || 0,
-        completed: result.completed || 0,
-        inProgress: result.in_progress || 0,
-        terminated: result.terminated || 0,
-        cancelled: result.cancelled || 0,
-        revoked: revokedOnly.total || 0,
-        expired: expiredOnly.total || 0,
+        total: sum(([result]) => result.total),
+        invited: sum(([, invitedOnly]) => invitedOnly.total),
+        completed: sum(([result]) => result.completed),
+        inProgress: sum(([result]) => result.in_progress),
+        terminated: sum(([result]) => result.terminated),
+        cancelled: sum(([result]) => result.cancelled),
+        revoked: sum(([, , revokedOnly]) => revokedOnly.total),
+        expired: sum(([, , , expiredOnly]) => expiredOnly.total),
       });
     } catch (error) {
       console.error('Failed to load invitation overview:', error);
@@ -686,6 +726,41 @@ export default function AIInterview() {
          list is fetched and filtered and paged here —
          filtering only the current server page would leave the page count
          and "Showing X of Y" describing rows that are not there. */
+      /* Job-wide tracker: each interview's matching rows (narrowed to the
+         chosen job / interview version), stamped with their versions, merged
+         newest-sent first, then filtered and paged here — the same client-side
+         path as Source / Result below, across several configs. */
+      const scope = trackerScopeFor(configId);
+      if (scope) {
+        const { job, interview } = trackerVersionFiltersRef.current;
+        const targets = scope.filter((entry) =>
+          (!job || String(entry.jobVersion) === job) && (!interview || String(entry.interviewVersion) === interview));
+        const lists = await Promise.all(targets.map((entry) =>
+          aiInterviewService.getConfigInvitations(entry.config.id, {
+            search: filters.search.trim() || undefined,
+            status: filters.status !== 'all' ? filters.status : undefined,
+            invite_date_from: filters.dateFrom || undefined,
+            invite_date_to: filters.dateTo || undefined,
+            page: 1,
+            page_size: 1000,
+          }).then((res) => (res.items || []).map((inv: any) => ({
+            ...inv,
+            _jd_version: entry.jobVersion,
+            _interview_version: entry.interviewVersion,
+          })))));
+        const sentAt = (inv: any) => new Date(inv.invitation_sent_at || inv.created_at || 0).getTime();
+        const matching = lists.flat()
+          .filter((inv: any) =>
+            (!source || inv.invite_source === source) && matchesInviteResultFilter(inv, displayInviteScore(inv), resultFilter))
+          .sort((a: any, b: any) => sentAt(b) - sentAt(a));
+        const totalPages = Math.max(1, Math.ceil(matching.length / INVITATION_PAGE_SIZE));
+        const safePage = Math.min(page, totalPages);
+        setInvitations(matching.slice((safePage - 1) * INVITATION_PAGE_SIZE, safePage * INVITATION_PAGE_SIZE));
+        setInvitationTotal(matching.length);
+        setInvitationTotalPages(totalPages);
+        if (safePage !== page) setInvitationPage(safePage);
+        return;
+      }
       if (source || resultFilter) {
         const all = await aiInterviewService.getConfigInvitations(configId, {
           search: filters.search.trim() || undefined,
@@ -1004,7 +1079,7 @@ export default function AIInterview() {
   useEffect(() => {
     if (!viewInvitationsConfig) return;
     loadInvitations(viewInvitationsConfig.id, invitationPage, inviteFilters, trackerSourceFilter, trackerResultFilter);
-  }, [viewInvitationsConfig, invitationPage, inviteFilters, trackerSourceFilter, trackerResultFilter, loadInvitations]);
+  }, [viewInvitationsConfig, trackerJobScope, trackerJobVersionFilter, trackerVersionFilter, invitationPage, inviteFilters, trackerSourceFilter, trackerResultFilter, loadInvitations]);
 
   // Bulk-revoke selection is scoped to the current invitations page — clear it
   // whenever the page, filters, or the open config changes so a stale selection
@@ -1022,7 +1097,7 @@ export default function AIInterview() {
   useEffect(() => {
     if (!viewInvitationsConfig) return;
     loadInvitationOverview(viewInvitationsConfig.id);
-  }, [viewInvitationsConfig, loadInvitationOverview]);
+  }, [viewInvitationsConfig, trackerJobScope, loadInvitationOverview]);
 
   /* Dismiss the 3-dot menu — the card's own in-flow menu (`menuRef`) and the
      version panel's portalled compact menu (`versionMenuRef`) share one open id,
@@ -1100,8 +1175,15 @@ export default function AIInterview() {
      version a tracker is for. They show when the tracker is opened from a
      job's own row on Total Jobs; opened from a version row they are hidden,
      since the row that was clicked already names the version. */
-  const handleViewInvitations = async (config: AIInterviewResponse, showVersionDetails = false) => {
+  const handleViewInvitations = async (
+    config: AIInterviewResponse,
+    showVersionDetails = false,
+    jobScope: TrackerScopeEntry[] | null = null,
+  ) => {
     setTrackerShowVersions(showVersionDetails);
+    /* Set on every open (null for one interview). Not cleared on close: the
+       Send Invite round trip reopens this same tracker directly and must keep it. */
+    setTrackerJobScope(jobScope && jobScope.length > 0 ? jobScope : null);
     /* Loading from the very first paint. The effect that fetches the rows runs
        AFTER the popup's first render, so without this the body showed "No
        candidates invited yet" for one frame - wrong, and a third height for
@@ -1557,21 +1639,26 @@ export default function AIInterview() {
     const entry = jobRowTotals.get(key) ?? { interviews: 0, active: 0, invitations: 0, completed: 0, completedKnown: true };
     entry.interviews += 1;
     if (normalizeConfigStatus(config.status) === 'published') entry.active += 1;
-    entry.invitations += config.invitations_count ?? 0;
+    entry.invitations += invitationTotals[config.id] ?? config.invitations_count ?? 0;
     // Completed candidates — known only once every interview's count landed.
     if (typeof completedCounts[config.id] === 'number') entry.completed += completedCounts[config.id];
     else entry.completedKnown = false;
     jobRowTotals.set(key, entry);
   }
 
-  /** Fetch the completed-session count of each given interview not yet asked
-   *  for — a page_size-1 page of `completed` sessions, keeping its total. */
+  /** Fetch each given interview's invitation summary, once — the same
+   *  unfiltered page_size-1 call the Track popup uses for its cards, so
+   *  Invitations Sent (`total`) and Completed (`completed`) read the same
+   *  numbers there and here. */
   const requestCompletedCounts = (list: AIInterviewResponse[]) => {
     list.forEach((c) => {
       if (completedCountsRequested.current.has(c.id)) return;
       completedCountsRequested.current.add(c.id);
-      aiInterviewService.getConfigInvitations(c.id, { page: 1, page_size: 1, compact: true, status: 'completed' })
-        .then((res) => setCompletedCounts((prev) => ({ ...prev, [c.id]: res.total || 0 })))
+      aiInterviewService.getConfigInvitations(c.id, { page: 1, page_size: 1 })
+        .then((res) => {
+          setCompletedCounts((prev) => ({ ...prev, [c.id]: res.completed || 0 }));
+          setInvitationTotals((prev) => ({ ...prev, [c.id]: res.total || 0 }));
+        })
         .catch(() => { completedCountsRequested.current.delete(c.id); });
     });
   };
@@ -1658,7 +1745,7 @@ export default function AIInterview() {
     status: normalizeConfigStatus(config.status),
     created_at: config.created_at,
     created_by_name: config.created_by_name,
-    invitations_count: config.invitations_count,
+    invitations_count: invitationTotals[config.id] ?? config.invitations_count,
     // Undefined until fetched — the cell shows a dash rather than a false 0.
     completed_count: completedCounts[config.id],
     jd_id: config.jd_id,
@@ -2295,7 +2382,7 @@ export default function AIInterview() {
             },
             {
               label: 'Candidates Interviewed',
-              value: stats?.completed ?? 0,
+              value: interviewedCount ?? stats?.completed ?? 0,
               icon: Users,
               tab: 'candidate-results' as TabKey,
               cardKey: 'interviewed' as OverviewCardKey,
@@ -2871,7 +2958,14 @@ export default function AIInterview() {
                                     return;
                                   }
                                   if (!canTrack || !trackTarget) return;
-                                  void handleViewInvitations(trackTarget, true);
+                                  // Every interview of this job, so the popup totals match this row.
+                                  const lineage = [...configs, ...archivedConfigs].filter(
+                                    (c) => configLineageKeyOf(c) === configLineageKeyOf(config));
+                                  void handleViewInvitations(trackTarget, true, lineage.map((c) => ({
+                                    config: c,
+                                    jobVersion: c.jd_version ?? 1,
+                                    interviewVersion: interviewVersionOrdinal(c, [...configs, ...archivedConfigs]),
+                                  })));
                                 }}
                                 className={`h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all ${
                                   canTrack
@@ -4158,19 +4252,8 @@ export default function AIInterview() {
                 statusOptions={AI_INTERVIEW_INVITE_STATUS_OPTIONS}
                 searchPlaceholder="Search by candidate name or email..."
                 extraSelects={[
-                  ...(trackerShowVersions ? [{
-                    key: 'job-version', ariaLabel: 'Job Version', anyLabel: 'All Job Versions', value: trackerJobVersionFilter,
-                    options: [{ value: String(viewInvitationsConfig.jd_version ?? 1), label: `Job V${viewInvitationsConfig.jd_version ?? 1}` }],
-                    onChange: setTrackerJobVersionFilter,
-                  },
-                  {
-                    key: 'interview-version', ariaLabel: 'Interview Version', anyLabel: 'All Interview Versions', value: trackerVersionFilter,
-                    options: (() => {
-                      const v = interviewVersionOrdinal(viewInvitationsConfig, [...configs, ...archivedConfigs]);
-                      return [{ value: String(v), label: `Interview V${v}` }];
-                    })(),
-                    onChange: setTrackerVersionFilter,
-                  }] : []),
+                  /* Same Source / Result pair as every other Track popup, so the bar
+                     keeps their one-row layout. Versions read per row in the table. */
                   {
                     key: 'source', ariaLabel: 'Source', anyLabel: 'All Sources', value: trackerSourceFilter,
                     options: INVITE_SOURCE_FILTER_OPTIONS,
@@ -4283,8 +4366,9 @@ export default function AIInterview() {
                   isLoading={invitesInitialLoading}
                   hasActiveFilters={filtersActive}
                   emptyHint={'Use the "Send via Email" button to invite candidates'}
-                  jobVersion={trackerShowVersions ? (viewInvitationsConfig.jd_version ?? 1) : undefined}
-                  interviewVersion={trackerShowVersions ? interviewVersionOrdinal(viewInvitationsConfig, [...configs, ...archivedConfigs]) : undefined}
+                  jobVersion={trackerShowVersions && !trackerJobScope ? (viewInvitationsConfig.jd_version ?? 1) : undefined}
+                  interviewVersion={trackerShowVersions && !trackerJobScope ? interviewVersionOrdinal(viewInvitationsConfig, [...configs, ...archivedConfigs]) : undefined}
+                  showRowVersions={!!trackerJobScope}
                   selectedIds={trackerBulkMode ? selectedInviteIds : undefined}
                   onToggleSelect={trackerBulkMode ? toggleSelectOne : undefined}
                   isSelectable={trackerRowSelectable}
