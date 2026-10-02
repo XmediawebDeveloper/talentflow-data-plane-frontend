@@ -182,6 +182,9 @@ export interface ResumeVersion {
 export interface ResumeListResponse {
   items: Resume[];
   total: number;
+  // Rows actually stored for this view, including superseded versions kept
+  // for history - `total` above counts latest versions only.
+  total_including_versions?: number;
   page: number;
   page_size: number;
   total_pages: number;

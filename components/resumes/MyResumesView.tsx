@@ -928,6 +928,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
   const [totalItems, setTotalItems] = useState(0);
+  const [totalIncludingVersions, setTotalIncludingVersions] = useState<number | undefined>(undefined);
   const [totalPages, setTotalPages] = useState(1);
   const [isPaginating, setIsPaginating] = useState(false);
   const [folderTreeWidth, setFolderTreeWidth] = useState(240);
@@ -1936,6 +1937,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
 
       setResumes(convertedResumes);
       setTotalItems(resumeResponse.total);
+      setTotalIncludingVersions(resumeResponse.total_including_versions);
       setTotalPages(resumeResponse.total_pages);
       setFolders(applyCachedCorrections(rawFolders));
 
@@ -3912,7 +3914,12 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                 {totalItems} Resumes
               </span>
             </div>
-            <p className="text-xs sm:text-sm text-gray-600">Resumes uploaded by you</p>
+            <p className="text-xs sm:text-sm text-gray-600">
+              Resumes uploaded by you
+              {typeof totalIncludingVersions === 'number' && totalIncludingVersions > totalItems && (
+                <span className="text-gray-400"> · {totalIncludingVersions} incl. version history</span>
+              )}
+            </p>
           </div>
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
