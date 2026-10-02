@@ -2,6 +2,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { Cluster } from './types';
 
+import { formatScore1 } from '@/lib/utils/matchStatus';
 export interface PDFViolation {
   kind: string;
   severity: 'low' | 'medium' | 'high' | string;
@@ -218,8 +219,8 @@ export function generateEvaluationPDF(data: PDFData) {
     startY: yPos,
     head: [['Metric', 'Value', 'Details']],
     body: [
-      ['Final Score', `${data.scores.final.toFixed(2)} / 100`, `${((data.scores.final / 100) * 100).toFixed(0)}% Performance`],
-      ['Must-Have Status', data.scores.mustHave >= 6.0 ? 'PASSED' : 'FAILED', `Threshold: 6.0 | Score: ${data.scores.mustHave.toFixed(2)}`],
+      ['Final Score', `${formatScore1(data.scores.final)} / 100`, `${((data.scores.final / 100) * 100).toFixed(0)}% Performance`],
+      ['Must-Have Status', data.scores.mustHave >= 6.0 ? 'PASSED' : 'FAILED', `Threshold: 6.0 | Score: ${formatScore1(data.scores.mustHave)}`],
       ['Skills Evaluated', `${totalSkills} skills`, `Across ${totalClusters} clusters`],
       ['Strengths / Development', `${data.strengths.length} / ${data.weaknesses.length}`, 'High performers / Areas to improve'],
     ],
@@ -273,11 +274,11 @@ export function generateEvaluationPDF(data: PDFData) {
     startY: yPos,
     head: [['Category', 'Score', 'Weight', 'Contribution', 'Status']],
     body: [
-      ['Must-Have Skills', data.scores.mustHave.toFixed(2), '70%', (data.scores.mustHave * 0.7).toFixed(3), data.scores.mustHave >= 6.0 ? 'PASS' : 'FAIL'],
-      ['Nice-to-Have Skills', data.scores.niceToHave.toFixed(2), '30%', (data.scores.niceToHave * 0.3).toFixed(3), '—'],
+      ['Must-Have Skills', formatScore1(data.scores.mustHave), '70%', (data.scores.mustHave * 0.7).toFixed(3), data.scores.mustHave >= 6.0 ? 'PASS' : 'FAIL'],
+      ['Nice-to-Have Skills', formatScore1(data.scores.niceToHave), '30%', (data.scores.niceToHave * 0.3).toFixed(3), '—'],
       ['', '', '', '', ''],
       ['WEIGHTED SUM', '', '100%', (data.scores.mustHave * 0.7 + data.scores.niceToHave * 0.3).toFixed(3), ''],
-      ['FINAL SCORE (x10)', '', '', data.scores.final.toFixed(2), ''],
+      ['FINAL SCORE (x10)', '', '', formatScore1(data.scores.final), ''],
       ['HR Assessment', '—', '0% (review only)', '—', '—'],
     ],
     theme: 'grid',

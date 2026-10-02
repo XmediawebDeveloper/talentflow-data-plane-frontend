@@ -1,6 +1,7 @@
 import { Mail, User, Shield, CheckCircle, TrendingUp, TrendingDown, Award, AlertCircle, Zap, Target, Star, Brain, XCircle } from 'lucide-react';
 import type { DashboardData } from './types';
 
+import { formatScore1 } from '@/lib/utils/matchStatus';
 interface Props {
   data: DashboardData;
   /** Whether identity/liveness verification was confirmed for this candidate */
@@ -155,7 +156,7 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
                     }`}
                     style={{ fontFamily: 'var(--font-mono)' }}
                   >
-                    {scores.mustHave.toFixed(2)}
+                    {formatScore1(scores.mustHave)}
                     <span className="text-base text-gray-500 font-normal">/10</span>
                   </div>
                   <div
@@ -179,7 +180,7 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
                     className="text-3xl font-bold text-amber-900"
                     style={{ fontFamily: 'var(--font-mono)' }}
                   >
-                    {scores.niceToHave.toFixed(2)}
+                    {formatScore1(scores.niceToHave)}
                     <span className="text-base text-gray-500 font-normal">/10</span>
                   </div>
                   <div className="text-2xs mt-1 text-amber-700">informational only</div>
@@ -269,7 +270,7 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
                     <div className="text-xs text-gray-500">{s.desc}</div>
                   </div>
                 </div>
-                <div className={`text-3xl font-bold ${s.textColor}`} style={{ fontFamily: 'var(--font-mono)' }}>{s.score.toFixed(2)}</div>
+                <div className={`text-3xl font-bold ${s.textColor}`} style={{ fontFamily: 'var(--font-mono)' }}>{formatScore1(s.score)}</div>
               </div>
               <div className={`relative h-6 ${s.barBg} rounded-full overflow-hidden`}>
                 <div className={`absolute inset-y-0 left-0 bg-gradient-to-r ${s.barFill} rounded-full transition-all duration-1000`} style={{ width: `${(s.score / 10) * 100}%` }} />

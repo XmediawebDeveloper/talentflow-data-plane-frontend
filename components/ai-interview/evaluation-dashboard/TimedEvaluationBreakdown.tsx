@@ -1,6 +1,7 @@
 import { Calculator, CheckCircle, XCircle } from 'lucide-react';
 import type { DashboardData, PerQuestionDetail } from './types';
 
+import { formatScore1 } from '@/lib/utils/matchStatus';
 interface Props {
   data: DashboardData;
 }
@@ -149,7 +150,7 @@ export function TimedEvaluationBreakdown({ data }: Props) {
                   {finalResult ? finalResult.toUpperCase() : '—'}
                 </div>
                 <div className="text-sm text-gray-600">
-                  Must-Have <strong>{scores.mustHave.toFixed(2)} / 10</strong>
+                  Must-Have <strong>{formatScore1(scores.mustHave)} / 10</strong>
                   {' '}
                   {isPass ? '≥' : '<'} {mhsThreshold.toFixed(1)} threshold
                 </div>
@@ -230,7 +231,7 @@ function SectionPill({
         {label}
       </div>
       <div className="text-3xl font-bold" style={{ fontFamily: 'var(--font-mono)' }}>
-        {value.toFixed(2)}<span className="text-base opacity-60 font-normal"> / 10</span>
+        {formatScore1(value)}<span className="text-base opacity-60 font-normal"> / 10</span>
       </div>
       <div className="text-2xs opacity-70 mt-1">
         avg of {count} question{count === 1 ? '' : 's'}
@@ -284,7 +285,7 @@ function QuestionTable({
                     </td>
                   )}
                   <td className="px-4 py-2 text-gray-800">{s.name}</td>
-                  <td className="px-4 py-2 text-right">{s.priority}</td>
+                  <td className="px-4 py-2 text-right">{s.priority ?? '—'}</td>
                   <td className="px-4 py-2 text-right">{s.weight}</td>
                   <td className="px-4 py-2 text-right">
                     <span className="inline-flex items-center gap-1">
@@ -312,7 +313,7 @@ function QuestionTable({
                       rowSpan={skillCount}
                       className={`px-4 py-2 text-right font-bold text-base align-top ${palette.strong}`}
                     >
-                      {q.questionScore.toFixed(2)}
+                      {formatScore1(q.questionScore)}
                     </td>
                   )}
                 </tr>

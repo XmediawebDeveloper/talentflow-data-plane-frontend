@@ -43,6 +43,9 @@ export const RATING_PASS_THRESHOLD = 6;
 // different value across a 0.1 boundary.
 export const truncate1 = (value: number): number => Math.floor(value * 10 + 1e-9) / 10;
 
+/** Display a score with exactly one decimal, truncated (8.25 → "8.2"). */
+export const formatScore1 = (value: number): string => truncate1(value).toFixed(1);
+
 /**
  * Reduce any of the spellings the backends and older components use to one
  * verdict. `exact_match`, `Exact Match`, `excellentmatch`, `excellent` and

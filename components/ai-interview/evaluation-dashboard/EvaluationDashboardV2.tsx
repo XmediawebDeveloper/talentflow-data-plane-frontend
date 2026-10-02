@@ -11,6 +11,7 @@ import type { DashboardData, PerQuestionDetail } from './types';
 import { buildRationaleLines } from './types';
 import { IS_PRODUCTION_ENV } from '../../../lib/utils/env';
 
+import { formatScore1, truncate1 } from '@/lib/utils/matchStatus';
 interface Props {
   data: DashboardData;
 }
@@ -19,7 +20,9 @@ const MHS_THRESHOLD = 6.0;
 
 type SubView = 'skills' | 'questions' | 'formula';
 
-function priorityTag(p: 'High' | 'Medium' | 'Low') {
+function priorityTag(p: 'High' | 'Medium' | 'Low' | null) {
+  // No priority → weight 0, not counted in the question score.
+  if (!p)             return { tag: '—',  weight: 0,  bg: 'bg-gray-50',   text: 'text-gray-500'   };
   if (p === 'High')   return { tag: 'P1', weight: 10, bg: 'bg-indigo-50', text: 'text-indigo-700' };
   if (p === 'Medium') return { tag: 'P2', weight: 7,  bg: 'bg-amber-50',  text: 'text-amber-700'  };
   return                   { tag: 'P3', weight: 4,  bg: 'bg-pink-50',   text: 'text-pink-700'   };
@@ -274,7 +277,7 @@ export function SkillsView({ data }: { data: DashboardData }) {
                 </div>
                 <div className="text-xs text-gray-500">
                   {mhSkills.length} skill{mhSkills.length === 1 ? '' : 's'} · Avg{' '}
-                  <span className="font-semibold text-gray-900">{mhAvg.toFixed(2)}</span>/10
+                  <span className="font-semibold text-gray-900">{formatScore1(mhAvg)}</span>/10
                 </div>
               </div>
               {mhSkills.map((s, i) => renderSkillCard(s, `mh-${s.name}-${i}`))}
@@ -293,7 +296,7 @@ export function SkillsView({ data }: { data: DashboardData }) {
                 </div>
                 <div className="text-xs text-gray-500">
                   {nhSkills.length} skill{nhSkills.length === 1 ? '' : 's'} · Avg{' '}
-                  <span className="font-semibold text-gray-900">{nhAvg.toFixed(2)}</span>/10
+                  <span className="font-semibold text-gray-900">{formatScore1(nhAvg)}</span>/10
                 </div>
               </div>
               {nhSkills.map((s, i) => renderSkillCard(s, `nh-${s.name}-${i}`))}
@@ -314,7 +317,7 @@ export function SkillsView({ data }: { data: DashboardData }) {
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <div className="text-2xs text-gray-500 mb-0.5">Avg Score</div>
-                  <div className="text-xl font-bold text-indigo-700">{mhAvg.toFixed(2)}</div>
+                  <div className="text-xl font-bold text-indigo-700">{formatScore1(mhAvg)}</div>
                 </div>
                 <div>
                   <div className="text-2xs text-gray-500 mb-0.5">Skills</div>
@@ -337,7 +340,7 @@ export function SkillsView({ data }: { data: DashboardData }) {
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <div className="text-2xs text-gray-500 mb-0.5">Avg Score</div>
-                  <div className="text-xl font-bold text-amber-600">{nhAvg.toFixed(2)}</div>
+                  <div className="text-xl font-bold text-amber-600">{formatScore1(nhAvg)}</div>
                 </div>
                 <div>
                   <div className="text-2xs text-gray-500 mb-0.5">Skills</div>
@@ -409,13 +412,14 @@ export function QuestionsView({ data }: { data: DashboardData }) {
   };
   // Priority chip color — mirrors the spec's weight tiers: P1 (weight 10),
   // P2 (weight 7), P3 (weight 4). Green = high priority, lighter = lower.
-  const priorityChipClass = (level: 'High' | 'Medium' | 'Low'): string => {
+  const priorityChipClass = (level: 'High' | 'Medium' | 'Low' | null): string => {
+    if (!level) return 'bg-gray-50 text-gray-500 border-gray-200';
     if (level === 'High') return 'bg-indigo-50 text-indigo-700 border-indigo-200';
     if (level === 'Medium') return 'bg-sky-50 text-sky-700 border-sky-200';
     return 'bg-violet-50 text-violet-700 border-violet-200';
   };
-  const priorityLabel = (level: 'High' | 'Medium' | 'Low'): string =>
-    level === 'High' ? 'P1' : level === 'Medium' ? 'P2' : 'P3';
+  const priorityLabel = (level: 'High' | 'Medium' | 'Low' | null): string =>
+    !level ? 'No priority' : level === 'High' ? 'P1' : level === 'Medium' ? 'P2' : 'P3';
 
   // Section grouping — render Qs grouped by section so the recruiter sees
   // MHS / NHS / HR in distinct sections (matches the spec doc's framing).
@@ -443,10 +447,10 @@ export function QuestionsView({ data }: { data: DashboardData }) {
   // ±0.1 mismatch (e.g. card 2.10 vs report/Match-Score 2.00). Fall back to the
   // local recompute only when the backend value is missing (old evals).
   const _mhRecompute = mhDenom > 0
-    ? Math.round((mhScored.reduce((s, q) => s + q.questionScore, 0) / mhDenom) * 10) / 10
+    ? truncate1(mhScored.reduce((s, q) => s + q.questionScore, 0) / mhDenom)
     : 0;
   const _nhRecompute = nhDenom > 0
-    ? Math.round((nhScored.reduce((s, q) => s + q.questionScore, 0) / nhDenom) * 10) / 10
+    ? truncate1(nhScored.reduce((s, q) => s + q.questionScore, 0) / nhDenom)
     : 0;
   const mhScore = (typeof data.scores?.mustHave === 'number') ? data.scores.mustHave : _mhRecompute;
   const nhScore = (typeof data.scores?.niceToHave === 'number') ? data.scores.niceToHave : _nhRecompute;
@@ -698,7 +702,7 @@ export function QuestionsView({ data }: { data: DashboardData }) {
                         </span>
                       )}
                       <span className="text-2xs font-mono text-gray-500 shrink-0">
-                        Q Score <span className="text-gray-900 font-semibold">{q.questionScore.toFixed(2)}</span>
+                        Q Score <span className="text-gray-900 font-semibold">{formatScore1(q.questionScore)}</span>
                       </span>
                     </span>
                   </button>
@@ -759,7 +763,7 @@ export function QuestionsView({ data }: { data: DashboardData }) {
                       })}
                       {sumW > 0 ? (
                         <div className="text-2xs font-mono text-gray-500 pl-1 pt-1">
-                          Question Score = {sumWS.toFixed(1)} ÷ {sumW} = <span className="text-gray-900 font-semibold">{q.questionScore.toFixed(2)}</span>
+                          Question Score = {sumWS.toFixed(1)} ÷ {sumW} = <span className="text-gray-900 font-semibold">{formatScore1(q.questionScore)}</span>
                         </div>
                       ) : q.isUnscored && displayOnlyScore !== null ? (
                         <div className="text-2xs text-amber-700 italic pl-1 pt-1">
@@ -956,7 +960,7 @@ export function QuestionsView({ data }: { data: DashboardData }) {
                 </div>
                 <div className="flex items-baseline justify-between gap-3 mb-2">
                   <span className={`text-3xl font-bold ${mhPass ? 'text-emerald-600' : 'text-rose-600'}`}>
-                    {mhScore.toFixed(2)}
+                    {formatScore1(mhScore)}
                   </span>
                   <span className={`text-sm font-semibold ${mhPass ? 'text-emerald-700' : 'text-rose-700'}`}>
                     out of 10
@@ -969,7 +973,7 @@ export function QuestionsView({ data }: { data: DashboardData }) {
                       : 'bg-rose-100 border-rose-500 text-rose-800'
                   }`}
                 >
-                  {mhScore.toFixed(2)} {mhPass ? '≥' : '<'} {MHS_THRESHOLD.toFixed(1)} → {mhPass ? 'PASS ✓' : 'FAIL ✗'}
+                  {formatScore1(mhScore)} {mhPass ? '≥' : '<'} {MHS_THRESHOLD.toFixed(1)} → {mhPass ? 'PASS ✓' : 'FAIL ✗'}
                 </div>
               </div>
             </div>
@@ -984,7 +988,7 @@ export function QuestionsView({ data }: { data: DashboardData }) {
                   Section Score = sum of question scores ÷ {nhDenom} planned questions
                 </div>
                 <div className="flex items-baseline justify-between gap-3 mb-2">
-                  <span className="text-3xl font-bold text-amber-600">{nhScore.toFixed(2)}</span>
+                  <span className="text-3xl font-bold text-amber-600">{formatScore1(nhScore)}</span>
                   <span className="text-sm font-semibold text-amber-700">out of 10</span>
                 </div>
                 <div className="text-sm font-bold text-center p-2 rounded bg-amber-100 border-2 border-amber-500 text-amber-800">
@@ -1126,7 +1130,7 @@ function _QuestionsView_DISABLED_DEAD_CODE({ data }: { data: DashboardData }) {
                         </div>
                       </div>
                       <div className="text-center min-w-[88px]">
-                        <div className="text-3xl font-bold" style={{ color }}>{q.questionScore.toFixed(2)}</div>
+                        <div className="text-3xl font-bold" style={{ color }}>{formatScore1(q.questionScore)}</div>
                         <div className="text-xs text-gray-500">Final Score</div>
                       </div>
                     </div>
@@ -1259,7 +1263,7 @@ function _QuestionsView_DISABLED_DEAD_CODE({ data }: { data: DashboardData }) {
                           Question Score = Total Weighted ÷ Total Weight
                         </div>
                         <div className="ml-3 text-lg font-mono font-bold text-indigo-700 mt-1">
-                          = {sumContrib.toFixed(1)} ÷ {sumWeight} = {q.questionScore.toFixed(2)}
+                          = {sumContrib.toFixed(1)} ÷ {sumWeight} = {formatScore1(q.questionScore)}
                         </div>
                       </div>
 
@@ -1297,7 +1301,7 @@ function _QuestionsView_DISABLED_DEAD_CODE({ data }: { data: DashboardData }) {
         // Numerator display — pad with explicit "+ 0" entries for skipped
         // slots so the math is transparent ("8.0 + 7.5 + 0 + 0 + 0 ... ÷ 10").
         const numeratorParts = (delivered: PerQuestionDetail[], denom: number) => {
-          const parts = delivered.map(q => q.questionScore.toFixed(2));
+          const parts = delivered.map(q => formatScore1(q.questionScore));
           const missing = Math.max(0, denom - parts.length);
           for (let i = 0; i < missing; i++) parts.push('0');
           return parts.length ? parts.join(' + ') : '0';
@@ -1323,21 +1327,21 @@ function _QuestionsView_DISABLED_DEAD_CODE({ data }: { data: DashboardData }) {
                       = ({numeratorParts(mhQs, mhDenom)}) ÷ {mhDenom}
                     </div>
                     <div className="text-sm font-mono text-emerald-800 mb-3">
-                      = {mhSum.toFixed(2)} ÷ {mhDenom} = <strong>{mhAvg.toFixed(2)}</strong>
+                      = {formatScore1(mhSum)} ÷ {mhDenom} = <strong>{formatScore1(mhAvg)}</strong>
                     </div>
                   </>
                 )}
                 <hr className="border-emerald-200 my-3" />
                 <div className="flex items-center justify-between mb-3">
                   <div className="text-sm font-bold text-emerald-800">Final Must-Have Score:</div>
-                  <div className="text-3xl font-bold text-emerald-500">{mhAvg.toFixed(2)}</div>
+                  <div className="text-3xl font-bold text-emerald-500">{formatScore1(mhAvg)}</div>
                 </div>
                 <div className={`p-3 rounded-xl border-2 text-sm font-bold text-center ${
                   mhAvg >= MHS_THRESHOLD
                     ? 'bg-emerald-100 border-emerald-500 text-emerald-800'
                     : 'bg-red-100 border-red-500 text-red-800'
                 }`}>
-                  {mhAvg.toFixed(2)} {mhAvg >= MHS_THRESHOLD ? '≥' : '<'} {MHS_THRESHOLD.toFixed(1)} → {mhAvg >= MHS_THRESHOLD ? 'PASS ✓' : 'FAIL ✗'}
+                  {formatScore1(mhAvg)} {mhAvg >= MHS_THRESHOLD ? '≥' : '<'} {MHS_THRESHOLD.toFixed(1)} → {mhAvg >= MHS_THRESHOLD ? 'PASS ✓' : 'FAIL ✗'}
                 </div>
               </div>
             </div>
@@ -1362,14 +1366,14 @@ function _QuestionsView_DISABLED_DEAD_CODE({ data }: { data: DashboardData }) {
                       = ({numeratorParts(nhQs, nhDenom)}) ÷ {nhDenom}
                     </div>
                     <div className="text-sm font-mono text-amber-800 mb-3">
-                      = {nhSum.toFixed(2)} ÷ {nhDenom} = <strong>{nhAvg.toFixed(2)}</strong>
+                      = {formatScore1(nhSum)} ÷ {nhDenom} = <strong>{formatScore1(nhAvg)}</strong>
                     </div>
                   </>
                 )}
                 <hr className="border-amber-200 my-3" />
                 <div className="flex items-center justify-between mb-3">
                   <div className="text-sm font-bold text-amber-800">Final Nice-to-Have Score:</div>
-                  <div className="text-3xl font-bold text-amber-500">{nhAvg.toFixed(2)}</div>
+                  <div className="text-3xl font-bold text-amber-500">{formatScore1(nhAvg)}</div>
                 </div>
                 <div className="p-3 rounded-xl bg-amber-100 border-2 border-amber-500 text-sm font-bold text-amber-800 text-center">
                   Information Only (Not used for Pass/Fail decision)
@@ -1492,7 +1496,7 @@ export function FormulaView() {
 
   // Doc §5 Scenario 4 — full Must-Have section averaging
   const mhScores = [10.0, 9.5, 8.0, 7.5, 6.0, 8.5, 9.0, 7.0, 5.5, 8.2];
-  const mhSectionAvg = +(mhScores.reduce((a, b) => a + b, 0) / mhScores.length).toFixed(2);
+  const mhSectionAvg = truncate1(mhScores.reduce((a, b) => a + b, 0) / mhScores.length);
 
   return (
     <div className="space-y-4">
@@ -1575,7 +1579,7 @@ export function FormulaView() {
               <div>Total Weighted = {sc.skills.map(s => s.score * s.weight).join(' + ')} = {sc.totalWeighted}</div>
               <div>Total Weight = {sc.skills.map(s => s.weight).join(' + ')} = {sc.totalWeight}</div>
               <div className="text-base font-bold pt-1" style={{ color: sc.color }}>
-                Question Score = {sc.totalWeighted} ÷ {sc.totalWeight} = {sc.questionScore.toFixed(2)}
+                Question Score = {sc.totalWeighted} ÷ {sc.totalWeight} = {formatScore1(sc.questionScore)}
               </div>
             </div>
 
@@ -1603,7 +1607,7 @@ export function FormulaView() {
         <div className="text-sm font-mono text-gray-800 space-y-1">
           <div>Question scores: {mhScores.join(', ')}</div>
           <div>Sum = {mhScores.reduce((a, b) => a + b, 0).toFixed(1)}</div>
-          <div>Section Score = {mhScores.reduce((a, b) => a + b, 0).toFixed(1)} ÷ {mhScores.length} = <strong>{mhSectionAvg.toFixed(2)}</strong></div>
+          <div>Section Score = {mhScores.reduce((a, b) => a + b, 0).toFixed(1)} ÷ {mhScores.length} = <strong>{formatScore1(mhSectionAvg)}</strong></div>
         </div>
 
         <hr className="border-indigo-200 my-3" />
@@ -1613,7 +1617,7 @@ export function FormulaView() {
             ? 'bg-emerald-100 border-emerald-500 text-emerald-800'
             : 'bg-red-100 border-red-500 text-red-800'
         }`}>
-          {mhSectionAvg.toFixed(2)} {mhSectionAvg >= MHS_THRESHOLD ? '≥' : '<'} {MHS_THRESHOLD.toFixed(1)} → {mhSectionAvg >= MHS_THRESHOLD ? 'PASS ✓' : 'FAIL ✗'}
+          {formatScore1(mhSectionAvg)} {mhSectionAvg >= MHS_THRESHOLD ? '≥' : '<'} {MHS_THRESHOLD.toFixed(1)} → {mhSectionAvg >= MHS_THRESHOLD ? 'PASS ✓' : 'FAIL ✗'}
         </div>
 
         <div className="mt-3 text-xs text-gray-600 italic leading-relaxed">

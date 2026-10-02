@@ -22,6 +22,7 @@ import type { DashboardData } from './types';
 import { buildRationaleLines } from './types';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 
+import { formatScore1 } from '@/lib/utils/matchStatus';
 interface Props {
   data: DashboardData;
   aiConfidence?: number | null;
@@ -133,7 +134,7 @@ export async function exportEvalReportPDF(
   doc.text(
     isPartialEvaluation
       ? 'This interview ended before completion. The AI evaluated only the attended questions.'
-      : `${pass ? 'Recommended to Hire' : 'Does Not Meet Requirements'} · Must-Have ${scores.mustHave.toFixed(2)} / Threshold ${MHS_THRESHOLD.toFixed(1)}`,
+      : `${pass ? 'Recommended to Hire' : 'Does Not Meet Requirements'} · Must-Have ${formatScore1(scores.mustHave)} / Threshold ${MHS_THRESHOLD.toFixed(1)}`,
     M + 4,
     y + 13.5,
   );
@@ -152,14 +153,14 @@ export async function exportEvalReportPDF(
   if (sectionsPresent.mustHave) {
     doc.text(`Must-Have Section: `, sx, y + 6); sx += doc.getTextWidth('Must-Have Section: ');
     const mustHaveLabel = isPartialEvaluation
-      ? `${scores.mustHave.toFixed(2)}/10 (Partial)`
-      : `${scores.mustHave.toFixed(2)}/10 (${pass ? 'PASS' : 'FAIL'})`;
+      ? `${formatScore1(scores.mustHave)}/10 (Partial)`
+      : `${formatScore1(scores.mustHave)}/10 (${pass ? 'PASS' : 'FAIL'})`;
     txt(isPartialEvaluation ? amber : (pass ? green : red)); doc.text(mustHaveLabel, sx, y + 6);
     sx += doc.getTextWidth(mustHaveLabel) + 8; txt(ink);
   }
   if (sectionsPresent.niceToHave) {
     doc.text(`Nice-to-Have Section: `, sx, y + 6); sx += doc.getTextWidth('Nice-to-Have Section: ');
-    txt(indigo); doc.text(`${scores.niceToHave.toFixed(2)}/10 (Info)`, sx, y + 6); txt(ink);
+    txt(indigo); doc.text(`${formatScore1(scores.niceToHave)}/10 (Info)`, sx, y + 6); txt(ink);
   }
   y += 13;
 
@@ -172,7 +173,7 @@ export async function exportEvalReportPDF(
     doc.setFont('helvetica', 'bold'); doc.setFontSize(10); txt(white);
     doc.text(title, M + 3, y + 6);
     doc.setFontSize(9);
-    doc.text(scored ? `Section Score: ${scoreVal.toFixed(2)}/10 · ${badge}` : 'Not Scored', pageW - M - 3, y + 6, { align: 'right' });
+    doc.text(scored ? `Section Score: ${formatScore1(scoreVal)}/10 · ${badge}` : 'Not Scored', pageW - M - 3, y + 6, { align: 'right' });
     y += 12;
 
     qs.forEach((q) => {
@@ -180,10 +181,10 @@ export async function exportEvalReportPDF(
       const src = (q.skipSource || '').toLowerCase();
       let status: { label: string; color: RGB; isScore: boolean };
       if (key === 'hr') status = { label: 'Not Scored', color: faint, isScore: false };
-      else if (q.notDelivered) status = { label: `Not Delivered · ${q.questionScore.toFixed(2)}/10`, color: scoreRGB(q.questionScore), isScore: false };
+      else if (q.notDelivered) status = { label: `Not Delivered · ${formatScore1(q.questionScore)}/10`, color: scoreRGB(q.questionScore), isScore: false };
       else if (rt === 'skipped' || src === 'candidate') status = { label: 'Skipped', color: sub, isScore: false };
       else if (['not_answered', 'idk', 'timeout', 'low_coverage'].includes(rt)) status = { label: 'Not Answered', color: faint, isScore: false };
-      else status = { label: `${q.questionScore.toFixed(2)}/10`, color: scoreRGB(q.questionScore), isScore: true };
+      else status = { label: `${formatScore1(q.questionScore)}/10`, color: scoreRGB(q.questionScore), isScore: true };
 
       const qSkills = key === 'hr' ? [] : q.skills;
       const qText = splitLines(q.question || `Question ${q.qNum}`, CW - 28, 8.5);
@@ -264,7 +265,7 @@ export async function exportEvalReportPDF(
       skillRows.forEach(({ skill, lines, rowHeight }) => {
         const rowTop = cursorY;
         // Priority tag P1/P2/P3 (High/Medium/Low → weights 10/7/4) — was missing.
-        const pLabel = skill.priority === 'High' ? 'P1' : skill.priority === 'Medium' ? 'P2' : 'P3';
+        const pLabel = !skill.priority ? '—' : skill.priority === 'High' ? 'P1' : skill.priority === 'Medium' ? 'P2' : 'P3';
         const pColor: RGB = skill.priority === 'High' ? indigo : skill.priority === 'Medium' ? amber : faint;
         doc.setFont('helvetica', 'normal'); doc.setFontSize(8); txt(sub);
         lines.forEach((lineText, idx) => {
@@ -331,12 +332,12 @@ export async function exportEvalReportPDF(
   const verdictPoints: string[] = isPartialEvaluation
     ? [
         `${candidate.name}'s interview ended before completion.`,
-        `The Must-Have score of ${scores.mustHave.toFixed(2)}/10 and the Nice-to-Have score of ${scores.niceToHave.toFixed(2)}/10 summarize only the attended questions.`,
+        `The Must-Have score of ${formatScore1(scores.mustHave)}/10 and the Nice-to-Have score of ${formatScore1(scores.niceToHave)}/10 summarize only the attended questions.`,
         'HR is not scored, and no final pass/fail or match score is generated for this report.',
       ]
     : [
-        `${candidate.name} ${pass ? 'meets' : 'does not meet'} the Must-Have bar — ${scores.mustHave.toFixed(2)}/10 vs the ${MHS_THRESHOLD.toFixed(1)} threshold (${pass ? '+' : '-'}${Math.abs(scores.mustHave - MHS_THRESHOLD).toFixed(2)}).`,
-        `This drives the ${finalResultLabel} decision; Nice-to-Have (${scores.niceToHave.toFixed(2)}/10) is informational and HR is not scored.`,
+        `${candidate.name} ${pass ? 'meets' : 'does not meet'} the Must-Have bar — ${formatScore1(scores.mustHave)}/10 vs the ${MHS_THRESHOLD.toFixed(1)} threshold (${pass ? '+' : '-'}${formatScore1(Math.abs(scores.mustHave - MHS_THRESHOLD))}).`,
+        `This drives the ${finalResultLabel} decision; Nice-to-Have (${formatScore1(scores.niceToHave)}/10) is informational and HR is not scored.`,
       ];
   if (aiSummary) verdictPoints.push(aiSummary);
   doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
@@ -415,13 +416,13 @@ export async function exportEvalReportPDF(
     `The evaluation consisted of ${pdfQuestions} question${pdfQuestions !== 1 ? 's' : ''} covering ${pdfSkills} skill${pdfSkills !== 1 ? 's' : ''} across multiple priority levels.`,
   ];
   if (sectionsPresent.mustHave) {
-    execPoints.push(`The candidate achieved a Must-Have Section Score of ${scores.mustHave.toFixed(2)}/10, ` + (isPartialEvaluation
+    execPoints.push(`The candidate achieved a Must-Have Section Score of ${formatScore1(scores.mustHave)}/10, ` + (isPartialEvaluation
       ? 'based only on the questions the candidate attended before the interview ended.'
       : pass
-        ? `which exceeds the required threshold of ${MHS_THRESHOLD.toFixed(1)} by ${(scores.mustHave - MHS_THRESHOLD).toFixed(2)} points.`
-        : `which falls below the required threshold of ${MHS_THRESHOLD.toFixed(1)} by ${(MHS_THRESHOLD - scores.mustHave).toFixed(2)} points.`));
+        ? `which exceeds the required threshold of ${MHS_THRESHOLD.toFixed(1)} by ${formatScore1((scores.mustHave - MHS_THRESHOLD))} points.`
+        : `which falls below the required threshold of ${MHS_THRESHOLD.toFixed(1)} by ${formatScore1((MHS_THRESHOLD - scores.mustHave))} points.`));
     if (sectionsPresent.niceToHave) {
-      execPoints.push(`The Nice-to-Have Section Score was ${scores.niceToHave.toFixed(2)}/10, demonstrating ${nhStrength} proficiency in supplementary skills.`);
+      execPoints.push(`The Nice-to-Have Section Score was ${formatScore1(scores.niceToHave)}/10, demonstrating ${nhStrength} proficiency in supplementary skills.`);
     }
   }
   execPoints.push(isPartialEvaluation
@@ -508,9 +509,9 @@ function SectionRow({ label, value, Icon, bar, iconTone, badge }: {
       </div>
       <div className="absolute -top-1 -bottom-1 border-l-2 border-dashed border-gray-400 dark:border-slate-500" style={{ left: `${MHS_THRESHOLD * 10}%` }} title={`Pass threshold ${MHS_THRESHOLD.toFixed(1)}`} />
     </div>
-    <div className="hidden sm:block text-lg font-bold text-gray-900 dark:text-slate-50 tabular-nums text-right">{value.toFixed(2)}</div>
+    <div className="hidden sm:block text-lg font-bold text-gray-900 dark:text-slate-50 tabular-nums text-right">{formatScore1(value)}</div>
     <div className="flex items-center justify-end gap-2">
-      <span className="sm:hidden text-base font-bold text-gray-900 dark:text-slate-50 tabular-nums">{value.toFixed(2)}</span>
+      <span className="sm:hidden text-base font-bold text-gray-900 dark:text-slate-50 tabular-nums">{formatScore1(value)}</span>
       {badge}
     </div>
   </div>
@@ -719,10 +720,10 @@ export function EvalReportCombined({
                     <span className="text-sm font-medium">· {isPassed ? 'Recommended to Hire' : 'Does Not Meet Requirements'}</span>
                   </div>
                   <div className="text-xs text-gray-600 dark:text-slate-400 mt-1.5 tabular-nums">
-                    Must-Have {scores.mustHave.toFixed(2)} / Threshold {MHS_THRESHOLD.toFixed(1)}
+                    Must-Have {formatScore1(scores.mustHave)} / Threshold {MHS_THRESHOLD.toFixed(1)}
                     {isPassed
-                      ? ` · +${(scores.mustHave - MHS_THRESHOLD).toFixed(2)} above`
-                      : ` · Below by ${(MHS_THRESHOLD - scores.mustHave).toFixed(2)}`}
+                      ? ` · +${formatScore1((scores.mustHave - MHS_THRESHOLD))} above`
+                      : ` · Below by ${formatScore1((MHS_THRESHOLD - scores.mustHave))}`}
                   </div>
                 </>
               )}
@@ -762,15 +763,15 @@ export function EvalReportCombined({
             <>{candidate.name} completed an AI-powered technical interview for the <strong>{candidate.role}</strong> position on {interview.date || 'the scheduled date'}.</>,
             <>The evaluation consisted of <strong>{totalQuestions} question{totalQuestions !== 1 ? 's' : ''}</strong> covering <strong>{totalSkills} skill{totalSkills !== 1 ? 's' : ''}</strong> across multiple priority levels.</>,
             ...(sectionsPresent.mustHave ? [
-              <>The candidate achieved a <strong>Must-Have Section Score of {scores.mustHave.toFixed(2)}/10</strong>,{' '}
+              <>The candidate achieved a <strong>Must-Have Section Score of {formatScore1(scores.mustHave)}/10</strong>,{' '}
                 {isPartialEvaluation
                   ? 'based only on the questions the candidate attended before the interview ended.'
                   : isPassed
-                    ? `which exceeds the required threshold of ${MHS_THRESHOLD.toFixed(1)} by ${(scores.mustHave - MHS_THRESHOLD).toFixed(2)} points.`
-                    : `which falls below the required threshold of ${MHS_THRESHOLD.toFixed(1)} by ${(MHS_THRESHOLD - scores.mustHave).toFixed(2)} points.`}</>,
+                    ? `which exceeds the required threshold of ${MHS_THRESHOLD.toFixed(1)} by ${formatScore1((scores.mustHave - MHS_THRESHOLD))} points.`
+                    : `which falls below the required threshold of ${MHS_THRESHOLD.toFixed(1)} by ${formatScore1((MHS_THRESHOLD - scores.mustHave))} points.`}</>,
             ] : []),
             ...(sectionsPresent.mustHave && sectionsPresent.niceToHave ? [
-              <>The Nice-to-Have Section Score was <strong>{scores.niceToHave.toFixed(2)}/10</strong>, demonstrating {niceToHaveStrong} proficiency in supplementary skills.</>,
+              <>The Nice-to-Have Section Score was <strong>{formatScore1(scores.niceToHave)}/10</strong>, demonstrating {niceToHaveStrong} proficiency in supplementary skills.</>,
             ] : []),
             isPartialEvaluation
               ? <>Because the interview was terminated early, this report provides question-by-question and skill-by-skill analysis only; it does not generate a final hiring recommendation or match score.</>
@@ -957,7 +958,7 @@ export function EvalReportCombined({
                       {isHR
                         ? <span className="text-xs font-medium text-gray-400 italic">Review only</span>
                         : <>
-                            <span className={`text-base font-bold tabular-nums ${sc.text}`}>{q.questionScore.toFixed(2)}</span>
+                            <span className={`text-base font-bold tabular-nums ${sc.text}`}>{formatScore1(q.questionScore)}</span>
                             {q.notDelivered && <span className="block text-2xs font-semibold text-gray-400 uppercase tracking-wide">Not Delivered</span>}
                           </>}
                     </span>
@@ -1020,15 +1021,15 @@ export function EvalReportCombined({
               {[
                 ...(isPartialEvaluation ? [
                   <><strong>{candidate.name}</strong> was evaluated only on the portion of the interview completed before termination.</>,
-                  <>The Must-Have section average shown here is <strong>{scores.mustHave.toFixed(2)}/10</strong>, and Nice-to-Have is <strong>{scores.niceToHave.toFixed(2)}/10</strong>.</>,
+                  <>The Must-Have section average shown here is <strong>{formatScore1(scores.mustHave)}/10</strong>, and Nice-to-Have is <strong>{formatScore1(scores.niceToHave)}/10</strong>.</>,
                   <>These numbers summarize the attended questions only and do not produce a final pass/fail decision.</>,
                 ] : [
                   <><strong>{candidate.name}</strong> {isPassed ? 'meets' : 'does not meet'} the Must-Have bar — scoring{' '}
-                    <strong>{scores.mustHave.toFixed(2)}/10</strong> against the {MHS_THRESHOLD.toFixed(1)} pass threshold
+                    <strong>{formatScore1(scores.mustHave)}/10</strong> against the {MHS_THRESHOLD.toFixed(1)} pass threshold
                     {isPassed
-                      ? ` (exceeds by ${(scores.mustHave - MHS_THRESHOLD).toFixed(2)})`
-                      : ` (below by ${(MHS_THRESHOLD - scores.mustHave).toFixed(2)})`}.</>,
-                  <>This Must-Have result drives the <strong>{finalResultLabel}</strong> decision; Nice-to-Have ({scores.niceToHave.toFixed(2)}/10) is informational and HR is not scored.</>,
+                      ? ` (exceeds by ${formatScore1((scores.mustHave - MHS_THRESHOLD))})`
+                      : ` (below by ${formatScore1((MHS_THRESHOLD - scores.mustHave))})`}.</>,
+                  <>This Must-Have result drives the <strong>{finalResultLabel}</strong> decision; Nice-to-Have ({formatScore1(scores.niceToHave)}/10) is informational and HR is not scored.</>,
                 ]),
                 ...(aiSummary ? [<>{aiSummary}</>] : []),
               ].map((point, i) => {
