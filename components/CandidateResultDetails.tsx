@@ -13,6 +13,7 @@ import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import ResumeDetailView from '@/components/ResumeDetailView';
 import ViewResumeButton from '@/components/ui/view-resume-button';
 import ResumeHoverPreview from '@/components/ResumeHoverPreview';
+import { RESUME_EMAIL_MISMATCH_MESSAGE, emailsMatch, normalizeEmail, resumeEmailOf, verifyResumeBelongsToInvite } from '@/lib/utils/resumeEmailMatch';
 import { Tooltip as HoverTooltip } from '@/components/ui/tooltip';
 import TabEmptyState, { TAB_EMPTY_ACTION_CLASS } from '@/components/ui/tab-empty-state';
 import { Button } from '@/components/ui/button';
@@ -321,6 +322,11 @@ export default function CandidateResultDetails({
   // resume_id). If not, the candidate was typed in by e-mail — the same rule
   // the Invite Source column uses.
   const [invitedFromResume, setInvitedFromResume] = useState(false);
+  // A resume is linked but its email isn't the invited email — withheld.
+  const [resumeEmailMismatch, setResumeEmailMismatch] = useState(false);
+  // The invite address resolveResumeId matched against (the invitation's own
+  // when found), so opening the resume re-checks against the same one.
+  const inviteEmailRef = useRef('');
   const detailContentRef = useRef<HTMLDivElement>(null);
 
   // One tab row now owns both summary panels and detailed question panels.
@@ -626,8 +632,14 @@ export default function CandidateResultDetails({
   // Resolved on load, as on the AI Interview result page, so a candidate with
   // no resume gets a disabled button (with a tooltip saying why) instead of one
   // that only fails once clicked. The button is still always rendered.
+  //
+  // Whichever route finds it, the resume is shown only when it exists in the
+  // resume database AND its email is the email the invitation was sent to
+  // (verifyResumeBelongsToInvite) — a linked resume_id is no exception.
   const resolveResumeId = async (): Promise<string | null> => {
-    const email = detailedResult?.candidate_email?.trim().toLowerCase();
+    setResumeEmailMismatch(false);
+    let email = normalizeEmail(detailedResult?.candidate_email) || undefined;
+    inviteEmailRef.current = email || '';
     const name = detailedResult?.candidate_name?.trim().toLowerCase();
     const displayId = candidateDisplayId || detailedResult?.candidate_display_id;
 
@@ -668,7 +680,22 @@ export default function CandidateResultDetails({
         resumeId: match?.resume_id,
       });
       setInvitedFromResume(!!match?.resume_id);
-      if (match?.resume_id) return match.resume_id;
+      // The invitation's own address is the one the candidate was invited with.
+      if (match?.candidate_email) email = normalizeEmail(match.candidate_email);
+      inviteEmailRef.current = email || '';
+      if (match?.resume_id && email) {
+        const { resumeService } = await import('@/lib/services/resumeService');
+        try {
+          // get(id) without logView — an availability check, not a view.
+          const verified = await verifyResumeBelongsToInvite(match.resume_id, email, id => resumeService.get(id));
+          if (verified) return verified;
+          console.info('[CandidateResultDetails] linked resume rejected: missing or e-mail mismatch', { resumeId: match.resume_id, email });
+          setResumeEmailMismatch(true);
+        } catch (err) {
+          // Never shown unverified; the e-mail search below may still find it.
+          console.warn('[CandidateResultDetails] Linked resume check failed:', err);
+        }
+      }
     } catch (err) {
       console.warn('[CandidateResultDetails] Invitation lookup failed:', err);
     }
@@ -698,10 +725,11 @@ export default function CandidateResultDetails({
       const results = await resumeService.list({ search: email, page_size: 20 });
       const items = results.items || [];
       const byEmail = items.find(
-        (item: any) => (item.candidate_email || item.email || '').trim().toLowerCase() === email
+        (item: any) => emailsMatch(resumeEmailOf(item), email)
           && samePerson(item.candidate_name || '')
       );
       console.info('[CandidateResultDetails] resume lookup by e-mail', { email, hits: items.length, matched: byEmail?.id ?? null, name });
+      if (byEmail?.id) setResumeEmailMismatch(false);
       return byEmail?.id || null;
     } catch (err) {
       console.warn('[CandidateResultDetails] Resume search failed:', err);
@@ -729,6 +757,7 @@ export default function CandidateResultDetails({
     setResumeUnavailable(false);
     setResolvedResumeId(undefined);
     setInvitedFromResume(false);
+    setResumeEmailMismatch(false);
   }, [candidateId]);
 
   // Availability is checked once the result (and so the candidate's e-mail
@@ -767,6 +796,14 @@ export default function CandidateResultDetails({
         resumeService.get(id, true), // handleViewResume - a genuine user view
         resumeService.getVersions(id).catch(() => []),
       ]);
+      // Re-checked on the record actually shown, in case it changed since the
+      // load-time check — against the same invite address that check used.
+      if (!emailsMatch(resumeEmailOf(data), inviteEmailRef.current || detailedResult?.candidate_email)) {
+        setResumeEmailMismatch(true);
+        setResolvedResumeId(null);
+        openResumeUnavailable();
+        return;
+      }
       setResumeDetail(convertApiResume(data, versions || []));
       setShowResume(true);
       // Told to the parent rather than derived there: the page owns the
@@ -1145,7 +1182,9 @@ export default function CandidateResultDetails({
       <TabEmptyState
         icon={FileText}
         title="Resume Not Available"
-        description={invitedFromResume
+        description={resumeEmailMismatch
+          ? RESUME_EMAIL_MISMATCH_MESSAGE
+          : invitedFromResume
           ? 'No resume was found for this candidate.'
           : 'This candidate was invited via direct email, so no resume is linked to this assessment.'}
         action={
@@ -1333,7 +1372,9 @@ export default function CandidateResultDetails({
               {resolvedResumeId === null ? (
                 <HoverTooltip
                   position="bottom"
-                  content={invitedFromResume
+                  content={resumeEmailMismatch
+                    ? RESUME_EMAIL_MISMATCH_MESSAGE
+                    : invitedFromResume
                     ? 'Resume not available'
                     : 'Resume is not available because the candidate was invited via Direct Email.'}
                 >
