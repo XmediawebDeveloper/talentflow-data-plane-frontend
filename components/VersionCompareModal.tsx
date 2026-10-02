@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { X, History, FileText, Check } from 'lucide-react';
 import { buildUnifiedDiff, buildDiffSidePairs, type DiffLine } from '@/lib/utils/textDiff';
 import ReactMarkdown from 'react-markdown';
@@ -40,6 +40,19 @@ interface VersionCompareModalProps {
   subtitle?: string;
   /** JD descriptions are markdown; render them with the same markdown path as the individual version view. */
   contentFormat?: 'plain' | 'markdown';
+  /**
+   * What the tint on each line means.
+   * - 'changes' (default): the version-history reading — removed lines tint
+   *   red on the older side, added lines tint green on the newer side,
+   *   identical lines are plain. Answers "what changed between these two".
+   * - 'matches': tints identical lines green on BOTH sides and differing
+   *   lines amber, independently per side (no red/green edit framing).
+   *   Answers "how much of this is the same resume, and what's different"
+   *   — the question that matters when comparing an upload against the
+   *   record already on file, where the two are different documents by
+   *   definition, not two edits of one.
+   */
+  highlightMode?: 'changes' | 'matches';
   /** Lets a comparison opened from another modal stack above its parent. */
   zIndexClassName?: string;
 }
@@ -66,6 +79,33 @@ const isSectionHeader = (trimmed: string) => {
 };
 
 /**
+ * Each side's own lines, flagged against the other side's content — for
+ * 'matches' mode, where the two documents are unrelated by definition and
+ * there is nothing to align line-for-line.
+ *
+ * `buildDiffSidePairs` is LCS alignment: it pads whichever side has fewer
+ * lines in a run with blank spacer rows so an edit lines up beside what it
+ * replaced. That is the right read for two versions of one document, but for
+ * an upload compared against the record on file it turned into long stretches
+ * of empty space — the two résumés rarely have the same number of lines
+ * between their matching anchors. Here, each side just renders its own text
+ * top to bottom exactly as extracted; only the highlight is informed by the
+ * other side.
+ */
+const buildMatchOnlyLines = (text: string, otherText: string): DiffLine[] => {
+  const otherLines = new Set(
+    otherText.split('\n').map(l => l.trim()).filter(l => l.length > 0),
+  );
+  return text.split('\n').map(line => {
+    const trimmed = line.trim();
+    return {
+      text: line,
+      type: trimmed && otherLines.has(trimmed) ? 'unchanged' : 'added',
+    };
+  });
+};
+
+/**
  * The résumé version diff — extracted from the resume detail page so the same
  * comparison opens from anywhere a version list is shown (the detail page, and
  * the version history popup on the resume lists).
@@ -74,16 +114,46 @@ const isSectionHeader = (trimmed: string) => {
  * that side's changes tinted; or unified, one column with additions and
  * removals inline.
  */
-export default function VersionCompareModal({ older, newer, onClose, title, subtitle, contentFormat = 'plain', zIndexClassName = 'z-50' }: VersionCompareModalProps) {
+export default function VersionCompareModal({ older, newer, onClose, title, subtitle, contentFormat = 'plain', highlightMode = 'changes', zIndexClassName = 'z-50' }: VersionCompareModalProps) {
   const olderLabel = older.label || `Version ${older.version || '?'}`;
   const newerLabel = newer.label || `Version ${newer.version || '?'}`;
   const [viewMode, setViewMode] = useState<'side-by-side' | 'unified'>('side-by-side');
   const shouldRenderMarkdown = contentFormat === 'markdown';
 
+  /* Side-by-side reads as one document split in two, so scrolling one pane
+     scrolls both — otherwise lining a change up against its counterpart on
+     the other side means scrolling each column separately to find it. The
+     `syncing` ref is the re-entrancy guard: setting scrollTop on the other
+     pane fires ITS onScroll, which would otherwise bounce back and forth. */
+  const leftPaneRef = useRef<HTMLDivElement>(null);
+  const rightPaneRef = useRef<HTMLDivElement>(null);
+  const syncingScroll = useRef(false);
+  const handlePaneScroll = (source: 'left' | 'right') => (e: React.UIEvent<HTMLDivElement>) => {
+    if (syncingScroll.current) return;
+    const other = (source === 'left' ? rightPaneRef : leftPaneRef).current;
+    if (!other) return;
+    syncingScroll.current = true;
+    other.scrollTop = e.currentTarget.scrollTop;
+    syncingScroll.current = false;
+  };
+
   const olderText = older.text || '';
   const newerText = newer.text || '';
   const diff = buildUnifiedDiff(olderText, newerText);
   const sidePairs = buildDiffSidePairs(diff.lines);
+  const isMatchesMode = highlightMode === 'matches';
+  // Only built in 'matches' mode — buildMatchOnlyLines is an O(n) scan per
+  // side, needless work for the far more common 'changes' comparisons.
+  const olderMatchLines = isMatchesMode ? buildMatchOnlyLines(olderText, newerText) : [];
+  const newerMatchLines = isMatchesMode ? buildMatchOnlyLines(newerText, olderText) : [];
+  const matchedCount = isMatchesMode
+    ? olderMatchLines.filter(l => l.type === 'unchanged').length
+    : diff.unchangedCount;
+  const countDiffering = (lines: DiffLine[]) =>
+    lines.filter(l => l.type !== 'unchanged' && l.text.trim().length > 0).length;
+  const differingCount = isMatchesMode
+    ? countDiffering(olderMatchLines) + countDiffering(newerMatchLines)
+    : 0;
 
   /* Identical versions still have a document to read, and it is the same
      document either way — every line unchanged, so the panes below render it
@@ -99,6 +169,16 @@ export default function VersionCompareModal({ older, newer, onClose, title, subt
   const isUnchanged = hasContent && diff.addedCount === 0 && diff.removedCount === 0;
 
   const diffHighlightClass = (line: DiffLine, side: 'left' | 'right' | 'unified') => {
+    if (highlightMode === 'matches') {
+      // Two different documents by definition (an upload vs. the record on
+      // file), so what the recruiter wants is "how much of this is the same
+      // resume, and what changed" — tint matching lines green and differing
+      // lines amber, on both sides, rather than a red/green edit framing
+      // that implies one side is the "old" and the other the "new" edit.
+      return line.type === 'unchanged'
+        ? 'bg-green-50 border-l-4 border-green-400 pl-3 rounded'
+        : 'bg-amber-50 border-l-4 border-amber-400 pl-3 rounded';
+    }
     if (line.type === 'removed' && (side === 'left' || side === 'unified')) {
       return 'bg-red-50 border-l-4 border-red-400 pl-3 rounded';
     }
@@ -144,11 +224,32 @@ export default function VersionCompareModal({ older, newer, onClose, title, subt
     const trimmed = line.text.trim();
     if (!trimmed) return <div key={idx} className="h-3" />;
 
+    // A heading is structure, not data — never tinted, even when it reads
+    // identically (or not) on the other side, so the colour stays a signal
+    // about content and doesn't fire on every "SKILLS"/"EXPERIENCE" label.
+    if (isSectionHeader(trimmed)) {
+      return (
+        <h3 key={idx} className="text-xs font-bold mt-4 mb-1.5 pb-1 border-b border-gray-300 uppercase tracking-wide text-gray-900">
+          {trimmed}
+        </h3>
+      );
+    }
+
     let bgClass = '';
     let textColor = 'text-gray-800';
     let borderClass = '';
 
-    if (line.type === 'removed' && side === 'left') {
+    if (highlightMode === 'matches') {
+      if (line.type === 'unchanged') {
+        bgClass = 'bg-green-50';
+        textColor = 'text-green-800';
+        borderClass = 'border-l-4 border-green-400 pl-2';
+      } else {
+        bgClass = 'bg-amber-50';
+        textColor = 'text-amber-800';
+        borderClass = 'border-l-4 border-amber-400 pl-2';
+      }
+    } else if (line.type === 'removed' && side === 'left') {
       bgClass = 'bg-red-50';
       textColor = 'text-red-800';
       borderClass = 'border-l-4 border-red-400 pl-2';
@@ -156,14 +257,6 @@ export default function VersionCompareModal({ older, newer, onClose, title, subt
       bgClass = 'bg-green-50';
       textColor = 'text-green-800';
       borderClass = 'border-l-4 border-green-400 pl-2';
-    }
-
-    if (isSectionHeader(trimmed)) {
-      return (
-        <h3 key={idx} className={`text-xs font-bold mt-4 mb-1.5 pb-1 border-b border-gray-300 uppercase tracking-wide ${bgClass} ${borderClass} ${textColor}`}>
-          {trimmed}
-        </h3>
-      );
     }
 
     if (trimmed.startsWith('•') || trimmed.startsWith('-') || trimmed.startsWith('*')) {
@@ -221,14 +314,29 @@ export default function VersionCompareModal({ older, newer, onClose, title, subt
               </button>
             </div>
             <div className="flex items-center gap-2 text-xs">
-              <span className="flex items-center gap-1.5 px-2.5 py-1 bg-green-50 border border-green-200 rounded-full text-green-700">
-                <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-                +{diff.addedCount}
-              </span>
-              <span className="flex items-center gap-1.5 px-2.5 py-1 bg-red-50 border border-red-200 rounded-full text-red-700">
-                <span className="w-2 h-2 bg-red-500 rounded-full"></span>
-                −{diff.removedCount}
-              </span>
+              {highlightMode === 'matches' ? (
+                <>
+                  <span className="flex items-center gap-1.5 px-2.5 py-1 bg-green-50 border border-green-200 rounded-full text-green-700">
+                    <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                    {matchedCount} matching
+                  </span>
+                  <span className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 border border-amber-200 rounded-full text-amber-700">
+                    <span className="w-2 h-2 bg-amber-500 rounded-full"></span>
+                    {differingCount} different
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="flex items-center gap-1.5 px-2.5 py-1 bg-green-50 border border-green-200 rounded-full text-green-700">
+                    <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                    +{diff.addedCount}
+                  </span>
+                  <span className="flex items-center gap-1.5 px-2.5 py-1 bg-red-50 border border-red-200 rounded-full text-red-700">
+                    <span className="w-2 h-2 bg-red-500 rounded-full"></span>
+                    −{diff.removedCount}
+                  </span>
+                </>
+              )}
             </div>
             <button
               onClick={onClose}
@@ -278,9 +386,11 @@ export default function VersionCompareModal({ older, newer, onClose, title, subt
                   </div>
                   <p className="text-xs text-red-600 mt-0.5 truncate">{older.name}</p>
                 </div>
-                <div className="flex-1 overflow-y-auto p-4">
+                <div ref={leftPaneRef} onScroll={handlePaneScroll('left')} className="flex-1 overflow-y-auto p-4">
                   <div className="bg-white rounded-lg border border-gray-200 p-5">
-                    {sidePairs.map((pair, idx) => renderDiffLine(pair.left, idx, 'left'))}
+                    {isMatchesMode
+                      ? olderMatchLines.map((line, idx) => renderDiffLine(line, idx, 'left'))
+                      : sidePairs.map((pair, idx) => renderDiffLine(pair.left, idx, 'left'))}
                   </div>
                 </div>
               </div>
@@ -294,9 +404,11 @@ export default function VersionCompareModal({ older, newer, onClose, title, subt
                   </div>
                   <p className="text-xs text-green-600 mt-0.5 truncate">{newer.name}</p>
                 </div>
-                <div className="flex-1 overflow-y-auto p-4">
+                <div ref={rightPaneRef} onScroll={handlePaneScroll('right')} className="flex-1 overflow-y-auto p-4">
                   <div className="bg-white rounded-lg border border-gray-200 p-5">
-                    {sidePairs.map((pair, idx) => renderDiffLine(pair.right, idx, 'right'))}
+                    {isMatchesMode
+                      ? newerMatchLines.map((line, idx) => renderDiffLine(line, idx, 'right'))
+                      : sidePairs.map((pair, idx) => renderDiffLine(pair.right, idx, 'right'))}
                   </div>
                 </div>
               </div>
@@ -311,25 +423,29 @@ export default function VersionCompareModal({ older, newer, onClose, title, subt
                   const trimmed = line.text.trim();
                   if (!trimmed) return <div key={idx} className="h-3" />;
 
-                  const highlightClass = line.type === 'added'
-                    ? 'bg-green-100 border-l-4 border-green-500 pl-3'
-                    : line.type === 'removed'
-                      ? 'bg-red-50 border-l-4 border-red-400 pl-3 line-through opacity-70'
-                      : '';
-
-                  const textColor = line.type === 'added'
-                    ? 'text-green-900'
-                    : line.type === 'removed'
-                      ? 'text-red-700'
-                      : 'text-gray-800';
-
                   if (isSectionHeader(trimmed)) {
                     return (
-                      <h3 key={idx} className={`text-base font-bold mt-5 mb-2 pb-1 border-b border-gray-300 uppercase tracking-wide rounded ${highlightClass} ${textColor}`}>
+                      <h3 key={idx} className="text-base font-bold mt-5 mb-2 pb-1 border-b border-gray-300 uppercase tracking-wide text-gray-900">
                         {trimmed}
                       </h3>
                     );
                   }
+
+                  const highlightClass = highlightMode === 'matches'
+                    ? (line.type === 'unchanged' ? 'bg-green-100 border-l-4 border-green-500 pl-3' : 'bg-amber-50 border-l-4 border-amber-400 pl-3')
+                    : line.type === 'added'
+                      ? 'bg-green-100 border-l-4 border-green-500 pl-3'
+                      : line.type === 'removed'
+                        ? 'bg-red-50 border-l-4 border-red-400 pl-3 line-through opacity-70'
+                        : '';
+
+                  const textColor = highlightMode === 'matches'
+                    ? (line.type === 'unchanged' ? 'text-green-900' : 'text-amber-900')
+                    : line.type === 'added'
+                      ? 'text-green-900'
+                      : line.type === 'removed'
+                        ? 'text-red-700'
+                        : 'text-gray-800';
 
                   if (trimmed.startsWith('•') || trimmed.startsWith('-') || trimmed.startsWith('*')) {
                     return (
