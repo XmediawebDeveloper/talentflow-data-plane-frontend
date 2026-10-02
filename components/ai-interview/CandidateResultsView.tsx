@@ -50,6 +50,7 @@ import ViewResumeButton from '@/components/ui/view-resume-button';
 import ResumeHoverPreview from '@/components/ResumeHoverPreview';
 import { Tooltip as HoverTooltip } from '@/components/ui/tooltip';
 import TabEmptyState, { TAB_EMPTY_ACTION_CLASS } from '@/components/ui/tab-empty-state';
+import { formatScore1, truncate1 } from '@/lib/utils/matchStatus';
 
 interface CandidateResultsViewProps {
   interview: AIInterviewResponse;
@@ -2720,10 +2721,10 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                   p >= 3 ? 1 : p === 2 ? 2 : p === 1 ? 3 : 0;
                 const getPrio = (skill?: string) =>
                   skill ? configToDisplayPrio(skillPriority[skill.toLowerCase()] || 0) : 0;
-                // Spec: P1=10, P2=7, P3=4 (memory: timed eval spec). Unknown
-                // skills fall back to P3 weight rather than the previous 3,
-                // which wasn't a real priority level.
-                const priorityWeight = (p: number) => p === 1 ? 10 : p === 2 ? 7 : 4;
+                // Spec: P1=10, P2=7, P3=4. No default: a skill with no
+                // priority (0) weighs 0 and is left out of the formula,
+                // matching the backend's _compute_question_scores.
+                const priorityWeight = (p: number) => p === 1 ? 10 : p === 2 ? 7 : p === 3 ? 4 : 0;
 
                 // ── Build evaluations lookup by question_number ──
                 // Used to surface per-skill rows + one_line_note for the AI Analysis Summary.
@@ -2837,10 +2838,13 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                   (item.secondary_skills || []).forEach((s: any) => pushSkill(s.skill, s.score));
                   if (skillsForQ.length === 0) pushSkill(item.topic, item.score);
 
-                  // Weighted final score using priority-derived weights
-                  const totalW = skillsForQ.reduce((acc, s) => acc + priorityWeight(s.priority || 3), 0);
-                  const weightedSum = skillsForQ.reduce((acc, s) => acc + s.score * priorityWeight(s.priority || 3), 0);
-                  const finalScore = totalW > 0 ? weightedSum / totalW : (item.score ?? 0);
+                  // Question score comes from the backend only — never
+                  // recomputed here. `question_score` (null = not scored) wins;
+                  // older evaluations only carry `score`. totalW is used just
+                  // for the explanatory formula below.
+                  const totalW = skillsForQ.reduce((acc, s) => acc + priorityWeight(s.priority), 0);
+                  const backendQS = 'question_score' in item ? item.question_score : item.score;
+                  const finalScore = typeof backendQS === 'number' ? truncate1(backendQS) : 0;
 
                   // AI summary: take the rep evaluation's one_line_note
                   const repEval = (evalsByQ[item.question_number] || []).reduce<any | null>(
@@ -2892,7 +2896,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                           <div className="flex items-start gap-2 flex-shrink-0">
                             {!isSkipped && (
                               <div className="text-right">
-                                <div className={`text-2xl font-bold ${finalScoreColor}`}>{finalScore.toFixed(finalScore % 1 === 0 ? 0 : 2)}</div>
+                                <div className={`text-2xl font-bold ${finalScoreColor}`}>{formatScore1(finalScore)}</div>
                                 <div className="text-2xs text-gray-500 uppercase tracking-wider">Final Score</div>
                               </div>
                             )}
@@ -2928,7 +2932,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                               <div className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">Skill Scoring Breakdown</div>
                               <div className="space-y-2">
                                 {skillsForQ.map((s, i) => {
-                                  const w = priorityWeight(s.priority || 3);
+                                  const w = priorityWeight(s.priority);
                                   const contribution = s.score * w;
                                   const pct = Math.min(100, Math.max(0, (s.score / 10) * 100));
                                   return (
@@ -2941,9 +2945,9 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                                           )}
                                         </div>
                                         <div className="flex items-center gap-4 text-xs">
-                                          <div><span className="text-gray-500">Score</span> <span className="font-semibold text-gray-900">{s.score.toFixed(s.score % 1 === 0 ? 0 : 1)}</span></div>
+                                          <div><span className="text-gray-500">Score</span> <span className="font-semibold text-gray-900">{formatScore1(s.score)}</span></div>
                                           <div><span className="text-gray-500">Weight</span> <span className="font-semibold text-gray-900">{w}</span></div>
-                                          <div><span className="text-gray-500">Contribution</span> <span className="font-semibold text-gray-900">{contribution.toFixed(contribution % 1 === 0 ? 0 : 0)}</span></div>
+                                          <div><span className="text-gray-500">Contribution</span> <span className="font-semibold text-gray-900">{formatScore1(contribution)}</span></div>
                                         </div>
                                       </div>
                                       <div className="h-1.5 bg-white rounded-full overflow-hidden ring-1 ring-slate-200">
@@ -2962,7 +2966,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                               <div className="text-xs font-semibold text-brand-blue mb-1.5">Weighted Calculation Formula</div>
                               <div className="font-mono text-xs text-gray-700 space-y-0.5">
                                 <div>Question Score = Σ(Skill Score × Weight) / ΣWeights</div>
-                                <div>= ({skillsForQ.map(s => `${s.score.toFixed(s.score % 1 === 0 ? 0 : 1)}×${priorityWeight(s.priority || 3)}`).join(' + ')}) / {totalW} = {finalScore.toFixed(finalScore % 1 === 0 ? 0 : 2)}</div>
+                                <div>= ({skillsForQ.map(s => `${formatScore1(s.score)}×${priorityWeight(s.priority)}`).join(' + ')}) / {totalW} = {formatScore1(finalScore)}</div>
                               </div>
                             </div>
                           )}
