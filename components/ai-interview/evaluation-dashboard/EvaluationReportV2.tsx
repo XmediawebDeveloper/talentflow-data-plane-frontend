@@ -4,6 +4,7 @@
 import { CheckCircle, XCircle } from 'lucide-react';
 import type { DashboardData } from './types';
 
+import { formatScore1 } from '@/lib/utils/matchStatus';
 interface Props {
   data: DashboardData;
   aiConfidence?: number | null;
@@ -163,15 +164,15 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
           </p>
           {sectionsPresent.mustHave && (
             <p>
-              The candidate achieved a <strong>Must-Have Section Score of {scores.mustHave.toFixed(2)}/10</strong>,{' '}
+              The candidate achieved a <strong>Must-Have Section Score of {formatScore1(scores.mustHave)}/10</strong>,{' '}
               {isPartialEvaluation
                 ? 'calculated from the attended questions only.'
                 : isPassed
-                  ? `which exceeds the required threshold of ${MHS_THRESHOLD.toFixed(1)} by ${(scores.mustHave - MHS_THRESHOLD).toFixed(2)} points.`
-                  : `which falls below the required threshold of ${MHS_THRESHOLD.toFixed(1)} by ${(MHS_THRESHOLD - scores.mustHave).toFixed(2)} points.`}
+                  ? `which exceeds the required threshold of ${MHS_THRESHOLD.toFixed(1)} by ${formatScore1((scores.mustHave - MHS_THRESHOLD))} points.`
+                  : `which falls below the required threshold of ${MHS_THRESHOLD.toFixed(1)} by ${formatScore1((MHS_THRESHOLD - scores.mustHave))} points.`}
               {sectionsPresent.niceToHave && (
                 <>
-                  {' '}The Nice-to-Have Section Score was <strong>{scores.niceToHave.toFixed(2)}/10</strong>,{' '}
+                  {' '}The Nice-to-Have Section Score was <strong>{formatScore1(scores.niceToHave)}/10</strong>,{' '}
                   demonstrating {niceToHaveStrong} proficiency in supplementary skills.
                 </>
               )}
@@ -203,7 +204,7 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
           {sectionsPresent.mustHave && (
             <div className="grid grid-cols-[35%_15%_minmax(0,1fr)_20%] items-center bg-emerald-50/60 px-5 py-4 gap-2">
               <div className="text-sm font-bold text-emerald-800">Must-Have Section Score</div>
-              <div className="text-2xl font-bold text-emerald-500">{scores.mustHave.toFixed(2)}</div>
+              <div className="text-2xl font-bold text-emerald-500">{formatScore1(scores.mustHave)}</div>
               <div className="pr-3">
                 <div className="h-3.5 bg-emerald-100 rounded-full overflow-hidden">
                   <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${(scores.mustHave / 10) * 100}%` }} />
@@ -230,7 +231,7 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
           {sectionsPresent.niceToHave && (
             <div className="grid grid-cols-[35%_15%_minmax(0,1fr)_20%] items-center px-5 py-4 gap-2">
               <div className="text-sm font-semibold text-gray-900">Nice-to-Have Section Score</div>
-              <div className="text-2xl font-bold text-indigo-500">{scores.niceToHave.toFixed(2)}</div>
+              <div className="text-2xl font-bold text-indigo-500">{formatScore1(scores.niceToHave)}</div>
               <div className="pr-3">
                 <div className="h-3.5 bg-indigo-100 rounded-full overflow-hidden">
                   <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${(scores.niceToHave / 10) * 100}%` }} />
@@ -246,7 +247,7 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
           {!isPartialEvaluation && (
             <div className="grid grid-cols-[35%_15%_minmax(0,1fr)_20%] items-center bg-gray-50 px-5 py-4 gap-2">
               <div className="text-sm font-semibold text-gray-900">Overall Average Score</div>
-              <div className="text-2xl font-bold text-indigo-700">{(scores.final / 10).toFixed(2)}</div>
+              <div className="text-2xl font-bold text-indigo-700">{formatScore1((scores.final / 10))}</div>
               <div className="pr-3">
                 <div className="h-3.5 bg-gray-200 rounded-full overflow-hidden">
                   <div className="h-full bg-indigo-700 rounded-full" style={{ width: `${scores.final}%` }} />
@@ -374,7 +375,7 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
                   {isHR ? (
                     <div className="text-xs font-medium text-gray-400 text-right italic">Review only</div>
                   ) : (
-                    <div className={`text-base font-bold ${sc.text} text-right`}>{q.questionScore.toFixed(2)}</div>
+                    <div className={`text-base font-bold ${sc.text} text-right`}>{formatScore1(q.questionScore)}</div>
                   )}
                 </div>
               );

@@ -101,52 +101,64 @@ function AssessmentDetailsContent() {
   const [assessment, setAssessment] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  /* Prev / Next steps between JOBS, one stop per job.
+  /* Prev / Next steps through the ASSESSMENT VERSIONS of ONE JOB VERSION.
    *
-   * This held every assessment id the account has, so on a job with three
-   * versions Next walked V1 → V2 → V3 before ever reaching the next job -
-   * paging through versions of the thing you were already looking at. The
-   * version selector in the header is what moves between a job's versions;
-   * this pager moves between jobs.
+   * Opened on C++ Developer → Job V1 → Assessment V2, the pager runs
+   * Assessment V1 → V2 → V3 of Job V1 and stops at either end: never onto
+   * Job V2's assessments, the job-level row, or another job.
    *
-   * One entry per job LINEAGE, keyed the way every other surface on this page
-   * keys one (`jd_short_id`, falling back to `jd_id`, then the row's own id so
-   * an unlinked assessment stays its own stop rather than collapsing into a
-   * shared "no job" bucket). The id kept for each job is its newest
-   * assessment - the same row the Total Jobs list shows for that job - so
-   * paging lands where the list would.
+   * The scope is the current assessment's own `jd_id`. Every job version is
+   * its own JD row, so that id names exactly one version - unlike
+   * `jd_short_id` (the whole job) or `jd_version` (a number that can be stale
+   * on the assessment row). It is read off the record loaded for THIS route's
+   * id, so a record still on screen while another loads does not scope the
+   * pager to the wrong version. The list is fetched with that `jd_id` and
+   * filtered on it again client-side, so the pager holds that version's rows
+   * even if the endpoint were to widen the filter; then ordered by assessment
+   * version, `sequence_number` and creation time breaking ties.
+   *
+   * An assessment with no job has nothing to page through but itself, which
+   * leaves both buttons disabled. While the next record loads, the last list
+   * stays up, so a step within the version does not blink the pager away.
    */
-  const [allAssessmentIds, setAllAssessmentIds] = useState<string[]>([]);
+  const scopeJdId: string | null =
+    assessment && assessment.id === assessmentId ? (assessment.jd_id || '') : null;
+  const pagerTabQuery = (activeTab: string) =>
+    activeTab && activeTab !== 'overview' ? `?tab=${encodeURIComponent(activeTab)}` : '';
+  const [versionScope, setVersionScope] = useState<{ jdId: string; ids: string[] } | null>(null);
+  const allAssessmentIds: string[] =
+    scopeJdId === ''
+      ? [assessmentId]
+      : scopeJdId !== null && versionScope?.jdId !== scopeJdId
+      ? []
+      : versionScope?.ids ?? [];
 
   useEffect(() => {
-    const fetchAllIds = async () => {
+    if (!scopeJdId) return;
+    let cancelled = false;
+    const fetchVersionIds = async () => {
       try {
-        const probe: any = await assessmentService.list({ page_size: 1, page: 1 });
-        const probeItems: any[] = Array.isArray(probe) ? probe : (probe.items ?? []);
-        const total: number = (probe && typeof probe === 'object' && 'total' in probe ? probe.total : probeItems.length) ?? probeItems.length;
-        const res: any = total > 0
-          ? await assessmentService.list({ page_size: total, page: 1 })
-          : probe;
-        const items: any[] = Array.isArray(res) ? res : (res.items ?? []);
-        /* Collapse to one stop per job, keeping each job's newest assessment
-           and the order the list returned them in - so the pager runs in the
-           same order as the Total Jobs list rather than re-sorting under it. */
-        const byJob = new Map<string, (typeof items)[number]>();
-        for (const row of items) {
-          const key = row?.jd_short_id || row?.jd_id || `__unlinked__:${row?.id}`;
-          const current = byJob.get(key);
-          const isNewer =
-            !current ||
-            (row?.jd_version ?? 0) > (current?.jd_version ?? 0) ||
-            ((row?.jd_version ?? 0) === (current?.jd_version ?? 0) &&
-              (row?.version ?? 0) > (current?.version ?? 0));
-          if (isNewer) byJob.set(key, row);
+        const rows: Awaited<ReturnType<typeof assessmentService.list>>['items'] = [];
+        let page = 1;
+        while (true) {
+          const res = await assessmentService.list({ jd_id: scopeJdId, page, page_size: 100 });
+          const items = res?.items ?? [];
+          rows.push(...items);
+          if (rows.length >= (res?.total ?? 0) || items.length < 100) break;
+          page++;
         }
-        setAllAssessmentIds([...byJob.values()].map((a: any) => a.id));
+        const ordered = rows
+          .filter((row) => row?.jd_id === scopeJdId)
+          .sort((a, b) =>
+            (a?.version ?? 0) - (b?.version ?? 0) ||
+            (a?.sequence_number ?? 0) - (b?.sequence_number ?? 0) ||
+            String(a?.created_at ?? '').localeCompare(String(b?.created_at ?? '')));
+        if (!cancelled) setVersionScope({ jdId: scopeJdId, ids: ordered.map((row) => row.id) });
       } catch { /* ignore */ }
     };
-    fetchAllIds();
-  }, []);
+    fetchVersionIds();
+    return () => { cancelled = true; };
+  }, [scopeJdId]);
 
   // Modal states
   const [showShareModal, setShowShareModal] = useState(false);
@@ -395,11 +407,15 @@ function AssessmentDetailsContent() {
           onRefresh={fetchAssessment}
           currentIndex={allAssessmentIds.indexOf(assessmentId)}
           totalCount={allAssessmentIds.length}
+          /* The open vertical tab rides along as `?tab=`, which the view reads
+             as its initial tab - so Results stays Results, View JD stays View
+             JD, across every step. Assessment Details (`overview`) is the
+             view's own default and needs no parameter. */
           onPrev={allAssessmentIds.indexOf(assessmentId) > 0
-            ? () => router.replace(`/recruitment/assessments/${allAssessmentIds[allAssessmentIds.indexOf(assessmentId) - 1]}`)
+            ? (activeTab) => router.replace(`/recruitment/assessments/${allAssessmentIds[allAssessmentIds.indexOf(assessmentId) - 1]}${pagerTabQuery(activeTab)}`)
             : undefined}
           onNext={allAssessmentIds.indexOf(assessmentId) >= 0 && allAssessmentIds.indexOf(assessmentId) < allAssessmentIds.length - 1
-            ? () => router.replace(`/recruitment/assessments/${allAssessmentIds[allAssessmentIds.indexOf(assessmentId) + 1]}`)
+            ? (activeTab) => router.replace(`/recruitment/assessments/${allAssessmentIds[allAssessmentIds.indexOf(assessmentId) + 1]}${pagerTabQuery(activeTab)}`)
             : undefined}
           breadcrumbItems={breadcrumbItems}
           /* This route does not carry a Version History tab. The assessment's

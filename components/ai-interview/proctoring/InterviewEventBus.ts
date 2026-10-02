@@ -57,6 +57,8 @@ export interface ProctoringEvent {
   severity: 'minor' | 'moderate' | 'severe';
   timestamp: Date;
   details?: Record<string, any>;
+  /** Held toast: stays up (no auto-dismiss) until release(holdKey) is called. */
+  holdKey?: string;
 }
 
 // Warning messages
@@ -133,9 +135,11 @@ const EVENT_SEVERITY: Record<ProctoringEventType, 'minor' | 'moderate' | 'severe
 };
 
 type Listener = (event: ProctoringEvent) => void;
+type ReleaseListener = (holdKey: string) => void;
 
 class InterviewEventBusClass {
   private listeners = new Set<Listener>();
+  private releaseListeners = new Set<ReleaseListener>();
 
   /** Subscribe to proctoring events */
   subscribe(listener: Listener): () => void {
@@ -159,9 +163,40 @@ class InterviewEventBusClass {
     return event;
   }
 
+  /** Emit a HELD warning: the toast stays on screen until release(holdKey). */
+  emitHeld(type: ProctoringEventType, holdKey: string, details?: Record<string, any>): ProctoringEvent {
+    const event: ProctoringEvent = {
+      id: `evt-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+      type,
+      message: WARNING_MESSAGES[type],
+      severity: EVENT_SEVERITY[type],
+      timestamp: new Date(),
+      details,
+      holdKey,
+    };
+    this.listeners.forEach(fn => {
+      try { fn(event); } catch (e) { console.error('[InterviewEventBus] Listener error:', e); }
+    });
+    return event;
+  }
+
+  /** Subscribe to held-warning releases */
+  subscribeRelease(listener: ReleaseListener): () => void {
+    this.releaseListeners.add(listener);
+    return () => this.releaseListeners.delete(listener);
+  }
+
+  /** Take down the held warning emitted with this holdKey */
+  release(holdKey: string): void {
+    this.releaseListeners.forEach(fn => {
+      try { fn(holdKey); } catch (e) { console.error('[InterviewEventBus] Release listener error:', e); }
+    });
+  }
+
   /** Remove all listeners (cleanup) */
   clear(): void {
     this.listeners.clear();
+    this.releaseListeners.clear();
   }
 }
 

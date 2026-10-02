@@ -26,6 +26,8 @@ interface WarningItem {
   message: string;
   severity: 'minor' | 'moderate' | 'severe';
   timestamp: Date;
+  /** Held warning (looking away / multiple faces): no auto-dismiss, removed on release. */
+  holdKey?: string;
 }
 
 const AUTO_DISMISS_MS = 2000;
@@ -119,21 +121,25 @@ const WarningCard = memo(function WarningCard({
   const onDismissRef = useRef(onDismiss);
   onDismissRef.current = onDismiss;
 
+  const held = !!warning.holdKey;
   useEffect(() => {
+    if (held) return; // held until the condition clears (InterviewEventBus.release)
     const timer = setTimeout(() => onDismissRef.current(), AUTO_DISMISS_MS);
     return () => clearTimeout(timer);
-  }, []); // Empty deps — runs only on mount
+  }, [held]);
 
   return (
     <div className={`relative overflow-hidden rounded-lg border-l-4 ${colors.bg} ${colors.border} p-4 shadow-lg animate-interview-slide-in`}>
-      <div
-        className="absolute bottom-0 left-0 h-1 bg-current opacity-30 animate-interview-progress-shrink"
-        style={{
-          animationDuration: `${AUTO_DISMISS_MS}ms`,
-          animationTimingFunction: 'linear',
-          animationFillMode: 'forwards',
-        }}
-      />
+      {!held && (
+        <div
+          className="absolute bottom-0 left-0 h-1 bg-current opacity-30 animate-interview-progress-shrink"
+          style={{
+            animationDuration: `${AUTO_DISMISS_MS}ms`,
+            animationTimingFunction: 'linear',
+            animationFillMode: 'forwards',
+          }}
+        />
+      )}
       <div className="flex items-start gap-3">
         <div className={`flex-shrink-0 ${colors.icon}`}>
           {EVENT_ICONS[warning.type] || <AlertTriangle className="w-6 h-6" />}
@@ -149,9 +155,11 @@ const WarningCard = memo(function WarningCard({
             {warning.timestamp.toLocaleTimeString('en-US', { hour12: true })}
           </p>
         </div>
-        <button onClick={onDismiss} className={`flex-shrink-0 p-1 rounded hover:bg-black/5 ${colors.text}`} aria-label="Close">
-          <X className="w-4 h-4" />
-        </button>
+        {!held && (
+          <button onClick={onDismiss} className={`flex-shrink-0 p-1 rounded hover:bg-black/5 ${colors.text}`} aria-label="Close">
+            <X className="w-4 h-4" />
+          </button>
+        )}
       </div>
       <div className="absolute top-2 right-10">
         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
@@ -202,19 +210,32 @@ export function InterviewProctoringWarnings() {
           message: event.message,
           severity: event.severity,
           timestamp: event.timestamp,
+          holdKey: event.holdKey,
         };
         const combined = [...prev, next];
         // Hard-cap: drop oldest when over the limit. Keeps the render tree
         // small + bounded so a flood of violations doesn't compound into a
         // re-render storm.
         if (combined.length > MAX_VISIBLE_WARNINGS) {
-          return combined.slice(combined.length - MAX_VISIBLE_WARNINGS);
+          // Held warnings are never dropped (they must stay until their
+          // condition clears); trim only the auto-dismissing ones, always
+          // leaving room for at least the newest of those.
+          const held = combined.filter(w => w.holdKey);
+          const normal = combined.filter(w => !w.holdKey);
+          const room = Math.max(MAX_VISIBLE_WARNINGS - held.length, 1);
+          const keep = new Set([...held, ...normal.slice(-room)]);
+          return combined.filter(w => keep.has(w));
         }
         return combined;
       });
     });
 
-    return () => { unsubscribe(); };
+    // Held warnings come down when their condition clears.
+    const unsubscribeRelease = InterviewEventBus.subscribeRelease((holdKey) => {
+      setWarnings(prev => prev.filter(w => w.holdKey !== holdKey));
+    });
+
+    return () => { unsubscribe(); unsubscribeRelease(); };
   }, []);
 
   const dismissWarning = useCallback((id: string) => {

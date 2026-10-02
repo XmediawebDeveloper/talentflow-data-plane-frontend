@@ -9,6 +9,7 @@ import type {
   PerQuestionDetail, PerQuestionSkill, PerQuestionFollowUp,
 } from './types';
 import { buildSkipReasoner, buildClarificationsByQuestion } from './skipReason';
+import { truncate1 } from '@/lib/utils/matchStatus';
 
 interface ClusterConfigDef {
   id?: string;
@@ -543,7 +544,7 @@ function buildClustersFromConfig(
       }
       return {
         name: sname,
-        score: Math.round(score010 * 10) / 10,
+        score: truncate1(score010),
         level: scoreToLevel(score010),
         feedback: lookupFeedback(sname, evaluations) || 'No specific feedback captured for this skill.',
         asked: lookupAsked(sname, score010),
@@ -553,7 +554,7 @@ function buildClustersFromConfig(
     // Cluster score = average of skill scores
     const scored = skills.filter(s => s.score > 0);
     const clusterScore = scored.length > 0
-      ? Math.round((scored.reduce((a, s) => a + s.score, 0) / scored.length) * 100) / 100
+      ? truncate1((scored.reduce((a, s) => a + s.score, 0) / scored.length))
       : 0;
 
     return {
@@ -641,6 +642,12 @@ function formatMinSec(totalSec: number): string {
 
 // Doc-spec priority → weight (10/7/4). Used by per-question breakdown table.
 const PRIORITY_WEIGHT: Record<Level, number> = { High: 10, Medium: 7, Low: 4 };
+
+// No default weight: a skill with no High/Medium/Low priority (not in any
+// cluster) weighs 0, so it drops out of Σ(score×weight)/Σ(weight) — the same
+// rule as the backend's _compute_question_scores. Never weighted as Medium.
+const priorityWeight = (priority: Level | null): number =>
+  priority ? PRIORITY_WEIGHT[priority] : 0;
 
 function priorityLabelToLevel(raw: any): Level {
   const s = String(raw || '').toLowerCase();
@@ -986,7 +993,7 @@ function buildPerQuestionDetailsFromGroups(
 
   const buildSkillRows = (names: string[], scoringRows: any[] = []): PerQuestionSkill[] =>
     names.map(name => {
-      const priority = clusterPriorityBySkill[String(name).toLowerCase().trim()] || 'Medium';
+      const priority = clusterPriorityBySkill[String(name).toLowerCase().trim()] ?? null;
       const sl = String(name).toLowerCase().trim();
       const matchedRow = scoringRows.find((r: any) => {
         const topic = String(r?.skill || r?.topic || '').toLowerCase().trim();
@@ -995,8 +1002,8 @@ function buildPerQuestionDetailsFromGroups(
       return {
         name,
         priority,
-        weight: PRIORITY_WEIGHT[priority],
-        score: matchedRow ? Math.round((Number(matchedRow?.score) || 0) * 10) / 10 : 0,
+        weight: priorityWeight(priority),
+        score: matchedRow ? truncate1((Number(matchedRow?.score) || 0)) : 0,
         note: matchedRow ? String(matchedRow?.note || '') : '',
       };
     });
@@ -1009,7 +1016,7 @@ function buildPerQuestionDetailsFromGroups(
     const scored = skills.filter(k => !k.is_unscored);
     const sumW = scored.reduce((s, k) => s + k.weight, 0);
     const sumWS = scored.reduce((s, k) => s + k.score * k.weight, 0);
-    return sumW > 0 ? Math.round((sumWS / sumW) * 10) / 10 : 0;
+    return sumW > 0 ? truncate1((sumWS / sumW)) : 0;
   };
 
   for (const g of groups) {
@@ -1047,7 +1054,7 @@ function buildPerQuestionDetailsFromGroups(
       questionScore: mainScoreRows.length > 0
         ? computeQuestionScore(mainSkills)
         : typeof matched?.score === 'number'
-          ? Math.round(matched.score * 10) / 10
+          ? truncate1(matched.score)
           : 0,
       // Recover the bundled-followup note from the matched history row so it
       // survives even when this (groups) builder is the one selected.
@@ -1091,7 +1098,7 @@ function buildPerQuestionDetailsFromGroups(
         questionScore: fuScoreRows.length > 0
           ? computeQuestionScore(fuSkills)
           : typeof fuMatched?.score === 'number'
-            ? Math.round(fuMatched.score * 10) / 10
+            ? truncate1(fuMatched.score)
             : 0,
         bundledFollowUp: bundledFollowUpFromRow(fuMatched),
         scoreRationale: String(fu?.score_rationale || fuMatched?.score_rationale || ''),
@@ -1378,7 +1385,7 @@ function buildPerQuestionDetailsFromHistory(
       question: String(fu?.question || '').trim(),
       answer: String(fu?.answer || '').trim(),
       topic: String(fu?.topic || ev?.topic || ev?.evaluation?.topic || '').trim() || undefined,
-      score: typeof fuScore === 'number' ? Math.round(fuScore * 10) / 10 : undefined,
+      score: typeof fuScore === 'number' ? truncate1(fuScore) : undefined,
       note: String(ev?.one_line_note || ev?.evaluation?.brief_note || '').slice(0, 250) || undefined,
       // Trigger metadata stamped by the backend when the followup fired.
       // Drives the "Note: This follow-up was asked because..." line in
@@ -1502,8 +1509,8 @@ function buildPerQuestionDetailsFromHistory(
     const rowNotDelivered = isUndeliveredHistoryRow(q);
 
     const skills: PerQuestionSkill[] = skillNames.map(skillName => {
-      const priority = clusterPriorityBySkill[String(skillName).toLowerCase().trim()] || 'Medium';
-      const weight = PRIORITY_WEIGHT[priority];
+      const priority = clusterPriorityBySkill[String(skillName).toLowerCase().trim()] ?? null;
+      const weight = priorityWeight(priority);
       const { score, note, is_fallback, is_skipped, is_unscored } = scoreForSkill(
         origQ, skillName, entryScore, isSkippedRow,
       );
@@ -1511,7 +1518,7 @@ function buildPerQuestionDetailsFromHistory(
         name: skillName,
         priority,
         weight,
-        score: Math.round(score * 10) / 10,
+        score: truncate1(score),
         note,
         is_fallback,
         // An un-reached question is NOT "skipped by the candidate" — its skills
@@ -1532,11 +1539,14 @@ function buildPerQuestionDetailsFromHistory(
     // real 0-scored skill (asked but not demonstrated) is a genuine gap and MUST
     // count, so a strong answer on one skill can't hide zeros on the others.
     const scoredSkills = skills.filter(k => !k.is_unscored);
-    const hasEvaluatedSkill = skills.some(k => !k.is_unscored);
+    // A skill with no priority (weight 0) can't carry the question score, so a
+    // question whose only scored skills are unprioritized is "Not evaluated" —
+    // matching the backend, which leaves such a question without a score.
+    const hasEvaluatedSkill = skills.some(k => !k.is_unscored && k.weight > 0);
     const sumW = scoredSkills.reduce((s, k) => s + k.weight, 0);
     const sumWS = scoredSkills.reduce((s, k) => s + k.score * k.weight, 0);
     const weighted = sumW > 0 ? sumWS / sumW : 0;
-    const questionScore = Math.round(weighted * 10) / 10;
+    const questionScore = truncate1(weighted);
     // Whole question is "Not evaluated" only when the evaluator produced NO
     // usable score rows for any skill on the slot. A real no-answer / skip /
     // IDK turn is still an evaluated question with score 0, so it must stay
@@ -1853,13 +1863,13 @@ function buildPerQuestionDetailsFromConversation(
 
   const buildSkillRows = (questionText: string, names: string[]): PerQuestionSkill[] =>
     names.map(name => {
-      const priority = clusterPriorityBySkill[String(name).toLowerCase().trim()] || 'Medium';
+      const priority = clusterPriorityBySkill[String(name).toLowerCase().trim()] ?? null;
       const { score, note } = lookupSkillScoreAndNote(questionText, name);
       return {
         name,
         priority,
-        weight: PRIORITY_WEIGHT[priority],
-        score: Math.round(score * 10) / 10,
+        weight: priorityWeight(priority),
+        score: truncate1(score),
         note,
       };
     });
@@ -1870,7 +1880,7 @@ function buildPerQuestionDetailsFromConversation(
     if (skills.length === 0) return 0;
     const sumW = skills.reduce((s, k) => s + k.weight, 0);
     const sumWS = skills.reduce((s, k) => s + k.score * k.weight, 0);
-    return sumW > 0 ? Math.round((sumWS / sumW) * 10) / 10 : 0;
+    return sumW > 0 ? truncate1((sumWS / sumW)) : 0;
   };
 
   // Resolve skills for a question text. Priority order:
@@ -2000,8 +2010,8 @@ function buildPerQuestionDetailsLegacy(
   // Reverse skill_question_map → per-question skill rows
   const perQ: Record<number, PerQuestionSkill[]> = {};
   for (const [topic, rows] of Object.entries(skillQMap || {})) {
-    const priority = clusterPriorityBySkill[topic.toLowerCase().trim()] || 'Medium';
-    const weight = PRIORITY_WEIGHT[priority];
+    const priority = clusterPriorityBySkill[topic.toLowerCase().trim()] ?? null;
+    const weight = priorityWeight(priority);
     for (const r of rows || []) {
       const q = Number(r?.q_num || 0);
       if (!q) continue;
@@ -2010,7 +2020,7 @@ function buildPerQuestionDetailsLegacy(
         name: topic,
         priority,
         weight,
-        score: Math.round(score * 10) / 10,
+        score: truncate1(score),
         note: String(r?.note || '').slice(0, 250),
       });
     }
@@ -2026,7 +2036,7 @@ function buildPerQuestionDetailsLegacy(
       const meta = qMeta[qNum] || { section: 'mth' as const, question: '', answer: '' };
       const qsRaw = questionScores[qNum] ?? questionScores[String(qNum)];
       const questionScore = typeof qsRaw === 'number'
-        ? Math.round(qsRaw * 10) / 10
+        ? truncate1(qsRaw)
         : 0;
       return {
         qNum,
@@ -2270,15 +2280,15 @@ export function buildDashboardData(params: {
   const mthBackend = eval_?.section_scores?.mth?.score;
   const nthBackend = eval_?.section_scores?.nth?.score;
   const mustHaveAvg = (typeof mthQAvg === 'number')
-    ? Math.round(mthQAvg * 100) / 100
+    ? truncate1(mthQAvg)
     : (mustHaveClusters.length > 0
-        ? Math.round(mustHaveClusters.reduce((a, c) => a + c.clusterScore * c.weight / 100, 0) * 100) / 100
-        : (typeof mthBackend === 'number' && mthBackend > 0 ? Math.round(mthBackend) / 10 : 0));
+        ? truncate1(mustHaveClusters.reduce((a, c) => a + c.clusterScore * c.weight / 100, 0))
+        : (typeof mthBackend === 'number' && mthBackend > 0 ? truncate1(mthBackend / 10) : 0));
   const niceToHaveAvg = (typeof nthQAvg === 'number')
-    ? Math.round(nthQAvg * 100) / 100
+    ? truncate1(nthQAvg)
     : (niceToHaveClusters.length > 0
-        ? Math.round(niceToHaveClusters.reduce((a, c) => a + c.clusterScore * c.weight / 100, 0) * 100) / 100
-        : (typeof nthBackend === 'number' && nthBackend > 0 ? Math.round(nthBackend) / 10 : 0));
+        ? truncate1(niceToHaveClusters.reduce((a, c) => a + c.clusterScore * c.weight / 100, 0))
+        : (typeof nthBackend === 'number' && nthBackend > 0 ? truncate1(nthBackend / 10) : 0));
   const hr = hrScoreFromEval(eval_);
 
   // Determine which sections actually exist in this interview
@@ -2358,7 +2368,7 @@ export function buildDashboardData(params: {
   for (const [k, v] of Object.entries(questionScoresRaw)) {
     const n = Number(k);
     if (Number.isFinite(n) && typeof v === 'number') {
-      questionScores[n] = Math.round(v * 10) / 10;
+      questionScores[n] = truncate1(v);
     }
   }
 
@@ -2427,11 +2437,11 @@ export function buildDashboardData(params: {
       unique.push(n);
     }
     return unique.map(name => {
-      const priority = clusterPriorityBySkill[name.toLowerCase().trim()] || 'Medium';
+      const priority = clusterPriorityBySkill[name.toLowerCase().trim()] ?? null;
       return {
         name,
         priority,
-        weight: PRIORITY_WEIGHT[priority],
+        weight: priorityWeight(priority),
         score: 0,
         note: '',
       };
@@ -2617,7 +2627,7 @@ export function buildDashboardData(params: {
         const _scored = replacedSkills.filter(k => !k.is_unscored);
         const _sumW = _scored.reduce((s, k) => s + k.weight, 0);
         const _sumWS = _scored.reduce((s, k) => s + k.score * k.weight, 0);
-        const _qScore = _sumW > 0 ? Math.round((_sumWS / _sumW) * 10) / 10 : 0;
+        const _qScore = _sumW > 0 ? truncate1((_sumWS / _sumW)) : 0;
         return { ...row, skills: replacedSkills, questionScore: _qScore };
       });
     };
@@ -2737,7 +2747,7 @@ export function buildDashboardData(params: {
       });
       const scoredSkills = updatedSkills.filter(sk => sk.score > 0);
       const newClusterScore = scoredSkills.length > 0
-        ? Math.round(scoredSkills.reduce((sum, sk) => sum + sk.score, 0) / scoredSkills.length * 100) / 100
+        ? truncate1(scoredSkills.reduce((sum, sk) => sum + sk.score, 0) / scoredSkills.length)
         : 0;
       return { ...cluster, skills: updatedSkills, clusterScore: newClusterScore };
     });
@@ -2771,12 +2781,12 @@ export function buildDashboardData(params: {
   // longer preferred because it carries the old ÷ANSWERED denominator.
   const mthPlannedDenom = Math.max(plannedCounts?.mustHave || 0, mthQARows.length);
   const mustHaveAvgQA = mthPlannedDenom > 0
-    ? Math.round(mthQARows.reduce((s, q) => s + q.questionScore, 0) / mthPlannedDenom * 10) / 10
+    ? truncate1(mthQARows.reduce((s, q) => s + q.questionScore, 0) / mthPlannedDenom)
     : mustHaveAvg; // keep original if QA produced no scored rows (old sessions)
 
   const nthPlannedDenom = Math.max(plannedCounts?.niceToHave || 0, nthQARows.length);
   const niceToHaveAvgQA = nthPlannedDenom > 0
-    ? Math.round(nthQARows.reduce((s, q) => s + q.questionScore, 0) / nthPlannedDenom * 10) / 10
+    ? truncate1(nthQARows.reduce((s, q) => s + q.questionScore, 0) / nthPlannedDenom)
     : niceToHaveAvg;
 
   // 4. Final score from QA-derived section averages.
@@ -2840,9 +2850,9 @@ export function buildDashboardData(params: {
     },
     isPartialEvaluation: isPartialEval,
     scores: {
-      mustHave:   Math.round(mustHaveHeadline * 100) / 100,
-      niceToHave: Math.round(niceToHaveAvgQA * 100) / 100,
-      hr:         Math.round(hr             * 100) / 100,
+      mustHave:   truncate1(mustHaveHeadline),
+      niceToHave: truncate1(niceToHaveAvgQA),
+      hr:         truncate1(hr),
       final:      finalScoreQA,
     },
     weights: {

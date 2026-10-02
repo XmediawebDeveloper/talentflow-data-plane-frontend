@@ -7,6 +7,7 @@ import {
 } from 'recharts';
 import type { DashboardData } from './types';
 
+import { formatScore1 } from '@/lib/utils/matchStatus';
 interface Props {
   data: DashboardData;
   livenessVerified?: boolean;
@@ -173,8 +174,8 @@ export function OverviewSectionV2({
                 {isPartialEvaluation
                   ? `This interview ended before completion. Section scores below summarize only the questions the candidate attended.`
                   : isPassed
-                    ? `Must-Have Score: ${scores.mustHave.toFixed(2)} (Threshold: ${MHS_THRESHOLD.toFixed(1)}) • Exceeds by +${(scores.mustHave - MHS_THRESHOLD).toFixed(2)}`
-                    : `Must-Have Score: ${scores.mustHave.toFixed(2)} (Threshold: ${MHS_THRESHOLD.toFixed(1)}) • Below threshold by ${(MHS_THRESHOLD - scores.mustHave).toFixed(2)}`}
+                    ? `Must-Have Score: ${formatScore1(scores.mustHave)} (Threshold: ${MHS_THRESHOLD.toFixed(1)}) • Exceeds by +${formatScore1((scores.mustHave - MHS_THRESHOLD))}`
+                    : `Must-Have Score: ${formatScore1(scores.mustHave)} (Threshold: ${MHS_THRESHOLD.toFixed(1)}) • Below threshold by ${formatScore1((MHS_THRESHOLD - scores.mustHave))}`}
               </div>
             </div>
           </div>
@@ -209,21 +210,21 @@ export function OverviewSectionV2({
           <div className="flex divide-x divide-gray-200">
             {sectionsPresent.mustHave && (
               <div className="px-6 text-center min-w-[120px]">
-                <div className="text-4xl font-bold text-emerald-500 mb-1">{scores.mustHave.toFixed(2)}</div>
+                <div className="text-4xl font-bold text-emerald-500 mb-1">{formatScore1(scores.mustHave)}</div>
                 <div className="text-sm font-semibold text-gray-500">Must-Have</div>
                 <div className="text-xs text-gray-400">Score</div>
               </div>
             )}
             {sectionsPresent.niceToHave && (
               <div className="px-6 text-center min-w-[120px]">
-                <div className="text-4xl font-bold text-indigo-500 mb-1">{scores.niceToHave.toFixed(2)}</div>
+                <div className="text-4xl font-bold text-indigo-500 mb-1">{formatScore1(scores.niceToHave)}</div>
                 <div className="text-sm font-semibold text-gray-500">Nice-to-Have</div>
                 <div className="text-xs text-gray-400">Score</div>
               </div>
             )}
             {!isPartialEvaluation && (
               <div className="px-6 text-center min-w-[120px]">
-                <div className="text-4xl font-bold text-indigo-700 mb-1">{(scores.final / 10).toFixed(2)}</div>
+                <div className="text-4xl font-bold text-indigo-700 mb-1">{formatScore1((scores.final / 10))}</div>
                 <div className="text-sm font-semibold text-gray-500">Overall</div>
                 <div className="text-xs text-gray-400">Score</div>
               </div>
@@ -439,7 +440,7 @@ export function OverviewSectionV2({
                   </div>
                   <div className="text-right shrink-0">
                     <div className="text-2xl font-bold mb-1" style={{ color: item.color }}>
-                      {item.score.toFixed(2)}
+                      {formatScore1(item.score)}
                     </div>
                     <span
                       className={`text-xs font-bold px-2.5 py-1 rounded-full ${

@@ -13,6 +13,7 @@ import {
   useInterviewObjectDetection,
   useInterviewProctoringMonitor,
   InterviewProctoringWarnings,
+  InterviewEventBus,
   EnvironmentVerificationOverlay,
   markAppOwnedCanvas,
   type DetectedObjectEvent,
@@ -2357,17 +2358,18 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   //   start -> `gaze_away` / `multiple_faces` (counts as the violation)
   //   end   -> `gaze_away_ended` / `multiple_faces_ended` (info, not scored)
   // paired by episode_id and carrying the duration.
+  // The warning is the normal proctoring toaster (bottom-right), emitted as a
+  // HELD toast: no auto-dismiss, removed via InterviewEventBus.release(id).
   type AttentionKind = 'gaze_away' | 'multiple_faces';
   interface AttentionEpisode { id: string; startedAt: number; details: Record<string, any> }
   const attentionEpisodesRef = useRef<Partial<Record<AttentionKind, AttentionEpisode>>>({});
-  const [attentionWarnings, setAttentionWarnings] = useState<Partial<Record<AttentionKind, string>>>({});
 
-  const startAttentionEpisode = useCallback((kind: AttentionKind, details: Record<string, any>, message: string) => {
+  const startAttentionEpisode = useCallback((kind: AttentionKind, details: Record<string, any>) => {
     if (attentionEpisodesRef.current[kind]) return; // already open; detector only fires on the edge anyway
     const startedAt = Date.now();
     const id = `${kind}-${startedAt}-${Math.random().toString(36).slice(2, 8)}`;
     attentionEpisodesRef.current[kind] = { id, startedAt, details };
-    setAttentionWarnings(prev => ({ ...prev, [kind]: message }));
+    InterviewEventBus.emitHeld(kind, id, details);
     candidateAIInterviewService.reportProctorEvent(token, {
       event_type: kind,
       timestamp: new Date(startedAt).toISOString(),
@@ -2379,7 +2381,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     const ep = attentionEpisodesRef.current[kind];
     if (!ep) return;
     delete attentionEpisodesRef.current[kind];
-    setAttentionWarnings(prev => { const next = { ...prev }; delete next[kind]; return next; });
+    InterviewEventBus.release(ep.id);
     const endedAt = Date.now();
     const durationMs = Math.max(0, endedAt - ep.startedAt);
     candidateAIInterviewService.reportProctorEvent(token, {
@@ -2398,7 +2400,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   }, [token]);
 
   const handleMultipleFaces = useCallback((count: number) => {
-    startAttentionEpisode('multiple_faces', { face_count: count }, 'Please ensure you are alone.');
+    startAttentionEpisode('multiple_faces', { face_count: count });
   }, [startAttentionEpisode]);
 
   const handleMultipleFacesCleared = useCallback(() => {
@@ -2406,7 +2408,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   }, [endAttentionEpisode]);
 
   const handleGazeAway = useCallback((direction: string) => {
-    startAttentionEpisode('gaze_away', { direction }, 'Please keep your attention on the screen.');
+    startAttentionEpisode('gaze_away', { direction });
   }, [startAttentionEpisode]);
 
   const handleGazeRestored = useCallback(() => {
@@ -3847,30 +3849,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // running through it. `activeStreakStartRef` = when the current unbroken run
   // of active frames began (null when the last frame was inactive).
   const activeStreakStartRef = useRef<number | null>(null);
-  const SUSTAINED_ACTIVE_MS = 3000; // TEST (was 400): the 3s speech window
-  // 3s WINDOW RULE (replaces "3s unbroken"): speech counts when, within the
-  // last SUSTAINED_ACTIVE_MS, at least SUSTAINED_VOICE_MS of frames were voice.
-  // The unbroken version broke on every pause > STREAK_DIP_GRACE_MS, which
-  // normal speech has between phrases — worst on quiet wired/BT headsets whose
-  // frames dip under the threshold more often. Result: continuous speech never
-  // reset the silence clock and the "Are you done?" popup kept appearing while
-  // the candidate was talking. A noise blip (cough, door, one word) still can't
-  // fill half a 3s window.
-  const SUSTAINED_VOICE_MS = 1500;
-  // Voice frames inside the current window: [timestamp, ms credited].
-  const inTurnVoiceWindowRef = useRef<Array<[number, number]>>([]);
-  const onsetVoiceWindowRef = useRef<Array<[number, number]>>([]);
-  const vadPrevFrameAtRef = useRef<number | null>(null);
-  // Adds this frame (if voice) to a window buffer, drops entries older than
-  // SUSTAINED_ACTIVE_MS, and returns the voice ms left in the window.
-  const voiceMsInWindow = (buf: Array<[number, number]>, nowMs: number, frameMs: number, isVoice: boolean): number => {
-    if (isVoice) buf.push([nowMs, frameMs]);
-    const cutoff = nowMs - SUSTAINED_ACTIVE_MS;
-    while (buf.length && buf[0][0] < cutoff) buf.shift();
-    let total = 0;
-    for (const [, ms] of buf) total += ms;
-    return total;
-  };
+  // TEST (was 400): 3s of CONTINUOUS voice (gaps up to STREAK_DIP_GRACE_MS
+  // allowed) before it counts. Product choice over the "1.5s within 3s" window
+  // rule. Known risk: speech with pauses > STREAK_DIP_GRACE_MS between phrases
+  // (common on quiet wired/BT headsets) may not reset the silence clock, so the
+  // "Are you done?" popup can appear while the candidate is still talking.
+  const SUSTAINED_ACTIVE_MS = 3000;
   // Dip tolerance ("hangover") for the active streak. Natural speech is not a
   // solid block of above-threshold frames — there are ~50-150ms gaps between
   // words, unstressed syllables, and after plosives that dip BELOW the
@@ -7834,23 +7818,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         }
 
         const speechConfirmThreshold = Math.max(silenceThresholdRef.current, possibleSpeechThreshold);
-        // Real elapsed time of this analyser frame (clamped so a stalled tab
-        // can't credit a long gap as voice). Shared by both 3s windows.
-        const _frameMs = vadPrevFrameAtRef.current == null
-          ? 0
-          : Math.min(nowMs - vadPrevFrameAtRef.current, 250);
-        vadPrevFrameAtRef.current = nowMs;
         if (suppressNewSpeechDetection && !speechDetectedRef.current) {
           // Bina's echo must not pre-charge the 3s onset window.
           speechFrameCountRef.current = 0;
         }
-        // speechFrameCountRef === 0 marks a fresh onset window (turn start,
-        // Bina speaking, etc. all zero it), so drop any stale onset credit.
-        if (speechFrameCountRef.current === 0) onsetVoiceWindowRef.current = [];
-        const _onsetVoice = !speechDetectedRef.current && avgLevel > speechConfirmThreshold && voiceLike;
-        const _onsetVoiceMs = speechDetectedRef.current
-          ? 0
-          : voiceMsInWindow(onsetVoiceWindowRef.current, nowMs, _frameMs, _onsetVoice);
         if (!speechDetectedRef.current && avgLevel > speechConfirmThreshold && voiceLike) {
           // Onset window: SPEECH_ONSET_CONFIRM_MS of voice, measured in time,
           // tolerating inter-word dips up to STREAK_DIP_GRACE_MS — the same
@@ -7867,9 +7838,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           onsetLastVoiceAtRef.current = nowMs;
           speechFrameCountRef.current++;
           silenceStartRef.current = null;
-          // 3s window rule (see SUSTAINED_VOICE_MS): enough voice inside the
-          // last SPEECH_ONSET_CONFIRM_MS, pauses between phrases allowed.
-          if (_onsetVoiceMs >= SUSTAINED_VOICE_MS && !suppressNewSpeechDetection) {
+          // 3s of continuous voice (gaps up to STREAK_DIP_GRACE_MS allowed).
+          const _onsetMs = nowMs - onsetStreakStartRef.current;
+          if (_onsetMs >= SPEECH_ONSET_CONFIRM_MS && !suppressNewSpeechDetection) {
             console.log('[INTERVIEW-DEBUG] Speech DETECTED (VAD)', {
               questionTimerSeconds: questionTimerSecondsRef.current,
               questionNumber: questionNumberRef.current,
@@ -7899,11 +7870,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           }
         } else {
           if (!speechDetectedRef.current) {
-            // Pauses are handled by the 3s window itself; only a full window of
-            // silence (> SUSTAINED_ACTIVE_MS since the last voice frame) starts over.
+            // Short inter-word dip keeps the onset streak alive; a real gap
+            // (> STREAK_DIP_GRACE_MS since the last voice frame) restarts it.
             if (
               onsetLastVoiceAtRef.current == null ||
-              (nowMs - onsetLastVoiceAtRef.current) > SUSTAINED_ACTIVE_MS
+              (nowMs - onsetLastVoiceAtRef.current) > STREAK_DIP_GRACE_MS
             ) {
               speechFrameCountRef.current = 0;
             }
@@ -7979,9 +7950,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             const _streakMs = activeStreakStartRef.current == null
               ? 0
               : (nowMs - activeStreakStartRef.current);
-            void _streakMs; // streak kept for the dip bookkeeping; the reset uses the window rule
-            const _inTurnVoiceMs = voiceMsInWindow(inTurnVoiceWindowRef.current, nowMs, _frameMs, _frameIsActive);
-            const _sustained = _frameIsActive && _inTurnVoiceMs >= SUSTAINED_VOICE_MS;
+            const _sustained = _frameIsActive && _streakMs >= SUSTAINED_ACTIVE_MS;
 
             // AII14 popup dismissal — counts SPEECH_RESUME_CONFIRM_MS of VAD
             // speech frames (cumulative, pauses allowed) straight from this
@@ -10065,32 +10034,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 }`}>
                   <span className={`w-1.5 h-1.5 rounded-full bg-red-300 ${isRecording && !isMuted ? 'animate-pulse' : 'opacity-70'}`} />
                   <span className="text-red-50 text-2xs font-bold tracking-wide">REC</span>
-                </div>
-              )}
-
-              {/* Held attention warnings: stay up for the whole episode and clear
-                  once the candidate looks back / is alone again. Top of the
-                  camera tile, so they never cover the question or timer. */}
-              {(attentionWarnings.multiple_faces || attentionWarnings.gaze_away) && !isClosing && (
-                <div className="absolute top-10 left-2 right-2 z-20 flex flex-col gap-1.5 pointer-events-none" role="status" aria-live="polite">
-                  {attentionWarnings.multiple_faces && (
-                    <div className="flex items-start gap-2 rounded-lg bg-red-600/90 backdrop-blur-sm ring-1 ring-red-300/60 px-3 py-2 shadow-lg">
-                      <span className="mt-1 w-2 h-2 rounded-full bg-white animate-pulse shrink-0" />
-                      <div className="min-w-0">
-                        <p className="text-white text-xs font-bold leading-tight">Multiple Faces Detected</p>
-                        <p className="text-white/90 text-2xs leading-snug">{attentionWarnings.multiple_faces}</p>
-                      </div>
-                    </div>
-                  )}
-                  {attentionWarnings.gaze_away && (
-                    <div className="flex items-start gap-2 rounded-lg bg-amber-400/95 backdrop-blur-sm ring-1 ring-amber-200/60 px-3 py-2 shadow-lg">
-                      <span className="mt-1 w-2 h-2 rounded-full bg-gray-900 animate-pulse shrink-0" />
-                      <div className="min-w-0">
-                        <p className="text-gray-900 text-xs font-bold leading-tight">Looking Away Detected</p>
-                        <p className="text-gray-900/85 text-2xs leading-snug">{attentionWarnings.gaze_away}</p>
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
 

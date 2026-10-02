@@ -48,8 +48,8 @@ export interface SectionWeights {
  *  shown directly in the UI. */
 export interface PerQuestionSkill {
   name: string;
-  priority: Level;       // High / Medium / Low
-  weight: number;        // 10 / 7 / 4
+  priority: Level | null; // High / Medium / Low; null = no priority (not scored)
+  weight: number;        // 10 / 7 / 4; 0 when priority is null
   score: number;         // 0-10
   note: string;          // short LLM rationale
   /** True when `score` was derived from the question-level entry.score

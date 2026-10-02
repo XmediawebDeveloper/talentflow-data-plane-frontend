@@ -15,7 +15,6 @@ import {
   formatEmploymentType,
   formatIndustryType,
   matchesStatusFilter,
-  getPublishedJobs,
   collapseToLatestVersions,
   groupByLineage,
   sortJobs,
@@ -346,7 +345,7 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
     },
   );
 
-  const criteriaMatchedJobs = jobs.filter(job => {
+  const matchesCriteria = (job: Job) => {
     // Enhanced search - search across multiple fields
     const searchLower = searchQuery.toLowerCase();
     const matchesSearch = searchQuery === '' || (
@@ -447,7 +446,7 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
     return matchesSearch && matchesLocation && matchesDepartment &&
            matchesIndustry && matchesEmploymentType && matchesExperience && matchesDatePosted &&
            matchesApplicants && matchesCreationMethod;
-  });
+  };
 
   /* ── One row per job on "All Jobs" — one row per MATCHING version on a status tab ──
      Every version of a JD is its own row in the API response (its own id,
@@ -464,9 +463,17 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
      and the stat tiles above — which still count distinct jobs by their LATEST
      version only — can disagree with a tab's row count. That's intentional
      here, not the bug this comment used to warn about.) */
-  const statusSelectedJobs = statusFilter === 'all'
-    ? collapseToLatestVersions(criteriaMatchedJobs)
-    : collapseToLatestVersions(criteriaMatchedJobs.filter(job => matchesStatusFilter(job, statusFilter)));
+  /* Version FIRST, criteria SECOND. Each job is represented by its latest
+     version (All Jobs) or its latest version with the tab's status, and only
+     THAT version is then tested against search and More Filters. Filtering
+     every version before collapsing let a filter drop the newest version and
+     promote an older one in its place — v4 listed under Published while v5
+     was the job's latest published version, because v5 alone missed a filter.
+     Now a job whose chosen version misses a filter is simply not listed. */
+  const statusSelectedJobs = (statusFilter === 'all'
+    ? collapseToLatestVersions(jobs)
+    : collapseToLatestVersions(jobs.filter(job => matchesStatusFilter(job, statusFilter)))
+  ).filter(matchesCriteria);
 
   const dedupedJobs = statusSelectedJobs;
 
@@ -662,61 +669,39 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
   const uniqueIndustries = Array.from(new Set(jobs.map(job => job.industry_type).filter(Boolean))).sort(byName);
 
   // Calculate stats
-  /* Every tile carries TWO numbers about ONE set of jobs:
+  /* Each status card IS its tab's filter — clicking it opens that tab — so its
+     number must be exactly the row count that tab shows (filters aside).
+     They used to disagree: the cards counted a job only when its LATEST
+     version had the status, while the tab lists a job when ANY version has it
+     (filter versions first, then one row per job — see statusSelectedJobs).
+     A job with v1 Published under a newer Draft/Disabled/Archived version
+     was a Published row but not a Published count: "129" on the card,
+     "135 of 216" after clicking it. Both now come from the same call.
 
-       jobs     — one per lineage, whose status is read from its LATEST version.
-                  The same figure the rows below and the "of N jobs" badge show.
-       versions — how many saved versions those same jobs are made of. A job
-                  republished twice is 1 job and 3 versions.
-
-     Both must describe the SAME lineages or the pair is nonsense. `versionsOf`
-     therefore selects whole lineages on their representative — the identical
-     test the job count uses — and sums their sizes.
-
-     It replaces a per-ROW status count (`jobs.filter(matchesStatusFilter(...))`)
-     that was wrong in both directions at once: it EXCLUDED the published and
-     draft versions of an archived job, so it under-reported that job's history,
-     and it INCLUDED archived versions belonging to jobs whose latest version is
-     published — jobs that the Archived pill does not list at all. "3 jobs,
-     7 versions" over a list of 3 rows was that: the 7 spanned more lineages
-     than the 3 it sat beside.
-
-     Caveat worth knowing: `jobs` is the list response, which does not
-     necessarily carry every version of every lineage — "View Versions" fetches
-     the authoritative history per job from the lineage endpoint. So this counts
-     the versions the page HAS, and an expanded row may show more.
-
-     Published's job count goes through the shared `getPublishedJobs`, the same
-     call the Apply to Job dialog counts and lists from — so that dialog cannot
-     report a different number of published jobs from this card. */
-  const versionsOf = (
-    isCounted: (representative: Job) => boolean,
-    /* Optional per-ROW filter, applied inside an already-matched lineage.
-       Without it (Published/Archived below) every row in the lineage counts,
-       which is what keeps "versions" describing the SAME lineages as "jobs" —
-       see the comment above. Drafts uses it: a draft lineage forked from an
-       older Published version, or one with an old abandoned draft from
-       before a later edit, would otherwise count that other-status row as a
-       "draft version" even though it isn't one. This still can't leak across
-       lineages the way a plain row-status count would (archived rows inside
-       a published lineage, etc.) — it only narrows WITHIN a lineage that
-       already passed `isCounted`. */
-    rowFilter?: (row: Job) => boolean,
-  ) =>
-    Array.from(allVersionGroups.values())
-      .filter(bucket => isCounted(bucket[0]))
-      .reduce((sum, bucket) => sum + (rowFilter ? bucket.filter(rowFilter).length : bucket.length), 0);
+     The versions pill counts the versions that HAVE the card's status —
+     not every version of those jobs. A job holds at most one draft (always
+     its latest version), so Drafts reads N jobs / N versions; Published
+     counts each published version once, however many a job has. Counting
+     all of a job's versions put a draft job's earlier published versions
+     under "Drafts" (79 jobs, "82 versions"). */
+  const jobsInStatusTab = (pill: string) =>
+    collapseToLatestVersions(jobs.filter(job => matchesStatusFilter(job, pill)));
+  const versionsWithStatus = (pill: string) =>
+    jobs.filter(job => matchesStatusFilter(job, pill)).length;
+  const publishedTabJobs = jobsInStatusTab('published');
+  const draftTabJobs = jobsInStatusTab('draft');
+  const archivedTabJobs = jobsInStatusTab('archived');
   const stats = {
     total: distinctJobs.length,
-    published: getPublishedJobs(jobs).length,
-    draft: distinctJobs.filter(j => j.status === 'Draft').length,
+    published: publishedTabJobs.length,
+    draft: draftTabJobs.length,
     closed: distinctJobs.filter(j => j.status === 'Closed').length,
-    archived: distinctJobs.filter(j => j.status === 'Archived').length,
+    archived: archivedTabJobs.length,
     totalApplicants: distinctJobs.reduce((sum, j) => sum + (j.applicants || 0), 0),
     totalVersions: jobs.length,
-    publishedVersions: versionsOf(j => j.status === 'Published'),
-    draftVersions: versionsOf(j => j.status === 'Draft', v => v.status === 'Draft'),
-    archivedVersions: versionsOf(j => j.status === 'Archived'),
+    publishedVersions: versionsWithStatus('published'),
+    draftVersions: versionsWithStatus('draft'),
+    archivedVersions: versionsWithStatus('archived'),
   };
 
   /* The four headline numbers on the stat cards: `statusCounts` (server-
