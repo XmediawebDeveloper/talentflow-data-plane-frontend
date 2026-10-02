@@ -953,7 +953,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                       </div>
                       {pending > 0 && (
                         <p className="text-xs mt-1 opacity-80">
-                          {pending} unit{pending > 1 ? 's' : ''} held by active invitations — released automatically when links expire.
+                          {pending} unit{pending > 1 ? 's' : ''} held by active invitations — freed when an invite expires or you revoke it.
                         </p>
                       )}
                     </div>

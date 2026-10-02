@@ -2,6 +2,8 @@
 
 import { Video, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, Shield, Lightbulb, Eye, Trash2, Play, Pause, Archive, ArchiveRestore, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronDown, Search, Plus, ClipboardList, Ban, Square, CheckSquare, Info, RefreshCw, Layers, Radar } from 'lucide-react';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
+import { collapseAIInterviewLineages } from '@/lib/utils/aiInterviewJobOrder';
+import { rememberAIInterviewPagerOrder, type AIInterviewPagerList } from '@/lib/utils/aiInterviewPagerList';
 import { useState, useEffect, useRef, useCallback, useMemo, type ComponentType } from 'react';
 import { createPortal } from 'react-dom';
 import { useDialogHeightLock } from '@/lib/hooks/useDialogHeightLock';
@@ -197,7 +199,19 @@ export default function AIInterview() {
     setListScrollRequest((request) => request + 1);
   };
 
-  const isOverviewCardActive = (cardKey: OverviewCardKey) => pageView === 'list' && activeOverviewCard === cardKey;
+  /* The card that matches the open tab is the selected one — read from the
+     tab itself, so picking a "Show:" pill selects its card just as clicking
+     the card selects its pill. Tabs with no card (Archived, Activity Logs, …)
+     select none. */
+  const TAB_OVERVIEW_CARD: Partial<Record<TabKey, OverviewCardKey>> = {
+    all: 'jobs',
+    'all-interviews': 'interviews',
+    published: 'active',
+    draft: 'draft',
+    'candidate-results': 'interviewed',
+  };
+  const isOverviewCardActive = (cardKey: OverviewCardKey) =>
+    pageView === 'list' && (TAB_OVERVIEW_CARD[activeTab] ?? activeOverviewCard) === cardKey;
   const [modeFilter, setModeFilter] = useState<'all' | 'timed' | 'conversational'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'active' | 'draft'>('newest');
@@ -1605,27 +1619,41 @@ export default function AIInterview() {
    * Map insertion order is first-appearance in the already-sorted
    * `filteredConfigs`, so collapsing narrows the list without reshuffling it.
    */
-  const collapsedConfigs = (() => {
-    const lineageKeyOf = (c: AIInterviewResponse) =>
-      c.jd_short_id || c.jd_id || `__unlinked__:${c.id}`;
-    const isNewerVersion = (a: AIInterviewResponse, b: AIInterviewResponse) => {
-      const aIsDraft = normalizeConfigStatus(a.status) === 'draft';
-      const bIsDraft = normalizeConfigStatus(b.status) === 'draft';
-      if (aIsDraft !== bIsDraft) return !aIsDraft;
-      const jobDelta = (a.jd_version ?? 1) - (b.jd_version ?? 1);
-      if (jobDelta !== 0) return jobDelta > 0;
-      const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
-      const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
-      return aTime > bTime;
-    };
-    const byLineage = new Map<string, AIInterviewResponse>();
-    for (const config of filteredConfigs) {
-      const key = lineageKeyOf(config);
-      const current = byLineage.get(key);
-      if (!current || isNewerVersion(config, current)) byLineage.set(key, config);
-    }
-    return [...byLineage.values()];
-  })();
+  // Shared with the details page's Prev / Next (lib/utils/aiInterviewJobOrder).
+  const collapsedConfigs = collapseAIInterviewLineages(filteredConfigs);
+
+  /* Which list the details page's Prev / Next walk — the list on screen:
+       Grouped (Total Jobs, and Active / Draft / Archived Grouped): its jobs,
+         one stop per job, so the counter reads the job count shown here;
+       Ungrouped (All Interviews, and Active / Draft / Archived Ungrouped): its
+         interviews, every version a stop, so it reads that table's row count.
+     The ungrouped tables hand over their own row order (AllInterviewsTable);
+     the grouped list hands over its jobs below. Any other tab keeps the plain
+     URL — every interview, as before. */
+  const GROUPED_PAGER_LIST: Partial<Record<TabKey, AIInterviewPagerList>> = {
+    all: 'total-jobs',
+    published: 'active-jobs',
+    draft: 'draft-jobs',
+    archived: 'archived-jobs',
+  };
+  const UNGROUPED_PAGER_LIST: Partial<Record<TabKey, AIInterviewPagerList>> = {
+    'all-interviews': 'all-interviews',
+    published: 'active',
+    draft: 'draft',
+    archived: 'archived',
+  };
+  const currentPagerList = (): AIInterviewPagerList | undefined =>
+    activeTab === 'all-interviews' || showUngroupedList
+      ? UNGROUPED_PAGER_LIST[activeTab]
+      : GROUPED_PAGER_LIST[activeTab];
+  const interviewDetailsHref = (id: string, tab?: string) => {
+    const params = new URLSearchParams();
+    if (tab) params.set('tab', tab);
+    const pagerList = currentPagerList();
+    if (pagerList) params.set('list', pagerList);
+    const query = params.toString();
+    return `/recruitment/ai-interviews/${id}${query ? `?${query}` : ''}`;
+  };
 
   /* ── Job List row figures (the Assessments Total Jobs row, for interviews) ──
      Bucketed by the same lineage key the list collapses by, and summed over
@@ -1877,7 +1905,7 @@ export default function AIInterview() {
               }}
             >
               <button
-                onClick={() => { router.push(`/recruitment/ai-interviews/${config.id}`); setOpenMenuId(null); }}
+                onClick={() => { router.push(interviewDetailsHref(config.id)); setOpenMenuId(null); }}
                 className={VERSION_MENU_ITEM_CLASS}
               >
                 <Eye className="w-4 h-4 flex-shrink-0 text-menu-icon-view" />
@@ -1933,7 +1961,7 @@ export default function AIInterview() {
                 <span className={MENU_ITEM_SCALE_CLASS}>Track{hasBeenShared ? ` (${invitations})` : ''}</span>
               </button>
               <button
-                onClick={() => { if (!hasBeenShared) return; router.push(`/recruitment/ai-interviews/${config.id}?tab=results`); setOpenMenuId(null); }}
+                onClick={() => { if (!hasBeenShared) return; router.push(interviewDetailsHref(config.id, 'results')); setOpenMenuId(null); }}
                 disabled={!hasBeenShared}
                 title={
                   hasBeenShared
@@ -2097,6 +2125,15 @@ export default function AIInterview() {
   /** Ungrouped renders the flat, one-row-per-version table instead of this
    *  component's own card list below. */
   const showUngroupedList = isStatusTab && configListViewMode === 'ungrouped';
+
+  /* The grouped job list hands its jobs, in the order shown (sort, search and
+     filters applied), to the details page's Prev / Next. */
+  const groupedPagerList = isConfigListTab && !showUngroupedList ? GROUPED_PAGER_LIST[activeTab] : undefined;
+  const groupedPagerIds = collapsedConfigs.map((c) => c.id).join(',');
+  useEffect(() => {
+    if (!groupedPagerList || loading) return;
+    rememberAIInterviewPagerOrder(groupedPagerList, groupedPagerIds ? groupedPagerIds.split(',') : []);
+  }, [groupedPagerList, groupedPagerIds, loading]);
   /** Status a version must match to appear under this tab's "View Versions"
    *  panel (Grouped mode) — undefined on Total Jobs/Completed, which show
    *  every version's status as before. */
@@ -2689,7 +2726,19 @@ export default function AIInterview() {
             default) is a flat table, one row per version; Grouped is the
             one-card-per-job view below, each job's other versions behind its
             own View Versions button, same as before this toggle existed. */}
-        {isStatusTab && (
+        {isStatusTab && (() => {
+          /* Each mode names how many it lists for this tab, unfiltered:
+             Ungrouped one row per interview (version), Grouped one card per job. */
+          const tabInterviews = activeTab === 'archived'
+            ? archivedConfigs
+            : configs.filter((c) => activeTab === 'published'
+              ? normalizeConfigStatus(c.status) === 'published'
+              : c.status === 'draft');
+          const modeCounts = {
+            ungrouped: tabInterviews.length,
+            grouped: collapseAIInterviewLineages(tabInterviews).length,
+          };
+          return (
           <div className="flex items-center gap-2 mb-3">
             <span className="text-sm text-gray-600 dark:text-slate-400">View:</span>
             <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
@@ -2704,19 +2753,27 @@ export default function AIInterview() {
                     type="button"
                     aria-pressed={isActive}
                     onClick={() => setConfigListViewMode(mode.key)}
-                    className={`px-2.5 sm:px-3 py-1.5 min-h-[32px] rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 whitespace-nowrap ${
+                    className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 min-h-[32px] rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 whitespace-nowrap ${
                       isActive
                         ? 'bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/20 text-brand-blue'
                         : 'text-gray-600 dark:text-slate-400 hover:text-brand-blue'
                     }`}
                   >
                     {mode.label}
+                    <span className={`min-w-[1.25rem] px-1.5 py-0.5 rounded-full text-2xs font-semibold tabular-nums text-center ${
+                      isActive
+                        ? 'bg-brand-blue/10 text-brand-blue'
+                        : 'bg-gray-200/70 dark:bg-slate-700 text-gray-600 dark:text-slate-300'
+                    }`}>
+                      {modeCounts[mode.key]}
+                    </span>
                   </button>
                 );
               })}
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {/* Main Content */}
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
@@ -3092,7 +3149,7 @@ export default function AIInterview() {
                               }}
                               /* Opens the interview the row names, the same thing
                                  clicking the card does. */
-                              onRowClick={(interviewId) => router.push(`/recruitment/ai-interviews/${interviewId}`)}
+                              onRowClick={(interviewId) => router.push(interviewDetailsHref(interviewId))}
                             />
                           </div>
                         )}

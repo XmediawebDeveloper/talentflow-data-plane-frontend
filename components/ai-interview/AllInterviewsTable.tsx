@@ -25,6 +25,7 @@ import { aiInterviewService, type AIInterviewResponse } from '@/lib/services/aiI
 import { formatISTStamp, parseIST } from '@/lib/utils/dateUtils';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { rememberAIInterviewPagerOrder, type AIInterviewPagerList } from '@/lib/utils/aiInterviewPagerList';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import { MENU_ITEM_SCALE_CLASS, MENU_ITEM_LIGHT_HIGHLIGHT_CLASS, MENU_PANEL_BORDER_CLASS } from '@/lib/constants/menuAnimation';
 
@@ -506,6 +507,17 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
     });
   }, [filtered, sortKey, sortDir]);
 
+  /* The details page's Prev / Next walk THIS table — its rows, sort and
+     filters — so "X / N" matches the count shown here. The order is handed
+     over on every change; the row link carries which list it is. */
+  const pagerList: AIInterviewPagerList =
+    fixedStatus === 'published' ? 'active' : fixedStatus ?? 'all-interviews';
+  useEffect(() => {
+    if (isLoading) return;
+    rememberAIInterviewPagerOrder(pagerList, sorted.map((r) => r.id));
+  }, [sorted, pagerList, isLoading]);
+  const detailsHref = (id: string) => `/recruitment/ai-interviews/${id}?list=${pagerList}`;
+
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
   const safePage = Math.min(Math.max(1, page), totalPages);
   const pageRows = sorted.slice((safePage - 1) * pageSize, safePage * pageSize);
@@ -678,7 +690,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
     const actions: { key: string; label: string; icon: typeof Eye; run: () => void; disabled?: boolean }[] = [
       {
         key: 'view', label: 'View', icon: Eye,
-        run: () => router.push(`/recruitment/ai-interviews/${row.id}`),
+        run: () => router.push(detailsHref(row.id)),
       },
     ];
     // Draft-only and jdId are business conditions (stay a real hide); the
@@ -1010,7 +1022,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
                       if (el) rowRefs.current.set(row.id, el);
                       else rowRefs.current.delete(row.id);
                     }}
-                    onClick={() => router.push(`/recruitment/ai-interviews/${row.id}`)}
+                    onClick={() => router.push(detailsHref(row.id))}
                     className={`border-b border-gray-100 dark:border-slate-700/60 last:border-b-0 cursor-pointer transition-colors duration-700 hover:bg-brand-blue/5 dark:hover:bg-brand-blue/10 ${
                       flashedRowId === row.id ? 'bg-brand-blue/10 dark:bg-brand-blue/15' : ''
                     }`}

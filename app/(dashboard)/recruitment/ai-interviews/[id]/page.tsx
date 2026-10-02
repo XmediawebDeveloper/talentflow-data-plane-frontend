@@ -1,9 +1,12 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
+import { toast } from 'sonner';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import AIInterviewDetailsView from '@/components/ai-interview/AIInterviewDetailsView';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { aiInterviewLineageKey, isPublishedConfig, newestFirst, orderAIInterviewTotalJobs } from '@/lib/utils/aiInterviewJobOrder';
+import { isAIInterviewJobPagerList, parseAIInterviewPagerList, readAIInterviewPagerOrder } from '@/lib/utils/aiInterviewPagerList';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -70,6 +73,11 @@ function AIInterviewDetailsSkeleton() {
   );
 }
 
+/* The interview a Prev / Next click is heading to — the arrival toast below
+   fires once for it, not for a direct visit or a refresh. Module scope so it
+   survives the route remounting this page for the next `[id]`. */
+let pagerArrivalFor: string | null = null;
+
 function AIInterviewDetailsContent() {
   const params = useParams();
   const router = useRouter();
@@ -86,20 +94,86 @@ function AIInterviewDetailsContent() {
   const [config, setConfig] = useState<AIInterviewResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /* `?list=` names the AI Interviews list this was opened from, and Prev /
+     Next walk THAT list (the Assessments details pager's rule), so "X / N"
+     is the count that list showed:
+       job lists (total-jobs, active-jobs, draft-jobs, archived-jobs — Total
+         Jobs and the Grouped tabs): one stop per JOB. Every version maps to
+         its job's stop, so one opened from View Versions pages from there.
+       version lists (all-interviews, active, draft, archived — the tables):
+         every interview its own stop.
+     The list hands over its order (sort / search / filters applied) in
+     sessionStorage; without it (another browser tab, cleared storage) the
+     unfiltered list is rebuilt from the API. Absent: every interview. */
+  const pagerList = parseAIInterviewPagerList(searchParams.get('list'));
+  const pagerQuery = pagerList ? `?list=${pagerList}` : '';
   const [allIds, setAllIds] = useState<string[]>([]);
+  const [jobStopById, setJobStopById] = useState<Record<string, number>>({});
 
   useEffect(() => {
+    const fetchAll = async (status?: string) => {
+      const probe = await aiInterviewService.listConfigs({ page_size: 1, page: 1, compact: true, ...(status ? { status } : {}) });
+      return probe.total > probe.items.length
+        ? (await aiInterviewService.listConfigs({ page_size: probe.total, page: 1, compact: true, ...(status ? { status } : {}) })).items
+        : probe.items;
+    };
+    /* What a list holds, unfiltered: Total Jobs / All Interviews span every
+       status (archived too, as the AI Interviews page loads them); the others
+       their own status. */
+    const fetchListConfigs = async (list: string) => {
+      if (list.startsWith('archived')) return fetchAll('archived');
+      const live = await fetchAll();
+      if (list.startsWith('active')) return live.filter(isPublishedConfig);
+      if (list.startsWith('draft')) return live.filter((c) => c.status === 'draft');
+      const archived = await fetchAll('archived').catch(() => []);
+      const seen = new Set(live.map((c) => c.id));
+      return [...live, ...archived.filter((c) => !seen.has(c.id))];
+    };
     const fetchAllIds = async () => {
       try {
-        const probe = await aiInterviewService.listConfigs({ page_size: 1, page: 1, compact: true });
-        const res = probe.total > probe.items.length
-          ? await aiInterviewService.listConfigs({ page_size: probe.total, page: 1, compact: true })
-          : probe;
-        setAllIds(res.items.map((a: any) => a.id));
+        if (!pagerList) {
+          setAllIds((await fetchAll()).map((c) => c.id));
+          setJobStopById({});
+          return;
+        }
+        const handedOver = readAIInterviewPagerOrder(pagerList);
+
+        if (!isAIInterviewJobPagerList(pagerList)) {
+          setAllIds(handedOver?.includes(interviewId)
+            ? handedOver
+            : newestFirst(await fetchListConfigs(pagerList)).map((c) => c.id));
+          setJobStopById({});
+          return;
+        }
+
+        /* Job list. Every config (archived too) is fetched to know each one's
+           job, so any version can be placed at its job's stop. */
+        const listConfigs = await fetchListConfigs(pagerList);
+        const everyConfig = pagerList === 'total-jobs'
+          ? listConfigs
+          : await fetchListConfigs('total-jobs');
+        const keyById = new Map(everyConfig.map((c) => [c.id, aiInterviewLineageKey(c)]));
+        // The handed-over order only if it holds this interview's job.
+        const ownKey = keyById.get(interviewId);
+        const stopIds = handedOver && ownKey && handedOver.some((id) => keyById.get(id) === ownKey)
+          ? handedOver
+          : orderAIInterviewTotalJobs(listConfigs).map((c) => c.id);
+        const stopIndexByKey = new Map<string, number>();
+        stopIds.forEach((id, index) => {
+          const key = keyById.get(id);
+          if (key && !stopIndexByKey.has(key)) stopIndexByKey.set(key, index);
+        });
+        const stopById: Record<string, number> = {};
+        for (const c of everyConfig) {
+          const index = stopIndexByKey.get(aiInterviewLineageKey(c));
+          if (index != null) stopById[c.id] = index;
+        }
+        setAllIds(stopIds);
+        setJobStopById(stopById);
       } catch { /* ignore */ }
     };
     fetchAllIds();
-  }, []);
+  }, [pagerList, interviewId]);
 
   const fetchConfig = async () => {
     try {
@@ -149,6 +223,19 @@ function AIInterviewDetailsContent() {
         ]
       : undefined;
 
+  /* DRAFT interviews, by the interview's own status: Prev / Next land on
+     drafts as readily as on live ones, so the page opens greyed out with only
+     Continue Editing live (`draftLocked`), and a Prev / Next arrival says why
+     — the Assessments page's rule. */
+  const isDraftLocked = config?.status === 'draft';
+  useEffect(() => {
+    if (isLoading || !config || config.id !== interviewId) return;
+    if (pagerArrivalFor !== interviewId) return;
+    pagerArrivalFor = null;
+    if (config.status !== 'draft') return;
+    toast.warning('This AI Interview Version is currently in Draft. Please publish it before using it.');
+  }, [isLoading, config, interviewId]);
+
   if (isLoading) {
     return <AIInterviewDetailsSkeleton />;
   }
@@ -174,19 +261,24 @@ function AIInterviewDetailsContent() {
   // layout's flex column. Nesting it broke sticky positioning inside (its own
   // breadcrumb, and the CandidateResultsView it renders for Invites → View
   // Details) and applied max-w-[1400px] mx-auto twice.
+  const goTo = (targetId: string) => {
+    pagerArrivalFor = targetId;
+    router.replace(`/recruitment/ai-interviews/${targetId}${pagerQuery}`);
+  };
+
+  const currentIndex = allIds.includes(interviewId)
+    ? allIds.indexOf(interviewId)
+    : jobStopById[interviewId] ?? -1;
   return (
     <AIInterviewDetailsView
       config={config}
       onBack={handleBack}
       onRefresh={fetchConfig}
-      currentIndex={allIds.indexOf(interviewId)}
+      currentIndex={currentIndex}
       totalCount={allIds.length}
-      onPrev={allIds.indexOf(interviewId) > 0
-        ? () => router.replace(`/recruitment/ai-interviews/${allIds[allIds.indexOf(interviewId) - 1]}`)
-        : undefined}
-      onNext={allIds.indexOf(interviewId) >= 0 && allIds.indexOf(interviewId) < allIds.length - 1
-        ? () => router.replace(`/recruitment/ai-interviews/${allIds[allIds.indexOf(interviewId) + 1]}`)
-        : undefined}
+      onPrev={currentIndex > 0 ? () => goTo(allIds[currentIndex - 1]) : undefined}
+      onNext={currentIndex >= 0 && currentIndex < allIds.length - 1 ? () => goTo(allIds[currentIndex + 1]) : undefined}
+      draftLocked={isDraftLocked}
       breadcrumbItems={breadcrumbItems}
       initialTab={initialTab}
     />
