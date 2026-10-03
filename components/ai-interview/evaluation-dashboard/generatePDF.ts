@@ -2,7 +2,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { Cluster } from './types';
 
-import { formatScore1 } from '@/lib/utils/matchStatus';
+import { formatSkillScore, formatScore1 } from '@/lib/utils/matchStatus';
 export interface PDFViolation {
   kind: string;
   severity: 'low' | 'medium' | 'high' | string;
@@ -333,7 +333,7 @@ export function generateEvaluationPDF(data: PDFData) {
 
       mustHaveData.push([
         `  - ${skill.name}`,
-        skill.score.toFixed(1),
+        formatSkillScore(skill.score),
         { content: skill.level, styles: { textColor: levelColor, fontStyle: 'bold' } },
         skill.feedback.substring(0, 80) + (skill.feedback.length > 80 ? '...' : ''),
       ]);
@@ -381,7 +381,7 @@ export function generateEvaluationPDF(data: PDFData) {
 
       niceToHaveData.push([
         `  - ${skill.name}`,
-        skill.score.toFixed(1),
+        formatSkillScore(skill.score),
         { content: skill.level, styles: { textColor: levelColor, fontStyle: 'bold' } },
         skill.feedback.substring(0, 80) + (skill.feedback.length > 80 ? '...' : ''),
       ]);

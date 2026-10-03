@@ -102,7 +102,7 @@ interface MatchHistory {
   matchedAt: Date;
   totalMatches: number;
   matchedCandidates: any[];
-  /** Who ran the match, when the sessions API sends it. */
+  /** Who ran the match — the sessions API's `run_by_name`. */
   matchedByName?: string;
 }
 
@@ -270,7 +270,7 @@ export default function AITalentMatchRoute() {
             matchedAt: new Date(session.created_at),
             totalMatches: session.total_matches,
             matchedCandidates: [],
-            matchedByName: session.created_by_name || undefined,
+            matchedByName: session.run_by_name || undefined,
           };
         });
 

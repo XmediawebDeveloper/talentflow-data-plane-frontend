@@ -8,12 +8,13 @@
  *
  * Performance rules:
  *   - MediaPipe needs WebGL/DOM so stays on main thread
- *   - Runs at very low FPS (every 3 seconds) to minimize CPU impact
+ *   - Runs at low FPS (face detect 1.5 s, gaze 1 s / 2 s low-tier) to minimize CPU impact
  *   - Uses REFS for detection state (no React state -> no re-renders)
  *   - Emits events via callback (caller routes to InterviewEventBus)
  */
 
 import { useEffect, useRef, useCallback } from "react";
+import { createGazeEstimator, type GazeEstimator } from "@/lib/proctoring/gazeEstimator";
 
 interface UseInterviewFaceDetectionConfig {
   enabled?: boolean;
@@ -23,8 +24,14 @@ interface UseInterviewFaceDetectionConfig {
   onMultipleFaces?: (count: number) => void;
   /** Multiple-faces episode ended (back to one face, or a confirmed no-face stretch). */
   onMultipleFacesCleared?: () => void;
-  onGazeAway?: (direction: string) => void;
+  /**
+   * Looking-away episode started. `metrics` is the measurement that tripped it
+   * (cue + yaw/pitch/eye deviations) so the recruiter record is auditable.
+   */
+  onGazeAway?: (direction: string, metrics?: Record<string, any>) => void;
   onGazeRestored?: () => void;
+  /** Low-tier device: check gaze every 2 s instead of every 1 s. */
+  lowTier?: boolean;
 }
 
 export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConfig) {
@@ -64,23 +71,27 @@ export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConf
   // Minimum bounding-box area (fraction of frame) for a detection to count as a
   // real face — filters small spurious boxes.
   const MIN_FACE_BOX_AREA = 0.025;
-  const FRAMES_GAZE_AWAY = 3;
-  // 1 check (<=2s at the 2s gaze cadence): the "looking away" warning is held on
-  // screen for the whole episode, so it should clear promptly once they look back.
+  // BUG03: gaze was checked every 2 s and needed 3 consecutive "away" checks,
+  // so a look-away of "a few seconds" (< 4-6 s) never registered. Now 1 s
+  // cadence × 3 checks ≈ 2-3 s. Low-tier devices keep the 2 s cadence (FaceMesh
+  // is the expensive model) and need 2 checks ≈ 2-4 s. Read through a ref: the
+  // device tier can resolve after the MediaPipe callbacks are installed.
+  const lowTierRef = useRef(config?.lowTier ?? false);
+  lowTierRef.current = config?.lowTier ?? false;
+  const gazeCheckIntervalMs = () => (lowTierRef.current ? 2000 : 1000);
+  const framesGazeAway = () => (lowTierRef.current ? 2 : 3);
+  // 1 check: the "looking away" warning is held on screen for the whole
+  // episode, so it should clear promptly once they look back.
   const FRAMES_GAZE_RESTORED = 1;
 
-  // Looking DOWN (notes / phone on the desk). Unlike left/right/up this can't
-  // use a fixed threshold: webcams usually sit ABOVE the screen, so a candidate
-  // reading the screen already tilts slightly down, and the amount differs per
-  // setup. So we learn each candidate's own neutral pitch first and flag only a
-  // clear drop below it.
-  //   pitch ratio = where the nose tip sits between forehead (0) and chin (1),
-  //   normalised by face height so distance from the camera doesn't matter.
-  // Looking down pushes the projected nose tip toward the chin → ratio rises.
-  const DOWN_BASELINE_SAMPLES = 8;     // ~16s of forward-facing frames (2s cadence)
-  const LOOK_DOWN_RATIO_DELTA = 0.10;  // rise above the candidate's own neutral
-  const downBaselineSamplesRef = useRef<number[]>([]);
-  const downBaselineRef = useRef<number | null>(null);
+  // Scale-free head-pose / iris measures + per-candidate baseline — shared
+  // with the assessment monitor. See lib/proctoring/gazeEstimator.ts (BUG03).
+  const gazeEstimatorRef = useRef<GazeEstimator | null>(null);
+  if (!gazeEstimatorRef.current) gazeEstimatorRef.current = createGazeEstimator("[INTERVIEW_FACE_DETECTION]");
+  // Latest raw face count from FaceDetection — lets the gaze path tell "head
+  // turned so far FaceMesh lost the landmarks" (detector still sees a face)
+  // apart from "nobody there" (face_missing owns that one).
+  const lastRawFaceCountRef = useRef(0);
 
   // Load a CDN script tag (idempotent — skips if already loaded)
   const loadScript = (src: string): Promise<void> =>
@@ -139,6 +150,7 @@ export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConf
             return area >= MIN_FACE_BOX_AREA;
           });
           const numFaces = detections.length;
+          lastRawFaceCountRef.current = numFaces;
 
           if (numFaces === 0) {
             faceMissingCountRef.current++;
@@ -210,61 +222,24 @@ export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConf
             });
 
             faceMesh.onResults((results: any) => {
-              if (!mounted || !results.multiFaceLandmarks?.length) return;
-
-              const lm = results.multiFaceLandmarks[0];
-              const noseTip = lm[1];
-              const leftEyeOuter = lm[33];
-              const rightEyeOuter = lm[263];
-              const forehead = lm[10];
-              const chin = lm[152];
-
-              const eyeMidX = (leftEyeOuter.x + rightEyeOuter.x) / 2;
-              const noseOffset = noseTip.x - eyeMidX;
-              const faceMidY = (forehead.y + chin.y) / 2;
-              const noseVerticalOffset = noseTip.y - faceMidY;
-
-              const isTurned = Math.abs(noseOffset) > 0.06;
-              const isUp = noseVerticalOffset < -0.08;
-
-              // Pitch ratio for looking-down (see DOWN_BASELINE_SAMPLES).
-              const faceHeight = chin.y - forehead.y;
-              const pitchRatio = faceHeight > 0.05 ? (noseTip.y - forehead.y) / faceHeight : null;
-              let isDown = false;
-              if (pitchRatio != null) {
-                if (downBaselineRef.current == null) {
-                  // Calibrate only on frames where the candidate is facing the
-                  // screen, so the baseline is their normal reading posture.
-                  if (!isTurned && !isUp) {
-                    const samples = downBaselineSamplesRef.current;
-                    samples.push(pitchRatio);
-                    if (samples.length >= DOWN_BASELINE_SAMPLES) {
-                      const sorted = [...samples].sort((a, b) => a - b);
-                      downBaselineRef.current = sorted[Math.floor(sorted.length / 2)];
-                      console.log("[INTERVIEW_FACE_DETECTION] Look-down baseline set", {
-                        baseline: Number(downBaselineRef.current.toFixed(3)),
-                      });
-                    }
-                  }
-                } else {
-                  isDown = pitchRatio - downBaselineRef.current > LOOK_DOWN_RATIO_DELTA;
-                }
-              }
-
-              const isLookingAway = isTurned || isUp || isDown;
-
-              let gazeDirection = "";
-              if (isTurned) gazeDirection = noseOffset > 0 ? "right" : "left";
-              if (isUp) gazeDirection = gazeDirection ? `${gazeDirection}_up` : "up";
-              else if (isDown) gazeDirection = gazeDirection ? `${gazeDirection}_down` : "down";
+              if (!mounted) return;
+              const reading = gazeEstimatorRef.current?.read(
+                results.multiFaceLandmarks?.[0],
+                // Latest raw FaceDetection count: tells "head turned so far the
+                // mesh lost it" (face still there) from "nobody there".
+                lastRawFaceCountRef.current >= 1,
+              );
+              if (!reading) return; // no face at all — face_missing owns it
+              const { away: isLookingAway, direction: gazeDirection, metrics } = reading;
 
               if (isLookingAway) {
                 gazeAwayCountRef.current++;
                 gazeRestoredCountRef.current = 0;
-                if (lastGazeStateRef.current && gazeAwayCountRef.current >= FRAMES_GAZE_AWAY) {
+                if (lastGazeStateRef.current && gazeAwayCountRef.current >= framesGazeAway()) {
                   lastGazeStateRef.current = false;
                   isGazeOnScreenRef.current = false;
-                  callbacksRef.current?.onGazeAway?.(gazeDirection);
+                  console.log("[INTERVIEW_FACE_DETECTION] Looking away", { direction: gazeDirection, ...metrics });
+                  callbacksRef.current?.onGazeAway?.(gazeDirection, metrics);
                 }
               } else {
                 gazeRestoredCountRef.current++;
@@ -314,7 +289,6 @@ export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConf
       let lastFaceDetectTime = 0;
       let lastGazeTime = 0;
       const FACE_DETECT_INTERVAL = 1500; // check every 1.5 s (was 3 s) for faster detection
-      const GAZE_CHECK_INTERVAL = 2000;
       const POLL_INTERVAL_MS = 250; // 4 Hz wake-up; cheap timestamp check
       let retryCount = 0;
 
@@ -343,7 +317,7 @@ export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConf
           try { await faceDetectorRef.current.send({ image: video }); } catch {}
         }
 
-        if (enableGazeTracking && faceMeshRef.current && timestamp - lastGazeTime >= GAZE_CHECK_INTERVAL) {
+        if (enableGazeTracking && faceMeshRef.current && timestamp - lastGazeTime >= gazeCheckIntervalMs()) {
           lastGazeTime = timestamp;
           try { await faceMeshRef.current.send({ image: video }); } catch {}
         }

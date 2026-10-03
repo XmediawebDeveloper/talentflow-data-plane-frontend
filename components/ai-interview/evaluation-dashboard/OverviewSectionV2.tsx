@@ -7,7 +7,7 @@ import {
 } from 'recharts';
 import type { DashboardData } from './types';
 
-import { formatScore1 } from '@/lib/utils/matchStatus';
+import { formatSkillScore, formatScore1 } from '@/lib/utils/matchStatus';
 interface Props {
   data: DashboardData;
   livenessVerified?: boolean;
@@ -304,7 +304,7 @@ export function OverviewSectionV2({
                     <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${(skill.score / 10) * 100}%` }} />
                   </div>
                   <div className="text-base font-bold text-emerald-500 min-w-[36px] text-right">
-                    {skill.score.toFixed(1)}
+                    {formatSkillScore(skill.score)}
                   </div>
                 </div>
               </div>

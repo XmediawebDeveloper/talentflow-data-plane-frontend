@@ -1739,16 +1739,31 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
           .forEach((el) => { if (!hideEls.includes(el)) hideEls.push(el); });
       } catch { /* querySelector never throws in practice; guard anyway */ }
     }
+    // Restore to the element's NORMAL look (''), never to "whatever it was
+    // when this capture started". ROOT CAUSE of the stuck white screen: two
+    // overlapping captures (a double-click on Continue) — the second one saved
+    // the FIRST one's hidden/white state as its "previous" value and restored
+    // to it after the first had already put things back, leaving the card
+    // hidden and the page white until a refresh.
     const restores = hideEls.map((el) => {
-      const prev = el.style.visibility;
       el.style.visibility = 'hidden';
-      return () => { el.style.visibility = prev; };
+      return () => { el.style.visibility = ''; };
     });
     // The outer page wrapper — its background is swapped to WHITE for the
     // capture (see shareBarPageRef declaration). Restored to its normal
     // dark-gradient styling in `finally`.
     const pageEl = shareBarPageRef.current;
-    const prevPageBg = pageEl?.style.background;
+    // WATCHDOG: an independent timer that puts the page back after 10s even if
+    // something below never settles and `finally` never runs. The blank is
+    // only ever meant to last 1-3s; it must never outlive this.
+    const restoreAll = () => {
+      restores.forEach((restore) => restore());
+      if (pageEl) pageEl.style.background = '';
+    };
+    const watchdog = window.setTimeout(() => {
+      console.warn('[ShareBar] capture watchdog fired — restoring the page');
+      restoreAll();
+    }, 10000);
     // ROOT CAUSE (found via a real capture that showed the candidate's OWN
     // card — including leftover error text from a PRIOR blocked attempt —
     // instead of the hidden-card/white-background state, even after the wait
@@ -1773,7 +1788,12 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     document.body.appendChild(video);
     try {
       video.srcObject = stream;
-      try { await video.play(); } catch { /* ignore */ }
+      // play() on a MediaStream can stay pending (no frames flowing yet) and
+      // would hold the page blanked; never wait on it for more than 1.5s.
+      await Promise.race([
+        video.play().catch(() => { /* ignore */ }),
+        new Promise<void>((r) => window.setTimeout(r, 1500)),
+      ]);
       await new Promise<void>((resolve) => {
         if (video.videoWidth && video.readyState >= 2) return resolve();
         const on = () => { video.removeEventListener('loadeddata', on); resolve(); };
@@ -1894,8 +1914,8 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     } finally {
       // Always restore every hidden graphic and the page background, whether
       // capture succeeded, returned null, or threw.
-      restores.forEach((restore) => restore());
-      if (pageEl) pageEl.style.background = prevPageBg ?? '';
+      window.clearTimeout(watchdog);
+      restoreAll();
       try { video.remove(); } catch { /* ignore */ }
     }
   }, [waitOutFullscreenBanner]);
@@ -1957,8 +1977,25 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   // Hide-share-bar gate: capture a screen frame → vision LLM → start only when it
   // confirms the bar is hidden; otherwise re-prompt. Fails OPEN (starts anyway)
   // if the frame can't be captured or the check errors, so it never bricks start.
-  const handleVerifyShareBarAndStart = useCallback(async () => {
-    if (shareBarChecking || startSubmitting) return;
+  // Synchronous re-entry guard for Continue. `shareBarChecking` is React state:
+  // it was only set AFTER the fullscreen request and device probe (both
+  // awaited, ~0.5-2s), so the button stayed enabled with no spinner and a
+  // second click started a SECOND overlapping screen capture — the cause of
+  // the stuck white screen. A ref flips in the same tick as the click.
+  const shareBarBusyRef = useRef(false);
+  const handleVerifyShareBarAndStart = async () => {
+    if (shareBarBusyRef.current || startSubmitting) return;
+    shareBarBusyRef.current = true;
+    setShareBarChecking(true); // disable the button + show "Checking…" right away
+    try {
+      await verifyShareBarAndStartOnce();
+    } finally {
+      shareBarBusyRef.current = false;
+      setShareBarChecking(false);
+    }
+  };
+
+  const verifyShareBarAndStartOnce = async () => {
     // Screen sharing MUST still be active. If the candidate clicked "Stop
     // sharing" on the browser bar, send them back to re-share Entire Screen —
     // never start (or even run the vision check) without a live share.
@@ -2034,7 +2071,15 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     setShareBarError(null);
     setShareBarChecking(true);
     try {
-      const frame = await captureScreenFrame();
+      // SAFETY NET: whatever happens inside the capture, give up after 16s (longest normal path ~14s) and
+      // re-prompt instead of leaving the candidate on a blank/"Checking…" page.
+      const frame = await Promise.race([
+        captureScreenFrame(),
+        new Promise<null>((r) => window.setTimeout(() => {
+          console.warn('[ShareBar] capture timed out after 16s — re-prompting');
+          r(null);
+        }, 16000)),
+      ]);
       if (!frame) {
         // HARD GATE: could not capture a frame to verify → do NOT proceed
         // (previously this fail-open let the interview start WITHOUT ever
@@ -2119,7 +2164,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     } finally {
       setShareBarChecking(false);
     }
-  }, [shareBarChecking, startSubmitting, shareBarAttempts, token, captureScreenFrame, startInterviewNow, markFullscreenBanner]);
+  };
 
   // NOTE: the share-bar check is CLICK-ONLY (no background auto-recheck). The
   // vision LLM runs exactly once per candidate press of "Continue" — never on a
@@ -3031,6 +3076,19 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
               </div>
             </div>
           )}
+
+          {/* Wait note — read just BEFORE the click. The capture blanks this whole
+              page for a few seconds; text can't be shown on the blank itself (it
+              would land in the screenshot), so the candidate is told up front.
+              "Don't click again" also prevents the double-click overlap. */}
+          <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 mb-4">
+            <Clock data-capture-decor className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <p className="text-sm text-amber-900 leading-snug">
+              <span className="font-semibold">After you click Continue, your screen will go blank for a few seconds</span> while
+              we check it. This is normal. Please <span className="font-semibold">don&rsquo;t click again or refresh the page</span> &mdash;
+              the interview will continue automatically.
+            </p>
+          </div>
 
           <button
             onClick={() => { handleVerifyShareBarAndStart(); }}

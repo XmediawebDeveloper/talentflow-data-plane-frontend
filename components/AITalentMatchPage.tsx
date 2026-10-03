@@ -143,8 +143,9 @@ interface MatchHistory {
   matchedAt: Date;
   totalMatches: number;
   matchedCandidates: MatchedCandidateWithVersions[];
-  /** Who ran the match — from the sessions API's `created_by_name`, once the
-   *  backend sends it. Absent until then, and the row says nothing. */
+  /** Who ran the match — the sessions API's `run_by_name` (resolved from
+   *  `ai_talent_match_sessions.run_by`). Absent only when that user row is
+   *  gone, and the row then reads "System". */
   matchedByName?: string;
 }
 
@@ -228,13 +229,13 @@ function matchBandForRating(rating: number): 'exact' | 'partial' | 'no_match' {
  * Match History modal's own filter row (Search / Matched By / Version /
  * Rating Range / Date Range). Draft edits live separately from the applied
  * values so typing/picking doesn't narrow the table until Apply — Reset
- * clears both back to this. "Matched By" only ever has one real value (the
- * API carries no per-run user attribution — every match is system-triggered)
- * so its options are honest rather than inventing names.
+ * clears both back to this. "Matched By" is 'all' or one of the names the
+ * loaded runs were actually run by (the sessions API's `run_by_name`), with
+ * 'System' standing for a run whose user can no longer be resolved.
  */
 interface MatchHistoryModalFilters {
   search: string;
-  matchedBy: 'all' | 'system';
+  matchedBy: string;
   version: 'all' | number;
   rating: 'all' | 'exact' | 'partial' | 'no_match';
   dateFrom: string;
@@ -264,7 +265,7 @@ interface CandidateMatchRow {
    *  attachment details so this roll-up can show the same columns as the
    *  per-job match table. */
   best: MatchedCandidateWithVersions;
-  jobs: Array<{ historyId: string; jobId: string; jobTitle: string; score: number; matchedAt: Date; resumeVersion?: number; resumeId?: string }>;
+  jobs: Array<{ historyId: string; jobId: string; jobTitle: string; score: number; matchedAt: Date; matchedByName?: string; resumeVersion?: number; resumeId?: string }>;
 }
 
 interface AITalentMatchPageProps {
@@ -591,6 +592,9 @@ export default function AITalentMatchPage({
             jobTitle: item.jobTitle,
             score: candidate.matchScore ?? 0,
             matchedAt: item.matchedAt,
+            // Who ran THAT match (the session's `run_by_name`), so the
+            // expanded per-job rows name a person instead of "System".
+            matchedByName: item.matchedByName,
             // Same field ScoredResumesTable's own "Resume Version" column
             // reads — this candidate's resume as of THIS match, not
             // necessarily the resume's current version if it was re-uploaded
@@ -1630,7 +1634,10 @@ export default function AITalentMatchPage({
         jobTitle: selectedJobData.title,
         matchedAt: new Date(),
         totalMatches: results.length,
-        matchedCandidates: candidatesWithVersions
+        matchedCandidates: candidatesWithVersions,
+        // This run was just made by the signed-in user; the server says the
+        // same in `run_by_name` on the next sessions refresh.
+        matchedByName: user?.name || undefined,
       };
       if (selectedHistoryItem?.jobId === selectedJob) {
         setSelectedHistoryItem(newMatchHistory);
@@ -3149,9 +3156,9 @@ export default function AITalentMatchPage({
                                         </thead>
                                         <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
                                           {pageCandidateJobs(row.key, sortedJobs).map(job => {
-                                            // The AI Match session has no "run by" field anywhere in the
-                                            // API (unlike resume scoring, which does) — 'System' names that
-                                            // honestly rather than guessing a person.
+                                            // Who ran the match comes from the session's `run_by_name`
+                                            // (ai_talent_match_sessions.run_by); 'System' is only the
+                                            // fallback for a run with no resolvable user.
                                             const jobVersion = jobs.find(j => j.id === job.jobId)?.currentVersion;
                                             return (
                                               <tr key={job.historyId} className="bg-white dark:bg-slate-900">
@@ -3167,7 +3174,7 @@ export default function AITalentMatchPage({
                                                   </span>
                                                 </td>
                                                 <td className="py-2.5 px-4 align-middle whitespace-nowrap">
-                                                  <div className="text-sm text-gray-700 dark:text-slate-300">System</div>
+                                                  <div className="text-sm text-gray-700 dark:text-slate-300">{job.matchedByName || 'System'}</div>
                                                   <div className="text-xs text-gray-500 dark:text-slate-500">
                                                     {formatISTDate(job.matchedAt.toISOString())} · {formatISTTime(job.matchedAt.toISOString())}
                                                   </div>
@@ -3361,7 +3368,7 @@ export default function AITalentMatchPage({
                                       {toMatchRating(job.score)}
                                     </span>
                                     <span className="text-xs text-gray-500 dark:text-slate-500">
-                                      {formatISTDate(job.matchedAt.toISOString())}
+                                      {job.matchedByName || 'System'} · {formatISTDate(job.matchedAt.toISOString())}
                                     </span>
                                   </div>
                                 </div>
@@ -4485,9 +4492,9 @@ export default function AITalentMatchPage({
                           Matched {formatISTDate(item.matchedAt.toISOString())}
                         </span>
                         {/* Who ran it. Always shown; the name comes from the
-                            sessions API's `created_by_name`, and until the
-                            backend sends it (or for a run that predates it) it
-                            reads "System", as the Match History popup does. */}
+                            sessions API's `run_by_name`, falling back to
+                            "System" only when the run has no resolvable user
+                            (a deleted account), as the Match History popup does. */}
                         <span className="flex items-center gap-1.5">
                           <User className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                           Matched by {item.matchedByName || 'System'}
@@ -4625,7 +4632,7 @@ export default function AITalentMatchPage({
                             matchedAt: new Date(session.created_at),
                             totalMatches: session.total_matches,
                             matchedCandidates: [],
-                            matchedByName: session.created_by_name || undefined,
+                            matchedByName: session.run_by_name || undefined,
                           }, targetJobId);
                           updateUrlParams({ jdId: targetJobId, view: 'results' });
                         }}
@@ -4718,9 +4725,9 @@ export default function AITalentMatchPage({
           History" design (stat cards, filter row, Rating Breakdown columns,
           a Rating Distribution + Latest Run Summary sidebar) adapted to this
           data: sessions instead of scoring runs, a 1-10 rating instead of a
-          percentage. "Matched By" always reads System — the API carries no
-          per-run user attribution, so that column states the honest single
-          value rather than inventing a name. A bespoke table replaces
+          percentage. "Matched By" is the session's `run_by_name` — the tenant
+          user who ran that match — and reads "System" only when the run has no
+          resolvable user. A bespoke table replaces
           AIMatchVersionHistoryTable here (still used, unchanged, by "View
           Versions" elsewhere) since the column set genuinely differs. */}
       {matchHistoryModal && (() => {
@@ -4755,11 +4762,20 @@ export default function AITalentMatchPage({
           const v9to7 = results.filter(r => matchBandForRating(ratingFor(r)) === 'partial').length;
           const vBelow7 = results.filter(r => matchBandForRating(ratingFor(r)) === 'no_match').length;
           const candidateCount = results.length || version.session.total_matches || 0;
-          return { version, v10, v9to7, vBelow7, candidateCount };
+          // Who ran the most recent run of this JD version. 'System' only when
+          // the session's run_by can't be resolved to a user.
+          const matchedBy = version.session.run_by_name?.trim() || 'System';
+          return { version, v10, v9to7, vBelow7, candidateCount, matchedBy };
         });
 
+        // "Matched By" options — the names actually present in these runs, so
+        // the filter can never offer a value that matches nothing.
+        const matchedByOptions = Array.from(
+          new Set(versionRows.map(r => r.matchedBy))
+        ).sort((a, b) => a.localeCompare(b));
+
         const searchTerm = historyModalFilter.search.trim().toLowerCase();
-        const filteredVersionRows = versionRows.filter(({ version, v10, v9to7, vBelow7 }) => {
+        const filteredVersionRows = versionRows.filter(({ version, v10, v9to7, vBelow7, matchedBy }) => {
           const f = historyModalFilter;
           const matchesSearch = !searchTerm || (version.session.results || []).some(r =>
             r.candidate_name?.toLowerCase().includes(searchTerm)
@@ -4772,8 +4788,8 @@ export default function AITalentMatchPage({
           const lastMatchedDay = version.lastMatchedAt ? version.lastMatchedAt.slice(0, 10) : '';
           const matchesDateFrom = !f.dateFrom || (!!lastMatchedDay && lastMatchedDay >= f.dateFrom);
           const matchesDateTo = !f.dateTo || (!!lastMatchedDay && lastMatchedDay <= f.dateTo);
-          // matchedBy has one real value today, so it never narrows anything.
-          return matchesSearch && matchesVersion && matchesRating && matchesDateFrom && matchesDateTo;
+          const matchesMatchedBy = f.matchedBy === 'all' || f.matchedBy === matchedBy;
+          return matchesSearch && matchesMatchedBy && matchesVersion && matchesRating && matchesDateFrom && matchesDateTo;
         });
 
         const isHistoryModalFilterActive =
@@ -4831,7 +4847,7 @@ export default function AITalentMatchPage({
                 matchedAt: new Date(session.created_at),
                 totalMatches: session.total_matches,
                 matchedCandidates: [],
-                matchedByName: session.created_by_name || undefined,
+                matchedByName: session.run_by_name || undefined,
               }, targetJobId);
               updateUrlParams({ jdId: targetJobId, view: 'results' });
               setMatchHistoryModal(null);
@@ -4966,11 +4982,13 @@ export default function AITalentMatchPage({
                           <label className={filterLabelClass}>Matched By</label>
                           <select
                             value={historyModalFilter.matchedBy}
-                            onChange={(e) => setHistoryModalFilter(prev => ({ ...prev, matchedBy: e.target.value as MatchHistoryModalFilters['matchedBy'] }))}
+                            onChange={(e) => setHistoryModalFilter(prev => ({ ...prev, matchedBy: e.target.value }))}
                             className={`${filterInputClass} w-full`}
                           >
                             <option value="all">All Sources</option>
-                            <option value="system">System</option>
+                            {matchedByOptions.map(name => (
+                              <option key={name} value={name} title={name}>{clampOptionLabel(name)}</option>
+                            ))}
                           </select>
                         </div>
                         <div className="flex-1 min-w-[7rem]">
@@ -5071,7 +5089,7 @@ export default function AITalentMatchPage({
                                     No match runs found for the selected filters.
                                   </td>
                                 </tr>
-                              ) : filteredVersionRows.map(({ version, v10, v9to7, vBelow7, candidateCount }) => {
+                              ) : filteredVersionRows.map(({ version, v10, v9to7, vBelow7, candidateCount, matchedBy }) => {
                                 const isCompleted = version.session.status?.toLowerCase() === 'completed';
                                 const statusLabel = version.session.status
                                   ? version.session.status.charAt(0).toUpperCase() + version.session.status.slice(1)
@@ -5084,9 +5102,9 @@ export default function AITalentMatchPage({
                                       </span>
                                     </td>
                                     <td className="py-2.5 px-3 whitespace-nowrap text-gray-700 dark:text-slate-300">
-                                      <span className="inline-flex items-center gap-1.5">
-                                        <Sparkles className="w-3.5 h-3.5 text-brand-cyan" />
-                                        System
+                                      <span className="inline-flex items-center gap-1.5 max-w-[11rem]" title={version.session.run_by_email || matchedBy}>
+                                        <Sparkles className="w-3.5 h-3.5 text-brand-cyan flex-shrink-0" />
+                                        <span className="truncate">{matchedBy}</span>
                                       </span>
                                     </td>
                                     <td className="py-2.5 px-3 whitespace-nowrap text-gray-600 dark:text-slate-400">
@@ -5122,7 +5140,7 @@ export default function AITalentMatchPage({
                             <p className="text-center text-xs text-gray-500 dark:text-slate-500 py-4">
                               No match runs found for the selected filters.
                             </p>
-                          ) : filteredVersionRows.map(({ version, v10, v9to7, vBelow7, candidateCount }) => {
+                          ) : filteredVersionRows.map(({ version, v10, v9to7, vBelow7, candidateCount, matchedBy }) => {
                             const isCompleted = version.session.status?.toLowerCase() === 'completed';
                             const statusLabel = version.session.status
                               ? version.session.status.charAt(0).toUpperCase() + version.session.status.slice(1)
@@ -5139,7 +5157,7 @@ export default function AITalentMatchPage({
                                   </span>
                                 </div>
                                 <div className="flex items-center justify-between text-gray-600 dark:text-slate-400 mb-2">
-                                  <span className="inline-flex items-center gap-1"><Sparkles className="w-3 h-3 text-brand-cyan" />System</span>
+                                  <span className="inline-flex items-center gap-1 min-w-0"><Sparkles className="w-3 h-3 text-brand-cyan flex-shrink-0" /><span className="truncate">{matchedBy}</span></span>
                                   <span>{formatISTDate(version.lastMatchedAt)} · {formatISTTime(version.lastMatchedAt)}</span>
                                 </div>
                                 <div className="flex items-center gap-2 mb-2">
@@ -5613,6 +5631,15 @@ export default function AITalentMatchPage({
                     <span className="inline-flex items-center gap-1">
                       <User className="w-3.5 h-3.5" />
                       {matchedCandidates.length} matches
+                    </span>
+                    {/* Who ran this match — the session's `run_by_name`, the
+                        same value the Matched Jobs row and Match History show.
+                        "System" only when the run has no resolvable user. */}
+                    <span className="inline-flex items-center gap-1 min-w-0">
+                      <User className="w-3.5 h-3.5 flex-shrink-0" />
+                      <span className="truncate">
+                        Matched by {selectedHistoryItem?.matchedByName || historyItemForSelectedJob?.matchedByName || 'System'}
+                      </span>
                     </span>
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-success-subtle text-success ring-1 ring-success-line">
                       <CheckCircle2 className="w-3 h-3" />

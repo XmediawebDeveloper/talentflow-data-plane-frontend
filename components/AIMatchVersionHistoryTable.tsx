@@ -213,7 +213,7 @@ export default function AIMatchVersionHistoryTable({
             <th className="py-2.5 px-3 font-bold text-gray-900 bg-brand-sky dark:bg-slate-800 dark:text-slate-100">Location</th>
             <th className="py-2.5 px-3 font-bold text-gray-900 bg-brand-sky dark:bg-slate-800 dark:text-slate-100">Work Mode / Type</th>
             <th className="py-2.5 px-3 font-bold text-gray-900 bg-brand-sky dark:bg-slate-800 dark:text-slate-100">Posted On / By</th>
-            <th className="py-2.5 px-3 font-bold text-gray-900 bg-brand-sky dark:bg-slate-800 dark:text-slate-100">Last Match Date</th>
+            <th className="py-2.5 px-3 font-bold text-gray-900 bg-brand-sky dark:bg-slate-800 dark:text-slate-100">Last Match Date / By</th>
             <th className="py-2.5 px-3 font-bold text-gray-900 bg-brand-sky dark:bg-slate-800 dark:text-slate-100">Number of Runs</th>
             <th className="py-2.5 px-3 font-bold text-gray-900 bg-brand-sky dark:bg-slate-800 dark:text-slate-100">Total Matches</th>
             <th className="py-2.5 px-3 font-bold text-gray-900 bg-brand-sky dark:bg-slate-800 dark:text-slate-100 text-right">Actions</th>
@@ -332,9 +332,17 @@ export default function AIMatchVersionHistoryTable({
                     {job?.postedBy || '—'}
                   </div>
                 </td>
-                {/* Most recent match against this JD version. */}
+                {/* Most recent match against this JD version, and the tenant
+                    user who ran it (the session's `run_by_name`). "System" is
+                    only the fallback for a run with no resolvable user. */}
                 <td className={`py-2.5 px-3 text-gray-600 dark:text-slate-400 whitespace-nowrap ${rowDivider}`}>
-                  {formatIST(lastMatchedAt)}
+                  <div>{formatIST(lastMatchedAt)}</div>
+                  <div
+                    className="text-gray-500 dark:text-slate-500 max-w-[140px] truncate"
+                    title={session.run_by_email || session.run_by_name || ''}
+                  >
+                    {session.run_by_name || 'System'}
+                  </div>
                 </td>
                 <td className={`py-2.5 px-3 text-gray-900 dark:text-slate-100 ${rowDivider}`}>{runCount}</td>
                 <td className={`py-2.5 px-3 text-gray-900 dark:text-slate-100 ${rowDivider}`}>{session.total_matches}</td>
@@ -440,7 +448,7 @@ export default function AIMatchVersionHistoryTable({
                   {job.postedBy && ` by ${job.postedBy}`}
                 </span>
               )}
-              <span>Last Match Date: {formatIST(lastMatchedAt)}</span>
+              <span>Last Match Date: {formatIST(lastMatchedAt)} by {session.run_by_name || 'System'}</span>
               <span>Number of Runs: {runCount}</span>
             </div>
             <div className="flex items-center justify-between gap-2">

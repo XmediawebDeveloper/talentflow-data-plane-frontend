@@ -1143,13 +1143,12 @@ export function useProctoringMonitor({
             });
           }
         },
-        onGazeAway: (direction, offsets) => {
+        onGazeAway: (direction, metrics) => {
           // One event per episode (monitor gates re-entry on a restored state);
           // emitEvent adds the per-type cooldown on top.
           emitEventRef.current('gaze_away', {
             direction,
-            noseOffsetX: offsets.x,
-            noseOffsetY: offsets.y,
+            ...metrics,
             method: 'mediapipe_face_mesh',
           });
         },

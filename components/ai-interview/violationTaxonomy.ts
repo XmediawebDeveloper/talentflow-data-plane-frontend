@@ -382,6 +382,8 @@ const GAZE_DIR: Record<string, string> = {
   left: 'to the left', right: 'to the right', up: 'upward',
   left_up: 'up and to the left', right_up: 'up and to the right',
   down: 'downward', left_down: 'down and to the left', right_down: 'down and to the right',
+  // Head turned so far the face tracker lost the landmarks (face still on camera).
+  profile: 'with the head turned far to one side',
 };
 
 const TAB_METHOD: Record<string, string> = {
@@ -459,7 +461,8 @@ export function describeViolation(v: ViolationRecord): string {
     }
     case 'gaze_away': {
       const dir = typeof d.direction === 'string' ? GAZE_DIR[d.direction] : undefined;
-      return dir ? `Looked away ${dir}.` : 'Eyes moved away from the screen.';
+      if (!dir) return 'Eyes moved away from the screen.';
+      return d.cue === 'eyes' ? `Eyes moved away ${dir} (head still facing the screen).` : `Looked away ${dir}.`;
     }
     case 'tab_switch': {
       const m = typeof d.method === 'string' ? TAB_METHOD[d.method] : undefined;

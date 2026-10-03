@@ -89,11 +89,14 @@ export interface AIMatchSessionResponse {
   // immediately from the session list, without waiting for per-session
   // candidate detail to load.
   top_rating?: number | null;
-  /* Who ran the match. Not sent by the backend yet — declared so the
-     Matched Jobs list shows "Matched by <name>" the moment it is, with no
-     further frontend change. Same names the AI Interview records use. */
-  created_by?: string;
-  created_by_name?: string;
+  /* Who ran the match — `ai_talent_match_sessions.run_by`, resolved to the
+     tenant user's name/email server-side (GET /ai-match/sessions, GET
+     /ai-match/sessions/{id} and POST /ai-match/run all send all three).
+     Absent only for a run whose user row has since been deleted; the UI then
+     falls back to "System". */
+  run_by?: string;
+  run_by_name?: string;
+  run_by_email?: string;
 }
 
 export interface AIMatchSessionListResponse {
