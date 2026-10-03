@@ -1386,14 +1386,14 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                 </button>
                 <button
                   type="button"
-                  onClick={() => setNewHRQuestion(prev => ({ ...prev, answer_type: 'yes_no', correct_answer: prev.correct_answer || 'Yes', time_minutes: 1 }))}
+                  onClick={() => setNewHRQuestion(prev => ({ ...prev, answer_type: 'yes_no', correct_answer: prev.correct_answer || 'Yes', time_minutes: 2 }))}
                   className={`flex-1 rounded-lg border-2 px-4 py-2.5 text-sm font-medium transition-all ${
                     newHRQuestion.answer_type === 'yes_no'
                       ? 'border-brand-blue/40 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20'
                       : 'border-gray-200 bg-white text-gray-700 hover:border-brand-blue/30 hover:text-brand-blue'
                   }`}
                 >
-                  Yes / No
+                  Yes / No / Need to Explain More
                 </button>
               </div>
             </div>

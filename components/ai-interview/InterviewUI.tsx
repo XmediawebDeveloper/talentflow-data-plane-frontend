@@ -193,6 +193,7 @@ interface InterviewVadConfig {
 interface InterviewSocketMessage {
   type?: string;
   action?: string;
+  answer_type?: 'text' | 'yes_no';
   buffer_minutes?: number;
   cluster?: string;
   clusters?: ClusterData[];
@@ -207,6 +208,7 @@ interface InterviewSocketMessage {
   for_previous_question?: boolean;
   from_cluster?: string;
   global_remaining_seconds?: number;
+  hr_question_id?: string;
   hr_topics?: Record<string, string>;
   is_clarification?: boolean;
   is_enhanced?: boolean;
@@ -729,6 +731,22 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   const isClarificationRef = useRef(false);
   // Question progress counter (sent with question_timer_started)
   const [questionNumber, setQuestionNumber] = useState<number | null>(null);
+  // AII-20: HR Tagged Question Types. Set from the question_meta WS event
+  // when the upcoming HR question is Text-based or Yes/No/Other — tagged
+  // with the question_number it belongs to so a later question that sends
+  // no question_meta (ordinary free-form questions, unchanged) can never
+  // render stale buttons: the render guard below requires an exact match
+  // against the live `questionNumber`.
+  const [structuredHrPrompt, setStructuredHrPrompt] = useState<{
+    questionNumber: number;
+    answerType: 'yes_no' | 'text';
+    hrQuestionId: string;
+  } | null>(null);
+  // "Need to Explain More" was clicked — hide the buttons and fall through
+  // to the existing voice-answer UI (already recording underneath; this
+  // flag changes nothing about mic/timer, it just stops rendering buttons).
+  const [hrExplainMore, setHrExplainMore] = useState(false);
+  const [hrTextAnswer, setHrTextAnswer] = useState('');
   const [totalQuestions, setTotalQuestions] = useState<number | null>(null);
   const questionNumberRef = useRef<number | null>(null); // sync ref for stale-closure reads
   // Clarification mode — true when backend signals is_clarification on a same-Q timer event
@@ -5444,6 +5462,21 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         } else {
           isCurrentFollowupRef.current = false;
         }
+        // AII-20: HR Tagged Question Types — backend sends this when the
+        // upcoming HR question is Text-based or Yes/No/Other and has been
+        // forced verbatim. Tag with question_number so the render guard
+        // self-invalidates once the interview moves to a different
+        // question, even on a later turn that sends no question_meta at
+        // all (ordinary free-form questions — completely unaffected).
+        if (data.answer_type === 'yes_no' || data.answer_type === 'text') {
+          setStructuredHrPrompt({
+            questionNumber: data.question_number,
+            answerType: data.answer_type,
+            hrQuestionId: data.hr_question_id || '',
+          });
+          setHrExplainMore(false);
+          setHrTextAnswer('');
+        }
         break;
       case "llm_token":
         console.log(`[WS ${timestamp}] LLM token: token_length=${data.token?.length}, buffer_length=${tokenBufferRef.current.length}`);
@@ -9359,6 +9392,22 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     !isAiSpeaking && !isProcessing &&
     questionTimerSeconds !== null && !questionTimerExpired;
 
+  // AII-20: submit a Yes/No click or a Text-based typed answer. Reuses the
+  // EXISTING `text_input` WS message the backend already handles end-to-end
+  // (run_text_pipeline) — no new message type, no new backend workflow.
+  // "Need to Explain More" does NOT call this — it just hides the buttons
+  // and falls through to the voice answer already recording underneath.
+  const submitStructuredHrAnswer = (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    try {
+      wsRef.current?.send(JSON.stringify({ type: 'text_input', text: trimmed }));
+    } catch { /* best-effort, mirrors other wsRef.current?.send call sites */ }
+    setStructuredHrPrompt(null);
+    setHrExplainMore(false);
+    setHrTextAnswer('');
+  };
+
   // Post a candidate-initiated action into the chat as a distinct chip. Tagged
   // isActionRequest so the answer-transcript logic never overwrites it. Returns
   // the new message id so callers can later remove it (e.g. drop the "moved on"
@@ -9550,6 +9599,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     // The big pre-turn "get ready" countdown owns the screen — suppress the small
     // banner while it runs so we don't show two "getting ready" messages at once.
     if (preTurnCountdown != null) return null;
+    // AII-20: while the Yes/No/Need-to-Explain-More buttons are showing,
+    // hide the voice banner — the candidate picks an option first; voice
+    // only becomes relevant once they click Need to Explain More.
+    if (structuredHrPrompt && structuredHrPrompt.questionNumber === questionNumber && !hrExplainMore) return null;
     let variant: 'silence' | 'timesup' | 'hold' | 'turn' | 'prepare' | null = null;
     if (showSilenceBanner) variant = 'silence';
     else if (questionTimerExpired) variant = 'timesup';
@@ -10266,6 +10319,80 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               <MessageRowMemo key={msg.id} msg={msg} candidatePhotoUrl={candidatePhotoUrl} />
             ))}
 
+            {/* AII-20: HR Tagged Question Types — Yes/No/Need-to-Explain-More
+                buttons, or a Text-based input box. Gated on an EXACT
+                questionNumber match so this can never show for a different
+                (ordinary free-form) question — including one that sends no
+                question_meta at all. "Need to Explain More" renders nothing
+                further here: it just hides these buttons (setHrExplainMore)
+                and the existing voice-answer bubble below takes over exactly
+                as it already does for every other question — no new voice
+                workflow, no new timer. */}
+            {structuredHrPrompt &&
+              structuredHrPrompt.questionNumber === questionNumber &&
+              isCandidateTurn &&
+              !hrExplainMore && (
+              <div className="flex gap-2 flex-row-reverse">
+                <YouAvatar photoUrl={candidatePhotoUrl} />
+                <div className="max-w-[80%] w-full">
+                  {structuredHrPrompt.answerType === 'yes_no' ? (
+                    <div className="w-full rounded-2xl border border-gray-200 bg-white shadow-sm p-3">
+                      <div className="flex flex-col gap-2">
+                        <button
+                          type="button"
+                          onClick={() => submitStructuredHrAnswer('Yes')}
+                          className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 text-sm font-semibold hover:bg-emerald-100 hover:border-emerald-300 transition-colors text-left"
+                        >
+                          <span className="flex items-center justify-center w-6 h-6 rounded-full bg-emerald-500 text-white text-xs font-bold shrink-0">A</span>
+                          Yes
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => submitStructuredHrAnswer('No')}
+                          className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-rose-200 bg-rose-50 text-rose-800 text-sm font-semibold hover:bg-rose-100 hover:border-rose-300 transition-colors text-left"
+                        >
+                          <span className="flex items-center justify-center w-6 h-6 rounded-full bg-rose-500 text-white text-xs font-bold shrink-0">B</span>
+                          No
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setHrExplainMore(true)}
+                          className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-gray-800 text-sm font-semibold hover:bg-gray-100 hover:border-gray-300 transition-colors text-left"
+                        >
+                          <span className="flex items-center justify-center w-6 h-6 rounded-full bg-gray-500 text-white text-xs font-bold shrink-0">C</span>
+                          Need to Explain More
+                        </button>
+                      </div>
+                      <div className="mt-2.5 pt-2.5 border-t border-gray-100 text-center text-2xs text-gray-400">
+                        Click only one option
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 justify-end">
+                      <input
+                        type="text"
+                        value={hrTextAnswer}
+                        onChange={(e) => setHrTextAnswer(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && hrTextAnswer.trim()) submitStructuredHrAnswer(hrTextAnswer);
+                        }}
+                        placeholder="Type your answer..."
+                        className="flex-1 px-3.5 py-2.5 rounded-2xl border border-emerald-200 bg-emerald-50 text-emerald-900 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                      />
+                      <button
+                        type="button"
+                        disabled={!hrTextAnswer.trim()}
+                        onClick={() => submitStructuredHrAnswer(hrTextAnswer)}
+                        className="px-4 py-2.5 rounded-lg text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40 transition-colors"
+                      >
+                        Send
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Candidate live/processing bubble — ONE persistent bubble across
                 the whole recording → processing phase so its inner content
                 MORPHS (waveform/live text → loading dots) instead of two
@@ -10274,7 +10401,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 + emerald container stay mounted; only the inner content swaps. It
                 unmounts once the final transcript lands in `messages` (identical
                 emerald "Your Response" styling → visually seamless handoff). */}
-            {(isRecording || currentTranscript || (isCandidateTranscriptProcessing && !currentTranscript)) && (
+            {(isRecording || currentTranscript || (isCandidateTranscriptProcessing && !currentTranscript)) &&
+              // AII-20: hide the recording bubble while the Yes/No/Need-to-
+              // Explain-More buttons are showing — it reappears once "Need
+              // to Explain More" is clicked (or immediately for Text-based
+              // questions, which don't show buttons at all).
+              !(structuredHrPrompt && structuredHrPrompt.questionNumber === questionNumber && structuredHrPrompt.answerType === 'yes_no' && !hrExplainMore) && (
               <div className="flex gap-2 flex-row-reverse">
                 <YouAvatar photoUrl={candidatePhotoUrl} />
                 <div className="max-w-[80%]">
