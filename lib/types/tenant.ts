@@ -551,7 +551,11 @@ export const FEATURE_METADATA: Record<string, { name: string; description: strin
 
 // RBAC07: Permission dependency matrix
 export const PERMISSION_DEPENDENCIES: Record<string, string[]> = {
-  resume_scoring: ['resume_upload', 'resume_database_access'],
+  // Resume Database Access deliberately excluded — Scoring needs a resume
+  // source (My Resumes or the shared database), not specifically the shared
+  // one; forcing it would grant visibility into every other recruiter's
+  // resumes just for turning Scoring on.
+  resume_scoring: ['resume_upload'],
   ai_talent_match: ['resume_database_access'],
   ai_interview: ['assessment'],
   bulk_operations: ['resume_database_access'],
