@@ -27,6 +27,13 @@ import {
 } from '@/lib/services/unitPoolService';
 import { formatIST, formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 import { Skeleton } from '@/components/ui/skeleton';
+import ExportFormatModal from '@/components/ExportFormatModal';
+import { exportRows, type ExportFileFormat } from '@/lib/utils/exportUtils';
+
+const EXPORT_HEADERS = [
+  'Date', 'Time', 'Unit Type', 'Units', 'Category', 'Status',
+  'User', 'Entity Type', 'Entity Name', 'Team', 'Score'
+];
 
 interface UsageTransparencyDashboardProps {
   onBack?: () => void;
@@ -41,6 +48,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
 
   // Filters
   const [showFilters, setShowFilters] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
 
   // Pagination — declared before the hook so `onChange` can reset it.
   const [page, setPage] = useState(0);
@@ -154,51 +162,35 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
     }
   };
 
-  // Export data
-  const handleExport = async () => {
-    try {
-      const exportData = await unitPoolService.getUsageTransparency({
-        unit_type: selectedUnitType || undefined,
-        deduction_category: selectedCategory || undefined,
-        include_non_deductions: includeNonDeductions,
-        include_partial_deductions: includePartialDeductions,
-        limit: 10000,
-        offset: 0,
-      });
+  // Export data — runs from the format picker, which toasts and stays open
+  // if the fetch fails.
+  const handleExport = async (format: ExportFileFormat) => {
+    const exportData = await unitPoolService.getUsageTransparency({
+      unit_type: selectedUnitType || undefined,
+      deduction_category: selectedCategory || undefined,
+      include_non_deductions: includeNonDeductions,
+      include_partial_deductions: includePartialDeductions,
+      limit: 10000,
+      offset: 0,
+    });
 
-      // Convert to CSV
-      const headers = [
-        'Date', 'Time', 'Unit Type', 'Units', 'Category', 'Status',
-        'User', 'Entity Type', 'Entity Name', 'Team', 'Score'
-      ];
+    const rows = exportData.items.map(entry => [
+      formatISTDate(entry.created_at),
+      formatISTTime(entry.created_at),
+      entry.unit_type,
+      formatUnitsConsumed(entry.units_consumed),
+      getDeductionCategoryName(entry.deduction_category),
+      entry.status,
+      entry.user_email || entry.user_name || '',
+      entry.entity_type || '',
+      entry.entity_name || '',
+      entry.team_name || '',
+      entry.overall_score?.toString() || '',
+    ]);
 
-      const rows = exportData.items.map(entry => [
-        formatISTDate(entry.created_at),
-        formatISTTime(entry.created_at),
-        entry.unit_type,
-        formatUnitsConsumed(entry.units_consumed),
-        getDeductionCategoryName(entry.deduction_category),
-        entry.status,
-        entry.user_email || entry.user_name || '',
-        entry.entity_type || '',
-        entry.entity_name || '',
-        entry.team_name || '',
-        entry.overall_score?.toString() || '',
-      ]);
-
-      const csvContent = [
-        headers.join(','),
-        ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
-      ].join('\n');
-
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = `usage-transparency-${new Date().toISOString().split('T')[0]}.csv`;
-      link.click();
-    } catch (err: any) {
-      setError('Failed to export data');
-    }
+    await exportRows(format, EXPORT_HEADERS, rows, `usage-transparency-${new Date().toISOString().split('T')[0]}`, {
+      sheetName: 'Usage Transparency',
+    });
   };
 
   if (loading && !data) {
@@ -332,11 +324,19 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
               </Button>
               <Button
                 variant="primary"
-                onClick={handleExport}
+                onClick={() => setShowExportModal(true)}
                 icon={<Download className="w-4 h-4" />}
               >
-                Export CSV
+                Export
               </Button>
+              <ExportFormatModal
+                open={showExportModal}
+                onClose={() => setShowExportModal(false)}
+                title="Export Usage Transparency"
+                recordCount={data?.total}
+                columns={EXPORT_HEADERS}
+                onExport={handleExport}
+              />
               {onBack && (
                 <Button
                   variant="secondary"

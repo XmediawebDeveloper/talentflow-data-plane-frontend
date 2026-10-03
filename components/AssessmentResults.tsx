@@ -1844,9 +1844,13 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                one row before they fit, so buttons wrapped mid-row. Now: one row
                (search fills, controls at the end) once the toolbar is 56rem
                wide; below that the search takes its own row and the controls
-               wrap as a group under it. */
-            fitToContainer
-            containerBreakpoint="4xl"
+               wrap as a group under it.
+               Now ONE LINE at every width: search flexes, the controls keep
+               their width, and a row too wide for the screen scrolls sideways
+               (scrollbar hidden) rather than wrapping. The scroll is dropped
+               while the Columns picker is open so the row cannot clip it. */
+            singleLine
+            overflowVisible={showColumnSelector}
             /* Status — what the four stat cards used to switch between, now a
                dropdown at the head of the controls, beside More Filters. Same
                state, same values the API's status filter matches on; only the
@@ -1917,7 +1921,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   setStatusFilter(e.target.value as 'all' | 'Completed' | 'In Progress' | 'Pending');
                   setCurrentPage(1);
                 }}
-                className={`h-[38px] w-full sm:w-auto sm:min-w-[9rem] sm:max-w-[16rem] px-3 text-sm font-medium rounded-lg border cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-blue/40 transition-all ${
+                className={`h-[38px] w-auto min-w-[9rem] max-w-[16rem] px-3 text-sm font-medium rounded-lg border cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-blue/40 transition-all ${
                   statusFilter !== 'all'
                     ? 'bg-brand-blue/10 text-brand-blue border-brand-blue/20'
                     : 'bg-brand-blue/5 text-gray-700 border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue'

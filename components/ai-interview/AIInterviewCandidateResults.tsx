@@ -116,7 +116,7 @@ function VersionPill({ kind, version }: { kind: 'job' | 'interview'; version: nu
   );
 }
 
-const PAGE_SIZE = 15;
+const PAGE_SIZE = 10;
 /** The "Show N per page" choices. */
 const PAGE_SIZE_OPTIONS = [10, 15, 25, 50, 100];
 

@@ -5,6 +5,7 @@ import { truncateJobTitle } from '@/lib/utils/jobOpeningDisplay';
 import { useState, useEffect, useMemo, Fragment } from 'react';
 import { toast } from 'sonner';
 import ColumnCustomizationModal from './ColumnCustomizationModal';
+import ZipDownloadConfirmModal from './ZipDownloadConfirmModal';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
@@ -570,7 +571,7 @@ Best regards`);
   const [aiInterviewInviteCandidate, setAiInterviewInviteCandidate] = useState<ScoredResume | null>(null);
   const [showBulkInviteModal, setShowBulkInviteModal] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(20);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   // Search + filters in the shared hook. This panel commits as you pick rather
   // than staging, so it uses `setFilter` and leaves the draft pair alone.
@@ -1172,6 +1173,9 @@ Best regards`);
     }
   };
 
+  // "Download as ZIP" confirmation — asked before a multi-candidate download.
+  const [showZipConfirm, setShowZipConfirm] = useState(false);
+
   const handleDownloadBulkScorecards = async () => {
     if (selectedResumes.length === 0) return;
 
@@ -1656,6 +1660,62 @@ Best regards`);
     return (parts[0][0] + (parts[1]?.[0] || '')).toUpperCase();
   };
 
+  /* The selection's actions — Download and Invite. Shown once rows are
+     picked: after the view pills when the host has them, else inside the
+     search/filter row itself, so either way they share one line. */
+  const selectionActions = selectedResumes.length > 0 ? (
+    <>
+      <Button
+        variant="secondary"
+        size="sm"
+        onClick={() => {
+          if (!canDownloadScorecard) {
+            toast.error('You do not have permission to download the scorecard');
+            return;
+          }
+          // Several → a ZIP, so confirm first; one → its PDF directly.
+          if (selectedResumes.length > 1) setShowZipConfirm(true);
+          else void handleDownloadBulkScorecards();
+        }}
+        disabled={bulkDownloading}
+        aria-disabled={!canDownloadScorecard}
+        title={!canDownloadScorecard ? 'You do not have permission to download the scorecard' : undefined}
+        className={`rounded-full ${!canDownloadScorecard ? 'opacity-50 cursor-not-allowed' : ''}`}
+        icon={bulkDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+      >
+        {bulkDownloading ? 'Downloading...' : `Download (${selectedResumes.length})`}
+      </Button>
+      <Button
+        variant="primary"
+        size="sm"
+        onClick={() => {
+          if (!canCreateAssessments) {
+            toast.error('You do not have permission to invite candidates to an assessment');
+            return;
+          }
+          setShowBulkInviteModal(true);
+        }}
+        /* Invite goes to assessments too, so it takes the same
+           "is there one on this JD" gate as the per-row entry. */
+        disabled={assessmentConfigured === false || availableUnits === 0}
+        aria-disabled={!canCreateAssessments}
+        className={`rounded-full ${!canCreateAssessments ? 'opacity-50 cursor-not-allowed' : ''}`}
+        icon={<Send className="w-4 h-4" />}
+        title={
+          !canCreateAssessments
+            ? 'You do not have permission to invite candidates to an assessment'
+            : !canInviteAssessment
+              ? 'No published assessment for this job yet'
+              : availableUnits === 0
+                ? 'No assessment units available'
+                : `Invite ${selectedResumes.length} candidates`
+        }
+      >
+        Invite ({selectedResumes.length})
+      </Button>
+    </>
+  ) : null;
+
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
       {/* Header — title and the one page-level action. Everything that acts on
@@ -1703,19 +1763,30 @@ Best regards`);
               selected={selectedResumes.length}
             />
           }
+          /* Customize Columns sits right after More Filters — hidden on the
+             narrowest screens, where the row has no space for it and the
+             table scrolls horizontally anyway. */
+          afterFiltersActions={
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setShowColumnModal(true)}
+              icon={<SlidersHorizontal className="w-4 h-4" />}
+              className="hidden sm:flex whitespace-nowrap"
+            >
+              <span className="hidden md:inline">Customize Columns</span>
+              <span className="md:hidden">Columns</span>
+            </Button>
+          }
         >
-          {/* Customize Columns — hidden on the narrowest screens, where the row
-              has no space for it and the table scrolls horizontally anyway. */}
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setShowColumnModal(true)}
-            icon={<SlidersHorizontal className="w-4 h-4" />}
-            className="hidden sm:flex whitespace-nowrap"
-          >
-            <span className="hidden md:inline">Customize Columns</span>
-            <span className="md:hidden">Columns</span>
-          </Button>
+          {/* No view pills to sit after — the selection's actions join this
+              row instead, so search, filters and actions stay on one line. */}
+          {!viewPillsSlot && selectionActions && (
+            <>
+              <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
+              {selectionActions}
+            </>
+          )}
 
           {/* One Export for both states — handleExportExcel already exports the
               selection, and asks for one when there isn't any. It just leads
@@ -1926,94 +1997,40 @@ Best regards`);
           </div>
         )}
 
-        {/* pt-3, not relying on the parent's space-y-3: that only adds a
-            margin-top, which collapses with this slot's own mb-3 down to a
-            single 12px gap instead of the two stacking — padding never
-            collapses, so this guarantees the same visible gap job-openings
-            gets above its own status-tabs row. */}
-        {viewPillsSlot && <div className="pt-3">{viewPillsSlot}</div>}
+        {/* View pills, then — once rows are picked — the selection's actions
+            on the same line, set apart by a divider so they don't read as one
+            more view. The pills' own bottom margin is dropped here so the row
+            centres on one line. */}
+        {viewPillsSlot && (
+          <div className="pt-3 flex flex-wrap items-center gap-2 [&>*:first-child]:mb-0">
+            {viewPillsSlot}
+            {selectedResumes.length > 0 && (
+              <>
+                <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
+                {selectionActions}
+              </>
+            )}
+          </div>
+        )}
 
-        {/* Selection row — its own strip under the search/filter row, divided by
-            a rule, exactly like job-openings' "Select all + Bulk Actions" line.
-            Bulk buttons only appear once something is picked, so the row stays
-            quiet until it has work to do. Shown in both list and grid view,
-            since grid cards now carry their own per-item checkbox too. */}
-        {filteredResumes.length > 0 && (
+        {/* Grid only: cards have no header checkbox, so Select all stays
+            here. List view selects through the table header's checkbox, and
+            the toolbar's count badge already shows how many are picked. */}
+        {displayMode === 'grid' && filteredResumes.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 sm:gap-3 pt-3 border-t border-gray-200">
             <button
               onClick={handleSelectAll}
-              className={`group inline-flex items-center gap-2 h-9 pl-2.5 pr-3.5 rounded-full border text-sm font-medium transition-all ${
-                selectedResumes.length > 0
-                  ? 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/30 hover:bg-brand-blue-2'
-                  : 'bg-white text-gray-700 border-gray-400 hover:border-brand-blue/40 hover:text-brand-blue'
-              }`}
+              className="group inline-flex items-center gap-2 h-9 pl-2.5 pr-3.5 rounded-full border text-sm font-medium transition-all bg-white text-gray-700 border-gray-400 hover:border-brand-blue/40 hover:text-brand-blue"
             >
-              <span className={`flex h-5 w-5 items-center justify-center rounded-full transition-colors ${
-                selectedResumes.length > 0 ? 'bg-white/20' : 'bg-gray-100 group-hover:bg-brand-blue/10'
-              }`}>
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gray-100 group-hover:bg-brand-blue/10">
                 {selectedResumes.length === filteredResumes.length ? (
-                  <CheckSquare className={`w-3.5 h-3.5 ${selectedResumes.length > 0 ? 'text-white' : 'text-brand-blue'}`} />
-                ) : selectedResumes.length > 0 ? (
-                  <span className="h-2 w-2 rounded-full bg-white" />
+                  <CheckSquare className="w-3.5 h-3.5 text-brand-blue" />
                 ) : (
                   <Square className="w-3.5 h-3.5 text-gray-400 group-hover:text-brand-blue" />
                 )}
               </span>
-              <span>
-                {selectedResumes.length > 0 ? `${selectedResumes.length} selected` : 'Select all'}
-              </span>
+              <span>{selectedResumes.length === filteredResumes.length ? 'Deselect all' : 'Select all'}</span>
             </button>
-
-            {selectedResumes.length > 0 && (
-              <>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => {
-                    if (!canDownloadScorecard) {
-                      toast.error('You do not have permission to download the scorecard');
-                      return;
-                    }
-                    handleDownloadBulkScorecards();
-                  }}
-                  disabled={bulkDownloading}
-                  aria-disabled={!canDownloadScorecard}
-                  title={!canDownloadScorecard ? 'You do not have permission to download the scorecard' : undefined}
-                  className={`rounded-full ${!canDownloadScorecard ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  icon={bulkDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                >
-                  {bulkDownloading ? 'Downloading...' : `Download (${selectedResumes.length})`}
-                </Button>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => {
-                    if (!canCreateAssessments) {
-                      toast.error('You do not have permission to invite candidates to an assessment');
-                      return;
-                    }
-                    setShowBulkInviteModal(true);
-                  }}
-                  /* Bulk Invite goes to assessments too, so it takes the same
-                     "is there one on this JD" gate as the per-row entry. */
-                  disabled={assessmentConfigured === false || availableUnits === 0}
-                  aria-disabled={!canCreateAssessments}
-                  className={`rounded-full ${!canCreateAssessments ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  icon={<Send className="w-4 h-4" />}
-                  title={
-                    !canCreateAssessments
-                      ? 'You do not have permission to invite candidates to an assessment'
-                      : !canInviteAssessment
-                        ? 'No published assessment for this job yet'
-                        : availableUnits === 0
-                          ? 'No assessment units available'
-                          : `Bulk invite ${selectedResumes.length} candidates`
-                  }
-                >
-                  Bulk Invite ({selectedResumes.length})
-                </Button>
-              </>
-            )}
           </div>
         )}
       </div>
@@ -2879,6 +2896,18 @@ Best regards`);
         onPageChange={setCurrentPage}
         onItemsPerPageChange={setItemsPerPage}
         itemLabel={isGrouped ? 'candidates' : 'scored resumes'}
+      />
+
+      <ZipDownloadConfirmModal
+        open={showZipConfirm}
+        count={selectedResumes.length}
+        itemLabel="scorecards"
+        busy={bulkDownloading}
+        onClose={() => setShowZipConfirm(false)}
+        onConfirm={async () => {
+          await handleDownloadBulkScorecards();
+          setShowZipConfirm(false);
+        }}
       />
 
       {/* Column Customization Modal */}

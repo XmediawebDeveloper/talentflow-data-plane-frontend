@@ -300,7 +300,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
-  const PAGE_SIZE = 15;
+  const PAGE_SIZE = 10;
   // With a Source filter the list is fetched whole and paged here (see
   // pageBySource); this caps that one request.
   const SOURCE_FETCH_LIMIT = 1000;

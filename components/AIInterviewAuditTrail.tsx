@@ -15,6 +15,8 @@ import { useListSearch } from '@/lib/hooks/useListSearch';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DateField } from '@/components/ui/date-field';
 import { Button } from '@/components/ui/button';
+import ExportFormatModal from '@/components/ExportFormatModal';
+import { exportRows, type ExportFileFormat } from '@/lib/utils/exportUtils';
 
 type CategoryFilter = 'all' | 'config_lifecycle' | 'candidate_activity';
 
@@ -70,7 +72,7 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal }: AI
   });
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const pageSize = 50;
+  const pageSize = 10;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   // Local text for the "Go to" box so a partial edit doesn't get clobbered by
   // `page` until Enter/blur commits it.
@@ -171,9 +173,33 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal }: AI
     if (page === 1) loadAuditTrail();
   }, [searchTerm, filterDateFrom, filterDateTo]);
 
-  const handleExportAuditLogs = () => {
-    const count = selectedKeys.size > 0 ? selectedKeys.size : activities.length;
-    toast.info(`Exporting ${count} audit log entries to CSV`);
+  // Export the selected rows, or the whole loaded page when nothing is selected.
+  const [showExportModal, setShowExportModal] = useState(false);
+  const AUDIT_EXPORT_HEADERS = ['Timestamp', 'Activity', 'Category', 'Activity Type', 'Description', 'Actor', 'Interview', 'Job', 'Candidate', 'Candidate Email', 'Score'];
+  const exportActivities = () =>
+    selectedKeys.size > 0
+      ? activities.filter((activity, index) => selectedKeys.has(activityKey(activity, index)))
+      : activities;
+
+  const handleExportAuditLogs = async (format: ExportFileFormat) => {
+    const rows = exportActivities().map((activity) => [
+      formatIST(activity.timestamp),
+      activity.title,
+      getCategoryLabel(activity.category),
+      activity.activity_type.replace(/_/g, ' '),
+      activity.description,
+      activity.actor_name ?? '',
+      activity.config_title ?? '',
+      activity.jd_title ?? '',
+      activity.candidate_name ?? '',
+      activity.candidate_email ?? '',
+      activity.score !== null && activity.score !== undefined ? Number(activity.score.toFixed(1)) : '',
+    ]);
+    await exportRows(format, AUDIT_EXPORT_HEADERS, rows, 'ai-interview-audit-logs', {
+      sheetName: 'Audit Logs',
+      title: 'AI Interview Audit Logs',
+    });
+    toast.success(`Exported ${rows.length} audit log entries to ${format === 'xlsx' ? 'Excel' : 'CSV'}`);
   };
 
   const formatTimestamp = (timestamp: string) => {
@@ -309,11 +335,21 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal }: AI
 
             <Button
               variant="secondary"
-              onClick={handleExportAuditLogs}
+              onClick={() => setShowExportModal(true)}
+              disabled={activities.length === 0}
               icon={<Download className="w-4 h-4" />}
             >
               Export Logs{selectedKeys.size > 0 ? ` (${selectedKeys.size})` : ''}
             </Button>
+            <ExportFormatModal
+              open={showExportModal}
+              onClose={() => setShowExportModal(false)}
+              title="Export Audit Logs"
+              recordCount={exportActivities().length}
+              selected={selectedKeys.size > 0}
+              columns={AUDIT_EXPORT_HEADERS}
+              onExport={handleExportAuditLogs}
+            />
           </div>
 
           {/* Category Filter Chips */}

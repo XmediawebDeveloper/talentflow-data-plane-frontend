@@ -5,7 +5,9 @@ import { useRef, useState } from 'react';
 import { Resume, Job } from '@/lib/types/types';
 import JobOpeningPickerList, { JobSelection } from '@/components/jobs/JobOpeningPickerList';
 import SelectedCandidatesPanel from './SelectedCandidatesPanel';
+import CandidateVersionPicker from './CandidateVersionPicker';
 import { Button } from '@/components/ui/button';
+import JobIdBadge from '@/components/jobs/JobIdBadge';
 
 /**
  * One radio group across the whole dialog — the job cards AND every Version
@@ -31,7 +33,14 @@ interface ApplyToJobModalProps {
    * hand to a progress panel) can no longer be sure to find it in whatever
    * list it passed in.
    */
-  onApply: (resumeIds: string[], jobIds: string[], selectedJobRecords?: Job[]) => void;
+  onApply: (
+    resumeIds: string[],
+    jobIds: string[],
+    selectedJobRecords?: Job[],
+    /** Parallel to `resumeIds`: the candidate's own resume id each submitted
+     *  id came from (they differ when an older version was picked). */
+    sourceResumeIds?: string[],
+  ) => void;
   mode?: 'apply' | 'assessment' | 'scoring' | 'match';
   title?: string; // New: Custom title
   description?: string; // New: Custom description
@@ -51,6 +60,14 @@ interface ApplyToJobModalProps {
   jobOnly?: boolean;
   /** Replaces the Next Steps list when a flow ends somewhere different. */
   nextSteps?: string[];
+  /**
+   * The job is already decided (e.g. a resume opened from an AI Talent Match
+   * result is scored against that match's JD): the job search and list are
+   * dropped, the job is pre-selected, the subtitle names it as
+   * "JD ID, JD title, JD version", and a single candidate's resume versions
+   * are listed inline with the latest pre-selected.
+   */
+  fixedJob?: Job;
 }
 
 export default function ApplyToJobModal({
@@ -65,6 +82,7 @@ export default function ApplyToJobModal({
   confirmLabel,
   nextSteps,
   jobOnly = false,
+  fixedJob,
 }: ApplyToJobModalProps) {
   // Default titles based on mode
   const defaultTitle =
@@ -90,7 +108,9 @@ export default function ApplyToJobModal({
      `lineage` records which job's card the pick belongs to, so that card reads
      as selected whichever of its versions was picked. Owned here (not by the
      job list) because the footer and info box below also need it. */
-  const [selection, setSelection] = useState<JobSelection>(null);
+  const [selection, setSelection] = useState<JobSelection>(
+    fixedJob ? { job: fixedJob, lineage: fixedJob.job_id || fixedJob.id } : null,
+  );
   const [isApplying, setIsApplying] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -141,7 +161,7 @@ export default function ApplyToJobModal({
 
       // Simulate API call
       setTimeout(() => {
-        onApply(resumeIds, [picked.id], [picked]);
+        onApply(resumeIds, [picked.id], [picked], includedResumes.map(r => r.id));
         setIsApplying(false);
       }, 800);
     }
@@ -160,7 +180,21 @@ export default function ApplyToJobModal({
             </div>
             <div className="min-w-0">
               <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">{modalTitle}</h2>
-              <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">{modalDescription}</p>
+              {fixedJob && !description ? (
+                /* The fixed job, as every other page shows a job: the JD ID
+                   badge, the title, then the version pill. */
+                <div className="flex items-center gap-2 mt-1 min-w-0">
+                  {fixedJob.job_id && (
+                    <JobIdBadge className="inline-flex h-6 items-center flex-shrink-0">{fixedJob.job_id}</JobIdBadge>
+                  )}
+                  <span className="text-sm font-medium text-gray-700 dark:text-slate-300 truncate">{fixedJob.title}</span>
+                  <span className="px-2 py-0.5 rounded-md font-semibold text-xs text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35 flex-shrink-0">
+                    v{fixedJob.versionNumber ?? 1}
+                  </span>
+                </div>
+              ) : (
+                <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">{modalDescription}</p>
+              )}
             </div>
           </div>
           <Button
@@ -178,29 +212,47 @@ export default function ApplyToJobModal({
         <div ref={listRef} className="flex-1 overflow-y-auto p-4 sm:p-6">
           {/* Candidates Selected — shared with every other flow that acts
               on a set of candidates, so they all read the same. */}
-          <SelectedCandidatesPanel
-            resumes={resumes}
-            excludedIds={excludedIds}
-            onToggleCandidate={toggleCandidate}
-            versionChoice={versionChoice}
-            onVersionChosen={(resumeId, choice) =>
-              setVersionChoice(prev => ({ ...prev, [resumeId]: choice }))
-            }
-          />
+          {fixedJob && resumes.length === 1 ? (
+            /* Job already decided, one candidate — every resume version up
+               front, latest pre-selected. Several candidates use the shared
+               Candidates Selected panel below. */
+            resumes.map(resume => (
+              <CandidateVersionPicker
+                key={resume.id}
+                resume={resume}
+                choice={versionChoice[resume.id]}
+                onChoose={(choice) => setVersionChoice(prev => ({ ...prev, [resume.id]: choice }))}
+              />
+            ))
+          ) : (
+            <SelectedCandidatesPanel
+              resumes={resumes}
+              excludedIds={excludedIds}
+              onToggleCandidate={toggleCandidate}
+              versionChoice={versionChoice}
+              onVersionChosen={(resumeId, choice) =>
+                setVersionChoice(prev => ({ ...prev, [resumeId]: choice }))
+              }
+            />
+          )}
 
           {/* The job list — search, cards, Version History, pagination — is
               the same component the Resume Scoring page renders statically
-              for its own job-selection step, so the two never drift apart. */}
-          <JobOpeningPickerList
-            jobs={jobs}
-            selection={selection}
-            onSelectionChange={setSelection}
-            radioGroupName={JOB_RADIO_GROUP}
-            scrollContainerRef={listRef}
-          />
+              for its own job-selection step, so the two never drift apart.
+              Not shown when the job is fixed. */}
+          {!fixedJob && (
+            <JobOpeningPickerList
+              jobs={jobs}
+              selection={selection}
+              onSelectionChange={setSelection}
+              radioGroupName={JOB_RADIO_GROUP}
+              scrollContainerRef={listRef}
+            />
+          )}
 
-          {/* Info Box */}
-          {selection && (
+          {/* Info Box — not shown when the job is fixed: nothing is left to
+              explain once the only choice is the candidates' versions. */}
+          {selection && !fixedJob && (
             <div className="mt-3 sm:mt-4 p-3 sm:p-4 bg-gradient-to-r from-gray-50 to-gray-50 dark:from-slate-800/50 dark:to-slate-800/50 border border-gray-200 dark:border-slate-700 rounded-lg">
               <div className="flex items-start gap-2 sm:gap-3">
                 <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue mt-0.5 flex-shrink-0" />

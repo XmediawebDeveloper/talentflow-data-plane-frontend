@@ -12,6 +12,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { DateField } from '@/components/ui/date-field';
+import ExportFormatModal from '@/components/ExportFormatModal';
+import { exportRows, type ExportFileFormat } from '@/lib/utils/exportUtils';
 
 // Use backend proxy instead of direct Admin API calls
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
@@ -81,9 +83,12 @@ const STATUS_OPTIONS = [
   { value: 'resolved', label: 'Resolved' },
 ];
 
+const EXPORT_HEADERS = ['Dispute #', 'Date', 'Deadline', 'Original Invoice', 'Reason', 'Customer Claim', 'Amount', 'Status', 'Bank Reference'];
+
 export default function DisputeHistoryPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [showExportModal, setShowExportModal] = useState(false);
   const [disputes, setDisputes] = useState<DisputeInvoice[]>([]);
   const [stats, setStats] = useState<DisputeStats | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -278,9 +283,8 @@ export default function DisputeHistoryPage() {
     }
   };
 
-  // Export filtered data to CSV
-  const handleExportCSV = () => {
-    const csvHeaders = ['Dispute #', 'Date', 'Deadline', 'Original Invoice', 'Reason', 'Customer Claim', 'Amount', 'Status', 'Bank Reference'];
+  // Export filtered data — runs from the CSV / Excel format picker
+  const handleExport = async (format: ExportFileFormat) => {
     const csvRows = filteredDisputes.map(d => [
       d.invoice_number || '',
       formatISTDate(d.issue_date),
@@ -293,21 +297,9 @@ export default function DisputeHistoryPage() {
       d.metadata?.bank_reference || '',
     ]);
 
-    const csvContent = [
-      csvHeaders.join(','),
-      ...csvRows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    const timestamp = new Date().toISOString().split('T')[0];
-    link.href = url;
-    link.download = `dispute-history-${timestamp}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    await exportRows(format, EXPORT_HEADERS, csvRows, `dispute-history-${new Date().toISOString().split('T')[0]}`, {
+      sheetName: 'Dispute History',
+    });
   };
 
   const clearFilters = () => {
@@ -334,13 +326,21 @@ export default function DisputeHistoryPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button
-              onClick={handleExportCSV}
+              onClick={() => setShowExportModal(true)}
               disabled={loading || filteredDisputes.length === 0}
               className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 transition-[border-color,box-shadow,color,background-color] hover:border-brand-blue/25 hover:text-brand-blue disabled:opacity-60"
             >
               <Download className="h-4 w-4" />
-              Export CSV
+              Export
             </button>
+            <ExportFormatModal
+              open={showExportModal}
+              onClose={() => setShowExportModal(false)}
+              title="Export Dispute History"
+              recordCount={filteredDisputes.length}
+              columns={EXPORT_HEADERS}
+              onExport={handleExport}
+            />
             <button
               onClick={fetchDisputeData}
               disabled={loading}

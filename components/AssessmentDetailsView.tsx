@@ -1993,7 +1993,7 @@ export default function AssessmentDetailsView({
                   title="Archive assessment"
                   className="h-8 w-8 px-0 flex-shrink-0"
                 >
-                  {isArchiving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Archive className="w-4 h-4" />}
+                  {isArchiving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Archive className="w-4 h-4 text-menu-icon-archive" />}
                 </Button>
               )}
               {isArchivedAssessment && canUnarchiveAssessments && (
@@ -2007,7 +2007,7 @@ export default function AssessmentDetailsView({
                   title="Unarchive assessment"
                   className="h-8 w-8 px-0 flex-shrink-0"
                 >
-                  {isUnarchiving ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArchiveRestore className="w-4 h-4" />}
+                  {isUnarchiving ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArchiveRestore className="w-4 h-4 text-menu-icon-archive" />}
                 </Button>
               )}
               {onEdit && canCreateAssessments && !isArchivedAssessment && (() => {
@@ -2034,7 +2034,7 @@ export default function AssessmentDetailsView({
                      pencil, lifted with a brand ring so it reads as the way on. */
                   className={`h-8 w-8 px-0 flex-shrink-0 ${draftLocked ? 'ring-2 ring-brand-blue/40 text-brand-blue shadow-md shadow-brand-blue/20' : ''}`}
                 >
-                  <Edit2 className="w-4 h-4" />
+                  <Edit2 className="w-4 h-4 text-menu-icon-edit" />
                 </Button>
                 );
               })()}

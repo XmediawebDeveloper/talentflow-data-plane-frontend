@@ -3,6 +3,7 @@
 import { SCORE_CELL_TEXT } from '@/lib/utils/score';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { WorkInProgressIcon } from '@/components/icons/nav-icons';
+import { Cell, Pie, PieChart as RechartsPieChart, ResponsiveContainer } from 'recharts';
 import { Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, TrendingUp, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, Loader2, Square, CheckSquare, Building2, Calendar, Users, ChevronDown, ChevronsUpDown, MoreVertical, Info, PieChart, RefreshCw, Layers, ClipboardList } from 'lucide-react';
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, useId } from 'react';
 import { useDialogHeightLock } from '@/lib/hooks/useDialogHeightLock';
@@ -39,7 +40,9 @@ import { useListSearch } from '@/lib/hooks/useListSearch';
 import { useJobInviteTargets } from '@/lib/hooks/useJobInviteTargets';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
-import { lineageKey, resolveVersionHistoryRows } from '@/lib/utils/jobOpeningDisplay';
+import { lineageKey, resolveVersionHistoryRows, getCreationMethodConfig, getDisplayStatus, getStatusConfig } from '@/lib/utils/jobOpeningDisplay';
+import { JobOpeningPrimaryItems } from '@/components/jobs/JobOpeningSummary';
+import { useJobRecords } from '@/lib/hooks/useJobRecords';
 import type { Job as LineageJob } from '@/lib/types/types';
 import {
   DropdownMenu,
@@ -589,6 +592,17 @@ export default function ResumeScoringPage({
   // `historyModalFilter`: one object, updated directly on every change, no
   // separate Apply step.
   const [historyModalFilter, setHistoryModalFilter] = useState<ScoringHistoryModalFilters>(EMPTY_SCORING_HISTORY_FILTERS);
+  // Full JD records by id — so the job list rows print the Job Descriptions
+  // cards' tags (experience, salary, AI/Manual…), which the scoring records
+  // themselves don't carry.
+  const jobRecordsById = useJobRecords();
+  /** The JD code (JD-266) for a scored job: the scoring record's own, else the
+   *  full JD record's — some score records come back without it. */
+  const jdCodeOf = (it: { jdJobId?: string; jobId: string }) =>
+    it.jdJobId || jobRecordsById.get(it.jobId)?.job_id;
+  // Scoring History popup's Match Breakdown donut — 'all' or one version, kept
+  // per job (a different job reads as 'all' without needing a reset).
+  const [historyBreakdown, setHistoryBreakdown] = useState<{ jobId: string; version: string }>({ jobId: '', version: 'all' });
   const resetHistoryModalFilters = () => setHistoryModalFilter(EMPTY_SCORING_HISTORY_FILTERS);
 
   // Every time the modal opens for a job, pull its latest scores — the same
@@ -2047,6 +2061,40 @@ export default function ResumeScoringPage({
   }
 
   // View History Details
+  /* The View by Job list's search + filters, as one predicate — shared by the
+     list itself and the job page's Previous / Next, so paging walks exactly
+     the jobs the list shows. */
+  const historyItemMatchesFilters = (item: ScoredResumeData): boolean => {
+    const matchesSearch = historySearchQuery === '' ||
+      item.jobTitle.toLowerCase().includes(historySearchQuery.toLowerCase()) ||
+      (jdCodeOf(item) || '').toLowerCase().includes(historySearchQuery.toLowerCase());
+
+    const matchesCreatedBy = historyCreatedBy === '' ||
+      (item.jdCreatedByName || '') === historyCreatedBy;
+
+    let matchesScoredDate = true;
+    if (historyScoredFrom) matchesScoredDate = matchesScoredDate && new Date(item.scoredAt) >= new Date(historyScoredFrom);
+    if (historyScoredTo) matchesScoredDate = matchesScoredDate && new Date(item.scoredAt) <= new Date(historyScoredTo);
+
+    const matchesLocation = historyLocation === '' ||
+      (item.jdLocation || '').toLowerCase().includes(historyLocation.toLowerCase());
+
+    /* Exact match on the raw value, like Job Type and Industry beside it —
+       the options are built from these same rows, so the compared strings
+       always come from one source. */
+    const matchesWorkMode = historyWorkMode === '' ||
+      (item.jdRemoteType || '').toLowerCase() === historyWorkMode.toLowerCase();
+
+    const matchesJobType = historyJobType === '' ||
+      (item.jdEmploymentType || '').toLowerCase() === historyJobType.toLowerCase();
+
+    const matchesIndustry = historyIndustry === '' ||
+      (item.jdIndustryType || '').toLowerCase() === historyIndustry.toLowerCase();
+
+    return matchesSearch && matchesCreatedBy && matchesScoredDate && matchesLocation
+      && matchesWorkMode && matchesJobType && matchesIndustry;
+  };
+
   if (viewMode === 'details' && selectedHistoryItem) {
     // Version badge next to the job title — same lineage data the "View by
     // Job" list rows already prefetch (see historyLineageFilterTargets
@@ -2129,10 +2177,22 @@ export default function ResumeScoringPage({
             } },
             { label: selectedHistoryItem.jobTitle },
           ]}
-          actions={scoredHistory.length > 1 ? (() => {
-            const historyIdx = scoredHistory.findIndex(h => h.jobId === selectedHistoryItem.jobId);
-            const prevItem = historyIdx > 0 ? scoredHistory[historyIdx - 1] : null;
-            const nextItem = historyIdx >= 0 && historyIdx < scoredHistory.length - 1 ? scoredHistory[historyIdx + 1] : null;
+          actions={(() => {
+            /* One stop per JOB — the View by Job list's own rows (each job's
+               latest scored version, search and filters applied, in its
+               order) — not per scored version, which walked job 1 v1, v2, v3
+               before ever reaching job 2. Matched by lineage, so whichever
+               version is open, it counts as its job's row. A job the active
+               filters hide falls back to the unfiltered list. */
+            const filteredJobs = collapseHistoryToLatestVersions(scoredHistory.filter(historyItemMatchesFilters), resolveHistoryGroupKey);
+            const currentKey = resolveHistoryGroupKey(selectedHistoryItem);
+            const jobNavList = filteredJobs.some(h => resolveHistoryGroupKey(h) === currentKey)
+              ? filteredJobs
+              : collapseHistoryToLatestVersions(scoredHistory, resolveHistoryGroupKey);
+            if (jobNavList.length <= 1) return undefined;
+            const historyIdx = jobNavList.findIndex(h => resolveHistoryGroupKey(h) === currentKey);
+            const prevItem = historyIdx > 0 ? jobNavList[historyIdx - 1] : null;
+            const nextItem = historyIdx >= 0 && historyIdx < jobNavList.length - 1 ? jobNavList[historyIdx + 1] : null;
             const goToHistoryItem = (item: ScoredResumeData) => {
               setSelectedHistoryItem(item);
               setSelectedScoredResumes([]);
@@ -2142,12 +2202,12 @@ export default function ResumeScoringPage({
             return (
               <RecordPager
                 currentIndex={historyIdx >= 0 ? historyIdx : 0}
-                totalCount={scoredHistory.length}
+                totalCount={jobNavList.length}
                 onPrev={prevItem ? () => goToHistoryItem(prevItem) : undefined}
                 onNext={nextItem ? () => goToHistoryItem(nextItem) : undefined}
               />
             );
-          })() : undefined}
+          })()}
         />
         {/* Job header — the Prev/Next that used to sit beside Score New Resumes
             moved into the breadcrumb. */}
@@ -2160,6 +2220,10 @@ export default function ResumeScoringPage({
                 </div>
                 <div>
                   <div className="flex flex-wrap items-center gap-2 mb-1">
+                    {/* JD ID before the title — the same badge the job rows use. */}
+                    {jdCodeOf(selectedHistoryItem) && (
+                      <JobIdBadge className="inline-flex h-7 items-center flex-shrink-0">{jdCodeOf(selectedHistoryItem)}</JobIdBadge>
+                    )}
                     <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight break-words">{selectedHistoryItem.jobTitle}</h1>
                     {detailsVersionNumber && detailsVersionNumber >= 1 && (
                       detailsVersionRows.length > 1 ? (
@@ -2266,18 +2330,8 @@ export default function ResumeScoringPage({
               </div>
 
               <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full sm:w-auto sm:flex-shrink-0">
-                {/* Go to JD — opens the job, at the version this page is
-                    scoring against (`jobId` is that version's JD id, and
-                    follows the version switcher). */}
-                <Button
-                  variant="secondary"
-                  onClick={() => router.push(`/recruitment/job-details?id=${encodeURIComponent(selectedHistoryItem.jobId)}`)}
-                  title="Open this job version"
-                  icon={<Briefcase className="w-4 h-4" />}
-                  className="w-full sm:w-auto"
-                >
-                  Go to JD
-                </Button>
+                {/* Go to JD lives inside the View Job Detail popup now
+                    (JDVersionHistoryModal's `showGoToJd`). */}
                 {/* Prev/Next — placed before the Score New Resumes action */}
                 <Button
                   variant="primary"
@@ -2298,7 +2352,7 @@ export default function ResumeScoringPage({
                        either way. */
                     const jobForPicker: LineageJob = {
                       id: selectedHistoryItem.jobId,
-                      job_id: selectedHistoryItem.jdJobId,
+                      job_id: jdCodeOf(selectedHistoryItem),
                       title: selectedHistoryItem.jobTitle,
                       status: mapJdStatusToJobStatus(selectedHistoryItem.jdStatus),
                       location: selectedHistoryItem.jdLocation || '',
@@ -2339,6 +2393,11 @@ export default function ResumeScoringPage({
           jdId={selectedHistoryItem.jobId}
           jdTitle={selectedHistoryItem.jobTitle}
           initialVersionNumber={detailsVersionNumber}
+          /* Go to JD, moved here from the header: opens the version on
+             screen in the popup (this page's version unless another is
+             being previewed). */
+          showGoToJd
+          goToJdTab="scored-resumes"
         />
 
         {/* Scored Resumes Table */}
@@ -2346,7 +2405,7 @@ export default function ResumeScoringPage({
           resumes={scoredResumesData}
           jobTitle={selectedHistoryItem.jobTitle}
           jobId={selectedHistoryItem.jobId}
-          jobCode={selectedHistoryItem.jdJobId}
+          jobCode={jdCodeOf(selectedHistoryItem)}
           initialScoredDate={selectedHistoryItem.scoredDateFilter ?? ''}
           availableUnits={availableASUnits ?? 10}
           /* Nothing published on this JD → nothing to invite to, so the row's
@@ -2369,7 +2428,7 @@ export default function ResumeScoringPage({
             }
             const jobForPicker: LineageJob = {
               id: selectedHistoryItem.jobId,
-              job_id: selectedHistoryItem.jdJobId,
+              job_id: jdCodeOf(selectedHistoryItem),
               title: selectedHistoryItem.jobTitle,
               status: mapJdStatusToJobStatus(selectedHistoryItem.jdStatus),
               location: selectedHistoryItem.jdLocation || '',
@@ -2592,37 +2651,8 @@ export default function ResumeScoringPage({
       }
     }
 
-    // Filter history items
-    const filteredHistory = scoredHistory.filter(item => {
-      const matchesSearch = historySearchQuery === '' ||
-        item.jobTitle.toLowerCase().includes(historySearchQuery.toLowerCase()) ||
-        (item.jdJobId || '').toLowerCase().includes(historySearchQuery.toLowerCase());
-
-      const matchesCreatedBy = historyCreatedBy === '' ||
-        (item.jdCreatedByName || '') === historyCreatedBy;
-
-      let matchesScoredDate = true;
-      if (historyScoredFrom) matchesScoredDate = matchesScoredDate && new Date(item.scoredAt) >= new Date(historyScoredFrom);
-      if (historyScoredTo) matchesScoredDate = matchesScoredDate && new Date(item.scoredAt) <= new Date(historyScoredTo);
-
-      const matchesLocation = historyLocation === '' ||
-        (item.jdLocation || '').toLowerCase().includes(historyLocation.toLowerCase());
-
-      /* Exact match on the raw value, like Job Type and Industry beside it —
-         the options are built from these same rows, so the compared strings
-         always come from one source. */
-      const matchesWorkMode = historyWorkMode === '' ||
-        (item.jdRemoteType || '').toLowerCase() === historyWorkMode.toLowerCase();
-
-      const matchesJobType = historyJobType === '' ||
-        (item.jdEmploymentType || '').toLowerCase() === historyJobType.toLowerCase();
-
-      const matchesIndustry = historyIndustry === '' ||
-        (item.jdIndustryType || '').toLowerCase() === historyIndustry.toLowerCase();
-
-      return matchesSearch && matchesCreatedBy && matchesScoredDate && matchesLocation
-        && matchesWorkMode && matchesJobType && matchesIndustry;
-    });
+    // Filter history items (shared with the job page's Previous / Next)
+    const filteredHistory = scoredHistory.filter(historyItemMatchesFilters);
 
     // One row per job — its own final (highest) scored version — instead of
     // one row per JD version. Earlier versions remain reachable through that
@@ -2976,11 +3006,8 @@ export default function ResumeScoringPage({
         {/* Search and Filter Bar — only when there's a list to filter */}
         {scoredHistory.length > 0 && (
           <div className="bg-white dark:bg-slate-900 p-4 mb-4 border-b border-gray-200 dark:border-slate-700/60">
-            {/* This list is its own component, not `ScoredResumesTable`, so it
-                did not get the section heading the other five views have. Named
-                for what its rows are — jobs, not resumes — which is the whole
-                distinction between this view and the rest. */}
-            <h2 className="text-gray-900 dark:text-slate-50 mb-4">Job List ({collapsedScoredHistoryCount.toLocaleString()})</h2>
+            {/* No "Job List (N)" heading — the toolbar's count badge already
+                says how many jobs are listed. */}
             <ListToolbar
               searchValue={historySearchQuery}
               onSearchChange={historySearch.setQuery}
@@ -3339,8 +3366,10 @@ export default function ResumeScoringPage({
                       <div className="flex-1 min-w-0 w-full">
                         {/* Title row — matches JD list card */}
                         <div className="flex flex-wrap items-center gap-2 mb-2">
-                          {item.jdJobId && (
-                            <JobIdBadge className="inline-flex h-7 items-center flex-shrink-0">{item.jdJobId}</JobIdBadge>
+                          {/* The scoring record's own JD code, else the full JD
+                              record's — some scores come back without it. */}
+                          {jdCodeOf(item) && (
+                            <JobIdBadge className="inline-flex h-7 items-center flex-shrink-0">{jdCodeOf(item)}</JobIdBadge>
                           )}
                           <h3
                             className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 truncate min-w-0 cursor-pointer hover:text-brand-blue transition-colors"
@@ -3362,23 +3391,30 @@ export default function ResumeScoringPage({
                               v{displayVersionNumber}
                             </span>
                           )}
-                          {/* Status badge */}
+                          {/* AI / Manual and status — the Job Descriptions cards'
+                              own tags and colours (`getCreationMethodConfig`,
+                              `getDisplayStatus` / `getStatusConfig`), so a job
+                              reads the same here, Republished included. */}
                           {(() => {
-                            const s = (item.jdStatus || 'published').toLowerCase();
-                            const cfg: Record<string, { label: string; bg: string; text: string; border: string; dot: string }> = {
-                              published: { label: 'Published', bg: 'bg-success-subtle',  text: 'text-success',  border: 'border-success-line',  dot: 'bg-success' },
-                              active:    { label: 'Published', bg: 'bg-success-subtle',  text: 'text-success',  border: 'border-success-line',  dot: 'bg-success' },
-                              closed:    { label: 'Closed',    bg: 'bg-destructive-subtle',    text: 'text-destructive',    border: 'border-destructive-line',    dot: 'bg-destructive' },
-                              archived:  { label: 'Archived',  bg: 'bg-gray-50',   text: 'text-gray-500',   border: 'border-gray-200',   dot: 'bg-gray-400' },
-                              disabled:  { label: 'Disabled',  bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200', dot: 'bg-orange-500' },
-                              draft:     { label: 'Draft',     bg: 'bg-brand-orange/10', text: 'text-brand-orange-deep', border: 'border-brand-orange/20', dot: 'bg-brand-orange' },
-                            };
-                            const c = cfg[s] || cfg.published;
+                            const record = jobRecordsById.get(item.jobId);
+                            const method = getCreationMethodConfig(record?.creation_method ?? item.jdCreationMethod);
+                            const raw = record?.status || (item.jdStatus === 'active' ? 'published' : item.jdStatus) || 'published';
+                            const label = getDisplayStatus(
+                              raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase(),
+                              record?.currentVersion ?? item.jdCurrentVersion,
+                            );
+                            const tone = getStatusConfig(label);
                             return (
-                              <span className={`inline-flex h-7 items-center px-2 py-0.5 rounded-full text-xs ${c.bg} ${c.text} border ${c.border} gap-1.5 flex-shrink-0`}>
-                                <div className={`w-1.5 h-1.5 rounded-full ${c.dot}`}></div>
-                                {c.label}
-                              </span>
+                              <>
+                                <span className={`inline-flex h-7 items-center px-2 py-0.5 rounded-full text-xs ${method.bg} ${method.text} border ${method.border} gap-1.5 flex-shrink-0`}>
+                                  <div className={`w-1.5 h-1.5 rounded-full ${method.dot}`}></div>
+                                  {method.label}
+                                </span>
+                                <span className={`inline-flex h-7 items-center px-2 py-0.5 rounded-full text-xs ${tone.bg} ${tone.text} border ${tone.border} gap-1.5 flex-shrink-0`}>
+                                  <div className={`w-1.5 h-1.5 rounded-full ${tone.dot}`}></div>
+                                  {label}
+                                </span>
+                              </>
                             );
                           })()}
                           {/* History icon button */}
@@ -3393,38 +3429,47 @@ export default function ResumeScoringPage({
                           </Button>
                         </div>
 
-                        {/* Info row — matches JD list card exactly */}
+                        {/* Info row — the Job Descriptions cards' own details
+                            line (experience, industry, location, salary, type,
+                            work mode) from the shared component, then when it
+                            was posted and by whom, then this page's scoring
+                            facts. Falls back to the scoring record's own JD
+                            fields until the full record has loaded. */}
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-gray-600 dark:text-slate-400 mb-2">
-                          {item.jdDepartment && (
-                            <span className="flex items-center gap-1.5">
-                              <Briefcase className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-                              {item.jdDepartment}
-                            </span>
-                          )}
-                          {item.jdIndustryType && (
-                            <span className="flex items-center gap-1.5">
-                              <Building2 className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-                              {formatIndustryType(item.jdIndustryType)}
-                            </span>
-                          )}
-                          {item.jdLocation && (
-                          <span className="flex items-center gap-1.5">
-                            <MapPin className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-                            {item.jdLocation}
-                          </span>
-                          )}
-                          {item.jdEmploymentType && (
-                            <span className="flex items-center gap-1.5">
-                              <Clock className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-                              {formatEmploymentType(item.jdEmploymentType)}
-                            </span>
-                          )}
-                          {item.jdRemoteType && (
-                            <span className="flex items-center gap-1.5">
-                              <Users className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-                              <span className="capitalize">{item.jdRemoteType}</span>
-                            </span>
-                          )}
+                          {(() => {
+                            const record = jobRecordsById.get(item.jobId);
+                            const postedDate = record?.postedDate || item.jdPublishedAt;
+                            const postedBy = record?.postedBy || item.jdCreatedByName;
+                            return (
+                              <>
+                                <JobOpeningPrimaryItems
+                                  job={record ?? {
+                                    id: item.jobId,
+                                    title: item.jobTitle,
+                                    status: mapJdStatusToJobStatus(item.jdStatus),
+                                    location: item.jdLocation || '',
+                                    daysActive: 0,
+                                    requiredMatch: 0,
+                                    industry_type: item.jdIndustryType,
+                                    employmentType: item.jdEmploymentType,
+                                    workMode: item.jdRemoteType,
+                                  }}
+                                />
+                                {postedDate && (
+                                  <span className="flex items-center gap-1.5">
+                                    <Calendar className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                                    Posted {formatISTDate(postedDate)}
+                                  </span>
+                                )}
+                                {postedBy && (
+                                  <span className="flex items-center gap-1.5">
+                                    <User className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                                    By {postedBy}
+                                  </span>
+                                )}
+                              </>
+                            );
+                          })()}
                           {item.scoredResumes?.[0]?.scoredBy && (
                             <span className="flex items-center gap-1.5">
                               <User className="w-4 h-4 text-gray-400 dark:text-slate-500" />
@@ -3883,6 +3928,21 @@ export default function ResumeScoringPage({
           { dot: 'bg-pink-500', bar: 'bg-pink-500' },
         ];
 
+        // Match Breakdown donut — every version, or the one picked in its own
+        // dropdown; like the summary cards, independent of the table filters.
+        const breakdownVersion = historyBreakdown.jobId === historyModalItem.jobId ? historyBreakdown.version : 'all';
+        const breakdownResumes = breakdownVersion === 'all'
+          ? allResumes
+          : allResumes.filter((r) => String(r.__versionNumber) === breakdownVersion);
+        const breakdownTotal = breakdownResumes.length;
+        const breakdownRows = [
+          { key: 'exact', label: 'Exact Match', value: breakdownResumes.filter(isExactMatch).length, swatch: 'bg-success', fill: 'fill-success' },
+          { key: 'partial', label: 'Partial Match', value: breakdownResumes.filter(isPartialMatch).length, swatch: 'bg-brand-orange', fill: 'fill-brand-orange' },
+          { key: 'nomatch', label: 'No Match', value: breakdownResumes.filter(isNoMatch).length, swatch: 'bg-destructive', fill: 'fill-destructive' },
+        ];
+        const breakdownSegments = breakdownRows.filter(row => row.value > 0);
+        const breakdownPct = (value: number) => breakdownTotal > 0 ? Math.round((value / breakdownTotal) * 100) : 0;
+
         const sortHeaderIcon = <ChevronsUpDown className="w-3 h-3 text-gray-400 dark:text-slate-500" />;
         const historySelectClass = 'w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black dark:text-slate-100 bg-white dark:bg-slate-900';
         const historyLabelClass = 'block text-xs font-medium text-gray-600 dark:text-slate-400 mb-1';
@@ -3904,7 +3964,7 @@ export default function ResumeScoringPage({
                     <h3 className="font-bold text-gray-900 dark:text-slate-50">Scoring History</h3>
                     <p className="text-sm text-gray-500 dark:text-slate-500 truncate max-w-[360px]">
                       {historyModalItem.jobTitle}
-                      {historyModalItem.jdJobId && ` (${historyModalItem.jdJobId})`}
+                      {jdCodeOf(historyModalItem) && ` (${jdCodeOf(historyModalItem)})`}
                     </p>
                   </div>
                 </div>
@@ -4069,12 +4129,13 @@ export default function ResumeScoringPage({
                 </div>
               </div>
 
-              {/* Table + side panel. items-start (rather than flex's default
-                  stretch) means each side sizes to its own content — the
-                  side panel never gets force-stretched to the table's height
-                  and then clipped, since it carries no scrollbar of its own. */}
-              <div className="flex flex-col lg:flex-row items-start gap-5 px-6 py-4">
-                <div className="w-full lg:flex-1 lg:min-w-0 flex flex-col rounded-lg border border-gray-100 dark:border-slate-700/60 overflow-hidden">
+              {/* Same layout as the AI Talent Match / Assessment / AI Interview
+                  history popups: the table with its version summary beneath
+                  it on the left, a breakdown donut with its own version
+                  picker on the right, stretched to the left column's height. */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 px-6 py-4 items-stretch">
+                <div className="lg:col-span-2 min-w-0 flex flex-col gap-4">
+                <div className="flex flex-col rounded-lg border border-gray-100 dark:border-slate-700/60 overflow-hidden">
                   {groups.length === 0 ? (
                     <div className="flex-1 flex items-center justify-center py-10 text-center text-sm text-gray-400 dark:text-slate-500">
                       {allResumes.length === 0 ? 'No scoring history available.' : 'No scoring history matches these filters.'}
@@ -4166,11 +4227,10 @@ export default function ResumeScoringPage({
                   )}
                 </div>
 
-                {/* Job Version Average — average score per JD version,
-                    independent of the table's own filters (see
-                    versionAverages). No internal scroll: a lineage tops out
-                    at a handful of versions, so this always fits in full. */}
-                <div className="w-full lg:w-[300px] lg:flex-shrink-0 rounded-lg border border-gray-100 dark:border-slate-700/60 overflow-hidden">
+                {/* Job Version Average — average score per JD version, under
+                    the table and independent of its filters (see
+                    versionAverages). Versions sit side by side. */}
+                <div className="rounded-lg border border-gray-100 dark:border-slate-700/60 overflow-hidden">
                   <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50">
                     <div className="min-w-0">
                       <p className="text-sm font-bold text-gray-900 dark:text-slate-100">Job Version Average</p>
@@ -4178,28 +4238,107 @@ export default function ResumeScoringPage({
                     </div>
                     <TrendingUp className="w-4 h-4 text-brand-blue flex-shrink-0" />
                   </div>
-                  <div className="p-4 space-y-4">
+                  <div className="p-4">
                     {versionAverages.length === 0 ? (
-                      <div className="text-center text-xs text-gray-400 dark:text-slate-500 py-6">No data yet.</div>
+                      <div className="text-center text-xs text-gray-400 dark:text-slate-500 py-4">No data yet.</div>
                     ) : (
-                      versionAverages.map((v, idx) => {
-                        const accent = VERSION_ACCENTS[idx % VERSION_ACCENTS.length];
-                        return (
-                          <div key={v.version}>
-                            <div className="flex items-center justify-between gap-2 mb-1.5">
-                              <span className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-800 dark:text-slate-200">
-                                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${accent.dot}`} />
-                                v{v.version}
-                              </span>
-                              <span className="text-sm font-bold text-gray-900 dark:text-slate-100">{v.avg}%</span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-3">
+                        {versionAverages.map((v, idx) => {
+                          const accent = VERSION_ACCENTS[idx % VERSION_ACCENTS.length];
+                          return (
+                            <div key={v.version}>
+                              <div className="flex items-center justify-between gap-2 mb-1.5">
+                                <span className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-800 dark:text-slate-200">
+                                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${accent.dot}`} />
+                                  v{v.version}
+                                </span>
+                                <span className="text-sm font-bold text-gray-900 dark:text-slate-100">{v.avg}%</span>
+                              </div>
+                              <div className="h-1.5 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden">
+                                <div className={`h-full rounded-full ${accent.bar}`} style={{ width: `${Math.min(100, Math.max(0, v.avg))}%` }} />
+                              </div>
                             </div>
-                            <div className="h-1.5 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden">
-                              <div className={`h-full rounded-full ${accent.bar}`} style={{ width: `${Math.min(100, Math.max(0, v.avg))}%` }} />
-                            </div>
-                          </div>
-                        );
-                      })
+                          );
+                        })}
+                      </div>
                     )}
+                  </div>
+                </div>
+                </div>
+
+                {/* Match Breakdown — donut + legend with a version picker,
+                    as the other history popups have. Static: the centre always
+                    shows the total and the legend carries every count, so
+                    colour is never the only cue. */}
+                <div className="rounded-lg border border-gray-100 dark:border-slate-700/60 p-4 flex flex-col">
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-brand-blue/10 text-brand-blue flex items-center justify-center flex-shrink-0">
+                        <PieChart className="w-4 h-4" />
+                      </div>
+                      <span className="text-sm font-semibold text-gray-900 dark:text-slate-50 truncate">Match Breakdown</span>
+                    </div>
+                    <select
+                      value={breakdownVersion}
+                      onChange={(e) => setHistoryBreakdown({ jobId: historyModalItem.jobId, version: e.target.value })}
+                      aria-label="Match breakdown version"
+                      className="text-xs px-2 py-1.5 border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 flex-shrink-0"
+                    >
+                      <option value="all">All Versions</option>
+                      {distinctHistoryVersions.map((v) => (
+                        <option key={v} value={String(v)}>v{v}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex flex-col items-center gap-4 flex-1 justify-center">
+                    <div className="relative w-[190px] h-[190px] shrink-0">
+                      {breakdownSegments.length > 0 ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <RechartsPieChart>
+                            <Pie
+                              data={breakdownSegments.map(row => ({ name: row.label, value: row.value }))}
+                              dataKey="value"
+                              nameKey="name"
+                              innerRadius="66%"
+                              outerRadius="100%"
+                              startAngle={90}
+                              endAngle={-270}
+                              paddingAngle={breakdownSegments.length > 1 ? 2 : 0}
+                              cornerRadius={3}
+                              stroke="none"
+                              isAnimationActive={false}
+                            >
+                              {breakdownSegments.map(row => (
+                                <Cell key={row.key} className={`${row.fill} outline-none pointer-events-none`} />
+                              ))}
+                            </Pie>
+                          </RechartsPieChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <div className="w-full h-full rounded-full border-[20px] border-slate-100 dark:border-slate-800" />
+                      )}
+                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center">
+                        <span className="text-3xl font-bold tabular-nums text-gray-900 dark:text-slate-50 leading-none">{breakdownTotal}</span>
+                        <span className="text-xs text-gray-500 dark:text-slate-400 mt-1 leading-tight">Resumes<br />Scored</span>
+                      </div>
+                    </div>
+                    {/* Legend: names in the left half, values in the right
+                        half, split by one common line down the centre. */}
+                    <ul className="relative w-full space-y-1.5 text-sm">
+                      <li className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 !mt-0 bg-gray-200 dark:bg-slate-700" aria-hidden />
+                      {breakdownRows.map(row => (
+                        <li key={row.key} className="grid grid-cols-2 items-center rounded">
+                          <span className="flex items-center gap-2 min-w-0 pl-1 pr-3">
+                            <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${row.swatch}`} />
+                            <span className="truncate text-gray-600 dark:text-slate-400">{row.label}</span>
+                          </span>
+                          <span className="flex items-baseline gap-1.5 pl-3 pr-1">
+                            <span className="tabular-nums font-semibold text-gray-900 dark:text-slate-100">{row.value}</span>
+                            <span className="tabular-nums text-xs text-gray-500 dark:text-slate-400">({breakdownPct(row.value)}%)</span>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 </div>
               </div>
@@ -4238,7 +4377,7 @@ export default function ResumeScoringPage({
           </div>
           <div className="flex-1 min-w-0">
             <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Score Resumes</h1>
-            <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5">Select a job and let AI match the best candidates</p>
+            <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5">Select a job and let AI score candidates.</p>
           </div>
         </div>
       </div>
@@ -4253,17 +4392,16 @@ export default function ResumeScoringPage({
           Select Job Description
         </label>
 
-        {/* The list below is the Job Openings page's own published set: a job
-            is listed only when its LATEST version is Published, so a job the
-            Job Descriptions list shows as Draft is never offered here. It
-            used to fall back to an older published version (showAllStatuses),
-            which listed re-drafted jobs as Published and scorable. */}
+        {/* Every non-draft job is listed — Published, Disabled and Archived —
+            by its latest non-draft version, with its non-draft versions under
+            View Versions (excludeDraftsOnly). Only a Published version can be
+            scored; the rest are shown greyed out and unselectable. */}
         <div className="mb-3 flex items-start gap-2 rounded-lg bg-brand-blue/[0.06] border border-brand-blue/20 px-3 py-2.5">
           <Info className="w-4 h-4 text-brand-blue flex-shrink-0 mt-0.5" />
           <div className="min-w-0">
             <p className="text-xs font-semibold text-gray-900 dark:text-slate-100">Job Eligibility</p>
             <p className="mt-0.5 text-xs text-gray-700 dark:text-slate-300">
-              Only jobs whose latest version is Published or Republished are listed — the same jobs as the Published filter in Job Descriptions. A job is unavailable here until its latest version is Published, so a job with a newer Draft, Disabled or Archived version is not listed. Under View Versions, Disabled and Archived versions are shown for reference but cannot be selected.
+              Every job is listed in every status except Draft — Published, Republished, Disabled and Archived — and View Versions shows its versions the same way. Only Published (or Republished) jobs and versions can be selected for scoring; Disabled and Archived ones are shown greyed out for reference. Drafts are not listed.
             </p>
           </div>
         </div>
@@ -4281,6 +4419,10 @@ export default function ResumeScoringPage({
           }}
           proceedDisabled={!canRunScoring}
           proceedLabel="Select Resumes"
+          excludeDraftsOnly
+          /* The "N assessed" / "N interviewed" tags the Job Descriptions
+             cards carry, so each job reads the same in both lists. */
+          showCandidateCounts
         />
 
       </div>

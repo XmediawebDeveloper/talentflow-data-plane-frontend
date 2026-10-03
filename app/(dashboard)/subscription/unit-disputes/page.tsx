@@ -12,6 +12,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { DateField } from '@/components/ui/date-field';
+import ExportFormatModal from '@/components/ExportFormatModal';
+import { exportRows, type ExportFileFormat } from '@/lib/utils/exportUtils';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
@@ -79,6 +81,8 @@ const UNIT_TYPE_LABELS: Record<string, string> = {
   max_seats: 'Max Users',
 };
 
+const EXPORT_HEADERS = ['Dispute ID', 'Date', 'Unit Type', 'Units Requested', 'Reason', 'Description', 'Status', 'Units Restored', 'Resolved At'];
+
 // --- Component ---
 
 export default function UnitDisputesPage() {
@@ -86,6 +90,7 @@ export default function UnitDisputesPage() {
   const canExportDisputes = hasPermission('canExportUsage');
   const canFileDispute = hasPermission('canUpgradePlan');
   const [loading, setLoading] = useState(true);
+  const [showExportModal, setShowExportModal] = useState(false);
   const [disputes, setDisputes] = useState<UnitDispute[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [selectedDispute, setSelectedDispute] = useState<UnitDispute | null>(null);
@@ -411,8 +416,7 @@ export default function UnitDisputesPage() {
     return REASON_OPTIONS.find(r => r.value === reason)?.label || reason;
   };
 
-  const handleExportCSV = () => {
-    const csvHeaders = ['Dispute ID', 'Date', 'Unit Type', 'Units Requested', 'Reason', 'Description', 'Status', 'Units Restored', 'Resolved At'];
+  const handleExport = async (format: ExportFileFormat) => {
     const csvRows = filteredDisputes.map(d => [
       d.id,
       formatDate(d.created_at),
@@ -425,20 +429,9 @@ export default function UnitDisputesPage() {
       d.resolved_at ? formatDate(d.resolved_at) : '',
     ]);
 
-    const csvContent = [
-      csvHeaders.join(','),
-      ...csvRows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `unit-disputes-${new Date().toISOString().split('T')[0]}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    await exportRows(format, EXPORT_HEADERS, csvRows, `unit-disputes-${new Date().toISOString().split('T')[0]}`, {
+      sheetName: 'Unit Disputes',
+    });
   };
 
   const clearFilters = () => {
@@ -472,15 +465,23 @@ export default function UnitDisputesPage() {
                   toast.error('You do not have permission to export disputes');
                   return;
                 }
-                handleExportCSV();
+                setShowExportModal(true);
               }}
               disabled={loading || filteredDisputes.length === 0 || !canExportDisputes}
               title={!canExportDisputes ? 'You do not have permission to export disputes' : ''}
               className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 transition-[border-color,box-shadow,color,background-color] hover:border-brand-blue/25 hover:text-brand-blue disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <Download className="h-4 w-4" />
-              <span className="hidden sm:inline">Export CSV</span>
+              <span className="hidden sm:inline">Export</span>
             </button>
+            <ExportFormatModal
+              open={showExportModal}
+              onClose={() => setShowExportModal(false)}
+              title="Export Unit Disputes"
+              recordCount={filteredDisputes.length}
+              columns={EXPORT_HEADERS}
+              onExport={handleExport}
+            />
             <button
               onClick={fetchDisputes}
               disabled={loading}

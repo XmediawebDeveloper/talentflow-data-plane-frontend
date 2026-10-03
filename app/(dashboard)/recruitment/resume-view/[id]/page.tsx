@@ -201,6 +201,8 @@ import { resumeService, Resume as ApiResume } from '@/lib/services/resumeService
 import { jdService } from '@/lib/services/jdService';
 import { scoringService, BatchScoringStatus } from '@/lib/services/scoringService';
 import ApplyToJobModal from '@/components/ApplyToJobModal';
+import { useScoringProgress } from '@/contexts/ScoringProgressContext';
+import { trackScoringBatch } from '@/lib/utils/trackScoringBatch';
 import AITalentMatchSelectJobModal from '@/components/AITalentMatchSelectJobModal';
 import AITalentMatchProgressPanel from '@/components/AITalentMatchProgressPanel';
 import ScoringJobProgressModal, { JobScoringProgress } from '@/components/ScoringJobProgressModal';
@@ -860,7 +862,43 @@ Best regards`);
     }
   };
 
+  /* Opened from an AI Talent Match result: Score Resume scores against THAT
+     match's JD — no job search/list, and the resume versions are picked inside
+     the dialog itself (all listed, latest pre-selected). */
+  const [aiMatchScoringJob, setAiMatchScoringJob] = useState<Job | null>(null);
+  // App-wide scoring progress popup — the AI Talent Match flow's scoring is
+  // tracked there so it follows the user to the job's page.
+  const scoringProgress = useScoringProgress();
+
   const handleApplyToJob = async () => {
+    if (viewSource === 'ai-talent-match' && aiMatchJobId) {
+      try {
+        const [jd, lineage] = await Promise.all([
+          jdService.get(aiMatchJobId),
+          jdService.getLineageVersions(aiMatchJobId).catch(() => []),
+        ]);
+        const versionNumber = lineage.find(v => v.id === aiMatchJobId)?.version_number ?? jd.current_version ?? 1;
+        setAiMatchScoringJob({
+          id: jd.id,
+          job_id: jd.job_id,
+          title: jd.title || aiMatchJobTitle || 'Untitled',
+          status: 'Published',
+          location: jd.location || '',
+          daysActive: 0,
+          requiredMatch: 70,
+          applicants: 0,
+          skills: [],
+          versionNumber,
+        } as Job);
+        setSelectedVersionForApply(null);
+        setIsApplyToJobModalOpen(true);
+        return;
+      } catch (error) {
+        console.error('Failed to load the AI Talent Match job for scoring:', error);
+        // Fall through to the normal job picker.
+      }
+    }
+    setAiMatchScoringJob(null);
     // If resume has multiple versions, show version selection first
     if (resume && resume.versions && resume.versions.length > 1) {
       setSelectedVersionForApply(resumeId); // Default to current version
@@ -977,10 +1015,49 @@ Best regards`);
 
     const jobId = jobIds[0];
     // Use selected version if available, otherwise use current resume
-    const resumeIdToScore = selectedVersionForApply || resumeId;
+    // The AI Talent Match flow picks the version inside the dialog, so its
+    // pick (resumeIds[0]) wins; elsewhere the pre-dialog version picker does.
+    const resumeIdToScore = (aiMatchScoringJob ? resumeIds[0] : selectedVersionForApply) || resumeId;
     const selectedJob = jobRecords?.[0] || publishedJobs.find(job => job.id === jobId);
     const fallbackJobTitle = selectedJob?.title || 'Selected Job';
     const candidateName = getCandidateName();
+
+    /* AI Talent Match flow: score, then land on the JOB's own page (its
+       Scored Resumes tab) — the same place the AI Talent Match results page's
+       Score goes. Progress rides the app-wide scoring popup, which follows. */
+    if (aiMatchScoringJob) {
+      const jobScoredResumesUrl = `/recruitment/job-details?id=${encodeURIComponent(jobId)}&tab=scored-resumes`;
+      try {
+        // Already scored against this JD → nothing to run; show it there.
+        try {
+          const existing = await scoringService.checkExistingScores(jobId, [resumeIdToScore]);
+          if (existing.existing_count > 0) {
+            toast.info(`This resume is already scored for "${fallbackJobTitle}".`);
+            router.push(jobScoredResumesUrl);
+            return;
+          }
+        } catch (checkError) {
+          console.warn('[ResumeView] checkExistingScores failed, scoring anyway:', checkError);
+        }
+
+        const response = await scoringService.startBulkScoringAsync(jobId, [resumeIdToScore]);
+        trackScoringBatch(scoringProgress, {
+          batchId: response.batch_id,
+          jobId: response.jd_id || jobId,
+          jobTitle: response.jd_title || fallbackJobTitle,
+          items: [{ resumeId: resumeIdToScore, candidateName }],
+          returnUrl: jobScoredResumesUrl,
+        });
+        toast.success(`Scoring started for ${candidateName}.`);
+        router.push(jobScoredResumesUrl);
+      } catch (error) {
+        console.error('[ResumeView] Failed to start scoring:', error);
+        toast.error(error instanceof Error ? error.message : 'Failed to start scoring');
+      } finally {
+        setSelectedVersionForApply(null);
+      }
+      return;
+    }
 
     try {
       setScoringProgressKey(prev => prev + 1);
@@ -1258,7 +1335,9 @@ Best regards`);
                 )}
               </div>
             )}
-            {canRunAITalentMatch && (
+            {/* Not offered when the resume was opened FROM an AI Talent Match
+                result — the candidate is already a match there. */}
+            {canRunAITalentMatch && viewSource !== 'ai-talent-match' && (
               <button
                 onClick={handleAITalentMatch}
                 className="flex items-center gap-2 px-4 py-2 bg-white border border-brand-cyan/40 text-brand-cyan rounded-lg hover:bg-brand-cyan/5 transition-colors text-sm font-medium"
@@ -1267,7 +1346,8 @@ Best regards`);
                 AI Talent Match
               </button>
             )}
-            {canDeleteResume && (
+            {/* Not offered when opened from an AI Talent Match result. */}
+            {canDeleteResume && viewSource !== 'ai-talent-match' && (
               <button
                 onClick={handleDelete}
                 className="flex items-center gap-2 px-4 py-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50 hover:border-red-300 transition-colors text-sm"
@@ -2426,6 +2506,7 @@ Best regards`);
           jobs={publishedJobs}
           mode="scoring"
           stayOnCurrentPage
+          fixedJob={aiMatchScoringJob ?? undefined}
           onClose={() => {
             setIsApplyToJobModalOpen(false);
             setSelectedVersionForApply(null);

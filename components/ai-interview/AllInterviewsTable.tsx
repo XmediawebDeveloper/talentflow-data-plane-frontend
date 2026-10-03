@@ -330,7 +330,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(10);
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
 

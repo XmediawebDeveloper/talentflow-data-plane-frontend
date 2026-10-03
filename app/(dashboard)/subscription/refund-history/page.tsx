@@ -13,6 +13,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { DateField } from '@/components/ui/date-field';
+import ExportFormatModal from '@/components/ExportFormatModal';
+import { exportRows, type ExportFileFormat } from '@/lib/utils/exportUtils';
 
 // Use backend proxy instead of direct Admin API calls
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
@@ -76,11 +78,14 @@ const STATUS_OPTIONS = [
   { value: 'rejected', label: 'Rejected' },
 ];
 
+const EXPORT_HEADERS = ['Refund #', 'Date', 'Original Invoice', 'Reason', 'Amount', 'Status', 'Refund Method', 'Processed By'];
+
 export default function RefundHistoryPage() {
   const { hasPermission } = useAuth();
   const canExportRefundHistory = hasPermission('canExportUsage');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [showExportModal, setShowExportModal] = useState(false);
   const [refunds, setRefunds] = useState<RefundInvoice[]>([]);
   const [stats, setStats] = useState<RefundStats | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -275,9 +280,8 @@ export default function RefundHistoryPage() {
     }
   };
 
-  // Export filtered data to CSV
-  const handleExportCSV = () => {
-    const csvHeaders = ['Refund #', 'Date', 'Original Invoice', 'Reason', 'Amount', 'Status', 'Refund Method', 'Processed By'];
+  // Export filtered data — runs from the CSV / Excel format picker
+  const handleExport = async (format: ExportFileFormat) => {
     const csvRows = filteredRefunds.map(r => [
       r.invoice_number || '',
       formatISTDate(r.issue_date),
@@ -289,21 +293,9 @@ export default function RefundHistoryPage() {
       r.metadata?.processed_by || '',
     ]);
 
-    const csvContent = [
-      csvHeaders.join(','),
-      ...csvRows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    const timestamp = new Date().toISOString().split('T')[0];
-    link.href = url;
-    link.download = `refund-history-${timestamp}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    await exportRows(format, EXPORT_HEADERS, csvRows, `refund-history-${new Date().toISOString().split('T')[0]}`, {
+      sheetName: 'Refund History',
+    });
   };
 
   const clearFilters = () => {
@@ -329,15 +321,23 @@ export default function RefundHistoryPage() {
                 toast.error('You do not have permission to export refund history');
                 return;
               }
-              handleExportCSV();
+              setShowExportModal(true);
             }}
             disabled={loading || filteredRefunds.length === 0 || !canExportRefundHistory}
             title={!canExportRefundHistory ? 'You do not have permission to export refund history' : ''}
             className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 text-sm font-medium text-gray-700 dark:text-slate-300 transition-colors hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <Download className="h-4 w-4" />
-            Export CSV
+            Export
           </button>
+          <ExportFormatModal
+            open={showExportModal}
+            onClose={() => setShowExportModal(false)}
+            title="Export Refund History"
+            recordCount={filteredRefunds.length}
+            columns={EXPORT_HEADERS}
+            onExport={handleExport}
+          />
           <button
             onClick={fetchRefundData}
             disabled={loading}

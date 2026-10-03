@@ -1456,10 +1456,18 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     if (!stream || !track || track.readyState !== 'live') return null;
     const card = shareBarCardRef.current;
     const page = shareBarPageRef.current;
-    const prevVis = card?.style.visibility;
-    const prevBg = page?.style.background;
+    // Restored to the NORMAL look in finally, never to a saved "previous" value:
+    // an overlapping capture would otherwise save the hidden/white state and
+    // restore to it, leaving the page stuck white until a refresh.
     if (card) card.style.visibility = 'hidden';
     if (page) page.style.background = '#ffffff';
+    // WATCHDOG: puts the page back after 10s even if the capture never settles
+    // and `finally` never runs — the blank must never outlive a few seconds.
+    const watchdog = window.setTimeout(() => {
+      console.warn('[ShareBar] capture watchdog fired — restoring the page');
+      if (card) card.style.visibility = '';
+      if (page) page.style.background = '';
+    }, 10000);
     const video = document.createElement('video');
     video.muted = true; video.playsInline = true;
     video.style.position = 'fixed'; video.style.left = '-99999px'; video.style.top = '0';
@@ -1467,7 +1475,12 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     document.body.appendChild(video);
     try {
       video.srcObject = stream;
-      try { await video.play(); } catch { /* ignore */ }
+      // play() on a MediaStream can stay pending (no frames flowing yet) and
+      // would hold the page blanked; never wait on it for more than 1.5s.
+      await Promise.race([
+        video.play().catch(() => { /* ignore */ }),
+        new Promise<void>((r) => window.setTimeout(r, 1500)),
+      ]);
       await new Promise<void>((resolve) => {
         if (video.videoWidth && video.readyState >= 2) return resolve();
         const on = () => { video.removeEventListener('loadeddata', on); resolve(); };
@@ -1541,14 +1554,30 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       try { video.pause(); } catch { /* ignore */ }
       video.srcObject = null;
       video.remove();
-      if (card) card.style.visibility = prevVis || '';
-      if (page) page.style.background = prevBg || '';
+      window.clearTimeout(watchdog);
+      if (card) card.style.visibility = '';
+      if (page) page.style.background = '';
     }
   }, [waitOutFullscreenBanner]);
 
   /** Hide-share-bar gate Continue: capture → vision verdict → proceed only when clean. */
-  const handleShareBarContinue = useCallback(async () => {
-    if (shareBarChecking) return;
+  // Synchronous re-entry guard: `shareBarChecking` (state) is only set after the
+  // awaited fullscreen request, so a quick second click used to start a second
+  // overlapping capture (stuck white screen). A ref flips in the same tick.
+  const shareBarBusyRef = useRef(false);
+  const handleShareBarContinue = async () => {
+    if (shareBarBusyRef.current) return;
+    shareBarBusyRef.current = true;
+    setShareBarChecking(true);
+    try {
+      await shareBarContinueOnce();
+    } finally {
+      shareBarBusyRef.current = false;
+      setShareBarChecking(false);
+    }
+  };
+
+  const shareBarContinueOnce = async () => {
     const track = screenStreamRef.current?.getVideoTracks?.()[0];
     if (!screenStreamRef.current || !track || track.readyState !== 'live') {
       setScreenShareNotice(SCREEN_SHARE_REQUIRED_MESSAGE);
@@ -1573,7 +1602,15 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     setShareBarError(null);
     setShareBarChecking(true);
     try {
-      const frame = await captureScreenFrame();
+      // SAFETY NET: whatever happens inside the capture, give up after 16s (longest normal path ~14s) and
+      // re-prompt instead of leaving the candidate on a blank/"Checking…" page.
+      const frame = await Promise.race([
+        captureScreenFrame(),
+        new Promise<null>((r) => window.setTimeout(() => {
+          console.warn('[ShareBar] capture timed out after 16s — re-prompting');
+          r(null);
+        }, 16000)),
+      ]);
       if (!frame) {
         setShareBarError('We could not verify the screen-sharing bar. Make sure you are sharing your ENTIRE screen, click "Hide" on that bar, then press Continue again.');
         return;
@@ -1607,7 +1644,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       setShareBarChecking(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shareBarChecking, token, captureScreenFrame, setStepSafe, markFullscreenBanner]);
+  };
 
   /** "Re-share Entire Screen" after the candidate stopped sharing mid-assessment. */
   const handleReshareScreen = useCallback(async () => {

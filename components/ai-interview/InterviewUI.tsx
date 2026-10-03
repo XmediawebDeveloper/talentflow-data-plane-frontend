@@ -2425,8 +2425,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     endAttentionEpisode('multiple_faces', 'restored');
   }, [endAttentionEpisode]);
 
-  const handleGazeAway = useCallback((direction: string) => {
-    startAttentionEpisode('gaze_away', { direction });
+  const handleGazeAway = useCallback((direction: string, metrics?: Record<string, any>) => {
+    startAttentionEpisode('gaze_away', { direction, ...(metrics ?? {}) });
   }, [startAttentionEpisode]);
 
   const handleGazeRestored = useCallback(() => {
@@ -2539,6 +2539,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   const faceDetection = useInterviewFaceDetection({
     enabled: isConnected && webcamReady,
     enableGazeTracking: true,
+    lowTier: effectiveDeviceCapability?.tier === 'low',
     onFaceMissing: handleFaceMissing,
     onFaceRestored: handleFaceRestored,
     onMultipleFaces: handleMultipleFaces,

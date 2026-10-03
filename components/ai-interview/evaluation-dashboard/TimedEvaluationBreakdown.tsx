@@ -1,7 +1,7 @@
 import { Calculator, CheckCircle, XCircle } from 'lucide-react';
 import type { DashboardData, PerQuestionDetail } from './types';
 
-import { formatScore1 } from '@/lib/utils/matchStatus';
+import { formatSkillScore, formatScore1 } from '@/lib/utils/matchStatus';
 interface Props {
   data: DashboardData;
 }
@@ -289,7 +289,7 @@ function QuestionTable({
                   <td className="px-4 py-2 text-right">{s.weight}</td>
                   <td className="px-4 py-2 text-right">
                     <span className="inline-flex items-center gap-1">
-                      <span className={s.is_skipped ? 'text-gray-400' : ''}>{s.score.toFixed(1)}</span>
+                      <span className={s.is_skipped ? 'text-gray-400' : ''}>{formatSkillScore(s.score)}</span>
                       {s.is_skipped ? (
                         <span
                           className="inline-flex items-center px-1 py-0 rounded text-2xs font-semibold bg-gray-100 text-gray-600 border border-gray-300"
