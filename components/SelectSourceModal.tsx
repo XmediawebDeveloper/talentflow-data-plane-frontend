@@ -1,7 +1,11 @@
 'use client';
 
-import { X, Users, Database, Search, CheckSquare, Square, MinusSquare, Loader2, ClipboardList, Upload, Trash2, ShieldAlert, Lock, AlertCircle, HelpCircle } from 'lucide-react';
+import { X, Users, Database, Search, CheckSquare, Square, MinusSquare, Loader2, ClipboardList, Upload, Trash2, ShieldAlert, Lock, AlertCircle, HelpCircle, ChevronDown } from 'lucide-react';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
+import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
+import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
+import { lineageKey } from '@/lib/utils/jobOpeningDisplay';
+import type { Job } from '@/lib/types/types';
 import { useState, useEffect, useMemo, useId } from 'react';
 import { useRouter } from 'next/navigation';
 import { DndProvider } from 'react-dnd';
@@ -83,6 +87,13 @@ interface SelectSourceModalProps {
   /** The JD's short id (e.g. "JD-198") and job version, for the subtitle. */
   jobShortId?: string;
   jobVersion?: number | null;
+  /**
+   * The host's JD row. When given, the popup offers a Job Version picker - the
+   * Resume Database scoring dialog's own Version History panel - and scores
+   * against the version picked there. Starts on `jobId`'s version. Omitted, the
+   * popup scores `jobId` exactly as before.
+   */
+  job?: Job;
   /** The run has settled and the progress popup is still up: bring the
    *  results in BEHIND it (refresh, switch view/tab) without unmounting this
    *  modal, so Close only dismisses and Minimise lands on the results. */
@@ -98,15 +109,45 @@ interface SelectSourceModalProps {
 
 export default function SelectSourceModal({
   onClose,
-  jobTitle,
-  jobId,
+  jobTitle: hostJobTitle,
+  jobId: hostJobId,
   jobShortId,
-  jobVersion,
+  jobVersion: hostJobVersion,
+  job,
   onScoringFinished,
   onScoringComplete,
   onViewResult
 }: SelectSourceModalProps) {
   const router = useRouter();
+
+  /* THE JD VERSION THIS RUN SCORES AGAINST. Each job version is its own JD row,
+     so scoring "against v2" means sending v2's row id. Starts on the host's own
+     version and changes only when the recruiter picks another one below; every
+     use of `jobId` / `jobTitle` / `jobVersion` in this component - the
+     already-scored check, the bulk start, the polling, the progress registry,
+     retry - reads it, so a run is scored, tracked and labelled against the
+     version that was picked. A run already started keeps the id it started with
+     (its closures captured it), and the picker is locked while one is going. */
+  const [scoringTarget, setScoringTarget] = useState<{ id: string; title: string; version: number | null }>(
+    () => ({ id: hostJobId, title: hostJobTitle, version: hostJobVersion ?? null }),
+  );
+  const jobId = scoringTarget.id;
+  const jobTitle = scoringTarget.title;
+  const jobVersion = scoringTarget.version;
+
+  /* The lineage behind the picker - the same hook and endpoint the Resume
+     Database scoring dialog's Version History uses. */
+  const versionLineage = useJobVersionLineage();
+  const versionKey = job ? lineageKey(job) : '';
+  const [versionPickerOpen, setVersionPickerOpen] = useState(false);
+  const versionRadioGroup = `score-version-${useId()}`;
+  useEffect(() => {
+    if (job && versionKey) versionLineage.ensureLoaded(versionKey, hostJobId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [job, versionKey, hostJobId]);
+  const lineageVersions = job ? versionLineage.lineages[versionKey] : undefined;
+  const publishedVersionCount = (lineageVersions || []).filter(v => (v.status || '').toLowerCase() === 'published').length;
+
   const { user, tenant, isTenantAdmin, hasPermissionCode } = useAuth();
   const { startScoringJob, updateItemStatus, setPanelVisibility, setOnRestorePanel, setMinimized, clearJob, activeScoringJobs } = useScoringProgress();
   // Stable per-instance id for the ref-counted panel-visibility registry —
@@ -1015,6 +1056,76 @@ export default function SelectSourceModal({
             <X className="w-5 h-5 text-gray-500 dark:text-slate-500" />
           </button>
         </div>
+
+        {/* JOB VERSION - which version the selected resumes are scored
+            against. The chosen version is named here (and in the header) before
+            anything is scored; "View Versions" opens the Resume Database
+            scoring dialog's own Version History panel, a Select radio per
+            version, published ones selectable. With a single published version
+            there is nothing to choose, so it is simply stated. */}
+        {job && (
+          <div className="border-b border-gray-100 dark:border-slate-700/60 px-3 sm:px-6 py-2.5 sm:py-3 bg-white dark:bg-slate-900 flex-shrink-0">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2 min-w-0 text-xs sm:text-sm">
+                <span className="text-gray-600 dark:text-slate-400">Score against Job Version</span>
+                {jobVersion != null && jobVersion > 0 && (
+                  <span className="text-xs font-semibold px-1.5 py-0.5 rounded-md bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 flex-shrink-0">V{jobVersion}</span>
+                )}
+                {lineageVersions && publishedVersionCount <= 1 && (
+                  <span className="text-xs text-gray-500 dark:text-slate-500">Only published version</span>
+                )}
+              </div>
+              {publishedVersionCount > 1 && (
+                <button
+                  type="button"
+                  onClick={() => setVersionPickerOpen(open => !open)}
+                  disabled={submitting || showProgressModal}
+                  aria-expanded={versionPickerOpen}
+                  className={`h-7 px-2 inline-flex items-center gap-1 whitespace-nowrap border rounded-md text-xs transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
+                    versionPickerOpen
+                      ? 'bg-brand-sky text-brand-blue border-brand-blue/30 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 dark:bg-slate-800 dark:text-slate-100 dark:border-brand-blue/50'
+                      : 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/30 hover:bg-brand-blue-2'
+                  }`}
+                  title={versionPickerOpen ? 'Hide version history' : 'Choose the job version to score against'}
+                >
+                  {versionPickerOpen ? 'Hide Versions' : 'View Versions'}
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${versionPickerOpen ? 'rotate-180' : ''}`} />
+                </button>
+              )}
+            </div>
+            {versionPickerOpen && publishedVersionCount > 1 && (
+              <div className="mt-2.5 max-h-64 overflow-auto">
+                <JobVersionHistoryPanel
+                  job={job}
+                  versions={lineageVersions}
+                  loading={versionLineage.isLoading(versionKey)}
+                  versionDetails={versionLineage.versionDetails}
+                  versionApplicants={versionLineage.versionApplicants}
+                  openInNewTab
+                  staticRows
+                  /* Every published version is a target here, the latest
+                     included - there is no card radio standing in for it. */
+                  keepLatestWhenSelectable
+                  onSelectVersion={(versionJob) => {
+                    setScoringTarget({
+                      id: versionJob.id,
+                      title: versionJob.title || hostJobTitle,
+                      version: versionJob.versionNumber ?? null,
+                    });
+                    setVersionPickerOpen(false);
+                  }}
+                  selectedVersionId={scoringTarget.id}
+                  selectHint={(versionJob) => `Score against v${versionJob.versionNumber ?? 1}`}
+                  selectionDisabled={submitting || showProgressModal}
+                  selectionDisabledReason="Scoring is in progress"
+                  radioGroupName={versionRadioGroup}
+                  publishedOnly
+                  includeInactiveVersions
+                />
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="border-b border-gray-100 dark:border-slate-700/60 px-3 sm:px-6 pt-3 sm:pt-4 bg-slate-50 dark:bg-slate-950 flex-shrink-0">

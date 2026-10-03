@@ -726,6 +726,9 @@ function JDCreationContent() {
       allow_overqualified: editingJD.allow_overqualified,
       job_id: editingJD.job_id,
       current_version: editingJD.current_version,
+      // The LINEAGE version (v1, v2, ...) the Review header shows. current_version
+      // above is the row's publish count - a new version's own row starts it at 1.
+      version_number: editingJD.version_number,
       locations: editingJD.locations?.map(loc => ({
         city: loc.city || '',
         radius_km: loc.radius_km,

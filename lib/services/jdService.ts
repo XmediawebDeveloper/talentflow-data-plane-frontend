@@ -107,6 +107,10 @@ export interface JDResponse extends JDCreate {
   created_at: string;
   updated_at: string;
   current_version?: number;  // Version number - if > 1, means republished
+  // Lineage version (v1, v2, ...) - the number every vN badge shows. NOT the same
+  // as current_version: a new version is its own JD row, so its publish count
+  // starts again at 1 while this is N+1.
+  version_number?: number;
   // Extracted seniority level from the JD body (matches JDExtractedParams.experience_level)
   experience_level?: 'entry' | 'junior' | 'mid' | 'senior' | 'architect' | 'management';
 }

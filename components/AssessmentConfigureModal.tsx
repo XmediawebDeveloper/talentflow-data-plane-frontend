@@ -4,6 +4,7 @@ import { Eye, Shield, Sliders, X } from 'lucide-react';
 import { useRef } from 'react';
 import AssessmentCreation, { type AssessmentCreationHandle } from './AssessmentCreation';
 import { Button } from '@/components/ui/button';
+import AssessmentJobBinding from '@/components/assessments/AssessmentJobBinding';
 
 interface AssessmentConfigureModalProps {
   isOpen: boolean;
@@ -119,11 +120,20 @@ export default function AssessmentConfigureModal({
                   </span>
                 )}
               </div>
-              <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 truncate">
+              {/* The job as JD ID · role · version, from the record's own
+                  binding — the same row the Configure page's subtitle shows.
+                  Wraps instead of truncating, so the version is never cut. */}
+              <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 min-w-0 break-words">
                 {readOnly ? 'Duration, section distribution, and topics for ' : 'Set duration, section distribution, and topics for '}
-                <span className="text-brand-blue font-medium">
-                  {assessment.jd_title || assessment.job?.title || 'this job'}
-                </span>
+                {assessment.jd_short_id || assessment.jd_title || assessment.job?.title || assessment.jd_version != null ? (
+                  <AssessmentJobBinding
+                    jobId={assessment.jd_short_id}
+                    role={assessment.jd_title || assessment.job?.title}
+                    version={assessment.jd_version}
+                  />
+                ) : (
+                  <span className="text-brand-blue font-medium">this job</span>
+                )}
               </p>
             </div>
           </div>

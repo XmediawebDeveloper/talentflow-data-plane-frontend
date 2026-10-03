@@ -187,6 +187,14 @@ interface AssessmentVersionHistoryPanelProps {
    */
   hideDraftJobVersions?: boolean;
   /**
+   * Leave out job versions with no assessment, so the table lists only the
+   * versions an assessment was created for (the Total Jobs list). Read off the
+   * same `hasAssessment` that decides the row's View Assessment, so a version
+   * is listed exactly when it would offer one. Display only, like
+   * `hideDraftJobVersions`; omitted, every version is shown as before.
+   */
+  hideJobVersionsWithoutAssessments?: boolean;
+  /**
    * The trailing controls for one assessment — the host's own three-dot menu
    * and quick actions. Given that assessment's record so the host's existing
    * per-assessment handlers work unchanged. Omit it and the Actions column
@@ -807,6 +815,7 @@ export default function AssessmentVersionHistoryPanel({
   renderChildDetail,
   renderChildExtraDetail,
   hideDraftJobVersions = false,
+  hideJobVersionsWithoutAssessments = false,
   paginated = false,
 }: AssessmentVersionHistoryPanelProps) {
   const childColumns = childColumnsFor(vocabulary);
@@ -1030,13 +1039,16 @@ export default function AssessmentVersionHistoryPanel({
     };
   });
 
-  /* Draft job versions left out when the host asks (see the prop). If the
-     host's latest version is one of them, Latest moves to the newest version
-     still listed, so the table always badges a row. */
+  /* Draft job versions, and versions with no assessment, left out when the
+     host asks (see the props). If the host's latest version is one of them,
+     Latest moves to the newest version still listed, so the table always
+     badges a row. */
   const groups: JobVersionGroup[] = (() => {
-    if (!hideDraftJobVersions) return allGroups;
+    if (!hideDraftJobVersions && !hideJobVersionsWithoutAssessments) return allGroups;
     const visible = allGroups.filter(
-      (group) => jobVersionDisplayStatus(group.jobStatus, group.jobCurrentVersion) !== 'Draft',
+      (group) =>
+        (!hideDraftJobVersions || jobVersionDisplayStatus(group.jobStatus, group.jobCurrentVersion) !== 'Draft') &&
+        (!hideJobVersionsWithoutAssessments || group.hasAssessment),
     );
     if (visible.length === 0 || visible.some((group) => group.isLatestJobVersion)) return visible;
     return visible.map((group, index) => ({ ...group, isLatestJobVersion: index === 0 }));

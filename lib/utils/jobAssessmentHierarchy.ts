@@ -34,6 +34,14 @@ import { jdService, JDLineageVersion } from '@/lib/services/jdService';
  * candidate records is what makes it disappear.
  */
 
+/**
+ * Most assessment versions one JOB VERSION (one JD row) may hold - archived ones
+ * excluded, since archiving is how a recruiter makes room. Counted per JD row:
+ * a job's v3 at the cap leaves its v2 free. The JD page's Create Assessment
+ * stops here; the backend's publish blocks a 6th.
+ */
+export const MAX_ASSESSMENT_VERSIONS = 5;
+
 /** One job version, with every assessment authored against it. */
 export interface JobVersionAssessments {
   /** This version's own JD row id — the join key, not the job's lineage key. */

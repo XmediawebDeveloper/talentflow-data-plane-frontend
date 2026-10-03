@@ -1,9 +1,11 @@
 'use client';
 
-import { Wand2, FileText, Copy, Download, Save, ChevronRight, ChevronDown, Plus, X, Edit2, CheckCircle, CheckCircle2, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, GripVertical, Info, Eye, Pencil, AlertTriangle, AlertCircle, Cloud, CloudOff, Loader2, Sparkles } from 'lucide-react';
+import { Wand2, FileText, Copy, Download, Save, ChevronRight, ChevronDown, Plus, X, Edit2, CheckCircle, CheckCircle2, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, GripVertical, Info, Eye, Pencil, Lightbulb, Briefcase, MapPin, NotebookPen, ClipboardCheck, BarChart3, Clock, Building2, Wallet, Circle, ArrowLeftRight, Users, Lock, AlertTriangle, AlertCircle, Cloud, CloudOff, Loader2, Sparkles } from 'lucide-react';
 import UnsavedChangesModal from '@/components/UnsavedChangesModal';
 import SuccessAnimation from '@/components/ui/success-animation';
 import ReactMarkdown, { type Components } from 'react-markdown';
+import JobIdBadge from '@/components/jobs/JobIdBadge';
+import FileFormatIcon from '@/components/ui/file-format-icon';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { Fragment, useState, useEffect, useRef, useMemo } from 'react';
@@ -749,7 +751,8 @@ interface ExtractedData {
 interface EditingJDData {
   id: string;
   job_id?: string;  // Human-readable code like "JD-076"
-  current_version?: number;
+  current_version?: number;  // publish COUNT of this row - says "republished", not which version
+  version_number?: number;   // LINEAGE version (v1, v2, ...) - what every vN badge shows
   title: string;
   description: string;
   status?: 'draft' | 'published' | 'archived' | 'disabled';
@@ -894,8 +897,81 @@ const serializeStep2 = (value: unknown): string =>
 const step2Fingerprint = (data: unknown, jobTitle: string): string =>
   serializeStep2({ jobTitle: (jobTitle || '').trim(), data });
 
-// How many skills a category shows before the rest collapse behind "+N more".
-const SKILL_PREVIEW_LIMIT = 10;
+// How many items a skills / additional-requirements list shows before the rest
+// collapse behind a "+N skills" / "+N requirements" toggle.
+const SKILL_PREVIEW_LIMIT = 5;
+
+// The visibility badges beside Step 2's section headings — one lucide glyph and
+// a label, on the project's semantic tokens. Private (internal notes) is the
+// warning tone; Visible to candidates is the success tone the Job Details
+// page's Additional Details badge already uses.
+const PRIVATE_BADGE_CLASS =
+  'inline-flex items-center gap-1 whitespace-nowrap text-xs font-medium text-warning-strong bg-warning-subtle border border-warning-line px-2 py-0.5 rounded';
+const CANDIDATE_VISIBLE_BADGE_CLASS =
+  'inline-flex items-center gap-1 whitespace-nowrap text-xs font-medium text-success bg-success-subtle border border-success-line px-2 py-0.5 rounded';
+
+// Step 2's section cards: the step's white card with a 2px edge in the design
+// system's `--border` token (globals.css, dark value included) so each
+// section's boundary reads clearly, and the lighter bordered panel that groups
+// one field (or one pair of fields) inside a card.
+const STEP2_CARD_CLASS =
+  'bg-white dark:bg-slate-900 rounded-xl border-2 border-border ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6';
+// Step 2's required fields in the order they sit on the page - Next scrolls to
+// the first one that is missing. Each field's block carries a matching
+// `data-step2-field`.
+const STEP2_REQUIRED_MESSAGES = {
+  mustHaveSkills: 'At least one must-have skill required',
+  experience: 'Experience is required',
+  industryType: 'Industry Type is required',
+} as const;
+const STEP2_REQUIRED_FIELD_ORDER = [
+  'mustHaveSkills', 'experience', 'industryType', 'salaryRange', 'allowOverqualified', 'locations',
+] as const;
+const STEP2_PANEL_CLASS =
+  'min-w-0 rounded-lg border border-gray-100 dark:border-slate-700/60 p-3 sm:p-4';
+
+// One brand tone per Step 2 section, so the three cards are told apart at a
+// glance. Each pairs a tinted tile with its glyph colour, as the Assessment
+// configure step's fact tiles do; every value is a globals.css brand token.
+const STEP2_SECTION_TONES = {
+  blue: { tile: 'bg-brand-blue/10 ring-1 ring-brand-blue/15', icon: 'text-brand-blue' },
+  cyan: { tile: 'bg-brand-cyan/10 ring-1 ring-brand-cyan/15', icon: 'text-brand-cyan' },
+  orange: { tile: 'bg-brand-orange/10 ring-1 ring-brand-orange/15', icon: 'text-brand-orange-deep' },
+  success: { tile: 'bg-success-subtle ring-1 ring-success-line', icon: 'text-success' },
+} as const;
+
+/**
+ * A Step 2 / Step 3 section card's heading row: toned icon tile, title, one-line
+ * hint. `badge` sits beside the title, `actions` at the row's right end (wrapping
+ * under it on a narrow screen); `spacing` replaces the default gap below.
+ */
+const Step2SectionHeader = ({
+  icon: Icon, title, hint, tone = 'blue', badge, actions, spacing = 'mb-4 sm:mb-5',
+}: {
+  icon: typeof Info;
+  title: string;
+  hint: string;
+  tone?: keyof typeof STEP2_SECTION_TONES;
+  badge?: React.ReactNode;
+  actions?: React.ReactNode;
+  spacing?: string;
+}) => (
+  <div className={`flex flex-wrap items-start justify-between gap-3 ${spacing}`}>
+    <div className="flex items-start gap-3 min-w-0">
+      <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${STEP2_SECTION_TONES[tone].tile}`}>
+        <Icon className={`w-4 h-4 sm:w-5 sm:h-5 ${STEP2_SECTION_TONES[tone].icon}`} />
+      </div>
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 tracking-tight">{title}</h2>
+          {badge}
+        </div>
+        <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-400 mt-0.5">{hint}</p>
+      </div>
+    </div>
+    {actions && <div className="flex-shrink-0">{actions}</div>}
+  </div>
+);
 
 /**
  * Where a phrase from the "possibly missed" panel can go.
@@ -1242,7 +1318,9 @@ const DraggableSkill = ({
   }));
 
   const isMustHave = category === 'mustHaveSkills';
-  const tickColor = isMustHave ? 'text-success' : 'text-sky-500';
+  // One colour treatment for every skill / requirement card: the Must-Have
+  // Skills card's.
+  const tickColor = 'text-success';
   const groupedCount = mergedInto?.removed?.length || 0;
 
   return (
@@ -1374,7 +1452,6 @@ const DroppableSkillsContainer = ({ category, onDrop, children }: DroppableSkill
     }),
   }));
 
-  const isMustHave = category === 'mustHaveSkills';
   const isActive = isOver && canDrop;
   
   return (
@@ -1382,9 +1459,7 @@ const DroppableSkillsContainer = ({ category, onDrop, children }: DroppableSkill
       ref={drop as unknown as React.Ref<HTMLDivElement>}
       className={`space-y-2 min-h-[100px] py-2 rounded-lg border-2 border-dashed transition-all ${
         isActive
-          ? isMustHave
-            ? 'border-destructive-line bg-destructive-subtle'
-            : 'border-gray-400 bg-gray-50'
+          ? 'border-destructive-line bg-destructive-subtle'
           : 'border-transparent'
       }`}
     >
@@ -1441,8 +1516,9 @@ const DraggableComment = ({
   }));
 
   const isMustHave = category === 'mustHaveComments';
-  const bgColor = isMustHave ? 'bg-destructive-subtle border-destructive-line' : 'bg-blue-50 border-blue-200';
-  const iconColor = isMustHave ? 'text-orange-500' : 'text-blue-500';
+  // Same surface and tick as the Must-Have Skills card, for both lists.
+  const bgColor = 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700';
+  const iconColor = 'text-success';
 
   return (
     <div
@@ -1496,7 +1572,7 @@ const DraggableComment = ({
             )}
             <CheckCircle2 className={`w-4 h-4 ${iconColor} flex-shrink-0`} />
             <span
-              className={`text-sm text-gray-900 dark:text-slate-50 flex-1 ${readOnly ? '' : 'cursor-pointer hover:text-gray-800'}`}
+              className={`text-sm text-gray-700 dark:text-slate-300 flex-1 ${readOnly ? '' : 'cursor-pointer hover:text-gray-900'}`}
               onClick={() => !readOnly && onStartEdit(category, index, comment)}
               title={readOnly ? '' : 'Click to edit'}
             >
@@ -1530,7 +1606,7 @@ const DraggableComment = ({
               </button>
               <button
                 onClick={() => onRemove(category, index)}
-                className={isMustHave ? 'text-destructive hover:text-destructive' : 'text-blue-600 hover:text-blue-700'}
+                className="text-destructive hover:text-destructive"
                 aria-label="Delete" title="Delete"
               >
                 <X className="w-4 h-4" />
@@ -1572,7 +1648,6 @@ const DroppableCommentsContainer = ({ category, onDrop, children }: DroppableCom
     }),
   }));
 
-  const isMustHave = category === 'mustHaveComments';
   const isActive = isOver && canDrop;
 
   return (
@@ -1580,9 +1655,7 @@ const DroppableCommentsContainer = ({ category, onDrop, children }: DroppableCom
       ref={drop as unknown as React.Ref<HTMLDivElement>}
       className={`space-y-2 min-h-[100px] py-2 rounded-lg border-2 border-dashed transition-all ${
         isActive
-          ? isMustHave
-            ? 'border-orange-400 bg-orange-50'
-            : 'border-blue-400 bg-blue-50'
+          ? 'border-destructive-line bg-destructive-subtle'
           : 'border-transparent'
       }`}
     >
@@ -1816,6 +1889,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           const jd = await jdService.get(editingJDId);
           const jdData: EditingJDData = {
             id: jd.id,
+            job_id: jd.job_id,
+            current_version: jd.current_version,
+            version_number: jd.version_number,
             title: jd.title,
             description: jd.description,
             status: jd.status,
@@ -1993,15 +2069,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const [usCitiesByState, setUsCitiesByState] = useState<Record<string, string[]>>({});
   const [isLoadingUsLocations, setIsLoadingUsLocations] = useState(false);
   
-  // Long skill lists are collapsed to the first SKILL_PREVIEW_LIMIT entries so
-  // one column can't push the other two off the fold; the rest sit behind a
-  // "+N more" toggle, per category.
+  // Long skill and additional-requirement lists are collapsed to the first
+  // SKILL_PREVIEW_LIMIT entries so one column can't push the others off the
+  // fold; the rest sit behind a "+N skills" / "+N requirements" toggle, per list.
   const [expandedSkillCategories, setExpandedSkillCategories] = useState<{
     mustHaveSkills: boolean;
     niceToHaveSkills: boolean;
-  }>({ mustHaveSkills: false, niceToHaveSkills: false });
+    mustHaveComments: boolean;
+    niceToHaveComments: boolean;
+  }>({ mustHaveSkills: false, niceToHaveSkills: false, mustHaveComments: false, niceToHaveComments: false });
 
-  const toggleSkillCategory = (category: 'mustHaveSkills' | 'niceToHaveSkills') =>
+  const toggleSkillCategory = (category: 'mustHaveSkills' | 'niceToHaveSkills' | 'mustHaveComments' | 'niceToHaveComments') =>
     setExpandedSkillCategories(prev => ({ ...prev, [category]: !prev[category] }));
 
   // Inline editing states
@@ -2097,9 +2175,20 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     };
   }, [isLoadingUsLocations, locationCountry, usStates.length]);
   const [publishedVersion, setPublishedVersion] = useState<number | null>(null);
+  // The published JD's LINEAGE version (v1, v2, ...) - what the Published
+  // screen's version badge shows. `publishedVersion` above is the row's publish
+  // COUNT (current_version), which only says whether this was a republish: a new
+  // version is its own JD row, so its first publish is count 1 even when it is v2.
+  const [publishedVersionNumber, setPublishedVersionNumber] = useState<number | null>(null);
+  // Step 3's version badge, for when the loaded record does not carry its own
+  // `version_number`: the lineage endpoint's entry for this row, keyed by id so a
+  // different JD never shows another's number.
+  const [reviewLineageVersion, setReviewLineageVersion] = useState<{ id: string; version: number } | null>(null);
   const [extractedDataModified, setExtractedDataModified] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [showExtractedSummary, setShowExtractedSummary] = useState(false);
+  // Step 3's Download format picker (Text / DOCX / PDF).
+  const [showDownloadFormatDialog, setShowDownloadFormatDialog] = useState(false);
 
   // Track if we've loaded from editingJD to prevent re-initialization on re-renders
   const hasLoadedFromEditingJD = useRef(false);
@@ -2173,6 +2262,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     industryType?: string;
     salaryRange?: string;
     allowOverqualified?: string;
+    locations?: string;
   }>({});
   const [jobTitleServerValidationError, setJobTitleServerValidationError] = useState('');
   const [jobTitleServerValidatedValue, setJobTitleServerValidatedValue] = useState('');
@@ -2489,8 +2579,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
    * expand the list - on a 21-skill JD the Docker and Kubernetes notes sat at positions
    * 16 and 17 with nothing on screen to say they existed.
    */
-  const hiddenTrailLabel = (category: 'mustHaveSkills' | 'niceToHaveSkills') => {
-    const listKey = category === 'mustHaveSkills' ? 'must_have_skills' : 'nice_to_have_skills';
+  const hiddenTrailLabel = (category: 'mustHaveSkills' | 'niceToHaveSkills' | 'mustHaveComments' | 'niceToHaveComments') => {
+    const listKey = {
+      mustHaveSkills: 'must_have_skills',
+      niceToHaveSkills: 'nice_to_have_skills',
+      mustHaveComments: 'must_have_comments',
+      niceToHaveComments: 'nice_to_have_comments',
+    }[category];
     const hidden = new Set((extractedData[category] || []).slice(SKILL_PREVIEW_LIMIT));
     let merges = 0;
     let notes = 0;
@@ -3110,6 +3205,34 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     setValidationErrors(prev => (prev.allowOverqualified ? { ...prev, allowOverqualified: undefined } : prev));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [experienceHasCeiling]);
+
+  // A Step 2 required-field error goes as soon as its field satisfies the same
+  // rule Next checks - one place, so it clears however the field got filled.
+  // Only the "is required" messages Next sets: Experience also carries its own
+  // range / English-only errors, which their own handlers manage.
+  useEffect(() => {
+    setValidationErrors(prev => {
+      const next = { ...prev };
+      if (prev.mustHaveSkills === STEP2_REQUIRED_MESSAGES.mustHaveSkills && (extractedData.mustHaveSkills?.length ?? 0) > 0) next.mustHaveSkills = undefined;
+      if (prev.experience === STEP2_REQUIRED_MESSAGES.experience && extractedData.experience?.trim()) next.experience = undefined;
+      if (prev.industryType === STEP2_REQUIRED_MESSAGES.industryType && extractedData.industryType?.trim()) next.industryType = undefined;
+      if (prev.locations && (!extractedData.locationsRequired || (extractedData.locations?.length ?? 0) > 0)) next.locations = undefined;
+      if (prev.allowOverqualified
+          && (!experienceHasCeiling || (extractedData.allowOverqualified !== null && extractedData.allowOverqualified !== undefined))) {
+        next.allowOverqualified = undefined;
+      }
+      const changed = (Object.keys(prev) as Array<keyof typeof prev>).some(k => prev[k] !== next[k]);
+      return changed ? next : prev;
+    });
+  }, [
+    extractedData.mustHaveSkills,
+    extractedData.experience,
+    extractedData.industryType,
+    extractedData.locations,
+    extractedData.locationsRequired,
+    extractedData.allowOverqualified,
+    experienceHasCeiling,
+  ]);
 
   const deriveExperienceCodeFromYears = (min?: number | null, max?: number | null): string => {
     const value =
@@ -5206,6 +5329,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       }));
       setNewComment('');
       setEditingCategory(null);
+      // Appended past the "+N requirements" fold — expand so it stays in view.
+      setExpandedSkillCategories(prev => ({ ...prev, mustHaveComments: true }));
       markExtractedDataModified(); // Mark as modified for regeneration
       // Clear validation error when comment is added
       setValidationErrors(prev => ({ ...prev, mustHaveComments: undefined }));
@@ -5378,6 +5503,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       }));
       setNewComment('');
       setEditingCategory(null);
+      // Appended past the "+N requirements" fold — expand so it stays in view.
+      setExpandedSkillCategories(prev => ({ ...prev, niceToHaveComments: true }));
       markExtractedDataModified(); // Mark as modified for regeneration
     }
   };
@@ -5798,24 +5925,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       industryTypeTrimmed: extractedData.industryType?.trim() || '',
     });
 
-    // DEFENSIVE CHECK: Early return if critical fields are empty
-    // This prevents any edge case where button might be clickable
-    const earlyCheckFailed = [];
-    // Education deliberately absent: its Step 2 control was removed 2026-08-20, so a
-    // recruiter could never clear this check. Extraction guarantees the requirement
-    // lands in Must-Have or Nice-to-Have Additional Requirements instead.
-    if (!extractedData.experience?.trim()) earlyCheckFailed.push('Experience');
-    if (!extractedData.industryType?.trim()) earlyCheckFailed.push('Industry Type');
-
-    if (earlyCheckFailed.length > 0) {
-      console.log('[TalentFlow] BLOCKED: Missing required fields:', earlyCheckFailed);
-      toast.error({
-        title: 'Missing Required Fields',
-        description: `Please select: ${earlyCheckFailed.join(', ')}`,
-      });
-      return;
-    }
-
     // Validate mandatory fields
     const missingFields: string[] = [];
     const errors: {
@@ -5824,6 +5933,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       education?: string;
       experience?: string;
       industryType?: string;
+      salaryRange?: string;
       locations?: string;
       allowOverqualified?: string;
     } = {};
@@ -5831,7 +5941,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     // Must have at least one must-have skill
     if (!extractedData.mustHaveSkills || extractedData.mustHaveSkills.length === 0) {
       missingFields.push('At least one Must-Have Skill');
-      errors.mustHaveSkills = 'At least one Must-Have Skill is required';
+      errors.mustHaveSkills = STEP2_REQUIRED_MESSAGES.mustHaveSkills;
     }
 
     // Must-Have Comments are optional - no validation required
@@ -5844,13 +5954,20 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     // Experience is required - check for empty string, null, undefined, or whitespace only
     if (!extractedData.experience || extractedData.experience.trim() === '') {
       missingFields.push('Experience');
-      errors.experience = 'Experience is required';
+      errors.experience = STEP2_REQUIRED_MESSAGES.experience;
     }
 
     // Industry Type is required - check for empty string, null, undefined, or whitespace only
     if (!extractedData.industryType || extractedData.industryType.trim() === '') {
       missingFields.push('Industry Type');
-      errors.industryType = 'Industry Type is required';
+      errors.industryType = STEP2_REQUIRED_MESSAGES.industryType;
+    }
+
+    // Salary range - the same rule getValidationStatus applies.
+    const salaryRangeError = validateSalaryRange(extractedData.salaryFrom || '', extractedData.salaryTo || '');
+    if (salaryRangeError) {
+      missingFields.push('Salary Range - ' + salaryRangeError);
+      errors.salaryRange = salaryRangeError;
     }
 
     // Location validation - if location is marked as required but no locations added, show error
@@ -5877,6 +5994,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         title: 'Missing Required Fields',
         description: `Please complete: ${missingFields.join(', ')}`,
       });
+      // Bring the FIRST missing field (in page order) into view, once its error
+      // has rendered.
+      const firstMissing = STEP2_REQUIRED_FIELD_ORDER.find(key => errors[key]);
+      if (firstMissing) {
+        setTimeout(() => {
+          document.querySelector(`[data-step2-field="${firstMissing}"]`)
+            ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 0);
+      }
       return;
     }
 
@@ -6332,6 +6458,113 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
   const validationStatus = getValidationStatus();
 
+  // The version Step 3 shows: the edited row's LINEAGE version. A new version is
+  // its own JD row, so its publish count (`current_version`) reads 1 - or nothing
+  // before its first publish - while this reads 2.
+  const reviewJdId = effectiveEditingJD?.id || editingId || null;
+  const reviewVersionNumber: number | null =
+    effectiveEditingJD?.version_number
+    ?? (reviewLineageVersion && reviewLineageVersion.id === reviewJdId ? reviewLineageVersion.version : null);
+
+  useEffect(() => {
+    if (step !== 'review' || !reviewJdId || effectiveEditingJD?.version_number != null) return;
+    if (reviewLineageVersion?.id === reviewJdId) return;
+    let cancelled = false;
+    jdService.getLineageVersions(reviewJdId)
+      .then(lineage => {
+        const own = lineage.find(v => v.id === reviewJdId);
+        if (!cancelled && own?.version_number != null) {
+          setReviewLineageVersion({ id: reviewJdId, version: own.version_number });
+        }
+      })
+      .catch(err => console.error('[TalentFlow] Could not resolve the JD version for Review:', err));
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, reviewJdId, effectiveEditingJD?.version_number]);
+
+  /* Step 3's Download, in the format picked in the format dialog. The CONTENT is
+     the one the Download button always wrote - built below exactly as it was -
+     and only the container differs: a .txt, a .docx (one paragraph per line,
+     the way the JD version history writes its Word download) or a .pdf (the
+     same lines, wrapped to the page). `docx` and `jspdf` load on demand so
+     neither sits in the bundle until someone downloads. */
+  const downloadReviewJD = async (format: 'txt' | 'docx' | 'pdf') => {
+    const text = mode === 'ai' ? generatedJD : manualJD;
+    // The standalone "Education:" line was dropped 2026-08-21 and the Additional
+    // Requirements lists added in its place. Education is a line inside those lists
+    // now, so this export carries it exactly once - and it carries MHAR/NHAR at all,
+    // which it previously omitted entirely.
+    const fullContent = [
+      jobTitle,
+      '',
+      text,
+      '',
+      '--- Skills ---',
+      `Must Have: ${extractedData.mustHaveSkills.join(', ')}`,
+      `Nice to Have: ${extractedData.niceToHaveSkills.join(', ')}`,
+      '',
+      '--- Additional Requirements ---',
+      `Must Have: ${(extractedData.mustHaveComments || []).join('; ') || 'None'}`,
+      `Nice to Have: ${(extractedData.niceToHaveComments || []).join('; ') || 'None'}`,
+      '',
+      `Experience: ${extractedData.experience}`,
+    ].join('\n');
+    const baseName = `${jobTitle.replace(/[^a-z0-9]/gi, '_')}_JD`;
+
+    const saveBlob = (blob: Blob, fileName: string) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+
+    try {
+      if (format === 'txt') {
+        saveBlob(new Blob([fullContent], { type: 'text/plain' }), `${baseName}.txt`);
+        toast.success({ title: 'Downloaded!', description: 'Job description saved as text file' });
+        return;
+      }
+
+      if (format === 'docx') {
+        const { Document, Packer, Paragraph, TextRun } = await import('docx');
+        // Blank lines included - an empty paragraph is the spacer Word expects.
+        const children = fullContent.split('\n').map(line => new Paragraph({ children: [new TextRun({ text: line })] }));
+        const blob = await Packer.toBlob(new Document({ sections: [{ properties: {}, children }] }));
+        saveBlob(blob, `${baseName}.docx`);
+        toast.success({ title: 'Downloaded!', description: 'Job description saved as DOCX file' });
+        return;
+      }
+
+      const { default: jsPDF } = await import('jspdf');
+      const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+      const margin = 15;
+      const lineHeight = 5.5;
+      const maxWidth = doc.internal.pageSize.getWidth() - margin * 2;
+      const pageBottom = doc.internal.pageSize.getHeight() - margin;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(11);
+      let y = margin;
+      for (const line of fullContent.split('\n')) {
+        const wrapped: string[] = line ? doc.splitTextToSize(line, maxWidth) : [''];
+        for (const part of wrapped) {
+          if (y + lineHeight > pageBottom) {
+            doc.addPage();
+            y = margin;
+          }
+          doc.text(part, margin, y);
+          y += lineHeight;
+        }
+      }
+      doc.save(`${baseName}.pdf`);
+      toast.success({ title: 'Downloaded!', description: 'Job description saved as PDF file' });
+    } catch (error) {
+      console.error('[TalentFlow] JD download failed:', error);
+      toast.error({ title: 'Download failed', description: 'Could not create the file. Please try again.' });
+    }
+  };
+
   // Handle regenerating JD based on modified extracted data
   const handleRegenerateFromExtractedData = async () => {
     const trimmedJobTitle = jobTitle.trim();
@@ -6593,6 +6826,19 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       setPublishedJdId(publishedJd.id);
       setPublishedJobCode(publishedJd.job_id || null);
       setPublishedVersion(publishedJd.current_version || 1);
+      // The badge's number comes from the published row itself: its lineage
+      // `version_number`. When the publish response does not carry it, the
+      // lineage endpoint is asked for THIS row's entry - never the publish count,
+      // which reads 1 for a freshly published v2.
+      setPublishedVersionNumber(publishedJd.version_number ?? null);
+      if (publishedJd.version_number == null) {
+        jdService.getLineageVersions(publishedJd.id)
+          .then(lineage => {
+            const own = lineage.find(v => v.id === publishedJd.id);
+            if (own?.version_number != null) setPublishedVersionNumber(own.version_number);
+          })
+          .catch(err => console.error('[TalentFlow] Could not resolve published version number:', err));
+      }
 
       // Create the job object for UI
       if (onPublish) {
@@ -7468,15 +7714,18 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-brand-blue/30 hover:bg-brand-blue/[0.03]'
                 }`}
               >
-                <div className="flex items-center gap-2 sm:gap-3 mb-1 sm:mb-2">
-                  <Wand2 className={`w-5 h-5 sm:w-6 sm:h-6 ${mode === 'ai' ? 'text-brand-blue' : 'text-gray-400 dark:text-slate-500'}`} />
-                  <h3 className="font-medium text-sm sm:text-base text-gray-900 dark:text-slate-50">
-                    AI-Generated JD
-                  </h3>
+                {/* Icon left; title over description beside it. */}
+                <div className="flex items-start gap-2 sm:gap-3 text-left">
+                  <Wand2 className={`w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0 ${mode === 'ai' ? 'text-brand-blue' : 'text-gray-400 dark:text-slate-500'}`} />
+                  <div className="min-w-0">
+                    <h3 className="font-medium text-sm sm:text-base text-gray-900 dark:text-slate-50 mb-1">
+                      AI-Generated JD
+                    </h3>
+                    <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
+                      Let AI create a professional job description based on your inputs
+                    </p>
+                  </div>
                 </div>
-                <p className="text-xs sm:text-sm text-left text-gray-600 dark:text-slate-400">
-                  Let AI create a professional job description based on your inputs
-                </p>
               </button>
 
               <button
@@ -7487,15 +7736,18 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-brand-blue/30 hover:bg-brand-blue/[0.03]'
                 }`}
               >
-                <div className="flex items-center gap-2 sm:gap-3 mb-1 sm:mb-2">
-                  <Edit2 className={`w-5 h-5 sm:w-6 sm:h-6 ${mode === 'manual' ? 'text-brand-blue' : 'text-gray-400 dark:text-slate-500'}`} />
-                  <h3 className="font-medium text-sm sm:text-base text-gray-900 dark:text-slate-50">
-                    Manual Input
-                  </h3>
+                {/* Icon left; title over description beside it. */}
+                <div className="flex items-start gap-2 sm:gap-3 text-left">
+                  <Edit2 className={`w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0 ${mode === 'manual' ? 'text-brand-blue' : 'text-gray-400 dark:text-slate-500'}`} />
+                  <div className="min-w-0">
+                    <h3 className="font-medium text-sm sm:text-base text-gray-900 dark:text-slate-50 mb-1">
+                      Manual Input
+                    </h3>
+                    <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
+                      Write or paste your own job description
+                    </p>
+                  </div>
                 </div>
-                <p className={`text-xs sm:text-sm text-left ${mode === 'manual' ? 'text-gray-600 dark:text-slate-400' : 'text-gray-600 dark:text-slate-400'}`}>
-                  Write or paste your own job description
-                </p>
               </button>
             </div>
 
@@ -7974,41 +8226,44 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           <div className="space-y-4 sm:space-y-6">
             {/* Drag & Drop Tips */}
             {showDragTips && (
-              <div className="bg-brand-blue/5 ring-1 ring-brand-blue/15 rounded-xl p-3 sm:p-5">
-                <div className="flex items-start gap-3 sm:gap-4">
+              <div className="bg-brand-orange/[0.08] border border-brand-orange/20 rounded-xl px-3 py-2.5 sm:px-4 sm:py-3">
+                <div className="flex items-start gap-3">
                   <div className="flex-shrink-0 hidden sm:block">
-                    <div className="w-10 h-10 rounded-lg bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center">
-                      <Info className="w-5 h-5 text-white" />
+                    <div className="w-8 h-8 rounded-lg bg-brand-orange shadow-sm shadow-brand-orange/25 ring-1 ring-white/10 flex items-center justify-center">
+                      <Info className="w-4 h-4 text-white" />
                     </div>
                   </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-sm sm:text-base text-brand-blue font-medium">💡 Pro Tips</h3>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <h3 className="text-xs text-gray-700 dark:text-slate-300 font-semibold flex items-center gap-1.5">
+                        <Lightbulb className="w-3.5 h-3.5 text-brand-orange flex-shrink-0" />
+                        Pro Tips
+                      </h3>
                       <button
                         onClick={() => setShowDragTips(false)}
-                        className="text-brand-blue hover:text-brand-blue-2 text-xs sm:text-sm flex items-center gap-1"
+                        className="text-brand-blue hover:text-brand-blue-2 text-xs flex items-center gap-1 flex-shrink-0"
                       >
-                        <X className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                        <X className="w-3.5 h-3.5" />
                         Dismiss
                       </button>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 text-xs sm:text-sm text-gray-700 dark:text-slate-300">
-                      <div className="flex items-start gap-2">
-                        <GripVertical className="w-4 h-4 mt-0.5 text-brand-blue flex-shrink-0" />
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 text-xs text-gray-700 dark:text-slate-300">
+                      <div className="flex items-start gap-1.5">
+                        <GripVertical className="w-3.5 h-3.5 mt-px text-brand-orange flex-shrink-0" />
                         <div>
-                          <strong>Drag & Drop:</strong> Hover over a skill and grab the grip icon to drag it between Must-Have and Nice-to-Have
+                          <strong className="font-semibold">Drag & Drop:</strong> Hover over a skill and grab the grip icon to drag it between Must-Have and Nice-to-Have
                         </div>
                       </div>
-                      <div className="flex items-start gap-2">
-                        <Edit2 className="w-4 h-4 mt-0.5 text-brand-blue flex-shrink-0" />
+                      <div className="flex items-start gap-1.5">
+                        <Edit2 className="w-3.5 h-3.5 mt-px text-brand-orange flex-shrink-0" />
                         <div>
-                          <strong>Click to Edit:</strong> Click on any skill or comment text to edit it inline. Press Enter to save, Escape to cancel
+                          <strong className="font-semibold">Click to Edit:</strong> Click on any skill or comment text to edit it inline. Press Enter to save, Escape to cancel
                         </div>
                       </div>
-                      <div className="flex items-start gap-2">
-                        <span className="text-brand-blue mt-0.5 flex-shrink-0">← →</span>
+                      <div className="flex items-start gap-1.5">
+                        <ArrowLeftRight className="w-3.5 h-3.5 mt-px text-brand-orange flex-shrink-0" />
                         <div>
-                          <strong>Arrow Buttons:</strong> Use arrow buttons to quickly move skills between categories
+                          <strong className="font-semibold">Arrow Buttons:</strong> Use arrow buttons to quickly move skills between categories
                         </div>
                       </div>
                     </div>
@@ -8034,14 +8289,25 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               </div>
             )}
 
-            <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6">
-              <h2 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 mb-4 sm:mb-6">Extracted Information</h2>
-              <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-4 sm:mb-6">
-                {isRegenerating
-                  ? 'Processing... Fields are temporarily read-only.'
-                  : 'AI has extracted the following information from your JD. You can modify, add, or remove items.'
-                }
-              </p>
+            <div className={`${STEP2_CARD_CLASS} [&>*:last-child]:mb-0`}>
+              {/* Laid out as `Step2SectionHeader` lays out the cards below -
+                  icon tile beside a title-over-paragraph column, gap-3, mt-0.5,
+                  then mb-4 sm:mb-5 to the content - with this card's own text
+                  sizes and colours kept. */}
+              <div className="flex items-start gap-3 mb-4 sm:mb-5">
+                <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${STEP2_SECTION_TONES.blue.tile}`}>
+                  <Sparkles className={`w-4 h-4 sm:w-5 sm:h-5 ${STEP2_SECTION_TONES.blue.icon}`} />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">Extracted Information</h2>
+                  <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mt-0.5">
+                    {isRegenerating
+                      ? 'Processing... Fields are temporarily read-only.'
+                      : 'AI has extracted the following information from your JD. You can modify, add, or remove items.'
+                    }
+                  </p>
+                </div>
+              </div>
 
               {/* POSSIBLY MISSED. JD phrases that ended up in no list. Every other Step 2
                   note hangs off an item that survived extraction; a requirement that did
@@ -8186,7 +8452,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               {/* Skills & Comments Section - Single Row with 3 Columns */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
                 {/* Column 1: Must-Have Skills */}
-                <div>
+                <div data-step2-field="mustHaveSkills">
                   <div className="section-header-row">
                     <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">Must-Have Skills <span className="text-destructive">*</span> ({extractedData.mustHaveSkills?.length || 0})</h3>
                     {!isRegenerating && (
@@ -8207,7 +8473,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         onChange={(e) => applyEnglishOnlyInputChange(e.target.value, 'Must-have skills', setNewSkill)}
                         onKeyDown={(e) => e.key === 'Enter' && handleAddSkill('mustHaveSkills')}
                         placeholder="Enter skill..."
-                        className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black"
+                        className="flex-1 min-w-0 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black"
                         autoFocus
                       />
                       <Button
@@ -8216,12 +8482,44 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       >
                         Add
                       </Button>
+                      {/* Closes the input without adding: the app's icon-only
+                          close button (secondary Button, tight padding, X) at the
+                          Add button's size, with a tooltip. The typed text is
+                          dropped; the list and any validation state are left as
+                          they are. */}
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => {
+                          setNewSkill('');
+                          setEditingCategory(null);
+                        }}
+                        aria-label="Cancel"
+                        title="Cancel"
+                        className="px-2.5 flex-shrink-0"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
                     </div>
                   )}
                   <DroppableSkillsContainer
                     category="mustHaveSkills"
                     onDrop={(skill, fromCategory) => handleDropSkill(skill, fromCategory, 'mustHaveSkills')}
                   >
+                    {/* The required-skill error as the list's FIRST card: a skill
+                        card's shape (rounded-lg, p-2.5, a 28px content row) in
+                        the destructive tokens, message centred both ways. */}
+                    {validationErrors.mustHaveSkills && (
+                      <div
+                        role="alert"
+                        className="flex items-center justify-center p-2.5 rounded-lg border border-destructive-line bg-destructive-subtle"
+                      >
+                        <span className="flex items-center justify-center gap-1.5 min-h-7 text-sm text-destructive text-center">
+                          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                          {validationErrors.mustHaveSkills}
+                        </span>
+                      </div>
+                    )}
                     {/* Sliced from the front so each chip keeps its real index —
                         remove/edit/drag all address the array by position. */}
                     {(expandedSkillCategories.mustHaveSkills
@@ -8258,14 +8556,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     >
                       {expandedSkillCategories.mustHaveSkills
                         ? 'Show less'
-                        : `+${extractedData.mustHaveSkills.length - SKILL_PREVIEW_LIMIT} more${hiddenTrailLabel('mustHaveSkills')}`}
+                        : `+${extractedData.mustHaveSkills.length - SKILL_PREVIEW_LIMIT} skills${hiddenTrailLabel('mustHaveSkills')}`}
                     </button>
-                  )}
-                  {validationErrors.mustHaveSkills && (
-                    <p className="text-destructive text-sm mt-2 flex items-center gap-1">
-                      <AlertCircle className="w-4 h-4" />
-                      {validationErrors.mustHaveSkills}
-                    </p>
                   )}
                 </div>
 
@@ -8340,7 +8632,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     >
                       {expandedSkillCategories.niceToHaveSkills
                         ? 'Show less'
-                        : `+${extractedData.niceToHaveSkills.length - SKILL_PREVIEW_LIMIT} more${hiddenTrailLabel('niceToHaveSkills')}`}
+                        : `+${extractedData.niceToHaveSkills.length - SKILL_PREVIEW_LIMIT} skills${hiddenTrailLabel('niceToHaveSkills')}`}
                     </button>
                   )}
                 </div>
@@ -8384,7 +8676,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       category="mustHaveComments"
                       onDrop={(comment, fromCategory) => handleDropComment(comment, fromCategory, 'mustHaveComments')}
                     >
-                      {extractedData.mustHaveComments.map((comment, index) => (
+                      {/* Sliced from the front so each item keeps its real index —
+                          remove/edit/drag all address the array by position. */}
+                      {(expandedSkillCategories.mustHaveComments
+                        ? extractedData.mustHaveComments
+                        : extractedData.mustHaveComments.slice(0, SKILL_PREVIEW_LIMIT)
+                      ).map((comment, index) => (
                         <DraggableComment
                           key={index}
                           comment={comment}
@@ -8406,6 +8703,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         />
                       ))}
                     </DroppableCommentsContainer>
+                    {extractedData.mustHaveComments.length > SKILL_PREVIEW_LIMIT && (
+                      <button
+                        type="button"
+                        onClick={() => toggleSkillCategory('mustHaveComments')}
+                        className="mt-2 inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 rounded-lg hover:bg-brand-blue/10 transition-colors"
+                      >
+                        {expandedSkillCategories.mustHaveComments
+                          ? 'Show less'
+                          : `+${extractedData.mustHaveComments.length - SKILL_PREVIEW_LIMIT} requirements${hiddenTrailLabel('mustHaveComments')}`}
+                      </button>
+                    )}
                     {validationErrors.mustHaveComments && (
                       <p className="text-destructive text-sm mt-2 flex items-center gap-1">
                         <AlertCircle className="w-4 h-4" />
@@ -8452,7 +8760,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       category="niceToHaveComments"
                       onDrop={(comment, fromCategory) => handleDropComment(comment, fromCategory, 'niceToHaveComments')}
                     >
-                      {(extractedData.niceToHaveComments || []).map((comment, index) => (
+                      {(expandedSkillCategories.niceToHaveComments
+                        ? (extractedData.niceToHaveComments || [])
+                        : (extractedData.niceToHaveComments || []).slice(0, SKILL_PREVIEW_LIMIT)
+                      ).map((comment, index) => (
                         <DraggableComment
                           key={index}
                           comment={comment}
@@ -8474,14 +8785,37 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         />
                       ))}
                     </DroppableCommentsContainer>
+                    {(extractedData.niceToHaveComments || []).length > SKILL_PREVIEW_LIMIT && (
+                      <button
+                        type="button"
+                        onClick={() => toggleSkillCategory('niceToHaveComments')}
+                        className="mt-2 inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 rounded-lg hover:bg-brand-blue/10 transition-colors"
+                      >
+                        {expandedSkillCategories.niceToHaveComments
+                          ? 'Show less'
+                          : `+${(extractedData.niceToHaveComments || []).length - SKILL_PREVIEW_LIMIT} requirements${hiddenTrailLabel('niceToHaveComments')}`}
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
 
-              {/* Experience, Education, Salary - 3 Column Layout */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+            </div>
+
+            {/* ROLE REQUIREMENTS - Experience and Industry side by side (two
+                columns now that Education is gone, rather than a three-column
+                grid with an empty third), then Salary, then the Allow
+                Overqualified choice that reads the Experience range. */}
+            <div className={STEP2_CARD_CLASS}>
+              <Step2SectionHeader
+                icon={Briefcase}
+                tone="success"
+                title="Role Requirements"
+                hint="Experience, industry, and compensation for this role."
+              />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Experience */}
-                <div>
+                <div data-step2-field="experience" className={STEP2_PANEL_CLASS}>
                   <div className="mb-3 sm:mb-4 flex items-center justify-between gap-3">
                     <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">Experience <span className="text-destructive">*</span></h3>
                     <label className={`flex shrink-0 items-center gap-1.5 ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
@@ -8678,7 +9012,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     _enforce_education_placement() in the backend. */}
 
                 {/* Industry Type */}
-                <div>
+                <div data-step2-field="industryType" className={STEP2_PANEL_CLASS}>
                   <div className="mb-3 sm:mb-4 flex items-center justify-between gap-3">
                     <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">Industry Type <span className="text-destructive">*</span></h3>
                     <label className={`flex shrink-0 items-center gap-1.5 ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
@@ -8736,9 +9070,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   {extractedData.industrySuggestedName && !extractedData.industryIsCustom && (
                     <div className="mt-1 rounded-lg border border-brand-blue/30 bg-brand-blue/5 p-3">
                       <div className="flex items-start gap-2">
-                        <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-brand-blue" />
+                        {/* Nudged to sit on the heading's first line, which is
+                            text-base (24px line) from sm up. */}
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm text-gray-900 dark:text-slate-50">
+                          {/* The Allow Overqualified Candidates card's heading
+                              style, verbatim. */}
+                          <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 mb-1">
+                            New Industry Type Detected
+                          </h3>
+                          <p className="text-xs text-gray-600 dark:text-slate-400">
                             This JD looks like{' '}
                             <strong>{extractedData.industrySuggestedName}</strong>, which is
                             not on your list yet.
@@ -8834,8 +9174,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 </div>
               </div>
 
+              {/* Salary Range | Allow Overqualified Candidates - one row of two
+                  equal columns from md up (each panel stretches to the row's
+                  height), stacked below that. Halving the row also stops the
+                  From / To inputs running the full card width. */}
+              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Salary */}
-              <div className="mb-6 sm:mb-8">
+              <div data-step2-field="salaryRange" className={STEP2_PANEL_CLASS}>
                 <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mb-3">
                   <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">Salary Range</h3>
                   <div className="flex items-center gap-4">
@@ -8865,8 +9210,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     </label>
                   </div>
                 </div>
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
-                    <div className="relative flex-1">
+                {/* Wraps instead of squeezing: in a half-width column the period
+                    select drops to its own line before the inputs get cramped. */}
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                    <div className="relative flex-1 min-w-[7.5rem]">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">{getSalaryCurrencySymbol(extractedData.salaryCurrency)}</span>
                       <input
                         type="text"
@@ -8896,7 +9243,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       />
                     </div>
                     <span className="text-gray-400 dark:text-slate-500 hidden sm:block">–</span>
-                    <div className="relative flex-1">
+                    <div className="relative flex-1 min-w-[7.5rem]">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">{getSalaryCurrencySymbol(extractedData.salaryCurrency)}</span>
                       <input
                         type="text"
@@ -8940,13 +9287,98 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     </p>
                   )}
                 </div>
+
+              {/* Allow Overqualified Candidates - REQUIRED choice, not a default-off
+                  toggle. Scoring reads this (evaluate_experience_level in
+                  odoo_scoring.py) so an unanswered field is not a safe silent default
+                  in either direction - the recruiter must pick Yes or No before
+                  leaving Step 2 (enforced in getValidationStatus/handlePublish). */}
+              <div data-step2-field="allowOverqualified" className={`min-w-0 p-3 sm:p-4 rounded-lg border ${
+                validationErrors.allowOverqualified
+                  ? 'bg-destructive-subtle border-destructive-line'
+                  : 'bg-gray-50 dark:bg-slate-800/50 border-gray-200 dark:border-slate-700'
+              }`}>
+                {/* Title and description, then the no-ceiling helper, then
+                    Yes / No: one column, so the helper is read before the
+                    choice it explains. */}
+                <div className="flex flex-col gap-3">
+                  <div>
+                    <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 mb-1">
+                      Allow Overqualified Candidates <span className="text-destructive">*</span>
+                    </h3>
+                    <p className="text-xs text-gray-600 dark:text-slate-400">
+                      Should candidates with more experience than the maximum for this role be scored favorably (Yes), or treated as a mismatch (No)? With No, any experience above the To value fails the Experience criterion.
+                    </p>
+                  </div>
+                  {/* The app's Tip box — the colours, Lightbulb and bold lead-in
+                      of the Tip in the Resume Scoring popup's candidate panel
+                      (`SelectedCandidatesPanel`): brand-orange tint and border,
+                      brand-orange icon, gray-700 text. */}
+                  {!experienceHasCeiling && (
+                    <div className="flex items-start gap-2.5 rounded-xl bg-brand-orange/[0.08] border border-brand-orange/20 px-3 py-2.5">
+                      <Lightbulb className="w-4 h-4 text-brand-orange flex-shrink-0 mt-0.5" />
+                      <p className="min-w-0 flex-1 text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+                        <span className="font-semibold">Set to Yes:</span> the experience requirement has no upper limit, so there is no range to exceed. Enter a To (maximum) years value above to choose No.
+                      </p>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2" role="radiogroup" aria-label="Allow Overqualified Candidates">
+                    {([
+                      { label: 'Yes', value: true },
+                      { label: 'No', value: false },
+                    ] as const).map((opt) => {
+                      const isSelected = extractedData.allowOverqualified === opt.value;
+                      // "No" needs a ceiling to exceed - locked (and Yes forced, see
+                      // experienceHasCeiling) until the recruiter enters a To value.
+                      const lockedNo = opt.value === false && !experienceHasCeiling;
+                      const isDisabled = isRegenerating || lockedNo;
+                      return (
+                        <button
+                          key={opt.label}
+                          type="button"
+                          role="radio"
+                          aria-checked={isSelected}
+                          aria-disabled={isDisabled}
+                          disabled={isDisabled}
+                          title={lockedNo ? 'Enter a To (maximum) years value to allow choosing No' : undefined}
+                          onClick={() => {
+                            if (isDisabled) return;
+                            setExtractedData(prev => ({ ...prev, allowOverqualified: opt.value }));
+                            setValidationErrors(prev => ({ ...prev, allowOverqualified: undefined }));
+                            markExtractedDataModified();
+                          }}
+                          className={`px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
+                            isSelected
+                              ? 'bg-brand-blue text-white border-brand-blue'
+                              : 'bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 border-gray-300 dark:border-slate-700 hover:border-brand-blue/40'
+                          } ${isDisabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                {validationErrors.allowOverqualified && (
+                  <p className="text-destructive text-sm mt-2 flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4" />
+                    {validationErrors.allowOverqualified}
+                  </p>
+                )}
+              </div>
+              </div>
               </div>
 
-              {/* Locations Section — boxed like the page's other panels
-                  (same border / ring / shadow and the same p-4 sm:p-6 inner
-                  padding as the card that wraps this step). */}
-              <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6">
-                <div className="flex items-center gap-3 mb-4">
+              {/* LOCATION & WORK SETUP - Locations, then Employment Type and
+                  Work Mode under a divider, in one card. */}
+              <div className={STEP2_CARD_CLASS}>
+                <Step2SectionHeader
+                  icon={MapPin}
+                  tone="cyan"
+                  title="Location & Work Setup"
+                  hint="Where the role is based and how it is worked."
+                />
+                <div data-step2-field="locations" className="flex flex-wrap items-center gap-3 mb-4">
                   <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">Locations <span className="text-destructive">*</span></h3>
                   <label className={`flex shrink-0 items-center gap-1.5 ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                     <input
@@ -9996,6 +10428,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   </Button>
                 </div>
                 )}
+                {validationErrors.locations && (
+                  <p className="text-destructive text-sm -mt-2 mb-3 flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    {validationErrors.locations}
+                  </p>
+                )}
 
                 {/* Added Locations Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
@@ -10018,21 +10456,24 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     </div>
                   ))}
                 </div>
-              </div>
 
-              {/* Employment Type & Work Model - Side by Side, in a panel that
-                  matches the Locations box above it. */}
-              <div className="mt-4 sm:mt-6 bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+              {/* Employment Type & Work Model - under a divider in the Location &
+                  Work Setup card, in the Country / State format: the same small
+                  label, the same select box, and a quarter-width column on
+                  desktop (two columns on tablet, stacked on a phone), so the
+                  pair lines up with the location fields above. */}
+              <div className="mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-gray-100 dark:border-slate-700/60 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
                 {/* Employment Type */}
-                <div>
-                  <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 mb-2">Employment Type</h3>
+                <div className="min-w-0">
+                  <label htmlFor="jd-employment-type" className="block text-sm text-gray-700 dark:text-slate-300 mb-1">Employment Type</label>
                   <select
+                    id="jd-employment-type"
                     value={extractedData.employmentType}
                     onChange={(e) => { setExtractedData(prev => ({
                       ...prev,
                       employmentType: e.target.value as ExtractedData['employmentType']
                     })); markExtractedDataModified(); }}
-                    className={`w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black bg-white ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                    className={`w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-sm text-black ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     disabled={isRegenerating}
                   >
                     <option value="full_time">Full Time</option>
@@ -10044,15 +10485,16 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 </div>
 
                 {/* Work Model */}
-                <div>
-                  <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 mb-2">Work Mode</h3>
+                <div className="min-w-0">
+                  <label htmlFor="jd-work-mode" className="block text-sm text-gray-700 dark:text-slate-300 mb-1">Work Mode</label>
                   <select
+                    id="jd-work-mode"
                     value={extractedData.workModel}
                     onChange={(e) => { setExtractedData(prev => ({
                       ...prev,
                       workModel: e.target.value as ExtractedData['workModel']
                     })); markExtractedDataModified(); }}
-                    className={`w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black bg-white ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                    className={`w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-sm text-black ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     disabled={isRegenerating}
                   >
                     <option value="onsite">Onsite</option>
@@ -10062,75 +10504,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   </select>
                 </div>
               </div>
-
-              {/* Allow Overqualified Candidates - REQUIRED choice, not a default-off
-                  toggle. Scoring reads this (evaluate_experience_level in
-                  odoo_scoring.py) so an unanswered field is not a safe silent default
-                  in either direction - the recruiter must pick Yes or No before
-                  leaving Step 2 (enforced in getValidationStatus/handlePublish). */}
-              <div className={`mt-4 sm:mt-6 p-3 sm:p-4 rounded-lg border ${
-                validationErrors.allowOverqualified
-                  ? 'bg-destructive-subtle border-destructive-line'
-                  : 'bg-gray-50 dark:bg-slate-800/50 border-gray-200 dark:border-slate-700'
-              }`}>
-                <div className="flex items-center justify-between gap-3 flex-wrap">
-                  <div>
-                    <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 mb-1">
-                      Allow Overqualified Candidates <span className="text-destructive">*</span>
-                    </h3>
-                    <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
-                      Should candidates with more experience than the maximum for this role be scored favorably (Yes), or treated as a mismatch (No)? With No, any experience above the To value fails the Experience criterion.
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2" role="radiogroup" aria-label="Allow Overqualified Candidates">
-                    {([
-                      { label: 'Yes', value: true },
-                      { label: 'No', value: false },
-                    ] as const).map((opt) => {
-                      const isSelected = extractedData.allowOverqualified === opt.value;
-                      // "No" needs a ceiling to exceed - locked (and Yes forced, see
-                      // experienceHasCeiling) until the recruiter enters a To value.
-                      const lockedNo = opt.value === false && !experienceHasCeiling;
-                      const isDisabled = isRegenerating || lockedNo;
-                      return (
-                        <button
-                          key={opt.label}
-                          type="button"
-                          role="radio"
-                          aria-checked={isSelected}
-                          aria-disabled={isDisabled}
-                          disabled={isDisabled}
-                          title={lockedNo ? 'Enter a To (maximum) years value to allow choosing No' : undefined}
-                          onClick={() => {
-                            if (isDisabled) return;
-                            setExtractedData(prev => ({ ...prev, allowOverqualified: opt.value }));
-                            setValidationErrors(prev => ({ ...prev, allowOverqualified: undefined }));
-                            markExtractedDataModified();
-                          }}
-                          className={`px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
-                            isSelected
-                              ? 'bg-brand-blue text-white border-brand-blue'
-                              : 'bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 border-gray-300 dark:border-slate-700 hover:border-brand-blue/40'
-                          } ${isDisabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
-                        >
-                          {opt.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-                {!experienceHasCeiling && (
-                  <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mt-2 flex items-center gap-1">
-                    <Info className="w-4 h-4 flex-shrink-0" />
-                    Set to Yes: the experience requirement has no upper limit, so there is no range to exceed. Enter a To (maximum) years value above to choose No.
-                  </p>
-                )}
-                {validationErrors.allowOverqualified && (
-                  <p className="text-destructive text-sm mt-2 flex items-center gap-1">
-                    <AlertCircle className="w-4 h-4" />
-                    {validationErrors.allowOverqualified}
-                  </p>
-                )}
               </div>
 
               {/* Certifications & Domain Keywords - HIDDEN as per requirement */}
@@ -10262,16 +10635,27 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   it. To restore this feature, re-add the block AND drop the two `false &&`
                   overrides at the extraction sites. */}
 
+              {/* NOTES & VISIBILITY - who sees each note is the thing that
+                  separates them, so each sits in its own panel with its
+                  visibility badge on the heading row. */}
+              <div className={STEP2_CARD_CLASS}>
+              <Step2SectionHeader
+                icon={NotebookPen}
+                tone="orange"
+                title="Notes & Visibility"
+                hint="Guidance for assessments, private notes, and details for candidates."
+              />
               {/* Assessment Guidance & Internal Recruiter Notes - Side by Side */}
-              <div className="mt-4 sm:mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Assessment Guidance - Left */}
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
+                <div className={STEP2_PANEL_CLASS}>
+                  <div className="flex flex-wrap items-center gap-2 mb-2">
                     <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">Assessment Guidance</h3>
                     <span className="text-xs text-gray-500 dark:text-slate-500 bg-gray-100 dark:bg-slate-800 px-2 py-0.5 rounded">Optional</span>
                   </div>
-                  <p className="text-sm text-gray-600 dark:text-slate-400 mb-3 flex items-center gap-1">
-                    <span className="text-blue-500">ℹ️</span> Visible to assessment team
+                  <p className="text-sm text-gray-600 dark:text-slate-400 mb-3 flex items-center gap-1.5">
+                    <Users className="w-4 h-4 text-brand-blue flex-shrink-0" />
+                    Visible to assessment team
                   </p>
                   <textarea
                     value={extractedData.assessmentGuidance}
@@ -10292,11 +10676,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 </div>
 
                 {/* Internal Recruiter Notes - Right */}
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
+                <div className={STEP2_PANEL_CLASS}>
+                  <div className="flex flex-wrap items-center gap-2 mb-2">
                     <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">Internal Recruiter Notes</h3>
-                    <span className="text-xs text-gray-500 dark:text-slate-500 bg-warning-subtle px-2 py-0.5 rounded flex items-center gap-1">
-                      🔒 Private
+                    <span className={PRIVATE_BADGE_CLASS}>
+                      <Lock className="w-3 h-3 flex-shrink-0" />
+                      Private
                     </span>
                   </div>
                   <p className="text-sm text-gray-600 dark:text-slate-400 mb-3">
@@ -10305,7 +10690,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   <textarea
                     value={extractedData.internalRecruiterComments.join('\n')}
                     onChange={(e) => {
-                      const nextValue = e.target.value;
+                      // Capped at 500 like Assessment Guidance beside it.
+                      const nextValue = e.target.value.slice(0, 500);
                       applyEnglishOnlyInputChange(nextValue, 'Internal recruiter notes', () => {
                         setExtractedData(prev => ({
                           ...prev,
@@ -10320,6 +10706,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     disabled={isRegenerating}
                     readOnly={isRegenerating}
                   />
+                  <div className="text-right text-xs text-gray-500 dark:text-slate-500 mt-1">{extractedData.internalRecruiterComments.join('\n').length}/500</div>
                 </div>
               </div>
 
@@ -10338,12 +10725,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   here will quietly affect a candidate's score. It will not: the field
                   travels as its own column and no scoring, assessment or interview input
                   ever reads it. */}
-              <div className="mt-4 sm:mt-6">
-                <div className="flex items-center gap-2 mb-2">
+              <div className={`mt-4 ${STEP2_PANEL_CLASS}`}>
+                <div className="flex flex-wrap items-center gap-2 mb-2">
                   <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">Additional Details</h3>
                   <span className="text-xs text-gray-500 dark:text-slate-500 bg-gray-100 dark:bg-slate-800 px-2 py-0.5 rounded">Optional</span>
-                  <span className="text-xs text-success bg-success-subtle border border-success-line px-2 py-0.5 rounded flex items-center gap-1">
-                    👁️ Visible to candidates
+                  <span className={CANDIDATE_VISIBLE_BADGE_CLASS}>
+                    <Eye className="w-3 h-3 flex-shrink-0" />
+                    Visible to candidates
                   </span>
                 </div>
                 <p className="text-sm text-gray-600 dark:text-slate-400 mb-3">
@@ -10369,26 +10757,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 />
                 <div className="text-right text-xs text-gray-500 dark:text-slate-500 mt-1">{extractedData.additionalDetails?.length || 0}/2000</div>
               </div>
-
-            {/* Validation Warning Banner - Show when required fields are missing */}
-            {!validationStatus.isValid && (
-              <div className="bg-warning-subtle border border-warning-line rounded-lg p-3 sm:p-4 mt-4 sm:mt-6">
-                <div className="flex items-start gap-2 sm:gap-3">
-                  <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-warning flex-shrink-0 mt-0.5" />
-                  <div>
-                    <h4 className="text-sm sm:text-base text-warning-strong font-medium">Cannot Proceed - Missing Required Fields</h4>
-                    <p className="text-xs sm:text-sm text-warning mt-1">
-                      Please complete the following before {isEditingPublished ? 'republishing' : 'publishing'}:
-                    </p>
-                    <ul className="text-xs sm:text-sm text-warning mt-2 list-disc list-inside">
-                      {validationStatus.missingFields.map((field, index) => (
-                        <li key={index}>{field}</li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
               </div>
-            )}
 
             <div className="flex flex-col-reverse sm:flex-row justify-between items-stretch sm:items-center mt-6 sm:mt-8 gap-3 sm:gap-0">
               <div className="flex gap-2 sm:gap-3">
@@ -10419,7 +10788,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               <Button
                 variant="primary"
                 onClick={handlePublish}
-                disabled={isRegenerating || !validationStatus.isValid}
+                disabled={isRegenerating}
                 title={!validationStatus.isValid ? `Missing: ${validationStatus.missingFields.join(', ')}` : ''}
               >
                 {isRegenerating ? (
@@ -10443,35 +10812,36 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             them, and what the indicator reads as Step 3 vs Step 4. */}
         {step === 'review' && !isPublished && (
           <div className="space-y-4 sm:space-y-6">
-                {/* Header */}
-                <div className="bg-gradient-to-r from-brand-blue to-brand-blue-2 rounded-xl p-4 sm:p-6 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10">
-                  <h2 className="text-lg sm:text-2xl mb-1 sm:mb-2 font-semibold tracking-tight">{isEditingPublished ? 'Review & Republish' : 'Review & Publish'}</h2>
-                  <p className="text-sm sm:text-base text-white/85">
-                    {isEditingPublished
+                {/* Header - Step 2's section card and heading row, so Review
+                    reads as the same workspace. */}
+                <div className={STEP2_CARD_CLASS}>
+                  <Step2SectionHeader
+                    icon={ClipboardCheck}
+                    tone="blue"
+                    spacing="mb-0"
+                    title={isEditingPublished ? 'Review & Republish' : 'Review & Publish'}
+                    hint={isEditingPublished
                       ? 'Review all details before republishing. This will create a new version of the published JD.'
                       : 'Review all details before publishing. Once published, this JD will be locked and available to all authorized users.'}
-                  </p>
+                  />
                 </div>
 
             {/* Final JD Document View */}
-            <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-md shadow-brand-blue/10 tf-round-edges">
-              <div className="bg-brand-blue/[0.04] px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-                  <div className="min-w-0">
-                    <h3 className="text-sm sm:text-lg text-gray-900 dark:text-slate-50 flex items-center gap-2 flex-wrap">
-                      <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800 dark:text-slate-100 flex-shrink-0" />
-                      Final Job Description
-                      {/* JD12: AI-Generated indicator */}
-                      {mode === 'ai' && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">
-                          <Wand2 className="w-3 h-3" />
-                          AI Generated
-                        </span>
-                      )}
-                    </h3>
-                    <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mt-1">This is the job description that will be published</p>
-                  </div>
-                  <div className="flex gap-2 flex-shrink-0">
+            <div className={STEP2_CARD_CLASS}>
+              <Step2SectionHeader
+                icon={FileText}
+                tone="cyan"
+                title="Final Job Description"
+                hint="This is the job description that will be published"
+                badge={mode === 'ai' ? (
+                  /* JD12: AI-Generated indicator */
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">
+                    <Wand2 className="w-3 h-3" />
+                    AI Generated
+                  </span>
+                ) : undefined}
+                actions={
+                  <div className="flex gap-2">
                     <button
                       onClick={() => {
                         const text = mode === 'ai' ? generatedJD : manualJD;
@@ -10485,79 +10855,63 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       Copy
                     </button>
                     <button
-                      onClick={() => {
-                        const text = mode === 'ai' ? generatedJD : manualJD;
-                        // The standalone "Education:" line was dropped 2026-08-21 and the Additional
-                        // Requirements lists added in its place. Education is a line inside those lists
-                        // now, so this export carries it exactly once - and it carries MHAR/NHAR at all,
-                        // which it previously omitted entirely.
-                        const fullContent = [
-                          jobTitle,
-                          '',
-                          text,
-                          '',
-                          '--- Skills ---',
-                          `Must Have: ${extractedData.mustHaveSkills.join(', ')}`,
-                          `Nice to Have: ${extractedData.niceToHaveSkills.join(', ')}`,
-                          '',
-                          '--- Additional Requirements ---',
-                          `Must Have: ${(extractedData.mustHaveComments || []).join('; ') || 'None'}`,
-                          `Nice to Have: ${(extractedData.niceToHaveComments || []).join('; ') || 'None'}`,
-                          '',
-                          `Experience: ${extractedData.experience}`,
-                        ].join('\n');
-                        const blob = new Blob([fullContent], { type: 'text/plain' });
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `${jobTitle.replace(/[^a-z0-9]/gi, '_')}_JD.txt`;
-                        a.click();
-                        URL.revokeObjectURL(url);
-                        toast.success({ title: 'Downloaded!', description: 'Job description saved as text file' });
-                      }}
+                      /* Opens the format picker; nothing downloads until a
+                         format is chosen there. */
+                      onClick={() => setShowDownloadFormatDialog(true)}
+                      aria-haspopup="dialog"
                       className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 sm:py-2 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-md hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors text-xs sm:text-sm text-black"
                     >
                       <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       Download
                     </button>
                   </div>
-                </div>
-              </div>
-              <div className="p-4 sm:p-6 lg:p-8 bg-white dark:bg-slate-900">
+                }
+              />
+              <div className="min-w-0 rounded-lg border border-gray-100 dark:border-slate-700/60 p-4 sm:p-6 lg:p-8">
                 <div className="prose prose-sm max-w-none">
                   {/* Job Title & Quick Info */}
                   <div className="mb-4 sm:mb-6 pb-4 sm:pb-6 border-b border-gray-200 dark:border-slate-700">
-                    {effectiveEditingJD?.job_id && (
-                      <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-slate-500 mb-1">{effectiveEditingJD.job_id}</p>
-                    )}
-                    <h1 className="text-xl sm:text-2xl lg:text-3xl text-gray-900 dark:text-slate-50 mb-2 sm:mb-3 flex items-center gap-2 sm:gap-3 flex-wrap">
-                      {jobTitle}
-                      {effectiveEditingJD?.current_version && (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700">
-                          v{effectiveEditingJD.current_version}
+                    {/* JD ID · job name · version on ONE row, drawn exactly as
+                        the Job Openings list draws it (`JobOpeningSummary`):
+                        the shared JobIdBadge, the job name in its typography,
+                        and its dotted version pill, gap-2 apart. The name wraps
+                        within itself rather than clipping, so a long title
+                        never pushes the version off a narrow screen. */}
+                    <div className="not-prose flex flex-wrap items-center gap-2 mb-2 sm:mb-3">
+                      {effectiveEditingJD?.job_id && (
+                        <JobIdBadge className="flex-shrink-0">{effectiveEditingJD.job_id}</JobIdBadge>
+                      )}
+                      <h1 className="m-0 min-w-0 text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 [overflow-wrap:anywhere]">
+                        {jobTitle}
+                      </h1>
+                      {reviewVersionNumber != null && (
+                        <span className="px-2 py-0.5 rounded-full text-xs bg-gray-50 text-gray-700 border border-gray-200 flex items-center gap-1.5 flex-shrink-0 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
+                          <span className="w-1.5 h-1.5 rounded-full bg-gray-500" />
+                          v{reviewVersionNumber}
                         </span>
                       )}
-                    </h1>
+                    </div>
                     <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600 dark:text-slate-400">
                       {extractedData.locations.length > 0 && extractedData.locations[0].city && (
-                        <span className="flex items-center gap-1">📍 {extractedData.locations[0].city}</span>
+                        <span className="flex items-center gap-1.5"><MapPin className="w-4 h-4 text-gray-500 dark:text-slate-400 flex-shrink-0" />{extractedData.locations[0].city}</span>
                       )}
                       {extractedData.experience && (
-                        <span className="flex items-center gap-1">⏱️ {getExperienceLabel(extractedData.experience)}</span>
+                        <span className="flex items-center gap-1.5"><Clock className="w-4 h-4 text-gray-500 dark:text-slate-400 flex-shrink-0" />{getExperienceLabel(extractedData.experience)}</span>
                       )}
                       {/* Education badge REMOVED 2026-08-21 - it is a requirement line
                           in Must-Have / Nice-to-Have Additional Requirements, not a
                           header attribute like location or employment type. */}
                       {extractedData.employmentType && (
-                        <span className="flex items-center gap-1">💼 {extractedData.employmentType === 'full_time' ? 'Full Time' : extractedData.employmentType === 'part_time' ? 'Part Time' : extractedData.employmentType === 'contract' ? 'Contract' : extractedData.employmentType}</span>
+                        <span className="flex items-center gap-1.5"><Briefcase className="w-4 h-4 text-gray-500 dark:text-slate-400 flex-shrink-0" />{extractedData.employmentType === 'full_time' ? 'Full Time' : extractedData.employmentType === 'part_time' ? 'Part Time' : extractedData.employmentType === 'contract' ? 'Contract' : extractedData.employmentType}</span>
                       )}
                       {extractedData.workModel && (
-                        <span className="flex items-center gap-1">🏢 {extractedData.workModel === 'onsite' ? 'On-site' : extractedData.workModel === 'remote' ? 'Remote' : extractedData.workModel === 'hybrid' ? 'Hybrid' : extractedData.workModel}</span>
+                        <span className="flex items-center gap-1.5"><Building2 className="w-4 h-4 text-gray-500 dark:text-slate-400 flex-shrink-0" />{extractedData.workModel === 'onsite' ? 'On-site' : extractedData.workModel === 'remote' ? 'Remote' : extractedData.workModel === 'hybrid' ? 'Hybrid' : extractedData.workModel}</span>
                       )}
                     </div>
                     {(extractedData.salaryFrom || extractedData.salaryTo) && (
-                      <div className="mt-3 text-sm text-success font-medium">
-                        💰 {formatSalaryRange({
+                      <div className="mt-3 text-sm text-success font-medium flex items-center gap-1.5">
+                        <Wallet className="w-4 h-4 flex-shrink-0" />
+                        {formatSalaryRange({
                           min: extractedData.salaryFrom,
                           max: extractedData.salaryTo,
                           currency: extractedData.salaryCurrency,
@@ -10580,201 +10934,200 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               </div>
             </div>
 
-            {/* Extracted Data Summary Preview - Collapsible */}
-            <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 tf-round-edges">
+            {/* Extracted Data Summary Preview - Collapsible. A Step 2 card; the
+                whole heading row is still the toggle. */}
+            <div className={STEP2_CARD_CLASS}>
               {/* Section Header with Toggle */}
               <button
+                type="button"
                 onClick={() => setShowExtractedSummary(!showExtractedSummary)}
-                className="w-full bg-brand-blue/[0.04] px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between hover:bg-brand-blue/[0.07] transition-colors"
+                aria-expanded={showExtractedSummary}
+                className="w-full text-left rounded-lg"
               >
-                <div className="text-left">
-                  <h3 className="text-sm sm:text-lg text-gray-900 dark:text-slate-50 flex items-center gap-2 flex-wrap">
-                    📊 Extracted Data Summary
-                    <Eye className="w-5 h-5 text-gray-500 dark:text-slate-500" />
-                    {/* JD12: AI-Generated indicator for extracted parameters */}
-                    {mode === 'ai' && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">
-                        <Wand2 className="w-3 h-3" />
-                        AI Extracted
-                      </span>
-                    )}
-                  </h3>
-                  <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">Click to {showExtractedSummary ? 'hide' : 'view'} structured requirements</p>
-                </div>
-                <div className={`transform transition-transform ${showExtractedSummary ? 'rotate-180' : ''}`}>
-                  <ChevronRight className="w-5 h-5 text-gray-500 dark:text-slate-500 rotate-90" />
-                </div>
+                <Step2SectionHeader
+                  icon={BarChart3}
+                  tone="orange"
+                  spacing="mb-0"
+                  title="Extracted Data Summary"
+                  hint={`Click to ${showExtractedSummary ? 'hide' : 'view'} structured requirements`}
+                  badge={mode === 'ai' ? (
+                    /* JD12: AI-Generated indicator for extracted parameters */
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">
+                      <Wand2 className="w-3 h-3" />
+                      AI Extracted
+                    </span>
+                  ) : undefined}
+                  actions={
+                    <span className={`inline-flex transform transition-transform ${showExtractedSummary ? 'rotate-180' : ''}`}>
+                      <ChevronRight className="w-5 h-5 text-gray-500 dark:text-slate-500 rotate-90" />
+                    </span>
+                  }
+                />
               </button>
 
-              {/* Collapsible Content */}
+              {/* Collapsible Content - the sections stacked under dividers inside
+                  the card's own padding, Step 2's divided-card treatment. */}
               {showExtractedSummary && (
-                <>
+                <div className="mt-4 sm:mt-5 pt-1 border-t border-gray-100 dark:border-slate-700/60 divide-y divide-gray-100 dark:divide-slate-700/60">
+              {/* A read-only mirror of Step 2: every field the Skill Extraction
+                  step shows, read from the same `extractedData`, grouped under
+                  Step 2's own section names and icons. A field with no value says
+                  so instead of disappearing, so the preview is complete. */}
+              {(() => {
+                const fieldLabel = 'text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-1 sm:mb-2';
+                const fieldValue = 'text-sm sm:text-base text-gray-900 dark:text-slate-50 [overflow-wrap:anywhere]';
+                const emptyValue = 'text-sm text-gray-500 dark:text-slate-500 italic';
+                const tile = 'min-w-0 bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg';
+                const requiredLine = (required?: boolean) => (
+                  <p className="text-xs text-gray-500 dark:text-slate-500 mt-1 flex items-center gap-1">
+                    {required
+                      ? <><CheckCircle2 className="w-3.5 h-3.5 text-success flex-shrink-0" />Required</>
+                      : <><Circle className="w-3.5 h-3.5 flex-shrink-0" />Preferred</>}
+                  </p>
+                );
+                const sectionHeading = (Icon: typeof Info, tone: keyof typeof STEP2_SECTION_TONES, title: string) => (
+                  <div className="flex items-center justify-between gap-3 mb-3 sm:mb-4">
+                    <h3 className="flex items-center gap-2 text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">
+                      <Icon className={`w-4 h-4 flex-shrink-0 ${STEP2_SECTION_TONES[tone].icon}`} />
+                      {title}
+                    </h3>
+                    <button
+                      onClick={() => setStep('extract')}
+                      className="flex items-center gap-1 text-sm text-gray-600 dark:text-slate-400 hover:text-gray-800 transition-colors"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                      Edit
+                    </button>
+                  </div>
+                );
+                const itemList = (items: string[], emptyMessage: string) => (
+                  items.length > 0 ? (
+                    <div className="space-y-2">
+                      {items.map((item, index) => (
+                        <div key={index} className="flex items-start gap-2 text-sm text-gray-700 dark:text-slate-300">
+                          <CheckCircle className="w-4 h-4 text-success flex-shrink-0 mt-0.5" />
+                          <span className="min-w-0 [overflow-wrap:anywhere]">{item}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className={emptyValue}>{emptyMessage}</p>
+                  )
+                );
+                const salaryText = formatSalaryRange({
+                  min: extractedData.salaryFrom,
+                  max: extractedData.salaryTo,
+                  currency: extractedData.salaryCurrency,
+                });
+                const mustHaveComments = extractedData.mustHaveComments || [];
+                const niceToHaveComments = extractedData.niceToHaveComments || [];
+                return (
+                  <>
               {/* Job Title */}
-              <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-slate-700">
+              <div className="py-4 sm:py-5">
                 <h3 className="text-sm text-gray-500 dark:text-slate-500 mb-2">Job Title</h3>
-                <p className="text-base sm:text-xl text-gray-900 dark:text-slate-50">{jobTitle}</p>
+                <p className="text-base sm:text-xl text-gray-900 dark:text-slate-50 [overflow-wrap:anywhere]">{jobTitle}</p>
               </div>
 
-              {/* Skills Section */}
-              <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-slate-700">
-                <div className="flex items-center justify-between mb-3 sm:mb-4">
-                  <h3 className="text-sm sm:text-base text-gray-900 dark:text-slate-50">Skills & Requirements</h3>
-                  <button
-                    onClick={() => setStep('extract')}
-                    className="flex items-center gap-1 text-sm text-gray-600 dark:text-slate-400 hover:text-gray-800 transition-colors"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                    Edit
-                  </button>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                  {/* Left Column: Skills */}
-                  <div className="space-y-4 sm:space-y-6">
-                    {/* Must-Have Skills */}
-                    <div>
-                      <h4 className="text-sm text-gray-700 dark:text-slate-300 mb-3">Must-Have Skills ({extractedData.mustHaveSkills.length})</h4>
-                      <div className="space-y-2">
-                        {extractedData.mustHaveSkills.map((skill, index) => (
-                          <div key={index} className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300">
-                            <CheckCircle className="w-4 h-4 text-destructive flex-shrink-0" />
-                            {skill}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Nice-to-Have Skills */}
-                    <div>
-                      <h4 className="text-sm text-gray-700 dark:text-slate-300 mb-3">Nice-to-Have Skills ({extractedData.niceToHaveSkills.length})</h4>
-                      <div className="space-y-2">
-                        {extractedData.niceToHaveSkills.map((skill, index) => (
-                          <div key={index} className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
-                            <CheckCircle className="w-4 h-4 text-gray-800 dark:text-slate-100 flex-shrink-0" />
-                            {skill}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+              {/* Skills & Requirements - Step 2's four lists */}
+              <div className="py-4 sm:py-5">
+                {sectionHeading(Sparkles, 'blue', 'Skills & Requirements')}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                  <div className="min-w-0">
+                    <h4 className="text-sm text-gray-700 dark:text-slate-300 mb-3">Must-Have Skills ({extractedData.mustHaveSkills.length})</h4>
+                    {itemList(extractedData.mustHaveSkills, 'None added')}
                   </div>
-
-                  {/* Right Column: Comments */}
-                  <div className="space-y-6">
-                    {/* Must-Have Comments */}
-                    {extractedData.mustHaveComments.length > 0 && (
-                      <div>
-                        <h4 className="text-sm text-gray-700 dark:text-slate-300 mb-3">Must-Have Additional Requirements ({extractedData.mustHaveComments.length})</h4>
-                        <div className="space-y-2">
-                          {extractedData.mustHaveComments.map((comment, index) => (
-                            <div key={index} className="flex items-start gap-2 text-sm text-gray-700 dark:text-slate-300">
-                              <CheckCircle2 className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" />
-                              <span>{comment}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Nice-to-Have Comments */}
-                    {(extractedData.niceToHaveComments || []).length > 0 && (
-                      <div>
-                        <h4 className="text-sm text-gray-700 dark:text-slate-300 mb-3">Nice-to-Have Additional Requirements ({(extractedData.niceToHaveComments || []).length})</h4>
-                        <div className="space-y-2">
-                          {(extractedData.niceToHaveComments || []).map((comment, index) => (
-                            <div key={index} className="flex items-start gap-2 text-sm text-gray-600 dark:text-slate-400">
-                              <CheckCircle2 className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
-                              <span>{comment}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                  <div className="min-w-0">
+                    <h4 className="text-sm text-gray-700 dark:text-slate-300 mb-3">Nice-to-Have Skills ({extractedData.niceToHaveSkills.length})</h4>
+                    {itemList(extractedData.niceToHaveSkills, 'None added')}
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="text-sm text-gray-700 dark:text-slate-300 mb-3">Must-Have Additional Requirements ({mustHaveComments.length})</h4>
+                    {itemList(mustHaveComments, 'None added')}
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="text-sm text-gray-700 dark:text-slate-300 mb-3">Nice-to-Have Additional Requirements ({niceToHaveComments.length})</h4>
+                    {itemList(niceToHaveComments, 'None added')}
                   </div>
                 </div>
               </div>
 
-              {/* Requirements Grid */}
-              <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-slate-700">
-                <div className="flex items-center justify-between mb-3 sm:mb-4">
-                  <h3 className="text-sm sm:text-base text-gray-900 dark:text-slate-50">Requirements</h3>
-                  <button
-                    onClick={() => setStep('extract')}
-                    className="flex items-center gap-1 text-sm text-gray-600 dark:text-slate-400 hover:text-gray-800 transition-colors"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                    Edit
-                  </button>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-6">
-                  {/* Experience */}
-                  <div className="bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg">
-                    <h4 className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-1 sm:mb-2">Experience</h4>
-                    <p className="text-sm sm:text-base text-gray-900 dark:text-slate-50">{getExperienceLabel(extractedData.experience)}</p>
+              {/* Role Requirements - Experience, Industry, Salary, Overqualified */}
+              <div className="py-4 sm:py-5">
+                {sectionHeading(Briefcase, 'success', 'Role Requirements')}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                  <div className={tile}>
+                    <h4 className={fieldLabel}>Experience</h4>
+                    {extractedData.experience
+                      ? <p className={fieldValue}>{getExperienceLabel(extractedData.experience)}</p>
+                      : <p className={emptyValue}>Not specified</p>}
+                    {requiredLine(extractedData.experienceRequired)}
                     <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">
-                      {extractedData.experienceRequired ? '✓ Required' : '○ Preferred'}
+                      Evaluate Job Hopping: {extractedData.jobHoppingEnabled ? 'Yes' : 'No'}
                     </p>
                   </div>
-
-                  {/* Education tile REMOVED 2026-08-21. The Step 3 review showed the
-                      same degree twice - once here and once in the Must-Have /
-                      Nice-to-Have Additional Requirements listed directly above - which
-                      is what the recruiter reported. The lists are the only place
-                      education appears now; education_mandatory still decides WHICH of
-                      the two it lands in, so the Required-vs-Preferred distinction is
-                      preserved without a second tile saying it. */}
-
-                  {/* Industry Type - Only show if specified */}
-                  {extractedData.industryType && (
-                    <div className="bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg">
-                      <h4 className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-1 sm:mb-2">Industry Type</h4>
-                      <p className="text-sm sm:text-base text-gray-900 dark:text-slate-50">{getIndustryLabel(extractedData.industryType)}</p>
-                      <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">
-                        {extractedData.industryTypeRequired ? '✓ Required' : '○ Preferred'}
+                  <div className={tile}>
+                    <h4 className={fieldLabel}>Industry Type</h4>
+                    {extractedData.industryType
+                      ? <p className={fieldValue}>{getIndustryLabel(extractedData.industryType)}</p>
+                      : <p className={emptyValue}>Not specified</p>}
+                    {requiredLine(extractedData.industryTypeRequired)}
+                  </div>
+                  <div className={tile}>
+                    <h4 className={fieldLabel}>Salary Range</h4>
+                    {salaryText ? (
+                      <p className="flex flex-wrap items-center gap-1.5">
+                        <span className={fieldValue}>{salaryText}</span>
+                        <span className="text-gray-600 dark:text-slate-400 text-xs sm:text-sm">/ {extractedData.compensationType}</span>
                       </p>
-                    </div>
-                  )}
+                    ) : (
+                      <p className={emptyValue}>Not specified</p>
+                    )}
+                  </div>
+                  <div className={tile}>
+                    <h4 className={fieldLabel}>Allow Overqualified Candidates</h4>
+                    <p className={`${fieldValue} flex items-center gap-1.5`}>
+                      {extractedData.allowOverqualified
+                        ? <CheckCircle className="w-4 h-4 text-success flex-shrink-0" />
+                        : <X className="w-4 h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />}
+                      {extractedData.allowOverqualified ? 'Yes' : 'No'}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">
+                      {extractedData.allowOverqualified
+                        ? 'Accepting candidates who exceed requirements'
+                        : 'Only accepting candidates within requirements'}
+                    </p>
+                  </div>
                 </div>
               </div>
 
-              {/* Compensation */}
-              <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-slate-700">
-                <div className="flex items-center justify-between mb-3 sm:mb-4">
-                  <h3 className="text-sm sm:text-base text-gray-900 dark:text-slate-50">Compensation</h3>
-                  <button
-                    onClick={() => setStep('extract')}
-                    className="flex items-center gap-1 text-sm text-gray-600 dark:text-slate-400 hover:text-gray-800 transition-colors"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                    Edit
-                  </button>
-                </div>
-                <div className="bg-success-subtle p-3 sm:p-4 rounded-lg inline-flex flex-wrap items-center gap-1.5 sm:gap-2">
-                  <span className="text-sm sm:text-base text-gray-900 dark:text-slate-50">
-                    {formatSalaryRange({
-                      min: extractedData.salaryFrom,
-                      max: extractedData.salaryTo,
-                      currency: extractedData.salaryCurrency,
-                    })}
-                  </span>
-                  <span className="text-gray-600 dark:text-slate-400 text-xs sm:text-sm">/ {extractedData.compensationType}</span>
-                </div>
-              </div>
-
-              {/* Employment Type & Work Model */}
-              <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-slate-700">
-                <div className="flex items-center justify-between mb-3 sm:mb-4">
-                  <h3 className="text-sm sm:text-base text-gray-900 dark:text-slate-50">Job Type</h3>
-                  <button
-                    onClick={() => setStep('extract')}
-                    className="flex items-center gap-1 text-sm text-gray-600 dark:text-slate-400 hover:text-gray-800 transition-colors"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                    Edit
-                  </button>
-                </div>
+              {/* Location & Work Setup - Locations, Employment Type, Work Mode */}
+              <div className="py-4 sm:py-5">
+                {sectionHeading(MapPin, 'cyan', 'Location & Work Setup')}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                  <div className="bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg">
-                    <h4 className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-1 sm:mb-2">Employment Type</h4>
-                    <p className="text-sm sm:text-base text-gray-900 dark:text-slate-50">
+                  <div className={`${tile} sm:col-span-2`}>
+                    <h4 className={fieldLabel}>Locations ({extractedData.locations.length})</h4>
+                    {extractedData.locations.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {extractedData.locations.map((loc, index) => (
+                          <span
+                            key={index}
+                            className="inline-flex items-center gap-1.5 max-w-full px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-sm text-gray-800 dark:text-slate-200"
+                          >
+                            <MapPin className="w-3.5 h-3.5 text-brand-cyan flex-shrink-0" />
+                            <span className="min-w-0 [overflow-wrap:anywhere]">{loc.city}</span>
+                            <span className="text-xs text-gray-500 dark:text-slate-400 whitespace-nowrap">{loc.radius} km radius</span>
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className={emptyValue}>No locations added</p>
+                    )}
+                    {requiredLine(extractedData.locationsRequired)}
+                  </div>
+                  <div className={tile}>
+                    <h4 className={fieldLabel}>Employment Type</h4>
+                    <p className={fieldValue}>
                       {extractedData.employmentType === 'full_time' ? 'Full Time' :
                        extractedData.employmentType === 'part_time' ? 'Part Time' :
                        extractedData.employmentType === 'contract' ? 'Contract' :
@@ -10782,9 +11135,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                        extractedData.employmentType === 'temporary' ? 'Temporary / Seasonal' : 'Not specified'}
                     </p>
                   </div>
-                  <div className="bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg">
-                    <h4 className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-1 sm:mb-2">Work Mode</h4>
-                    <p className="text-sm sm:text-base text-gray-900 dark:text-slate-50">
+                  <div className={tile}>
+                    <h4 className={fieldLabel}>Work Mode</h4>
+                    <p className={fieldValue}>
                       {extractedData.workModel === 'onsite' ? 'Onsite' :
                        extractedData.workModel === 'remote' ? 'Remote' :
                        extractedData.workModel === 'hybrid' ? 'Hybrid' :
@@ -10794,102 +11147,128 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 </div>
               </div>
 
-              {/* Locations - Hidden for now */}
-              {false && extractedData.locations.length > 0 && (
-                <div className="p-6 border-b border-gray-200">
-                  <h3 className="text-gray-900 mb-4">
-                    Locations ({extractedData.locations.length})
-                    {extractedData.locationsRequired && (
-                      <span className="text-xs text-gray-500 ml-2">✓ Required</span>
-                    )}
-                  </h3>
-                  <div className="flex flex-wrap gap-2">
-                    {extractedData.locations.map((loc, index) => (
-                      <div key={index} className="bg-gray-50 text-gray-800 px-3 py-2 rounded-lg text-sm">
-                        {loc.city} <span className="text-gray-800">(+{loc.radius}km)</span>
+              {/* Notes & Visibility - each with Step 2's visibility marker */}
+              <div className="pt-4 sm:pt-5">
+                {sectionHeading(NotebookPen, 'orange', 'Notes & Visibility')}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+                  <div className={tile}>
+                    <h4 className={`${fieldLabel} flex flex-wrap items-center gap-2`}>
+                      Assessment Guidance
+                      <span className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-normal text-gray-600 dark:text-slate-400">
+                        <Users className="w-3.5 h-3.5 text-brand-blue flex-shrink-0" />
+                        Visible to assessment team
+                      </span>
+                    </h4>
+                    {extractedData.assessmentGuidance
+                      ? <p className="text-xs sm:text-sm text-gray-700 dark:text-slate-300 whitespace-pre-wrap [overflow-wrap:anywhere]">{extractedData.assessmentGuidance}</p>
+                      : <p className={emptyValue}>No assessment guidance provided</p>}
+                  </div>
+                  <div className={tile}>
+                    <h4 className={`${fieldLabel} flex flex-wrap items-center gap-2`}>
+                      Internal Recruiter Notes
+                      <span className={PRIVATE_BADGE_CLASS}>
+                        <Lock className="w-3 h-3 flex-shrink-0" />
+                        Private
+                      </span>
+                    </h4>
+                    {extractedData.internalRecruiterComments.length > 0 ? (
+                      <div className="space-y-2">
+                        {extractedData.internalRecruiterComments.map((comment, index) => (
+                          <div key={index} className="bg-warning-subtle p-2.5 sm:p-3 rounded-lg text-xs sm:text-sm text-gray-700 dark:text-slate-300 border border-warning-line [overflow-wrap:anywhere]">
+                            {comment}
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* JD22 - Additional Details. Rendered only when the recruiter actually
-                  wrote something (requirement 4: "only the details provided"), so an
-                  empty field adds no empty section to the preview. */}
-              {extractedData.additionalDetails && (
-                <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-slate-700">
-                  <h3 className="text-sm sm:text-base text-gray-900 dark:text-slate-50 mb-3 flex items-center gap-2">
-                    Additional Details
-                    <span className="text-xs text-success bg-success-subtle border border-success-line px-2 py-1 rounded">
-                      👁️ Visible to candidates
-                    </span>
-                  </h3>
-                  <div className="bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg text-xs sm:text-sm text-gray-700 dark:text-slate-300 whitespace-pre-wrap">
-                    {extractedData.additionalDetails}
-                  </div>
-                </div>
-              )}
-
-              {/* Assessment Guidance */}
-              {extractedData.assessmentGuidance && (
-                <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-slate-700">
-                  <h3 className="text-sm sm:text-base text-gray-900 dark:text-slate-50 mb-3 flex items-center gap-2">
-                    Assessment Guidance
-                    <span className="text-xs text-gray-800 dark:text-slate-100 bg-gray-50 dark:bg-slate-800/50 px-2 py-1 rounded">
-                      ℹ️ Visible to assessment team
-                    </span>
-                  </h3>
-                  <div className="bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg text-xs sm:text-sm text-gray-700 dark:text-slate-300 whitespace-pre-wrap">
-                    {extractedData.assessmentGuidance}
-                  </div>
-                </div>
-              )}
-
-              {/* Internal Recruiter Comments */}
-              {extractedData.internalRecruiterComments.length > 0 && (
-                <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-slate-700">
-                  <h3 className="text-sm sm:text-base text-gray-900 dark:text-slate-50 mb-3 flex items-center gap-2">
-                    Internal Recruiter Notes
-                    <span className="text-xs text-gray-500 dark:text-slate-500 bg-warning-subtle px-2 py-1 rounded">
-                      🔒 Private
-                    </span>
-                  </h3>
-                  <div className="space-y-2">
-                    {extractedData.internalRecruiterComments.map((comment, index) => (
-                      <div key={index} className="bg-warning-subtle p-2.5 sm:p-3 rounded-lg text-xs sm:text-sm text-gray-700 dark:text-slate-300 border border-warning-line">
-                        {comment}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Candidate Preferences */}
-              <div className="p-4 sm:p-6">
-                <h3 className="text-sm sm:text-base text-gray-900 dark:text-slate-50 mb-3 sm:mb-4">Candidate Preferences</h3>
-                <div className="flex items-center gap-3 bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg">
-                  <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-                    extractedData.allowOverqualified ? 'bg-success-subtle' : 'bg-gray-200 dark:bg-slate-800'
-                  }`}>
-                    {extractedData.allowOverqualified ? (
-                      <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6 text-success" />
                     ) : (
-                      <X className="w-5 h-5 sm:w-6 sm:h-6 text-gray-400 dark:text-slate-500" />
+                      <p className={emptyValue}>No internal notes</p>
                     )}
                   </div>
-                  <div>
-                    <p className="text-sm sm:text-base text-gray-900 dark:text-slate-50">Allow Overqualified Candidates</p>
-                    <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
-                      {extractedData.allowOverqualified 
-                        ? 'Accepting candidates who exceed requirements'
-                        : 'Only accepting candidates within requirements'}
-                    </p>
+                  <div className={`${tile} md:col-span-2`}>
+                    <h4 className={`${fieldLabel} flex flex-wrap items-center gap-2`}>
+                      Additional Details
+                      <span className={CANDIDATE_VISIBLE_BADGE_CLASS}>
+                        <Eye className="w-3 h-3 flex-shrink-0" />
+                        Visible to candidates
+                      </span>
+                    </h4>
+                    {extractedData.additionalDetails
+                      ? <p className="text-xs sm:text-sm text-gray-700 dark:text-slate-300 whitespace-pre-wrap [overflow-wrap:anywhere]">{extractedData.additionalDetails}</p>
+                      : <p className={emptyValue}>No additional details provided</p>}
                   </div>
                 </div>
               </div>
-                </>
+                  </>
+                );
+              })()}
+                </div>
               )}
             </div>
+
+            {/* DOWNLOAD FORMAT - the house dialog (overlay, panel, slate header
+                with tile, title and close) around three option rows in the
+                export dialogs' row style. Each format keeps the icon colour it
+                already has in the app's export menus: Text the neutral file,
+                DOCX brand blue, PDF destructive red. Picking one downloads and
+                closes; the overlay and X close without downloading. */}
+            {showDownloadFormatDialog && (
+              <div
+                className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6"
+                onClick={() => setShowDownloadFormatDialog(false)}
+              >
+                <div
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="jd-download-format-title"
+                  className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-sm overflow-hidden"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="bg-slate-50 dark:bg-slate-950 border-b border-gray-100 dark:border-slate-700/60 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex items-center gap-3">
+                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                        <Download className="w-5 h-5 text-brand-blue" />
+                      </div>
+                      <div className="min-w-0">
+                        <h2 id="jd-download-format-title" className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Download Job Description</h2>
+                        <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">Choose a file format</p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      type="button"
+                      onClick={() => setShowDownloadFormatDialog(false)}
+                      aria-label="Close"
+                      className="px-2 flex-shrink-0"
+                    >
+                      <X className="w-5 h-5" />
+                    </Button>
+                  </div>
+                  <div className="p-4 sm:p-5 space-y-2.5">
+                    {/* The upload modal's folded-corner format icon (FileFormatIcon),
+                        as it is - DOCX its Word chip in blue, PDF in its own red,
+                        Text in the neutral gray the app's plain-text exports use. */}
+                    {([
+                      { format: 'txt', label: 'Text', icon: <FileFormatIcon color="var(--raw-6b7280)" accent="var(--raw-9ca3af)" label="TXT" className="h-7 w-7" /> },
+                      { format: 'docx', label: 'DOCX', icon: <FileFormatIcon color="var(--raw-2563eb)" accent="var(--raw-93c5fd)" label="W" className="h-7 w-7" /> },
+                      { format: 'pdf', label: 'PDF', icon: <FileFormatIcon color="var(--raw-dc2626)" accent="var(--raw-f87171)" label="PDF" className="h-7 w-7" /> },
+                    ] as const).map(option => (
+                      <button
+                        key={option.format}
+                        type="button"
+                        onClick={() => {
+                          setShowDownloadFormatDialog(false);
+                          void downloadReviewJD(option.format);
+                        }}
+                        className="w-full flex items-center gap-3 p-3 border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 hover:border-gray-300 transition-all text-left"
+                      >
+                        {option.icon}
+                        <span className="text-sm font-medium text-gray-900 dark:text-slate-50">{option.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Action Buttons */}
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-between">
@@ -10957,17 +11336,19 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             </div>
             <h2 className="text-lg sm:text-2xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight mb-3 sm:mb-4">{publishedVersion && publishedVersion > 1 ? 'Job Description Republished!' : 'Job Description Published!'}</h2>
 
-            {/* JD Name, Code and Version */}
-            <div className="bg-brand-blue/[0.04] ring-1 ring-brand-blue/15 rounded-lg px-4 sm:px-6 py-2 sm:py-3 mb-4 sm:mb-6 inline-flex items-center gap-2 sm:gap-3 flex-wrap justify-center">
+            {/* JD Code, Name and Version - the Recruitment JD row (`JobOpeningSummary`,
+                as the Review header draws it): the shared JobIdBadge, the job
+                name in its typography and the dotted version pill, gap-2 apart,
+                on one row that wraps instead of clipping on a narrow screen. */}
+            <div className="bg-brand-blue/[0.04] ring-1 ring-brand-blue/15 rounded-lg px-4 sm:px-6 py-2 sm:py-3 mb-4 sm:mb-6 inline-flex max-w-full items-center gap-2 flex-wrap justify-center">
               {publishedJobCode && (
-                <span className="px-3 py-1 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 text-sm font-medium rounded-full">
-                  {publishedJobCode}
-                </span>
+                <JobIdBadge className="flex-shrink-0">{publishedJobCode}</JobIdBadge>
               )}
-              <span className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50">{jobTitle}</span>
-              {publishedVersion && (
-                <span className="px-3 py-1 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 text-sm font-medium rounded-full">
-                  v{publishedVersion}
+              <span className="min-w-0 text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 [overflow-wrap:anywhere]">{jobTitle}</span>
+              {publishedVersionNumber != null && (
+                <span className="px-2 py-0.5 rounded-full text-xs bg-gray-50 text-gray-700 border border-gray-200 flex items-center gap-1.5 flex-shrink-0 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
+                  <span className="w-1.5 h-1.5 rounded-full bg-gray-500" />
+                  v{publishedVersionNumber}
                 </span>
               )}
             </div>

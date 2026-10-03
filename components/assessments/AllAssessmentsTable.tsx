@@ -723,8 +723,19 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
   const runStatusAction = async (row: AssessmentRow, verb: string, action: () => Promise<unknown>, success: string) => {
     setBusyRowId(row.id);
     try {
-      await action();
+      const result = await action();
       toast.success(success);
+      /* The row takes the API's reply at once - its new status, or gone after
+         a delete, or off a status tab it no longer belongs on - and the
+         refetch below then confirms it. Only on success: a failed call
+         throws past this. */
+      const reply = result as AssessmentResponse | undefined;
+      if (verb === 'delete' || reply?.status) {
+        const updated = verb === 'delete' ? null : toRow(reply as AssessmentResponse);
+        setRows((prev) => (updated === null || (fixedStatus && updated.rawStatus !== fixedStatus)
+          ? prev.filter((r) => r.id !== row.id)
+          : prev.map((r) => (r.id === row.id ? { ...r, rawStatus: updated.rawStatus, status: updated.status } : r))));
+      }
       refreshRows();
     } catch (err) {
       console.error(`Failed to ${verb} assessment:`, err);
