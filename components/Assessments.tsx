@@ -2,7 +2,7 @@
 
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { InviteSourceValue, assessmentInviteSource } from '@/components/AIInterviewInviteTable';
-import { Plus, Clock, Calendar, Users, CheckCircle, FileText, ArrowDown, ArrowRight, FileCheck, MoreVertical, Play, Sparkles, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, Download, Link2, Share2, PauseCircle, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Shield, Video, X, Info, CheckCircle2, Check, MonitorOff, Clipboard, Lock, TrendingUp, Activity, Loader2, ClipboardCheck, ChevronRight, ListFilter, FilterX, FileDown, FileSpreadsheet, CheckSquare, Square } from 'lucide-react';
+import { Plus, Clock, Calendar, Users, CheckCircle, FileText, ArrowDown, ArrowRight, FileCheck, MoreVertical, Play, Sparkles, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, ArchiveRestore, Download, Link2, Share2, PauseCircle, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Shield, Video, X, Info, CheckCircle2, Check, MonitorOff, Clipboard, Lock, TrendingUp, Activity, Loader2, ClipboardCheck, ChevronRight, ListFilter, FilterX, FileDown, FileSpreadsheet, CheckSquare, Square } from 'lucide-react';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { useState, useEffect, useRef, type Dispatch, type ReactNode, type SetStateAction } from 'react';
@@ -111,6 +111,7 @@ import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import QuotaBadge from '@/components/ui/quota-badge';
 import AllAssessmentsTable, { VersionPill } from '@/components/assessments/AllAssessmentsTable';
+import DraftAssessmentExistsModal from '@/components/assessments/DraftAssessmentExistsModal';
 import AssessmentVersionHistoryPanel, { type AssessmentVersionRow, VersionChip, jobVersionDisplayStatus } from '@/components/assessments/AssessmentVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import { latestVersionNumber } from '@/lib/utils/jobOpeningDisplay';
@@ -125,6 +126,7 @@ import {
   resolveJobVersionsByJdId,
   jobVersionOfAssessment,
   listAllAssessments,
+  MAX_ASSESSMENT_VERSIONS,
   type JobAssessmentHierarchy,
 } from '@/lib/utils/jobAssessmentHierarchy';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
@@ -344,7 +346,6 @@ async function collectAllPages<T>(
 /** How many versions one assessment lineage may hold. Duplicate mints the
  *  next sequential version until the lineage sits at this many, then the
  *  action reports the cap rather than creating another. */
-const MAX_ASSESSMENT_VERSIONS = 5;
 const assessmentDropdownMenuItemClass = 'group';
 interface AssessmentsProps {
   jobs: Job[];
@@ -1134,50 +1135,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       : (apiAssessments.filter((x: any) => x.jd_id === assessment.jd_id) as AssessmentVersionRow[]);
     return rows.find(
       v => String(v.status || '').toLowerCase() === 'draft' && v.id !== assessment.id,
-    );
-  };
-
-  /**
-   * Create an assessment for ONE job version, from the Job Version History.
-   *
-   * The same navigation Job Details uses (`AssessmentsForJD.handleCreateAssessment`
-   * and the Job Details Quick Action both push
-   * `/recruitment/assessments/create?jd_id=<id>`), so the creation flow, its
-   * validations, its plan gate and its API calls are the ones already in
-   * service — nothing about creating an assessment is reimplemented here.
-   *
-   * The id passed is the JOB VERSION's own JD row id, not the card's, which is
-   * what associates the new assessment with the version the recruiter clicked.
-   * `returnUrl` brings them back to this list afterwards, where the row will
-   * have refetched and now shows the assessment.
-   */
-  const handleCreateAssessmentForJobVersion = (jobVersionId: string) => {
-    if (!canCreateAssessment) {
-      toast.error('You do not have permission to create assessments');
-      return;
-    }
-    /* `step=configure` lands the recruiter on the Configure form with THIS job
-       version already chosen, rather than on the JD picker.
-
-       That is not a shortcut, it is the correctness of the version. The picker
-       collapses a lineage to one row - its latest Published or Republished
-       version (`buildAssessmentJobList`) - so a V2 whose lineage has a V3 is
-       not a row there at all. Landing on the picker after clicking V2's own
-       Create therefore offered the job's latest version instead, which is the
-       wrong assessment to author. With `step=configure` the step is settled
-       from the first render: the flow holds a loader while it resolves the id,
-       and `AssessmentCreation` keeps the step the URL asked for rather than
-       rewriting the route a moment later.
-
-       `jd_id` is the JOB VERSION's own JD row id, passed from the clicked row
-       (`group.jobVersionId` on the version panel) - never the card's, and
-       never a version number. The create flow resolves that id directly,
-       fetching the record by id when the list did not include it, so V1, V2
-       and V3 each open on themselves. */
-    router.push(
-      '/recruitment/assessments/create?step=configure'
-      + `&jd_id=${encodeURIComponent(jobVersionId)}`
-      + `&returnUrl=${encodeURIComponent('/recruitment/assessments')}`
     );
   };
 
@@ -3543,6 +3500,46 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     }
   };
 
+  /**
+   * After a status action SUCCEEDS (Activate, Unarchive, Archive, Pause,
+   * Delete): put the outcome on screen at once, then re-read.
+   *
+   * `reloadAssessments` alone left the Assessment Versions table behind: that
+   * table renders the lineage cache (`assessmentLineages`), which is only ever
+   * forced after an ADD, so an unarchived version kept its Archived badge and
+   * its Unarchive menu until the page was reloaded. So the record is patched,
+   * from the API's own reply, in both places it lives — every cached lineage
+   * row and the list row — and then the list, its counts and every cached
+   * lineage (plus the jds-with-assessments index, which ignores archived ones)
+   * are re-read from the server, as the clone flow does. Called only after the
+   * request resolves, so a failed action leaves the screen as it was.
+   */
+  const syncAssessmentAfterStatusChange = async (
+    assessmentId: string,
+    /** The API's reply to the status write, or `null` when the record is gone. */
+    updated: { status?: string } | null,
+  ) => {
+    if (updated === null) {
+      setAssessmentLineages(prev => Object.fromEntries(
+        Object.entries(prev).map(([key, rows]) => [key, rows.filter(row => row.id !== assessmentId)]),
+      ));
+      setApiAssessments(prev => prev.filter(a => a.id !== assessmentId));
+    } else if (updated.status) {
+      const rawStatus = updated.status;
+      setAssessmentLineages(prev => Object.fromEntries(
+        Object.entries(prev).map(([key, rows]) => [
+          key,
+          rows.map(row => (row.id === assessmentId ? { ...row, status: rawStatus } : row)),
+        ]),
+      ));
+      /* The list holds MAPPED records, so the reply's status goes through the
+         list's own mapper rather than a second copy of its wording. */
+      const status = mapAssessmentFromApi({ status: rawStatus }, 0).status;
+      setApiAssessments(prev => prev.map(a => (a.id === assessmentId ? { ...a, status } : a)));
+    }
+    await Promise.all([reloadAssessments(), refreshAssessmentExistence()]);
+  };
+
   // FIX-004: Check quota before opening creation view (inline instead of navigation)
   const handleOpenCreation = async () => {
     // If unlimited, allow creation
@@ -3629,9 +3626,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
     try {
       await assessmentService.delete(assessmentId);
-      // Reload from API
-      await reloadAssessments();
       setOpenMenuId(null);
+      // Off the screen at once, then reload from API
+      await syncAssessmentAfterStatusChange(assessmentId, null);
     } catch (error) {
       console.error('Failed to delete assessment:', error);
       toast.error(`Failed to delete assessment: ${error instanceof Error ? error.message : 'Only draft assessments can be deleted'}`);
@@ -3644,9 +3641,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     if (!await dialog.confirm({ title: 'Pause Assessment', message: 'Are you sure you want to pause this assessment?', variant: 'warning', confirmText: 'Pause' })) return;
 
     try {
-      await assessmentService.update(assessmentId, { status: 'closed' as any });
-      await reloadAssessments();
+      const updated = await assessmentService.update(assessmentId, { status: 'closed' as any });
       setOpenMenuId(null);
+      await syncAssessmentAfterStatusChange(assessmentId, updated);
     } catch (error) {
       console.error('Failed to pause assessment:', error);
       toast.error(`Failed to pause assessment: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -3797,12 +3794,33 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   // Activate assessment (publish)
   const handleActivateAssessment = async (assessmentId: string) => {
     try {
-      await assessmentService.publish(assessmentId);
-      await reloadAssessments();
+      const updated = await assessmentService.publish(assessmentId);
       setOpenMenuId(null);
+      await syncAssessmentAfterStatusChange(assessmentId, updated);
     } catch (error) {
       console.error('Failed to activate assessment:', error);
       toast.error(`Failed to activate assessment: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setOpenMenuId(null);
+    }
+  };
+
+  /* Unarchive — the All Assessments table's and the details page's, as is: no
+     dedicated endpoint, a status write back to `published`, gated on the
+     Archive permission, same toast. Archived rows get this instead of
+     Activate. */
+  const handleUnarchiveAssessment = async (assessmentId: string) => {
+    if (!canDeleteAssessment) {
+      toast.error('You do not have permission to unarchive assessments');
+      return;
+    }
+    try {
+      const updated = await assessmentService.update(assessmentId, { status: 'published' });
+      toast.success('Assessment restored to Active');
+      setOpenMenuId(null);
+      await syncAssessmentAfterStatusChange(assessmentId, updated);
+    } catch (error) {
+      console.error('Failed to unarchive assessment:', error);
+      toast.error(`Failed to unarchive assessment: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setOpenMenuId(null);
     }
   };
@@ -3818,9 +3836,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     })) return;
 
     try {
-      await assessmentService.update(assessmentId, { status: 'archived' as any });
-      await reloadAssessments();
+      const updated = await assessmentService.update(assessmentId, { status: 'archived' as any });
       setOpenMenuId(null);
+      await syncAssessmentAfterStatusChange(assessmentId, updated);
     } catch (error) {
       console.error('Failed to archive assessment:', error);
       toast.error(`Failed to archive assessment: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -4472,9 +4490,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
    * version number only if neither is available.
    */
   const getJobVersionCount = (
-    assessment: { jd_id?: string; jd_short_id?: string; jd_version?: number },
+    assessment: { id: string; jd_id?: string; jd_short_id?: string; jd_version?: number },
     includeDrafts = false,
   ) => {
+    /* The Job List's panel lists only job versions with an assessment
+       (`hideJobVersionsWithoutAssessments`), so its figure is counted the way
+       that panel decides: the job's assessments resolved to their job
+       version, plus the backend's per-version index, Draft versions out. */
+    if (!includeDrafts) return getJobVersionsWithAssessmentCount(assessment);
     const counts = assessment.jd_id ? jdLineage.versionCounts[assessment.jd_id] : undefined;
     if (counts) return includeDrafts ? counts.total : counts.active;
 
@@ -4489,6 +4512,54 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       return visible.length || rows.length;
     }
     return getLatestJobVersion(assessment);
+  };
+
+  /**
+   * How many of this job's versions have an assessment — the Job List row's
+   * Job Versions figure, equal to the "Job Versions (N)" its panel lists.
+   *
+   * The panel's own test (`hasAssessment` in AssessmentVersionHistoryPanel),
+   * over the same data: an assessment counts for the job version its JD row
+   * (`jd_id`) resolves to through the lineage, falling back to its
+   * `jd_version`; a lineage version the jds-with-assessments index names
+   * counts too. Assessments are read from the job's fetched lineage AND the
+   * page's whole loaded set, so the figure is right before the panel opens.
+   * Versions are counted by NUMBER, as the panel groups them, and a version
+   * the lineage shows as Draft is left out, as the panel leaves it out.
+   */
+  const getJobVersionsWithAssessmentCount = (
+    assessment: { id: string; jd_id?: string; jd_short_id?: string; jd_version?: number },
+  ) => {
+    const lineageRows = getJobLineageRows(assessment) ?? [];
+    const versionByJdId = new Map<string, number>();
+    const draftVersions = new Set<number>();
+    const seenVersions = new Set<number>();
+    for (const row of lineageRows) {
+      const number = row.version_number ?? 1;
+      versionByJdId.set(row.id, number);
+      /* First entry for a number decides its status, as in the panel. */
+      if (seenVersions.has(number)) continue;
+      seenVersions.add(number);
+      if (jobVersionDisplayStatus(row.status, row.current_version) === 'Draft') draftVersions.add(number);
+    }
+    const versions = new Set<number>();
+    const addFor = (jdId?: string, jdVersion?: number) => {
+      const byId = jdId ? versionByJdId.get(jdId) : undefined;
+      const resolved = byId ?? (typeof jdVersion === 'number' ? jdVersion : undefined);
+      if (resolved !== undefined) versions.add(resolved);
+    };
+    const key = lineageKeyOf(assessment);
+    for (const row of (assessment.jd_id ? assessmentLineages[assessment.jd_id] : undefined) ?? []) {
+      addFor(row.jd_id, row.jd_version);
+    }
+    for (const loaded of assessments) {
+      if (lineageKeyOf(loaded) === key) addFor(loaded.jd_id, loaded.jd_version);
+    }
+    for (const row of lineageRows) {
+      if (jdsWithAssessments.has(row.id)) versions.add(row.version_number ?? 1);
+    }
+    for (const draft of draftVersions) versions.delete(draft);
+    return versions.size;
   };
 
   /**
@@ -5000,6 +5071,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                Draft version is hidden here, not changed. Send Invite
                (selectMode) keeps its own listing as it was. */
             hideDraftJobVersions={!selectMode}
+            /* ...and only the job versions an assessment was created
+               for: a version without one is left out rather than
+               shown with an empty action slot. Send Invite keeps
+               its own listing. */
+            hideJobVersionsWithoutAssessments={!selectMode}
             /* Opened on the page the ROW's own status calls for -
                a Draft on the draft page, everything else on the
                details page. The row is found by ASSESSMENT id in
@@ -5093,7 +5169,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   [assessment.jd_id!]: assessmentId,
                 })))
             }
-            onCreateAssessment={selectMode ? undefined : handleCreateAssessmentForJobVersion}
+            /* No `onCreateAssessment`: Total Jobs does not create assessments.
+               A job version with an assessment shows View Assessment; one
+               without shows nothing in that slot. */
               headerAction={
               /* The job version details popup, pinned to the
                  table's top-right corner. Opens on the version
@@ -5379,7 +5457,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             const willOpen = openMenuId !== menuKey;
             if (willOpen) {
               const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-              setMenuDropUp(window.innerHeight - rect.bottom < 280);
+              const spaceBelow = window.innerHeight - rect.bottom;
+              /* 'compact' lists every option, so it opens on whichever side
+                 has more room rather than flipping up into a shorter one. */
+              setMenuDropUp(
+                variant === 'compact'
+                  ? spaceBelow < 320 && rect.top > spaceBelow
+                  : spaceBelow < 280,
+              );
               setMenuAnchor({ top: rect.top, bottom: rect.bottom, right: rect.right });
             }
             setOpenMenuId(willOpen ? menuKey : null);
@@ -5411,20 +5496,32 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                dismissal effect), so these coordinates cannot
                go stale while it is open.
 
-               'compact' (the Assessment Versions table) caps the
-               list at three options: each is 2.5rem tall (py-2.5 +
-               a 1.25rem text-sm line), plus the 0.25rem top
-               padding. The rest scroll inside the menu, with
-               overscroll contained so reaching the end does not
-               chain into the page. */
+               'compact' (the Assessment Versions table) shows
+               every option: rows tightened to 2rem (py-1.5 + a
+               1.25rem text-sm line) and dividers to my-0.5, set
+               here on the container so the shared items keep
+               their own classes. Its height is capped at the room
+               between the trigger and the viewport edge (8px
+               clear), so it never runs off screen; only past that
+               does it scroll, inside the menu, with overscroll
+               contained so reaching the end does not chain into
+               the page. */
             className={`fixed w-52 max-w-[calc(100vw-1rem)] bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[9999] overflow-y-auto ${
               variant === 'compact'
-                ? 'max-h-[7.75rem] overscroll-contain scroll-smooth'
+                ? 'overscroll-contain scroll-smooth [&>button]:py-1.5 [&>div]:my-0.5'
                 : 'max-h-[70dvh]'
             }`}
             style={{
               top: menuDropUp ? undefined : menuAnchor.bottom + 4,
               bottom: menuDropUp ? Math.max(8, window.innerHeight - menuAnchor.top + 4) : undefined,
+              maxHeight: variant === 'compact'
+                ? Math.max(
+                    96,
+                    menuDropUp
+                      ? menuAnchor.top - 4 - 8
+                      : window.innerHeight - menuAnchor.bottom - 4 - 8,
+                  )
+                : undefined,
               // Right-aligned to the trigger, as `right-0`
               // used to do, and kept clear of the viewport.
               left: Math.max(8, menuAnchor.right - 208),
@@ -5533,8 +5630,29 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             {/* Draft assessments hide Activate/Archive — drafts
                 go through the configure-page Publish button,
                 and an unpublished row has nothing meaningful
-                to archive. */}
-            {assessment.status !== 'Active' && assessment.status !== 'Draft' && (
+                to archive. Archived is restored through
+                Unarchive, not Activate - the All Assessments
+                table's and details page's action. */}
+            {assessment.status === 'Archived' && (
+              <button
+                onClick={() => {
+                  if (!canDeleteAssessment) {
+                    toast.error('You do not have permission to unarchive assessments');
+                    return;
+                  }
+                  handleUnarchiveAssessment(assessment.id);
+                }}
+                aria-disabled={!canDeleteAssessment}
+                title={!canDeleteAssessment ? 'You do not have permission to unarchive assessments' : ''}
+                className={`group w-full px-4 py-2.5 text-left text-sm flex items-center gap-2 transition-colors ${
+                  canDeleteAssessment ? 'text-gray-700 dark:text-slate-300' : 'text-gray-400 cursor-not-allowed opacity-60'
+                }`}
+              >
+                <ArchiveRestore className={`w-4 h-4 flex-shrink-0 ${canDeleteAssessment ? 'text-menu-icon-archive' : 'text-gray-300'}`} />
+                <span className={MENU_ITEM_SCALE_CLASS}>Unarchive</span>
+              </button>
+            )}
+            {assessment.status !== 'Active' && assessment.status !== 'Draft' && assessment.status !== 'Archived' && (
               <button
                 onClick={() => {
                   if (!canUpdateAssessment) {
@@ -9016,37 +9134,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   </div>
                 </div>
 
-                {/* Grouped/Ungrouped — the AI Interviews picker's toggle.
-                    Ungrouped: one row per sendable assessment. Grouped: one
-                    card per job, versions behind View Versions. Switching
-                    drops the pick, as it does there. */}
-                <div className="flex flex-wrap items-center gap-2 mb-4">
-                  <span className="text-sm text-gray-600 dark:text-slate-400">View:</span>
-                  <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-                    {([
-                      { key: 'ungrouped', label: 'Ungrouped' },
-                      { key: 'grouped', label: 'Grouped' },
-                    ] as const).map((mode) => {
-                      const isActive = invitePickerViewMode === mode.key;
-                      return (
-                        <button
-                          key={mode.key}
-                          type="button"
-                          aria-pressed={isActive}
-                          onClick={() => { setInvitePickerViewMode(mode.key); setInvitePickerSelection(null); setInvitePickerPage(1); }}
-                          className={`px-2.5 sm:px-3 py-1.5 min-h-[32px] rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 whitespace-nowrap ${
-                            isActive
-                              ? 'bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/20 text-brand-blue'
-                              : 'text-gray-600 dark:text-slate-400 hover:text-brand-blue'
-                          }`}
-                        >
-                          {mode.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
                 {(() => {
                   const query = invitePickerQuery.trim().toLowerCase();
                   const matchesQuery = (assessment: (typeof assessments)[number]) =>
@@ -9093,9 +9180,51 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   const pagedJobRows = pageSlice(jobRows);
                   const selection = invitePickerSelection;
                   const PICKER_TH = 'px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 whitespace-nowrap bg-slate-50 dark:bg-slate-800';
+                  /* What each view lists under the current search — the same
+                     rows the pager counts — so the figure on an option is what
+                     switching to it shows, as on the page's own toggle. */
+                  const pickerViewCounts = isLoading
+                    ? null
+                    : { ungrouped: pickerRows.length, grouped: jobRows.length };
 
                   return (
                     <>
+                      {/* Grouped/Ungrouped — the AI Interviews picker's toggle.
+                          Ungrouped: one row per sendable assessment. Grouped: one
+                          card per job, versions behind View Versions. Switching
+                          drops the pick, as it does there. Each option carries
+                          its count in the page toggle's treatment: the figure in
+                          parentheses, a shade lighter. */}
+                      <div className="flex flex-wrap items-center gap-2 mb-4">
+                        <span className="text-sm text-gray-600 dark:text-slate-400">View:</span>
+                        <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+                          {([
+                            { key: 'ungrouped', label: 'Ungrouped' },
+                            { key: 'grouped', label: 'Grouped' },
+                          ] as const).map((mode) => {
+                            const isActive = invitePickerViewMode === mode.key;
+                            return (
+                              <button
+                                key={mode.key}
+                                type="button"
+                                aria-pressed={isActive}
+                                onClick={() => { setInvitePickerViewMode(mode.key); setInvitePickerSelection(null); setInvitePickerPage(1); }}
+                                className={`px-2.5 sm:px-3 py-1.5 min-h-[32px] rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 whitespace-nowrap ${
+                                  isActive
+                                    ? 'bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/20 text-brand-blue'
+                                    : 'text-gray-600 dark:text-slate-400 hover:text-brand-blue'
+                                }`}
+                              >
+                                {mode.label}
+                                {pickerViewCounts && (
+                                  <span className="ml-1 tabular-nums opacity-70">({pickerViewCounts[mode.key].toLocaleString()})</span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
                       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                         <label className="min-w-0 text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300">
                           Select an Assessment
@@ -10463,104 +10592,31 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       {pendingDraftConflict && (() => {
         const { target, draft } = pendingDraftConflict;
         const closeConflict = () => setPendingDraftConflict(null);
-        const lastEdited = draft.updated_at || draft.created_at;
         // Same fields/fallbacks the clone-confirmation modal uses for its
         // "Current Job" card, so the JD name/version shown here always
         // agrees with what that modal (and the list row) would show.
-        const jdShortId = target?.jd_short_id;
-        const jobTitle = target?.jd_title
-          || target?.job?.title
-          || stripVersionFromTitle(target?.title || draft.title || '')
-          || 'This job';
-        const jobVersion = target?.jd_version ?? draft.jd_version ?? 1;
-        const draftVersion = draft.version ?? 1;
         return (
-          <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
-            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-[95vw] sm:max-w-lg max-h-[calc(100dvh-1.5rem)] flex flex-col overflow-hidden">
-              <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-7 pt-5 sm:pt-7 pb-5 sm:pb-6">
-                <div className="flex justify-end">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={closeConflict}
-                    className="px-2 -mr-1.5 -mt-1"
-                    aria-label="Close"
-                  >
-                    <X className="w-5 h-5 sm:w-6 sm:h-6" />
-                  </Button>
-                </div>
-
-                <div className="flex flex-col items-center text-center -mt-4">
-                  <div className="w-14 h-14 rounded-full bg-warning-subtle flex items-center justify-center">
-                    <AlertTriangle className="w-6 h-6 text-warning" />
-                  </div>
-                  <h3 className="mt-4 text-xl sm:text-2xl font-bold text-gray-900 dark:text-slate-50 tracking-tight">
-                    Draft already exists
-                  </h3>
-                  <p className="mt-2 text-sm sm:text-base text-gray-500 dark:text-slate-400 leading-snug">
-                    A draft version already exists for this assessment.
-                    Open the existing draft to continue editing, or cancel to stay here.
-                  </p>
-                </div>
-
-                <div className="mt-5 sm:mt-6 rounded-xl border border-gray-200/80 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-3 sm:p-4">
-                  <div className="flex items-start gap-3 sm:gap-4">
-                    <div className="w-11 h-11 rounded-xl bg-blue-50 dark:bg-blue-500/15 flex items-center justify-center flex-shrink-0">
-                      <FileText className="w-5 h-5 text-brand-blue dark:text-blue-300" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-400">Existing Draft</p>
-                      <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
-                        <span className="text-sm sm:text-base font-bold text-gray-900 dark:text-slate-50 break-words">
-                          {jdShortId ? `${jdShortId.replace(/-/g, ' ')}  ` : ''}
-                          {jobTitle} v{jobVersion} - Assessment V {draftVersion}
-                        </span>
-                        <span className="px-2.5 py-1 rounded-lg bg-warning-subtle text-warning-strong text-xs font-semibold flex-shrink-0">
-                          Draft
-                        </span>
-                      </div>
-                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs sm:text-sm text-gray-500 dark:text-slate-400">
-                        {lastEdited && (
-                          <span className="inline-flex items-center gap-1.5">
-                            <Calendar className="w-3.5 h-3.5" />
-                            Last edited on {formatIST(lastEdited)}
-                          </span>
-                        )}
-                        {draft.created_by_name && (
-                          <>
-                            <span aria-hidden="true" className="text-gray-300 dark:text-slate-600">|</span>
-                            <span className="inline-flex items-center gap-1.5">
-                              <Users className="w-3.5 h-3.5" />
-                              Edited by {draft.created_by_name}
-                            </span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="shrink-0 border-t border-gray-200 dark:border-slate-700 px-4 sm:px-7 py-3 sm:py-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3">
-                <Button
-                  variant="primary"
-                  size="md"
-                  onClick={() => {
-                    handleEditAssessment({
-                      id: draft.id,
-                      jd_id: target?.jd_id,
-                      status: 'Draft',
-                      invitations_count: 0,
-                    });
-                    closeConflict();
-                  }}
-                >
-                  Open Draft
-                  <ArrowRight className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-          </div>
+          <DraftAssessmentExistsModal
+            draft={draft}
+            jdShortId={target?.jd_short_id}
+            jobTitle={
+              target?.jd_title
+              || target?.job?.title
+              || stripVersionFromTitle(target?.title || draft.title || '')
+              || 'This job'
+            }
+            jobVersion={target?.jd_version ?? draft.jd_version ?? 1}
+            onClose={closeConflict}
+            onOpenDraft={() => {
+              handleEditAssessment({
+                id: draft.id,
+                jd_id: target?.jd_id,
+                status: 'Draft',
+                invitations_count: 0,
+              });
+              closeConflict();
+            }}
+          />
         );
       })()}
 

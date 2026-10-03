@@ -37,6 +37,9 @@ import { Resume } from '@/lib/types/types';
 import { scoringService, normalizeScoringStatus } from '@/lib/services/scoringService';
 import { dispatchUnitsConsumed } from '@/lib/services/api';
 import { assessmentService } from '@/lib/services/assessmentService';
+import { listAllAssessments, loadJobAssessmentHierarchy, MAX_ASSESSMENT_VERSIONS } from '@/lib/utils/jobAssessmentHierarchy';
+import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
+import DraftAssessmentExistsModal, { type ExistingDraftAssessment } from '@/components/assessments/DraftAssessmentExistsModal';
 import { parseAssessmentTitle, isAssessmentRevoked, getLocallyRevokedAssessmentIds } from '@/lib/utils/assessmentUtils';
 import { aiMatchService, AIMatchResultItem, AIMatchSessionResponse, MatchedCandidate } from '@/lib/services/aiMatchService';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
@@ -693,6 +696,13 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   // True while the Create action resolves whether this JD already has an
   // assessment, so the button shows a spinner instead of feeling unresponsive.
   const [resolvingAssessmentTarget, setResolvingAssessmentTarget] = useState(false);
+  const dialog = useGlobalDialog();
+  /* An unpublished assessment version found by Create - the Assessments page's
+     "Draft already exists" popup, asking for it to be published first. */
+  const [draftAssessmentConflict, setDraftAssessmentConflict] = useState<{
+    draft: ExistingDraftAssessment & { jd_id?: string };
+    jobVersion: number;
+  } | null>(null);
   // Set when Create finds only an unpublished draft — drives the in-place
   // publish prompt below instead of navigating to a half-finished details page.
   const [draftAssessment, setDraftAssessment] = useState<any>(null);
@@ -711,6 +721,13 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   // a draft has nothing to invite candidates to, and clicking through would only
   // bounce them back with "publish it first". False while still loading.
   const [hasPublishedAssessment, setHasPublishedAssessment] = useState(false);
+  /* How many assessment versions THIS JOB VERSION holds (this JD row only,
+     archived excluded) - what Create's MAX_ASSESSMENT_VERSIONS cap reads, from
+     the same count the click re-runs. Null until it lands for the version on
+     screen; `assessmentCountJdId` says which version a count belongs to, so a
+     late reply for the version just left can never set this one's state. */
+  const [assessmentVersionCount, setAssessmentVersionCount] = useState<number | null>(null);
+  const assessmentCountJdId = useRef<string | null>(null);
   // Same pair for AI Interview.
   const [resolvingAIInterviewTarget, setResolvingAIInterviewTarget] = useState(false);
   const [draftAIInterview, setDraftAIInterview] = useState<any>(null);
@@ -889,6 +906,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   // ✅ PERMISSIONS: Get permissions for Quick Actions (using camelCase)
   const permissions = {
     canCreateAssessments: hasPermission('canCreateAssessments'),
+    canUpdateAssessments: hasPermission('canUpdateAssessments'),
     canRunAiMatch: hasPermission('canRunAiMatch'),
     canReadJD: hasPermission('canReadJD'),
     canViewAssessments: hasPermission('canViewAssessments'),
@@ -997,17 +1015,20 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
      deep-link path (`?action=create-ai-interview`) and for the window between
      a stale tab rendering and the fetch landing — so this gate is the honest
      label on the button, not the only thing enforcing the rule. */
-  const assessmentAlreadyPublished = hasPublishedAssessment;
   const aiInterviewAlreadyPublished = hasLiveAIInterview;
-  const blockAssessmentCreate = !assessmentExistenceChecked || assessmentAlreadyPublished;
+  /* Create makes the NEXT assessment version once one is live, so a published
+     assessment no longer shuts it - the version cap does. */
+  const atAssessmentVersionCap =
+    assessmentVersionCount !== null && assessmentVersionCount >= MAX_ASSESSMENT_VERSIONS;
+  const blockAssessmentCreate = !assessmentExistenceChecked || atAssessmentVersionCap;
   const blockAIInterviewCreate = !aiInterviewExistenceChecked || aiInterviewAlreadyPublished;
   /** Why Create is off, for the button titles and tile tooltips. Null when on. */
   const assessmentCreateBlockedReason = !features.assessment
     ? 'Assessments not enabled'
     : job.status === 'Disabled'
       ? 'JD is disabled'
-      : assessmentAlreadyPublished
-        ? 'This job already has a published assessment'
+      : atAssessmentVersionCap
+        ? `This job version has the maximum ${MAX_ASSESSMENT_VERSIONS} assessment versions — archive or delete one to create another`
         : !assessmentExistenceChecked
           ? 'Checking this job’s assessment…'
           : null;
@@ -1202,49 +1223,87 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     handleShowAIInterviewResults();
   };
 
-  // Resolve the destination on click, so Create goes straight to wherever it
-  // belongs instead of routing through the creation page and bouncing back out:
-  //   a published assessment exists → /recruitment/assessments/{id}
-  //   only a draft exists           → publish prompt, in place on this page
-  //   nothing exists                → /recruitment/assessments/create
-  // AssessmentCreation still runs its own eligibility guard — that one is the
-  // enforcement (it also covers deep links and the JD picker); this is what
-  // keeps the click from flashing a page the recruiter was never meant to see.
+  // Create Assessment, resolved on click against the job's real assessment
+  // versions - the same count, archived excluded, that the Assessments page's
+  // Duplicate is capped by (`loadJobAssessmentHierarchy`: every JD version of
+  // this job, every page of results):
+  //   MAX_ASSESSMENT_VERSIONS already → blocked, with the Duplicate cap message
+  //   a draft version exists          → publish prompt, in place on this page
+  //                                     (one unpublished version at a time)
+  //   this JD has a live assessment   → the NEXT version: a duplicate of its
+  //                                     newest one, opened straight in Configure
+  //   nothing for this JD yet         → /recruitment/assessments/create
+  // The guard re-reads on every click and the button is held while it runs, so
+  // a repeated click cannot slip a 6th version past it. AssessmentCreation
+  // keeps its own one-per-JD-version guard for deep links, and the backend's
+  // publish blocks a 6th version.
   const handleCreateAssessment = async () => {
     if (resolvingAssessmentTarget) return;
     setResolvingAssessmentTarget(true);
+    const returnUrl = `/recruitment/job-details?id=${encodeURIComponent(job.id)}`;
     try {
-      const resp: any = await assessmentService.list({ jd_id: job.id, page_size: 100 });
-      const items: any[] = Array.isArray(resp) ? resp : (resp?.items ?? []);
+      const statusOf = (a: any) => String(a?.status || '').toLowerCase();
       const newestFirst = (a: any, b: any) =>
         new Date(b?.updated_at || b?.created_at || 0).getTime() -
         new Date(a?.updated_at || a?.created_at || 0).getTime();
-      const statusOf = (a: any) => String(a?.status || '').toLowerCase();
+      // The cap is per JOB VERSION: only this JD row's assessments, every page.
+      const [ownRows, hierarchy] = await Promise.all([
+        listAllAssessments({ jd_id: job.id }),
+        loadJobAssessmentHierarchy(job.id),
+      ]);
+      const ownVersions = ownRows.filter(a => a.jd_id === job.id && statusOf(a) !== 'archived');
+      setAssessmentVersionCount(ownVersions.length);
+      // The Draft rule reads the whole job, as it always has.
+      const versions = hierarchy.assessments.filter(a => statusOf(a) !== 'archived');
 
-      // A published assessment is a real destination — open its details page.
-      const live = items.filter(a => ['published', 'active'].includes(statusOf(a))).sort(newestFirst)[0];
-      if (live?.id) {
-        toast.info('An assessment already exists for this job.');
-        router.push(`/recruitment/assessments/${live.id}?from=job-details`);
+      if (ownVersions.length >= MAX_ASSESSMENT_VERSIONS) {
+        await dialog.alert({
+          title: 'Maximum versions reached',
+          message: `This job version already has ${MAX_ASSESSMENT_VERSIONS} assessment versions (the maximum allowed). Archive or delete a version before creating another.`,
+          variant: 'warning',
+        });
         return;
       }
 
-      // Only a draft: its details page shows an unfinished record and gives no
-      // way forward from here, so stay put and offer to publish it instead.
-      const draft = items.filter(a => statusOf(a) === 'draft').sort(newestFirst)[0];
+      // An unpublished version already exists: it must be published before
+      // another is created - the Assessments page's "Draft already exists" popup.
+      const draft = versions.filter(a => statusOf(a) === 'draft').sort(newestFirst)[0];
       if (draft?.id) {
-        // Read the full record before prompting: the prompt only offers Publish
-        // once the draft is actually publishable, and list rows can't be relied
-        // on to carry every section field. A failed read falls back to the row,
-        // which reads as unfinished — the safe direction.
-        const full = await assessmentService.get(draft.id).catch(() => null);
-        setDraftAssessment(full ?? draft);
+        setDraftAssessmentConflict({
+          draft,
+          jobVersion: hierarchy.jobVersionByAssessmentId.get(draft.id) ?? job.versionNumber ?? 1,
+        });
         return;
       }
-    } catch {
-      // Lookup failed — fall through to the creation flow rather than blocking.
-      // Its own guard re-checks and redirects if an assessment does exist, so a
-      // transient error here can't produce a duplicate.
+
+      // This JD already has a live assessment: create its next version, the way
+      // Duplicate does - the same clone call - and open it in Configure.
+      const source = ownVersions.slice().sort(newestFirst)[0];
+      if (source?.id) {
+        const nextVersion = ownVersions.length + 1;
+        const confirmed = await dialog.confirm({
+          title: 'Create a new assessment version',
+          message: `Create version ${nextVersion} of ${MAX_ASSESSMENT_VERSIONS} for this job version? It starts as a draft copy of the current assessment, ready to edit.`,
+          confirmText: 'Create Version',
+        });
+        if (!confirmed) return;
+        const response = await assessmentService.clone(source.id);
+        toast.success(`Assessment duplicated: "${response.cloned_title}"`);
+        router.push(
+          `/recruitment/assessments/create?step=configure&jd_id=${encodeURIComponent(job.id)}` +
+          `&edit=${encodeURIComponent(response.cloned_id)}` +
+          `&from=job-details&jd_title=${encodeURIComponent(job.title || '')}` +
+          `&returnUrl=${encodeURIComponent(returnUrl)}`
+        );
+        return;
+      }
+    } catch (error: any) {
+      // A failed clone says why; a failed lookup falls through to the creation
+      // flow, whose own guard re-checks before anything is created.
+      if (error?.message) {
+        toast.error(error.message);
+        return;
+      }
     } finally {
       setResolvingAssessmentTarget(false);
     }
@@ -1258,7 +1317,6 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     // chosen, so step=configure skips the JD picker. jd_title travels along so
     // the JD crumb is correct on first paint instead of showing a placeholder
     // until the JD fetch lands and then visibly swapping.
-    const returnUrl = `/recruitment/job-details?id=${encodeURIComponent(job.id)}`;
     router.push(
       `/recruitment/assessments/create?step=configure&jd_id=${encodeURIComponent(job.id)}` +
       `&from=job-details&jd_title=${encodeURIComponent(job.title || '')}` +
@@ -1599,8 +1657,20 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   };
 
   // Fetch assessment results for this JD
+  /** Assessment versions of ONE job version: rows on that JD id, archived excluded. */
+  const countAssessmentVersionsFor = (rows: { jd_id?: string | null; status?: string | null }[], jdId: string) =>
+    rows.filter(a => a.jd_id === jdId && String(a?.status || '').toLowerCase() !== 'archived').length;
+
   const fetchAssessmentResults = async () => {
     setLoadingAssessmentResults(true);
+    /* A different job version: nothing of the previous one's Create state may
+       carry over - the gate reads "checking" until THIS version's count lands. */
+    if (assessmentCountJdId.current !== job.id) {
+      assessmentCountJdId.current = job.id;
+      setAssessmentVersionCount(null);
+      setAssessmentExistenceChecked(false);
+    }
+    const countForJdId = job.id;
     try {
       // First, get all assessments for this JD
       const assessmentsResponse = await assessmentService.list({ jd_id: job.id, page_size: 100 });
@@ -1614,6 +1684,15 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       // "duplicate one to start a fresh round" message, which only lands if the
       // click gets through.
       setHasAnyAssessment(assessments.length > 0);
+      // Every page of THIS version's assessments, not just the first 100 above.
+      listAllAssessments({ jd_id: countForJdId })
+        .then(rows => {
+          if (assessmentCountJdId.current !== countForJdId) return;
+          setAssessmentVersionCount(countAssessmentVersionsFor(rows, countForJdId));
+        })
+        .catch(() => {
+          if (assessmentCountJdId.current === countForJdId) setAssessmentVersionCount(null);
+        });
       setHasPublishedAssessment(
         assessments.some((a: any) => ['published', 'active'].includes(String(a?.status || '').toLowerCase()))
       );
@@ -4780,6 +4859,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           jobId={job.id}
           jobShortId={job.job_id}
           jobVersion={job.versionNumber && job.versionNumber > 0 ? job.versionNumber : null}
+          /* Turns on the popup's Job Version picker: score against any
+             published version of this job, starting on this page's own. */
+          job={job}
           onClose={() => setShowSelectSourceModal(false)}
           onScoringFinished={() => {
             // Run settled, popup still up: bring Scored Resumes in behind it.
@@ -4928,6 +5010,28 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         </div>
       )}
 
+      {draftAssessmentConflict && (
+        <DraftAssessmentExistsModal
+          draft={draftAssessmentConflict.draft}
+          jdShortId={job.job_id}
+          jobTitle={job.title}
+          jobVersion={draftAssessmentConflict.jobVersion}
+          message={"A draft version already exists for this assessment. Publish the existing draft before creating another version — open it to finish and publish, or cancel to stay here."}
+          onClose={() => setDraftAssessmentConflict(null)}
+          onOpenDraft={() => {
+            const { draft } = draftAssessmentConflict;
+            setDraftAssessmentConflict(null);
+            const returnUrl = `/recruitment/job-details?id=${encodeURIComponent(job.id)}`;
+            router.push(
+              `/recruitment/assessments/create?step=configure&jd_id=${encodeURIComponent(draft.jd_id || job.id)}` +
+              `&edit=${encodeURIComponent(draft.id)}` +
+              `&from=job-details&jd_title=${encodeURIComponent(job.title || '')}` +
+              `&returnUrl=${encodeURIComponent(returnUrl)}`
+            );
+          }}
+        />
+      )}
+
       <AssessmentVersionHistoryModal
         open={showAssessmentVersionHistory}
         onClose={() => setShowAssessmentVersionHistory(false)}
@@ -4935,6 +5039,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         jobTitle={job.title}
         jobShortId={job.job_id}
         jobVersion={job.versionNumber && job.versionNumber > 0 ? job.versionNumber : null}
+        canEdit={permissions.canUpdateAssessments}
       />
 
       <AIInterviewVersionHistoryModal

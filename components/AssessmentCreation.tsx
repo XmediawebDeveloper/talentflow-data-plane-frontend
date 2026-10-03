@@ -24,6 +24,9 @@ import JDFullViewModal from '@/components/jobs/JDFullViewModal';
 import CodingRoundLanguageModal from '@/components/assessments/CodingRoundLanguageModal';
 import LanguageLogo from '@/components/assessments/LanguageLogo';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
+import DraftAssessmentExistsModal, { type ExistingDraftAssessment } from '@/components/assessments/DraftAssessmentExistsModal';
+import { loadJobAssessmentHierarchy } from '@/lib/utils/jobAssessmentHierarchy';
+import AssessmentJobBinding from '@/components/assessments/AssessmentJobBinding';
 import JobOpeningSummary from '@/components/jobs/JobOpeningSummary';
 import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
 import ListPagination from '@/components/ListPagination';
@@ -699,6 +702,13 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
   // shown only while the form actually has unsaved changes (see `isDirty`) —
   // a click that leaves an unchanged form needs no confirmation at all.
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
+  /* The job's unpublished assessment version, found when "+" was pressed - it
+     has to be published before another version is created. */
+  const [draftAssessmentConflict, setDraftAssessmentConflict] = useState<{
+    draft: ExistingDraftAssessment & { jd_id?: string };
+    job: Job;
+    jobVersion: number;
+  } | null>(null);
   // What "leave" means for the click that opened the dialog — `onBack` (the
   // root "Assessments" crumb, the popup's own close button) by default, or a
   // different destination (e.g. the "Select Job Description" crumb going
@@ -2150,10 +2160,35 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
    * (`aria-busy` and a spinner on the pressed one, the rest inert), which a ref
    * cannot drive because writing one does not re-render.
    */
-  const handleCreateForVersion = (versionJob: Job) => {
+  const handleCreateForVersion = async (versionJob: Job) => {
     if (startingAssessmentRef.current) return;
     startingAssessmentRef.current = versionJob.id;
     setStartingAssessmentFor(versionJob.id);
+
+    /* An unpublished assessment version anywhere in this JOB must be published
+       before another one is created - the Assessments page's "Draft already
+       exists" popup, read from the job's real assessments. A failed read lets
+       the create through; the version's own one-per-version guard still runs. */
+    try {
+      const hierarchy = await loadJobAssessmentHierarchy(versionJob.id);
+      const draft = hierarchy.assessments
+        .filter(a => String(a?.status || '').toLowerCase() === 'draft')
+        .sort((a, b) =>
+          new Date(b?.updated_at || b?.created_at || 0).getTime() -
+          new Date(a?.updated_at || a?.created_at || 0).getTime())[0];
+      if (draft?.id) {
+        startingAssessmentRef.current = null;
+        setStartingAssessmentFor(null);
+        setDraftAssessmentConflict({
+          draft,
+          job: versionJob,
+          jobVersion: hierarchy.jobVersionByAssessmentId.get(draft.id) ?? versionJob.versionNumber ?? 1,
+        });
+        return;
+      }
+    } catch {
+      /* fall through to the create */
+    }
 
     const detail = jdLineage.versionDetails[versionJob.id];
     handleJobSelect(
@@ -2697,10 +2732,16 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
    * checkpoint written and nothing on screen to say so.
    */
   const isDirty = useMemo(() => {
+    /* Configure only. The prompt offers to save a CONFIGURATION, and the
+       dialog is rendered by the Configure step alone - so on Select Job
+       Description (or the published page) a crumb that routed through here
+       opened a dialog that was never drawn: "Assessments" and "Dashboard" did
+       nothing at all. Off Configure there is nothing to save, so they leave. */
+    if (step !== 'configure') return false;
     if (readOnly) return false;
     if (isEditMode && !editLoadSettled) return false;
     return true;
-  }, [readOnly, isEditMode, editLoadSettled]);
+  }, [step, readOnly, isEditMode, editLoadSettled]);
 
   // The root "Assessments" breadcrumb (and the popup chrome's own close
   // button, via the imperative handle below). Route it through here instead
@@ -4058,6 +4099,29 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
         {/* The Job Details page's Version History popup, unchanged and
             unwrapped — one implementation, so the version history read here is
             the one that page shows. */}
+        {draftAssessmentConflict && (
+          <DraftAssessmentExistsModal
+            draft={draftAssessmentConflict.draft}
+            jdShortId={draftAssessmentConflict.job.job_id}
+            jobTitle={draftAssessmentConflict.job.title}
+            jobVersion={draftAssessmentConflict.jobVersion}
+            message={"A draft version already exists for this assessment. Publish the existing draft before creating another version — open it to finish and publish, or cancel to stay here."}
+            onClose={() => setDraftAssessmentConflict(null)}
+            onOpenDraft={() => {
+              const { draft, job } = draftAssessmentConflict;
+              setDraftAssessmentConflict(null);
+              const params = new URLSearchParams({
+                step: 'configure',
+                jd_id: draft.jd_id || job.id,
+                edit: draft.id,
+              });
+              if (fromJobDetails) params.set('from', 'job-details');
+              if (returnUrl) params.set('returnUrl', returnUrl);
+              router.push(`/recruitment/assessments/create?${params.toString()}`);
+            }}
+          />
+        )}
+
         {versionHistoryFor && (
           <JDVersionHistoryModal
             isOpen
@@ -4118,6 +4182,16 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
     // questions from the bank. Save as Draft is intentionally allowed in
     // that state — drafts are explicitly incomplete by design.
     const hasValidHRSelection = !hrEnabled || selectedHRQuestions.length > 0;
+
+    /* The JOB this assessment is configured against, and WHICH VERSION of it.
+       Same mapping as the Publish step: the assessment record's own binding
+       (`jd_short_id`, `jd_version`) is asked first when editing, and the
+       selected JD — the exact version the assessment's `jd_id` points at —
+       answers for a new assessment or whatever the record leaves out. Either
+       value the data does not carry is left out rather than guessed at. */
+    const configureJobId = editingAssessment?.jd_short_id || selectedJob?.job_id || '';
+    const configureJobVersion = editingAssessment?.jd_version ?? selectedJob?.versionNumber;
+    const configureJobRole = selectedJob?.title || editingAssessment?.jd_title || '';
 
     /**
      * The HR round's SECTION card, rendered INSIDE the HR round block.
@@ -4454,7 +4528,8 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
             <div className="mb-4 sm:mb-6">
               <h1 className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900 mb-1 tracking-tight">Configure Assessment</h1>
               <p className="text-sm sm:text-base text-gray-600">
-                Set duration, section distribution, and topics for <span className="text-brand-blue font-medium [overflow-wrap:anywhere]">{selectedJob?.title}</span>
+                Set duration, section distribution, and topics for{' '}
+                <AssessmentJobBinding jobId={configureJobId} role={configureJobRole} version={configureJobVersion} />
               </p>
             </div>
           )}

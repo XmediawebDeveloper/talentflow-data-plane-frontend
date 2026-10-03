@@ -1,6 +1,7 @@
 'use client';
 
 import { X, Upload, File, Trash2, FolderPlus, FolderOpen, FolderInput, FolderRoot, Archive, ChevronRight, ChevronDown, AlertCircle, CheckCircle, XCircle, Shield, HardDrive, FileText, FileUser, Files, Database, Info, Lightbulb } from 'lucide-react';
+import FileFormatIcon from '@/components/ui/file-format-icon';
 import { createPortal } from 'react-dom';
 import ViewResumeButton from '@/components/ui/view-resume-button';
 import { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
@@ -106,32 +107,6 @@ interface UploadModalProps {
   onScoreResumes?: (resumes: { id: string; candidateName: string }[]) => void; // Bulk counterpart of onScoreResume
   onDuplicateDetected?: (duplicateData: any) => void; // Callback for duplicate resolution
   targetFolder?: string;
-}
-
-/**
- * Folded-corner document glyph for the accepted-formats chips — a real file
- * shape (not a generic Lucide icon) so PDF/DOCX/DOC read at a glance the way
- * OS file pickers render them, in their conventional colors (PDF red, Word
- * blue).
- */
-function FileFormatIcon({ color, accent, label }: { color: string; accent: string; label: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true">
-      <path d="M5 2h9l5 5v15a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" fill={color} />
-      <path d="M14 2v4a1 1 0 0 0 1 1h4" fill={accent} />
-      <text
-        x="12"
-        y="17.5"
-        textAnchor="middle"
-        fontSize="6.5"
-        fontWeight="700"
-        fontFamily="Arial, sans-serif"
-        fill="var(--raw-ffffff)"
-      >
-        {label}
-      </text>
-    </svg>
-  );
 }
 
 export default function UploadModal({ folders, tenant, uploadSection, onClose, onUpload, onCreateFolder, onViewResume, onScoreResume, onScoreResumes, onDuplicateDetected, targetFolder }: UploadModalProps) {

@@ -4,12 +4,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Archive, BarChart3, CheckCircle, ChevronDown, ChevronUp, ChevronsUpDown, ClipboardList, Clock, Eye, FileText, Info, Loader2,
-  RefreshCw, X,
+  Pencil, RefreshCw, X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Cell, Pie, PieChart, ResponsiveContainer } from 'recharts';
 import { assessmentService, type AssessmentResponse } from '@/lib/services/assessmentService';
-import { loadJobAssessmentHierarchy } from '@/lib/utils/jobAssessmentHierarchy';
+import { loadJobAssessmentHierarchy, MAX_ASSESSMENT_VERSIONS } from '@/lib/utils/jobAssessmentHierarchy';
 import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { DateField } from '@/components/ui/date-field';
@@ -137,7 +137,7 @@ async function loadStats(a: AssessmentResponse): Promise<VersionStats> {
  * page's Assessment quick-actions heading.
  */
 export default function AssessmentVersionHistoryModal({
-  open, onClose, jobId, jobTitle, jobShortId, jobVersion,
+  open, onClose, jobId, jobTitle, jobShortId, jobVersion, canEdit = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -147,6 +147,8 @@ export default function AssessmentVersionHistoryModal({
   jobShortId?: string;
   /** The job version this page shows, for the subtitle. */
   jobVersion?: number | null;
+  /** May this user edit assessments - turns on each row's Edit action. */
+  canEdit?: boolean;
 }) {
   const router = useRouter();
   const [allConfigs, setAllConfigs] = useState<AssessmentResponse[]>([]);
@@ -465,6 +467,7 @@ export default function AssessmentVersionHistoryModal({
                               </span>
                             </td>
                             <td className="px-3 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+                              <div className="inline-flex items-center gap-1.5">
                               <button
                                 type="button"
                                 onClick={() => router.push(`/recruitment/assessments/${c.id}?tab=results`)}
@@ -474,6 +477,63 @@ export default function AssessmentVersionHistoryModal({
                               >
                                 <Eye className="w-4 h-4" />
                               </button>
+                              {/* EDIT, decided per VERSION from its own invitations - never
+                                  from its number. The Assessments page's Edit rule:
+                                  locked once anything was sent (the record's
+                                  invitations_count, or this table's own paged count,
+                                  revoked included - whichever is higher, so a page
+                                  boundary cannot hide an invite), Archived read-only,
+                                  greyed but clickable at the version cap (publishing an
+                                  edit bumps the version). Opens THIS record's
+                                  configuration in edit mode - the same row is updated,
+                                  no new version is cloned. */}
+                              {canEdit && (() => {
+                                const invited = Math.max(
+                                  Number((c as unknown as { invitations_count?: number }).invitations_count) || 0,
+                                  st ? st.total + st.revoked : 0,
+                                );
+                                const archived = normalizeStatus(c.status) === 'archived';
+                                const atCap = (c.version ?? 1) >= MAX_ASSESSMENT_VERSIONS;
+                                const locked = invited > 0 || archived;
+                                const reason = invited > 0
+                                  ? 'Cannot edit — this assessment has already been sent to candidates'
+                                  : archived
+                                  ? 'Archived assessments cannot be edited'
+                                  : atCap
+                                  ? `This assessment already has ${MAX_ASSESSMENT_VERSIONS} versions, the maximum allowed — it can’t be edited further.`
+                                  : '';
+                                const greyed = locked || atCap;
+                                return (
+                                  <button
+                                    type="button"
+                                    disabled={locked}
+                                    onClick={() => {
+                                      if (locked) return;
+                                      if (atCap) {
+                                        toast.error('Maximum versions reached', { description: reason });
+                                        return;
+                                      }
+                                      const returnUrl = `/recruitment/job-details?id=${encodeURIComponent(jobId)}`;
+                                      router.push(
+                                        `/recruitment/assessments/create?step=configure&jd_id=${encodeURIComponent(c.jd_id || jobId)}` +
+                                        `&edit=${encodeURIComponent(c.id)}` +
+                                        `&from=job-details&jd_title=${encodeURIComponent(jobTitle || '')}` +
+                                        `&returnUrl=${encodeURIComponent(returnUrl)}`,
+                                      );
+                                    }}
+                                    title={reason || `Edit assessment ${labelOf(c)}`}
+                                    aria-label={`Edit assessment ${labelOf(c)}`}
+                                    className={`w-8 h-8 inline-flex items-center justify-center rounded-lg border border-gray-200 dark:border-slate-700 transition-colors ${
+                                      greyed
+                                        ? 'opacity-50 cursor-not-allowed text-gray-300'
+                                        : 'text-menu-icon-edit hover:border-brand-blue/30 hover:bg-brand-blue/5'
+                                    }`}
+                                  >
+                                    <Pencil className="w-4 h-4" />
+                                  </button>
+                                );
+                              })()}
+                              </div>
                             </td>
                           </tr>
                         );
