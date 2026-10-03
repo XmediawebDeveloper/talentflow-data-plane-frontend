@@ -14,7 +14,7 @@
  */
 
 import { forwardRef } from 'react';
-import { Loader2, Monitor, ShieldCheck, EyeOff } from 'lucide-react';
+import { Loader2, Monitor, ShieldCheck, EyeOff, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface ShareBarGateScreenProps {
@@ -61,6 +61,18 @@ export const ShareBarGateScreen = forwardRef<HTMLDivElement, ShareBarGateScreenP
               {error}
             </div>
           )}
+
+          {/* Wait note — read just BEFORE the click. The capture blanks this page
+              for a few seconds; text can't be shown on the blank itself (it would
+              land in the screenshot), so the candidate is told up front. */}
+          <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 mb-4">
+            <Clock className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <p className="text-sm text-amber-900 leading-snug">
+              <span className="font-semibold">After you click Continue, your screen will go blank for a few seconds</span> while
+              we check it. This is normal. Please <span className="font-semibold">don&rsquo;t click again or refresh the page</span> &mdash;
+              the assessment will continue automatically.
+            </p>
+          </div>
 
           <Button onClick={onContinue} disabled={checking} className="w-full h-12 text-base" size="lg">
             {checking ? (

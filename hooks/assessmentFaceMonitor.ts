@@ -14,8 +14,9 @@
  * components/ai-interview/proctoring/InterviewFaceDetection.ts and
  * InterviewFaceVerification.ts, which candidates run without hanging):
  *   - MediaPipe FaceDetection (short model, WASM/WebGL, CDN) every 1.5 s → face count
- *   - MediaPipe FaceMesh every 2 s → gaze direction (interview thresholds,
- *     3 away / 2 restored confirmations, ONE event per episode)
+ *   - MediaPipe FaceMesh every 2 s → gaze direction via the shared
+ *     lib/proctoring/gazeEstimator (same measures as the interview; 2 away /
+ *     2 restored confirmations, ONE event per episode)
  *   - face-api.js identity descriptor every 10 s, ONLY when exactly one face
  *     is present and the page is visible; never per-cycle, never on snapshots
  *   - a single 250 ms setTimeout scheduler with timestamp gates and a busy
@@ -31,16 +32,24 @@
 import { loadFaceApiWithCpuBackend, type FaceApiModule } from '@/lib/face-api-loader';
 import { loadFaceApiNetWithFallback, FACE_API_MODEL_URLS } from '@/lib/proctoring/faceDetection';
 import { createFaceIdentityWorker, type FaceIdentityWorker } from '@/lib/proctoring/faceIdentityWorker';
+import { createGazeEstimator } from '@/lib/proctoring/gazeEstimator';
 
-export type GazeDirection = 'left' | 'right' | 'up' | 'left_up' | 'right_up' | 'center';
+export type GazeDirection =
+  | 'left' | 'right' | 'up' | 'left_up' | 'right_up'
+  | 'down' | 'left_down' | 'right_down'
+  // Head turned so far FaceMesh lost the landmarks while the detector still sees a face.
+  | 'profile';
 
 export interface FaceMonitorCallbacks {
   /** Called on every detection tick (~1.5 s) with the plausible face count. */
   onFaceCount: (count: number, details: Record<string, unknown>) => void;
   /** Detector threw or produced nothing usable. */
   onDetectionFailure?: (error: unknown) => void;
-  /** Gaze left the screen for ≥ 3 consecutive checks (~6 s). Once per episode. */
-  onGazeAway?: (direction: GazeDirection, offsets: { x: number; y: number }) => void;
+  /**
+   * Gaze left the screen for ≥ 2 consecutive checks (~2-4 s). Once per episode.
+   * `metrics` is what tripped it (cue + yaw/pitch/eye deviations from baseline).
+   */
+  onGazeAway?: (direction: GazeDirection, metrics: Record<string, string | number | boolean>) => void;
   /** Gaze came back for ≥ 2 consecutive checks. Carries the episode length. */
   onGazeRestored?: (episodeMs: number) => void;
   /** Descriptor distance to the baseline exceeded the threshold twice in a row. */
@@ -76,7 +85,11 @@ export interface AssessmentFaceMonitor {
 
 const MIN_FACE_BOX_AREA = 0.025;   // ≥2.5 % of the frame — filters spurious boxes
 const MIN_DETECTION_CONFIDENCE = 0.6;
-const FRAMES_GAZE_AWAY = 3;
+// BUG03: was 3 checks at the 2 s cadence (≥ 4-6 s), so "a few seconds" of
+// looking away never registered. 2 checks ≈ 2-4 s, matching the interview's
+// low-tier setting — the gaze cadence stays 2 s here because this page has a
+// history of main-thread hangs (see the file header).
+const FRAMES_GAZE_AWAY = 2;
 const FRAMES_GAZE_RESTORED = 2;
 const FALLBACK_FACE_INTERVAL_MS = 3000;
 // When the identity worker cannot start, the main-thread descriptor (5–8 s on
@@ -191,29 +204,17 @@ export function createAssessmentFaceMonitor(
     });
   };
 
+  // Scale-free head-pose / iris measures + per-candidate baseline. The old
+  // frame-fraction thresholds here (0.06 / 0.08) could never be reached at a
+  // normal laptop distance — see lib/proctoring/gazeEstimator.ts (BUG03).
+  const gazeEstimator = createGazeEstimator('[FACE-MONITOR]');
+
   const handleMeshResults = (results: any) => {
-    const lm = results?.multiFaceLandmarks?.[0];
-    if (!lm) return; // no face → face-count path owns the alarm
-    const noseTip = lm[1];
-    const leftEyeOuter = lm[33];
-    const rightEyeOuter = lm[263];
-    const forehead = lm[10];
-    const chin = lm[152];
-    if (!noseTip || !leftEyeOuter || !rightEyeOuter || !forehead || !chin) return;
-
-    const eyeMidX = (leftEyeOuter.x + rightEyeOuter.x) / 2;
-    const noseOffset = noseTip.x - eyeMidX;
-    const faceMidY = (forehead.y + chin.y) / 2;
-    const noseVerticalOffset = noseTip.y - faceMidY;
-
-    // Same thresholds as the interview (normalised MediaPipe coordinates).
-    const horizontal = Math.abs(noseOffset) > 0.06;
-    const upward = noseVerticalOffset < -0.08;
-    const lookingAway = horizontal || upward;
-
-    let direction: GazeDirection = 'center';
-    if (horizontal) direction = noseOffset > 0 ? 'right' : 'left';
-    if (upward) direction = direction === 'center' ? 'up' : (`${direction}_up` as GazeDirection);
+    // lastFaceCount (detector, 1.5 s) tells "head turned so far the mesh lost
+    // it" (face still there) from "nobody there" (face-count path owns that).
+    const reading = gazeEstimator.read(results?.multiFaceLandmarks?.[0], lastFaceCount >= 1);
+    if (!reading) return;
+    const lookingAway = reading.away;
 
     if (lookingAway) {
       gazeAwayCount += 1;
@@ -221,10 +222,8 @@ export function createAssessmentFaceMonitor(
       if (gazeOnScreen && gazeAwayCount >= FRAMES_GAZE_AWAY) {
         gazeOnScreen = false;
         gazeEpisodeStartedAt = Date.now();
-        callbacks.onGazeAway?.(direction, {
-          x: Number(noseOffset.toFixed(3)),
-          y: Number(noseVerticalOffset.toFixed(3)),
-        });
+        console.log('[FACE-MONITOR] Looking away', { direction: reading.direction, ...reading.metrics });
+        callbacks.onGazeAway?.(reading.direction as GazeDirection, reading.metrics);
       }
     } else {
       gazeRestoredCount += 1;
