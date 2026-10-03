@@ -1,7 +1,7 @@
 import { Mail, User, Shield, CheckCircle, TrendingUp, TrendingDown, Award, AlertCircle, Zap, Target, Star, Brain, XCircle } from 'lucide-react';
 import type { DashboardData } from './types';
 
-import { formatScore1 } from '@/lib/utils/matchStatus';
+import { formatSkillScore, formatScore1 } from '@/lib/utils/matchStatus';
 interface Props {
   data: DashboardData;
   /** Whether identity/liveness verification was confirmed for this candidate */
@@ -371,7 +371,7 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
                 <div key={idx}>
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm">{s.label}</span>
-                    <span className="text-lg font-medium" style={{ fontFamily: 'var(--font-mono)' }}>{s.score.toFixed(1)}/10</span>
+                    <span className="text-lg font-medium" style={{ fontFamily: 'var(--font-mono)' }}>{formatSkillScore(s.score)}/10</span>
                   </div>
                   <div className={`relative w-full h-8 ${s.bg} rounded-full overflow-hidden`}>
                     <div className={`absolute inset-y-0 left-0 bg-gradient-to-r ${s.fill} rounded-full transition-all duration-1000`} style={{ width: `${(s.score / 10) * 100}%` }} />
@@ -399,7 +399,7 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
                     <div className="w-20 h-2 bg-emerald-200 rounded-full overflow-hidden">
                       <div className="h-full bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-full" style={{ width: `${(skill.score / 10) * 100}%` }} />
                     </div>
-                    <span className="text-sm font-semibold text-emerald-900" style={{ fontFamily: 'var(--font-mono)' }}>{skill.score.toFixed(1)}</span>
+                    <span className="text-sm font-semibold text-emerald-900" style={{ fontFamily: 'var(--font-mono)' }}>{formatSkillScore(skill.score)}</span>
                   </div>
                 </div>
               ))}

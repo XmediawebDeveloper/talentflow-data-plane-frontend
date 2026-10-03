@@ -22,7 +22,7 @@ import type { DashboardData } from './types';
 import { buildRationaleLines } from './types';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 
-import { formatScore1 } from '@/lib/utils/matchStatus';
+import { formatScore1, formatSkillScore } from '@/lib/utils/matchStatus';
 interface Props {
   data: DashboardData;
   aiConfidence?: number | null;
@@ -280,7 +280,7 @@ export async function exportEvalReportPDF(
         } else {
           bar(pageW - M - 38, rowTop + 0.8, 22, skill.score, scoreRGB(skill.score));
           doc.setFont('helvetica', 'bold'); doc.setFontSize(8); txt(scoreRGB(skill.score));
-          doc.text(`${skill.score.toFixed(1)}/10`, pageW - M, rowTop + 2.5, { align: 'right' });
+          doc.text(`${formatSkillScore(skill.score)}/10`, pageW - M, rowTop + 2.5, { align: 'right' });
         }
         cursorY += rowHeight;
       });
@@ -569,7 +569,7 @@ function SkillTable({ title, rows, tagClass }: {
               <td className="px-4 py-2 text-gray-800 dark:text-slate-200">{s.name}</td>
               <td className="px-2 py-2 text-center"><span className={`inline-block text-2xs font-bold px-1.5 py-0.5 rounded ${tagClass(s.tag)}`}>{s.tag}</span></td>
               <td className="px-2 py-2 text-center text-gray-500 dark:text-slate-400 tabular-nums">{s.weight}</td>
-              <td className={`px-4 py-2 text-right font-bold tabular-nums ${scoreColor(s.score).text}`}>{s.score.toFixed(1)}</td>
+              <td className={`px-4 py-2 text-right font-bold tabular-nums ${scoreColor(s.score).text}`}>{formatSkillScore(s.score)}</td>
             </tr>
           ))}
         </tbody>

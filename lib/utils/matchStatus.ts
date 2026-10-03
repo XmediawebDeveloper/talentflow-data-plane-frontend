@@ -47,6 +47,22 @@ export const truncate1 = (value: number): number => Math.floor(value * 10 + 1e-9
 export const formatScore1 = (value: number): string => truncate1(value).toFixed(1);
 
 /**
+ * Display a SKILL score — a whole number 0-10, never a decimal.
+ *
+ * A decimal is only correct where ONE number spans SEVERAL SKILLS: a question
+ * score is a weighted average across the skills on that question, and a
+ * section score an average of those. Both keep `formatScore1`. A skill's own
+ * score is assigned 0-10 whole (AIU102/103 AC3, AIU104 AC1, AIU106 AC4), and
+ * the backend now emits it as an integer.
+ *
+ * Needed because `toFixed(1)` renders that integer as "8.0" — the decimal the
+ * whole change was meant to remove. `Math.round` guards legacy reports stored
+ * before the backend fix, so re-opening one shows 8 rather than 7.5.
+ */
+export const formatSkillScore = (value: number): string =>
+  String(Math.max(0, Math.min(10, Math.round(Number(value) || 0))));
+
+/**
  * Reduce any of the spellings the backends and older components use to one
  * verdict. `exact_match`, `Exact Match`, `excellentmatch`, `excellent` and
  * `good_match` have all appeared in this codebase for the same thing.

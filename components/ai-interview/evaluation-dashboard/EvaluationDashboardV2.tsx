@@ -11,7 +11,7 @@ import type { DashboardData, PerQuestionDetail } from './types';
 import { buildRationaleLines } from './types';
 import { IS_PRODUCTION_ENV } from '../../../lib/utils/env';
 
-import { formatScore1, truncate1 } from '@/lib/utils/matchStatus';
+import { formatScore1, formatSkillScore, truncate1 } from '@/lib/utils/matchStatus';
 interface Props {
   data: DashboardData;
 }
@@ -172,7 +172,7 @@ export function SkillsView({ data }: { data: DashboardData }) {
             <div className="flex items-center gap-5 shrink-0">
               <div className="text-right">
                 <div className="text-xs text-gray-500">Score</div>
-                <div className="text-lg font-bold" style={{ color }}>{s.score.toFixed(1)}</div>
+                <div className="text-lg font-bold" style={{ color }}>{formatSkillScore(s.score)}</div>
               </div>
               <div className="text-right">
                 <div className="text-xs text-gray-500">Weight</div>
@@ -229,7 +229,7 @@ export function SkillsView({ data }: { data: DashboardData }) {
 
               <div className="p-4 rounded-xl bg-indigo-50 border border-dashed border-indigo-300">
                 <div className="text-sm font-mono font-semibold text-indigo-800">
-                  Weighted Calculation: {s.score.toFixed(1)} × {tag.weight} = {contribution}
+                  Weighted Calculation: {formatSkillScore(s.score)} × {tag.weight} = {contribution}
                 </div>
               </div>
             </div>
@@ -732,7 +732,7 @@ export function QuestionsView({ data }: { data: DashboardData }) {
                                   <span title="LLM score for this skill">
                                     <span className="text-gray-400">Score </span>
                                     <span className={`${s.is_skipped ? 'text-gray-400' : 'text-gray-900'} font-semibold`}>
-                                      {s.score.toFixed(1)}
+                                      {formatSkillScore(s.score)}
                                     </span>
                                     {s.is_skipped ? (
                                       <span className="ml-1 inline-flex items-center px-1.5 py-0 rounded text-2xs font-semibold bg-gray-100 text-gray-600 border border-gray-300"
@@ -842,7 +842,7 @@ export function QuestionsView({ data }: { data: DashboardData }) {
                       )}
                       {typeof fu.score === 'number' && (
                         <span className="ml-auto text-2xs font-mono text-amber-800">
-                          Score {fu.score.toFixed(1)}
+                          Score {formatSkillScore(fu.score)}
                         </span>
                       )}
                     </div>
@@ -1193,7 +1193,7 @@ function _QuestionsView_DISABLED_DEAD_CODE({ data }: { data: DashboardData }) {
                                       <div
                                         className={`text-base font-bold ${s.is_skipped ? 'text-gray-400' : 'text-emerald-500'}`}
                                       >
-                                        {s.score.toFixed(1)}
+                                        {formatSkillScore(s.score)}
                                       </div>
                                       {s.is_skipped ? (
                                         <span
@@ -1241,7 +1241,7 @@ function _QuestionsView_DISABLED_DEAD_CODE({ data }: { data: DashboardData }) {
                         <div className="ml-3 mb-3 space-y-0.5">
                           {q.skills.map((s, idx) => (
                             <div key={idx} className="text-sm font-mono text-indigo-800">
-                              • {s.name}: {s.score.toFixed(1)} × {s.weight} = {(s.score * s.weight).toFixed(1)}
+                              • {s.name}: {formatSkillScore(s.score)} × {s.weight} = {(s.score * s.weight).toFixed(1)}
                             </div>
                           ))}
                         </div>

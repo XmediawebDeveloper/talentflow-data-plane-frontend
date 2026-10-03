@@ -4,7 +4,7 @@
 import { CheckCircle, XCircle } from 'lucide-react';
 import type { DashboardData } from './types';
 
-import { formatScore1 } from '@/lib/utils/matchStatus';
+import { formatScore1, formatSkillScore } from '@/lib/utils/matchStatus';
 interface Props {
   data: DashboardData;
   aiConfidence?: number | null;
@@ -288,7 +288,7 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
                         <div className={`h-full rounded-full ${sc.bar}`} style={{ width: `${(s.score / 10) * 100}%` }} />
                       </div>
                     </div>
-                    <div className={`text-base font-bold ${sc.text} text-right`}>{s.score.toFixed(1)}</div>
+                    <div className={`text-base font-bold ${sc.text} text-right`}>{formatSkillScore(s.score)}</div>
                   </div>
                 );
               })}
@@ -319,7 +319,7 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
                         <div className={`h-full rounded-full ${sc.bar}`} style={{ width: `${(s.score / 10) * 100}%` }} />
                       </div>
                     </div>
-                    <div className={`text-base font-bold ${sc.text} text-right`}>{s.score.toFixed(1)}</div>
+                    <div className={`text-base font-bold ${sc.text} text-right`}>{formatSkillScore(s.score)}</div>
                   </div>
                 );
               })}
