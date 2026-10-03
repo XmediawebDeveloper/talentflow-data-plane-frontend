@@ -6,7 +6,7 @@ import type { IconComponent } from '@/lib/types/icon';
 import teamService, { TeamHistoryEntry } from '@/lib/services/teamService';
 import { formatIST } from '@/lib/utils/dateUtils';
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10;
 
 const EVENT_CONFIG: Record<string, { label: string; icon: IconComponent; color: string; bg: string }> = {
   TEAM_CREATED: { label: 'Team Created', icon: Users, color: 'text-brand-teal', bg: 'bg-brand-teal/10' },

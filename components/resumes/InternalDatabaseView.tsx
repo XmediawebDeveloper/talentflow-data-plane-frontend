@@ -86,7 +86,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
   const [totalPages, setTotalPages] = useState(1);
   const [totalResumes, setTotalResumes] = useState(0);
   const [totalIncludingVersions, setTotalIncludingVersions] = useState<number | undefined>(undefined);
-  const [pageSize] = useState(25);
+  const [pageSize] = useState(10);
 
   // Track if initial load is done
   const initialLoadDone = useRef(false);

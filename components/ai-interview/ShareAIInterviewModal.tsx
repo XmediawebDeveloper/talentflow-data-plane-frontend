@@ -412,7 +412,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
      default, so a long prefilled list (25 resumes from My Resumes) doesn't
      push the rest of the dialog out of reach. */
   const [candidatePage, setCandidatePage] = useState(1);
-  const [candidatePageSize, setCandidatePageSize] = useState(5);
+  const [candidatePageSize, setCandidatePageSize] = useState(10);
   const candidateTotalPages = Math.max(1, Math.ceil(candidates.length / candidatePageSize));
   const candidateSafePage = Math.min(candidatePage, candidateTotalPages);
   const pagedCandidates = candidates.slice(

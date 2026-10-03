@@ -241,7 +241,7 @@ export default function AuditTrailPage() {
 
   // Pagination
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(20);
+  const [pageSize] = useState(10);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   // Text typed into the "jump to page" box; kept separate from `page` so the

@@ -121,6 +121,7 @@ export default function AITalentMatchPageJobsList({
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 lg:p-5">
         <JobOpeningPickerList
           excludeDraftsOnly
+          showCandidateCounts
           selection={selection}
           onSelectionChange={setSelection}
           radioGroupName="ai-talent-match-job"

@@ -19,6 +19,8 @@ import { jdService, type JDLineageVersion, type JDResponse } from '@/lib/service
 import JDIdentityHeader from '@/components/jobs/JDIdentityHeader';
 import JDOverviewSections from '@/components/jobs/JDOverviewSections';
 import { Button } from '@/components/ui/button';
+import ExportFormatModal from '@/components/ExportFormatModal';
+import { exportRows, type ExportFileFormat } from '@/lib/utils/exportUtils';
 import type {
   AIInterviewResponse,
   AIInterviewHRQuestion,
@@ -205,6 +207,8 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   // pattern) rather than a tab of its own; ShareAIInterviewModal already
   // supports this as its non-embedded (default) mode.
   const [showShareModal, setShowShareModal] = useState(false);
+  // CSV / Excel picker for the clusters & HR questions export.
+  const [showExportModal, setShowExportModal] = useState(false);
 
   // Activity
   const [recentActivity, setRecentActivity] = useState<AIInterviewResponse[]>([]);
@@ -553,81 +557,69 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
     }
   };
 
-  const handleExportCSV = () => {
-    const esc = (v: string) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const rows: string[] = [];
+  // One flat table — a Section column replaces the old CSV's stacked blocks so
+  // the same rows work as CSV or .xlsx.
+  const CONFIG_EXPORT_HEADERS = ['Section', '#', 'Cluster / Question', 'Priority', 'Skill', 'Description / Reason', 'Answer Type', 'Stage'];
 
-    const title = config.jd_title || config.position || 'AI Interview';
-    const displayId = config.display_id || config.id;
-
-    rows.push(`AI Interview Export`);
-    rows.push(`${esc(displayId)} - ${esc(title)}`);
-    rows.push(`Exported: ${new Date().toLocaleString()}`);
-    rows.push('');
-
+  const buildConfigExportRows = (): string[][] => {
+    const rows: string[][] = [];
     const PRIORITY_LABEL: Record<number, string> = { 3: 'High', 2: 'Medium', 1: 'Low' };
 
     // Helper: write clusters with one skill per row (first skill row shows cluster info, rest blank)
-    const writeClusters = (clusters: typeof mthClusters) => {
+    const writeClusters = (section: string, clusters: typeof mthClusters, emptyLabel: string) => {
+      if (clusters.length === 0) {
+        rows.push([section, '-', emptyLabel, '', '', '', '', '']);
+        return;
+      }
       clusters.forEach((c, i) => {
         const skills = c.skills?.length ? c.skills : ['(no skills)'];
         skills.forEach((skill, si) => {
           rows.push([
+            section,
             si === 0 ? String(i + 1) : '',
             si === 0 ? c.name : '',
             si === 0 ? (PRIORITY_LABEL[c.priority] ?? String(c.priority)) : '',
             skill,
             si === 0 ? (c.reason ?? '') : '',
-          ].map(esc).join(','));
+            '',
+            '',
+          ]);
         });
       });
     };
 
-    // ── Must-Have Skill Clusters ──
-    rows.push('MUST-HAVE SKILL CLUSTERS');
-    rows.push(['#', 'Cluster Name', 'Priority', 'Skill', 'Description / Reason'].map(esc).join(','));
-    if (mthClusters.length > 0) {
-      writeClusters(mthClusters);
-    } else {
-      rows.push(['-', 'No clusters configured', '', '', ''].map(esc).join(','));
-    }
-    rows.push('');
-
-    // ── Nice-to-Have Skill Clusters ──
-    rows.push('NICE-TO-HAVE SKILL CLUSTERS');
-    rows.push(['#', 'Cluster Name', 'Priority', 'Skill', 'Description / Reason'].map(esc).join(','));
-    if (nthClusters.length > 0) {
-      writeClusters(nthClusters);
-    } else {
-      rows.push(['-', 'No clusters configured or NTH disabled', '', '', ''].map(esc).join(','));
-    }
-    rows.push('');
+    writeClusters('Must-Have Skill Clusters', mthClusters, 'No clusters configured');
+    writeClusters('Nice-to-Have Skill Clusters', nthClusters, 'No clusters configured or NTH disabled');
 
     // ── HR Questions ──
-    rows.push('HR ROUND QUESTIONS');
     const hrQuestions = hrRound?.hr_questions ?? [];
     if (hrQuestions.length > 0) {
-      rows.push(['#', 'Question', 'Answer Type', 'Stage'].map(esc).join(','));
       hrQuestions.forEach((q, i) => {
         rows.push([
+          'HR Round Questions',
           String(i + 1),
           q.question_text ?? '',
+          '',
+          '',
+          '',
           q.answer_type ?? 'text',
           q.stage === 'opening' ? 'opening' : 'closing',
-        ].map(esc).join(','));
+        ]);
       });
     } else {
-      rows.push(['-', 'No HR questions configured or HR round disabled', '', ''].map(esc).join(','));
+      rows.push(['HR Round Questions', '-', 'No HR questions configured or HR round disabled', '', '', '', '', '']);
     }
+    return rows;
+  };
 
-    const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${displayId}-clusters-hr.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success('Exported to CSV');
+  const handleExport = async (format: ExportFileFormat) => {
+    const title = config.jd_title || config.position || 'AI Interview';
+    const displayId = config.display_id || config.id;
+    await exportRows(format, CONFIG_EXPORT_HEADERS, buildConfigExportRows(), `${displayId}-clusters-hr`, {
+      sheetName: 'Clusters & HR',
+      title: `AI Interview Export — ${displayId} - ${title}`,
+    });
+    toast.success(format === 'xlsx' ? 'Exported to Excel' : 'Exported to CSV');
     void aiInterviewService.logConfigExport(config.id);
   };
 
@@ -1429,13 +1421,21 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={handleExportCSV}
-                title="Export clusters & HR questions to CSV"
-                aria-label="Export to CSV"
+                onClick={() => setShowExportModal(true)}
+                title="Export clusters & HR questions"
+                aria-label="Export"
                 className="px-2 min-w-[40px] min-h-[40px]"
               >
                 <Download className="w-4 h-4" />
               </Button>
+              <ExportFormatModal
+                open={showExportModal}
+                onClose={() => setShowExportModal(false)}
+                title="Export Clusters & HR Questions"
+                recordCount={showExportModal ? buildConfigExportRows().length : undefined}
+                columns={CONFIG_EXPORT_HEADERS}
+                onExport={handleExport}
+              />
               {onRefresh && (
                 <Button
                   variant="secondary"

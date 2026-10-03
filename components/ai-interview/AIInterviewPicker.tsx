@@ -104,7 +104,7 @@ export default function AIInterviewPicker({
   const [invitePickerViewMode, setInvitePickerViewMode] = useState<'grouped' | 'ungrouped'>('ungrouped');
   const [invitePickerExpandedKey, setInvitePickerExpandedKey] = useState<string | null>(null);
   const [invitePickerPage, setInvitePickerPage] = useState(1);
-  const [invitePickerPageSize, setInvitePickerPageSize] = useState(5);
+  const [invitePickerPageSize, setInvitePickerPageSize] = useState(10);
   const [configurePreviewId, setConfigurePreviewId] = useState<string | null>(null);
   const invitePickerSelection = selection;
   const setInvitePickerSelection = onSelectionChange;

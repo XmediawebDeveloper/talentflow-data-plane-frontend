@@ -14,11 +14,13 @@ import {
   Download,
 } from 'lucide-react';
 import {
-  exportToCSV,
+  exportData,
   formatTeamUsageForExport,
   TEAM_USAGE_COLUMNS,
+  type ExportFileFormat,
 } from '@/lib/utils/exportUtils';
 import { Button } from '@/components/ui/button';
+import ExportFormatModal from '@/components/ExportFormatModal';
 import { DateField } from '@/components/ui/date-field';
 import {
   BarChart,
@@ -70,6 +72,7 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
     const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split('T')[0];
   });
   const [toDate, setToDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [showExportModal, setShowExportModal] = useState(false);
 
   // Must match the backend's actual gate (current_user.is_tenant_admin) for the
   // all-teams-usage endpoint — a raw role-string comparison drifts from the
@@ -201,12 +204,14 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
       .slice(0, 5);
   }, [teamComparisonData]);
 
-  // Export handler
-  const handleExport = () => {
+  // Export handler — runs from the format picker
+  const handleExport = async (format: ExportFileFormat) => {
     if (!teamsUsage?.teams) return;
 
     const formattedData = formatTeamUsageForExport(teamsUsage.teams);
-    exportToCSV(formattedData, TEAM_USAGE_COLUMNS, `team-analytics-${fromDate}-to-${toDate}`);
+    await exportData(format, formattedData, TEAM_USAGE_COLUMNS, `team-analytics-${fromDate}-to-${toDate}`, {
+      sheetName: 'Team Analytics',
+    });
   };
 
   if (isLoading) {
@@ -310,16 +315,24 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
                   toast.error('You do not have permission to export team analytics');
                   return;
                 }
-                handleExport();
+                setShowExportModal(true);
               }}
               aria-disabled={!canExport}
               className={!canExport ? 'opacity-50 cursor-not-allowed' : ''}
               title={!canExport ? 'You do not have permission to export team analytics' : ''}
               icon={<Download className="w-4 h-4" />}
             >
-              Export CSV
+              Export
             </Button>
           )}
+          <ExportFormatModal
+            open={showExportModal}
+            onClose={() => setShowExportModal(false)}
+            title="Export Team Analytics"
+            recordCount={teamsUsage?.teams?.length ?? 0}
+            columns={TEAM_USAGE_COLUMNS.map((c) => c.header)}
+            onExport={handleExport}
+          />
         </div>
       </div>
 

@@ -56,7 +56,12 @@ export interface AIMatchSessionVersion {
  * for the ordinary one-run-per-version case the two agree anyway. Newest first,
  * like every other version list in this app.
  */
-export function buildAIMatchVersions(sessions: AIMatchSessionResponse[]): AIMatchSessionVersion[] {
+export function buildAIMatchVersions(
+  sessions: AIMatchSessionResponse[],
+  /** The JD's own lineage version (v1, v2…) for a session's `jd_id`. A row
+   *  whose JD can't be resolved falls back to its order of first match. */
+  jdVersionOf?: (jdId: string) => number | undefined,
+): AIMatchSessionVersion[] {
   const byVersion = new Map<string, AIMatchSessionResponse[]>();
   for (const session of sessions) {
     // No `jd_id` (older records) means the run cannot be attributed to a
@@ -82,7 +87,10 @@ export function buildAIMatchVersions(sessions: AIMatchSessionResponse[]): AIMatc
       };
     })
     .sort((a, b) => asTime(a.firstMatchedAt) - asTime(b.firstMatchedAt))
-    .map((version, index) => ({ ...version, versionNumber: index + 1 }))
+    .map((version, index) => ({
+      ...version,
+      versionNumber: (version.session.jd_id && jdVersionOf?.(version.session.jd_id)) || index + 1,
+    }))
     .reverse();
 }
 

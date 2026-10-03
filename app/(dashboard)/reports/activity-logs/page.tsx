@@ -4,6 +4,9 @@ import { BarChart3, Search, Filter, Download, Clock, User, FileText, Target, Vid
 import { useState } from 'react';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
+import ExportFormatModal from '@/components/ExportFormatModal';
+import { exportRows } from '@/lib/utils/exportUtils';
+import { toast } from 'sonner';
 
 const mockActivityLogs = [
   { id: '1', user: 'John Admin', action: 'Created job posting', details: 'Senior Frontend Developer', timestamp: '2 min ago', category: 'jobs' },
@@ -41,6 +44,7 @@ const categoryColors: Record<string, string> = {
 export default function ActivityLogsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState('all');
+  const [showExportModal, setShowExportModal] = useState(false);
 
   // Persist the search + category filter and scroll position so returning to
   // this page restores exactly where the user left off.
@@ -65,11 +69,31 @@ export default function ActivityLogsPage() {
     return matchesSearch && matchesCategory;
   });
 
+  // Export Logs — the currently filtered rows, in the format picked in the
+  // shared CSV / Excel picker.
+  const exportHeaders = ['User', 'Action', 'Details', 'Category', 'Time'];
+  const handleExportLogs = async (format: 'csv' | 'xlsx') => {
+    const rows = filteredLogs.map(log => [log.user, log.action, log.details, log.category, log.timestamp]);
+    await exportRows(format, exportHeaders, rows, `Activity_Logs_${new Date().toISOString().slice(0, 10)}`, {
+      sheetName: 'Activity Logs',
+      title: 'Activity Logs',
+    });
+    toast.success(`Exported ${rows.length} log${rows.length !== 1 ? 's' : ''} to ${format === 'xlsx' ? 'Excel' : 'CSV'}`);
+  };
+
   return (
     <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Activity Logs' }]} />
+        <ExportFormatModal
+          open={showExportModal}
+          onClose={() => setShowExportModal(false)}
+          title="Export Activity Logs"
+          recordCount={filteredLogs.length}
+          columns={exportHeaders}
+          onExport={handleExportLogs}
+        />
 
         {/* Header */}
         <div className="mb-5 sm:mb-6 lg:mb-8">
@@ -83,7 +107,16 @@ export default function ActivityLogsPage() {
                 <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">Track all activities across your organization</p>
               </div>
             </div>
-            <button className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-200 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg font-medium transition-colors self-end sm:self-auto">
+            <button
+              type="button"
+              onClick={() => {
+                if (filteredLogs.length === 0) {
+                  toast.error('No logs to export');
+                  return;
+                }
+                setShowExportModal(true);
+              }}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-200 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg font-medium transition-colors self-end sm:self-auto">
               <Download className="w-4 h-4" />
               <span className="hidden sm:inline">Export Logs</span>
               <span className="sm:hidden">Export</span>

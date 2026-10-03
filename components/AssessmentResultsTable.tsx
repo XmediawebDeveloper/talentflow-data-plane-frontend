@@ -110,7 +110,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
   }>({});
 
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(25);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   const [displayMode, setDisplayMode] = useState<ListDisplayMode>('list');
 
   // Detect if any results have technical/coding rounds

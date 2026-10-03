@@ -76,7 +76,7 @@ export default function ResumeScoringJDSelection() {
                 <h1 className="text-gray-900 text-lg font-semibold tracking-tight">Select Job Description</h1>
                 <p className="text-sm text-gray-500 inline-flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-brand-blue" />
-                  Select a job and let AI match the best candidates
+                  Select a job and let AI score candidates.
                 </p>
               </div>
             </div>

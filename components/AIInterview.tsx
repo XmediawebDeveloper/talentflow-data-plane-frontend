@@ -379,7 +379,7 @@ export default function AIInterview() {
      it. '' means any. */
   const [inviteStatusColumnFilters, setInviteStatusColumnFilters] = useState(EMPTY_INVITE_COLUMN_FILTERS);
   const [inviteStatusPage, setInviteStatusPage] = useState(1);
-  const [inviteStatusItemsPerPage, setInviteStatusItemsPerPage] = useState(20);
+  const [inviteStatusItemsPerPage, setInviteStatusItemsPerPage] = useState(10);
   /* The tab's filter panel (behind More Filters in the toolbar above the
      pills), its row selection, and the bulk revoke that acts on it. */
   const [showInviteStatusFilters, setShowInviteStatusFilters] = useState(false);

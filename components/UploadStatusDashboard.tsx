@@ -7,6 +7,8 @@ import { formatIST } from '@/lib/utils/dateUtils';
 import { toast } from '@/components/ui/enhanced-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import ExportFormatModal from '@/components/ExportFormatModal';
+import { exportRows, ExportFileFormat } from '@/lib/utils/exportUtils';
 
 // Dynamic import to avoid SSR issues with docx-preview dependency
 const DuplicateResolutionModal = dynamic(() => import('./DuplicateResolutionModal'), {
@@ -71,6 +73,9 @@ interface UploadStatusDashboardProps {
   onRetryUpload?: (fileNames: string[]) => Promise<void>;
 }
 
+// Columns in the upload report export (CSV or Excel)
+const UPLOAD_REPORT_HEADERS = ['File Name', 'Status', 'Candidate Name', 'Error Message'];
+
 export default function UploadStatusDashboard({ statuses, fileName, uploadDate, onClose, onBack, onRetryUpload }: UploadStatusDashboardProps) {
   const [selectedCompleted, setSelectedCompleted] = useState<string[]>([]);
   const [selectedDuplicated, setSelectedDuplicated] = useState<string[]>([]);
@@ -78,6 +83,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
   const [selectedErrors, setSelectedErrors] = useState<string[]>([]);
   const [selectedPending, setSelectedPending] = useState<string[]>([]);
   const [showResolutionModal, setShowResolutionModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
   const [retryingFiles, setRetryingFiles] = useState<Set<string>>(new Set());
   const [activeFilter, setActiveFilter] = useState<'completed' | 'duplicated' | 'versioned' | 'error' | 'pending' | null>(null);
@@ -201,7 +207,8 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
     }
   };
 
-  const exportReport = () => {
+  // Export Report opens the CSV / Excel picker; the file is written here
+  const exportReport = async (format: ExportFileFormat) => {
     const report = statuses.map(s => ({
       fileName: s.fileName,
       status: s.status,
@@ -209,17 +216,13 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
       errorMessage: s.errorMessage || 'N/A',
     }));
 
-    const csvContent = [
-      ['File Name', 'Status', 'Candidate Name', 'Error Message'].join(','),
-      ...report.map(r => [r.fileName, r.status, r.candidateName, r.errorMessage].join(','))
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `upload-report-${new Date().toISOString()}.csv`;
-    a.click();
+    await exportRows(
+      format,
+      UPLOAD_REPORT_HEADERS,
+      report.map(r => [r.fileName, r.status, r.candidateName, r.errorMessage]),
+      `upload-report-${new Date().toISOString()}`,
+      { sheetName: 'Upload Report' },
+    );
   };
 
   const handleRetryUpload = async () => {
@@ -431,7 +434,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
             <Button
               variant="secondary"
               size="sm"
-              onClick={exportReport}
+              onClick={() => setShowExportModal(true)}
               icon={<Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
             >
               <span className="hidden sm:inline">Export Report</span>
@@ -921,6 +924,15 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
           }}
         />
       )}
+
+      <ExportFormatModal
+        open={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        title="Export Upload Report"
+        recordCount={statuses.length}
+        columns={UPLOAD_REPORT_HEADERS}
+        onExport={exportReport}
+      />
     </div>
   );
 }
