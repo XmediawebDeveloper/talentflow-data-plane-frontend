@@ -304,7 +304,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
   /* Candidate rows are paged — 5 a page by default, so a long prefilled list
      doesn't push the rest of the dialog out of reach. */
   const [candidatePage, setCandidatePage] = useState(1);
-  const [candidatePageSize, setCandidatePageSize] = useState(5);
+  const [candidatePageSize, setCandidatePageSize] = useState(10);
 
   /* "Select From" list paging — 10 a page, back to page 1 whenever the tab,
      folder or search changes what's listed. */

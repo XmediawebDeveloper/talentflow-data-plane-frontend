@@ -30,7 +30,7 @@ import type { Permission } from '@/lib/types/tenant';
 
 export type ResumeTab = 'my-resumes' | 'internal-db';
 
-/** Tab labels, kept here so the strip and the breadcrumb can never disagree. */
+/** Tab labels for the tab strip. */
 const TAB_LABEL: Record<ResumeTab, string> = {
   'my-resumes': 'My Resumes',
   'internal-db': 'Shared Database',
@@ -126,12 +126,11 @@ export default function ResumeDatabasePage() {
     return () => { cancelled = true; };
   }, [showTabs, activeTab]);
 
+  // The tab strip already shows which pool is open, so the breadcrumb stops at
+  // the page itself rather than repeating the tab name.
   const crumbs = [
     { label: 'Dashboard', href: '/dashboard' },
-    // No href: this page has no "both tabs" state to link to, and PageBreadcrumb
-    // renders a middle crumb without one as a muted grouping label.
     { label: 'Resume Database' },
-    { label: activeTab ? TAB_LABEL[activeTab] : 'Resume Database' },
   ];
 
   const header = (

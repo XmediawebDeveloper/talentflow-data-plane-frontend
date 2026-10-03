@@ -3,8 +3,14 @@
 import Image from 'next/image';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { Button } from '@/components/ui/button';
-import { ArrowUpDown, Sparkles, BarChart3, Search, ChevronDown, ChevronRight, Mail, Phone, MapPin, CheckCircle, Star, User, Users, FileText, Send, TrendingUp, Calendar, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2, Info, RefreshCw, PieChart, MoreVertical, Video, FileDown } from 'lucide-react';
-import { exportToCSV, type ExportColumn } from '@/lib/utils/exportUtils';
+import { ArrowUpDown, Sparkles, BarChart3, Search, SlidersHorizontal, Briefcase, ChevronDown, ChevronRight, Mail, Phone, MapPin, CheckCircle, Star, User, Users, FileText, Send, TrendingUp, Calendar, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2, Info, RefreshCw, PieChart, MoreVertical, Video, FileDown } from 'lucide-react';
+import { exportData, type ExportColumn } from '@/lib/utils/exportUtils';
+import ExportFormatModal from '@/components/ExportFormatModal';
+import ColumnCustomizationModal from '@/components/ColumnCustomizationModal';
+import JDVersionHistoryModal from '@/components/JDVersionHistoryModal';
+import ApplyToJobModal from '@/components/ApplyToJobModal';
+import { useScoringProgress } from '@/contexts/ScoringProgressContext';
+import { trackScoringBatch } from '@/lib/utils/trackScoringBatch';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,7 +33,8 @@ import { aiMatchService, MatchedCandidate, AIMatchSessionResponse } from '@/lib/
 import AIMatchVersionHistoryTable, { AIMatchSessionVersion, buildAIMatchVersions } from './AIMatchVersionHistoryTable';
 import { scoringService } from '@/lib/services/scoringService';
 import { resumeService } from '@/lib/services/resumeService';
-import { jdService } from '@/lib/services/jdService';
+import { jdService, JDLineageVersion } from '@/lib/services/jdService';
+import RecordPager from '@/components/RecordPager';
 import { toast } from 'sonner';
 import { assessmentService } from '@/lib/services';
 import ShareAssessmentModal from './ShareAssessmentModal';
@@ -43,6 +50,7 @@ import SkillsList from '@/components/ui/SkillsList';
 import { useAuth } from '@/lib/hooks/useAuth';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
+import { Cell, Pie, PieChart as RechartsPieChart, ResponsiveContainer } from 'recharts';
 /* The shared formatters, so a JD's industry and employment type read the same
    here as on the Resume Scoring rows this list is modelled on. */
 import { getDisplayStatus, getStatusConfig } from '@/lib/utils/jobOpeningDisplay';
@@ -185,6 +193,32 @@ function clampOptionLabel(text: string, max = 32): string {
 }
 
 /** Exact Match = a perfect 10, Partial Match = 7-9, anything under 7 is No Match. */
+/* Results page Customize Columns — the table's optional columns. Matched
+   Rating and Candidate Name always show, so they aren't offered. */
+const RESULTS_COLUMNS: { id: string; label: string }[] = [
+  { id: 'jobTitle', label: 'Job Title' },
+  { id: 'jobVersion', label: 'Job Version' },
+  { id: 'email', label: 'Email' },
+  { id: 'phone', label: 'Phone' },
+  { id: 'location', label: 'Location' },
+  { id: 'skills', label: 'Skills' },
+  { id: 'experience', label: 'Experience' },
+  { id: 'uploadedBy', label: 'Uploaded By' },
+  { id: 'uploadDate', label: 'Uploaded Date' },
+  { id: 'resumeVersion', label: 'Resume Version' },
+  { id: 'attachments', label: 'Attachments' },
+  { id: 'scoredStatus', label: 'Scored Status' },
+];
+const RESULTS_COLUMNS_STORAGE_KEY = 'aiTalentMatch.results.hiddenColumns';
+
+/* Results page More Filters panel — the same field metrics as Resume
+   Scoring's panel (ScoredResumesTable), so the two read as one design. */
+const RESULTS_FILTER_FIELD_CLASS = 'w-full sm:w-auto sm:grow sm:basis-[170px] sm:max-w-[280px]';
+const RESULTS_FILTER_FIELD_WIDE_CLASS = 'w-full sm:w-auto sm:grow-[1.5] sm:basis-[240px] sm:max-w-[380px]';
+const RESULTS_FILTER_LABEL_CLASS = 'block text-sm text-gray-700 dark:text-slate-300 mb-1 truncate';
+const RESULTS_FILTER_CONTROL_CLASS =
+  'w-full px-3 py-2 text-sm text-gray-900 dark:text-slate-100 border border-gray-300 dark:border-slate-700 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 bg-white dark:bg-slate-900';
+
 function matchBandForRating(rating: number): 'exact' | 'partial' | 'no_match' {
   if (rating >= 10) return 'exact';
   if (rating >= 7) return 'partial';
@@ -306,19 +340,45 @@ export default function AITalentMatchPage({
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<MatchHistory | null>(null);
   const [selectedJob, setSelectedJob] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterThreshold, setFilterThreshold] = useState(0);
+  // Results page rating filter — the same bands as the Match History popup
+  // (10 / 9 – 7 / Below 7), via `matchBandForRating`.
+  const [filterRatingBand, setFilterRatingBand] = useState<'all' | 'exact' | 'partial' | 'no_match'>('all');
+  // Results page: Scored / Not Scored, against `scoredResumeIds`.
+  const [filterScored, setFilterScored] = useState<'all' | 'scored' | 'not_scored'>('all');
+  // Results page More Filters panel.
+  const [showResultsFilters, setShowResultsFilters] = useState(false);
+  // Results page List / Grid, same switch Resume Scoring uses.
+  const [resultsDisplayMode, setResultsDisplayMode] = useState<ListDisplayMode>('list');
+  // Results page Customize Columns — hidden column ids, kept per browser.
+  const [showResultsColumnModal, setShowResultsColumnModal] = useState(false);
+  // Results page "View Job Detail" — the JD viewer popup.
+  const [showResultsJobDetail, setShowResultsJobDetail] = useState(false);
+  const [hiddenResultColumns, setHiddenResultColumns] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const saved = JSON.parse(localStorage.getItem(RESULTS_COLUMNS_STORAGE_KEY) || '[]');
+      return Array.isArray(saved) ? saved.filter((id): id is string => typeof id === 'string') : [];
+    } catch {
+      return [];
+    }
+  });
+  const isResultColumnVisible = (id: string) => !hiddenResultColumns.includes(id);
+  const visibleResultColumnCount = RESULTS_COLUMNS.filter(col => !hiddenResultColumns.includes(col.id)).length + 2;
+  const applyResultColumns = (enabledIds: string[]) => {
+    const hidden = RESULTS_COLUMNS.map(col => col.id).filter(id => !enabledIds.includes(id));
+    setHiddenResultColumns(hidden);
+    try { localStorage.setItem(RESULTS_COLUMNS_STORAGE_KEY, JSON.stringify(hidden)); } catch { /* ignore */ }
+  };
   const [selectedCandidates, setSelectedCandidates] = useState<string[]>([]);
 
   // Additional filters
-  const [filterPhone, setFilterPhone] = useState('');
-  const [filterLocation, setFilterLocation] = useState('');
   const [filterExperienceMin, setFilterExperienceMin] = useState<number | ''>('');
   const [filterExperienceMax, setFilterExperienceMax] = useState<number | ''>('');
   const [sortBy, setSortBy] = useState<'rank' | 'name' | 'score' | 'experience'>('rank'); // Sort by highest rating first (DevRMS style)
 
   // Pagination state for match results
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(25);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   // Assessment-related state
   const [isAssessmentModalOpen, setIsAssessmentModalOpen] = useState(false);
@@ -332,6 +392,11 @@ export default function AITalentMatchPage({
      `selectedAllResumeKeys` (a cross-job roll-up), not `selectedCandidates`
      (scoped to one job's own candidate list, which is what that function
      normally reads). `null` means "use the normal selectedCandidates path". */
+  // The job a per-row Invite Assessment was started for (View by Candidates /
+  // All Resumes ⋮). Scopes the invite dialog to that job's assessment
+  // versions, as Invite AI Interview is; the cross-job bulk selection leaves
+  // it unset and gets the full list.
+  const [pendingInviteJobId, setPendingInviteJobId] = useState<string | null>(null);
   const [pendingInviteRecipients, setPendingInviteRecipients] = useState<
     { id: string; name: string; email: string; source: 'ai-match'; candidateId: string }[] | null
   >(null);
@@ -602,7 +667,7 @@ export default function AITalentMatchPage({
   };
 
   // Helper to update URL params - use shallow routing to prevent full page reload
-  const updateUrlParams = (params: { jdId?: string; view?: string }) => {
+  const updateUrlParams = (params: { jdId?: string; view?: string }, options?: { replace?: boolean }) => {
     const url = new URL(window.location.href);
 
     if (params.jdId) {
@@ -617,7 +682,10 @@ export default function AITalentMatchPage({
       url.searchParams.delete('view');
     }
 
-    router.push(url.pathname + url.search, { scroll: false });
+    // `replace` for in-place moves on the results page (version switch,
+    // Previous / Next job) so one Back still returns to the list.
+    if (options?.replace) router.replace(url.pathname + url.search, { scroll: false });
+    else router.push(url.pathname + url.search, { scroll: false });
   };
   
   // Matched Jobs list: search + seven filters, in the shared hook. Sorting stays
@@ -719,12 +787,12 @@ export default function AITalentMatchPage({
   // same ListPagination control and expand-in-place pattern Resume Scoring's
   // grouped "View by Candidates" uses.
   const [candidateCurrentPage, setCandidateCurrentPage] = useState(1);
-  const [candidateItemsPerPage, setCandidateItemsPerPage] = useState(20);
+  const [candidateItemsPerPage, setCandidateItemsPerPage] = useState(10);
   // Separate page/size for the "View by Resumes" flat table — same filter
   // and sort state as "View by Candidates" above, but its own row grouping,
   // so the two views paginate independently.
   const [resumeCurrentPage, setResumeCurrentPage] = useState(1);
-  const [resumeItemsPerPage, setResumeItemsPerPage] = useState(20);
+  const [resumeItemsPerPage, setResumeItemsPerPage] = useState(10);
   const [expandedCandidateGroups, setExpandedCandidateGroups] = useState<Set<string>>(new Set());
   const toggleCandidateGroupExpanded = (key: string) => {
     setExpandedCandidateGroups(prev => {
@@ -766,6 +834,18 @@ export default function AITalentMatchPage({
   // filters) — only one of those views is ever on screen at a time, so one flag
   // is enough and a toggle made in either view carries over to the other.
   const [matchDisplayMode, setMatchDisplayMode] = useState<ListDisplayMode>('list');
+  // "View by Candidates": each expanded row's matched-jobs list is paged on
+  // its own, 10 per page by default. Keyed by the row's key.
+  const [candidateJobsPaging, setCandidateJobsPaging] = useState<Record<string, { page: number; size: number }>>({});
+  const candidateJobsPageOf = (key: string) => candidateJobsPaging[key] ?? { page: 1, size: 10 };
+  const pageCandidateJobs = <T,>(key: string, jobs: T[]): T[] => {
+    const { page, size } = candidateJobsPageOf(key);
+    return jobs.slice((page - 1) * size, page * size);
+  };
+  const setCandidateJobsPage = (key: string, page: number) =>
+    setCandidateJobsPaging(prev => ({ ...prev, [key]: { ...candidateJobsPageOf(key), page } }));
+  const setCandidateJobsSize = (key: string, size: number) =>
+    setCandidateJobsPaging(prev => ({ ...prev, [key]: { page: 1, size } }));
 
   useEffect(() => {
     setCandidateCurrentPage(1);
@@ -820,7 +900,60 @@ export default function AITalentMatchPage({
     }
     setSelectedHistoryItem(item);
     setSelectedJob(item.jobId);
-    await handleSubmitToScoring([candidate.id]);
+    await handleSubmitToScoring([candidate.id], { candidates, jobId: item.jobId, jobTitle: item.jobTitle });
+  };
+
+  // "Invite Assessment" from the candidate roll-up's per-job list — the same
+  // override path the All Resumes bulk invite uses: the recipient is built
+  // straight from the row, then the normal assessment picker opens.
+  const inviteAssessmentForJobMatch = (
+    candidate: { name?: string; email?: string; key: string },
+    job: { resumeId?: string; jobId: string },
+  ) => {
+    if (!canCreateAssessments) {
+      toast.error('You do not have permission to invite to an assessment');
+      return;
+    }
+    if (!candidate.email) {
+      toast.error('Candidate has no email on file');
+      return;
+    }
+    setPendingInviteRecipients([{
+      id: `row-invite-${candidate.key}-${job.resumeId ?? ''}`,
+      name: candidate.name || 'Candidate',
+      email: candidate.email,
+      source: 'ai-match' as const,
+      candidateId: job.resumeId || candidate.key,
+    }]);
+    setPendingInviteJobId(job.jobId);
+    // handleAssessment only checks that something is selected; the override
+    // above is the real recipient list.
+    void handleAssessment(['__candidate_job_row__']);
+  };
+
+  // "Invite AI Interview" from the same list — scoped to THIS row's job, since
+  // an AI interview config belongs to one JD.
+  const inviteAIInterviewForJobMatch = (
+    candidate: { name?: string; email?: string },
+    job: { jobId: string; historyId: string; resumeId?: string },
+  ) => {
+    if (!canCreateAIInterviews) {
+      toast.error('You do not have permission to invite to an AI interview');
+      return;
+    }
+    if (!candidate.email) {
+      toast.error('Candidate has no email on file');
+      return;
+    }
+    const item = matchHistory.find(h => h.id === job.historyId);
+    if (item) {
+      setSelectedHistoryItem(item);
+      setSelectedJob(item.jobId);
+    }
+    handleInviteAIInterview(
+      [{ name: candidate.name || 'Candidate', email: candidate.email, resumeId: job.resumeId }],
+      job.jobId,
+    );
   };
 
   const toggleCandidateChips = (e: React.MouseEvent, rowKey: string) => {
@@ -897,6 +1030,10 @@ export default function AITalentMatchPage({
   // Job Openings list's own version history).
   const [expandedHistoryJobId, setExpandedHistoryJobId] = useState<string | null>(null);
   const [historyVersionsByJob, setHistoryVersionsByJob] = useState<Record<string, AIMatchSessionVersion[]>>({});
+  // The JD lineage behind each history key — every version's own id, number,
+  // title and status. Older versions aren't in `jobs` (it only holds each
+  // job's current row), so the results page reads their title/version here.
+  const [lineageByJob, setLineageByJob] = useState<Record<string, JDLineageVersion[]>>({});
   const [loadingHistoryJobId, setLoadingHistoryJobId] = useState<string | null>(null);
   const [failedHistoryJobId, setFailedHistoryJobId] = useState<string | null>(null);
 
@@ -919,6 +1056,7 @@ export default function AITalentMatchPage({
       try {
         const lineage = await jdService.getLineageVersions(anyRowId);
         lineageIds = lineage.length ? lineage.map(v => v.id) : [anyRowId];
+        if (lineage.length) setLineageByJob(prev => ({ ...prev, [historyKey]: lineage }));
       } catch (error) {
         console.warn('Failed to load JD lineage for version history:', anyRowId, error);
         lineageIds = [anyRowId];
@@ -947,7 +1085,7 @@ export default function AITalentMatchPage({
           }
         })
       );
-      setHistoryVersionsByJob(prev => ({ ...prev, [historyKey]: buildAIMatchVersions(hydratedSessions) }));
+      setHistoryVersionsByJob(prev => ({ ...prev, [historyKey]: buildAIMatchVersions(hydratedSessions, jdVersionOf) }));
     } catch (error) {
       console.error('Failed to load AI match version history:', error);
       setFailedHistoryJobId(historyKey);
@@ -972,11 +1110,38 @@ export default function AITalentMatchPage({
    * "Match History" modal's Exact/Partial/No-Match roll-up depends on, so it
    * can't be skipped, only no longer blocking this table's first paint).
    */
+  /** A JD record's real lineage version, so the version rows read v1/v2 as
+   *  the Job Descriptions page does rather than in order of first match. */
+  const jdVersionOf = (jdId: string): number | undefined =>
+    jobs.find(j => j.id === jdId)?.currentVersion;
+
   const getOptimisticAIMatchVersions = (historyKey: string): AIMatchSessionVersion[] => {
     const lineageIds = new Set(jobs.filter(j => j.jobId === historyKey).map(j => j.id));
     const knownSessions = allMatchSessions.filter(s => s.jd_id && lineageIds.has(s.jd_id));
-    return buildAIMatchVersions(knownSessions);
+    return buildAIMatchVersions(knownSessions, jdVersionOf);
   };
+
+  /** History key (JD-xxx code) for any JD row id — including an older
+   *  version that's only known through a loaded lineage. Falls back to the
+   *  id itself, the same fallback the job list rows use. */
+  const historyKeyForJd = (jdId: string): string =>
+    jobs.find(j => j.id === jdId)?.jobId
+    || Object.keys(lineageByJob).find(key => lineageByJob[key].some(v => v.id === jdId))
+    || jdId;
+
+  // The results page's version dropdown reads the same per-job version cache
+  // as "View Versions" and the history popup — load it when a job's results
+  // open and it isn't cached yet. Waits for `jobs` so the key is the JD code,
+  // and doesn't retry a key that just failed.
+  useEffect(() => {
+    if (viewMode !== 'results' || !selectedJob || jobs.length === 0) return;
+    const key = historyKeyForJd(selectedJob);
+    if (historyVersionsByJob[key] || loadingHistoryJobId === key || failedHistoryJobId === key) return;
+    // A fetch, not derived state — its setState calls land after the request.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadAIMatchVersionHistory(key, selectedJob);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMode, selectedJob, jobs, lineageByJob, historyVersionsByJob, loadingHistoryJobId, failedHistoryJobId]);
 
   /* Opened per ROW (`rowId`, the history item's own id), not per job: several
      rows can share one `historyKey` — versions of the same job, or rows whose
@@ -998,11 +1163,27 @@ export default function AITalentMatchPage({
   // Live — every change narrows the table immediately, no Apply step. Fresh
   // on every open so a filter set for one job doesn't leak into the next.
   const [historyModalFilter, setHistoryModalFilter] = useState<MatchHistoryModalFilters>(EMPTY_HISTORY_MODAL_FILTERS);
+  // Which version the popup's Rating Breakdown donut shows — 'all', or a
+  // version's latest session id. Fresh on every open, like the filters.
+  const [historyBreakdownVersion, setHistoryBreakdownVersion] = useState<string>('all');
+  // Results page Export — opens the shared CSV / Excel picker first.
+  const [showCandidateExportModal, setShowCandidateExportModal] = useState(false);
   const openMatchHistoryModal = (item: MatchHistory, historyKey: string) => {
     setMatchHistoryModal({ item, historyKey });
     setHistoryModalFilter(EMPTY_HISTORY_MODAL_FILTERS);
+    setHistoryBreakdownVersion('all');
     if (!historyVersionsByJob[historyKey]) void loadAIMatchVersionHistory(historyKey, item.jobId);
   };
+
+  // Score preview — the shared Score Resume dialog (candidates, versions,
+  // the job fixed to this match's JD) shown before a batch starts.
+  const [scoringReview, setScoringReview] = useState<{
+    jobId: string;
+    jobTitle: string;
+    candidates: MatchedCandidateWithVersions[];
+  } | null>(null);
+  // App-wide scoring progress popup — scoring started here is tracked there.
+  const scoringProgress = useScoringProgress();
 
   // Version selection for scoring (single candidate)
   const [showVersionSelectForScoring, setShowVersionSelectForScoring] = useState(false);
@@ -1041,7 +1222,7 @@ export default function AITalentMatchPage({
       candidateFilterExpMin, candidateFilterExpMax,
       candidateFilterDateFrom, candidateFilterDateTo,
       candidateSortBy, candidateSortOrder,
-      searchQuery, filterThreshold, filterPhone, filterLocation,
+      searchQuery, filterRatingBand, filterScored,
       filterExperienceMin, filterExperienceMax, sortBy,
       currentPage, itemsPerPage,
       // The cards -> list/candidates drill-in. Restored with the filters below
@@ -1098,9 +1279,8 @@ export default function AITalentMatchPage({
       if (s.candidateSortBy === 'score' || s.candidateSortBy === 'name' || s.candidateSortBy === 'jobs' || s.candidateSortBy === 'date') setCandidateSortBy(s.candidateSortBy);
       if (s.candidateSortOrder === 'asc' || s.candidateSortOrder === 'desc') setCandidateSortOrder(s.candidateSortOrder);
       if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
-      if (typeof s.filterThreshold === 'number') setFilterThreshold(s.filterThreshold);
-      if (typeof s.filterPhone === 'string') setFilterPhone(s.filterPhone);
-      if (typeof s.filterLocation === 'string') setFilterLocation(s.filterLocation);
+      if (s.filterRatingBand === 'all' || s.filterRatingBand === 'exact' || s.filterRatingBand === 'partial' || s.filterRatingBand === 'no_match') setFilterRatingBand(s.filterRatingBand);
+      if (s.filterScored === 'all' || s.filterScored === 'scored' || s.filterScored === 'not_scored') setFilterScored(s.filterScored);
       if (typeof s.filterExperienceMin === 'number' || s.filterExperienceMin === '') setFilterExperienceMin(s.filterExperienceMin as number | '');
       if (typeof s.filterExperienceMax === 'number' || s.filterExperienceMax === '') setFilterExperienceMax(s.filterExperienceMax as number | '');
       if (s.sortBy === 'rank' || s.sortBy === 'name' || s.sortBy === 'score' || s.sortBy === 'experience') setSortBy(s.sortBy);
@@ -1488,56 +1668,50 @@ export default function AITalentMatchPage({
      synchronous call right after that setter would otherwise still see the
      previous selection in this closure. Falls back to the current selection
      for the bulk toolbar's own "Score (n)" button. */
-  const handleSubmitToScoring = async (candidateIds?: string[]) => {
+  /**
+   * Every Score on this page — the toolbar, a row's Score Resume, the
+   * candidate roll-up and All Resumes — opens the shared Candidates Selected
+   * review first (the job fixed, versions pickable); its Score Resume then
+   * starts the batch. `ctx` names the candidates and job explicitly for
+   * callers that have just pointed the page at another session, whose state
+   * this closure can't see yet.
+   */
+  const handleSubmitToScoring = async (
+    candidateIds?: string[],
+    ctx?: { candidates: MatchedCandidateWithVersions[]; jobId: string; jobTitle: string },
+  ) => {
     const idsToScore = candidateIds ?? selectedCandidates;
     if (idsToScore.length === 0) {
       toast.warning('Please select at least one candidate to score');
       return;
     }
 
-    // Get the current candidates based on view mode
-    const currentCandidates = viewMode === 'results'
+    const currentCandidates = ctx?.candidates ?? (viewMode === 'results'
       ? matchedCandidates
-      : getResolvedHistoryCandidates(selectedHistoryItem);
+      : getResolvedHistoryCandidates(selectedHistoryItem));
+    const selected = currentCandidates.filter(c => idsToScore.includes(c.id) && !!c.resumeId);
 
-    // Get selected candidates data
-    const selected = currentCandidates.filter(c => idsToScore.includes(c.id));
-
-    // Get the job ID and title
-    const jobId = selectedJob || selectedHistoryItem?.jobId;
-    const jobTitle = selectedJobData?.title || selectedHistoryItem?.jobTitle || 'Job';
+    const jobId = ctx?.jobId ?? (selectedJob || selectedHistoryItem?.jobId);
+    const jobTitle = ctx?.jobTitle ?? (selectedJobData?.title || selectedHistoryItem?.jobTitle || 'Job');
 
     if (!jobId) {
       toast.error('Job ID not found');
       return;
     }
-
-    // SINGLE CANDIDATE: Show version selection popup
-    if (selected.length === 1) {
-      const candidate = selected[0];
-      if (!candidate.resumeId) {
-        toast.error('Resume ID not found for this candidate');
-        return;
-      }
-
-      // Fetch versions and show selection modal
-      setScoringCandidate(candidate);
-      setLoadingVersions(true);
-      setShowVersionSelectForScoring(true);
-
-      try {
-        const versions = await resumeService.getVersions(candidate.resumeId);
-        setScoringVersions(versions.data || versions || []);
-      } catch (error) {
-        console.error('Failed to fetch versions:', error);
-        setScoringVersions([]);
-      } finally {
-        setLoadingVersions(false);
-      }
+    if (selected.length === 0) {
+      toast.error('Resume ID not found for this candidate');
       return;
     }
 
-    // MULTIPLE CANDIDATES: Pre-check for already-scored resumes, then batch-score only new ones
+    setScoringReview({ jobId, jobTitle, candidates: selected });
+  };
+
+  /**
+   * Score these resumes against the job: skip the ones already scored for it,
+   * batch the rest, and hand off to Resume Scoring's common bulk-progress
+   * popup (`?batch_id=`). Each item's `resumeId` is the exact version to score.
+   */
+  const startBatchScoring = async (selected: Array<{ resumeId: string; name?: string }>, jobId: string, jobTitle: string) => {
     const resumeIds = selected.map(c => c.resumeId);
 
     try {
@@ -1569,36 +1743,35 @@ export default function AITalentMatchPage({
         candidateName: c.name || 'Unknown',
       }));
 
+      // Scoring lands on the JOB's own page (its Scored Resumes tab), not on
+      // Resume Scoring. Progress rides the app-wide scoring popup, which
+      // follows the user there.
+      const jobScoredResumesUrl = `/recruitment/job-details?id=${encodeURIComponent(jobId)}&tab=scored-resumes`;
+
       if (newResumeIds.length === 0) {
-        // All already scored - use pendingScoringData path (no batch needed)
-        const pendingData = {
-          jobId: jobId,
-          jobTitle: jobTitle,
-          resumeIds: [],
-          resumeNames: [],
-          alreadyScoredItems: alreadyScoredItems,
-        };
-        sessionStorage.setItem('pendingScoringData', JSON.stringify(pendingData));
-        router.push(`/recruitment/resume-scoring?jd_id=${jobId}&start_scoring=true`);
+        // All already scored — nothing to run; show them on the job's page.
+        toast.info(
+          `${alreadyScoredItems.length === 1 ? 'This resume is' : `All ${alreadyScoredItems.length} resumes are`} already scored for "${jobTitle}".`,
+        );
+        router.push(jobScoredResumesUrl);
         return;
       }
 
       // Start async bulk scoring via Celery for new resumes only
       const response = await scoringService.startBulkScoringAsync(jobId, newResumeIds);
 
-      // Store batch info including already-scored items for progress display
-      const scoringData = {
+      trackScoringBatch(scoringProgress, {
         batchId: response.batch_id,
-        jobId: response.jd_id,
-        jobTitle: response.jd_title,
-        totalResumes: response.total_resumes + alreadyScoredItems.length,
-        resumeItems: resumeItems,
-        alreadyScoredItems: alreadyScoredItems,
-      };
-      sessionStorage.setItem('pendingScoringBatch', JSON.stringify(scoringData));
-
-      // Navigate to resume scoring page with batch_id to show progress
-      router.push(`/recruitment/resume-scoring?batch_id=${response.batch_id}`);
+        jobId: response.jd_id || jobId,
+        jobTitle: response.jd_title || jobTitle,
+        items: resumeItems,
+        returnUrl: jobScoredResumesUrl,
+      });
+      toast.success(
+        `Scoring started for ${newResumeIds.length} resume${newResumeIds.length === 1 ? '' : 's'}` +
+        (alreadyScoredItems.length > 0 ? ` (${alreadyScoredItems.length} already scored)` : '') + '.',
+      );
+      router.push(jobScoredResumesUrl);
     } catch (error: any) {
       console.error('Failed to start scoring:', error);
       toast.error(error.message || 'Failed to start scoring');
@@ -1721,6 +1894,7 @@ export default function AITalentMatchPage({
       setSelectedCandidates([]);
       setPrefilledCandidates([]);
       setPendingInviteRecipients(null);
+      setPendingInviteJobId(null);
     } catch (error: any) {
       console.error('Failed to send invitations:', error);
       toast.error(error.message || 'Failed to send invitations');
@@ -1769,31 +1943,33 @@ export default function AITalentMatchPage({
 
     const filtered = candidates.filter(candidate => {
       // Existing filters
-      const matchesThreshold = toMatchRating(candidate.matchScore) >= filterThreshold;
-      const matchesSearch = searchQuery === '' ||
-        candidate.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        candidate.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (candidate.email && candidate.email.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        candidate.skills.some(skill => skill.toLowerCase().includes(searchQuery.toLowerCase()));
-
-      // Phone filter (normalize phone numbers - remove special chars)
-      const matchesPhone = filterPhone === '' ||
-        (candidate.phone && (
-          candidate.phone.toLowerCase().includes(filterPhone.toLowerCase()) ||
-          candidate.phone.replace(/[^0-9]/g, '').includes(filterPhone.replace(/[^0-9]/g, ''))
-        ));
-
-      // Location filter
-      const matchesLocation = filterLocation === '' ||
-        (candidate.location && candidate.location.toLowerCase().includes(filterLocation.toLowerCase()));
+      const matchesThreshold = filterRatingBand === 'all' ||
+        matchBandForRating(toMatchRating(candidate.matchScore)) === filterRatingBand;
+      // One search box covers name, title, email, phone, location and skills
+      // — the same single-search pattern as the other candidate lists. Phone
+      // also matches on digits alone, so "90000 11223" finds "+91 90000-11223".
+      const query = searchQuery.trim().toLowerCase();
+      const queryDigits = query.replace(/[^0-9]/g, '');
+      const matchesSearch = query === '' ||
+        candidate.name.toLowerCase().includes(query) ||
+        candidate.title.toLowerCase().includes(query) ||
+        (!!candidate.email && candidate.email.toLowerCase().includes(query)) ||
+        (!!candidate.phone && (
+          candidate.phone.toLowerCase().includes(query) ||
+          (queryDigits.length >= 3 && candidate.phone.replace(/[^0-9]/g, '').includes(queryDigits))
+        )) ||
+        (!!candidate.location && candidate.location.toLowerCase().includes(query)) ||
+        candidate.skills.some(skill => skill.toLowerCase().includes(query));
 
       // Experience filter
       const candidateExp = candidate.experience ? parseFloat(candidate.experience) : 0;
       const matchesExperienceMin = filterExperienceMin === '' || candidateExp >= filterExperienceMin;
       const matchesExperienceMax = filterExperienceMax === '' || candidateExp <= filterExperienceMax;
 
-      return matchesThreshold && matchesSearch && matchesPhone && matchesLocation &&
-             matchesExperienceMin && matchesExperienceMax;
+      const isScored = !!candidate.resumeId && scoredResumeIds.has(candidate.resumeId);
+      const matchesScored = filterScored === 'all' || (filterScored === 'scored' ? isScored : !isScored);
+
+      return matchesThreshold && matchesSearch && matchesScored && matchesExperienceMin && matchesExperienceMax;
     });
 
     // Sort by selected option
@@ -1822,8 +1998,8 @@ export default function AITalentMatchPage({
 
   // Memoized filtered candidates for pagination calculations
   const filteredCandidatesMemo = useMemo(() => getFilteredCandidates(), [
-    viewMode, matchedCandidates, selectedHistoryItem, filterThreshold, searchQuery,
-    filterPhone, filterLocation, filterExperienceMin, filterExperienceMax, sortBy
+    viewMode, matchedCandidates, selectedHistoryItem, filterRatingBand, searchQuery,
+    filterScored, scoredResumeIds, filterExperienceMin, filterExperienceMax, sortBy
   ]);
 
   // Calculate pagination values
@@ -1840,7 +2016,7 @@ export default function AITalentMatchPage({
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, filterThreshold, filterPhone, filterLocation, filterExperienceMin, filterExperienceMax, sortBy, selectedHistoryItem, viewMode]);
+  }, [searchQuery, filterRatingBand, filterScored, filterExperienceMin, filterExperienceMax, sortBy, selectedHistoryItem, viewMode]);
 
   // Handle page change
   const handlePageChange = (page: number) => {
@@ -1946,6 +2122,52 @@ export default function AITalentMatchPage({
      in EVERY view branch below that offers the action (history, results and
      the default view): each branch returns its own tree, so a dialog placed in
      only one of them never opened from the others. */
+  /* The Score review — the shared Candidates Selected dialog (Score Resume
+     mode) with the job fixed: untick to drop, the eye to pick another resume
+     version, then Score Resume starts the batch. Rendered in every view
+     branch below, beside the invite dialogs. */
+  const reviewJobRecord = scoringReview ? jobs.find(j => j.id === scoringReview.jobId) : undefined;
+  const reviewLineageEntry = scoringReview
+    ? Object.values(lineageByJob).flat().find(v => v.id === scoringReview.jobId)
+    : undefined;
+  const scoringReviewDialog = scoringReview && (
+    <ApplyToJobModal
+      mode="scoring"
+      resumes={scoringReview.candidates.map(c => ({
+        id: c.resumeId,
+        name: c.name || 'Unknown',
+        title: c.title,
+        email: c.email,
+        phone: c.phone,
+        versionCount: c.attachmentCount || c.versions?.length || 1,
+      }) as unknown as Resume)}
+      fixedJob={{
+        id: scoringReview.jobId,
+        job_id: reviewJobRecord?.jobId || reviewLineageEntry?.job_id,
+        title: reviewJobRecord?.title || reviewLineageEntry?.title || scoringReview.jobTitle,
+        status: 'Published',
+        location: reviewJobRecord?.location || '',
+        daysActive: 0,
+        requiredMatch: 70,
+        applicants: 0,
+        skills: [],
+        versionNumber: reviewLineageEntry?.version_number ?? reviewJobRecord?.currentVersion,
+      } as SharedJob}
+      onClose={() => setScoringReview(null)}
+      onApply={(resumeIds, _jobIds, _jobs, sourceResumeIds) => {
+        const review = scoringReview;
+        setScoringReview(null);
+        const nameFor = (index: number) =>
+          review.candidates.find(c => c.resumeId === (sourceResumeIds?.[index] ?? resumeIds[index]))?.name;
+        void startBatchScoring(
+          resumeIds.map((resumeId, index) => ({ resumeId, name: nameFor(index) })),
+          review.jobId,
+          review.jobTitle,
+        );
+      }}
+    />
+  );
+
   const aiInviteDialog = (
     <InviteToAIInterviewFlow
       open={!!aiInviteFlow}
@@ -1987,6 +2209,7 @@ export default function AITalentMatchPage({
                 setIsAssessmentModalOpen(false);
                 setSelectedAssessments([]);
                 setPendingInviteRecipients(null);
+                setPendingInviteJobId(null);
               }}
               assessments={assessments}
               multiple
@@ -2001,7 +2224,9 @@ export default function AITalentMatchPage({
                  Invite AI Interview dialog is scoped to — so this opens on that
                  job's assessment versions. None for the cross-job All Resumes
                  selection, which gets the full list. */
-              jobId={pendingInviteRecipients ? undefined : (selectedJob || selectedHistoryItem?.jobId || undefined)}
+              jobId={pendingInviteRecipients
+                ? (pendingInviteJobId ?? undefined)
+                : (selectedJob || selectedHistoryItem?.jobId || undefined)}
             />
           );
         })()}
@@ -2292,18 +2517,23 @@ export default function AITalentMatchPage({
        state (selectedJob/selectedHistoryItem) rather than a parameter. */
     const handleScoreSelectedAllResumes = async () => {
       if (selectedAllResumeEntries.length === 0) return;
-      for (const group of selectedAllResumeJobGroups) {
-        const item = matchHistory.find(h => h.id === group.historyId);
-        if (!item) continue;
-        const candidates = await loadHistoryCandidates(item);
-        const ids = group.entries
-          .map(({ job }) => candidates.find(c => c.resumeId === job.resumeId)?.id)
-          .filter((id): id is string => !!id);
-        if (ids.length === 0) continue;
-        setSelectedHistoryItem(item);
-        setSelectedJob(item.jobId);
-        await handleSubmitToScoring(ids);
+      // Scoring is against one job, and the review shows that job — so, as
+      // with AI Interview invites, a selection spanning jobs is narrowed first.
+      if (selectedAllResumeJobGroups.length > 1) {
+        toast.error('Scoring is per job — select candidates for one job at a time.');
+        return;
       }
+      const group = selectedAllResumeJobGroups[0];
+      const item = group && matchHistory.find(h => h.id === group.historyId);
+      if (!item) return;
+      const candidates = await loadHistoryCandidates(item);
+      const ids = group.entries
+        .map(({ job }) => candidates.find(c => c.resumeId === job.resumeId)?.id)
+        .filter((id): id is string => !!id);
+      if (ids.length === 0) return;
+      setSelectedHistoryItem(item);
+      setSelectedJob(item.jobId);
+      await handleSubmitToScoring(ids, { candidates, jobId: item.jobId, jobTitle: item.jobTitle });
     };
 
     /* "Invite Assessment" from the All Resumes selection. Assessments aren't
@@ -2335,6 +2565,7 @@ export default function AITalentMatchPage({
         return;
       }
       setPendingInviteRecipients(recipients);
+      setPendingInviteJobId(null); // cross-job selection — full assessment list
       // handleAssessment only reads its argument to check "is anything
       // selected" — the real recipient list is the override just above —
       // so any non-empty placeholder satisfies that check.
@@ -2924,7 +3155,7 @@ export default function AITalentMatchPage({
                                           </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
-                                          {sortedJobs.map(job => {
+                                          {pageCandidateJobs(row.key, sortedJobs).map(job => {
                                             // Who ran the match comes from the session's `run_by_name`
                                             // (ai_talent_match_sessions.run_by); 'System' is only the
                                             // fallback for a run with no resolvable user.
@@ -2989,6 +3220,24 @@ export default function AITalentMatchPage({
                                                         <ClipboardList className="w-4 h-4 text-menu-icon-score" />
                                                         <span className={MENU_ITEM_SCALE_CLASS}>Score Resume</span>
                                                       </DropdownMenuItem>
+                                                      <DropdownMenuItem
+                                                        className={`${actionsMenuItemClass} ${!canCreateAssessments ? 'opacity-50' : ''}`}
+                                                        disabled={!row.email}
+                                                        title={!canCreateAssessments ? 'You do not have permission to invite to an assessment' : !row.email ? 'Candidate has no email on file' : undefined}
+                                                        onSelect={() => inviteAssessmentForJobMatch(row, job)}
+                                                      >
+                                                        <FileText className="w-4 h-4 text-menu-icon-view" />
+                                                        <span className={MENU_ITEM_SCALE_CLASS}>Invite Assessment</span>
+                                                      </DropdownMenuItem>
+                                                      <DropdownMenuItem
+                                                        className={`${actionsMenuItemClass} ${!canCreateAIInterviews ? 'opacity-50' : ''}`}
+                                                        disabled={!row.email}
+                                                        title={!canCreateAIInterviews ? 'You do not have permission to invite to an AI interview' : !row.email ? 'Candidate has no email on file' : undefined}
+                                                        onSelect={() => inviteAIInterviewForJobMatch(row, job)}
+                                                      >
+                                                        <Video className="w-4 h-4 text-menu-icon-share" />
+                                                        <span className={MENU_ITEM_SCALE_CLASS}>Invite AI Interview</span>
+                                                      </DropdownMenuItem>
                                                     </DropdownMenuContent>
                                                   </DropdownMenu>
                                                 </td>
@@ -2997,6 +3246,17 @@ export default function AITalentMatchPage({
                                           })}
                                         </tbody>
                                       </table>
+                                      {/* Paged on its own — a candidate matched to
+                                          dozens of jobs otherwise unrolls them all. */}
+                                      <ListPagination
+                                        compact
+                                        currentPage={candidateJobsPageOf(row.key).page}
+                                        itemsPerPage={candidateJobsPageOf(row.key).size}
+                                        totalItems={sortedJobs.length}
+                                        onPageChange={(page) => setCandidateJobsPage(row.key, page)}
+                                        onItemsPerPageChange={(size) => setCandidateJobsSize(row.key, size)}
+                                        itemLabel="matched jobs"
+                                      />
                                     </div>
                                   </td>
                                 </tr>
@@ -3099,7 +3359,7 @@ export default function AITalentMatchPage({
 
                         {isExpanded && (
                           <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-800 space-y-2">
-                            {sortedJobs.map(job => (
+                            {pageCandidateJobs(row.key, sortedJobs).map(job => (
                               <div key={job.historyId} className="flex items-center justify-between gap-2">
                                 <div className="min-w-0">
                                   <div className="text-sm text-gray-700 dark:text-slate-300 truncate">{job.jobTitle}</div>
@@ -3120,6 +3380,15 @@ export default function AITalentMatchPage({
                                 </button>
                               </div>
                             ))}
+                            <ListPagination
+                              compact
+                              currentPage={candidateJobsPageOf(row.key).page}
+                              itemsPerPage={candidateJobsPageOf(row.key).size}
+                              totalItems={sortedJobs.length}
+                              onPageChange={(page) => setCandidateJobsPage(row.key, page)}
+                              onItemsPerPageChange={(size) => setCandidateJobsSize(row.key, size)}
+                              itemLabel="matched jobs"
+                            />
                           </div>
                         )}
                       </div>
@@ -3251,7 +3520,10 @@ export default function AITalentMatchPage({
                 ))}
 
                 {selectedAllResumeEntries.length > 0 && (
-                  <div className="flex flex-wrap items-center gap-2">
+                  /* The selection's actions, set apart from the view pills by
+                     a divider so they don't read as one more filter. */
+                  <div className="flex flex-wrap items-center gap-2 sm:ml-1">
+                    <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-300 dark:bg-slate-600 mr-1" />
                     <Button
                       variant="secondary"
                       size="sm"
@@ -3791,6 +4063,25 @@ export default function AITalentMatchPage({
                                   <ClipboardList className="w-4 h-4 text-menu-icon-score" />
                                   <span className={MENU_ITEM_SCALE_CLASS}>Score Resume</span>
                                 </DropdownMenuItem>
+                                {/* Same two invites as View by Candidates' per-job menu. */}
+                                <DropdownMenuItem
+                                  className={`${actionsMenuItemClass} ${!canCreateAssessments ? 'opacity-50' : ''}`}
+                                  disabled={!row.email}
+                                  title={!canCreateAssessments ? 'You do not have permission to invite to an assessment' : !row.email ? 'Candidate has no email on file' : undefined}
+                                  onSelect={() => inviteAssessmentForJobMatch(row, job)}
+                                >
+                                  <FileText className="w-4 h-4 text-menu-icon-view" />
+                                  <span className={MENU_ITEM_SCALE_CLASS}>Invite Assessment</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  className={`${actionsMenuItemClass} ${!canCreateAIInterviews ? 'opacity-50' : ''}`}
+                                  disabled={!row.email}
+                                  title={!canCreateAIInterviews ? 'You do not have permission to invite to an AI interview' : !row.email ? 'Candidate has no email on file' : undefined}
+                                  onSelect={() => inviteAIInterviewForJobMatch(row, job)}
+                                >
+                                  <Video className="w-4 h-4 text-menu-icon-share" />
+                                  <span className={MENU_ITEM_SCALE_CLASS}>Invite AI Interview</span>
+                                </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </td>
@@ -4076,12 +4367,8 @@ export default function AITalentMatchPage({
         {/* History List */}
         {filteredHistory.length > 0 ? (
           <>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-0 mb-3">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-base sm:text-lg text-gray-900 dark:text-slate-50 font-medium">Matched Jobs ({filteredHistory.length})</h2>
-              </div>
-              <p className="text-sm text-gray-600 dark:text-slate-400">Click any job to view matched candidates</p>
-            </div>
+            {/* No "Matched Jobs (N)" heading — the toolbar's count badge
+                already says how many jobs are listed. */}
             <div className="grid grid-cols-1 gap-3 sm:gap-4">
             {sortedHistory.slice((historyCurrentPage - 1) * historyItemsPerPage, historyCurrentPage * historyItemsPerPage).map((item) => {
               const jobData = jobs.find(j => j.id === item.jobId);
@@ -4212,6 +4499,13 @@ export default function AITalentMatchPage({
                           <User className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                           Matched by {item.matchedByName || 'System'}
                         </span>
+                        {/* Applicants — the same chip the Job Descriptions cards show. */}
+                        {jobData && (
+                          <span className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
+                            <Users className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                            {jobData.applicants} {jobData.applicants === 1 ? 'applicant' : 'applicants'}
+                          </span>
+                        )}
                         {/* The result gets the tinted chip, exactly as the
                             "N candidates scored" chip does on the reference. */}
                         {/* A run that found nobody still counts as a matched job
@@ -4509,11 +4803,32 @@ export default function AITalentMatchPage({
         const filterInputClass = 'w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black dark:text-slate-100 bg-white dark:bg-slate-900';
         const filterLabelClass = 'block text-xs font-medium text-gray-600 dark:text-slate-400 mb-1';
 
-        const distributionRows: { label: string; value: number; barClass: string; textClass: string }[] = [
-          { label: 'Rating 10', value: exactCount, barClass: 'bg-success', textClass: 'text-success' },
-          { label: 'Rating 9 – 7', value: partialCount, barClass: 'bg-brand-orange', textClass: 'text-brand-orange-deep' },
-          { label: 'Below 7', value: noMatchCount, barClass: 'bg-destructive', textClass: 'text-destructive' },
+        const distributionRows: { label: string; band: 'exact' | 'partial' | 'no_match'; value: number; barClass: string; textClass: string; fillClass: string }[] = [
+          { label: 'Rating 10', band: 'exact', value: exactCount, barClass: 'bg-success', textClass: 'text-success', fillClass: 'fill-success' },
+          { label: 'Rating 9 – 7', band: 'partial', value: partialCount, barClass: 'bg-brand-orange', textClass: 'text-brand-orange-deep', fillClass: 'fill-brand-orange' },
+          { label: 'Below 7', band: 'no_match', value: noMatchCount, barClass: 'bg-destructive', textClass: 'text-destructive', fillClass: 'fill-destructive' },
         ];
+        const ratingPct = (value: number) => totalMatched > 0 ? Math.round((value / totalMatched) * 100) : 0;
+
+        // Rating Breakdown donut — every version, or the one picked in its
+        // own dropdown. The distribution bars stay all-versions, so the two
+        // cards answer different questions. A picked version that's gone
+        // (refresh) falls back to all.
+        const breakdownVersion = historyBreakdownVersion === 'all'
+          ? undefined
+          : versionList.find(v => v.session.id === historyBreakdownVersion);
+        const breakdownResults = breakdownVersion ? (breakdownVersion.session.results || []) : allResults;
+        const breakdownTotal = breakdownVersion
+          ? (breakdownVersion.session.total_matches ?? breakdownResults.length)
+          : totalMatched;
+        const breakdownRows = distributionRows.map(row => ({
+          ...row,
+          value: breakdownVersion
+            ? breakdownResults.filter(r => matchBandForRating(ratingFor(r)) === row.band).length
+            : row.value,
+        }));
+        const pieSegments = breakdownRows.filter(row => row.value > 0);
+        const breakdownPct = (value: number) => breakdownTotal > 0 ? Math.round((value / breakdownTotal) * 100) : 0;
 
         // Single action: jump straight to this version's match results — no
         // dropdown, so the Action column reads the same one-click way as the
@@ -4739,7 +5054,7 @@ export default function AITalentMatchPage({
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 items-start">
+                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 items-stretch">
                       {/* Version table — Rating Breakdown gives each version's
                           10 / 9-7 / Below 7 split alongside its candidate count.
                           Fixed height (not a cap) — matching the sidebar next
@@ -4870,31 +5185,108 @@ export default function AITalentMatchPage({
                             );
                           })}
                         </div>
+
+                        {/* Distribution across every version, always
+                            unfiltered (its own heading says so). */}
+                        <div className="mt-4 rounded-xl border border-gray-200 dark:border-slate-700 p-4">
+                          <div className="flex items-center justify-between mb-1">
+                            <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Rating Distribution (All Versions)</h4>
+                            <BarChart3 className="w-4 h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
+                          </div>
+                          <p className="text-xs text-gray-500 dark:text-slate-500 mb-3">Total candidates: {totalMatched}</p>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-3">
+                            {distributionRows.map(row => {
+                              const pct = ratingPct(row.value);
+                              return (
+                                <div key={row.label}>
+                                  <div className="flex items-center justify-between text-xs text-gray-600 dark:text-slate-400 mb-1">
+                                    <span>{row.label}</span>
+                                    <span className={`font-medium ${row.textClass}`}>{row.value} ({pct}%)</span>
+                                  </div>
+                                  <div className="h-2 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden">
+                                    <div className={`h-full rounded-full ${row.barClass}`} style={{ width: `${pct}%` }} />
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
                       </div>
 
-                      {/* Sidebar — distribution across every version, always
-                          unfiltered (its own heading says so). */}
-                      <div className="rounded-xl border border-gray-200 dark:border-slate-700 p-4">
-                        <div className="flex items-center justify-between mb-1">
-                          <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Rating Distribution (All Versions)</h4>
-                          <BarChart3 className="w-4 h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
+                      {/* Rating breakdown donut + legend — same treatment as the
+                          Assessment / AI Interview version history popups.
+                          Static: the centre always shows the total, and the
+                          legend carries every count so colour is never the
+                          only cue. */}
+                      <div className="rounded-xl border border-gray-200 dark:border-slate-700 p-4 flex flex-col">
+                        <div className="flex items-center justify-between gap-2 mb-3">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="w-8 h-8 rounded-lg bg-brand-blue/10 text-brand-blue flex items-center justify-center flex-shrink-0">
+                              <PieChart className="w-4 h-4" />
+                            </div>
+                            <span className="text-sm font-semibold text-gray-900 dark:text-slate-50 truncate">Rating Breakdown</span>
+                          </div>
+                          <select
+                            value={breakdownVersion ? breakdownVersion.session.id : 'all'}
+                            onChange={(e) => setHistoryBreakdownVersion(e.target.value)}
+                            aria-label="Rating breakdown version"
+                            className="text-xs px-2 py-1.5 border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 flex-shrink-0"
+                          >
+                            <option value="all">All Versions</option>
+                            {versionList.map(v => (
+                              <option key={v.session.id} value={v.session.id}>v{v.versionNumber}</option>
+                            ))}
+                          </select>
                         </div>
-                        <p className="text-xs text-gray-500 dark:text-slate-500 mb-3">Total candidates: {totalMatched}</p>
-                        <div className="space-y-3">
-                          {distributionRows.map(row => {
-                            const pct = totalMatched > 0 ? Math.round((row.value / totalMatched) * 100) : 0;
-                            return (
-                              <div key={row.label}>
-                                <div className="flex items-center justify-between text-xs text-gray-600 dark:text-slate-400 mb-1">
-                                  <span>{row.label}</span>
-                                  <span className={`font-medium ${row.textClass}`}>{row.value} ({pct}%)</span>
-                                </div>
-                                <div className="h-2 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden">
-                                  <div className={`h-full rounded-full ${row.barClass}`} style={{ width: `${pct}%` }} />
-                                </div>
-                              </div>
-                            );
-                          })}
+                        <div className="flex flex-col items-center gap-4 flex-1 justify-center">
+                          <div className="relative w-[210px] h-[210px] shrink-0">
+                            {pieSegments.length > 0 ? (
+                              <ResponsiveContainer width="100%" height="100%">
+                                <RechartsPieChart>
+                                  <Pie
+                                    data={pieSegments.map(row => ({ name: row.label, value: row.value }))}
+                                    dataKey="value"
+                                    nameKey="name"
+                                    innerRadius="66%"
+                                    outerRadius="100%"
+                                    startAngle={90}
+                                    endAngle={-270}
+                                    paddingAngle={pieSegments.length > 1 ? 2 : 0}
+                                    cornerRadius={3}
+                                    stroke="none"
+                                    isAnimationActive={false}
+                                  >
+                                    {pieSegments.map(row => (
+                                      <Cell key={row.label} className={`${row.fillClass} outline-none pointer-events-none`} />
+                                    ))}
+                                  </Pie>
+                                </RechartsPieChart>
+                              </ResponsiveContainer>
+                            ) : (
+                              <div className="w-full h-full rounded-full border-[22px] border-slate-100 dark:border-slate-800" />
+                            )}
+                            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center">
+                              <span className="text-3xl font-bold tabular-nums text-gray-900 dark:text-slate-50 leading-none">{breakdownTotal}</span>
+                              <span className="text-xs text-gray-500 dark:text-slate-400 mt-1 leading-tight">Total<br />Candidates</span>
+                            </div>
+                          </div>
+                          {/* Legend: names in the left half, values in the right
+                              half, split by one common line down the centre. */}
+                          <ul className="relative w-full space-y-1.5 text-sm">
+                            <li className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 !mt-0 bg-gray-200 dark:bg-slate-700" aria-hidden />
+                            {breakdownRows.map(row => (
+                              <li key={row.label} className="grid grid-cols-2 items-center rounded">
+                                <span className="flex items-center gap-2 min-w-0 pl-1 pr-3">
+                                  <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${row.barClass}`} />
+                                  <span className="truncate text-gray-600 dark:text-slate-400">{row.label}</span>
+                                </span>
+                                <span className="flex items-baseline gap-1.5 pl-3 pr-1">
+                                  <span className="tabular-nums font-semibold text-gray-900 dark:text-slate-100">{row.value}</span>
+                                  <span className="tabular-nums text-xs text-gray-500 dark:text-slate-400">({breakdownPct(row.value)}%)</span>
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
                         </div>
                       </div>
                     </div>
@@ -4914,6 +5306,7 @@ export default function AITalentMatchPage({
       })()}
 
       {aiInviteDialog}
+      {scoringReviewDialog}
       {assessmentInviteDialogs}
       </>
     );
@@ -4924,35 +5317,140 @@ export default function AITalentMatchPage({
     const filteredCandidates = filteredCandidatesMemo;
     const paginatedCandidates = getPaginatedCandidates();
 
+    // ── JD version dropdown ──
+    // Every version of this job, from the lineage; the ones with a match run
+    // open that version's latest run, the rest are listed but disabled.
+    const resultsHistoryKey = historyKeyForJd(selectedJob);
+    const resultsLineage = lineageByJob[resultsHistoryKey] ?? [];
+    const resultsLineageEntry = resultsLineage.find(v => v.id === selectedJob);
+    const resultsJobTitle = selectedJobData?.title
+      || resultsLineageEntry?.title
+      || selectedHistoryItem?.jobTitle
+      || matchHistory.find(item => item.jobId === selectedJob)?.jobTitle
+      || '';
+    const resultsJobCode = selectedJobData?.jobId || resultsLineageEntry?.job_id;
+    const resultsVersionNumber = resultsLineageEntry?.version_number ?? selectedJobData?.currentVersion;
+    const resultsJobStatus = (resultsLineageEntry?.status || selectedJobData?.status || '').toLowerCase();
+    const canRunAgainHere = resultsJobStatus !== 'disabled' && resultsJobStatus !== 'archived';
+
+    const matchedVersionOptions: { jdId: string; number: number; matchedAt?: Date; session?: AIMatchSessionVersion['session'] }[] = (historyVersionsByJob[resultsHistoryKey] ?? [])
+      .filter(v => !!v.session.jd_id)
+      .map(v => ({
+        jdId: v.session.jd_id as string,
+        number: resultsLineage.find(l => l.id === v.session.jd_id)?.version_number ?? v.versionNumber,
+        // The run on screen for the current version, else the version's latest.
+        matchedAt: v.session.jd_id === selectedJob && selectedHistoryItem
+          ? new Date(selectedHistoryItem.matchedAt)
+          : new Date(v.session.created_at),
+        session: v.session,
+      }));
+    // A run made moments ago may not be in the cached versions yet — the
+    // version on screen is always offered.
+    if (selectedJob && !matchedVersionOptions.some(o => o.jdId === selectedJob) && resultsVersionNumber) {
+      matchedVersionOptions.push({
+        jdId: selectedJob,
+        number: resultsVersionNumber,
+        matchedAt: selectedHistoryItem ? new Date(selectedHistoryItem.matchedAt) : undefined,
+      });
+    }
+    const unmatchedVersionOptions = resultsLineage
+      .filter(l => !matchedVersionOptions.some(o => o.jdId === l.id))
+      .map(l => ({ jdId: l.id, number: l.version_number, matchedAt: undefined }));
+    // Each version's JD status in the app's shared vocabulary and colours
+    // (Published / Republished / Draft / Disabled / Archived…), from the
+    // lineage, else the job list for a version the lineage hasn't covered.
+    const versionStatusLabel = (jdId: string, number: number): string | undefined => {
+      const raw = resultsLineage.find(l => l.id === jdId)?.status || jobs.find(j => j.id === jdId)?.status;
+      if (!raw) return undefined;
+      return getDisplayStatus(raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase(), number);
+    };
+    const versionDropdownOptions = [
+      ...matchedVersionOptions.map(o => ({ ...o, matched: true as const })),
+      ...unmatchedVersionOptions.map(o => ({ ...o, matched: false as const })),
+    ]
+      .map(o => ({ ...o, statusLabel: versionStatusLabel(o.jdId, o.number) }))
+      .sort((a, b) => b.number - a.number);
+
+    // Reset what belongs to the previous list — selection, search, filters —
+    // then open the target the same way a list click does. `replace` keeps
+    // Back pointed at the list.
+    const switchResultsTo = (item: MatchHistory, jdId: string) => {
+      userChangedView.current = true; // Prevent useEffect from resetting view
+      setSelectedCandidates([]);
+      setSearchQuery('');
+      setFilterRatingBand('all');
+      setFilterScored('all');
+      setFilterExperienceMin('');
+      setFilterExperienceMax('');
+      openMatchResults(item, jdId);
+      updateUrlParams({ jdId, view: 'results' }, { replace: true });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+    const handleResultsVersionChange = (jdId: string) => {
+      if (jdId === selectedJob) return;
+      const option = matchedVersionOptions.find(o => o.jdId === jdId);
+      if (!option?.session) return;
+      const lineageEntry = resultsLineage.find(l => l.id === jdId);
+      switchResultsTo({
+        id: option.session.id,
+        jobId: jdId,
+        jobTitle: jobs.find(j => j.id === jdId)?.title || lineageEntry?.title || resultsJobTitle,
+        matchedAt: new Date(option.session.created_at),
+        totalMatches: option.session.total_matches,
+        matchedCandidates: [],
+        matchedByName: option.session.created_by_name || undefined,
+      }, jdId);
+    };
+
+    // ── Previous / Next job ──
+    // Walks the Matched Jobs list in the order it is shown — search, filters
+    // and sort applied, across every page, not just the visible one. Resolved
+    // by id at render time since that list can reorder as candidates load.
+    const currentListIndex = (() => {
+      let index = selectedHistoryItem ? sortedHistory.findIndex(item => item.id === selectedHistoryItem.id) : -1;
+      if (index < 0) index = sortedHistory.findIndex(item => item.jobId === selectedJob);
+      // Viewing another version of a listed job (via the dropdown).
+      if (index < 0) index = sortedHistory.findIndex(item => historyKeyForJd(item.jobId) === resultsHistoryKey);
+      return index;
+    })();
+    const prevJobItem = currentListIndex > 0 ? sortedHistory[currentListIndex - 1] : undefined;
+    const nextJobItem = currentListIndex >= 0 && currentListIndex < sortedHistory.length - 1
+      ? sortedHistory[currentListIndex + 1]
+      : undefined;
+    const showJobNavigation = currentListIndex >= 0 && sortedHistory.length > 1;
+
+    // Filters narrowing the list — the More Filters badge (sort excluded).
+    const resultsActiveFilterCount =
+      (filterRatingBand !== 'all' ? 1 : 0) +
+      (filterScored !== 'all' ? 1 : 0) +
+      (filterExperienceMin !== '' || filterExperienceMax !== '' ? 1 : 0);
+
     // One Export for both states, same as ScoredResumesTable: exports the
     // selection when there is one, otherwise every currently filtered row.
-    const handleExportCandidates = () => {
-      const dataToExport = selectedCandidates.length > 0
-        ? filteredCandidates.filter(c => selectedCandidates.includes(c.id))
-        : filteredCandidates;
-      if (dataToExport.length === 0) {
-        toast.error('No candidates to export');
-        return;
-      }
-      const jobTitle = selectedJobData?.title || selectedHistoryItem?.jobTitle || 'Candidates';
-      const jobVersion = selectedJobData?.currentVersion ? `v${selectedJobData.currentVersion}` : '-';
-      const columns: ExportColumn[] = [
-        { key: 'rank', header: 'Matched Rating' },
-        { key: 'name', header: 'Candidate Name' },
-        { key: 'jobTitle', header: 'Job Title' },
-        { key: 'jobVersion', header: 'Job Version' },
-        { key: 'email', header: 'Email' },
-        { key: 'phone', header: 'Phone' },
-        { key: 'location', header: 'Location' },
-        { key: 'skills', header: 'Skills' },
-        { key: 'experience', header: 'Experience' },
-        { key: 'uploadedBy', header: 'Uploaded By' },
-        { key: 'uploadDate', header: 'Uploaded Date' },
-        { key: 'resumeVersion', header: 'Resume Version' },
-        { key: 'attachments', header: 'Attachments' },
-        { key: 'scoredStatus', header: 'Scored Status' },
-      ];
-      const rows = dataToExport.map(c => ({
+    // The button opens the CSV / Excel picker; the picker writes the file.
+    const candidatesToExport = selectedCandidates.length > 0
+      ? filteredCandidates.filter(c => selectedCandidates.includes(c.id))
+      : filteredCandidates;
+    const candidateExportColumns: ExportColumn[] = [
+      { key: 'rank', header: 'Matched Rating' },
+      { key: 'name', header: 'Candidate Name' },
+      { key: 'jobTitle', header: 'Job Title' },
+      { key: 'jobVersion', header: 'Job Version' },
+      { key: 'email', header: 'Email' },
+      { key: 'phone', header: 'Phone' },
+      { key: 'location', header: 'Location' },
+      { key: 'skills', header: 'Skills' },
+      { key: 'experience', header: 'Experience' },
+      { key: 'uploadedBy', header: 'Uploaded By' },
+      { key: 'uploadDate', header: 'Uploaded Date' },
+      { key: 'resumeVersion', header: 'Resume Version' },
+      { key: 'attachments', header: 'Attachments' },
+      { key: 'scoredStatus', header: 'Scored Status' },
+    ];
+    const handleExportCandidates = async (format: 'csv' | 'xlsx') => {
+      const jobTitle = resultsJobTitle || 'Candidates';
+      const jobVersion = resultsVersionNumber ? `v${resultsVersionNumber}` : '-';
+      const rows = candidatesToExport.map(c => ({
         rank: c.rank ?? '-',
         name: c.name || 'Unknown',
         jobTitle,
@@ -4970,8 +5468,11 @@ export default function AITalentMatchPage({
       }));
       const filenameSafeTitle = jobTitle.replace(/\s+/g, '_');
       const dateStamp = new Date().toISOString().slice(0, 10);
-      exportToCSV(rows, columns, `AI_Talent_Match_${filenameSafeTitle}_${dateStamp}`);
-      toast.success(`Exported ${rows.length} candidate${rows.length !== 1 ? 's' : ''} to CSV`);
+      await exportData(format, rows, candidateExportColumns, `AI_Talent_Match_${filenameSafeTitle}_${dateStamp}`, {
+        sheetName: 'AI Talent Match',
+        title: `${jobTitle} - AI Talent Match`,
+      });
+      toast.success(`Exported ${rows.length} candidate${rows.length !== 1 ? 's' : ''} to ${format === 'xlsx' ? 'Excel' : 'CSV'}`);
     };
     const excellentCount = matchedCandidates.filter(c => c.matchScore >= 85).length;
     const goodCount = matchedCandidates.filter(c => c.matchScore >= 70 && c.matchScore < 85).length;
@@ -4984,7 +5485,37 @@ export default function AITalentMatchPage({
     return (
       <>
       {aiInviteDialog}
+      {scoringReviewDialog}
       {assessmentInviteDialogs}
+      <ExportFormatModal
+        open={showCandidateExportModal}
+        onClose={() => setShowCandidateExportModal(false)}
+        title="Export Matched Candidates"
+        recordCount={candidatesToExport.length}
+        selected={selectedCandidates.length > 0}
+        columns={candidateExportColumns.map(c => c.header)}
+        onExport={handleExportCandidates}
+      />
+      {/* Opened straight onto the version on screen; Go to JD inside it
+          opens that version's job page. */}
+      {selectedJob && (
+        <JDVersionHistoryModal
+          isOpen={showResultsJobDetail}
+          onClose={() => setShowResultsJobDetail(false)}
+          jdId={selectedJob}
+          jdTitle={resultsJobTitle}
+          initialVersionNumber={resultsVersionNumber}
+          showGoToJd
+          goToJdTab="ai-talent-match"
+        />
+      )}
+      {showResultsColumnModal && (
+        <ColumnCustomizationModal
+          columns={RESULTS_COLUMNS.map(col => ({ ...col, enabled: isResultColumnVisible(col.id) }))}
+          onClose={() => setShowResultsColumnModal(false)}
+          onApply={applyResultColumns}
+        />
+      )}
       <main className="flex-1 overflow-x-clip bg-slate-50">
         <div className="mx-auto w-full max-w-[1400px]">
         <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
@@ -4993,8 +5524,19 @@ export default function AITalentMatchPage({
             items={[
               { label: 'Dashboard', href: '/dashboard' },
               { label: 'AI Talent Match', onClick: () => setViewMode('history') },
-              { label: selectedJobData?.title || 'Results' },
+              { label: resultsJobTitle || 'Results' },
             ]}
+            // Previous / Next job rides inside the breadcrumb bar, as on the
+            // other detail pages — through the Matched Jobs list in its
+            // current order.
+            actions={showJobNavigation ? (
+              <RecordPager
+                currentIndex={currentListIndex}
+                totalCount={sortedHistory.length}
+                onPrev={prevJobItem ? () => switchResultsTo(prevJobItem, prevJobItem.jobId) : undefined}
+                onNext={nextJobItem ? () => switchResultsTo(nextJobItem, nextJobItem.jobId) : undefined}
+              />
+            ) : undefined}
           />
 
           {/* SaaS Header */}
@@ -5007,10 +5549,83 @@ export default function AITalentMatchPage({
                 <div className="min-w-0">
                   {/* JD ID badge before the title — the same badge the job list rows use. */}
                   <div className="flex items-center gap-2 mb-1 min-w-0">
-                    {selectedJobData?.jobId && (
-                      <JobIdBadge className="inline-flex h-7 items-center flex-shrink-0">{selectedJobData.jobId}</JobIdBadge>
+                    {resultsJobCode && (
+                      <JobIdBadge className="inline-flex h-7 items-center flex-shrink-0">{resultsJobCode}</JobIdBadge>
                     )}
-                    <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight truncate min-w-0">{selectedJobData?.title}</h1>
+                    <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight truncate min-w-0">{resultsJobTitle}</h1>
+                    {/* JD version — a dropdown once the job has more than one
+                        version to pick from, else the same pill as the
+                        table's Job Version column. */}
+                    {versionDropdownOptions.length > 1 ? (
+                      /* A menu rather than a native <select>: the badge stays
+                         a compact "v2", while each item carries its match
+                         date/time and JD status pill, which an <option> can't. */
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            type="button"
+                            aria-label="JD version"
+                            title="Switch to another version's match results"
+                            className="inline-flex items-center gap-0.5 flex-shrink-0 pl-2 pr-1 py-0.5 rounded-md font-semibold text-xs text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 hover:bg-brand-blue/15 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 transition-colors"
+                          >
+                            v{resultsVersionNumber ?? versionDropdownOptions.find(o => o.jdId === selectedJob)?.number}
+                            <ChevronDown className="w-3 h-3" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-72 !rounded-lg !bg-white dark:!bg-slate-900 !py-1 !px-0 !shadow-xl">
+                          {versionDropdownOptions.map(option => {
+                            const isCurrent = option.jdId === selectedJob;
+                            const tone = option.statusLabel ? getStatusConfig(option.statusLabel) : undefined;
+                            return (
+                              <DropdownMenuItem
+                                key={option.jdId}
+                                disabled={!option.matched}
+                                onSelect={() => handleResultsVersionChange(option.jdId)}
+                                className={`!rounded-none !px-3 !py-2 flex items-center gap-3 ${isCurrent ? 'bg-brand-blue/[0.06] dark:bg-brand-blue/[0.12]' : ''}`}
+                              >
+                                <span className={`w-9 text-center px-1.5 py-0.5 rounded-md font-semibold text-xs flex-shrink-0 ${isCurrent ? 'bg-brand-blue text-white' : 'text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300'}`}>
+                                  v{option.number}
+                                </span>
+                                <span className="flex-1 min-w-0 text-xs leading-tight">
+                                  {option.matchedAt ? (
+                                    <>
+                                      <span className="block text-gray-900 dark:text-slate-100">{formatISTDate(option.matchedAt.toISOString())}</span>
+                                      <span className="block text-gray-500 dark:text-slate-400">{formatISTTime(option.matchedAt.toISOString())}</span>
+                                    </>
+                                  ) : (
+                                    <span className="text-gray-400 dark:text-slate-500">{option.matched ? 'Matched just now' : 'Not matched'}</span>
+                                  )}
+                                </span>
+                                {option.statusLabel && tone && (
+                                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium border whitespace-nowrap flex-shrink-0 ${tone.bg} ${tone.text} ${tone.border}`}>
+                                    <span className={`w-1.5 h-1.5 rounded-full ${tone.dot}`} />
+                                    {option.statusLabel}
+                                  </span>
+                                )}
+                              </DropdownMenuItem>
+                            );
+                          })}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    ) : resultsVersionNumber ? (
+                      <span className="px-2 py-0.5 rounded-md font-semibold text-xs text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35 flex-shrink-0">
+                        v{resultsVersionNumber}
+                      </span>
+                    ) : null}
+                    {/* "View Job Detail" — the JD these candidates were matched
+                        against, read-only, beside the version it names. Same
+                        neutral pill and popup as Resume Scoring's header. */}
+                    {selectedJob && (
+                      <button
+                        type="button"
+                        onClick={() => setShowResultsJobDetail(true)}
+                        title="View this job description"
+                        className="inline-flex h-6 items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-colors flex-shrink-0 bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700 hover:border-brand-blue/40 hover:text-brand-blue"
+                      >
+                        <Eye className="w-3 h-3" />
+                        View Job Detail
+                      </button>
+                    )}
                   </div>
                   <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-slate-400">
                     <span className="inline-flex items-center gap-1">
@@ -5026,18 +5641,43 @@ export default function AITalentMatchPage({
                         Matched by {selectedHistoryItem?.matchedByName || historyItemForSelectedJob?.matchedByName || 'System'}
                       </span>
                     </span>
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-success-subtle text-success ring-1 ring-success-line">
                       <CheckCircle2 className="w-3 h-3" />
                       Complete
                     </span>
-                    <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">
+                    <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/25">
                       <Sparkles className="w-3 h-3" />
                       AI Talent Match • 0 units consumed
                     </span>
                   </div>
                 </div>
               </div>
-              <div className="flex flex-col sm:items-end gap-2">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                {/* Run Again — re-runs the match for this same JD version.
+                    Not offered on a disabled or archived version. */}
+                {selectedJob && (
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      if (!canRunAiMatch) {
+                        toast.error('You do not have permission to run AI Talent Match');
+                        return;
+                      }
+                      if (!canRunAgainHere) return;
+                      handleRunAIMatch(selectedJob);
+                    }}
+                    aria-disabled={!canRunAiMatch || !canRunAgainHere}
+                    title={!canRunAiMatch
+                      ? 'You do not have permission to run AI Talent Match'
+                      : !canRunAgainHere
+                        ? `This version is ${resultsJobStatus} — switch to the latest version to run again`
+                        : 'Run the match again for this job'}
+                    className={`w-full sm:w-auto ${!canRunAiMatch || !canRunAgainHere ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    <span>Run Again</span>
+                  </Button>
+                )}
                 <button
                   onClick={() => {
                     setViewMode('new');
@@ -5058,86 +5698,151 @@ export default function AITalentMatchPage({
             </div>
           </div>
 
-          {/* Filters & Search toolbar — only show when there are matched candidates to filter */}
+          {/* Search + More Filters — the canonical list toolbar, laid out as
+              Resume Scoring's Scored Resumes: search, More Filters (with the
+              active count and Clear), the list actions, then the count badge.
+              Rating, Scored Status, Experience and Sort live in the panel. */}
           {!isLoadingResultsFromHistory && matchedCandidates.length > 0 && (
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-4 space-y-3">
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-              <div className="relative flex-1 min-w-0 sm:min-w-[200px]">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search candidates..."
-                  className="w-full pl-9 pr-4 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black placeholder:text-gray-400"
+          <div className="mb-4 space-y-3">
+            <ListToolbar
+              searchValue={searchQuery}
+              onSearchChange={setSearchQuery}
+              searchPlaceholder="Search by name, email, phone, location or skills..."
+              onToggleFilters={() => setShowResultsFilters(open => !open)}
+              filtersOpen={showResultsFilters}
+              activeFilterCount={resultsActiveFilterCount}
+              filtersApplied={resultsActiveFilterCount > 0}
+              onClearFilters={() => {
+                setFilterRatingBand('all');
+                setFilterScored('all');
+                setFilterExperienceMin('');
+                setFilterExperienceMax('');
+              }}
+              className="mb-0"
+              countBadge={
+                <ListCountBadge
+                  filtered={filteredCandidates.length}
+                  total={matchedCandidates.length}
+                  noun="candidate"
+                  selected={selectedCandidates.length}
                 />
-              </div>
-              <select
-                value={filterThreshold}
-                onChange={(e) => setFilterThreshold(Number(e.target.value))}
-                className="px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 bg-white dark:bg-slate-900 text-sm text-black"
-              >
-                <option value={0}>All Matches</option>
-                <option value={5}>5+ Rating</option>
-                <option value={7}>7+ Rating</option>
-                <option value={9}>9+ Rating</option>
-              </select>
-              {matchedCandidates.length > 0 && (
+              }
+              filterPanel={
+                <div className="bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded-lg p-4">
+                  <div className="flex flex-wrap gap-4">
+                    <div className={RESULTS_FILTER_FIELD_CLASS}>
+                      <label className={RESULTS_FILTER_LABEL_CLASS}>Matched Rating</label>
+                      <select
+                        value={filterRatingBand}
+                        onChange={(e) => setFilterRatingBand(e.target.value as 'all' | 'exact' | 'partial' | 'no_match')}
+                        className={RESULTS_FILTER_CONTROL_CLASS}
+                      >
+                        <option value="all">All Matches</option>
+                        <option value="exact">Rating 10</option>
+                        <option value="partial">Rating 9 – 7</option>
+                        <option value="no_match">Below 7</option>
+                      </select>
+                    </div>
+                    <div className={RESULTS_FILTER_FIELD_CLASS}>
+                      <label className={RESULTS_FILTER_LABEL_CLASS}>Scored Status</label>
+                      <select
+                        value={filterScored}
+                        onChange={(e) => setFilterScored(e.target.value as 'all' | 'scored' | 'not_scored')}
+                        className={RESULTS_FILTER_CONTROL_CLASS}
+                      >
+                        <option value="all">All Statuses</option>
+                        <option value="scored">Scored</option>
+                        <option value="not_scored">Not Scored</option>
+                      </select>
+                    </div>
+                    {/* Experience — two inputs sharing one field, like Resume
+                        Scoring's Score Range. */}
+                    <div className={RESULTS_FILTER_FIELD_WIDE_CLASS}>
+                      <label className={RESULTS_FILTER_LABEL_CLASS}>Experience (years)</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          min={0}
+                          value={filterExperienceMin}
+                          onChange={(e) => setFilterExperienceMin(e.target.value === '' ? '' : Number(e.target.value))}
+                          placeholder="Min"
+                          aria-label="Minimum experience (years)"
+                          className={RESULTS_FILTER_CONTROL_CLASS}
+                        />
+                        <input
+                          type="number"
+                          min={0}
+                          value={filterExperienceMax}
+                          onChange={(e) => setFilterExperienceMax(e.target.value === '' ? '' : Number(e.target.value))}
+                          placeholder="Max"
+                          aria-label="Maximum experience (years)"
+                          className={RESULTS_FILTER_CONTROL_CLASS}
+                        />
+                      </div>
+                    </div>
+                    {/* Sort isn't a filter, so it never counts toward the
+                        badge or gets reset by Clear. */}
+                    <div className={RESULTS_FILTER_FIELD_CLASS}>
+                      <label className={RESULTS_FILTER_LABEL_CLASS}>Sort By</label>
+                      <select
+                        value={sortBy}
+                        onChange={(e) => setSortBy(e.target.value as 'rank' | 'name' | 'score' | 'experience')}
+                        className={RESULTS_FILTER_CONTROL_CLASS}
+                      >
+                        <option value="rank">Rating (High to Low)</option>
+                        <option value="name">Name (A to Z)</option>
+                        <option value="score">Score</option>
+                        <option value="experience">Experience</option>
+                      </select>
+                    </div>
+                  </div>
+                  {/* Controls commit as they change, so Done just closes —
+                      same flow as Resume Scoring. */}
+                  <div className="mt-4 pt-3 border-t border-gray-200 dark:border-slate-700 flex items-center justify-end gap-2">
+                    <Button variant="secondary" size="sm" onClick={() => setShowResultsFilters(false)}>
+                      Done
+                    </Button>
+                  </div>
+                </div>
+              }
+              /* Customize Columns right after More Filters — list view only
+                 (the grid has no columns), hidden on the narrowest screens
+                 like Resume Scoring's. */
+              afterFiltersActions={resultsDisplayMode === 'list' ? (
                 <Button
                   variant="secondary"
-                  size="md"
-                  onClick={() => {
-                    if (!canExport) {
-                      toast.error('You do not have permission to export');
-                      return;
-                    }
-                    handleExportCandidates();
-                  }}
-                  aria-disabled={!canExport}
-                  title={!canExport ? 'You do not have permission to export' : undefined}
-                  icon={<FileDown className="w-3.5 h-3.5" />}
-                  className={`whitespace-nowrap ${!canExport ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  size="sm"
+                  onClick={() => setShowResultsColumnModal(true)}
+                  icon={<SlidersHorizontal className="w-4 h-4" />}
+                  className="hidden sm:flex whitespace-nowrap"
                 >
-                  Export
+                  <span className="hidden md:inline">Customize Columns</span>
+                  <span className="md:hidden">Columns</span>
                 </Button>
-              )}
-              {/* Count badge closes the row up to this point, as it does on
-                  every list — the Score/Invite actions below carry their own
-                  `sm:ml-auto` instead, so with a selection they take over the
-                  row's right edge and the badge sits just before them. */}
-              <ListCountBadge
-                className={selectedCandidates.length === 0 ? 'sm:ml-auto' : undefined}
-                filtered={filteredCandidates.length}
-                total={matchedCandidates.length}
-                noun="candidate"
-                selected={selectedCandidates.length}
-              />
+              ) : undefined}
+            >
+              {/* With a selection, Score / Invite lead the actions, set apart
+                  from the filter controls by a divider. */}
               {selectedCandidates.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto sm:ml-auto">
-                  {availableUnits !== null && selectedCandidates.length > availableUnits && (
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-orange/10 border border-brand-orange/30 ring-1 ring-brand-orange/15 rounded-lg w-full sm:w-auto">
-                      <AlertTriangle className="w-4 h-4 text-brand-orange-deep flex-shrink-0" />
-                      <span className="text-xs text-brand-orange-deep font-medium">
-                        Insufficient units! You have {availableUnits} RS unit{availableUnits !== 1 ? 's' : ''} but selected {selectedCandidates.length}. Remove {selectedCandidates.length - availableUnits} resume{selectedCandidates.length - availableUnits > 1 ? 's' : ''}.
-                      </span>
-                    </div>
-                  )}
-                  <>
+                <>
+                  <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
                   <Button
                       variant="secondary"
-                      size="md"
+                      size="sm"
                       onClick={() => {
                         if (!canRunScoring) {
                           toast.error('You do not have permission to score resumes');
                           return;
                         }
-                        handleSubmitToScoring();
+                        // Review first: the candidates, their versions and
+                        // the job, in the shared Score Resume dialog.
+                        void handleSubmitToScoring();
                       }}
                       disabled={availableUnits !== null && selectedCandidates.length > availableUnits}
                       aria-disabled={!canRunScoring}
                       title={!canRunScoring ? 'You do not have permission to score resumes' : undefined}
                       icon={<ClipboardList className="w-3.5 h-3.5" />}
-                      className={`flex-1 sm:flex-initial ${!canRunScoring ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      className={`whitespace-nowrap ${!canRunScoring ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                       Score ({selectedCandidates.length})
                     </Button>
@@ -5147,7 +5852,7 @@ export default function AITalentMatchPage({
                       menu already offers per candidate. */}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="primary" size="md" icon={<Send className="w-3.5 h-3.5" />} className="flex-1 sm:flex-initial">
+                      <Button variant="primary" size="sm" icon={<Send className="w-3.5 h-3.5" />} className="whitespace-nowrap">
                         Invite ({selectedCandidates.length})
                       </Button>
                     </DropdownMenuTrigger>
@@ -5185,54 +5890,39 @@ export default function AITalentMatchPage({
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </>
-                </div>
               )}
-            </div>
-            {/* Additional Filters — each field gets a fixed, short width at
-                `sm` and up (rather than `w-full`, which stretched every one
-                of them to the row's full width and forced it onto its own
-                line even inside the flex-wrap row). Below `sm` they stay
-                full-width, stacked in the grid above. */}
-            <div className="grid grid-cols-1 sm:flex sm:flex-wrap items-center gap-2 sm:gap-3">
-              <input
-                type="text"
-                value={filterPhone}
-                onChange={(e) => setFilterPhone(e.target.value)}
-                placeholder="Filter by phone..."
-                className="w-full sm:w-44 px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black placeholder:text-gray-400"
-              />
-              <input
-                type="text"
-                value={filterLocation}
-                onChange={(e) => setFilterLocation(e.target.value)}
-                placeholder="Filter by location..."
-                className="w-full sm:w-48 px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black placeholder:text-gray-400"
-              />
-              <input
-                type="number"
-                value={filterExperienceMin}
-                onChange={(e) => setFilterExperienceMin(e.target.value === '' ? '' : Number(e.target.value))}
-                placeholder="Min exp (years)"
-                className="w-full sm:w-28 px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black placeholder:text-gray-400"
-              />
-              <input
-                type="number"
-                value={filterExperienceMax}
-                onChange={(e) => setFilterExperienceMax(e.target.value === '' ? '' : Number(e.target.value))}
-                placeholder="Max exp (years)"
-                className="w-full sm:w-28 px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black placeholder:text-gray-400"
-              />
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as 'rank' | 'name' | 'score' | 'experience')}
-                className="w-full sm:w-56 px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 bg-white dark:bg-slate-900 text-sm text-black"
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  if (!canExport) {
+                    toast.error('You do not have permission to export');
+                    return;
+                  }
+                  if (candidatesToExport.length === 0) {
+                    toast.error('No candidates to export');
+                    return;
+                  }
+                  setShowCandidateExportModal(true);
+                }}
+                aria-disabled={!canExport}
+                title={!canExport ? 'You do not have permission to export' : undefined}
+                icon={<FileDown className="w-4 h-4" />}
+                className={`whitespace-nowrap ${!canExport ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
-                <option value="rank">Sort by Rating (High to Low)</option>
-                <option value="name">Sort by Name (A to Z)</option>
-                <option value="score">Sort by Score</option>
-                <option value="experience">Sort by Experience</option>
-              </select>
-            </div>
+                Export
+              </Button>
+              <ListViewToggle value={resultsDisplayMode} onChange={setResultsDisplayMode} />
+            </ListToolbar>
+
+            {selectedCandidates.length > 0 && availableUnits !== null && selectedCandidates.length > availableUnits && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-orange/10 border border-brand-orange/30 ring-1 ring-brand-orange/15 rounded-lg">
+                <AlertTriangle className="w-4 h-4 text-brand-orange-deep flex-shrink-0" />
+                <span className="text-xs text-brand-orange-deep font-medium">
+                  Insufficient units! You have {availableUnits} RS unit{availableUnits !== 1 ? 's' : ''} but selected {selectedCandidates.length}. Remove {selectedCandidates.length - availableUnits} resume{selectedCandidates.length - availableUnits > 1 ? 's' : ''}.
+                </span>
+              </div>
+            )}
           </div>
           )}
 
@@ -5279,8 +5969,8 @@ export default function AITalentMatchPage({
           ) : (
           <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm">
             {/* Bounded viewport so only the rows scroll — pagination below stays put. */}
-            <div className="hidden md:block min-h-[400px] max-h-[calc(100dvh-20rem)] overflow-auto tf-table-shell">
-            <table className="w-full min-w-[1450px]">
+            <div className={`${resultsDisplayMode === 'grid' ? 'hidden' : 'hidden md:block'} min-h-[400px] max-h-[calc(100dvh-20rem)] overflow-auto tf-table-shell`}>
+            <table className="w-full" style={{ minWidth: 260 + visibleResultColumnCount * 110 }}>
               <thead className="sticky top-0 z-10 [&_th]:bg-slate-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                 <tr>
                   <th className="w-12 px-4 py-3 tf-sticky-col-left">
@@ -5303,42 +5993,66 @@ export default function AITalentMatchPage({
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                     Candidate Name
                   </th>
+                  {isResultColumnVisible('jobTitle') && (
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                     Job Title
                   </th>
+                  )}
+                  {isResultColumnVisible('jobVersion') && (
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                     Job Version
                   </th>
+                  )}
+                  {isResultColumnVisible('email') && (
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                     Email
                   </th>
+                  )}
+                  {isResultColumnVisible('phone') && (
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                     Phone
                   </th>
+                  )}
+                  {isResultColumnVisible('location') && (
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                     Location
                   </th>
+                  )}
+                  {isResultColumnVisible('skills') && (
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                     Skills
                   </th>
+                  )}
+                  {isResultColumnVisible('experience') && (
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                     Experience
                   </th>
+                  )}
+                  {isResultColumnVisible('uploadedBy') && (
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                     Uploaded By
                   </th>
+                  )}
+                  {isResultColumnVisible('uploadDate') && (
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                     Uploaded Date
                   </th>
+                  )}
+                  {isResultColumnVisible('resumeVersion') && (
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                     Resume Version
                   </th>
+                  )}
+                  {isResultColumnVisible('attachments') && (
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                     Attachments
                   </th>
+                  )}
+                  {isResultColumnVisible('scoredStatus') && (
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                     Scored Status
                   </th>
+                  )}
                   <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider tf-sticky-col">
                     Actions
                   </th>
@@ -5392,23 +6106,30 @@ export default function AITalentMatchPage({
                         </div>
                       </div>
                     </td>
+                    {isResultColumnVisible('jobTitle') && (
                     <td className="px-4 py-3 text-sm text-gray-700 dark:text-slate-300">
                       <span className="block max-w-[220px] truncate">
-                        {selectedJobData?.title || selectedHistoryItem?.jobTitle || '-'}
+                        {resultsJobTitle || '-'}
                       </span>
                     </td>
+                    )}
+                    {isResultColumnVisible('jobVersion') && (
                     <td className="px-4 py-3">
-                      {selectedJobData?.currentVersion ? (
+                      {resultsVersionNumber ? (
                         <span className="px-2 py-0.5 rounded-md font-semibold text-xs text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35">
-                          v{selectedJobData.currentVersion}
+                          v{resultsVersionNumber}
                         </span>
                       ) : (
                         <span className="text-gray-400 dark:text-slate-500">-</span>
                       )}
                     </td>
+                    )}
+                    {isResultColumnVisible('email') && (
                     <td className="px-4 py-3 text-sm text-gray-700 dark:text-slate-300">
                       {candidate.email ? candidate.email : <span className="text-gray-400 dark:text-slate-500">-</span>}
                     </td>
+                    )}
+                    {isResultColumnVisible('phone') && (
                     <td className="px-4 py-3 text-sm text-gray-700 dark:text-slate-300">
                       {(() => {
                         const numbers = splitPhoneNumbers(candidate.phone, 2);
@@ -5417,9 +6138,13 @@ export default function AITalentMatchPage({
                           : <span className="text-gray-400 dark:text-slate-500">-</span>;
                       })()}
                     </td>
+                    )}
+                    {isResultColumnVisible('location') && (
                     <td className="px-4 py-3 text-sm text-gray-700 dark:text-slate-300">
                       {candidate.location ? candidate.location : <span className="text-gray-400 dark:text-slate-500">-</span>}
                     </td>
+                    )}
+                    {isResultColumnVisible('skills') && (
                     <td className="px-4 py-4 min-w-[220px] max-w-[260px]">
                       {/* One chip shown in full, the rest collapse into "+N
                           more" — flex-nowrap so a row with more/longer skills
@@ -5433,18 +6158,28 @@ export default function AITalentMatchPage({
                         />
                       </div>
                     </td>
+                    )}
+                    {isResultColumnVisible('experience') && (
                     <td className="px-4 py-3 text-sm text-gray-700 dark:text-slate-300">{candidate.experience}</td>
+                    )}
+                    {isResultColumnVisible('uploadedBy') && (
                     <td className="px-4 py-3 text-sm text-gray-700 dark:text-slate-300">
                       {formatUploadedBy(candidate.uploadedByName, candidate.uploadedBy)}
                     </td>
+                    )}
+                    {isResultColumnVisible('uploadDate') && (
                     <td className="px-4 py-3 text-sm text-gray-700 dark:text-slate-300">
                       {candidate.uploadDate ? formatISTDate(candidate.uploadDate) : <span className="text-gray-400 dark:text-slate-500">-</span>}
                     </td>
+                    )}
+                    {isResultColumnVisible('resumeVersion') && (
                     <td className="px-4 py-4">
                       <span className="inline-flex px-2 py-1 rounded-full text-xs border bg-blue-50 text-blue-700 border-blue-200">
                         v{candidate.resumeVersion || 1}
                       </span>
                     </td>
+                    )}
+                    {isResultColumnVisible('attachments') && (
                     <td className="px-4 py-4">
                       <button
                         onClick={(e) => {
@@ -5457,6 +6192,8 @@ export default function AITalentMatchPage({
                         {candidate.attachmentCount || 1}
                       </button>
                     </td>
+                    )}
+                    {isResultColumnVisible('scoredStatus') && (
                     <td className="px-4 py-4">
                       {scoredResumeIds.has(candidate.resumeId) ? (
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-success-subtle text-success ring-1 ring-success-line">
@@ -5470,6 +6207,7 @@ export default function AITalentMatchPage({
                         </span>
                       )}
                     </td>
+                    )}
                     <td className="px-4 py-4 text-right tf-sticky-col" onClick={(e) => e.stopPropagation()}>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -5548,7 +6286,152 @@ export default function AITalentMatchPage({
             </table>
             </div>
 
-            {/* Mobile cards — the table is too wide below md */}
+            {/* Grid view — roomy cards, one fact per line: who (name,
+                email, rating), which job, contact details, skills, then the
+                upload / scoring facts and the View action in a footer. */}
+            {resultsDisplayMode === 'grid' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4">
+              {paginatedCandidates.map((candidate) => {
+                const isSelected = selectedCandidates.includes(candidate.id);
+                const isScored = !!candidate.resumeId && scoredResumeIds.has(candidate.resumeId);
+                const openResume = () => {
+                  if (!candidate.resumeId) return;
+                  try {
+                    sessionStorage.setItem('resumeNavList', JSON.stringify(filteredCandidatesMemo.map((c: MatchedCandidateWithVersions) => c.resumeId).filter(Boolean)));
+                    sessionStorage.setItem('resumeNavSource', 'ai-talent-match');
+                    sessionStorage.setItem('resumeNavAIMatchJobId', selectedJob);
+                    sessionStorage.setItem('resumeNavAIMatchJobTitle', resultsJobTitle || '');
+                    markAIMatchReturnTrip();
+                  } catch { /* ignore */ }
+                  router.push(`/recruitment/resume-view/${candidate.resumeId}`);
+                };
+                return (
+                  <div
+                    key={candidate.id}
+                    onClick={openResume}
+                    className={`group relative flex flex-col min-h-[340px] rounded-xl border p-5 shadow-sm transition-all cursor-pointer hover:shadow-md hover:-translate-y-0.5 ${
+                      isSelected
+                        ? 'bg-brand-blue/[0.04] border-brand-blue/40 ring-1 ring-brand-blue/20'
+                        : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 hover:border-brand-blue/30'
+                    }`}
+                  >
+                    {/* Header: select · avatar · name/email · rating */}
+                    <div className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => handleSelectCandidate(candidate.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        aria-label={`Select ${candidate.name || 'candidate'}`}
+                        className="mt-3 rounded border-gray-300 dark:border-slate-700 text-brand-blue focus:ring-brand-blue/40 flex-shrink-0"
+                      />
+                      <div className="w-11 h-11 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-sm text-brand-blue font-semibold flex-shrink-0">
+                        {(candidate.name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                      </div>
+                      <div className="min-w-0 flex-1 pt-0.5">
+                        <p className="text-sm font-semibold text-gray-900 dark:text-slate-50 truncate" title={candidate.name || 'Unknown'}>
+                          {candidate.name || 'Unknown'}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-slate-400 truncate mt-0.5" title={candidate.email || ''}>
+                          {candidate.email || '—'}
+                        </p>
+                      </div>
+                      <div className="flex flex-col items-center flex-shrink-0">
+                        <span className={`inline-flex items-center justify-center w-9 h-9 rounded-full text-sm font-bold border ${rankBadgeClass(candidate.rank || 0)}`}>
+                          {candidate.rank || '-'}
+                        </span>
+                        <span className="text-2xs text-gray-400 dark:text-slate-500 mt-1">Rating</span>
+                      </div>
+                    </div>
+
+                    {/* Job */}
+                    <div className="mt-4 flex items-center gap-2 min-w-0">
+                      <span className="text-xs text-gray-700 dark:text-slate-300 truncate" title={resultsJobTitle}>
+                        {resultsJobTitle || '-'}
+                      </span>
+                      {resultsVersionNumber && (
+                        <span className="px-1.5 py-0.5 rounded-md font-semibold text-2xs text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 flex-shrink-0">
+                          v{resultsVersionNumber}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Contact + experience, one per line */}
+                    <div className="mt-3 space-y-2 text-xs text-gray-600 dark:text-slate-400">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Phone className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 flex-shrink-0" />
+                        <span className="truncate">{splitPhoneNumbers(candidate.phone, 1)[0] || '—'}</span>
+                      </div>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <MapPin className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 flex-shrink-0" />
+                        <span className="truncate" title={candidate.location || ''}>{candidate.location || '—'}</span>
+                      </div>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Briefcase className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 flex-shrink-0" />
+                        <span className="truncate">{candidate.experience || '—'}</span>
+                      </div>
+                    </div>
+
+                    {/* Skills */}
+                    <div className="mt-4 flex flex-wrap gap-1.5 min-h-[1.5rem]">
+                      <SkillsList
+                        skills={candidate.skills}
+                        max={3}
+                        chipClassName="inline-flex items-center px-2.5 py-0.5 rounded-full text-2xs bg-brand-blue/10 text-brand-blue border border-brand-blue/20 max-w-[140px] truncate"
+                        moreClassName="inline-flex items-center px-2 py-0.5 rounded-full text-2xs text-brand-blue font-medium hover:bg-brand-blue/10 transition-colors cursor-pointer"
+                      />
+                    </div>
+
+                    {/* Footer — pinned to the bottom so every card in a row
+                        lines up regardless of how much it holds above. */}
+                    <div className="mt-auto pt-4">
+                      <div className="flex items-center justify-between gap-2 pt-3 border-t border-gray-100 dark:border-slate-800">
+                        {isScored ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium bg-success-subtle text-success ring-1 ring-success-line">
+                            <CheckCircle className="w-3 h-3" />
+                            Scored
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 ring-1 ring-gray-200 dark:ring-slate-700">
+                            <XCircle className="w-3 h-3" />
+                            Not Scored
+                          </span>
+                        )}
+                        <span className="text-2xs text-gray-500 dark:text-slate-500 truncate" title={`Uploaded by ${formatUploadedBy(candidate.uploadedByName, candidate.uploadedBy)}`}>
+                          {formatUploadedBy(candidate.uploadedByName, candidate.uploadedBy)}
+                          {candidate.uploadDate && <> · {formatISTDate(candidate.uploadDate)}</>}
+                        </span>
+                      </div>
+                      <div className="mt-3 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); openResume(); }}
+                          disabled={!candidate.resumeId}
+                          className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-800 dark:text-slate-200 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          View
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setSelectedVersionsCandidate(candidate); }}
+                          title="Attachments"
+                          aria-label={`Attachments (${candidate.attachmentCount || 1})`}
+                          className="inline-flex items-center gap-1 px-2.5 py-2 rounded-lg text-xs font-medium border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+                        >
+                          <Paperclip className="w-3.5 h-3.5" />
+                          {candidate.attachmentCount || 1}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            )}
+
+            {/* List view's stand-in below md, where the table is too wide. */}
+            {resultsDisplayMode === 'list' && (
             <div className="md:hidden space-y-3 p-3">
               {paginatedCandidates.map((candidate) => (
                 <div
@@ -5590,7 +6473,7 @@ export default function AITalentMatchPage({
                       <div className="min-w-0">
                         <div className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{candidate.name || 'Unknown'}</div>
                         <div className="text-xs text-gray-500 dark:text-slate-500 truncate">
-                          {selectedJobData?.title || selectedHistoryItem?.jobTitle || '-'}
+                          {resultsJobTitle || '-'}
                         </div>
                       </div>
                     </div>
@@ -5643,6 +6526,7 @@ export default function AITalentMatchPage({
                 </div>
               ))}
             </div>
+            )}
 
             {/* Pagination Controls */}
             {totalFilteredCandidates > 0 && (
@@ -5718,6 +6602,7 @@ export default function AITalentMatchPage({
       )}
 
       {aiInviteDialog}
+      {scoringReviewDialog}
 
 
       {/* Version Selection Modal for Scoring (single candidate) */}

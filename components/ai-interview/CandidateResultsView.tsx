@@ -18,6 +18,8 @@ import {
   ResponsiveContainer, LineChart, Line, Legend,
 } from 'recharts';
 import { Button } from '@/components/ui/button';
+import ExportFormatModal from '@/components/ExportFormatModal';
+import { exportRows, type ExportFileFormat } from '@/lib/utils/exportUtils';
 import EvaluationTab from './tabs/EvaluationTab';
 import EvaluationDashboardTab from './tabs/EvaluationDashboardTab';
 import EvaluationReportTab from './tabs/EvaluationReportTab';
@@ -4240,10 +4242,6 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                       if (current) groups.push(current);
 
                       // ── Export helpers ────────────────────────────────────────
-                      const escapeCsv = (v: string) => {
-                        const s = (v ?? '').toString();
-                        return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-                      };
                       // Flatten groups into sequential rows: one main row + one row per follow-up.
                       // Follow-ups keep the parent's Question ID (e.g. Q1) and are tagged Type="Follow-up".
                       type RowType = 'Main' | 'Followup' | 'Deep Dive' | 'Clarification' | 'End';
@@ -4287,52 +4285,22 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                           });
                         }
                       }
-                      const buildRows = () => flatRows.map(r => ({
-                        'S.No': String(r.sno),
-                        'Question ID': r.questionId,
-                        'Type': r.type,
-                        'Question': r.question,
-                        'Raw Transcript': r.raw,
-                        'Corrected Transcript': r.corrected,
-                        'Language': r.language,
-                        'Timestamp': formatTs(r.timestamp),
-                      }));
-                      const download = (blob: Blob, filename: string) => {
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = filename;
-                        document.body.appendChild(a);
-                        a.click();
-                        document.body.removeChild(a);
-                        URL.revokeObjectURL(url);
-                      };
+                      const TRANSCRIPT_EXPORT_HEADERS = ['S.No', 'Question ID', 'Type', 'Question', 'Raw Transcript', 'Corrected Transcript', 'Language', 'Timestamp'];
+                      const buildRows = () => flatRows.map(r => [
+                        String(r.sno),
+                        r.questionId,
+                        r.type,
+                        r.question,
+                        r.raw,
+                        r.corrected,
+                        r.language,
+                        formatTs(r.timestamp),
+                      ]);
                       const baseName = `transcript_${interview.candidate_name || 'candidate'}_${liveSession.id.slice(0, 8)}`.replace(/\s+/g, '_');
-                      const exportCSV = () => {
+                      const exportTranscript = async (format: ExportFileFormat) => {
                         const rows = buildRows();
                         if (rows.length === 0) return;
-                        const headers = Object.keys(rows[0]);
-                        const lines = [headers.join(',')];
-                        for (const r of rows) lines.push(headers.map(h => escapeCsv(r[h])).join(','));
-                        download(new Blob(['\uFEFF' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' }), `${baseName}.csv`);
-                        setExportMenuOpen(false);
-                      };
-                      const exportXLSX = async () => {
-                        const rows = buildRows();
-                        if (rows.length === 0) return;
-                        const ExcelJS = (await import('exceljs')).default;
-                        const wb = new ExcelJS.Workbook();
-                        const ws = wb.addWorksheet('Transcript');
-                        const headers = Object.keys(rows[0]);
-                        const widths = [6, 14, 10, 50, 50, 50, 10, 12];
-                        ws.columns = headers.map((h, i) => ({ header: h, key: h, width: widths[i] ?? 15 }));
-                        ws.addRows(rows);
-                        const buf = await wb.xlsx.writeBuffer();
-                        download(
-                          new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
-                          `${baseName}.xlsx`,
-                        );
-                        setExportMenuOpen(false);
+                        await exportRows(format, TRANSCRIPT_EXPORT_HEADERS, rows, baseName, { sheetName: 'Transcript' });
                       };
 
                       return (
@@ -4342,26 +4310,20 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                             <Button
                               variant="primary"
                               size="sm"
-                              onClick={() => setExportMenuOpen(v => !v)}
+                              onClick={() => setExportMenuOpen(true)}
                               disabled={groups.length === 0}
                             >
                               <Download className="w-3.5 h-3.5" />
                               Export
-                              <ChevronDown className="w-3 h-3" />
                             </Button>
-                            {exportMenuOpen && (
-                              <>
-                                <div className="fixed inset-0 z-10" onClick={() => setExportMenuOpen(false)} />
-                                <div className="absolute right-0 top-9 z-20 w-32 max-w-[calc(100vw-1.5rem)] bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-lg shadow-brand-blue/10 py-1">
-                                  <button onClick={exportCSV} className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue">
-                                    <FileText className="w-3.5 h-3.5 text-slate-400" /> CSV
-                                  </button>
-                                  <button onClick={exportXLSX} className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue">
-                                    <FileText className="w-3.5 h-3.5 text-success" /> XLSX
-                                  </button>
-                                </div>
-                              </>
-                            )}
+                            <ExportFormatModal
+                              open={exportMenuOpen}
+                              onClose={() => setExportMenuOpen(false)}
+                              title="Export Transcript"
+                              recordCount={flatRows.length}
+                              columns={TRANSCRIPT_EXPORT_HEADERS}
+                              onExport={exportTranscript}
+                            />
                           </div>
 
                           <div className="overflow-x-auto rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 bg-white tf-table-shell">

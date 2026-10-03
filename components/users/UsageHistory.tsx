@@ -89,7 +89,7 @@ function UsageTableSkeleton({ cols, rows = 8 }: { cols: string[]; rows?: number 
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10;
 
 type LucideIcon = React.FC<React.SVGProps<SVGSVGElement>>;
 

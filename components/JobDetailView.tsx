@@ -46,6 +46,7 @@ import InviteToAIInterviewFlow from './InviteToAIInterviewFlow';
 import AIInterviewVersionHistoryModal from './ai-interview/AIInterviewVersionHistoryModal';
 import AssessmentVersionHistoryModal from './assessments/AssessmentVersionHistoryModal';
 import type { Resume as ResumeRecord } from '@/lib/types/types';
+import ApplyToJobModal from '@/components/ApplyToJobModal';
 import AIInterviewResults from './ai-interview/AIInterviewResults';
 import CandidateResultsView from './ai-interview/CandidateResultsView';
 import { aiInterviewService, AIInterviewResponse, AIInterviewVersionHistoryItem } from '@/lib/services/aiInterviewService';
@@ -856,6 +857,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   // AI Talent Match state
   const [aiMatchSessions, setAiMatchSessions] = useState<AIMatchSessionResponse[]>([]);
   const [aiMatchCandidates, setAiMatchCandidates] = useState<MatchedCandidate[]>([]);
+  // AI Talent Match tab's Score Selected / Score All: reviewed in the shared
+  // Candidates Selected dialog (this job fixed) before the batch starts.
+  const [aiMatchScoreReview, setAiMatchScoreReview] = useState<MatchedCandidate[] | null>(null);
   /* Starts true, not false: the mount effect below always fetches this (when
      the plan has the feature) before the first paint settles, so a `false`
      default let the tab badge and empty state read "0 / No AI Talent Match
@@ -4316,11 +4320,12 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           loading={loadingAiMatch}
           canRunAiMatch={permissions.canRunAiMatch}
           onRunMatch={handleAITalentMatch}
-          onScoreSelected={(selected) => startAiMatchScoring(selected)}
-          onScoreAll={() => startAiMatchScoring(aiMatchCandidates.filter((c) => {
+          onScoreSelected={(selected) => { if (selected.length > 0) setAiMatchScoreReview(selected); }}
+          onScoreAll={() => {
             const scoredIds = new Set(scoredResumes.map((r: any) => r.resume_id).filter(Boolean));
-            return !scoredIds.has(c.resumeId);
-          }))}
+            const unscored = aiMatchCandidates.filter((c) => !scoredIds.has(c.resumeId));
+            if (unscored.length > 0) setAiMatchScoreReview(unscored);
+          }}
           onViewCandidate={(candidate) => {
             try {
               sessionStorage.setItem('resumeNavJobId', job.id);
@@ -4823,6 +4828,37 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       />
 
       {/* AI Talent Match Progress Panel */}
+      {/* Review before scoring — the candidates (untick to drop, eye to pick
+          another resume version) against this job, then Score starts it. */}
+      {aiMatchScoreReview && (
+        <ApplyToJobModal
+          mode="scoring"
+          resumes={aiMatchScoreReview
+            .filter((c) => !!c.resumeId)
+            .map((c) => ({
+              id: c.resumeId,
+              name: c.name || 'Unknown',
+              title: c.title,
+              email: c.email,
+              phone: c.phone,
+            }) as unknown as ResumeRecord)}
+          fixedJob={{ ...job, versionNumber: job.versionNumber }}
+          onClose={() => setAiMatchScoreReview(null)}
+          onApply={(resumeIds, _jobIds, _jobs, sourceResumeIds) => {
+            const reviewed = aiMatchScoreReview;
+            setAiMatchScoreReview(null);
+            // Each picked id may be an older version of the candidate's resume.
+            const toScore = resumeIds
+              .map((resumeId, index) => {
+                const original = reviewed.find((c) => c.resumeId === (sourceResumeIds?.[index] ?? resumeId));
+                return original ? { ...original, resumeId } : null;
+              })
+              .filter((c): c is MatchedCandidate => !!c);
+            void startAiMatchScoring(toScore);
+          }}
+        />
+      )}
+
       {showAIMatchPanel && (
         <AITalentMatchProgressPanel
           jobTitle={job.title}
@@ -4962,7 +4998,7 @@ function AIMatchTabContent({
   const [filterExperienceMax, setFilterExperienceMax] = useState<number | ''>('');
   const [sortBy, setSortBy] = useState<'rank' | 'name' | 'score' | 'experience'>('rank');
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(25);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   const [displayMode, setDisplayMode] = useState<ListDisplayMode>('list');
 
   // Attachments column → Version History popup. Same fetch-and-fallback

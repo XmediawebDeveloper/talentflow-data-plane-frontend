@@ -12,6 +12,8 @@ import ResumeTable from './ResumeTable';
 import FolderTree from './FolderTree';
 import NoResumesEmptyState from '@/components/resumes/NoResumesEmptyState';
 import ResumeTextPreviewModal from './ResumeTextPreviewModal';
+import ApplyToJobModal from './ApplyToJobModal';
+import type { Job as SharedJob, Resume as SharedResume } from '@/lib/types/types';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -153,6 +155,9 @@ export default function SelectSourceModal({
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
+  // Review step before scoring — the shared Candidates Selected dialog with
+  // this job fixed: untick to drop a resume, pick another version, then Score.
+  const [showScoreReview, setShowScoreReview] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFolder, setSelectedFolder] = useState<string>('all');
 
@@ -529,11 +534,13 @@ export default function SelectSourceModal({
   };
 
   // Submit for scoring with progress tracking
-  const handleSubmitForScoring = async () => {
-    if (selectedResumes.length === 0) return;
+  const handleSubmitForScoring = async (reviewedIds?: string[]) => {
+    // From the review step: the resumes still ticked, each on its chosen version.
+    const idsToScore = reviewedIds ?? selectedResumes;
+    if (idsToScore.length === 0) return;
 
     // Check for already-scored resumes before proceeding
-    let resumesToScore = [...selectedResumes];
+    let resumesToScore = [...idsToScore];
     try {
       const checkResult = await scoringService.checkExistingScores(jobId, resumesToScore);
       if (checkResult.existing_count > 0) {
@@ -1327,7 +1334,7 @@ export default function SelectSourceModal({
             </div>
             <div className="flex items-center gap-2 sm:gap-3">
               <button
-                onClick={handleSubmitForScoring}
+                onClick={() => setShowScoreReview(true)}
                 disabled={(() => {
                   if (!canRunScoring) return true;
                   if (selectedResumes.length === 0) return true;
@@ -1517,6 +1524,37 @@ export default function SelectSourceModal({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Review before scoring — Candidates Selected with this job fixed, the
+          same dialog every other Score Resume flow shows first. */}
+      {showScoreReview && (
+        <ApplyToJobModal
+          mode="scoring"
+          resumes={selectedResumes.map(id => {
+            const r = resumes.find(x => x.id === id);
+            return (r
+              ? { ...r, name: r.candidate_name || (r as { name?: string }).name || 'Unknown' }
+              : { id, name: 'Resume' }) as unknown as SharedResume;
+          })}
+          fixedJob={{
+            id: jobId,
+            job_id: jobShortId,
+            title: jobTitle,
+            status: 'Published',
+            location: '',
+            daysActive: 0,
+            requiredMatch: 70,
+            applicants: 0,
+            skills: [],
+            versionNumber: jobVersion ?? undefined,
+          } as SharedJob}
+          onClose={() => setShowScoreReview(false)}
+          onApply={(resumeIds) => {
+            setShowScoreReview(false);
+            void handleSubmitForScoring(resumeIds);
+          }}
+        />
+      )}
 
       {/* Preview — same in-app document viewer My Resumes uses. */}
       {previewResume && (

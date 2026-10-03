@@ -565,7 +565,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      way. Reset whenever the picker opens or closes. */
   const [invitePickerViewMode, setInvitePickerViewMode] = useState<'ungrouped' | 'grouped'>('ungrouped');
   const [invitePickerPage, setInvitePickerPage] = useState(1);
-  const [invitePickerPageSize, setInvitePickerPageSize] = useState(5);
+  const [invitePickerPageSize, setInvitePickerPageSize] = useState(10);
   const invitePickerScrollRef = useRef<HTMLDivElement | null>(null);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [selectedAssessmentForPreview, setSelectedAssessmentForPreview] = useState<any>(null);

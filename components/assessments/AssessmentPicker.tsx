@@ -80,7 +80,7 @@ export default function AssessmentPicker({
   const [viewMode, setViewMode] = useState<'grouped' | 'ungrouped'>('ungrouped');
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(5);
+  const [pageSize, setPageSize] = useState(10);
   const [previewAssessment, setPreviewAssessment] = useState<PickerAssessment | null>(null);
   const jdLineage = useJobVersionLineage();
 

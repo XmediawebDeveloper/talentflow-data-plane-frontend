@@ -4,7 +4,8 @@ import { Plus, Search, MapPin, Calendar, Eye, MoreVertical, Users, Filter, Check
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { formatISTDate } from '@/lib/utils/dateUtils';
-import { exportToCSV, ExportColumn } from '@/lib/utils/exportUtils';
+import { exportData, ExportColumn, ExportFileFormat } from '@/lib/utils/exportUtils';
+import ExportFormatModal from '@/components/ExportFormatModal';
 import { jdService, JDResponse, JDAccessCheckResponse } from '@/lib/services/jdService';
 import { formatSalaryRange } from '@/lib/utils/salary';
 import { toast } from 'sonner';
@@ -33,6 +34,30 @@ const formatEmploymentType = (type: string | undefined): string => {
     .join(' ');
 };
 
+// Columns in the JD export file (CSV or Excel)
+const JD_EXPORT_COLUMNS: ExportColumn[] = [
+  { key: 'job_id', header: 'JD ID' },
+  { key: 'title', header: 'Title' },
+  { key: 'status', header: 'Status' },
+  { key: 'creation_method', header: 'Creation Method' },
+  { key: 'current_version', header: 'Version' },
+  { key: 'industry_type', header: 'Industry' },
+  { key: 'department', header: 'Department' },
+  { key: 'employment_type', header: 'Employment Type' },
+  { key: 'remote_type', header: 'Work Mode' },
+  { key: 'experience', header: 'Experience' },
+  { key: 'salary', header: 'Salary Range' },
+  { key: 'location', header: 'Location' },
+  { key: 'job_level', header: 'Job Level' },
+  { key: 'published_at', header: 'Posted Date' },
+  { key: 'created_at', header: 'Created Date' },
+  { key: 'updated_at', header: 'Last Updated' },
+  { key: 'created_by_name', header: 'Created By' },
+  { key: 'applicants_count', header: 'Applicants' },
+  { key: 'scored_resumes_count', header: 'Scored Resumes' },
+  { key: 'assessments_count', header: 'Assessments' },
+];
+
 // JD03: Status tabs for filtering
 const STATUS_TABS = [
   { id: 'all', label: 'All JDs' },
@@ -57,6 +82,7 @@ export default function JDListPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [bulkActionsOpen, setBulkActionsOpen] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
   const bulkActionsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -393,17 +419,22 @@ export default function JDListPage() {
     );
   };
 
-  const handleExportJDs = () => {
-    const jdsToExport = selectedJds.length > 0
-      ? jds.filter(jd => selectedJds.includes(jd.id))
-      : jds;
+  const getJdsToExport = () => (selectedJds.length > 0
+    ? jds.filter(jd => selectedJds.includes(jd.id))
+    : jds);
 
-    if (jdsToExport.length === 0) {
+  // Export opens the CSV / Excel picker; the file is written in runExportJDs
+  const handleExportJDs = () => {
+    if (getJdsToExport().length === 0) {
       toast.error('No job descriptions to export');
       return;
     }
+    setShowExportModal(true);
+  };
 
-    const exportData = jdsToExport.map(jd => ({
+  const runExportJDs = async (format: ExportFileFormat) => {
+    const jdsToExport = getJdsToExport();
+    const rows = jdsToExport.map(jd => ({
       job_id: jd.job_id || '-',
       title: jd.title,
       status: jd.status.charAt(0).toUpperCase() + jd.status.slice(1),
@@ -436,31 +467,9 @@ export default function JDListPage() {
       assessments_count: jd.assessments_count || 0,
     }));
 
-    const columns: ExportColumn[] = [
-      { key: 'job_id', header: 'JD ID' },
-      { key: 'title', header: 'Title' },
-      { key: 'status', header: 'Status' },
-      { key: 'creation_method', header: 'Creation Method' },
-      { key: 'current_version', header: 'Version' },
-      { key: 'industry_type', header: 'Industry' },
-      { key: 'department', header: 'Department' },
-      { key: 'employment_type', header: 'Employment Type' },
-      { key: 'remote_type', header: 'Work Mode' },
-      { key: 'experience', header: 'Experience' },
-      { key: 'salary', header: 'Salary Range' },
-      { key: 'location', header: 'Location' },
-      { key: 'job_level', header: 'Job Level' },
-      { key: 'published_at', header: 'Posted Date' },
-      { key: 'created_at', header: 'Created Date' },
-      { key: 'updated_at', header: 'Last Updated' },
-      { key: 'created_by_name', header: 'Created By' },
-      { key: 'applicants_count', header: 'Applicants' },
-      { key: 'scored_resumes_count', header: 'Scored Resumes' },
-      { key: 'assessments_count', header: 'Assessments' },
-    ];
 
     const dateStr = new Date().toISOString().split('T')[0];
-    exportToCSV(exportData, columns, `job-descriptions-${dateStr}`);
+    await exportData(format, rows, JD_EXPORT_COLUMNS, `job-descriptions-${dateStr}`, { sheetName: 'Job Descriptions' });
     toast.success(`Exported ${jdsToExport.length} job description${jdsToExport.length !== 1 ? 's' : ''}`);
   };
 
@@ -563,7 +572,7 @@ export default function JDListPage() {
               icon={<Download className="w-4 h-4" />}
               title={selectedJds.length > 0 ? `Export ${selectedJds.length} selected JDs` : 'Export all JDs'}
             >
-              {selectedJds.length > 0 ? `Export (${selectedJds.length})` : 'Export CSV'}
+              {selectedJds.length > 0 ? `Export (${selectedJds.length})` : 'Export'}
             </Button>
             <Button
               variant="primary"
@@ -635,7 +644,7 @@ export default function JDListPage() {
                       className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                     >
                       <Download className="w-4 h-4 text-gray-500" />
-                      Export Selected to CSV
+                      Export Selected
                     </button>
                   )}
                   <div className="border-t border-gray-100 my-1" />
@@ -1231,6 +1240,16 @@ export default function JDListPage() {
           isLoading={confirmLoading}
         />
       )}
+
+      <ExportFormatModal
+        open={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        title="Export Job Descriptions"
+        recordCount={showExportModal ? getJdsToExport().length : undefined}
+        selected={selectedJds.length > 0}
+        columns={JD_EXPORT_COLUMNS.map(c => c.header)}
+        onExport={runExportJDs}
+      />
     </main>
   );
 }

@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { X, Clock, User, FileText, History, Loader2, ArrowLeft, Eye, Download, Calendar, MapPin } from 'lucide-react';
+import { X, Clock, User, FileText, History, Loader2, ArrowLeft, Eye, Download, Calendar, MapPin, Briefcase } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { jdService, JDLineageVersion, JDResponse } from '@/lib/services/jdService';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
@@ -20,6 +21,18 @@ interface JDVersionHistoryModalProps {
   jdId: string;
   jdTitle: string;
   initialVersionNumber?: number;
+  /**
+   * Show a "Go to JD" button in the header that opens the job-details page
+   * for the version on screen (the one being previewed, else `jdId`).
+   * Opt-in: hosts that already have their own Go to JD leave it off.
+   */
+  showGoToJd?: boolean;
+  /**
+   * The job-details tab Go to JD lands on — the host's own module, e.g.
+   * 'scored-resumes' from Resume Scoring, 'ai-talent-match' from AI Talent
+   * Match. Omitted, it opens the page's default tab.
+   */
+  goToJdTab?: string;
 }
 
 interface JDHistoryVersion {
@@ -313,7 +326,10 @@ export default function JDVersionHistoryModal({
   jdId,
   jdTitle,
   initialVersionNumber,
+  showGoToJd = false,
+  goToJdTab,
 }: JDVersionHistoryModalProps) {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [versions, setVersions] = useState<JDHistoryVersion[]>([]);
   const [selectedVersion, setSelectedVersion] = useState<JDHistoryVersion | null>(null);
@@ -512,6 +528,26 @@ export default function JDVersionHistoryModal({
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
+            {showGoToJd && (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  const targetId = selectedVersion?.id || jdId;
+                  closeModal();
+                  router.push(
+                    `/recruitment/job-details?id=${encodeURIComponent(targetId)}` +
+                    (goToJdTab ? `&tab=${encodeURIComponent(goToJdTab)}` : ''),
+                  );
+                }}
+                title={selectedVersion ? `Open version ${selectedVersion.version_number} of this job` : 'Open this job'}
+                icon={<Briefcase className="w-4 h-4" />}
+                className="whitespace-nowrap"
+              >
+                Go to JD
+              </Button>
+            )}
             {!selectedVersion && versions.length > 1 && (
               <Button
                 type="button"

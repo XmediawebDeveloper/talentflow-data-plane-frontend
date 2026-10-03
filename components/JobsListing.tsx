@@ -34,6 +34,8 @@ import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import { useListSearch } from '@/lib/hooks/useListSearch';
+import ExportFormatModal from '@/components/ExportFormatModal';
+import { exportRows, ExportFileFormat } from '@/lib/utils/exportUtils';
 /* Radix menu rather than the hand-rolled absolute dropdown the job rows use:
    the version table sits inside an overflow-x-auto shell, which would clip an
    absolutely positioned menu — Radix portals it out of the scroll container. */
@@ -51,6 +53,22 @@ const viewVersionsMenuItemRedClass = 'group text-destructive [&_svg]:!text-curre
 /* Formatting, badge tokens, lineage grouping and the list sort all live in
    lib/utils/jobOpeningDisplay — this page is the reference listing, and the
    Apply to Job dialog renders the same jobs from the same helpers. */
+
+// Columns in the job-openings export file (CSV or Excel)
+const JOBS_EXPORT_HEADERS = [
+  'JD ID', 'Title', 'Status', 'Creation Method', 'Version',
+  'Industry', 'Department', 'Employment Type', 'Work Mode',
+  'Experience (Min Years)', 'Experience (Max Years)', 'Experience',
+  // 'Education' removed 2026-08-21. Education is a requirement, and requirements
+  // live in Must-Have / Nice-to-Have Additional Requirements now. This export is
+  // JD METADATA - it carries no skills or requirements columns at all - so a lone
+  // Education column was the odd one out. Keep this list and the row values in runBulkExport
+  // in the SAME order: they are joined positionally, so dropping one without the
+  // other silently shifts every following column.
+  'Salary', 'Location', 'Job Level',
+  'Posted Date', 'Created Date', 'Last Updated', 'Created By',
+  'Applicants'
+];
 
 interface JobsListingProps {
   jobs: Job[];
@@ -209,6 +227,7 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
   }, [initialStatusFilter]);
 
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+  const [showExportModal, setShowExportModal] = useState(false);
   /* Version history — expand state, lineage, per-version JD records and
      applicant counts, all from the shared hook so the Apply to Job dialog opens
      the same history from the same endpoints. */
@@ -590,60 +609,35 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
     }
   };
 
-  const handleBulkExport = () => {
-    const selectedJobsData = sortedJobs.filter(job => selectedJobs.has(job.id));
-    const headers = [
-      'JD ID', 'Title', 'Status', 'Creation Method', 'Version',
-      'Industry', 'Department', 'Employment Type', 'Work Mode',
-      'Experience (Min Years)', 'Experience (Max Years)', 'Experience',
-      // 'Education' removed 2026-08-21. Education is a requirement, and requirements
-      // live in Must-Have / Nice-to-Have Additional Requirements now. This export is
-      // JD METADATA - it carries no skills or requirements columns at all - so a lone
-      // Education column was the odd one out. Keep this list and the value list below
-      // in the SAME order: they are joined positionally, so dropping one without the
-      // other silently shifts every following column.
-      'Salary', 'Location', 'Job Level',
-      'Posted Date', 'Created Date', 'Last Updated', 'Created By',
-      'Applicants'
-    ];
-    const escape = (val: any) => {
-      const str = val === null || val === undefined ? '' : String(val);
-      return str.includes(',') || str.includes('"') || str.includes('\n')
-        ? `"${str.replace(/"/g, '""')}"` : str;
-    };
-    const csvContent = [
-      headers.join(','),
-      ...selectedJobsData.map(job => [
-        (job as any).job_id || '',
-        job.title,
-        job.status,
-        (job as any).creation_method === 'ai_generated' ? 'AI' : (job as any).creation_method === 'manual' ? 'Manual' : '',
-        (job as any).versionNumber ? `v${(job as any).versionNumber}` : '',
-        (job as any).industry_type || '',
-        job.department || '',
-        job.employmentType || '',
-        (job as any).workMode || '',
-        (job as any).experience_min !== undefined ? (job as any).experience_min : '',
-        (job as any).experience_max !== undefined ? (job as any).experience_max : '',
-        job.experience || '',
-        (job as any).salary || '',
-        job.location || '',
-        (job as any).experience_level || '',
-        job.postedDate || '',
-        (job as any).created_at ? new Date((job as any).created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
-        (job as any).updated_at ? new Date((job as any).updated_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
-        job.postedBy || '',
-        job.applicants || 0
-      ].map(escape).join(','))
-    ].join('\n');
+  // Export opens the CSV / Excel picker; the file is written in runBulkExport
+  const handleBulkExport = () => setShowExportModal(true);
 
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `jobs-export-${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const runBulkExport = async (format: ExportFileFormat) => {
+    const selectedJobsData = sortedJobs.filter(job => selectedJobs.has(job.id));
+    const rows = selectedJobsData.map(job => [
+      (job as any).job_id || '',
+      job.title,
+      job.status,
+      (job as any).creation_method === 'ai_generated' ? 'AI' : (job as any).creation_method === 'manual' ? 'Manual' : '',
+      (job as any).versionNumber ? `v${(job as any).versionNumber}` : '',
+      (job as any).industry_type || '',
+      job.department || '',
+      job.employmentType || '',
+      (job as any).workMode || '',
+      (job as any).experience_min !== undefined ? (job as any).experience_min : '',
+      (job as any).experience_max !== undefined ? (job as any).experience_max : '',
+      job.experience || '',
+      (job as any).salary || '',
+      job.location || '',
+      (job as any).experience_level || '',
+      job.postedDate || '',
+      (job as any).created_at ? new Date((job as any).created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
+      (job as any).updated_at ? new Date((job as any).updated_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
+      job.postedBy || '',
+      job.applicants || 0
+    ]);
+
+    await exportRows(format, JOBS_EXPORT_HEADERS, rows, `jobs-export-${new Date().toISOString().split('T')[0]}`, { sheetName: 'Job Openings' });
   };
 
   // Close dropdown when clicking outside
@@ -1168,7 +1162,7 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                           }`}
                         >
                           <Download className="w-4 h-4 text-gray-700" />
-                          Export Selected to CSV
+                          Export Selected
                         </button>
                         {onBulkDelete && (
                           <button
@@ -1959,6 +1953,16 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
           </div>
         </div>
       )}
+
+      <ExportFormatModal
+        open={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        title="Export Job Openings"
+        recordCount={selectedJobs.size}
+        selected
+        columns={JOBS_EXPORT_HEADERS}
+        onExport={runBulkExport}
+      />
     </main>
   );
 }

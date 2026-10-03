@@ -17,10 +17,12 @@ import {
   Download,
 } from 'lucide-react';
 import {
-  exportToCSV,
+  exportData,
   formatMemberUsageForExport,
   MEMBER_USAGE_COLUMNS,
+  type ExportFileFormat,
 } from '@/lib/utils/exportUtils';
+import ExportFormatModal from '@/components/ExportFormatModal';
 import teamService, { TeamMembersUsageSummary, TeamMemberUsage as MemberUsage } from '@/lib/services/teamService';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DateField } from '@/components/ui/date-field';
@@ -51,6 +53,7 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
   const [toDate, setToDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [sortBy, setSortBy] = useState<'total' | 'name' | 'recent'>('total');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [showExportModal, setShowExportModal] = useState(false);
 
   const { isTenantAdmin: authIsTenantAdmin, user } = useAuth();
   // Must match the backend's actual gate (current_user.is_tenant_admin) for the
@@ -114,12 +117,14 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
     }
   };
 
-  const handleExport = () => {
+  const handleExport = async (format: ExportFileFormat) => {
     if (!membersUsage?.members) return;
 
     const formattedData = formatMemberUsageForExport(membersUsage.members);
     const teamSlug = team.name.toLowerCase().replace(/\s+/g, '-');
-    exportToCSV(formattedData, MEMBER_USAGE_COLUMNS, `${teamSlug}-member-usage-${fromDate}-to-${toDate}`);
+    await exportData(format, formattedData, MEMBER_USAGE_COLUMNS, `${teamSlug}-member-usage-${fromDate}-to-${toDate}`, {
+      sheetName: 'Member Usage',
+    });
   };
 
   const formatLastActivity = (dateStr: string | null) => {
@@ -253,7 +258,7 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
                   toast.error('You do not have permission to export');
                   return;
                 }
-                handleExport();
+                setShowExportModal(true);
               }}
               aria-disabled={!canExport}
               title={!canExport ? 'You do not have permission to export' : ''}
@@ -264,9 +269,17 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
               }`}
             >
               <Download className="w-4 h-4" />
-              Export CSV
+              Export
             </button>
           )}
+          <ExportFormatModal
+            open={showExportModal}
+            onClose={() => setShowExportModal(false)}
+            title={`Export ${team.name} Member Usage`}
+            recordCount={membersUsage?.members?.length ?? 0}
+            columns={MEMBER_USAGE_COLUMNS.map((c) => c.header)}
+            onExport={handleExport}
+          />
         </div>
       </div>
 

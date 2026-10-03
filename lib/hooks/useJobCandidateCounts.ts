@@ -112,16 +112,19 @@ export function prefetchJobCandidateCounts(): Promise<JobCandidateCounts> {
   return inflight;
 }
 
-export function useJobCandidateCounts(): JobCandidateCounts | null {
+/** `enabled: false` skips the tally and returns null — for a shared list whose
+ *  hosts don't all show the chips. */
+export function useJobCandidateCounts(enabled = true): JobCandidateCounts | null {
   const [counts, setCounts] = useState<JobCandidateCounts | null>(() =>
-    typeof window === 'undefined' ? null : readCache(),
+    typeof window === 'undefined' || !enabled ? null : readCache(),
   );
 
   useEffect(() => {
+    if (!enabled) return;
     let cancelled = false;
     prefetchJobCandidateCounts().then((fresh) => { if (!cancelled) setCounts(fresh); });
     return () => { cancelled = true; };
-  }, []);
+  }, [enabled]);
 
-  return counts;
+  return enabled ? counts : null;
 }
