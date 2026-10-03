@@ -536,37 +536,6 @@ export default function HRQuestionBank() {
               </div>
             </div>
 
-            {/* Correct Answer - Only for Yes/No questions */}
-            {formData.answer_type === 'yes_no' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Correct Answer *</label>
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({ ...prev, correct_answer: 'Yes' }))}
-                    className={`flex-1 px-4 py-3 rounded-lg border-2 text-sm font-medium transition-all ${
-                      formData.correct_answer === 'Yes'
-                        ? 'border-green-500 bg-green-50 text-green-700 shadow-sm ring-1 ring-green-500/30'
-                        : 'border-gray-200 bg-white text-gray-500 hover:border-green-300 hover:bg-green-50/50'
-                    }`}
-                  >
-                    Yes is correct
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({ ...prev, correct_answer: 'No' }))}
-                    className={`flex-1 px-4 py-3 rounded-lg border-2 text-sm font-medium transition-all ${
-                      formData.correct_answer === 'No'
-                        ? 'border-green-500 bg-green-50 text-green-700 shadow-sm ring-1 ring-green-500/30'
-                        : 'border-gray-200 bg-white text-gray-500 hover:border-green-300 hover:bg-green-50/50'
-                    }`}
-                  >
-                    No is correct
-                  </button>
-                </div>
-              </div>
-            )}
-
             {/* Save / Cancel */}
             <div className="flex justify-end gap-3 pt-3 border-t border-gray-100">
               <button
