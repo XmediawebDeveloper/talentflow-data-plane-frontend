@@ -700,6 +700,22 @@ function bundledFollowUpFromRow(row: any): PerQuestionDetail['bundledFollowUp'] 
  *  text. Lets the conversation / groups builders recover the authoritative
  *  per-row metadata (round_type section + bundled-followup note) for a turn
  *  they sourced from elsewhere. First write wins on duplicate text. */
+/** The backend's question score for a question_history row or question group.
+ *  The UI never recomputes it from the skill rows — the backend
+ *  (_compute_question_scores) is the only source. `question_score` wins
+ *  (null = the backend gave this question no score); evaluations written
+ *  before that field existed only carry `score`. A partial (terminated)
+ *  row's runtime `score` is not a question score — it is shown separately as
+ *  displayOnlyQuestionScore. */
+function backendQuestionScore(row: any): number | null {
+  if (!row) return null;
+  if ('question_score' in row) {
+    return typeof row.question_score === 'number' ? truncate1(row.question_score) : null;
+  }
+  if (String(row.score_source || '').toLowerCase() === 'partial_runtime') return null;
+  return typeof row.score === 'number' ? truncate1(row.score) : null;
+}
+
 function indexHistoryByText(questionHistory: any[]): Map<string, any> {
   const m = new Map<string, any>();
   for (const h of questionHistory || []) {
@@ -1008,17 +1024,6 @@ function buildPerQuestionDetailsFromGroups(
       };
     });
 
-  const computeQuestionScore = (skills: PerQuestionSkill[]): number => {
-    // AIU104: Σ(score×weight) / Σ(weight) over EVERY assigned skill the
-    // evaluator scored — a 0-score skill (asked, not demonstrated) is a real gap
-    // and MUST count. Only skills with NO evaluator score (is_unscored) are
-    // excluded, so we never fabricate a 0 for an unevaluated skill.
-    const scored = skills.filter(k => !k.is_unscored);
-    const sumW = scored.reduce((s, k) => s + k.weight, 0);
-    const sumWS = scored.reduce((s, k) => s + k.score * k.weight, 0);
-    return sumW > 0 ? truncate1((sumWS / sumW)) : 0;
-  };
-
   for (const g of groups) {
     const mainQ = String(g?.question || '');
     // Skip the role warm-up / deflection / farewell / resume ack — these are
@@ -1051,11 +1056,8 @@ function buildPerQuestionDetailsFromGroups(
       question: mainQ,
       answer: mainA,
       skills: mainSkills,
-      questionScore: mainScoreRows.length > 0
-        ? computeQuestionScore(mainSkills)
-        : typeof matched?.score === 'number'
-          ? truncate1(matched.score)
-          : 0,
+      // Backend question score for this group (never recomputed here).
+      questionScore: backendQuestionScore(g) ?? backendQuestionScore(matched) ?? 0,
       // Recover the bundled-followup note from the matched history row so it
       // survives even when this (groups) builder is the one selected.
       bundledFollowUp: bundledFollowUpFromRow(matched),
@@ -1095,11 +1097,7 @@ function buildPerQuestionDetailsFromGroups(
         question: fuQ,
         answer: fuA,
         skills: fuSkills,
-        questionScore: fuScoreRows.length > 0
-          ? computeQuestionScore(fuSkills)
-          : typeof fuMatched?.score === 'number'
-            ? truncate1(fuMatched.score)
-            : 0,
+        questionScore: backendQuestionScore(fuMatched) ?? 0,
         bundledFollowUp: bundledFollowUpFromRow(fuMatched),
         scoreRationale: String(fu?.score_rationale || fuMatched?.score_rationale || ''),
       });
@@ -1538,20 +1536,20 @@ function buildPerQuestionDetailsFromHistory(
     // evaluator score (is_unscored — cancelled/incomplete eval) are EXCLUDED; a
     // real 0-scored skill (asked but not demonstrated) is a genuine gap and MUST
     // count, so a strong answer on one skill can't hide zeros on the others.
-    const scoredSkills = skills.filter(k => !k.is_unscored);
+    // Question score comes from the backend only (_compute_question_scores);
+    // it is never recomputed from the skill rows here.
+    const backendQS = backendQuestionScore(q);
+    const questionScore = backendQS ?? 0;
     // A skill with no priority (weight 0) can't carry the question score, so a
-    // question whose only scored skills are unprioritized is "Not evaluated" —
-    // matching the backend, which leaves such a question without a score.
+    // question whose only scored skills are unprioritized is "Not evaluated".
     const hasEvaluatedSkill = skills.some(k => !k.is_unscored && k.weight > 0);
-    const sumW = scoredSkills.reduce((s, k) => s + k.weight, 0);
-    const sumWS = scoredSkills.reduce((s, k) => s + k.score * k.weight, 0);
-    const weighted = sumW > 0 ? sumWS / sumW : 0;
-    const questionScore = truncate1(weighted);
     // Whole question is "Not evaluated" only when the evaluator produced NO
     // usable score rows for any skill on the slot. A real no-answer / skip /
     // IDK turn is still an evaluated question with score 0, so it must stay
     // counted instead of collapsing to "Not Evaluated".
-    const isUnscored = skills.length > 0 && !hasEvaluatedSkill;
+    const isUnscored = backendQS === null && (
+      (q != null && 'question_score' in q) || (skills.length > 0 && !hasEvaluatedSkill)
+    );
 
     // Attach explicit follow-ups for this main Q. Looked up by the raw
     // history question_number (origQ) since follow-up entries store the
@@ -1874,15 +1872,6 @@ function buildPerQuestionDetailsFromConversation(
       };
     });
 
-  // Question Score = Σ(skill_score × skill_weight) / Σ(skill_weight)
-  // Per spec doc §4 Step 3.
-  const computeQuestionScore = (skills: PerQuestionSkill[]): number => {
-    if (skills.length === 0) return 0;
-    const sumW = skills.reduce((s, k) => s + k.weight, 0);
-    const sumWS = skills.reduce((s, k) => s + k.score * k.weight, 0);
-    return sumW > 0 ? truncate1((sumWS / sumW)) : 0;
-  };
-
   // Resolve skills for a question text. Priority order:
   //   1. Text scan against JD skill names — PREFERRED because Bina's
   //      actual question wording is the ground truth for "what was asked",
@@ -1909,7 +1898,9 @@ function buildPerQuestionDetailsFromConversation(
     score: number;
   } => {
     const skills = buildSkillRows(qText, resolveSkills(qText));
-    return { skills, score: computeQuestionScore(skills) };
+    // Backend question score of the matching history row (never recomputed).
+    const row = historyByText.get(qText.trim().toLowerCase());
+    return { skills, score: backendQuestionScore(row) ?? 0 };
   };
 
   const out: PerQuestionDetail[] = [];
@@ -2621,14 +2612,9 @@ export function buildDashboardData(params: {
         if (matchCount === 0 && rowHasRealScores) {
           return row;
         }
-        // Otherwise recompute the question score from the DISPLAYED (replaced)
-        // skills so the card's Q Score is always Σ(shown skill × weight)/Σweight
-        // — never a stale number from skills we just swapped out.
-        const _scored = replacedSkills.filter(k => !k.is_unscored);
-        const _sumW = _scored.reduce((s, k) => s + k.weight, 0);
-        const _sumWS = _scored.reduce((s, k) => s + k.score * k.weight, 0);
-        const _qScore = _sumW > 0 ? truncate1((_sumWS / _sumW)) : 0;
-        return { ...row, skills: replacedSkills, questionScore: _qScore };
+        // The question score stays the backend's value — swapping in the plan
+        // slot's skill rows never recomputes it.
+        return { ...row, skills: replacedSkills };
       });
     };
     // MHS offset = 0 (starts at global Q1).

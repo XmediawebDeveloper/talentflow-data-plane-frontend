@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { Button } from '@/components/ui/button';
-import { ArrowUpDown, Sparkles, BarChart3, Search, ChevronDown, ChevronRight, Mail, Phone, MapPin, Building2, CheckCircle, Star, User, Users, FileText, Send, TrendingUp, Clock, Calendar, Briefcase, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2, Info, RefreshCw, PieChart, MoreVertical, Video, FileDown } from 'lucide-react';
+import { ArrowUpDown, Sparkles, BarChart3, Search, ChevronDown, ChevronRight, Mail, Phone, MapPin, CheckCircle, Star, User, Users, FileText, Send, TrendingUp, Calendar, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2, Info, RefreshCw, PieChart, MoreVertical, Video, FileDown } from 'lucide-react';
 import { exportToCSV, type ExportColumn } from '@/lib/utils/exportUtils';
 import {
   DropdownMenu,
@@ -17,6 +17,8 @@ import { useState, useEffect, useRef, useMemo, Fragment } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
 import AITalentMatchPageJobsList from './AITalentMatchPageJobsList';
+import { JobOpeningPrimaryItems } from '@/components/jobs/JobOpeningSummary';
+import type { Job as SharedJob } from '@/lib/types/types';
 import ResumeVersionsModal from './ResumeVersionsModal';
 import Pagination from './Pagination';
 import ListPagination from './ListPagination';
@@ -43,7 +45,7 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 /* The shared formatters, so a JD's industry and employment type read the same
    here as on the Resume Scoring rows this list is modelled on. */
-import { formatEmploymentType, formatIndustryType, getDisplayStatus, getStatusConfig } from '@/lib/utils/jobOpeningDisplay';
+import { getDisplayStatus, getStatusConfig } from '@/lib/utils/jobOpeningDisplay';
 import { useQuota } from '@/contexts/QuotaContext';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
@@ -54,7 +56,6 @@ import { DateField } from '@/components/ui/date-field';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
 import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
 import { useListSearch } from '@/lib/hooks/useListSearch';
-import JDVersionHistory from '@/components/JDVersionHistory';
 
 /* Shared row for both candidate tables' ⋮ Actions menu (Preview Resume /
    Score Resume / Invite Assessment / Invite AI Interview). */
@@ -110,6 +111,11 @@ interface Job {
   postedDate?: string;
   /** Drives the AI / Manual badge next to Status in the version history table. */
   creationMethod?: string;
+  /** JD salary, for the Matched Jobs rows' details line. */
+  salaryMin?: number | null;
+  salaryMax?: number | null;
+  salaryCurrency?: string;
+  compensationType?: string;
 }
 
 // Extended interface for UI display (adds versions for modal)
@@ -129,6 +135,10 @@ interface MatchHistory {
   matchedAt: Date;
   totalMatches: number;
   matchedCandidates: MatchedCandidateWithVersions[];
+  /** Who ran the match — the sessions API's `run_by_name` (resolved from
+   *  `ai_talent_match_sessions.run_by`). Absent only when that user row is
+   *  gone, and the row then reads "System". */
+  matchedByName?: string;
 }
 
 /** Set just before leaving for a resume, so returning keeps the active filters. */
@@ -185,13 +195,13 @@ function matchBandForRating(rating: number): 'exact' | 'partial' | 'no_match' {
  * Match History modal's own filter row (Search / Matched By / Version /
  * Rating Range / Date Range). Draft edits live separately from the applied
  * values so typing/picking doesn't narrow the table until Apply — Reset
- * clears both back to this. "Matched By" only ever has one real value (the
- * API carries no per-run user attribution — every match is system-triggered)
- * so its options are honest rather than inventing names.
+ * clears both back to this. "Matched By" is 'all' or one of the names the
+ * loaded runs were actually run by (the sessions API's `run_by_name`), with
+ * 'System' standing for a run whose user can no longer be resolved.
  */
 interface MatchHistoryModalFilters {
   search: string;
-  matchedBy: 'all' | 'system';
+  matchedBy: string;
   version: 'all' | number;
   rating: 'all' | 'exact' | 'partial' | 'no_match';
   dateFrom: string;
@@ -221,7 +231,7 @@ interface CandidateMatchRow {
    *  attachment details so this roll-up can show the same columns as the
    *  per-job match table. */
   best: MatchedCandidateWithVersions;
-  jobs: Array<{ historyId: string; jobId: string; jobTitle: string; score: number; matchedAt: Date; resumeVersion?: number; resumeId?: string }>;
+  jobs: Array<{ historyId: string; jobId: string; jobTitle: string; score: number; matchedAt: Date; matchedByName?: string; resumeVersion?: number; resumeId?: string }>;
 }
 
 interface AITalentMatchPageProps {
@@ -517,6 +527,9 @@ export default function AITalentMatchPage({
             jobTitle: item.jobTitle,
             score: candidate.matchScore ?? 0,
             matchedAt: item.matchedAt,
+            // Who ran THAT match (the session's `run_by_name`), so the
+            // expanded per-job rows name a person instead of "System".
+            matchedByName: item.matchedByName,
             // Same field ScoredResumesTable's own "Resume Version" column
             // reads — this candidate's resume as of THIS match, not
             // necessarily the resume's current version if it was re-uploaded
@@ -965,9 +978,14 @@ export default function AITalentMatchPage({
     return buildAIMatchVersions(knownSessions);
   };
 
-  const toggleAIMatchVersionHistory = (historyKey: string, anyRowId: string) => {
-    const opening = expandedHistoryJobId !== historyKey;
-    setExpandedHistoryJobId(opening ? historyKey : null);
+  /* Opened per ROW (`rowId`, the history item's own id), not per job: several
+     rows can share one `historyKey` — versions of the same job, or rows whose
+     job isn't in the loaded list — and keying the open state on it opened every
+     one of them at once. The versions themselves are still fetched and cached
+     per job (`historyKey`), so rows of one job share the data, not the toggle. */
+  const toggleAIMatchVersionHistory = (historyKey: string, anyRowId: string, rowId: string) => {
+    const opening = expandedHistoryJobId !== rowId;
+    setExpandedHistoryJobId(opening ? rowId : null);
     if (opening && !historyVersionsByJob[historyKey]) void loadAIMatchVersionHistory(historyKey, anyRowId);
   };
 
@@ -1436,7 +1454,10 @@ export default function AITalentMatchPage({
         jobTitle: selectedJobData.title,
         matchedAt: new Date(),
         totalMatches: results.length,
-        matchedCandidates: candidatesWithVersions
+        matchedCandidates: candidatesWithVersions,
+        // This run was just made by the signed-in user; the server says the
+        // same in `run_by_name` on the next sessions refresh.
+        matchedByName: user?.name || undefined,
       };
       if (selectedHistoryItem?.jobId === selectedJob) {
         setSelectedHistoryItem(newMatchHistory);
@@ -2904,9 +2925,9 @@ export default function AITalentMatchPage({
                                         </thead>
                                         <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
                                           {sortedJobs.map(job => {
-                                            // The AI Match session has no "run by" field anywhere in the
-                                            // API (unlike resume scoring, which does) — 'System' names that
-                                            // honestly rather than guessing a person.
+                                            // Who ran the match comes from the session's `run_by_name`
+                                            // (ai_talent_match_sessions.run_by); 'System' is only the
+                                            // fallback for a run with no resolvable user.
                                             const jobVersion = jobs.find(j => j.id === job.jobId)?.currentVersion;
                                             return (
                                               <tr key={job.historyId} className="bg-white dark:bg-slate-900">
@@ -2922,7 +2943,7 @@ export default function AITalentMatchPage({
                                                   </span>
                                                 </td>
                                                 <td className="py-2.5 px-4 align-middle whitespace-nowrap">
-                                                  <div className="text-sm text-gray-700 dark:text-slate-300">System</div>
+                                                  <div className="text-sm text-gray-700 dark:text-slate-300">{job.matchedByName || 'System'}</div>
                                                   <div className="text-xs text-gray-500 dark:text-slate-500">
                                                     {formatISTDate(job.matchedAt.toISOString())} · {formatISTTime(job.matchedAt.toISOString())}
                                                   </div>
@@ -3087,7 +3108,7 @@ export default function AITalentMatchPage({
                                       {toMatchRating(job.score)}
                                     </span>
                                     <span className="text-xs text-gray-500 dark:text-slate-500">
-                                      {formatISTDate(job.matchedAt.toISOString())}
+                                      {job.matchedByName || 'System'} · {formatISTDate(job.matchedAt.toISOString())}
                                     </span>
                                   </div>
                                 </div>
@@ -3556,7 +3577,7 @@ export default function AITalentMatchPage({
             ) : (
               <>
                 <div className="hidden md:block min-h-[400px] max-h-[calc(100dvh-20rem)] overflow-auto rounded-xl border border-gray-100 dark:border-slate-700/60 tf-table-shell">
-                  <table className="w-full min-w-[1400px] table-auto">
+                  <table className="w-full min-w-[1600px] table-auto">
                     <thead className="sticky top-0 z-10">
                       <tr>
                         {/* Select + Match Rating stack as TWO sticky-left columns —
@@ -3578,7 +3599,7 @@ export default function AITalentMatchPage({
                         <th className="text-left py-3 px-4 text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap align-middle bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 sticky left-12 z-[8] shadow-[1px_0_0_0_var(--border)]">
                           Match Rating
                         </th>
-                        {['Candidate Name', 'Job Title', 'Email', 'Phone', 'Location', 'Skills', 'Experience', 'Uploaded By', 'Uploaded Date', 'Resume Version', 'Attachments', 'Scored Status'].map((label) => (
+                        {['Candidate Name', 'Job ID', 'Job Title', 'Job Version', 'Email', 'Phone', 'Location', 'Skills', 'Experience', 'Uploaded By', 'Uploaded Date', 'Resume Version', 'Attachments', 'Scored Status'].map((label) => (
                           <th
                             key={label}
                             className="text-left py-3 px-4 text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap align-middle bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700"
@@ -3632,6 +3653,19 @@ export default function AITalentMatchPage({
                               </span>
                             </div>
                           </td>
+                          {/* Job ID — the job this match ran against, its JD code
+                              off the job record (the badge every list uses). */}
+                          <td className="py-3 px-4 align-middle whitespace-nowrap">
+                            {(() => {
+                              // The job record first; the match session's own joined
+                              // JD code covers a job outside the loaded job list.
+                              const jdCode = jobs.find(j => j.id === job.jobId)?.jobId
+                                || allMatchSessions.find(s => s.id === job.historyId)?.jd_job_id;
+                              return jdCode
+                                ? <JobIdBadge>{jdCode}</JobIdBadge>
+                                : <span className="text-gray-400 dark:text-slate-500">-</span>;
+                            })()}
+                          </td>
                           <td className="py-3 px-4 align-middle">
                             <button
                               onClick={(e) => { e.stopPropagation(); openCandidateMatch(job.historyId); }}
@@ -3640,6 +3674,21 @@ export default function AITalentMatchPage({
                             >
                               {job.jobTitle}
                             </button>
+                          </td>
+                          {/* Job Version — the matched JD version, the chip the
+                              Match History popup's Job Version column draws. */}
+                          <td className="py-3 px-4 align-middle whitespace-nowrap">
+                            {(() => {
+                              const jobVersion = jobs.find(j => j.id === job.jobId)?.currentVersion
+                                ?? allMatchSessions.find(s => s.id === job.historyId)?.jd_current_version;
+                              return jobVersion
+                                ? (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs border bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-500/30">
+                                    v{jobVersion}
+                                  </span>
+                                )
+                                : <span className="text-gray-400 dark:text-slate-500">-</span>;
+                            })()}
                           </td>
                           <td className="py-3 px-4 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
                             {row.email ? row.email : <span className="text-gray-400 dark:text-slate-500">-</span>}
@@ -3655,12 +3704,16 @@ export default function AITalentMatchPage({
                           <td className="py-3 px-4 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
                             {row.location ? row.location : <span className="text-gray-400 dark:text-slate-500">-</span>}
                           </td>
-                          <td className="py-3 px-4 align-middle min-w-[220px]">
-                            <div className="flex flex-wrap gap-1">
+                          <td className="py-3 px-4 align-middle min-w-[220px] max-w-[260px]">
+                            {/* One chip shown in full, the rest collapse into
+                                "+N more" — flex-nowrap so a row with more/longer
+                                skills than another never grows taller than it. */}
+                            <div className="flex flex-nowrap items-center gap-1 overflow-hidden">
                               <SkillsList
                                 skills={row.best.skills}
-                                chipClassName="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-brand-blue/10 text-brand-blue border border-brand-blue/20 whitespace-nowrap"
-                                moreClassName="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs text-brand-blue font-medium whitespace-nowrap hover:bg-brand-blue/10 transition-colors cursor-pointer"
+                                max={1}
+                                chipClassName="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-brand-blue/10 text-brand-blue border border-brand-blue/20 min-w-0 shrink truncate max-w-[160px]"
+                                moreClassName="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs text-brand-blue font-medium whitespace-nowrap hover:bg-brand-blue/10 transition-colors cursor-pointer shrink-0"
                               />
                             </div>
                           </td>
@@ -4071,23 +4124,28 @@ export default function AITalentMatchPage({
                           >
                             {item.jobTitle}
                           </h3>
-                          {jobData?.currentVersion && (
-                            <span className={`inline-flex h-7 items-center px-2 py-0.5 rounded-full text-xs gap-1.5 border flex-shrink-0 ${
-                              jobData.currentVersion > 1
-                                ? 'bg-brand-orange/10 text-brand-orange-deep border-brand-orange/20'
-                                : 'bg-success-subtle text-success border-success-line'
-                            }`}>
-                              <div className={`w-1.5 h-1.5 rounded-full ${jobData.currentVersion > 1 ? 'bg-brand-orange' : 'bg-success'}`}></div>
-                              {jobData.currentVersion > 1 ? 'Republished' : 'Published'}
-                            </span>
-                          )}
+                          {/* JD no., name, version, status, then the History icon. */}
                           {jobData?.currentVersion && (
                             <span className="inline-flex h-7 items-center px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 gap-1.5 flex-shrink-0">
                               <div className="w-1.5 h-1.5 rounded-full bg-gray-500 dark:bg-slate-500"></div>
                               v{jobData.currentVersion}
                             </span>
                           )}
-                          <JDVersionHistory jdId={item.jobId} version={jobData?.currentVersion} />
+                          {jobData?.currentVersion && (() => {
+                            /* The Job Descriptions page's own status colours
+                               (`getStatusConfig`) — Republished brand blue,
+                               Published green — so a job reads the same here. */
+                            const statusLabel = jobData.currentVersion > 1 ? 'Republished' : 'Published';
+                            const statusTone = getStatusConfig(statusLabel);
+                            return (
+                              <span className={`inline-flex h-7 items-center px-2 py-0.5 rounded-full text-xs gap-1.5 border flex-shrink-0 ${statusTone.bg} ${statusTone.text} ${statusTone.border}`}>
+                                <div className={`w-1.5 h-1.5 rounded-full ${statusTone.dot}`}></div>
+                                {statusLabel}
+                              </span>
+                            );
+                          })()}
+                          {/* No inline View Versions here: the row's own View Versions
+                              button, right-hand end, is the one version control. */}
                           {/* Match History — every run across this job's whole
                               lineage, with the Exact/Partial/No Match roll-up
                               Resume Scoring's own History icon opens. */}
@@ -4101,46 +4159,58 @@ export default function AITalentMatchPage({
                             <History className="w-3.5 h-3.5" />
                           </Button>
                         </div>
+                        {/* The JD details line the Run AI Match job list (and
+                            the Job Descriptions list) prints — experience,
+                            industry, location, salary, type, work mode — from
+                            the one shared component, then when it was posted
+                            and by whom. */}
+                        {jobData && (
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-gray-600 dark:text-slate-400 mb-1.5">
+                            <JobOpeningPrimaryItems
+                              job={{
+                                id: jobData.id,
+                                title: jobData.title,
+                                status: jobData.status as SharedJob['status'],
+                                location: jobData.location,
+                                daysActive: 0,
+                                requiredMatch: 0,
+                                experience: jobData.experience,
+                                industry_type: jobData.industryType,
+                                employmentType: jobData.employmentType,
+                                workMode: jobData.remoteType,
+                                salary_min: jobData.salaryMin,
+                                salary_max: jobData.salaryMax,
+                                salary_currency: jobData.salaryCurrency,
+                                compensation_type: jobData.compensationType,
+                              }}
+                            />
+                            {jobData.postedDate && (
+                              <span className="flex items-center gap-1.5">
+                                <Calendar className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                                Posted {formatISTDate(jobData.postedDate)}
+                              </span>
+                            )}
+                            {jobData.postedBy && (
+                              <span className="flex items-center gap-1.5">
+                                <User className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                                By {jobData.postedBy}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        {/* The match itself: when it ran, and what it found. */}
                         <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-slate-400">
-                        {jobData?.department && (
-                          <span className="flex items-center gap-1.5">
-                            <Briefcase className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-                            {jobData.department}
-                          </span>
-                        )}
-                        {jobData?.industryType && (
-                          <span className="flex items-center gap-1.5">
-                            <Building2 className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-                            {formatIndustryType(jobData.industryType)}
-                          </span>
-                        )}
-                        {jobData?.location?.trim() && (
-                          <span className="flex items-center gap-1.5">
-                            <MapPin className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-                            {jobData.location}
-                          </span>
-                        )}
-                        {jobData?.employmentType && (
-                          <span className="flex items-center gap-1.5">
-                            <Clock className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-                            {formatEmploymentType(jobData.employmentType)}
-                          </span>
-                        )}
-                        {jobData?.remoteType && (
-                          <span className="flex items-center gap-1.5">
-                            <Users className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-                            <span className="capitalize">{jobData.remoteType}</span>
-                          </span>
-                        )}
-                        {jobData?.postedBy && (
-                          <span className="flex items-center gap-1.5">
-                            <User className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-                            By {jobData.postedBy}
-                          </span>
-                        )}
                         <span className="flex items-center gap-1.5">
-                          <Calendar className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                          <Sparkles className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                           Matched {formatISTDate(item.matchedAt.toISOString())}
+                        </span>
+                        {/* Who ran it. Always shown; the name comes from the
+                            sessions API's `run_by_name`, falling back to
+                            "System" only when the run has no resolvable user
+                            (a deleted account), as the Match History popup does. */}
+                        <span className="flex items-center gap-1.5">
+                          <User className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                          Matched by {item.matchedByName || 'System'}
                         </span>
                         {/* The result gets the tinted chip, exactly as the
                             "N candidates scored" chip does on the reference. */}
@@ -4194,18 +4264,18 @@ export default function AITalentMatchPage({
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            toggleAIMatchVersionHistory(historyKey, item.jobId);
+                            toggleAIMatchVersionHistory(historyKey, item.jobId, item.id);
                           }}
-                          aria-expanded={expandedHistoryJobId === historyKey}
-                          title={expandedHistoryJobId === historyKey ? 'Hide version history' : 'View version history'}
+                          aria-expanded={expandedHistoryJobId === item.id}
+                          title={expandedHistoryJobId === item.id ? 'Hide version history' : 'View version history'}
                           className={`px-3 py-2 rounded-lg transition-all text-sm font-medium flex items-center gap-1.5 justify-center w-full text-white ring-1 ring-white/10 ${
-                            expandedHistoryJobId === historyKey
+                            expandedHistoryJobId === item.id
                               ? 'bg-brand-blue-2 shadow-md shadow-brand-blue/30'
                               : 'bg-brand-blue hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25 hover:shadow-md hover:shadow-brand-blue/30'
                           }`}
                         >
-                          {expandedHistoryJobId === historyKey ? 'Hide Versions' : 'View Versions'}
-                          <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${expandedHistoryJobId === historyKey ? 'rotate-180' : ''}`} />
+                          {expandedHistoryJobId === item.id ? 'Hide Versions' : 'View Versions'}
+                          <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${expandedHistoryJobId === item.id ? 'rotate-180' : ''}`} />
                         </button>
                       )}
                     </div>
@@ -4215,7 +4285,7 @@ export default function AITalentMatchPage({
                       match run across this job's whole lineage (every republished
                       version), expanding in place the same way the Job Openings
                       list expands its own version history. */}
-                  {expandedHistoryJobId === historyKey && (
+                  {expandedHistoryJobId === item.id && (
                     <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700/60" onClick={(e) => e.stopPropagation()}>
                       {/* Same label/icon JobVersionHistoryPanel (Job Openings /
                           Resume Scoring) puts above its own version table — this
@@ -4268,6 +4338,7 @@ export default function AITalentMatchPage({
                             matchedAt: new Date(session.created_at),
                             totalMatches: session.total_matches,
                             matchedCandidates: [],
+                            matchedByName: session.run_by_name || undefined,
                           }, targetJobId);
                           updateUrlParams({ jdId: targetJobId, view: 'results' });
                         }}
@@ -4360,9 +4431,9 @@ export default function AITalentMatchPage({
           History" design (stat cards, filter row, Rating Breakdown columns,
           a Rating Distribution + Latest Run Summary sidebar) adapted to this
           data: sessions instead of scoring runs, a 1-10 rating instead of a
-          percentage. "Matched By" always reads System — the API carries no
-          per-run user attribution, so that column states the honest single
-          value rather than inventing a name. A bespoke table replaces
+          percentage. "Matched By" is the session's `run_by_name` — the tenant
+          user who ran that match — and reads "System" only when the run has no
+          resolvable user. A bespoke table replaces
           AIMatchVersionHistoryTable here (still used, unchanged, by "View
           Versions" elsewhere) since the column set genuinely differs. */}
       {matchHistoryModal && (() => {
@@ -4397,11 +4468,20 @@ export default function AITalentMatchPage({
           const v9to7 = results.filter(r => matchBandForRating(ratingFor(r)) === 'partial').length;
           const vBelow7 = results.filter(r => matchBandForRating(ratingFor(r)) === 'no_match').length;
           const candidateCount = results.length || version.session.total_matches || 0;
-          return { version, v10, v9to7, vBelow7, candidateCount };
+          // Who ran the most recent run of this JD version. 'System' only when
+          // the session's run_by can't be resolved to a user.
+          const matchedBy = version.session.run_by_name?.trim() || 'System';
+          return { version, v10, v9to7, vBelow7, candidateCount, matchedBy };
         });
 
+        // "Matched By" options — the names actually present in these runs, so
+        // the filter can never offer a value that matches nothing.
+        const matchedByOptions = Array.from(
+          new Set(versionRows.map(r => r.matchedBy))
+        ).sort((a, b) => a.localeCompare(b));
+
         const searchTerm = historyModalFilter.search.trim().toLowerCase();
-        const filteredVersionRows = versionRows.filter(({ version, v10, v9to7, vBelow7 }) => {
+        const filteredVersionRows = versionRows.filter(({ version, v10, v9to7, vBelow7, matchedBy }) => {
           const f = historyModalFilter;
           const matchesSearch = !searchTerm || (version.session.results || []).some(r =>
             r.candidate_name?.toLowerCase().includes(searchTerm)
@@ -4414,8 +4494,8 @@ export default function AITalentMatchPage({
           const lastMatchedDay = version.lastMatchedAt ? version.lastMatchedAt.slice(0, 10) : '';
           const matchesDateFrom = !f.dateFrom || (!!lastMatchedDay && lastMatchedDay >= f.dateFrom);
           const matchesDateTo = !f.dateTo || (!!lastMatchedDay && lastMatchedDay <= f.dateTo);
-          // matchedBy has one real value today, so it never narrows anything.
-          return matchesSearch && matchesVersion && matchesRating && matchesDateFrom && matchesDateTo;
+          const matchesMatchedBy = f.matchedBy === 'all' || f.matchedBy === matchedBy;
+          return matchesSearch && matchesMatchedBy && matchesVersion && matchesRating && matchesDateFrom && matchesDateTo;
         });
 
         const isHistoryModalFilterActive =
@@ -4452,6 +4532,7 @@ export default function AITalentMatchPage({
                 matchedAt: new Date(session.created_at),
                 totalMatches: session.total_matches,
                 matchedCandidates: [],
+                matchedByName: session.run_by_name || undefined,
               }, targetJobId);
               updateUrlParams({ jdId: targetJobId, view: 'results' });
               setMatchHistoryModal(null);
@@ -4586,11 +4667,13 @@ export default function AITalentMatchPage({
                           <label className={filterLabelClass}>Matched By</label>
                           <select
                             value={historyModalFilter.matchedBy}
-                            onChange={(e) => setHistoryModalFilter(prev => ({ ...prev, matchedBy: e.target.value as MatchHistoryModalFilters['matchedBy'] }))}
+                            onChange={(e) => setHistoryModalFilter(prev => ({ ...prev, matchedBy: e.target.value }))}
                             className={`${filterInputClass} w-full`}
                           >
                             <option value="all">All Sources</option>
-                            <option value="system">System</option>
+                            {matchedByOptions.map(name => (
+                              <option key={name} value={name} title={name}>{clampOptionLabel(name)}</option>
+                            ))}
                           </select>
                         </div>
                         <div className="flex-1 min-w-[7rem]">
@@ -4691,7 +4774,7 @@ export default function AITalentMatchPage({
                                     No match runs found for the selected filters.
                                   </td>
                                 </tr>
-                              ) : filteredVersionRows.map(({ version, v10, v9to7, vBelow7, candidateCount }) => {
+                              ) : filteredVersionRows.map(({ version, v10, v9to7, vBelow7, candidateCount, matchedBy }) => {
                                 const isCompleted = version.session.status?.toLowerCase() === 'completed';
                                 const statusLabel = version.session.status
                                   ? version.session.status.charAt(0).toUpperCase() + version.session.status.slice(1)
@@ -4704,9 +4787,9 @@ export default function AITalentMatchPage({
                                       </span>
                                     </td>
                                     <td className="py-2.5 px-3 whitespace-nowrap text-gray-700 dark:text-slate-300">
-                                      <span className="inline-flex items-center gap-1.5">
-                                        <Sparkles className="w-3.5 h-3.5 text-brand-cyan" />
-                                        System
+                                      <span className="inline-flex items-center gap-1.5 max-w-[11rem]" title={version.session.run_by_email || matchedBy}>
+                                        <Sparkles className="w-3.5 h-3.5 text-brand-cyan flex-shrink-0" />
+                                        <span className="truncate">{matchedBy}</span>
                                       </span>
                                     </td>
                                     <td className="py-2.5 px-3 whitespace-nowrap text-gray-600 dark:text-slate-400">
@@ -4742,7 +4825,7 @@ export default function AITalentMatchPage({
                             <p className="text-center text-xs text-gray-500 dark:text-slate-500 py-4">
                               No match runs found for the selected filters.
                             </p>
-                          ) : filteredVersionRows.map(({ version, v10, v9to7, vBelow7, candidateCount }) => {
+                          ) : filteredVersionRows.map(({ version, v10, v9to7, vBelow7, candidateCount, matchedBy }) => {
                             const isCompleted = version.session.status?.toLowerCase() === 'completed';
                             const statusLabel = version.session.status
                               ? version.session.status.charAt(0).toUpperCase() + version.session.status.slice(1)
@@ -4759,7 +4842,7 @@ export default function AITalentMatchPage({
                                   </span>
                                 </div>
                                 <div className="flex items-center justify-between text-gray-600 dark:text-slate-400 mb-2">
-                                  <span className="inline-flex items-center gap-1"><Sparkles className="w-3 h-3 text-brand-cyan" />System</span>
+                                  <span className="inline-flex items-center gap-1 min-w-0"><Sparkles className="w-3 h-3 text-brand-cyan flex-shrink-0" /><span className="truncate">{matchedBy}</span></span>
                                   <span>{formatISTDate(version.lastMatchedAt)} · {formatISTTime(version.lastMatchedAt)}</span>
                                 </div>
                                 <div className="flex items-center gap-2 mb-2">
@@ -4933,6 +5016,15 @@ export default function AITalentMatchPage({
                     <span className="inline-flex items-center gap-1">
                       <User className="w-3.5 h-3.5" />
                       {matchedCandidates.length} matches
+                    </span>
+                    {/* Who ran this match — the session's `run_by_name`, the
+                        same value the Matched Jobs row and Match History show.
+                        "System" only when the run has no resolvable user. */}
+                    <span className="inline-flex items-center gap-1 min-w-0">
+                      <User className="w-3.5 h-3.5 flex-shrink-0" />
+                      <span className="truncate">
+                        Matched by {selectedHistoryItem?.matchedByName || historyItemForSelectedJob?.matchedByName || 'System'}
+                      </span>
                     </span>
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
                       <CheckCircle2 className="w-3 h-3" />
@@ -5328,12 +5420,16 @@ export default function AITalentMatchPage({
                     <td className="px-4 py-3 text-sm text-gray-700 dark:text-slate-300">
                       {candidate.location ? candidate.location : <span className="text-gray-400 dark:text-slate-500">-</span>}
                     </td>
-                    <td className="px-4 py-4">
-                      <div className="flex flex-wrap gap-1">
+                    <td className="px-4 py-4 min-w-[220px] max-w-[260px]">
+                      {/* One chip shown in full, the rest collapse into "+N
+                          more" — flex-nowrap so a row with more/longer skills
+                          than another never grows taller than it. */}
+                      <div className="flex flex-nowrap items-center gap-1 overflow-hidden">
                         <SkillsList
                           skills={candidate.skills}
-                          chipClassName="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-brand-blue/10 text-brand-blue border border-brand-blue/20"
-                          moreClassName="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs text-brand-blue font-medium hover:bg-brand-blue/10 transition-colors cursor-pointer"
+                          max={1}
+                          chipClassName="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-brand-blue/10 text-brand-blue border border-brand-blue/20 min-w-0 shrink truncate max-w-[160px]"
+                          moreClassName="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs text-brand-blue font-medium hover:bg-brand-blue/10 transition-colors cursor-pointer shrink-0"
                         />
                       </div>
                     </td>

@@ -1010,65 +1010,63 @@ Best regards`);
     scoringService.logClientExport('csv', dataToExport.length, isUuid(jobId) ? jobId : undefined);
   };
 
-  // Export to XLS (using HTML table format that Excel can read)
-  const exportToXLS = () => {
+  /* Export to Excel — a real .xlsx workbook (ExcelJS, loaded on demand).
+     This used to be an HTML table saved as ".xls", which Excel opens only
+     after warning that the file's format and extension don't match. */
+  const exportToXLS = async () => {
     const selectedData = filteredResumes.filter(r => selectedResumes.includes(r.id));
     const dataToExport = selectedResumes.length > 0 ? selectedData : filteredResumes;
 
-    // Build HTML table that Excel can open
-    let tableHTML = `
-      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">
-      <head>
-        <meta charset="UTF-8">
-        <!--[if gte mso 9]>
-        <xml>
-          <x:ExcelWorkbook>
-            <x:ExcelWorksheets>
-              <x:ExcelWorksheet>
-                <x:Name>Scored Resumes</x:Name>
-                <x:WorksheetOptions>
-                  <x:DisplayGridlines/>
-                </x:WorksheetOptions>
-              </x:ExcelWorksheet>
-            </x:ExcelWorksheets>
-          </x:ExcelWorkbook>
-        </xml>
-        <![endif]-->
-        <style>
-          table { border-collapse: collapse; }
-          th, td { border: 1px solid var(--raw-000000); padding: 8px; text-align: left; }
-          th { background-color: var(--raw-f0f0f0); font-weight: bold; }
-        </style>
-      </head>
-      <body>
-        <h2>${jobTitle} - Scored Resumes</h2>
-        <p>Exported: ${formatIST(new Date().toISOString())}</p>
-        <p>Total Records: ${dataToExport.length}</p>
-        <div className="tf-table-shell">
-          <table>
-            <thead>
-              <tr>
-                ${exportColumns.map(col => `<th>${col.label}</th>`).join('')}
-              </tr>
-            </thead>
-            <tbody>
-              ${dataToExport.map(resume => `
-                <tr>
-                  ${exportColumns.map(col => `<td>${getCellValue(resume, col.id)}</td>`).join('')}
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </div>
-      </body>
-      </html>
-    `;
+    let buffer: ArrayBuffer;
+    try {
+      const ExcelJS = (await import('exceljs')).default;
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet('Scored Resumes');
 
-    const blob = new Blob([tableHTML], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+      // Title block, as the old export had it: job, export time, record count.
+      sheet.addRow([`${jobTitle} - Scored Resumes`]).font = { bold: true, size: 14 };
+      sheet.addRow([`Exported: ${formatIST(new Date().toISOString())}`]);
+      sheet.addRow([`Total Records: ${dataToExport.length}`]);
+      sheet.addRow([]);
+
+      const headerRow = sheet.addRow(exportColumns.map(col => col.label));
+      headerRow.eachCell(cell => {
+        cell.font = { bold: true };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F0F0' } };
+      });
+      dataToExport.forEach(resume => {
+        sheet.addRow(exportColumns.map(col => getCellValue(resume, col.id)));
+      });
+
+      // Hairline borders on the table; widths fitted to the longest value (capped).
+      const thin = { style: 'thin' as const, color: { argb: 'FFD0D0D0' } };
+      for (let r = headerRow.number; r <= sheet.rowCount; r++) {
+        sheet.getRow(r).eachCell({ includeEmpty: true }, cell => {
+          cell.border = { top: thin, left: thin, bottom: thin, right: thin };
+          cell.alignment = { vertical: 'top', wrapText: true };
+        });
+      }
+      exportColumns.forEach((col, i) => {
+        const longest = Math.max(
+          col.label.length,
+          ...dataToExport.map(resume => String(getCellValue(resume, col.id) ?? '').length),
+        );
+        sheet.getColumn(i + 1).width = Math.min(60, Math.max(10, longest + 2));
+      });
+      sheet.views = [{ state: 'frozen', ySplit: headerRow.number }];
+
+      buffer = await workbook.xlsx.writeBuffer() as ArrayBuffer;
+    } catch (error) {
+      console.error('Excel export failed:', error);
+      toast.error('Failed to export to Excel');
+      return;
+    }
+
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${jobCodePrefix(dataToExport)}${jobTitle.replace(/\s+/g, '_')}${versionTag(dataToExport)}_Scorecards_${formatFileDate(new Date())}.xls`;
+    link.download = `${jobCodePrefix(dataToExport)}${jobTitle.replace(/\s+/g, '_')}${versionTag(dataToExport)}_Scorecards_${formatFileDate(new Date())}.xlsx`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -3258,7 +3256,7 @@ Best regards`);
                     <FileSpreadsheet className="w-6 h-6 text-blue-700" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="font-bold text-gray-900">Excel Format (.xls)</div>
+                    <div className="font-bold text-gray-900">Excel Format (.xlsx)</div>
                     <div className="text-sm text-gray-500">Native Excel format with formatting and styling.</div>
                   </div>
                   <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
@@ -3282,7 +3280,7 @@ Best regards`);
               <Button
                 variant="primary"
                 size="md"
-                onClick={() => (exportFormat === 'csv' ? exportToCSV() : exportToXLS())}
+                onClick={() => (exportFormat === 'csv' ? exportToCSV() : void exportToXLS())}
                 icon={<Download className="w-4 h-4" />}
               >
                 Export

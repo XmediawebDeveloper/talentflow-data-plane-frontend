@@ -1091,6 +1091,31 @@ export const jdService = {
   },
 
   /**
+   * How many versions each of these jobs has, in ONE request.
+   *
+   * The authoritative source for the "Job Versions" figure on the Assessment
+   * and AI Interview job rows. Those used to count whatever lineage the browser
+   * happened to be holding, which is how a row disagreed with the version panel
+   * underneath it.
+   *
+   * Keyed by the id asked with. `active` excludes Draft versions — the rule the
+   * version panel lists by; `total` counts every version.
+   */
+  async getVersionCounts(jdIds: string[]): Promise<Record<string, { total: number; active: number }>> {
+    const ids = Array.from(new Set(jdIds.filter(Boolean)));
+    if (ids.length === 0) return {};
+    try {
+      const response = await api.get<{ counts: Record<string, { total: number; active: number }> }>(
+        '/jd/version-counts',
+        { params: { ids: ids.join(',') } },
+      );
+      return response.data?.counts || {};
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
    * The "Download this version as a Word document" button in
    * JDVersionHistoryModal builds the .docx entirely in the browser - there's
    * no file-generation request for the backend to audit, so it calls this

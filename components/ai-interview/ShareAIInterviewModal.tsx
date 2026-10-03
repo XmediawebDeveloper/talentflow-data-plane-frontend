@@ -1,10 +1,12 @@
 'use client';
 
-import { X, Mail, Plus, Trash2, Send, CheckCircle, Copy, Clock, FileText, Users, Upload, Database, AlertTriangle, Loader2, FileSpreadsheet, MapPin, ShieldAlert, Info, FolderOpen, Folder, ChevronRight, ChevronDown } from 'lucide-react';
+import { X, Mail, Plus, Trash2, Send, CheckCircle, Copy, Clock, Users, Upload, Database, AlertTriangle, Loader2, FileSpreadsheet, MapPin, ShieldAlert, Info, FolderOpen, ChevronRight, Eye, Layers, FolderRoot, FolderInput, Bot, ChevronDown } from 'lucide-react';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { VersionPill } from './AllInterviewsTable';
 import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
+import { modeFromConfig } from '@/lib/constants/aiInterviewMode';
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
@@ -17,6 +19,9 @@ import { Button } from '@/components/ui/button';
 import { isValidEmailFormat } from '@/lib/utils/email';
 import SuccessAnimation from '@/components/ui/success-animation';
 import ListPagination from '@/components/ListPagination';
+import ResumeTextPreviewModal from '@/components/ResumeTextPreviewModal';
+import ResumeVersionsModal from '@/components/ResumeVersionsModal';
+import { resumeService } from '@/lib/services/resumeService';
 
 // Delegates to the one shared, comprehensive format rule (lib/utils/email)
 // rather than this file's own regex, which didn't catch consecutive/
@@ -30,6 +35,8 @@ interface CandidateEmail {
   // scheduledDate: string;   // Commented out - schedule feature disabled for now
   // scheduledTime: string;   // Commented out - schedule feature disabled for now
   source: 'manual' | 'database';
+  /** Finer-grained origin for the row's source badge. Absent on prefilled rows. */
+  origin?: 'manual' | 'excel' | 'my-resumes' | 'shared-db';
   resumeId?: string;
   generatedLink?: string | null;
   generatedSessionId?: string | null;
@@ -43,6 +50,7 @@ interface Resume {
   position: string;
   experience: string;
   skills: string[];
+  versionCount: number;
 }
 
 interface ShareAIInterviewModalProps {
@@ -119,6 +127,29 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
       : [{ id: '1', name: '', email: '', /* scheduledDate: '', scheduledTime: '', */ source: 'manual' }]
   );
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
+  // Resume opened from the eye on a "Select From" row — same preview as Scored Resumes.
+  const [previewResume, setPreviewResume] = useState<{ id: string; name: string } | null>(null);
+  // Multi-version resumes open the version list (view and compare only) instead.
+  const [versionViewer, setVersionViewer] = useState<{ id: string; name: string; versions: any[] } | null>(null);
+  const [loadingViewFor, setLoadingViewFor] = useState<string | null>(null);
+
+  const handleViewResume = async (resume: Resume) => {
+    setLoadingViewFor(resume.id);
+    try {
+      const raw = await resumeService.getVersions(resume.id);
+      const list: any[] = Array.isArray(raw) ? raw : raw?.versions || [];
+      if (list.length <= 1) {
+        setPreviewResume({ id: list[0]?.id || resume.id, name: resume.name });
+        return;
+      }
+      setVersionViewer({ id: resume.id, name: resume.name, versions: list });
+    } catch {
+      // No version list to show — fall back to the resume itself.
+      setPreviewResume({ id: resume.id, name: resume.name });
+    } finally {
+      setLoadingViewFor(null);
+    }
+  };
   const [searchQuery, setSearchQuery] = useState('');
   const excelInputRef = useRef<HTMLInputElement>(null);
   const [excelFileName, setExcelFileName] = useState<string>('');
@@ -127,9 +158,19 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
   const [dbTab, setDbTab] = useState<'my-resumes' | 'internal-db'>('my-resumes');
   const [myResumesData, setMyResumesData] = useState<Resume[]>([]);
   const [internalDbData, setInternalDbData] = useState<Resume[]>([]);
-  const [myFolders, setMyFolders] = useState<{ id: string; name: string; parentId?: string | null }[]>([]);
+  const [myFolders, setMyFolders] = useState<{ id: string; name: string; parentId?: string | null; count: number }[]>([]);
+  // Resumes of the selected folder, fetched server-side (folder_id) like My Resumes does —
+  // the unscoped list doesn't carry a usable folder id to filter on.
+  const [folderResumes, setFolderResumes] = useState<Resume[]>([]);
+  const [isLoadingFolder, setIsLoadingFolder] = useState(false);
   const [selectedFolder, setSelectedFolder] = useState<string>('all');
-  const [expandedFolders, setExpandedFolders] = useState<string[]>([]);
+  type SidebarFolder = { id: string; name: string; parentId?: string | null; count: number };
+  // Open subfolder flyouts, one per depth — same cascading hover menu as "Move to Folder".
+  const [openPath, setOpenPath] = useState<{ folder: SidebarFolder; anchor: DOMRect }[]>([]);
+  const hoverIntentTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (hoverIntentTimer.current) clearTimeout(hoverIntentTimer.current);
+  }, []);
   const [myResumesLoaded, setMyResumesLoaded] = useState(false);
   const [internalDbLoaded, setInternalDbLoaded] = useState(false);
   const [isLoadingResumes, setIsLoadingResumes] = useState(false);
@@ -224,6 +265,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
     position: r.current_title || 'Not specified',
     experience: r.experience_years ? `${r.experience_years} years` : 'Not specified',
     skills: r.skills || [],
+    versionCount: r.version_count ?? r.versionCount ?? r.versions?.length ?? 1,
   });
 
   const loadMyResumes = async () => {
@@ -235,7 +277,16 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
         api.get('/folders'),
       ]);
       setMyResumesData((resumeRes.data?.items ?? []).map(mapResume));
-      setMyFolders((folderRes.data ?? []).map((f: any) => ({ id: f.id, name: f.name, parentId: f.parent_id ?? null })));
+      // The folders API may nest subfolders under `children` — flatten so the tree can walk parentId.
+      const flat: { id: string; name: string; parentId: string | null; count: number }[] = [];
+      const walk = (list: any[], parentId: string | null) => {
+        for (const f of list ?? []) {
+          flat.push({ id: f.id, name: f.name, parentId: f.parent_id ?? parentId, count: f.resume_count ?? 0 });
+          if (Array.isArray(f.children) && f.children.length) walk(f.children, f.id);
+        }
+      };
+      walk(Array.isArray(folderRes.data) ? folderRes.data : [], null);
+      setMyFolders(flat.filter((f, i) => flat.findIndex(x => x.id === f.id) === i));
       setMyResumesLoaded(true);
     } catch {
       toast.error('Failed to load My Resumes');
@@ -258,41 +309,103 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
     }
   };
 
-  const toggleExpandFolder = (id: string) => {
-    setExpandedFolders(prev => prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id]);
+  /* Hover intent: a short delay so scrolling, or crossing the gap into a
+     flyout, doesn't flip menus open and shut — each new event cancels the last. */
+  const scheduleOpenPath = (path: { folder: SidebarFolder; anchor: DOMRect }[]) => {
+    if (hoverIntentTimer.current) clearTimeout(hoverIntentTimer.current);
+    hoverIntentTimer.current = setTimeout(() => setOpenPath(path), 200);
+  };
+  const cancelScheduledClose = () => {
+    if (hoverIntentTimer.current) {
+      clearTimeout(hoverIntentTimer.current);
+      hoverIntentTimer.current = null;
+    }
+  };
+  const FLYOUT_WIDTH = 224;
+  const FLYOUT_EDGE = 8;
+  // Opens right of its row, flipping left when there's no room; clamped to the viewport.
+  const computeFlyoutPosition = (anchor: DOMRect) => {
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const maxHeight = Math.min(260, vh - FLYOUT_EDGE * 2);
+    const openLeft = vw - anchor.right - FLYOUT_EDGE < FLYOUT_WIDTH && anchor.left - FLYOUT_EDGE >= FLYOUT_WIDTH;
+    const left = openLeft
+      ? Math.max(FLYOUT_EDGE, anchor.left - FLYOUT_WIDTH)
+      : Math.min(anchor.right, vw - FLYOUT_EDGE - FLYOUT_WIDTH);
+    const top = Math.min(Math.max(FLYOUT_EDGE, anchor.top), vh - FLYOUT_EDGE - maxHeight);
+    return { top, left, maxHeight };
   };
 
-  const renderFolderTree = (parentId?: string | null, level = 0): React.ReactNode => {
-    const children = myFolders.filter(f => {
-      const isTop = !parentId && (f.parentId === null || f.parentId === undefined);
-      const isChild = parentId && f.parentId === parentId;
-      return isTop || isChild;
-    });
-    return children.map(folder => {
-      const isExpanded = expandedFolders.includes(folder.id);
-      const isSelected = selectedFolder === folder.id;
-      const hasChildren = myFolders.some(f => f.parentId === folder.id);
-      const count = myResumesData.filter(r => (r as any).folderId === folder.id).length;
-      return (
-        <div key={folder.id}>
-          <button
-            onClick={() => setSelectedFolder(folder.id)}
-            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${isSelected ? 'bg-gray-100 dark:bg-slate-800 text-gray-900 dark:text-slate-50 font-medium' : 'text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700'}`}
-            style={{ paddingLeft: `${level * 16 + 12}px` }}
-          >
-            {hasChildren ? (
-              <button onClick={e => { e.stopPropagation(); toggleExpandFolder(folder.id); }} className="p-0.5 hover:bg-gray-200 dark:hover:bg-slate-700 rounded">
-                {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-              </button>
-            ) : <div className="w-5" />}
-            {isExpanded ? <FolderOpen className="w-4 h-4 text-brand-orange" /> : <Folder className="w-4 h-4 text-brand-orange" />}
-            <span className="flex-1 text-left truncate">{folder.name}</span>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400">{count}</span>
-          </button>
-          {isExpanded && hasChildren && <div>{renderFolderTree(folder.id, level + 1)}</div>}
-        </div>
-      );
-    });
+  /* Same split as the "Move to Folder" picker: Root and Archived Resumes are
+     system fixtures, everything else is the user's own folder. Archived
+     Resumes isn't offered here — archived candidates can't be invited. */
+  const isSystemFolder = (f: { name: string; parentId?: string | null }) =>
+    !f.parentId && (f.name.toLowerCase() === 'root' || f.name === 'Archived Resumes');
+  const systemFolders = myFolders.filter(f => isSystemFolder(f) && f.name.toLowerCase() === 'root');
+  const folderCount = (folderId: string) => myFolders.find(f => f.id === folderId)?.count ?? 0;
+
+  useEffect(() => {
+    if (dbTab !== 'my-resumes' || selectedFolder === 'all') {
+      setFolderResumes([]);
+      return;
+    }
+    let cancelled = false;
+    setIsLoadingFolder(true);
+    api.get('/resumes', { params: { source: 'my-resumes', folder_id: selectedFolder, page_size: 200 } })
+      .then(res => { if (!cancelled) setFolderResumes((res.data?.items ?? []).map(mapResume)); })
+      .catch(() => { if (!cancelled) { setFolderResumes([]); toast.error('Failed to load this folder'); } })
+      .finally(() => { if (!cancelled) setIsLoadingFolder(false); });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dbTab, selectedFolder]);
+
+  const folderRowClass = (isSelected: boolean) =>
+    `w-full flex items-center gap-2 py-2 pr-2 rounded-md text-sm text-left transition-colors ${
+      isSelected
+        ? 'bg-gray-200 dark:bg-slate-700 text-gray-900 dark:text-slate-50 font-medium'
+        : 'text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800'
+    }`;
+
+  /** One folder row, in the sidebar or a flyout. Hovering a row with
+   *  subfolders opens them beside it; `ancestors` is the path it sits in. */
+  const renderFolderRow = (
+    folder: SidebarFolder,
+    depth: number,
+    ancestors: { folder: SidebarFolder; anchor: DOMRect }[],
+  ): React.ReactNode => {
+    const hasChildren = myFolders.some(f => f.parentId === folder.id);
+    const isOpen = openPath[depth]?.folder.id === folder.id;
+    return (
+      <button
+        key={folder.id}
+        type="button"
+        onClick={() => { setSelectedFolder(folder.id); cancelScheduledClose(); setOpenPath([]); }}
+        onMouseEnter={(e) => {
+          if (!hasChildren) { scheduleOpenPath(ancestors); return; }
+          scheduleOpenPath([...ancestors, { folder, anchor: e.currentTarget.getBoundingClientRect() }]);
+        }}
+        className={`${folderRowClass(selectedFolder === folder.id || isOpen)} pl-3`}
+      >
+        <FolderInput className="w-4 h-4 text-brand-orange flex-shrink-0" />
+        <span className="flex-1 truncate">{folder.name}</span>
+        <span className="flex-shrink-0 text-xs text-gray-500 dark:text-slate-400 tabular-nums">({folderCount(folder.id)})</span>
+        {/* Fixed-width slot so counts line up whether or not a row has subfolders. */}
+        <span className="w-4 flex-shrink-0 flex items-center justify-center">
+          {hasChildren && (
+            <ChevronRight
+              className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500"
+              onClick={(e) => {
+                // Touch has no hover — the chevron taps the flyout open/closed.
+                e.stopPropagation();
+                cancelScheduledClose();
+                const anchor = (e.currentTarget as Element).closest('button')!.getBoundingClientRect();
+                setOpenPath(isOpen ? ancestors : [...ancestors, { folder, anchor }]);
+              }}
+            />
+          )}
+        </span>
+      </button>
+    );
   };
 
   /* Candidate rows are paged with the project's ListPagination — 5 a page by
@@ -306,6 +419,24 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
     (candidateSafePage - 1) * candidatePageSize,
     candidateSafePage * candidatePageSize,
   );
+
+  /* "Select From" list paging — 10 a page, back to
+     page 1 whenever the tab, folder or search changes what's listed. */
+  const [resumePage, setResumePage] = useState(1);
+  const [resumePageSize, setResumePageSize] = useState(10);
+  useEffect(() => { setResumePage(1); }, [dbTab, selectedFolder, searchQuery]);
+
+  /* Manual / Upload Excel / Select From — plain buttons; only the icons carry
+     colour. The active one is marked by a darker border and a light fill. */
+  const modeTabClass = (active: boolean) =>
+    `flex items-center gap-2 px-3 py-2 rounded-lg text-sm border transition-colors ${
+      active
+        ? 'bg-gray-100 dark:bg-slate-800 border-gray-400 dark:border-slate-500 text-gray-900 dark:text-slate-50 font-medium'
+        : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800'
+    }`;
+
+  // Email Preview is collapsed by default — opened on demand from its header.
+  const [showEmailPreview, setShowEmailPreview] = useState(false);
 
   // Early return must stay below every hook call (Rules of Hooks).
   if (!isOpen) return null;
@@ -354,7 +485,9 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
 
   // Add selected resumes to candidates list and switch to manual view
   const handleAddFromDatabase = () => {
-    const selectedResumeData = resumeDatabase.filter((r) => selectedResumes.includes(r.id));
+    // A folder's rows come from their own fetch, so look there too.
+    const pool = [...resumeDatabase, ...folderResumes.filter(fr => !resumeDatabase.some(r => r.id === fr.id))];
+    const selectedResumeData = pool.filter((r) => selectedResumes.includes(r.id));
     const validExisting = candidates.filter((c) => c.name.trim() && c.email.trim());
     const existingEmails = new Set(validExisting.map((c) => c.email.toLowerCase().trim()));
     const newCandidates: CandidateEmail[] = selectedResumeData
@@ -364,6 +497,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
         name: resume.name,
         email: resume.email,
         source: 'database' as const,
+        origin: dbTab === 'my-resumes' ? 'my-resumes' as const : 'shared-db' as const,
         resumeId: resume.id,
       }));
     const duplicateCount = selectedResumeData.length - newCandidates.length;
@@ -373,78 +507,6 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
     setCandidates(validExisting.length > 0 ? [...validExisting, ...newCandidates] : newCandidates.length > 0 ? newCandidates : [{ id: '1', name: '', email: '', source: 'manual' }]);
     setSelectedResumes([]);
     setInputMode('manual');
-  };
-
-  // Send invitations directly to selected database candidates (no manual step)
-  const handleSendFromDatabase = async () => {
-    const selectedResumeData = resumeDatabase.filter((r) => selectedResumes.includes(r.id) && r.email);
-    if (selectedResumeData.length === 0) {
-      toast.warning('Please select at least one candidate with a valid email');
-      return;
-    }
-
-    // Quota check
-    if (quotaStats !== null && quotaStats.total_quota < 999999 && quotaStats.available < selectedResumeData.length) {
-      toast.error(`Insufficient quota. ${quotaStats.available} unit${quotaStats.available !== 1 ? 's' : ''} available, need ${selectedResumeData.length}.`);
-      return;
-    }
-
-    setIsSubmitting(true);
-    const resolvedMessage = customMessage
-      ? customMessage.replace('[deadline date]', expiryDays > 0
-          ? formatISTDate(new Date(Date.now() + expiryDays * 86400000).toISOString())
-          : 'no specific deadline')
-      : undefined;
-
-    let successCount = 0;
-    const alreadyInvited: string[] = [];
-    const duplicateReasons: string[] = [];
-    const tenantUserEmails: string[] = [];
-    const failed: { email: string; reason: string }[] = [];
-
-    for (const resume of selectedResumeData) {
-      try {
-        await aiInterviewService.inviteCandidate(config.id, {
-          candidate_name: resume.name,
-          candidate_email: resume.email,
-          resume_id: resume.id,
-          custom_message: resolvedMessage,
-          expiry_days: expiryDays,
-          base_url: typeof window !== 'undefined' ? window.location.origin : undefined,
-        });
-        successCount++;
-      } catch (err: any) {
-        const errData = err?.response?.data || {};
-        const errCode = errData?.error || errData?.detail?.error || '';
-        if (err?.response?.status === 409 || errCode === 'DUPLICATE_INVITATION') {
-          alreadyInvited.push(resume.email);
-          duplicateReasons.push(errData?.detail?.message || errData?.message || '');
-        } else if (err?.response?.status === 400 && errCode === 'TENANT_USER_EMAIL') {
-          tenantUserEmails.push(resume.email);
-        } else {
-          failed.push({ email: resume.email, reason: errData?.detail?.message || errData?.message || err?.message || 'Unknown error' });
-        }
-      }
-    }
-
-    setIsSubmitting(false);
-
-    if (successCount > 0) {
-      setSentCount(successCount);
-      if (alreadyInvited.length > 0) toast.warning(`${alreadyInvited.length} already invited: ${alreadyInvited.join(', ')}`);
-      if (tenantUserEmails.length > 0) toast.error(`Team member emails skipped: ${tenantUserEmails.join(', ')}`);
-      if (failed.length > 0) toast.error(`${failed.length} failed: ${failed.map(f => f.email).join(', ')}`);
-      setShowSuccess(true);
-      setTimeout(() => { setShowSuccess(false); onInviteSent(); onClose(); }, 2000);
-    } else if (alreadyInvited.length > 0 && failed.length === 0) {
-      setDuplicateEmail(alreadyInvited.join(', '));
-      setDuplicateReason(duplicateReasons.filter(Boolean)[0] || '');
-      setShowDuplicateError(true);
-    } else if (tenantUserEmails.length > 0) {
-      toast.error(`Cannot invite team member email${tenantUserEmails.length > 1 ? 's' : ''}: ${tenantUserEmails.join(', ')}`);
-    } else {
-      toast.error('Failed to send invitations. Please try again.');
-    }
   };
 
   // Parse CSV text into array of row objects
@@ -499,6 +561,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
           name: name || email.split('@')[0],
           email,
           source: 'manual' as const,
+          origin: 'excel' as const,
         });
       }
     }
@@ -604,12 +667,18 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
   // Filter resumes based on active tab, folder (My Resumes only), and search
   const activeResumes = dbTab === 'my-resumes' ? myResumesData : internalDbData;
   const folderFiltered = dbTab === 'my-resumes' && selectedFolder !== 'all'
-    ? activeResumes.filter(r => (r as any).folderId === selectedFolder)
+    ? folderResumes
     : activeResumes;
   const filteredResumes = folderFiltered.filter(r =>
     r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     r.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
     r.position.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+  const resumeTotalPages = Math.max(1, Math.ceil(filteredResumes.length / resumePageSize));
+  const resumeSafePage = Math.min(resumePage, resumeTotalPages);
+  const pagedResumes = filteredResumes.slice(
+    (resumeSafePage - 1) * resumePageSize,
+    resumeSafePage * resumePageSize,
   );
 
   const handleCopyLinkForCandidate = async (candidateId: string) => {
@@ -992,7 +1061,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
     >
       <div className={embedded
         ? 'bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 w-full flex flex-col overflow-hidden tf-round-edges'
-        : 'bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-[95vw] sm:max-w-2xl w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col tf-round-edges'}>
+        : 'bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-[95vw] sm:max-w-[935px] w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col tf-round-edges'}>
         {/* Header */}
         <div className="bg-slate-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
@@ -1019,6 +1088,25 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                   </span>
                 )}
               </p>
+              {/* Interview setup — duration, mode and what the rounds cover. */}
+              <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1 text-xs text-gray-500 dark:text-slate-400 min-w-0">
+                <span className="inline-flex items-center gap-1 flex-shrink-0">
+                  <Clock className="w-3.5 h-3.5" />
+                  {config.duration_minutes || 30} min
+                </span>
+                <span aria-hidden="true">•</span>
+                <span className="flex-shrink-0">
+                  {modeFromConfig(config.special_instructions, config.duration_minutes) === 'fixed' ? 'Timed' : 'Conversational'}
+                </span>
+                {enabledRounds.length > 0 && (
+                  <>
+                    <span aria-hidden="true">•</span>
+                    <span className="truncate text-gray-400 dark:text-slate-500">
+                      {enabledRounds.map((r: any) => ROUND_LABELS[r.type] || r.type).join(', ')}
+                    </span>
+                  </>
+                )}
+              </p>
             </div>
           </div>
           {!embedded && (
@@ -1034,47 +1122,48 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-          {/* Config Info Banner */}
-          <div className="bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded-lg p-4 mb-6">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-lg bg-gradient-to-r from-brand-blue to-brand-blue-2 flex items-center justify-center">
-                <FileText className="w-6 h-6 text-white" />
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-gray-900 dark:text-slate-50 font-medium">{config.jd_title || config.position}</span>
-                </div>
-                <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-slate-400">
-                  <span className="flex items-center gap-1">
-                    <Clock className="w-4 h-4" />
-                    {config.duration_minutes || 30} min
-                  </span>
-                  {enabledRounds.length > 0 && (
-                    <>
-                      <span>•</span>
-                      <span>{enabledRounds.length} rounds</span>
-                      <span>•</span>
-                      <span className="text-xs text-gray-400 dark:text-slate-500">
-                        {enabledRounds.map((r: any) => ROUND_LABELS[r.type] || r.type).join(', ')}
-                      </span>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Quota Banner */}
+          {/* Quota Banner — styled like the Upload Resume dialog's RU card:
+              icon tile, headline + available count, usage bar, then the
+              breakdown with a status pill. */}
           {(() => {
             const aiuQuota = quotaData?.quotas?.AIU;
             const subscriptionLimit = typeof aiuQuota?.subscription?.limit === 'number' ? aiuQuota.subscription.limit : null;
             const subscriptionUsed = aiuQuota?.subscription?.used ?? 0;
 
+            const panelClass = (tone: 'ok' | 'low' | 'out') =>
+              `mb-4 p-3 sm:p-4 rounded-xl border ring-1 ring-black/[0.02] ${
+                tone === 'out'
+                  ? 'bg-destructive-subtle border-destructive-line'
+                  : tone === 'low'
+                  ? 'bg-warning-subtle border-warning-line'
+                  : 'bg-gradient-to-r from-brand-blue/[0.07] via-brand-cyan/[0.05] to-white dark:from-brand-blue/10 dark:via-brand-cyan/5 dark:to-slate-900 border-brand-blue/15'
+              }`;
+            const iconTile = (tone: 'ok' | 'low' | 'out') => (
+              <div className={`flex-shrink-0 w-9 h-9 sm:w-10 sm:h-10 rounded-lg ring-1 flex items-center justify-center ${
+                tone === 'out' ? 'bg-destructive/10 ring-destructive/20' : tone === 'low' ? 'bg-brand-orange/10 ring-brand-orange/20' : 'bg-brand-blue/10 ring-brand-blue/15'
+              }`}>
+                {tone === 'out'
+                  ? <ShieldAlert className="w-4 h-4 sm:w-5 sm:h-5 text-destructive" />
+                  : <Bot className={`w-4 h-4 sm:w-5 sm:h-5 ${tone === 'low' ? 'text-brand-orange-deep' : 'text-brand-blue'}`} />}
+              </div>
+            );
+            const statusPill = (tone: 'ok' | 'low' | 'out', freePercent: number) =>
+              tone === 'out' ? (
+                <span className="flex-shrink-0 text-2xs sm:text-xs font-medium text-red-700 bg-red-50 ring-1 ring-red-200 rounded-full px-2 py-0.5">Quota exhausted</span>
+              ) : tone === 'low' ? (
+                <span className="flex-shrink-0 text-2xs sm:text-xs font-medium text-brand-orange-deep bg-brand-orange/10 ring-1 ring-brand-orange/20 rounded-full px-2 py-0.5">Low quota</span>
+              ) : (
+                <span className="flex-shrink-0 text-2xs sm:text-xs font-medium text-emerald-700 bg-emerald-50 ring-1 ring-emerald-200 rounded-full px-2 py-0.5 tabular-nums">{freePercent.toFixed(0)}% free</span>
+              );
+
             if (quotaStatsLoading) {
               return (
-                <div className="mb-4 px-4 py-3 bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded-lg flex items-center gap-2 text-sm text-gray-500 dark:text-slate-500">
-                  <Loader2 className="w-4 h-4 text-gray-500 dark:text-slate-500 animate-spin" />
-                  Checking AI interview quota...
+                <div className={`${panelClass('ok')} flex items-center gap-3 text-sm text-gray-500 dark:text-slate-400`}>
+                  {iconTile('ok')}
+                  <span className="inline-flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Checking AI interview quota...
+                  </span>
                 </div>
               );
             }
@@ -1087,49 +1176,61 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
 
               if (isUnlimited) {
                 return (
-                  <div className="mb-4 px-4 py-3 rounded-lg border text-sm bg-blue-50 border-blue-200 text-blue-800">
-                    <div className="flex items-center gap-2">
-                      <Info className="w-4 h-4 text-blue-500 flex-shrink-0" />
-                      <span className="font-medium">Unlimited AI interview units</span>
-                    </div>
+                  <div className={`${panelClass('ok')} flex items-center gap-3`}>
+                    {iconTile('ok')}
+                    <span className="text-xs sm:text-sm font-medium text-gray-900 dark:text-slate-50">Unlimited AI interview units</span>
                   </div>
                 );
               }
 
+              const tone = isInsufficient ? 'out' : isLow ? 'low' : 'ok';
+              const pct = (n: number) => (total_quota > 0 ? Math.min(100, (n / total_quota) * 100) : 0);
+              const freePercent = total_quota > 0 ? (available / total_quota) * 100 : 0;
+
               return (
-                <div className={`mb-4 px-4 py-3 rounded-lg border text-sm ${
-                  isInsufficient
-                    ? 'bg-destructive-subtle border-destructive-line text-destructive-strong'
-                    : isLow
-                    ? 'bg-warning-subtle border-warning-line text-warning-strong'
-                    : 'bg-blue-50 border-blue-200 text-blue-800'
-                }`}>
-                  <div className="flex items-start gap-2">
-                    {isInsufficient
-                      ? <ShieldAlert className="w-4 h-4 mt-0.5 text-destructive flex-shrink-0" />
-                      : <Info className="w-4 h-4 mt-0.5 text-blue-500 flex-shrink-0" />
-                    }
-                    <div className="flex-1">
-                      <div className="font-medium mb-1">
-                        {isInsufficient
-                          ? 'No AI interview units available'
-                          : isLow
-                          ? `Only ${available} unit${available !== 1 ? 's' : ''} available`
-                          : `${available} AI interview unit${available !== 1 ? 's' : ''} available`
-                        }
+                <div className={panelClass(tone)}>
+                  <div className="flex items-start gap-3">
+                    {iconTile(tone)}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 mb-2">
+                        <span className="text-xs sm:text-sm font-medium text-gray-900 dark:text-slate-50">
+                          {isInsufficient
+                            ? 'No AI interview units available'
+                            : isLow
+                            ? `Only ${available} unit${available !== 1 ? 's' : ''} available`
+                            : `${available} AI interview unit${available !== 1 ? 's' : ''} available`
+                          }
+                        </span>
+                        <span className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-200 tabular-nums">
+                          {available.toLocaleString()} / {total_quota.toLocaleString()} available
+                        </span>
                       </div>
-                      <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs opacity-80">
-                        <span>Total: {total_quota}</span>
-                        <span>Attended (consumed): {consumed}</span>
-                        {pending > 0 && (
-                          <span>Pending invitations (held): {pending}</span>
-                        )}
+                      {/* Consumed in brand blue, held by pending invitations in a lighter cyan. */}
+                      <div className="w-full flex bg-brand-blue/15 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
+                        <div className={`h-full transition-all duration-300 ${tone === 'out' ? 'bg-red-600' : tone === 'low' ? 'bg-brand-orange' : 'bg-brand-blue'}`} style={{ width: `${pct(consumed)}%` }} />
+                        <div className="h-full bg-brand-cyan/70 transition-all duration-300" style={{ width: `${pct(pending)}%` }} />
                       </div>
-                      {pending > 0 && (
-                        <p className="text-xs mt-1 opacity-80">
-                          {pending} unit{pending > 1 ? 's' : ''} held by active invitations — released automatically when links expire.
-                        </p>
-                      )}
+                      <div className="flex items-start justify-between gap-2 mt-1.5">
+                        <div className="min-w-0 text-2xs sm:text-xs text-gray-600 dark:text-slate-400">
+                          <div className="flex flex-wrap gap-x-4 gap-y-0.5 tabular-nums">
+                            <span>Total: {total_quota}</span>
+                            <span>Attended (consumed): {consumed}</span>
+                            {pending > 0 && (
+                              <span>Pending invitations (held): {pending}</span>
+                            )}
+                          </div>
+                          {pending > 0 && (
+                            <p className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-brand-cyan/10 ring-1 ring-brand-cyan/25 px-2.5 py-0.5 text-brand-blue dark:text-slate-200">
+                              <Info className="w-3 h-3 flex-shrink-0" />
+                              <span>
+                                <span className="font-semibold">Note:</span>{' '}
+                                {pending} unit{pending > 1 ? 's' : ''} held by active invitations — freed when an invite expires or you revoke it.
+                              </span>
+                            </p>
+                          )}
+                        </div>
+                        {statusPill(tone, freePercent)}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1141,23 +1242,26 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
               const remaining = subscriptionLimit - subscriptionUsed;
               const isInsufficient = remaining <= 0;
               const isLow = !isInsufficient && remaining <= 3;
+              const tone = isInsufficient ? 'out' : isLow ? 'low' : 'ok';
+              const usedPercent = subscriptionLimit > 0 ? Math.min(100, (subscriptionUsed / subscriptionLimit) * 100) : 0;
               return (
-                <div className={`mb-4 px-4 py-3 rounded-lg border text-sm ${
-                  isInsufficient
-                    ? 'bg-destructive-subtle border-destructive-line text-destructive-strong'
-                    : isLow
-                    ? 'bg-warning-subtle border-warning-line text-warning-strong'
-                    : 'bg-blue-50 border-blue-200 text-blue-800'
-                }`}>
-                  <div className="flex items-center gap-2">
-                    {isInsufficient
-                      ? <ShieldAlert className="w-4 h-4 text-destructive flex-shrink-0" />
-                      : <Info className="w-4 h-4 text-blue-500 flex-shrink-0" />
-                    }
-                    <span>
-                      <span className="font-medium">{Math.max(0, remaining)} AI interview unit{remaining !== 1 ? 's' : ''} remaining</span>
-                      <span className="opacity-80 ml-1">({subscriptionUsed} used of {subscriptionLimit})</span>
-                    </span>
+                <div className={panelClass(tone)}>
+                  <div className="flex items-start gap-3">
+                    {iconTile(tone)}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 mb-2">
+                        <span className="text-xs sm:text-sm font-medium text-gray-900 dark:text-slate-50">
+                          {Math.max(0, remaining)} AI interview unit{remaining !== 1 ? 's' : ''} remaining
+                        </span>
+                        <span className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 tabular-nums">
+                          ({subscriptionUsed} used of {subscriptionLimit})
+                        </span>
+                      </div>
+                      <div className="w-full bg-brand-blue/15 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
+                        <div className={`h-full rounded-full transition-all duration-300 ${tone === 'out' ? 'bg-red-600' : tone === 'low' ? 'bg-brand-orange' : 'bg-brand-blue'}`} style={{ width: `${usedPercent}%` }} />
+                      </div>
+                      <div className="flex justify-end mt-1.5">{statusPill(tone, 100 - usedPercent)}</div>
+                    </div>
                   </div>
                 </div>
               );
@@ -1174,20 +1278,16 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => setInputMode('manual')}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
-                    inputMode === 'manual' ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10' : 'bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
-                  }`}
+                  className={modeTabClass(inputMode === 'manual')}
                 >
-                  <Upload className="w-4 h-4" />
+                  <Upload className="w-4 h-4 text-brand-blue" />
                   Manual
                 </button>
                 <button
                   onClick={() => excelInputRef.current?.click()}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
-                    inputMode === 'excel' ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10' : 'bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
-                  }`}
+                  className={modeTabClass(inputMode === 'excel')}
                 >
-                  <FileSpreadsheet className="w-4 h-4" />
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                   Upload Excel
                 </button>
                 <input
@@ -1199,11 +1299,9 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                 />
                 <button
                   onClick={() => setInputMode('database')}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
-                    inputMode === 'database' ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10' : 'bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
-                  }`}
+                  className={modeTabClass(inputMode === 'database')}
                 >
-                  <Database className="w-4 h-4" />
+                  <Database className="w-4 h-4 text-brand-orange" />
                   Select From
                 </button>
               </div>
@@ -1227,18 +1325,25 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                   {pagedCandidates.map((candidate) => (
                     <div
                       key={candidate.id}
-                      className={`p-4 border rounded-lg ${
+                      className={`relative p-4 border rounded-lg ${
                         candidate.source === 'database' ? 'bg-gray-50 dark:bg-slate-800/50 border-gray-300 dark:border-slate-700' : 'bg-gray-50 dark:bg-slate-800/50 border-gray-200 dark:border-slate-700'
                       }`}
                     >
+                      {/* Where the row came from, pinned top-right — a word reads faster than an icon in a long list. */}
+                      {(() => {
+                        const badge =
+                          candidate.origin === 'excel' ? { label: 'Excel', cls: 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/20' }
+                          : candidate.origin === 'my-resumes' ? { label: 'My Resumes', cls: 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20' }
+                          : candidate.origin === 'shared-db' ? { label: 'Shared DB', cls: 'bg-brand-cyan/10 text-brand-cyan ring-brand-cyan/20' }
+                          : candidate.source === 'database' ? { label: 'Database', cls: 'bg-brand-blue/10 text-brand-blue ring-brand-blue/15' }
+                          : { label: 'Manual', cls: 'bg-gray-100 text-gray-600 ring-gray-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700' };
+                        return (
+                          <span className={`absolute top-2 right-3 inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-2xs font-semibold ring-1 ${badge.cls}`}>
+                            {badge.label}
+                          </span>
+                        );
+                      })()}
                       <div className="flex items-center gap-3">
-                        {candidate.source === 'database' && (
-                          <div className="flex-shrink-0">
-                            <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-brand-blue to-brand-blue-2 flex items-center justify-center">
-                              <Database className="w-4 h-4 text-white" />
-                            </div>
-                          </div>
-                        )}
                         <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div className="min-w-0">
                             <label className="text-xs text-gray-600 dark:text-slate-400 mb-1 block">Full Name *</label>
@@ -1287,7 +1392,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                                 }
                                 className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs border transition-colors whitespace-nowrap flex-shrink-0 ${
                                   candidate.generatedLink
-                                    ? 'bg-brand-blue/10 border-brand-blue/30 text-brand-blue hover:bg-brand-blue/10'
+                                    ? 'bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:border-emerald-500/30 dark:text-emerald-300 dark:hover:bg-emerald-500/20'
                                     : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
                                 } disabled:opacity-50`}
                               >
@@ -1298,6 +1403,16 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                                     : <><Copy className="w-3.5 h-3.5" /><span>Copy Link</span></>
                                 }
                               </button>
+                              {(candidates.length > 1 || candidate.source === 'database') && (
+                                <button
+                                  onClick={() => removeCandidate(candidate.id)}
+                                  title="Remove candidate"
+                                  aria-label="Remove candidate"
+                                  className="flex-shrink-0 p-2 text-destructive hover:bg-destructive-subtle rounded-lg transition-colors"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
                             </div>
                             {candidate.source !== 'database' && candidate.email.trim() && !isValidEmail(candidate.email) && (
                               <p className="text-xs text-destructive mt-1">Please enter a valid email (e.g., user@example.com)</p>
@@ -1364,14 +1479,6 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                             )}
                           </div>
                         </div>
-                        {(candidates.length > 1 || candidate.source === 'database') && (
-                          <button
-                            onClick={() => removeCandidate(candidate.id)}
-                            className="p-2 text-destructive hover:bg-destructive-subtle rounded-lg transition-colors self-start"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
                       </div>
                       {/* Schedule row - commented out for now, uncomment when schedule feature is needed */}
                       {/* <div className="grid grid-cols-2 gap-3 mt-3">
@@ -1426,7 +1533,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                           : 'border-transparent text-gray-500 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-300'
                       }`}
                     >
-                      <FolderOpen className="w-4 h-4" />
+                      <FolderOpen className="w-4 h-4 text-brand-orange" />
                       My Resumes
                       <span className="px-1.5 py-0.5 rounded-full text-xs bg-gray-200 dark:bg-slate-800 text-gray-700 dark:text-slate-300">{myResumesData.length}</span>
                     </button>
@@ -1440,7 +1547,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                           : 'border-transparent text-gray-500 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-300'
                       }`}
                     >
-                      <Database className="w-4 h-4" />
+                      <Database className="w-4 h-4 text-brand-cyan" />
                       Shared Database
                       <span className="px-1.5 py-0.5 rounded-full text-xs bg-gray-200 dark:bg-slate-800 text-gray-700 dark:text-slate-300">{internalDbData.length}</span>
                     </button>
@@ -1452,17 +1559,38 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                   {/* Folder Sidebar (My Resumes only) — short scrollable strip on
                       top for mobile, fixed left column from sm up. */}
                   {dbTab === 'my-resumes' && myFolders.length > 0 && (
-                    <div className="w-full sm:w-48 max-h-28 sm:max-h-none border-b sm:border-b-0 sm:border-r border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 overflow-y-auto flex-shrink-0 p-3">
-                      <p className="text-xs font-medium text-gray-500 dark:text-slate-500 uppercase mb-2 px-1">Folders</p>
-                      <button
-                        onClick={() => setSelectedFolder('all')}
-                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm mb-1 ${selectedFolder === 'all' ? 'bg-gray-100 dark:bg-slate-800 text-gray-900 dark:text-slate-50 font-medium' : 'text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700'}`}
-                      >
-                        <FolderOpen className="w-4 h-4 text-brand-orange" />
-                        <span className="flex-1 text-left">All Resumes</span>
-                        <span className="text-xs px-1.5 py-0.5 rounded-full bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400">{myResumesData.length}</span>
-                      </button>
-                      <div className="space-y-0.5">{renderFolderTree(undefined, 0)}</div>
+                    <div
+                      className="w-full sm:w-56 max-h-28 sm:max-h-none border-b sm:border-b-0 sm:border-r border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 overflow-y-auto flex-shrink-0 p-2"
+                      onMouseLeave={() => scheduleOpenPath([])}
+                      // Flyouts are pinned to row positions — scrolling would leave them adrift.
+                      onScroll={() => { cancelScheduledClose(); setOpenPath([]); }}
+                    >
+                      <p className="px-3 pb-1 text-2xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">System Folders</p>
+                      <div className="space-y-0.5">
+                        <button type="button" onClick={() => setSelectedFolder('all')} className={`${folderRowClass(selectedFolder === 'all')} pl-3`}>
+                          <FolderOpen className="w-4 h-4 text-brand-blue flex-shrink-0" />
+                          <span className="flex-1 truncate">All Resumes</span>
+                          <span className="flex-shrink-0 text-xs text-gray-500 dark:text-slate-400 tabular-nums">({myResumesData.length})</span>
+                          <span className="w-4 flex-shrink-0" />
+                        </button>
+                        {systemFolders.map(folder => (
+                          <button key={folder.id} type="button" onClick={() => setSelectedFolder(folder.id)} className={`${folderRowClass(selectedFolder === folder.id)} pl-3`}>
+                            <FolderRoot className="w-4 h-4 text-brand-cyan flex-shrink-0" />
+                            <span className="flex-1 truncate">{folder.name.toLowerCase() === 'root' ? 'Root (Default)' : folder.name}</span>
+                            <span className="flex-shrink-0 text-xs text-gray-500 dark:text-slate-400 tabular-nums">({folderCount(folder.id)})</span>
+                            <span className="w-4 flex-shrink-0" />
+                          </button>
+                        ))}
+                      </div>
+                      {myFolders.some(f => !isSystemFolder(f)) && (
+                        <>
+                          <div className="border-t border-gray-200 dark:border-slate-700 my-2" />
+                          <p className="px-3 pb-1 text-2xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">My Folders</p>
+                          <div className="space-y-0.5">
+                            {myFolders.filter(f => !f.parentId && !isSystemFolder(f)).map(f => renderFolderRow(f, 0, []))}
+                          </div>
+                        </>
+                      )}
                     </div>
                   )}
 
@@ -1493,7 +1621,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-2 space-y-1">
-                      {isLoadingResumes ? (
+                      {isLoadingResumes || isLoadingFolder ? (
                         <div className="flex items-center justify-center py-12 tf-loader-center tf-loader-center--compact">
                           <Loader2 className="w-6 h-6 animate-spin text-gray-400 dark:text-slate-500" />
                         </div>
@@ -1502,7 +1630,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                           <Database className="w-8 h-8 mb-2" />
                           <p className="text-sm">{searchQuery ? 'No resumes match your search' : 'No resumes found'}</p>
                         </div>
-                      ) : filteredResumes.map(resume => (
+                      ) : pagedResumes.map(resume => (
                         <div
                           key={resume.id}
                           onClick={() => toggleResumeSelection(resume.id)}
@@ -1517,15 +1645,59 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between gap-2">
-                              <span className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{resume.name}</span>
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{resume.name}</span>
+                                {resume.versionCount > 1 && (
+                                  <span
+                                    title={`Latest of ${resume.versionCount} versions`}
+                                    className="inline-flex items-center gap-1 flex-shrink-0 rounded-full bg-brand-blue/10 px-2 py-0.5 text-2xs font-semibold text-brand-blue ring-1 ring-brand-blue/15 tabular-nums"
+                                  >
+                                    <Layers className="w-3 h-3" />
+                                    v{resume.versionCount}
+                                    <span className="font-normal">of {resume.versionCount}</span>
+                                  </span>
+                                )}
+                              </div>
                               <span className="text-xs text-gray-400 dark:text-slate-500 flex-shrink-0">{resume.experience}</span>
                             </div>
-                            <div className="text-xs text-gray-500 dark:text-slate-500 truncate">{resume.email}</div>
-                            <div className="text-xs text-gray-400 dark:text-slate-500 truncate">{resume.position}</div>
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="min-w-0">
+                                <div className="text-xs text-gray-500 dark:text-slate-500 truncate">{resume.email}</div>
+                                <div className="text-xs text-gray-400 dark:text-slate-500 truncate">{resume.position}</div>
+                              </div>
+                              {/* stopPropagation so viewing a resume doesn't tick the row. */}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleViewResume(resume);
+                                }}
+                                disabled={loadingViewFor === resume.id}
+                                title={resume.versionCount > 1 ? 'View resume versions' : 'View resume'}
+                                aria-label={`View ${resume.name}'s resume`}
+                                className="flex-shrink-0 p-1.5 rounded-lg text-gray-400 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/10 transition-colors disabled:opacity-50"
+                              >
+                                {loadingViewFor === resume.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
+                              </button>
+                            </div>
                           </div>
                         </div>
                       ))}
                     </div>
+
+                    {!isLoadingResumes && !isLoadingFolder && filteredResumes.length > 0 && (
+                      <div className="px-3 py-2 border-t border-gray-100 dark:border-slate-700/60">
+                        <ListPagination
+                          currentPage={resumeSafePage}
+                          itemsPerPage={resumePageSize}
+                          totalItems={filteredResumes.length}
+                          onPageChange={setResumePage}
+                          onItemsPerPageChange={(size) => { setResumePageSize(size); setResumePage(1); }}
+                          itemLabel="resumes"
+                          compact
+                        />
+                      </div>
+                    )}
 
                     {/* Action footer */}
                     <div className="flex items-center justify-between px-3 py-2 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 flex-wrap gap-2">
@@ -1540,18 +1712,6 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                         >
                           Add to List
                         </Button>
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          onClick={handleSendFromDatabase}
-                          disabled={selectedResumes.length === 0 || isSubmitting}
-                        >
-                          {isSubmitting ? (
-                            <><Loader2 className="w-4 h-4 animate-spin" />Sending...</>
-                          ) : (
-                            <><Send className="w-4 h-4" />Send ({selectedResumes.length})</>
-                          )}
-                        </Button>
                       </div>
                     </div>
                   </div>
@@ -1564,13 +1724,20 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
           <div className="mb-6">
             <div className="flex items-center justify-between mb-2">
               <label className="text-gray-900 dark:text-slate-50 font-medium">Email Message</label>
-              <span className="text-xs text-brand-blue font-medium">✓ Live preview below</span>
+              <button type="button" onClick={() => setShowEmailPreview(true)} className="text-xs text-brand-blue font-medium hover:underline">✓ Live preview below</button>
             </div>
+            {/* Starts compact and grows with the text. The inline ref re-runs on
+                every render, so the height follows the value — typed or prefilled. */}
             <textarea
+              ref={(el) => {
+                if (!el) return;
+                el.style.height = 'auto';
+                el.style.height = `${el.scrollHeight + 2}px`;
+              }}
               value={customMessage}
               onChange={(e) => setCustomMessage(e.target.value)}
-              rows={10}
-              className="w-full px-4 py-3 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-transparent resize-none font-mono"
+              rows={3}
+              className="w-full min-h-[5.5rem] px-4 py-3 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-transparent resize-none overflow-hidden font-mono"
               placeholder="Edit the message content here..."
             />
             <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">
@@ -1611,16 +1778,26 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
 
           {/* Email Preview — colours from the Share Assessment via Email
               preview: flat slate panel, hairline border, brand-blue accents. */}
-          <div className="bg-slate-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-700 rounded-lg p-6">
-            <div className="flex items-center justify-between mb-4">
+          <div className="bg-slate-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-700 rounded-lg">
+            <button
+              type="button"
+              onClick={() => setShowEmailPreview(v => !v)}
+              aria-expanded={showEmailPreview}
+              className="w-full flex items-center justify-between gap-3 px-6 py-4 text-left rounded-lg hover:bg-slate-100/70 dark:hover:bg-slate-900 transition-colors"
+            >
               <div className="flex items-center gap-2">
                 <Mail className="w-5 h-5 text-brand-blue" />
                 <h3 className="text-gray-900 dark:text-slate-50 font-semibold">Email Preview</h3>
               </div>
-              <span className="text-xs text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 px-3 py-1 rounded-full font-medium">
-                Exact email format
-              </span>
-            </div>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 px-3 py-1 rounded-full font-medium">
+                  Exact email format
+                </span>
+                <ChevronDown className={`w-5 h-5 text-gray-500 dark:text-slate-400 transition-transform duration-200 ${showEmailPreview ? 'rotate-180' : ''}`} />
+              </div>
+            </button>
+            {showEmailPreview && (
+            <div className="px-6 pb-6">
             <p className="text-xs text-gray-600 dark:text-slate-400 mb-4 bg-white dark:bg-slate-900 rounded-lg px-3 py-2 border border-gray-200 dark:border-slate-700">
               This is exactly how the email will appear to candidates. Edit the message above to see live changes.
             </p>
@@ -1684,6 +1861,8 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                 <p className="text-gray-400 text-xs">If you did not expect this email, please ignore it.</p>
               </div>
             </div>
+            </div>
+            )}
           </div>
         </div>
 
@@ -1726,6 +1905,45 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
           </div>
         </div>
       </div>
+
+      {/* Subfolder flyouts, one portal per open depth, beside their trigger row.
+          z-[60] keeps them above this z-50 modal. */}
+      {typeof document !== 'undefined' && openPath.map((entry, i) => {
+        const ancestors = openPath.slice(0, i + 1);
+        const pos = computeFlyoutPosition(entry.anchor);
+        return createPortal(
+          <div
+            key={entry.folder.id}
+            className="fixed z-[60] bg-white dark:bg-slate-900 rounded-lg shadow-2xl border border-gray-200 dark:border-slate-700 p-1 space-y-0.5 overflow-y-auto overscroll-contain"
+            style={{ top: pos.top, left: pos.left, width: FLYOUT_WIDTH, maxHeight: pos.maxHeight }}
+            onMouseEnter={cancelScheduledClose}
+            onMouseLeave={() => scheduleOpenPath(openPath.slice(0, i))}
+          >
+            {myFolders.filter(f => f.parentId === entry.folder.id).map(child => renderFolderRow(child, i + 1, ancestors))}
+          </div>,
+          document.body,
+        );
+      })}
+
+      {/* Read a candidate's resume without leaving the dialog — z-[60] keeps it above this z-50 modal. */}
+      {previewResume && (
+        <ResumeTextPreviewModal
+          resumeId={previewResume.id}
+          title={previewResume.name}
+          zIndexClassName="z-[60]"
+          onClose={() => setPreviewResume(null)}
+        />
+      )}
+
+      {/* Several versions: preview and compare. No onSelectVersion, so the
+          "In use" / "Use this version" controls and the tip stay hidden here. */}
+      {versionViewer && (
+        <ResumeVersionsModal
+          candidate={{ id: versionViewer.id, name: versionViewer.name, resumeId: versionViewer.id }}
+          versions={versionViewer.versions}
+          onClose={() => setVersionViewer(null)}
+        />
+      )}
     </div>
   );
 }

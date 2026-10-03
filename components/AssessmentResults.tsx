@@ -1955,7 +1955,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               >
                 {downloadingBulkPDF
                   ? 'Downloading...'
-                  : `Download PDF${selectedRows.length > 0 ? ` (${selectedRows.length})` : ''}`}
+                  : `PDF${selectedRows.length > 0 ? ` (${selectedRows.length})` : ''}`}
               </Button>
             )}
             <Button

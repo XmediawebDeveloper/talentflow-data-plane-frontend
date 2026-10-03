@@ -2,6 +2,8 @@
 
 import { Video, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, Shield, Lightbulb, Eye, Trash2, Play, Pause, Archive, ArchiveRestore, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronDown, Search, Plus, ClipboardList, Ban, Square, CheckSquare, Info, RefreshCw, Layers, Radar } from 'lucide-react';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
+import { collapseAIInterviewLineages } from '@/lib/utils/aiInterviewJobOrder';
+import { rememberAIInterviewPagerOrder, type AIInterviewPagerList } from '@/lib/utils/aiInterviewPagerList';
 import { useState, useEffect, useRef, useCallback, useMemo, type ComponentType } from 'react';
 import { createPortal } from 'react-dom';
 import { useDialogHeightLock } from '@/lib/hooks/useDialogHeightLock';
@@ -54,6 +56,7 @@ import AssessmentVersionHistoryPanel, {
   ASSESSMENT_VOCABULARY,
   type AssessmentVersionRow,
   type VersionHistoryVocabulary,
+  jobVersionDisplayStatus,
 } from '@/components/assessments/AssessmentVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
@@ -197,7 +200,19 @@ export default function AIInterview() {
     setListScrollRequest((request) => request + 1);
   };
 
-  const isOverviewCardActive = (cardKey: OverviewCardKey) => pageView === 'list' && activeOverviewCard === cardKey;
+  /* The card that matches the open tab is the selected one — read from the
+     tab itself, so picking a "Show:" pill selects its card just as clicking
+     the card selects its pill. Tabs with no card (Archived, Activity Logs, …)
+     select none. */
+  const TAB_OVERVIEW_CARD: Partial<Record<TabKey, OverviewCardKey>> = {
+    all: 'jobs',
+    'all-interviews': 'interviews',
+    published: 'active',
+    draft: 'draft',
+    'candidate-results': 'interviewed',
+  };
+  const isOverviewCardActive = (cardKey: OverviewCardKey) =>
+    pageView === 'list' && (TAB_OVERVIEW_CARD[activeTab] ?? activeOverviewCard) === cardKey;
   const [modeFilter, setModeFilter] = useState<'all' | 'timed' | 'conversational'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'active' | 'draft'>('newest');
@@ -232,6 +247,10 @@ export default function AIInterview() {
   const [configs, setConfigs] = useState<AIInterviewResponse[]>([]);
   const [archivedConfigs, setArchivedConfigs] = useState<AIInterviewResponse[]>([]);
   const [stats, setStats] = useState<AIInterviewStatsResponse | null>(null);
+  /* Completed + Terminated sessions — the same rows Candidate Results lists
+     (a terminated interview still has its partial report). `stats.completed`
+     alone left the card short of that list's count. */
+  const [interviewedCount, setInterviewedCount] = useState<number | null>(null);
   const [settings, setSettings] = useState<AIInterviewSettingsResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -285,6 +304,25 @@ export default function AIInterview() {
      narrow it. Source does narrow: see loadInvitations. */
   const [trackerJobVersionFilter, setTrackerJobVersionFilter] = useState('');
   const [trackerVersionFilter, setTrackerVersionFilter] = useState('');
+  /* A job row's Track covers EVERY interview of that job, so its cards add up
+     to the row's Invitations Sent / Completed. Null for a single interview's
+     tracker (a version row). Each entry carries its versions, worked out when
+     the popup opens. Mirrored into refs because the loaders below are stable
+     callbacks that read them at call time. */
+  type TrackerScopeEntry = { config: AIInterviewResponse; jobVersion: number; interviewVersion: number };
+  const [trackerJobScope, setTrackerJobScope] = useState<TrackerScopeEntry[] | null>(null);
+  const trackerJobScopeRef = useRef<TrackerScopeEntry[] | null>(null);
+  const trackerVersionFiltersRef = useRef({ job: '', interview: '' });
+  // Declared ahead of the loader effects, so the refs are current when they run.
+  useEffect(() => {
+    trackerJobScopeRef.current = trackerJobScope;
+    trackerVersionFiltersRef.current = { job: trackerJobVersionFilter, interview: trackerVersionFilter };
+  }, [trackerJobScope, trackerJobVersionFilter, trackerVersionFilter]);
+  /** The job-wide scope `configId` belongs to, or null for a one-interview tracker. */
+  const trackerScopeFor = (configId: string) => {
+    const scope = trackerJobScopeRef.current;
+    return scope && scope.some((entry) => entry.config.id === configId) ? scope : null;
+  };
   const [trackerSourceFilter, setTrackerSourceFilter] = useState('');
   const [trackerResultFilter, setTrackerResultFilter] = useState('');
   // See handleViewInvitations.
@@ -360,6 +398,10 @@ export default function AIInterview() {
   /** Completed-session count per interview config — filled when its job's
    *  versions are opened (see the effect beside `interviewVersionRows`). */
   const [completedCounts, setCompletedCounts] = useState<Record<string, number>>({});
+  /* Invitation totals per interview, from the same unfiltered invitations
+     summary the Track popup reads — the list's `invitations_count` can drift
+     from it, so the job row and version rows prefer this once it lands. */
+  const [invitationTotals, setInvitationTotals] = useState<Record<string, number>>({});
   const completedCountsRequested = useRef<Set<string>>(new Set());
   /* The chosen interview version, one per job, exactly as the Assessments Job
      List holds its own pick (`selectedAssessmentVersionByJob`): the panel's
@@ -567,6 +609,15 @@ export default function AIInterview() {
       } catch (statsError) {
         console.error('Failed to load AI interview stats:', statsError);
       }
+
+      try {
+        // Same query Candidate Results loads; only the total is needed, so one row will do.
+        const interviewedRes = await aiInterviewService.list({ status: 'completed,terminated', page: 1, page_size: 1 });
+        setInterviewedCount(typeof interviewedRes.total === 'number' ? interviewedRes.total : null);
+      } catch (countError) {
+        console.error('Failed to load interviewed count:', countError);
+        setInterviewedCount(null);
+      }
     } catch (error) {
       setConfigs([]);
       if (error instanceof Error) {
@@ -647,21 +698,25 @@ export default function AIInterview() {
          card disagree with the rows it filters to: the remainder also holds
          expired and system_check sessions. Asking the endpoint for each bucket
          directly keeps the numbers and the filtered table in step. */
-      const [result, invitedOnly, revokedOnly, expiredOnly] = await Promise.all([
-        aiInterviewService.getConfigInvitations(configId, { page: 1, page_size: 1, compact: true }),
-        aiInterviewService.getConfigInvitations(configId, { page: 1, page_size: 1, compact: true, status: 'invited' }),
-        aiInterviewService.getConfigInvitations(configId, { page: 1, page_size: 1, compact: true, status: 'revoked' }),
-        aiInterviewService.getConfigInvitations(configId, { page: 1, page_size: 1, compact: true, status: 'expired' }),
-      ]);
+      // A job-wide tracker sums the same four calls over each of its interviews.
+      const ids = trackerScopeFor(configId)?.map((entry) => entry.config.id) ?? [configId];
+      const perConfig = await Promise.all(ids.map((id) => Promise.all([
+        aiInterviewService.getConfigInvitations(id, { page: 1, page_size: 1, compact: true }),
+        aiInterviewService.getConfigInvitations(id, { page: 1, page_size: 1, compact: true, status: 'invited' }),
+        aiInterviewService.getConfigInvitations(id, { page: 1, page_size: 1, compact: true, status: 'revoked' }),
+        aiInterviewService.getConfigInvitations(id, { page: 1, page_size: 1, compact: true, status: 'expired' }),
+      ])));
+      const sum = (pick: (calls: (typeof perConfig)[number]) => number | undefined) =>
+        perConfig.reduce((acc, calls) => acc + (pick(calls) || 0), 0);
       setInvitationOverview({
-        total: result.total || 0,
-        invited: invitedOnly.total || 0,
-        completed: result.completed || 0,
-        inProgress: result.in_progress || 0,
-        terminated: result.terminated || 0,
-        cancelled: result.cancelled || 0,
-        revoked: revokedOnly.total || 0,
-        expired: expiredOnly.total || 0,
+        total: sum(([result]) => result.total),
+        invited: sum(([, invitedOnly]) => invitedOnly.total),
+        completed: sum(([result]) => result.completed),
+        inProgress: sum(([result]) => result.in_progress),
+        terminated: sum(([result]) => result.terminated),
+        cancelled: sum(([result]) => result.cancelled),
+        revoked: sum(([, , revokedOnly]) => revokedOnly.total),
+        expired: sum(([, , , expiredOnly]) => expiredOnly.total),
       });
     } catch (error) {
       console.error('Failed to load invitation overview:', error);
@@ -686,6 +741,41 @@ export default function AIInterview() {
          list is fetched and filtered and paged here —
          filtering only the current server page would leave the page count
          and "Showing X of Y" describing rows that are not there. */
+      /* Job-wide tracker: each interview's matching rows (narrowed to the
+         chosen job / interview version), stamped with their versions, merged
+         newest-sent first, then filtered and paged here — the same client-side
+         path as Source / Result below, across several configs. */
+      const scope = trackerScopeFor(configId);
+      if (scope) {
+        const { job, interview } = trackerVersionFiltersRef.current;
+        const targets = scope.filter((entry) =>
+          (!job || String(entry.jobVersion) === job) && (!interview || String(entry.interviewVersion) === interview));
+        const lists = await Promise.all(targets.map((entry) =>
+          aiInterviewService.getConfigInvitations(entry.config.id, {
+            search: filters.search.trim() || undefined,
+            status: filters.status !== 'all' ? filters.status : undefined,
+            invite_date_from: filters.dateFrom || undefined,
+            invite_date_to: filters.dateTo || undefined,
+            page: 1,
+            page_size: 1000,
+          }).then((res) => (res.items || []).map((inv: any) => ({
+            ...inv,
+            _jd_version: entry.jobVersion,
+            _interview_version: entry.interviewVersion,
+          })))));
+        const sentAt = (inv: any) => new Date(inv.invitation_sent_at || inv.created_at || 0).getTime();
+        const matching = lists.flat()
+          .filter((inv: any) =>
+            (!source || inv.invite_source === source) && matchesInviteResultFilter(inv, displayInviteScore(inv), resultFilter))
+          .sort((a: any, b: any) => sentAt(b) - sentAt(a));
+        const totalPages = Math.max(1, Math.ceil(matching.length / INVITATION_PAGE_SIZE));
+        const safePage = Math.min(page, totalPages);
+        setInvitations(matching.slice((safePage - 1) * INVITATION_PAGE_SIZE, safePage * INVITATION_PAGE_SIZE));
+        setInvitationTotal(matching.length);
+        setInvitationTotalPages(totalPages);
+        if (safePage !== page) setInvitationPage(safePage);
+        return;
+      }
       if (source || resultFilter) {
         const all = await aiInterviewService.getConfigInvitations(configId, {
           search: filters.search.trim() || undefined,
@@ -1004,7 +1094,7 @@ export default function AIInterview() {
   useEffect(() => {
     if (!viewInvitationsConfig) return;
     loadInvitations(viewInvitationsConfig.id, invitationPage, inviteFilters, trackerSourceFilter, trackerResultFilter);
-  }, [viewInvitationsConfig, invitationPage, inviteFilters, trackerSourceFilter, trackerResultFilter, loadInvitations]);
+  }, [viewInvitationsConfig, trackerJobScope, trackerJobVersionFilter, trackerVersionFilter, invitationPage, inviteFilters, trackerSourceFilter, trackerResultFilter, loadInvitations]);
 
   // Bulk-revoke selection is scoped to the current invitations page — clear it
   // whenever the page, filters, or the open config changes so a stale selection
@@ -1022,7 +1112,7 @@ export default function AIInterview() {
   useEffect(() => {
     if (!viewInvitationsConfig) return;
     loadInvitationOverview(viewInvitationsConfig.id);
-  }, [viewInvitationsConfig, loadInvitationOverview]);
+  }, [viewInvitationsConfig, trackerJobScope, loadInvitationOverview]);
 
   /* Dismiss the 3-dot menu — the card's own in-flow menu (`menuRef`) and the
      version panel's portalled compact menu (`versionMenuRef`) share one open id,
@@ -1100,8 +1190,15 @@ export default function AIInterview() {
      version a tracker is for. They show when the tracker is opened from a
      job's own row on Total Jobs; opened from a version row they are hidden,
      since the row that was clicked already names the version. */
-  const handleViewInvitations = async (config: AIInterviewResponse, showVersionDetails = false) => {
+  const handleViewInvitations = async (
+    config: AIInterviewResponse,
+    showVersionDetails = false,
+    jobScope: TrackerScopeEntry[] | null = null,
+  ) => {
     setTrackerShowVersions(showVersionDetails);
+    /* Set on every open (null for one interview). Not cleared on close: the
+       Send Invite round trip reopens this same tracker directly and must keep it. */
+    setTrackerJobScope(jobScope && jobScope.length > 0 ? jobScope : null);
     /* Loading from the very first paint. The effect that fetches the rows runs
        AFTER the popup's first render, so without this the body showed "No
        candidates invited yet" for one frame - wrong, and a third height for
@@ -1523,27 +1620,41 @@ export default function AIInterview() {
    * Map insertion order is first-appearance in the already-sorted
    * `filteredConfigs`, so collapsing narrows the list without reshuffling it.
    */
-  const collapsedConfigs = (() => {
-    const lineageKeyOf = (c: AIInterviewResponse) =>
-      c.jd_short_id || c.jd_id || `__unlinked__:${c.id}`;
-    const isNewerVersion = (a: AIInterviewResponse, b: AIInterviewResponse) => {
-      const aIsDraft = normalizeConfigStatus(a.status) === 'draft';
-      const bIsDraft = normalizeConfigStatus(b.status) === 'draft';
-      if (aIsDraft !== bIsDraft) return !aIsDraft;
-      const jobDelta = (a.jd_version ?? 1) - (b.jd_version ?? 1);
-      if (jobDelta !== 0) return jobDelta > 0;
-      const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
-      const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
-      return aTime > bTime;
-    };
-    const byLineage = new Map<string, AIInterviewResponse>();
-    for (const config of filteredConfigs) {
-      const key = lineageKeyOf(config);
-      const current = byLineage.get(key);
-      if (!current || isNewerVersion(config, current)) byLineage.set(key, config);
-    }
-    return [...byLineage.values()];
-  })();
+  // Shared with the details page's Prev / Next (lib/utils/aiInterviewJobOrder).
+  const collapsedConfigs = collapseAIInterviewLineages(filteredConfigs);
+
+  /* Which list the details page's Prev / Next walk — the list on screen:
+       Grouped (Total Jobs, and Active / Draft / Archived Grouped): its jobs,
+         one stop per job, so the counter reads the job count shown here;
+       Ungrouped (All Interviews, and Active / Draft / Archived Ungrouped): its
+         interviews, every version a stop, so it reads that table's row count.
+     The ungrouped tables hand over their own row order (AllInterviewsTable);
+     the grouped list hands over its jobs below. Any other tab keeps the plain
+     URL — every interview, as before. */
+  const GROUPED_PAGER_LIST: Partial<Record<TabKey, AIInterviewPagerList>> = {
+    all: 'total-jobs',
+    published: 'active-jobs',
+    draft: 'draft-jobs',
+    archived: 'archived-jobs',
+  };
+  const UNGROUPED_PAGER_LIST: Partial<Record<TabKey, AIInterviewPagerList>> = {
+    'all-interviews': 'all-interviews',
+    published: 'active',
+    draft: 'draft',
+    archived: 'archived',
+  };
+  const currentPagerList = (): AIInterviewPagerList | undefined =>
+    activeTab === 'all-interviews' || showUngroupedList
+      ? UNGROUPED_PAGER_LIST[activeTab]
+      : GROUPED_PAGER_LIST[activeTab];
+  const interviewDetailsHref = (id: string, tab?: string) => {
+    const params = new URLSearchParams();
+    if (tab) params.set('tab', tab);
+    const pagerList = currentPagerList();
+    if (pagerList) params.set('list', pagerList);
+    const query = params.toString();
+    return `/recruitment/ai-interviews/${id}${query ? `?${query}` : ''}`;
+  };
 
   /* ── Job List row figures (the Assessments Total Jobs row, for interviews) ──
      Bucketed by the same lineage key the list collapses by, and summed over
@@ -1557,35 +1668,60 @@ export default function AIInterview() {
     const entry = jobRowTotals.get(key) ?? { interviews: 0, active: 0, invitations: 0, completed: 0, completedKnown: true };
     entry.interviews += 1;
     if (normalizeConfigStatus(config.status) === 'published') entry.active += 1;
-    entry.invitations += config.invitations_count ?? 0;
+    entry.invitations += invitationTotals[config.id] ?? config.invitations_count ?? 0;
     // Completed candidates — known only once every interview's count landed.
     if (typeof completedCounts[config.id] === 'number') entry.completed += completedCounts[config.id];
     else entry.completedKnown = false;
     jobRowTotals.set(key, entry);
   }
 
-  /** Fetch the completed-session count of each given interview not yet asked
-   *  for — a page_size-1 page of `completed` sessions, keeping its total. */
+  /** Fetch each given interview's invitation summary, once — the same
+   *  unfiltered page_size-1 call the Track popup uses for its cards, so
+   *  Invitations Sent (`total`) and Completed (`completed`) read the same
+   *  numbers there and here. */
   const requestCompletedCounts = (list: AIInterviewResponse[]) => {
     list.forEach((c) => {
       if (completedCountsRequested.current.has(c.id)) return;
       completedCountsRequested.current.add(c.id);
-      aiInterviewService.getConfigInvitations(c.id, { page: 1, page_size: 1, compact: true, status: 'completed' })
-        .then((res) => setCompletedCounts((prev) => ({ ...prev, [c.id]: res.total || 0 })))
+      aiInterviewService.getConfigInvitations(c.id, { page: 1, page_size: 1 })
+        .then((res) => {
+          setCompletedCounts((prev) => ({ ...prev, [c.id]: res.completed || 0 }));
+          setInvitationTotals((prev) => ({ ...prev, [c.id]: res.total || 0 }));
+        })
         .catch(() => { completedCountsRequested.current.delete(c.id); });
     });
   };
-  /** Job versions: the fetched lineage once loaded, else the newest known version. */
+  /**
+   * How many versions this job has — the figure beside Layers on the row, and
+   * it must equal the "Job Versions (N)" heading of the panel that opens under
+   * it.
+   *
+   * It used to fall back to `max(jd_version)` across the loaded configs, which
+   * is the highest version NUMBER rather than a count: a job whose V1 was
+   * deleted, or whose interviews were all authored against V3, reported 3 while
+   * the panel listed fewer. And the lineage it preferred was only there once a
+   * panel had been opened, so the same row could answer differently before and
+   * after a click.
+   *
+   * /jd/version-counts answers it for every job on the page in one request.
+   * `active` excludes Draft versions — the panel is given
+   * `hideDraftJobVersions` below, so the two agree. The loaded lineage,
+   * filtered the same way, covers the moment before that lands.
+   */
   const getJobVersionCount = (config: AIInterviewResponse) => {
+    const counts = config.jd_id ? jdLineage.versionCounts[config.jd_id] : undefined;
+    if (counts) return counts.active;
+
     const fetched = config.jd_id ? jdLineage.lineages[config.jd_id] : undefined;
-    if (fetched?.length) return fetched.length;
-    const key = configLineageKeyOf(config);
-    return Math.max(
-      1,
-      ...[...configs, ...archivedConfigs]
-        .filter((c) => configLineageKeyOf(c) === key)
-        .map((c) => c.jd_version ?? 1),
-    );
+    if (fetched?.length) {
+      const visible = fetched.filter(
+        (row) => jobVersionDisplayStatus(row.status, row.current_version) !== 'Draft',
+      );
+      return visible.length || fetched.length;
+    }
+    /* Nothing authoritative yet: one version is the only honest floor — a
+       version NUMBER is not a count, which is what the old fallback got wrong. */
+    return 1;
   };
   /** The job's most-invited interview — what the row's Track opens. */
   const getJobTrackTarget = (config: AIInterviewResponse) => {
@@ -1617,6 +1753,12 @@ export default function AIInterview() {
     if (!visibleLineageKeys) return;
     const keys = new Set(visibleLineageKeys.split('|'));
     requestCompletedCounts([...configs, ...archivedConfigs].filter((c) => keys.has(configLineageKeyOf(c))));
+    /* The authoritative "Job Versions" figure for the jobs on this page, in ONE
+       request — so the row prints the same number whether or not its version
+       panel has ever been opened. See getJobVersionCount. */
+    jdLineage.ensureVersionCounts(
+      paginatedConfigs.map((c) => c.jd_id).filter((id): id is string => !!id),
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visibleLineageKeys, configs, archivedConfigs]);
   /* ── View Versions: interview configs as the version panel's child rows ──
@@ -1658,7 +1800,7 @@ export default function AIInterview() {
     status: normalizeConfigStatus(config.status),
     created_at: config.created_at,
     created_by_name: config.created_by_name,
-    invitations_count: config.invitations_count,
+    invitations_count: invitationTotals[config.id] ?? config.invitations_count,
     // Undefined until fetched — the cell shows a dash rather than a false 0.
     completed_count: completedCounts[config.id],
     jd_id: config.jd_id,
@@ -1790,7 +1932,7 @@ export default function AIInterview() {
               }}
             >
               <button
-                onClick={() => { router.push(`/recruitment/ai-interviews/${config.id}`); setOpenMenuId(null); }}
+                onClick={() => { router.push(interviewDetailsHref(config.id)); setOpenMenuId(null); }}
                 className={VERSION_MENU_ITEM_CLASS}
               >
                 <Eye className="w-4 h-4 flex-shrink-0 text-menu-icon-view" />
@@ -1846,7 +1988,7 @@ export default function AIInterview() {
                 <span className={MENU_ITEM_SCALE_CLASS}>Track{hasBeenShared ? ` (${invitations})` : ''}</span>
               </button>
               <button
-                onClick={() => { if (!hasBeenShared) return; router.push(`/recruitment/ai-interviews/${config.id}?tab=results`); setOpenMenuId(null); }}
+                onClick={() => { if (!hasBeenShared) return; router.push(interviewDetailsHref(config.id, 'results')); setOpenMenuId(null); }}
                 disabled={!hasBeenShared}
                 title={
                   hasBeenShared
@@ -2010,6 +2152,15 @@ export default function AIInterview() {
   /** Ungrouped renders the flat, one-row-per-version table instead of this
    *  component's own card list below. */
   const showUngroupedList = isStatusTab && configListViewMode === 'ungrouped';
+
+  /* The grouped job list hands its jobs, in the order shown (sort, search and
+     filters applied), to the details page's Prev / Next. */
+  const groupedPagerList = isConfigListTab && !showUngroupedList ? GROUPED_PAGER_LIST[activeTab] : undefined;
+  const groupedPagerIds = collapsedConfigs.map((c) => c.id).join(',');
+  useEffect(() => {
+    if (!groupedPagerList || loading) return;
+    rememberAIInterviewPagerOrder(groupedPagerList, groupedPagerIds ? groupedPagerIds.split(',') : []);
+  }, [groupedPagerList, groupedPagerIds, loading]);
   /** Status a version must match to appear under this tab's "View Versions"
    *  panel (Grouped mode) — undefined on Total Jobs/Completed, which show
    *  every version's status as before. */
@@ -2295,7 +2446,7 @@ export default function AIInterview() {
             },
             {
               label: 'Candidates Interviewed',
-              value: stats?.completed ?? 0,
+              value: interviewedCount ?? stats?.completed ?? 0,
               icon: Users,
               tab: 'candidate-results' as TabKey,
               cardKey: 'interviewed' as OverviewCardKey,
@@ -2602,7 +2753,19 @@ export default function AIInterview() {
             default) is a flat table, one row per version; Grouped is the
             one-card-per-job view below, each job's other versions behind its
             own View Versions button, same as before this toggle existed. */}
-        {isStatusTab && (
+        {isStatusTab && (() => {
+          /* Each mode names how many it lists for this tab, unfiltered:
+             Ungrouped one row per interview (version), Grouped one card per job. */
+          const tabInterviews = activeTab === 'archived'
+            ? archivedConfigs
+            : configs.filter((c) => activeTab === 'published'
+              ? normalizeConfigStatus(c.status) === 'published'
+              : c.status === 'draft');
+          const modeCounts = {
+            ungrouped: tabInterviews.length,
+            grouped: collapseAIInterviewLineages(tabInterviews).length,
+          };
+          return (
           <div className="flex items-center gap-2 mb-3">
             <span className="text-sm text-gray-600 dark:text-slate-400">View:</span>
             <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
@@ -2617,19 +2780,27 @@ export default function AIInterview() {
                     type="button"
                     aria-pressed={isActive}
                     onClick={() => setConfigListViewMode(mode.key)}
-                    className={`px-2.5 sm:px-3 py-1.5 min-h-[32px] rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 whitespace-nowrap ${
+                    className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 min-h-[32px] rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 whitespace-nowrap ${
                       isActive
                         ? 'bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/20 text-brand-blue'
                         : 'text-gray-600 dark:text-slate-400 hover:text-brand-blue'
                     }`}
                   >
                     {mode.label}
+                    <span className={`min-w-[1.25rem] px-1.5 py-0.5 rounded-full text-2xs font-semibold tabular-nums text-center ${
+                      isActive
+                        ? 'bg-brand-blue/10 text-brand-blue'
+                        : 'bg-gray-200/70 dark:bg-slate-700 text-gray-600 dark:text-slate-300'
+                    }`}>
+                      {modeCounts[mode.key]}
+                    </span>
                   </button>
                 );
               })}
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {/* Main Content */}
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
@@ -2871,7 +3042,14 @@ export default function AIInterview() {
                                     return;
                                   }
                                   if (!canTrack || !trackTarget) return;
-                                  void handleViewInvitations(trackTarget, true);
+                                  // Every interview of this job, so the popup totals match this row.
+                                  const lineage = [...configs, ...archivedConfigs].filter(
+                                    (c) => configLineageKeyOf(c) === configLineageKeyOf(config));
+                                  void handleViewInvitations(trackTarget, true, lineage.map((c) => ({
+                                    config: c,
+                                    jobVersion: c.jd_version ?? 1,
+                                    interviewVersion: interviewVersionOrdinal(c, [...configs, ...archivedConfigs]),
+                                  })));
                                 }}
                                 className={`h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all ${
                                   canTrack
@@ -2914,6 +3092,13 @@ export default function AIInterview() {
                             onClick={(e) => e.stopPropagation()}
                           >
                             <AssessmentVersionHistoryPanel
+                              /* Same rule the Assessments Job List panel uses:
+                                 a Draft is not yet a version of the job, and
+                                 the row's count beside Layers reads `active`
+                                 for exactly this reason. Without it the two
+                                 modules answered "how many versions" with
+                                 different numbers for the same job. */
+                              hideDraftJobVersions
                               jobVersions={jdLineage.lineages[config.jd_id]}
                               jobVersionDetails={jdLineage.versionDetails}
                               assessments={interviewVersionRows(config.jd_id, versionStatusFilterForTab)}
@@ -2998,7 +3183,7 @@ export default function AIInterview() {
                               }}
                               /* Opens the interview the row names, the same thing
                                  clicking the card does. */
-                              onRowClick={(interviewId) => router.push(`/recruitment/ai-interviews/${interviewId}`)}
+                              onRowClick={(interviewId) => router.push(interviewDetailsHref(interviewId))}
                             />
                           </div>
                         )}
@@ -4158,19 +4343,8 @@ export default function AIInterview() {
                 statusOptions={AI_INTERVIEW_INVITE_STATUS_OPTIONS}
                 searchPlaceholder="Search by candidate name or email..."
                 extraSelects={[
-                  ...(trackerShowVersions ? [{
-                    key: 'job-version', ariaLabel: 'Job Version', anyLabel: 'All Job Versions', value: trackerJobVersionFilter,
-                    options: [{ value: String(viewInvitationsConfig.jd_version ?? 1), label: `Job V${viewInvitationsConfig.jd_version ?? 1}` }],
-                    onChange: setTrackerJobVersionFilter,
-                  },
-                  {
-                    key: 'interview-version', ariaLabel: 'Interview Version', anyLabel: 'All Interview Versions', value: trackerVersionFilter,
-                    options: (() => {
-                      const v = interviewVersionOrdinal(viewInvitationsConfig, [...configs, ...archivedConfigs]);
-                      return [{ value: String(v), label: `Interview V${v}` }];
-                    })(),
-                    onChange: setTrackerVersionFilter,
-                  }] : []),
+                  /* Same Source / Result pair as every other Track popup, so the bar
+                     keeps their one-row layout. Versions read per row in the table. */
                   {
                     key: 'source', ariaLabel: 'Source', anyLabel: 'All Sources', value: trackerSourceFilter,
                     options: INVITE_SOURCE_FILTER_OPTIONS,
@@ -4283,8 +4457,9 @@ export default function AIInterview() {
                   isLoading={invitesInitialLoading}
                   hasActiveFilters={filtersActive}
                   emptyHint={'Use the "Send via Email" button to invite candidates'}
-                  jobVersion={trackerShowVersions ? (viewInvitationsConfig.jd_version ?? 1) : undefined}
-                  interviewVersion={trackerShowVersions ? interviewVersionOrdinal(viewInvitationsConfig, [...configs, ...archivedConfigs]) : undefined}
+                  jobVersion={trackerShowVersions && !trackerJobScope ? (viewInvitationsConfig.jd_version ?? 1) : undefined}
+                  interviewVersion={trackerShowVersions && !trackerJobScope ? interviewVersionOrdinal(viewInvitationsConfig, [...configs, ...archivedConfigs]) : undefined}
+                  showRowVersions={!!trackerJobScope}
                   selectedIds={trackerBulkMode ? selectedInviteIds : undefined}
                   onToggleSelect={trackerBulkMode ? toggleSelectOne : undefined}
                   isSelectable={trackerRowSelectable}

@@ -42,6 +42,8 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { Button } from '@/components/ui/button';
+import { useArchiveAssessmentConfirm } from '@/components/assessments/ArchiveAssessmentModal';
+import { PAGER_LIST_PARAM, rememberAssessmentPagerOrder, type AssessmentPagerList } from '@/lib/utils/assessmentPagerList';
 
 /* Same batch size and same reason as the Assessments dashboard's own list: the
    /assessments endpoint takes only jd_id, status, search and paging, so every
@@ -328,6 +330,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
   const canUpdateAssessment = isTenantAdmin || (user?.permissions?.canUpdateAssessments ?? false);
   const canDeleteAssessment = isTenantAdmin || (user?.permissions?.canDeleteAssessments ?? false);
   const dialog = useGlobalDialog();
+  const { confirmArchive, archiveConfirmModal } = useArchiveAssessmentConfirm();
   const fixedLabel = fixedStatusLabel(fixedStatus);
   /* Both lines of the page header. Read only when this table is on its OWN
      route — see the header block below, which `embedded` drops whole. On the
@@ -736,7 +739,11 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
       toast.error('You do not have permission to archive assessments');
       return;
     }
-    if (!await dialog.confirm({ title: 'Archive Assessment', message: 'Archive this assessment? It will be moved to the archived section.', variant: 'warning', confirmText: 'Archive' })) return;
+    if (!await confirmArchive({
+      title: `${row.jobName || row.title || 'Untitled'} - Assessment`,
+      version: row.assessmentVersion,
+      createdAt: row.createdAt,
+    })) return;
     void runStatusAction(row, 'archive', () => assessmentService.update(row.id, { status: 'archived' }), 'Assessment archived');
   };
 
@@ -785,13 +792,29 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
     title?: string;
   };
 
+  /* Opens an assessment's details page, whose Prev / Next then walks THIS
+     table - every record, in the order it is showing (`sorted`: its filters
+     and sort) - rather than the Total Jobs list, so "X / N" counts this tab's
+     assessments, not jobs. One list per tab, so each tab pages its own. */
+  const pagerList: AssessmentPagerList =
+    fixedStatus === 'published' ? 'active-assessments'
+      : fixedStatus === 'draft' ? 'draft-assessments'
+        : fixedStatus === 'archived' ? 'archived-assessments'
+          : 'all-assessments';
+  const openAssessmentDetails = (row: AssessmentRow, query = '') => {
+    rememberAssessmentPagerOrder(pagerList, sorted.map((r) => r.id));
+    const params = new URLSearchParams(query);
+    params.set(PAGER_LIST_PARAM, pagerList);
+    router.push(`/recruitment/assessments/${row.id}?${params.toString()}`);
+  };
+
   const rowActions = (row: AssessmentRow) => {
     /* `iconClassName` is the ⋮-menu icon token for the action — the
        `text-menu-icon-*` set the Invitation Status tab's menu colours its
        icons with (globals.css), so View reads the same blue there and here. */
     const view: RowAction = {
       key: 'view', label: 'View Assessment', icon: Eye, iconClassName: 'text-menu-icon-view',
-      run: () => router.push(`/recruitment/assessments/${row.id}`),
+      run: () => openAssessmentDetails(row),
     };
     const results: RowAction = {
       key: 'results', label: 'View Results', icon: BarChart, iconClassName: 'text-menu-icon-score',
@@ -866,7 +889,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
       && (fixedStatus || !['published', 'archived'].includes(row.rawStatus))) {
       actions.push({
         key: 'history', label: 'View History', icon: History, iconClassName: 'text-menu-icon-secondary',
-        run: () => router.push(`/recruitment/assessments/${row.id}?tab=versions`),
+        run: () => openAssessmentDetails(row, 'tab=versions'),
       });
     }
     /* Last, as on the page's own menu: the one action that cannot be undone.
@@ -1227,7 +1250,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                     pageRows.map((row) => (
                       <tr
                         key={row.id}
-                        onClick={opensView(row) ? () => router.push(`/recruitment/assessments/${row.id}`) : undefined}
+                        onClick={opensView(row) ? () => openAssessmentDetails(row) : undefined}
                         className={`border-b border-gray-100 dark:border-slate-700/60 last:border-b-0 ${opensView(row) ? 'cursor-pointer' : ''} transition-colors hover:bg-brand-blue/5 dark:hover:bg-brand-blue/10`}
                       >
                         {/* 1. Job ID — secondary by design: the chip is the
@@ -1366,6 +1389,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
           )}
         </div>
       </div>
+      {archiveConfirmModal}
     </div>
   );
 }

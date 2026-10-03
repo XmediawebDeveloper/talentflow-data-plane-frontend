@@ -19,6 +19,7 @@ import ShareAssessmentModal from './ShareAssessmentModal';
 import AssessmentAuditTrail from './AssessmentAuditTrail';
 import ConsentLogs from './compliance/ConsentLogs';
 import AssessmentPreviewModal from './AssessmentPreviewModal';
+import AssessmentConfigureModal from './AssessmentConfigureModal';
 import AssessmentEditModal from './AssessmentEditModal';
 import JDVersionHistoryModal from '@/components/JDVersionHistoryModal';
 import AssessmentDetailsView from './AssessmentDetailsView';
@@ -110,7 +111,7 @@ import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import QuotaBadge from '@/components/ui/quota-badge';
 import AllAssessmentsTable, { VersionPill } from '@/components/assessments/AllAssessmentsTable';
-import AssessmentVersionHistoryPanel, { type AssessmentVersionRow, VersionChip } from '@/components/assessments/AssessmentVersionHistoryPanel';
+import AssessmentVersionHistoryPanel, { type AssessmentVersionRow, VersionChip, jobVersionDisplayStatus } from '@/components/assessments/AssessmentVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import { latestVersionNumber } from '@/lib/utils/jobOpeningDisplay';
 /* The Job Opening → Job Version → Assessment retrieval, as one implementation
@@ -128,6 +129,8 @@ import {
 } from '@/lib/utils/jobAssessmentHierarchy';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import { formatScore, SCORE_CELL_TEXT } from '@/lib/utils/score';
+import { useArchiveAssessmentConfirm } from '@/components/assessments/ArchiveAssessmentModal';
+import { jobLineageKey, collapseByLineage as collapseJobLineages, orderTotalJobs } from '@/lib/utils/assessmentJobOrder';
 
 
 /** What the version-history helpers below read off an assessment row — the
@@ -223,9 +226,11 @@ function InlinePageNav({ page, totalPages, onPageChange }: { page: number; total
    an assessment was built against, which is the thing a job's versions differ
    by, not the thing they collapse on. A row with neither falls back to its own
    id, so it stays a job of one rather than piling into a shared "no job"
-   bucket where unrelated rows would look like versions of one another. */
-const jobLineageKey = (a: { jd_short_id?: string; jd_id?: string; id: string }) =>
-  a.jd_short_id || a.jd_id || `__unlinked__:${a.id}`;
+   bucket where unrelated rows would look like versions of one another.
+
+   The key, the collapse and the Total Jobs order now live in
+   lib/utils/assessmentJobOrder, shared with the assessment details page's
+   Prev / Next so its "X / N" is this list's position. */
 
 /**
  * Counts the completed candidates of the assessments it is handed, and reports
@@ -405,6 +410,10 @@ const FLAT_ASSESSMENT_TABLE_CONFIG = {
   archived: { fixedStatus: 'archived' },
 } satisfies Record<FlatAssessmentTab, { fixedStatus?: 'published' | 'draft' | 'archived' }>;
 
+/** What the Send Invite picker's preview needs of an assessment: its id, and
+ *  the job the Configure form lays itself out from. */
+type PickerPreviewAssessment = { id: string; jd_id?: string; [key: string]: unknown };
+
 /** A completed attempt, tagged with the assessment it belongs to. */
 type CandidateResultRow = AssessmentAttemptResponse & {
   _assessment_id: string;
@@ -449,6 +458,7 @@ const RESULTS_RETURN_PAGE_KEY = 'assessments:resultsReturnPage';
 export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDCreation, autoOpenCreate, preSelectedJdId, preSelectedJdTitle, initialListTab }: AssessmentsProps) {
   const router = useRouter();
   const dialog = useGlobalDialog();
+  const { confirmArchive, archiveConfirmModal } = useArchiveAssessmentConfirm();
   const { user, isTenantAdmin, hasPermissionCode } = useAuth();
 
   // Permission checks for CRUD operations (bypass for tenant admin)
@@ -473,6 +483,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
      The default stays 'all', so which tab the page opens on is unchanged. */
   const [activeTab, setActiveTab] = useState<AssessmentPageTab>(initialListTab ?? 'all');
+  /* All / Active / Draft / Archived list view — the AI Interviews page's
+     `configListViewMode`. 'ungrouped' (default) is the flat table, one row
+     per version, as these tabs have always shown; 'grouped' is the Total
+     Jobs job list — one row per job, its other versions behind View
+     Versions — narrowed to this tab's status (All: every status). Total
+     Jobs has no toggle: it is the grouped list already. */
+  const [statusListViewMode, setStatusListViewMode] = useState<'grouped' | 'ungrouped'>('ungrouped');
   /* Two-step view: 'cards' shows only the 3 stat tiles; 'list' shows tabs +
      filters + assessments list.
      'cards' unless the arrival named a tab (`initialListTab`), which is the
@@ -552,6 +569,30 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const invitePickerScrollRef = useRef<HTMLDivElement | null>(null);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [selectedAssessmentForPreview, setSelectedAssessmentForPreview] = useState<any>(null);
+  /* The Send Invite picker's eye: the Configure Assessment form, read-only —
+     the view the assessment details page's own version preview opens. A popup
+     there because the picker is itself a dialog mid-choice, and navigating
+     away would throw the choice away. Everywhere else, View opens the
+     assessment details page (see `openAssessmentDetailsPage`). */
+  const [configurePreviewAssessment, setConfigurePreviewAssessment] = useState<PickerPreviewAssessment | null>(null);
+  /** Preview inside the Send Invite picker. The Configure form is scoped to a
+   *  job, so an assessment with no `jd_id` keeps the older preview modal,
+   *  which needs none. */
+  const previewAssessmentInPicker = (mapped: PickerPreviewAssessment) => {
+    if (mapped?.jd_id) {
+      setConfigurePreviewAssessment(mapped);
+      return;
+    }
+    setSelectedAssessmentForPreview(mapped);
+    setShowPreviewModal(true);
+  };
+  /** View, from the list: the assessment details page — the complete reading
+   *  of an assessment, with its actions. The Total Jobs list saves which job
+   *  had View Versions open and which version was picked
+   *  (`useListStatePersistence`), so Back lands where the reader left. */
+  const openAssessmentDetailsPage = (assessmentId: string) => {
+    router.push(`/recruitment/assessments/${assessmentId}`);
+  };
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedAssessmentForEdit, setSelectedAssessmentForEdit] = useState<any>(null);
   /* The ASSESSMENT version picked inside the Job Versions panel, per JOB.
@@ -1286,7 +1327,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
    * a promise callback, so a landing lineage re-renders the badge and nothing
    * else.
    */
-  const { ensureFilterLineages: ensureJobLineages } = jdLineage;
+  const { ensureFilterLineages: ensureJobLineages, ensureVersionCounts } = jdLineage;
   useEffect(() => {
     /* Keyed by the lineage, not the row: every version of a job resolves to
        the same history, so JD-080 is fetched once however many of its
@@ -1316,6 +1357,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     // already queued (the stats call) claim a connection slot first.
     const timer = setTimeout(() => {
       ensureJobLineages([...targets].map(([key, jobId]) => ({ key, jobId })));
+      /* ONE request for every job on the page, not one per job — the count the
+         row prints comes from here rather than from whichever lineage happened
+         to have landed. Same deferred tick, for the reason above. */
+      ensureVersionCounts([...targets.values()]);
     }, 0);
     return () => clearTimeout(timer);
   }, [apiAssessments, ensureJobLineages]);
@@ -1590,6 +1635,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
          again. Keyed per job, so several jobs keep their own place. */
       expandedJobVersionsByJob,
       selectedAssessmentVersionByJob,
+      statusListViewMode,
     },
     (s) => {
       /* An arrival that NAMED its tab (`initialListTab`, from `?tab=`) beats
@@ -1635,6 +1681,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           setSelectedAssessmentVersionByJob(restored);
         }
         if (typeof s.assessmentCurrentPage === 'number') setAssessmentCurrentPage(s.assessmentCurrentPage);
+        if (s.statusListViewMode === 'grouped' || s.statusListViewMode === 'ungrouped') setStatusListViewMode(s.statusListViewMode);
         if (typeof s.assessmentSearch === 'string') assessmentListSearch.setQuery(s.assessmentSearch);
         assessmentListSearch.setFilters({
           type:
@@ -1865,7 +1912,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       created_at: a.created_at,
       updated_at: a.updated_at,
       /* When the assessment was published (AssessmentResponse.published_at) —
-         what the Total Jobs list orders its jobs by, see `byLatestPublish`. */
+         what the Total Jobs list orders its jobs by, see `orderTotalJobs`. */
       published_at: a.published_at,
       created_by_name: a.created_by_name || 'System',
       version: a.version || 1,
@@ -2686,7 +2733,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
   // Row click opens that candidate's result view. The detail route builds its
   // own breadcrumb (Dashboard > Assessments > assessment > candidate) and pages
-  // through `assessmentResultNavList`, so seed it with the rows on screen.
+  // through `assessmentResultNavList`, so seed it with EVERY row of this tab's
+  // current list (search and filters applied, every page), in its order - so
+  // its "X / N" counts Candidate Results records. Each entry carries its own
+  // assessment (`aid`): this tab spans assessments, and the details route is
+  // keyed on the result's assessment, so the neighbour may live under another.
   const openCandidateResult = (result: CandidateResultRow, rows: CandidateResultRow[]) => {
     const attemptId = result.id;
     if (!attemptId) {
@@ -2698,8 +2749,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         'assessmentResultNavList',
         JSON.stringify(
           rows
-            .filter(row => row.id && row._assessment_id === result._assessment_id)
-            .map(row => ({ id: row.id, cid: row.candidate_display_id || '' }))
+            .filter(row => row.id && row._assessment_id)
+            .map(row => ({ id: row.id, cid: row.candidate_display_id || '', aid: row._assessment_id }))
         )
       );
     } catch { /* ignore quota errors */ }
@@ -3758,7 +3809,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
   // Archive assessment
   const handleArchiveAssessment = async (assessmentId: string) => {
-    if (!await dialog.confirm({ title: 'Archive Assessment', message: 'Archive this assessment? It will be moved to the archived section.', variant: 'warning', confirmText: 'Archive' })) return;
+    const target = apiAssessments.find((a) => a.id === assessmentId);
+    if (!await confirmArchive({
+      title: `${target?.jd_title || target?.title || 'Untitled'} - Assessment`,
+      version: target?.version,
+      createdAt: target?.created_at,
+      durationMinutes: target?.duration_minutes,
+    })) return;
 
     try {
       await assessmentService.update(assessmentId, { status: 'archived' as any });
@@ -4259,131 +4316,16 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     return true;
   });
 
-  /**
-   * One row per ASSESSMENT, not one per version.
-   *
-   * An assessment duplicated to V2 and V3 used to put three cards on the page,
-   * repeating the same job title, each with its own vN badge and nothing
-   * saying they were the same assessment. Only the latest version is listed
-   * now; the rest live behind that card's View Versions button.
-   *
-   * An assessment's versions are the other assessments sharing its JD — that
-   * is what the version cap counts and what the details view's own
-   * "New Versions" tab fetches, so it is the app's existing definition rather
-   * than a new one. Rows with no JD are their own lineage: unrelated
-   * assessments must not collapse into each other just because they share a
-   * missing field.
-   *
-   * "Sharing its JD" means the JOB, not one version of it. Every republish
-   * mints a new JD row with its own `jd_id` under the same human-readable
-   * `jd_short_id` (JD-025), so keying on `jd_id` put one card on the page per
-   * job VERSION — three rows all badged JD-025, which is the duplication a
-   * recruiter sees. `jd_short_id` is what the versions of a job share, and it
-   * is the same key the Job Openings list collapses on (`lineageKey` in
-   * lib/utils/jobOpeningDisplay), so one Job ID means one row here too. The
-   * versions behind it are what View Versions opens.
-   *
-   * Order is by each lineage's FIRST appearance in the server's ordering, so
-   * collapsing does not reshuffle a list the user was already reading.
-   *
-   * Note this runs on the tab-filtered set: on the Draft tab a lineage whose
-   * V3 alone is a draft is represented by V3, which is the right answer for
-   * "the draft assessments" — and the version panel fetches the lineage
-   * unfiltered, so opening it still shows every version whatever its status.
-   */
+  /* One row per job, picked and ordered by the Total Jobs rules in
+     lib/utils/assessmentJobOrder (`collapseByLineage`: a draft never
+     represents a job with a non-draft version; `orderTotalJobs`: latest
+     publish first, stable otherwise). Shared with the assessment details
+     page's Prev / Next, so the two cannot drift into different orders.
+     `collapseByLineage` stays a local name for the Send Invite picker's
+     call sites below. */
+  const collapseByLineage = (list: typeof assessments) => collapseJobLineages(list);
 
-  const collapseByLineage = (list: typeof assessments) => {
-    const byLineage = new Map<string, (typeof list)[number]>();
-
-    /* Which of two rows of one lineage is the newer VERSION — the Job Openings
-       list's `byLatestVersion`, read against the pair of numbers an assessment
-       carries. Negative when `a` is newer, so it reads like a sort comparator.
-
-       Newest JOB version wins, and only then the newest assessment version
-       within it. The job is the parent, so "which row represents this job" is
-       answered by the job's own version first - picking on the assessment
-       number alone could put an older job version on the card whenever an
-       assessment was duplicated after a republish.
-
-       DRAFT IS THE ONE STATUS TERM, and it outranks nothing: a version that
-       is still a draft never represents a lineage that has a non-draft
-       version in it. This is what keeps the Main Assessment List still when
-       a version is duplicated. Duplicate mints the next version as a Draft,
-       and on a pure sequence rule that draft immediately became the row —
-       so an Active assessment turned Draft, its name grew a "- Version 2"
-       suffix, its stage moved and the open version panel (keyed on the old
-       row's id) closed itself, all from an action that was supposed to touch
-       only the versions table. None of that was a data change; the list was
-       simply pointing at a different member of the same lineage.
-
-       Only DRAFT is weighed, not a full status ranking: Active vs Completed
-       vs Archived still sort purely by version, exactly as before, so the
-       only lineage whose row moves is one that had a draft on top of a
-       non-draft. A lineage that is all drafts still shows its newest draft —
-       there is no non-draft version for it to be represented by.
-
-       `created_at` is the last tie-break, for the same reason it is one there:
-       when the list endpoint omits `version` every row falls back to 1, both
-       numeric comparisons tie, and "latest" would quietly become whatever order
-       the API happened to return — enough to flip a lineage's card between its
-       draft and its published version from one load to the next. */
-    const isNewerVersion = (
-      a: (typeof list)[number],
-      b: (typeof list)[number],
-    ) => {
-      /* A draft loses to any non-draft in the same lineage, whatever the
-         version numbers say. Checked before the job version too: a draft
-         authored against a newer JOB version is still a draft, and letting
-         it through here would flip the row on the next republish-and-
-         duplicate just as surely. */
-      const aIsDraft = a.status === 'Draft';
-      const bIsDraft = b.status === 'Draft';
-      if (aIsDraft !== bIsDraft) return !aIsDraft;
-      const jobDelta = (a.jd_version ?? 1) - (b.jd_version ?? 1);
-      if (jobDelta !== 0) return jobDelta > 0;
-      const versionDelta = (a.version ?? 1) - (b.version ?? 1);
-      if (versionDelta !== 0) return versionDelta > 0;
-      const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
-      const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
-      return aTime > bTime;
-    };
-
-    for (const assessment of list) {
-      const key = lineageKeyOf(assessment);
-      const current = byLineage.get(key);
-      if (!current || isNewerVersion(assessment, current)) {
-        byLineage.set(key, assessment);
-      }
-    }
-    return [...byLineage.values()];
-  };
-
-  /* Total Jobs order: the job whose assessment was published most recently
-     first. Each job (lineage) is ranked by the latest publish among ALL of its
-     assessments in the list — so publishing the assessment of any job
-     version, V1 or V3, lifts that job to the top — and the row that represents
-     it is still the one `collapseByLineage` picks. The time is the API's
-     `published_at`; a published (Active) assessment the API returned without
-     one falls back to its `updated_at`, the moment its status last changed.
-     Jobs with nothing published keep their existing relative order below
-     (the sort is stable), so nothing else in the list reshuffles. The list
-     reloads after every publish, so the order follows on its own. */
-  const publishTimeOf = (assessment: (typeof assessments)[number]) => {
-    const stamp = assessment.published_at
-      || (assessment.status === 'Active' ? assessment.updated_at : undefined);
-    const time = stamp ? new Date(stamp).getTime() : NaN;
-    return Number.isFinite(time) ? time : 0;
-  };
-  const latestPublishByLineage = new Map<string, number>();
-  for (const assessment of filteredAssessments) {
-    const key = lineageKeyOf(assessment);
-    const time = publishTimeOf(assessment);
-    if (time > (latestPublishByLineage.get(key) ?? 0)) latestPublishByLineage.set(key, time);
-  }
-  const byLatestPublish = (a: (typeof assessments)[number], b: (typeof assessments)[number]) =>
-    (latestPublishByLineage.get(lineageKeyOf(b)) ?? 0) - (latestPublishByLineage.get(lineageKeyOf(a)) ?? 0);
-
-  const collapsedAssessments = collapseByLineage(filteredAssessments).sort(byLatestPublish);
+  const collapsedAssessments = orderTotalJobs(filteredAssessments);
 
   const assessmentResultCount = collapsedAssessments.length;
 
@@ -4512,15 +4454,42 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   };
 
   /**
-   * How many versions this job has.
+   * How many versions this job has — the figure the row prints beside Layers.
    *
-   * The fetched lineage is the authority and is what the version panel lists,
-   * so the row's count and the panel's row count agree. Until it lands (or if
-   * the fetch failed) the highest known version number stands in — the same
-   * number the LATEST badge is decided from, via the existing helper.
+   * MUST equal the "Job Versions (N)" heading of the panel that opens beneath
+   * it. Two things used to break that:
+   *
+   *   1. the panel drops DRAFT job versions when `hideDraftJobVersions` is set
+   *      (it is, outside select mode), while this counted the raw lineage — a
+   *      job with a draft read "3 Job Versions" above a panel listing 2;
+   *   2. the lineage it counted was whatever had loaded, so the same row could
+   *      answer differently before and after the panel was opened.
+   *
+   * So the count now comes from /jd/version-counts, which answers both
+   * readings for every job on the page in one request, and `includeDrafts` is
+   * passed the same flag the panel is given. The lineage (filtered the same
+   * way) is the fallback while that is in flight, and the highest known
+   * version number only if neither is available.
    */
-  const getJobVersionCount = (assessment: { jd_id?: string; jd_short_id?: string; jd_version?: number }) =>
-    getJobLineageRows(assessment)?.length ?? getLatestJobVersion(assessment);
+  const getJobVersionCount = (
+    assessment: { jd_id?: string; jd_short_id?: string; jd_version?: number },
+    includeDrafts = false,
+  ) => {
+    const counts = assessment.jd_id ? jdLineage.versionCounts[assessment.jd_id] : undefined;
+    if (counts) return includeDrafts ? counts.total : counts.active;
+
+    const rows = getJobLineageRows(assessment);
+    if (rows?.length) {
+      if (includeDrafts) return rows.length;
+      /* Same test the panel filters by, so the fallback cannot disagree with
+         it either: the DISPLAYED status, not the raw one. */
+      const visible = rows.filter(
+        (row) => jobVersionDisplayStatus(row.status, row.current_version) !== 'Draft',
+      );
+      return visible.length || rows.length;
+    }
+    return getLatestJobVersion(assessment);
+  };
 
   /**
    * Invitations sent for a JOB - what the Job List's Track button is gated on.
@@ -4588,11 +4557,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
        call site is untouched; Send Invite passes its own so the figures on a
        picker row describe the assessments the picker is offering. */
     totalsByLineage: ReturnType<typeof buildJobRowTotals> = jobRowTotals,
+    /* Whether Draft job versions count — the picker's panel lists them, the
+       Job List's does not. Passed through from the row so the figure always
+       describes the panel that opens under it. */
+    includeDraftJobVersions = false,
   ) => {
     const totals = totalsByLineage.get(lineageKeyOf(assessment))
       ?? { assessments: 0, invitations: 0, completed: 0 };
     return [
-      { key: 'job-versions', icon: Layers, iconClass: 'text-brand-blue', value: getJobVersionCount(assessment), label: 'Job Versions' },
+      { key: 'job-versions', icon: Layers, iconClass: 'text-brand-blue', value: getJobVersionCount(assessment, includeDraftJobVersions), label: 'Job Versions' },
       { key: 'assessments', icon: ClipboardList, iconClass: 'text-brand-cyan', value: totals.assessments, label: 'Assessments' },
       { key: 'invitations', icon: Send, iconClass: 'text-brand-orange', value: totals.invitations, label: 'Invitations Sent' },
       /* Completed is the one metric here that is NOT read from `totals`. The
@@ -4817,7 +4790,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         {/* Totals for the job. Two columns on a phone, four in a
             divided row once there is width for them. */}
         <div className="grid grid-cols-2 gap-x-2 gap-y-3 sm:grid-cols-4 sm:gap-x-0 sm:gap-y-0 @4xl/job-row:flex-1 @4xl/job-row:min-w-0">
-          {getJobRowMetrics(assessment, totals).map(({ key, icon: MetricIcon, iconClass, value, label }) => (
+          {/* `selectMode` is exactly what the panel below is given as
+              `hideDraftJobVersions`, so the row's Job Versions figure and the
+              panel's "Job Versions (N)" heading count the same versions. */}
+          {getJobRowMetrics(assessment, totals, selectMode).map(({ key, icon: MetricIcon, iconClass, value, label }) => (
             <div
               key={key}
               className="min-w-0 sm:px-3 sm:border-l sm:border-gray-100 dark:sm:border-slate-700/60 sm:first:border-l-0 sm:first:pl-0"
@@ -5001,14 +4977,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
            screen. */
         const displayedRows = assessmentLineages[jdId] ?? getOptimisticAssessmentRows(jdId);
         const hasRowsToShow = !!assessmentLineages[jdId] || displayedRows.length > 0;
-        /* The page's own preview modal, against the assessment that row IS.
-           Same component the list's Preview action opens, so there is one
-           assessment-details view in the app and this is it. */
+        /* The Send Invite picker's eye on a version row: a read-only preview
+           over the picker (see `previewAssessmentInPicker`). */
         const viewAssessmentVersion = (version: { id: string }) => {
           const raw = displayedRows.find((v) => v.id === version.id);
           if (!raw) return;
-          setSelectedAssessmentForPreview(mapAssessmentFromApi(raw, 0));
-          setShowPreviewModal(true);
+          previewAssessmentInPicker(mapAssessmentFromApi(raw, 0));
         };
         return (
         <div onClick={(e) => e.stopPropagation()}>
@@ -5186,7 +5160,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 mapped,
                 `version:${version.id}`,
                 'compact',
-                renderAssessmentRowMenuItems(mapped, () => viewAssessmentVersion(version)),
+                /* View Details: the assessment details page, not a popup. */
+                renderAssessmentRowMenuItems(mapped, () => openAssessmentDetailsPage(version.id)),
               );
             }}
           />
@@ -5254,8 +5229,23 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const jobCompletedCountsToFetch = [
     ...new Set(visibleAssessments.flatMap(getJobAssessmentIds)),
   ].filter((id) => completedCandidatesByAssessment[id] === undefined);
+  /* All / Active / Draft / Archived take the Grouped/Ungrouped toggle; on
+     Grouped they fall through to the job list below instead of the flat
+     table. */
+  const hasListViewToggle = isFlatAssessmentTab(activeTab);
+  const showFlatAssessmentTable = hasListViewToggle && statusListViewMode !== 'grouped';
+  /* The toggle's counts, off the same loaded set either view is drawn from
+     (this tab's status, all of it on All): every assessment record for
+     Ungrouped, one per job (`collapsedAssessments`, the job list's own rows)
+     for Grouped. Held back while the tab's set is loading rather than showing
+     the previous tab's figures. */
+  /** Every job in this tab's loaded set, before search and filters. */
+  const allJobsCount = collapseByLineage(assessments).length;
+  const listViewCounts = isLoading
+    ? null
+    : { ungrouped: filteredAssessments.length, grouped: collapsedAssessments.length };
   const activeTabOwnsListContent =
-    isFlatAssessmentTab(activeTab) ||
+    showFlatAssessmentTable ||
     ['completed-candidates', 'invitation-status', 'settings'].includes(activeTab);
 
   /* `assessmentListEmpty` stood here — the "this tab has no rows on screen"
@@ -6214,10 +6204,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 filtersApplied={assessmentFiltersActive}
                 onClearFilters={clearAssessmentFilters}
                 className="mb-0"
+                /* JOBS, as the noun says - the rows this list draws
+                   (`collapsedAssessments`) of every job in the loaded set.
+                   It counted assessment records, so a Grouped view of 71
+                   jobs read "107 of 107 jobs". */
                 countBadge={
                   <ListCountBadge
-                    filtered={filteredAssessments.length}
-                    total={assessments.length}
+                    filtered={collapsedAssessments.length}
+                    total={allJobsCount}
                     noun="job"
                   />
                 }
@@ -6443,7 +6437,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     appear-when-there-is-something-to-undo rule as the
                     toolbar's Reset. Puts the sort back to its default and
                     nothing else: search and filters stay as they are. */}
-                {isFlatAssessmentTab(activeTab) && sortedAssessmentTab === activeTab && (
+                {showFlatAssessmentTable && sortedAssessmentTab === activeTab && (
                   <button
                     type="button"
                     onClick={() => setClearAssessmentSortSignal((n) => n + 1)}
@@ -6475,6 +6469,44 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           );
         })()}
 
+        {/* Grouped/Ungrouped — All/Active/Draft/Archived, the AI Interviews
+            page's control. Ungrouped (the default) is the flat table, one row
+            per version; Grouped is the job list, one row per job with its
+            other versions behind View Versions. Each option carries its count
+            in the tab-pill treatment: the figure in parentheses, a shade
+            lighter. */}
+        {hasListViewToggle && (
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-sm text-gray-600 dark:text-slate-400">View:</span>
+            <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+              {([
+                { key: 'ungrouped', label: 'Ungrouped' },
+                { key: 'grouped', label: 'Grouped' },
+              ] as const).map((mode) => {
+                const isActive = statusListViewMode === mode.key;
+                return (
+                  <button
+                    key={mode.key}
+                    type="button"
+                    aria-pressed={isActive}
+                    onClick={() => setStatusListViewMode(mode.key)}
+                    className={`px-2.5 sm:px-3 py-1.5 min-h-[32px] rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 whitespace-nowrap ${
+                      isActive
+                        ? 'bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/20 text-brand-blue'
+                        : 'text-gray-600 dark:text-slate-400 hover:text-brand-blue'
+                    }`}
+                  >
+                    {mode.label}
+                    {listViewCounts && (
+                      <span className="ml-1 tabular-nums opacity-70">({listViewCounts[mode.key].toLocaleString()})</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* The list itself. Same card as before — it simply no longer
             carries the tab strip in its header. */}
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
@@ -6492,7 +6524,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 which is where All / Active / Draft already start since their
                 own headings came off. */}
 
-            {isFlatAssessmentTab(activeTab) ? (() => {
+            {showFlatAssessmentTable && isFlatAssessmentTab(activeTab) ? (() => {
               const config = FLAT_ASSESSMENT_TABLE_CONFIG[activeTab];
               return (
                 <AllAssessmentsTable
@@ -6824,7 +6856,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               phone={result.candidate_phone}
                               duration={formatTimeSpent(result.time_spent_seconds)}
                               date={result.completed_at ? formatIST(result.completed_at) : result.started_at ? formatIST(result.started_at) : '—'}
-                              onOpen={() => openCandidateResult(result, pageItems)}
+                              onOpen={() => openCandidateResult(result, filteredResults)}
                             />
                           ))}
                         </div>
@@ -6897,7 +6929,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               return (
                                 <tr
                                   key={`${result._assessment_id}-${result.invitation_id}`}
-                                  onClick={() => openCandidateResult(result, pageItems)}
+                                  onClick={() => openCandidateResult(result, filteredResults)}
                                   className="transition-colors hover:bg-gray-50 dark:hover:bg-slate-800 cursor-pointer"
                                   title={`View ${result.candidate_name || 'candidate'}'s result`}
                                 >
@@ -7036,7 +7068,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                       extraItems={
                                         <DropdownMenuItem
                                           className={assessmentDropdownMenuItemClass}
-                                          onSelect={() => openCandidateResult(result, pageItems)}
+                                          onSelect={() => openCandidateResult(result, filteredResults)}
                                         >
                                           <Eye className="w-3.5 h-3.5 text-menu-icon-view" />
                                           <span className={MENU_ITEM_SCALE_CLASS}>View Result</span>
@@ -9198,11 +9230,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                           {assessment.created_by_name || 'System'}
                                         </td>
                                         <td className="px-3 py-2.5 align-middle text-center tf-sticky-col" onClick={(e) => e.stopPropagation()}>
-                                          {/* The page's own assessment preview — the one a
-                                              Grouped card's version panel opens. */}
+                                          {/* The picker's preview — the same read-only
+                                              Configure view its Grouped version panel
+                                              opens (`previewAssessmentInPicker`). */}
                                           <button
                                             type="button"
-                                            onClick={() => { setSelectedAssessmentForPreview(assessment); setShowPreviewModal(true); }}
+                                            onClick={() => previewAssessmentInPicker(assessment)}
                                             className="h-8 w-8 inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-slate-700 text-gray-600 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-brand-blue/10 hover:text-brand-blue hover:border-brand-blue/40 transition-colors"
                                             aria-label="Preview assessment"
                                             title="Preview"
@@ -9443,6 +9476,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         />
       )}
       
+      {/* The Send Invite picker's preview — read-only Configure Assessment.
+          Renders nothing while no row is being previewed. */}
+      <AssessmentConfigureModal
+        isOpen={!!configurePreviewAssessment}
+        onClose={() => setConfigurePreviewAssessment(null)}
+        assessment={configurePreviewAssessment}
+        readOnly
+      />
+
       {/* Preview Assessment Modal */}
       {showPreviewModal && selectedAssessmentForPreview && (
         <AssessmentPreviewModal
@@ -10201,6 +10243,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         getAssessmentId={getInviteAssessmentId}
         onRevoked={refreshInviteSurfaces}
       />
+      {archiveConfirmModal}
+
       <EditInvitationModal
         target={editInviteTarget}
         onClose={() => setEditInviteTarget(null)}

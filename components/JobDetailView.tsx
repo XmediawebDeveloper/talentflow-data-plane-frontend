@@ -3947,8 +3947,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                    uploaded — not "(15 Matched)", "(25 Matched)". Worked out
                    oldest-first from each session's own result resume ids; a
                    session listed without its results falls back to its
-                   total. Sessions carry no "who" field yet, so the name is
-                   read where the API sends one and is "System" otherwise. */
+                   total. Who ran it is the session's `run_by_name`; the older
+                   spellings are still tried for any payload that predates it,
+                   and a run with no resolvable user shows no name at all. */
                 const seenMatchedResumeIds = new Set<string>();
                 [...aiMatchSessions]
                   .sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime())
@@ -3966,7 +3967,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                     // Who ran it — a NAME only; a bare user id (uuid) is not
                     // shown, it would read as gibberish in place of a name.
                     const raw = s as unknown as Record<string, unknown>;
-                    const runBy = [raw.created_by_name, raw.run_by_name, raw.triggered_by_name, raw.user_name, raw.created_by]
+                    const runBy = [raw.run_by_name, raw.created_by_name, raw.triggered_by_name, raw.user_name, raw.created_by]
                       .find((v): v is string => typeof v === 'string' && v.trim() !== '' && !/^[0-9a-f-]{32,36}$/i.test(v));
                     events.push({
                       key: `ai-match-${s.id}`,
@@ -5486,12 +5487,16 @@ function AIMatchTabContent({
                         })()}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">{candidate.location || '—'}</td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <div className="flex flex-nowrap items-center gap-1">
+                      <td className="px-4 py-3 min-w-[220px] max-w-[260px]">
+                        {/* One chip shown in full, the rest collapse into "+N
+                            more" — the same treatment every skills column in
+                            a table uses, so no row reads taller than another. */}
+                        <div className="flex flex-nowrap items-center gap-1 overflow-hidden">
                           <SkillsList
                             skills={candidate.skills}
-                            chipClassName="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full border border-blue-200 whitespace-nowrap"
-                            moreClassName="px-2 py-0.5 text-xs text-blue-600 font-medium rounded-full hover:bg-blue-50 transition-colors cursor-pointer whitespace-nowrap"
+                            max={1}
+                            chipClassName="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full border border-blue-200 min-w-0 shrink truncate max-w-[160px]"
+                            moreClassName="px-2 py-0.5 text-xs text-blue-600 font-medium rounded-full hover:bg-blue-50 transition-colors cursor-pointer whitespace-nowrap shrink-0"
                           />
                         </div>
                       </td>

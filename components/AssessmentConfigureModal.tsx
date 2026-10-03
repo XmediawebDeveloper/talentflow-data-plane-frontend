@@ -1,6 +1,6 @@
 'use client';
 
-import { Eye, Sliders, X } from 'lucide-react';
+import { Eye, Shield, Sliders, X } from 'lucide-react';
 import { useRef } from 'react';
 import AssessmentCreation, { type AssessmentCreationHandle } from './AssessmentCreation';
 import { Button } from '@/components/ui/button';
@@ -64,7 +64,7 @@ export default function AssessmentConfigureModal({
      reads the JD's skills, experience and coding requirements to lay itself
      out — so an assessment with no job behind it has nothing to configure.
      Callers fall back to the plain edit dialog in that case, the same way the
-     route's draft redirect is gated on `jd_id`. */
+     details page's Draft gate does for its Activate. */
   const assessmentCreationRef = useRef<AssessmentCreationHandle>(null);
 
   if (!isOpen || !assessment?.id || !assessment?.jd_id) return null;
@@ -99,6 +99,23 @@ export default function AssessmentConfigureModal({
                   <span className="px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-2xs sm:text-xs flex items-center gap-1 flex-shrink-0 whitespace-nowrap">
                     <Eye className="w-3 h-3" />
                     View only
+                  </span>
+                )}
+                {/* Proctoring on or off, from the record's own
+                    `proctoring_enabled`. The Configure step's Proctoring card
+                    is hidden for now, so in the view this chip is the one
+                    place the setting is stated; omitted when the record does
+                    not say. */}
+                {readOnly && typeof assessment.proctoring_enabled === 'boolean' && (
+                  <span
+                    className={`px-2 py-0.5 rounded text-2xs sm:text-xs flex items-center gap-1 flex-shrink-0 whitespace-nowrap ring-1 ${
+                      assessment.proctoring_enabled
+                        ? 'bg-success-subtle text-success ring-success-line'
+                        : 'bg-slate-100 text-gray-600 ring-gray-200'
+                    }`}
+                  >
+                    <Shield className="w-3 h-3" />
+                    Proctoring {assessment.proctoring_enabled ? 'Enabled' : 'Disabled'}
                   </span>
                 )}
               </div>

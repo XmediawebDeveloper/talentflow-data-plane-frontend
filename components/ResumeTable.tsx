@@ -807,11 +807,27 @@ export default function ResumeTable({
                   );
                 })()}
               </td>
-              <td className="px-4 py-3 align-middle min-w-[220px]">
-                <div className="flex flex-wrap gap-1">
-                  {/* Same set the Resume Details "Skills" section shows */}
+              <td className="px-4 py-3 align-middle min-w-[220px] max-w-[260px]">
+                {/* `flex-wrap` let a row with longer skill names (or, before
+                    SkillsList's own cap, more of them) wrap onto a second
+                    line, growing that one row taller than the rest of the
+                    table. Capped to one line — SkillsList already limits the
+                    visible count, so what's left just needs to not wrap.
+                    Chips shrink (and truncate) to make room rather than
+                    relying on `overflow-hidden` to cut content off, which
+                    clipped whichever element came last — usually the "+N
+                    more" badge itself, the one thing that always has to
+                    stay on screen. */}
+                <div className="flex flex-nowrap items-center gap-1 overflow-hidden">
+                  {/* Same set the Resume Details "Skills" section shows. Just
+                      one chip shown in full — the rest collapse into "+N
+                      more" — so a long skill name never competes with a
+                      second chip for the row's fixed width. */}
                   <SkillsList
                     skills={getDisplaySkills(resume)}
+                    max={1}
+                    chipClassName="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 min-w-0 shrink truncate max-w-[160px]"
+                    moreClassName="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs text-brand-blue font-medium hover:bg-brand-blue/10 transition-colors cursor-pointer shrink-0 whitespace-nowrap"
                     highlight={(s) => (highlightQuery ? highlightText(s, highlightQuery) : s)}
                   />
                 </div>

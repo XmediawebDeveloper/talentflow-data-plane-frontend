@@ -47,9 +47,11 @@ import { summarizeViolations } from './violationTaxonomy';
 import { Skeleton } from '@/components/ui/skeleton';
 import ResumeDetailView from '@/components/ResumeDetailView';
 import ViewResumeButton from '@/components/ui/view-resume-button';
+import { RESUME_EMAIL_MISMATCH_MESSAGE, emailsMatch, normalizeEmail, resumeEmailOf, verifyResumeBelongsToInvite } from '@/lib/utils/resumeEmailMatch';
 import ResumeHoverPreview from '@/components/ResumeHoverPreview';
 import { Tooltip as HoverTooltip } from '@/components/ui/tooltip';
 import TabEmptyState, { TAB_EMPTY_ACTION_CLASS } from '@/components/ui/tab-empty-state';
+import { formatScore1, truncate1 } from '@/lib/utils/matchStatus';
 
 interface CandidateResultsViewProps {
   interview: AIInterviewResponse;
@@ -622,6 +624,9 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
   // Resolved on load so the button can explain on hover that there's no
   // resume: undefined = still checking, null = none found.
   const [resolvedResumeId, setResolvedResumeId] = useState<string | null | undefined>(undefined);
+  // A resume is linked but its email isn't the one the candidate was invited
+  // with — withheld, and the tooltip / empty state say so.
+  const [resumeEmailMismatch, setResumeEmailMismatch] = useState(false);
   // Seek request from the Violations Event Log → Recording player. `key` is a
   // monotonic counter (via seekNonceRef) so clicking the same row twice re-fires.
   const [recordingSeek, setRecordingSeek] = useState<{ seconds: number; key: number } | null>(null);
@@ -1598,17 +1603,35 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
     setShowResume(true);
   };
 
-  // A session invited from the resume database
-  // carries resume_id; otherwise fall back to the resume library by exact email
-  // — accepted only when the names don't contradict, the same identity rule the
-  // interview agent applies (_names_plausibly_same_person), so a reused address
-  // can't surface a stranger's resume.
-  const resolveResumeId = async (): Promise<string | null> => {
-    const linked = liveSession.resume_id || interview.resume_id;
-    if (linked) return linked;
+  const inviteEmail = () => normalizeEmail(interview.candidate_email || liveSession.candidate_email);
 
-    const email = (interview.candidate_email || liveSession.candidate_email || '').trim().toLowerCase();
+  // A session invited from the resume database carries resume_id, but that
+  // link is only honoured when the resume still exists and its email is the
+  // interview's email (verifyResumeBelongsToInvite). Otherwise fall back to
+  // the resume library by exact email — accepted only when the names don't
+  // contradict, the same identity rule the interview agent applies
+  // (_names_plausibly_same_person), so a reused address can't surface a
+  // stranger's resume. No match → no resume.
+  const resolveResumeId = async (): Promise<string | null> => {
+    setResumeEmailMismatch(false);
+    const email = inviteEmail();
     if (!email) return null;
+    const { resumeService } = await import('@/lib/services/resumeService');
+
+    const linked = liveSession.resume_id || interview.resume_id;
+    if (linked) {
+      try {
+        // get(id) without logView — an availability check, not a view.
+        const verified = await verifyResumeBelongsToInvite(linked, email, id => resumeService.get(id));
+        if (verified) return verified;
+        setResumeEmailMismatch(true);
+      } catch (err) {
+        // Couldn't verify the link — never show it unverified; the email
+        // search below can still find the same resume.
+        console.warn('[CandidateResultsView] Linked resume check failed:', err);
+      }
+    }
+
     const tokens = (v: string) => new Set((v || '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean));
     const inviteTokens = tokens(interview.candidate_name || liveSession.candidate_name || '');
     const samePerson = (name: string) => {
@@ -1617,12 +1640,12 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
       return [...t].some(x => inviteTokens.has(x));
     };
 
-    const { resumeService } = await import('@/lib/services/resumeService');
     try {
       const results = await resumeService.list({ search: email, page_size: 20 });
       const match = (results.items || []).find((item: any) =>
-        (item.candidate_email || item.email || '').trim().toLowerCase() === email
+        emailsMatch(resumeEmailOf(item), email)
         && samePerson(item.candidate_name || ''));
+      if (match?.id) setResumeEmailMismatch(false);
       return match?.id || null;
     } catch (err) {
       console.warn('[CandidateResultsView] Resume search failed:', err);
@@ -1661,6 +1684,14 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
         resumeService.get(id, true), // a genuine user view
         resumeService.getVersions(id).catch(() => []),
       ]);
+      // Re-checked on the record actually shown, in case it changed since
+      // the load-time check.
+      if (!emailsMatch(resumeEmailOf(data), inviteEmail())) {
+        setResumeEmailMismatch(true);
+        setResolvedResumeId(null);
+        openResumeUnavailable();
+        return;
+      }
       setResumeDetail(convertApiResume(data, versions || []));
       setShowResume(true);
     } catch (err: any) {
@@ -1711,7 +1742,9 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
               <TabEmptyState
                 icon={FileText}
                 title="Resume Not Available"
-                description={inviteSource === 'email'
+                description={resumeEmailMismatch
+                  ? RESUME_EMAIL_MISMATCH_MESSAGE
+                  : inviteSource === 'email'
                   ? 'This candidate was invited via direct email, so no resume is linked to this interview.'
                   : 'No resume was found for this candidate.'}
                 action={
@@ -1880,7 +1913,9 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
               {resolvedResumeId === null ? (
                 <HoverTooltip
                   position="bottom"
-                  content={(liveSession.invite_source || interview.invite_source) === 'email'
+                  content={resumeEmailMismatch
+                    ? RESUME_EMAIL_MISMATCH_MESSAGE
+                    : (liveSession.invite_source || interview.invite_source) === 'email'
                     ? 'Resume is not available because the candidate was invited via Direct Email.'
                     : 'Resume not available'}
                 >
@@ -2720,10 +2755,10 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                   p >= 3 ? 1 : p === 2 ? 2 : p === 1 ? 3 : 0;
                 const getPrio = (skill?: string) =>
                   skill ? configToDisplayPrio(skillPriority[skill.toLowerCase()] || 0) : 0;
-                // Spec: P1=10, P2=7, P3=4 (memory: timed eval spec). Unknown
-                // skills fall back to P3 weight rather than the previous 3,
-                // which wasn't a real priority level.
-                const priorityWeight = (p: number) => p === 1 ? 10 : p === 2 ? 7 : 4;
+                // Spec: P1=10, P2=7, P3=4. No default: a skill with no
+                // priority (0) weighs 0 and is left out of the formula,
+                // matching the backend's _compute_question_scores.
+                const priorityWeight = (p: number) => p === 1 ? 10 : p === 2 ? 7 : p === 3 ? 4 : 0;
 
                 // ── Build evaluations lookup by question_number ──
                 // Used to surface per-skill rows + one_line_note for the AI Analysis Summary.
@@ -2837,10 +2872,13 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                   (item.secondary_skills || []).forEach((s: any) => pushSkill(s.skill, s.score));
                   if (skillsForQ.length === 0) pushSkill(item.topic, item.score);
 
-                  // Weighted final score using priority-derived weights
-                  const totalW = skillsForQ.reduce((acc, s) => acc + priorityWeight(s.priority || 3), 0);
-                  const weightedSum = skillsForQ.reduce((acc, s) => acc + s.score * priorityWeight(s.priority || 3), 0);
-                  const finalScore = totalW > 0 ? weightedSum / totalW : (item.score ?? 0);
+                  // Question score comes from the backend only — never
+                  // recomputed here. `question_score` (null = not scored) wins;
+                  // older evaluations only carry `score`. totalW is used just
+                  // for the explanatory formula below.
+                  const totalW = skillsForQ.reduce((acc, s) => acc + priorityWeight(s.priority), 0);
+                  const backendQS = 'question_score' in item ? item.question_score : item.score;
+                  const finalScore = typeof backendQS === 'number' ? truncate1(backendQS) : 0;
 
                   // AI summary: take the rep evaluation's one_line_note
                   const repEval = (evalsByQ[item.question_number] || []).reduce<any | null>(
@@ -2892,7 +2930,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                           <div className="flex items-start gap-2 flex-shrink-0">
                             {!isSkipped && (
                               <div className="text-right">
-                                <div className={`text-2xl font-bold ${finalScoreColor}`}>{finalScore.toFixed(finalScore % 1 === 0 ? 0 : 2)}</div>
+                                <div className={`text-2xl font-bold ${finalScoreColor}`}>{formatScore1(finalScore)}</div>
                                 <div className="text-2xs text-gray-500 uppercase tracking-wider">Final Score</div>
                               </div>
                             )}
@@ -2928,7 +2966,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                               <div className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">Skill Scoring Breakdown</div>
                               <div className="space-y-2">
                                 {skillsForQ.map((s, i) => {
-                                  const w = priorityWeight(s.priority || 3);
+                                  const w = priorityWeight(s.priority);
                                   const contribution = s.score * w;
                                   const pct = Math.min(100, Math.max(0, (s.score / 10) * 100));
                                   return (
@@ -2941,9 +2979,9 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                                           )}
                                         </div>
                                         <div className="flex items-center gap-4 text-xs">
-                                          <div><span className="text-gray-500">Score</span> <span className="font-semibold text-gray-900">{s.score.toFixed(s.score % 1 === 0 ? 0 : 1)}</span></div>
+                                          <div><span className="text-gray-500">Score</span> <span className="font-semibold text-gray-900">{formatScore1(s.score)}</span></div>
                                           <div><span className="text-gray-500">Weight</span> <span className="font-semibold text-gray-900">{w}</span></div>
-                                          <div><span className="text-gray-500">Contribution</span> <span className="font-semibold text-gray-900">{contribution.toFixed(contribution % 1 === 0 ? 0 : 0)}</span></div>
+                                          <div><span className="text-gray-500">Contribution</span> <span className="font-semibold text-gray-900">{formatScore1(contribution)}</span></div>
                                         </div>
                                       </div>
                                       <div className="h-1.5 bg-white rounded-full overflow-hidden ring-1 ring-slate-200">
@@ -2962,7 +3000,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                               <div className="text-xs font-semibold text-brand-blue mb-1.5">Weighted Calculation Formula</div>
                               <div className="font-mono text-xs text-gray-700 space-y-0.5">
                                 <div>Question Score = Σ(Skill Score × Weight) / ΣWeights</div>
-                                <div>= ({skillsForQ.map(s => `${s.score.toFixed(s.score % 1 === 0 ? 0 : 1)}×${priorityWeight(s.priority || 3)}`).join(' + ')}) / {totalW} = {finalScore.toFixed(finalScore % 1 === 0 ? 0 : 2)}</div>
+                                <div>= ({skillsForQ.map(s => `${formatScore1(s.score)}×${priorityWeight(s.priority)}`).join(' + ')}) / {totalW} = {formatScore1(finalScore)}</div>
                               </div>
                             </div>
                           )}

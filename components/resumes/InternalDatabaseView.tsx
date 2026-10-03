@@ -85,6 +85,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalResumes, setTotalResumes] = useState(0);
+  const [totalIncludingVersions, setTotalIncludingVersions] = useState<number | undefined>(undefined);
   const [pageSize] = useState(25);
 
   // Track if initial load is done
@@ -284,6 +285,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
       setFolders(convertedFolders);
       setTotalPages(resumeResponse.total_pages || 1);
       setTotalResumes(resumeResponse.total || 0);
+      setTotalIncludingVersions(resumeResponse.total_including_versions);
     } catch (error) {
       console.error('Failed to fetch data:', error);
       toast.error('Failed to load resume database');
@@ -1015,6 +1017,9 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
               <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Shared Resume Database</h1>
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-brand-blue/10 dark:bg-brand-blue/20 text-brand-blue ring-1 ring-brand-blue/20 dark:ring-brand-blue/30">
                 {resumes.length.toLocaleString()} Resumes
+                {typeof totalIncludingVersions === 'number' && totalIncludingVersions > totalResumes && (
+                  <> ({totalIncludingVersions - totalResumes} versions)</>
+                )}
               </span>
             </div>
             <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
