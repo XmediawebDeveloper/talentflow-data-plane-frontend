@@ -747,6 +747,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // flag changes nothing about mic/timer, it just stops rendering buttons).
   const [hrExplainMore, setHrExplainMore] = useState(false);
   const [hrTextAnswer, setHrTextAnswer] = useState('');
+  // Guards submitStructuredHrAnswer against a double-click/double-Enter
+  // double-send (see that function for why a ref, not state, is needed).
+  const hrSubmitInFlightRef = useRef(false);
   const [totalQuestions, setTotalQuestions] = useState<number | null>(null);
   const questionNumberRef = useRef<number | null>(null); // sync ref for stale-closure reads
   // Clarification mode — true when backend signals is_clarification on a same-Q timer event
@@ -5477,6 +5480,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           });
           setHrExplainMore(false);
           setHrTextAnswer('');
+          hrSubmitInFlightRef.current = false;
         }
         break;
       case "llm_token":
@@ -9398,9 +9402,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // (run_text_pipeline) — no new message type, no new backend workflow.
   // "Need to Explain More" does NOT call this — it just hides the buttons
   // and falls through to the voice answer already recording underneath.
+  //
+  // hrSubmitInFlightRef guards against a double-send: setStructuredHrPrompt
+  // below is async, so a second click/Enter landing before that re-render
+  // clears the buttons would otherwise fire this twice (observed: "Yes"
+  // recorded as two separate answer bubbles). Reset on the NEXT question's
+  // question_meta, not here, so it stays true for the rest of this turn.
   const submitStructuredHrAnswer = (text: string) => {
     const trimmed = text.trim();
-    if (!trimmed) return;
+    if (!trimmed || hrSubmitInFlightRef.current) return;
+    hrSubmitInFlightRef.current = true;
     try {
       wsRef.current?.send(JSON.stringify({ type: 'text_input', text: trimmed }));
     } catch { /* best-effort, mirrors other wsRef.current?.send call sites */ }
