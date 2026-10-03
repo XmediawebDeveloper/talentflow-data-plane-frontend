@@ -1365,6 +1365,21 @@ export default function UserManagement() {
       }
 
       toast.success('User created! An invite email has been sent with their login details.');
+
+      // RBAC02 AC3: surface any dependency the backend force-enabled on top of
+      // what was selected (e.g. granting Resume Scoring also enables Resume
+      // Upload + Resume Database Access) — see handleUpdateUser for details.
+      try {
+        const createdUserData = await response.json();
+        if (Array.isArray(createdUserData.dependency_notices)) {
+          createdUserData.dependency_notices.forEach((notice: string) => {
+            toast.warning(notice);
+          });
+        }
+      } catch {
+        // Response body already consumed or not JSON — nothing to surface.
+      }
+
       resetCreateModal();
       refreshLimits(); // Refresh user limits count
       setSeatQuotaRefreshTrigger(prev => prev + 1); // Refresh SeatQuotaCard
@@ -2045,6 +2060,17 @@ export default function UserManagement() {
       });
 
       toast.success('User updated successfully');
+
+      // RBAC02 AC3: the backend force-keeps a dependency enabled (e.g. Resume
+      // Database Access while Resume Scoring is on) even if this save tried to
+      // turn it off — without this, that reversal would be invisible, since
+      // this grid's own getBlockingPermissions warning doesn't know about the
+      // legacy feature-level booleans the backend enforces separately.
+      if (Array.isArray(updatedUserData.dependency_notices)) {
+        updatedUserData.dependency_notices.forEach((notice: string) => {
+          toast.warning(notice);
+        });
+      }
 
       // Refresh permission catalog too, because backend may have backfilled
       // missing tenant permission rows while saving.

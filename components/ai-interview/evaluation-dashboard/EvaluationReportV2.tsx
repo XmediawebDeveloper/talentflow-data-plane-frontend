@@ -382,7 +382,7 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
             })}
           </div>
         ) : (
-          <div className="p-6 text-sm text-gray-400 italic text-center">No question-level data available.</div>
+          <div className="p-6 text-sm text-gray-400 italic text-center">The candidate exited the interview without answering any questions, so question-level details are not shown here.</div>
         )}
       </div>
 

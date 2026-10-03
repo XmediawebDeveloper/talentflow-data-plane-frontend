@@ -102,7 +102,13 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     // for why this points at 'assessments:invite' rather than 'assessments:share')
     // NOTE: Export, Invite, Download Scorecard do NOT block disabling Score Resumes
     dependencies: {
-      'scoring:score': ['jd:read', 'my_resumes:read', 'my_resumes:upload', 'jd:add_applicants'],
+      // 'my_resumes:score' added so enabling Score Resumes always leaves the
+      // user with at least one usable scoring SOURCE — SelectSourceModal.tsx
+      // gates the "My Resumes" source tab on this exact code independently of
+      // my_resumes:read/upload (see its own comment: "now gated by its own
+      // Score Resume sub-action"). Without it, a user could have Score
+      // Resumes enabled with no tab available to actually pick a resume from.
+      'scoring:score': ['jd:read', 'my_resumes:read', 'my_resumes:upload', 'my_resumes:score', 'jd:add_applicants'],
       'scoring:invite': ['assessments:invite'],
     },
   },

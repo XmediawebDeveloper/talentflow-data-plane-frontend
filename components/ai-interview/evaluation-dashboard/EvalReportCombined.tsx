@@ -1001,7 +1001,7 @@ export function EvalReportCombined({
         ) : (
           <div className="py-10 flex flex-col items-center gap-2 text-gray-400">
             <ClipboardList className="w-9 h-9 opacity-50" />
-            <div className="text-sm">No question-level data available.</div>
+            <div className="text-sm">The candidate exited the interview without answering any questions, so question-level details are not shown here.</div>
           </div>
         )}
       </div>
