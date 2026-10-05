@@ -2436,6 +2436,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     return (
       <CandidateResultsView
         interview={viewingAIInterviewCandidate}
+        tabInUrl={false}
         onBack={() => setViewingAIInterviewCandidate(null)}
         breadcrumbItems={[
           { label: 'Dashboard', href: '/dashboard' },

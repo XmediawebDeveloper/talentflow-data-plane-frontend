@@ -1217,61 +1217,8 @@ Best regards`);
     setBulkDownloading(true);
     try {
       const selectedRows = resumes.filter(r => selectedResumes.includes(r.id));
-
-      // Built client-side (rather than the single-file zip the backend's
-      // bulk-download endpoint returns) so each candidate lands inside a
-      // per-job folder — the server's own zip has no notion of "job" and
-      // drops every PDF flat, which is fine for a single-job table but
-      // unreadable from the "All Candidates" view, where one download can
-      // span dozens of jobs.
-      const { default: JSZip } = await import('jszip');
-      const zip = new JSZip();
-      // Disambiguates two same-named candidates landing in the same job
-      // folder (e.g. two "Surya Mishra" scores against one JD) so the
-      // second file doesn't silently overwrite the first in the archive.
-      const namesUsedInFolder = new Map<string, number>();
-      // Small batches rather than one Promise.all across the whole
-      // selection — this now costs one request PER candidate (the server's
-      // own zip was a single request), so an unbounded burst against a
-      // large selection would hammer the API.
-      const BATCH_SIZE = 5;
-      for (let i = 0; i < selectedRows.length; i += BATCH_SIZE) {
-        const batch = selectedRows.slice(i, i + BATCH_SIZE);
-        await Promise.all(batch.map(async (resume) => {
-          const pdfBlob = await scoringService.downloadScorecard(resume.id);
-          const sanitize = (s: string) => s.replace(/[^a-zA-Z0-9_\- ]/g, '').trim().replace(/\s+/g, '_');
-          // Job title alone can't tell two folders apart once a lineage has
-          // several scored versions (or the JD was recreated under the same
-          // title), so the JD code and version ride along in the folder
-          // name itself rather than only in each file inside it.
-          const folderName = [
-            resume.jobCode ? sanitize(resume.jobCode) : null,
-            sanitize(resume.jobTitle || jobTitle) || 'Job',
-            resume.jobVersion ? `V${resume.jobVersion}` : null,
-          ].filter(Boolean).join('-');
-          const safeCandidateName = (resume.candidateName || 'Candidate').replace(/[^\w\s\-]/g, '').trim().replace(/\s+/g, '_') || 'Candidate';
-          const dedupeKey = `${folderName}/${safeCandidateName}`;
-          const priorCount = namesUsedInFolder.get(dedupeKey) ?? 0;
-          namesUsedInFolder.set(dedupeKey, priorCount + 1);
-          const fileName = `${safeCandidateName}${priorCount ? `_${priorCount + 1}` : ''}${versionTag([resume])}_Scorecard.pdf`;
-          zip.folder(folderName)!.file(fileName, pdfBlob);
-        }));
-      }
-
-      const zipBlob = await zip.generateAsync({ type: 'blob' });
-      const url = window.URL.createObjectURL(zipBlob);
-      const link = document.createElement('a');
-      link.href = url;
-      // No JD-code/version decoration here — unlike the single-job CSV/XLS
-      // export and the per-candidate PDF names, this zip can span many jobs
-      // and versions at once (each already broken out into its own folder
-      // above), so the outer archive name stays generic.
       const safeName = jobTitle.replace(/[^a-zA-Z0-9_\- ]/g, '').trim().replace(/\s+/g, '_') || 'Scorecards';
-      link.download = `${safeName}_Combined_Scorecards_${formatFileDate(new Date())}.zip`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
+      await downloadScorecardsZip(selectedRows, `${safeName}_Combined_Scorecards_${formatFileDate(new Date())}.zip`);
       toast.success(`${selectedResumes.length} scorecards downloaded`);
     } catch (error) {
       console.error('Error downloading bulk scorecards:', error);
@@ -1279,6 +1226,85 @@ Best regards`);
     } finally {
       setBulkDownloading(false);
     }
+  };
+
+  /* View by Candidates: the candidate row's own Download Scorecard — every
+     job this person was scored against, one PDF per job in the same per-job
+     folders as the bulk download. A single job is just that PDF. */
+  const handleDownloadCandidateScorecards = async (rows: ScoredResume[]) => {
+    if (rows.length <= 1) {
+      if (rows[0]) await handleDownloadScorecard(rows[0].id);
+      return;
+    }
+    const primary = rows[0];
+    setDownloadingId(primary.id);
+    try {
+      const safeCandidateName = (primary.candidateName || 'Candidate').replace(/[^\w\s\-]/g, '').trim().replace(/\s+/g, '_') || 'Candidate';
+      await downloadScorecardsZip(rows, `${safeCandidateName}_All_Jobs_Scorecards_${formatFileDate(new Date())}.zip`);
+      toast.success(`${rows.length} scorecards downloaded`);
+    } catch (error) {
+      console.error('Error downloading candidate scorecards:', error);
+      toast.error('Failed to download scorecards');
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
+  /** Every row's scorecard PDF in one client-built ZIP, per-job folders. */
+  const downloadScorecardsZip = async (selectedRows: ScoredResume[], archiveName: string) => {
+    // Built client-side (rather than the single-file zip the backend's
+    // bulk-download endpoint returns) so each candidate lands inside a
+    // per-job folder — the server's own zip has no notion of "job" and
+    // drops every PDF flat, which is fine for a single-job table but
+    // unreadable from the "All Candidates" view, where one download can
+    // span dozens of jobs.
+    const { default: JSZip } = await import('jszip');
+    const zip = new JSZip();
+    // Disambiguates two same-named candidates landing in the same job
+    // folder (e.g. two "Surya Mishra" scores against one JD) so the
+    // second file doesn't silently overwrite the first in the archive.
+    const namesUsedInFolder = new Map<string, number>();
+    // Small batches rather than one Promise.all across the whole
+    // selection — this now costs one request PER candidate (the server's
+    // own zip was a single request), so an unbounded burst against a
+    // large selection would hammer the API.
+    const BATCH_SIZE = 5;
+    for (let i = 0; i < selectedRows.length; i += BATCH_SIZE) {
+      const batch = selectedRows.slice(i, i + BATCH_SIZE);
+      await Promise.all(batch.map(async (resume) => {
+        const pdfBlob = await scoringService.downloadScorecard(resume.id);
+        const sanitize = (s: string) => s.replace(/[^a-zA-Z0-9_\- ]/g, '').trim().replace(/\s+/g, '_');
+        // Job title alone can't tell two folders apart once a lineage has
+        // several scored versions (or the JD was recreated under the same
+        // title), so the JD code and version ride along in the folder
+        // name itself rather than only in each file inside it.
+        const folderName = [
+          resume.jobCode ? sanitize(resume.jobCode) : null,
+          sanitize(resume.jobTitle || jobTitle) || 'Job',
+          resume.jobVersion ? `V${resume.jobVersion}` : null,
+        ].filter(Boolean).join('-');
+        const safeCandidateName = (resume.candidateName || 'Candidate').replace(/[^\w\s\-]/g, '').trim().replace(/\s+/g, '_') || 'Candidate';
+        const dedupeKey = `${folderName}/${safeCandidateName}`;
+        const priorCount = namesUsedInFolder.get(dedupeKey) ?? 0;
+        namesUsedInFolder.set(dedupeKey, priorCount + 1);
+        const fileName = `${safeCandidateName}${priorCount ? `_${priorCount + 1}` : ''}${versionTag([resume])}_Scorecard.pdf`;
+        zip.folder(folderName)!.file(fileName, pdfBlob);
+      }));
+    }
+
+    const zipBlob = await zip.generateAsync({ type: 'blob' });
+    const url = window.URL.createObjectURL(zipBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    // No JD-code/version decoration here — unlike the single-job CSV/XLS
+    // export and the per-candidate PDF names, this zip can span many jobs
+    // and versions at once (each already broken out into its own folder
+    // above), so the outer archive name stays generic.
+    link.download = archiveName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
   };
 
 
@@ -1606,7 +1632,9 @@ Best regards`);
    * per-row menu below, instead of a second hand-rolled copy drifting apart
    * from it.
    */
-  const renderActionsMenuItems = (resume: ScoredResume) => (
+  /** `candidateRows` — the grouped candidate row's menu: Download Scorecard
+   *  then covers every job in the group, not just its top row. */
+  const renderActionsMenuItems = (resume: ScoredResume, candidateRows?: ScoredResume[]) => (
     <>
       <DropdownMenuItem className={scoredResumesMenuItemClass} onSelect={() => onViewCandidate && onViewCandidate(resume)}>
         <Eye className="w-4 h-4 text-menu-icon-view" />
@@ -1654,7 +1682,8 @@ Best regards`);
             toast.error('You do not have permission to download the scorecard');
             return;
           }
-          handleDownloadScorecard(resume.id);
+          if (candidateRows) void handleDownloadCandidateScorecards(candidateRows);
+          else handleDownloadScorecard(resume.id);
         }}
       >
         {downloadingId === resume.id ? (
@@ -1662,7 +1691,9 @@ Best regards`);
         ) : (
           <Download className="w-4 h-4 text-menu-icon-download" />
         )}
-        <span className={MENU_ITEM_SCALE_CLASS}>Download Scorecard</span>
+        <span className={MENU_ITEM_SCALE_CLASS}>
+          {candidateRows && candidateRows.length > 1 ? `Download All Scorecards (${candidateRows.length})` : 'Download Scorecard'}
+        </span>
       </DropdownMenuItem>
     </>
   );
@@ -1749,8 +1780,10 @@ Best regards`);
       {/* Header — title and the one page-level action. Everything that acts on
           the list lives in the toolbar below, and everything that acts on a
           selection lives in its own row under that, same as job-openings. */}
+      {/* An empty `title` with no Score Resumes action drops the row. */}
+      {(title || onScoreResumes) && (
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-        <h2 className="text-gray-900">{title}</h2>
+        {title && <h2 className="text-gray-900">{title}</h2>}
         {/* Score Resumes — opens the host's "Select Applicants to Score" modal. */}
         {onScoreResumes && (
           <Button
@@ -1765,6 +1798,7 @@ Best regards`);
           </Button>
         )}
       </div>
+      )}
 
       {/* Search and Filter Bar */}
       <div className="mb-4 space-y-3">
@@ -2317,7 +2351,7 @@ Best regards`);
                               </button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-52 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
-                              {renderActionsMenuItems(primary)}
+                              {renderActionsMenuItems(primary, rows)}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </td>
@@ -2445,7 +2479,7 @@ Best regards`);
                           </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-52 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
-                          {renderActionsMenuItems(primary)}
+                          {renderActionsMenuItems(primary, rows)}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
@@ -3123,15 +3157,28 @@ Best regards`);
       )}
 
       {/* "View Score Table" from the Actions menu. */}
-      {scoreTableCandidate && (
-        <ScoreTableModal
-          resume={scoreTableCandidate}
-          jobId={jobId}
-          jobCode={jobCode}
-          jobTitle={scoreTableCandidate.jobTitle || jobTitle}
-          onClose={() => setScoreTableCandidate(null)}
-        />
-      )}
+      {scoreTableCandidate && (() => {
+        /* Grouped (View by Candidates): page through the candidate's own
+           rows — the same newest-first list their dropdown shows. */
+        const jobRows = isGrouped
+          ? candidateGroups.find(g => g.rows.some(r => r.id === scoreTableCandidate.id))?.rows
+          : undefined;
+        const jobIdx = jobRows ? jobRows.findIndex(r => r.id === scoreTableCandidate.id) : -1;
+        return (
+          <ScoreTableModal
+            resume={scoreTableCandidate}
+            jobId={jobId}
+            jobCode={jobCode}
+            jobTitle={scoreTableCandidate.jobTitle || jobTitle}
+            onClose={() => setScoreTableCandidate(null)}
+            jobPager={jobRows && jobIdx >= 0 ? {
+              page: jobIdx + 1,
+              total: jobRows.length,
+              onPageChange: (page) => setScoreTableCandidate(jobRows[page - 1]),
+            } : undefined}
+          />
+        );
+      })()}
 
       {/* The scorecard, read in place. z-[60] puts it over the share
           dialog, the same level the resume preview uses. */}

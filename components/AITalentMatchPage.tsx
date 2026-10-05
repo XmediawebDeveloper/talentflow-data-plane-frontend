@@ -196,11 +196,11 @@ function clampOptionLabel(text: string, max = 32): string {
 /* Results page Customize Columns — the table's optional columns. Matched
    Rating and Candidate Name always show, so they aren't offered. */
 const RESULTS_COLUMNS: { id: string; label: string }[] = [
-  { id: 'jobTitle', label: 'Job Title' },
-  { id: 'jobVersion', label: 'Job Version' },
   { id: 'email', label: 'Email' },
   { id: 'phone', label: 'Phone' },
   { id: 'location', label: 'Location' },
+  { id: 'jobTitle', label: 'Job Title' },
+  { id: 'jobVersion', label: 'Job Version' },
   { id: 'skills', label: 'Skills' },
   { id: 'experience', label: 'Experience' },
   { id: 'uploadedBy', label: 'Uploaded By' },
@@ -266,6 +266,20 @@ interface CandidateMatchRow {
    *  per-job match table. */
   best: MatchedCandidateWithVersions;
   jobs: Array<{ historyId: string; jobId: string; jobTitle: string; score: number; matchedAt: Date; matchedByName?: string; resumeVersion?: number; resumeId?: string }>;
+}
+
+/** True only for the first call in a document that was loaded by a browser
+ *  refresh — see the view restore in `useListStatePersistence` below. */
+let reloadChecked = false;
+function isFirstMountAfterReload(): boolean {
+  if (reloadChecked) return false;
+  reloadChecked = true;
+  try {
+    const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
+    return nav?.type === 'reload';
+  } catch {
+    return false;
+  }
 }
 
 interface AITalentMatchPageProps {
@@ -1230,11 +1244,30 @@ export default function AITalentMatchPage({
       // resume" round trip. Without it the view reset to the stat cards and the
       // list the user had been reading was simply gone.
       historyPageView,
+      // The Rating-10 / 9-7 / Below 7 pill, and the list/grid toggles.
+      candidateRatingBand, resultsDisplayMode, matchDisplayMode,
     },
     (s) => {
       // Layout choices are harmless to restore from any entry point.
       if (typeof s.historyItemsPerPage === 'number') setHistoryItemsPerPage(s.historyItemsPerPage);
       if (typeof s.itemsPerPage === 'number') setItemsPerPage(s.itemsPerPage);
+      if (s.resultsDisplayMode === 'list' || s.resultsDisplayMode === 'grid') setResultsDisplayMode(s.resultsDisplayMode);
+      if (s.matchDisplayMode === 'list' || s.matchDisplayMode === 'grid') setMatchDisplayMode(s.matchDisplayMode);
+
+      // The open view (Matched Jobs / View by Candidates / All Resumes) and
+      // its rating pill also survive a browser refresh — the user is still
+      // on the same screen. Only this document's first mount counts as the
+      // refresh: the navigation entry keeps saying 'reload' for the rest of
+      // the document's life, and a later in-app visit should start clean.
+      const restoreViewOnReload = isFirstMountAfterReload();
+      const restoreView = (pageView: unknown, band: unknown) => {
+        if (pageView === 'cards' || pageView === 'list' || pageView === 'candidates' || pageView === 'resumes') {
+          setHistoryPageView(pageView);
+        }
+        if (band === 'exact' || band === 'partial' || band === 'no_match' || band === null) {
+          setCandidateRatingBand(band as 'exact' | 'partial' | 'no_match' | null);
+        }
+      };
 
       // Search and filters only survive a round trip *within* this module —
       // opening a candidate's resume and coming back. Arriving from anywhere
@@ -1245,11 +1278,9 @@ export default function AITalentMatchPage({
         keepFilters = sessionStorage.getItem(AI_MATCH_KEEP_FILTERS_KEY) === '1';
         sessionStorage.removeItem(AI_MATCH_KEEP_FILTERS_KEY);
       } catch { /* ignore */ }
+      if (keepFilters || restoreViewOnReload) restoreView(s.historyPageView, s.candidateRatingBand);
       if (!keepFilters) return;
 
-      if (s.historyPageView === 'cards' || s.historyPageView === 'list' || s.historyPageView === 'candidates' || s.historyPageView === 'resumes') {
-        setHistoryPageView(s.historyPageView);
-      }
       if (typeof s.showHistoryFilters === 'boolean') setShowHistoryFilters(s.showHistoryFilters);
       if (typeof s.historySearchQuery === 'string') historySearch.setQuery(s.historySearchQuery);
       historySearch.setFilters({
@@ -3871,7 +3902,7 @@ export default function AITalentMatchPage({
                         <th className="text-left py-3 px-4 text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap align-middle bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 sticky left-12 z-[8] shadow-[1px_0_0_0_var(--border)]">
                           Match Rating
                         </th>
-                        {['Candidate Name', 'Job ID', 'Job Title', 'Job Version', 'Email', 'Phone', 'Location', 'Skills', 'Experience', 'Uploaded By', 'Uploaded Date', 'Resume Version', 'Attachments', 'Scored Status'].map((label) => (
+                        {['Candidate Name', 'Email', 'Phone', 'Location', 'Job ID', 'Job Title', 'Job Version', 'Skills', 'Experience', 'Uploaded By', 'Uploaded Date', 'Resume Version', 'Attachments', 'Scored Status'].map((label) => (
                           <th
                             key={label}
                             className="text-left py-3 px-4 text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap align-middle bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700"
@@ -3925,6 +3956,20 @@ export default function AITalentMatchPage({
                               </span>
                             </div>
                           </td>
+                          <td className="py-3 px-4 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
+                            {row.email ? row.email : <span className="text-gray-400 dark:text-slate-500">-</span>}
+                          </td>
+                          <td className="py-3 px-4 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
+                            {(() => {
+                              const numbers = splitPhoneNumbers(row.phone, 2);
+                              return numbers.length > 0
+                                ? <div className="flex flex-col gap-0.5">{numbers.map((num, i) => <span key={i}>{num}</span>)}</div>
+                                : <span className="text-gray-400 dark:text-slate-500">-</span>;
+                            })()}
+                          </td>
+                          <td className="py-3 px-4 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
+                            {row.location ? row.location : <span className="text-gray-400 dark:text-slate-500">-</span>}
+                          </td>
                           {/* Job ID — the job this match ran against, its JD code
                               off the job record (the badge every list uses). */}
                           <td className="py-3 px-4 align-middle whitespace-nowrap">
@@ -3961,20 +4006,6 @@ export default function AITalentMatchPage({
                                 )
                                 : <span className="text-gray-400 dark:text-slate-500">-</span>;
                             })()}
-                          </td>
-                          <td className="py-3 px-4 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
-                            {row.email ? row.email : <span className="text-gray-400 dark:text-slate-500">-</span>}
-                          </td>
-                          <td className="py-3 px-4 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
-                            {(() => {
-                              const numbers = splitPhoneNumbers(row.phone, 2);
-                              return numbers.length > 0
-                                ? <div className="flex flex-col gap-0.5">{numbers.map((num, i) => <span key={i}>{num}</span>)}</div>
-                                : <span className="text-gray-400 dark:text-slate-500">-</span>;
-                            })()}
-                          </td>
-                          <td className="py-3 px-4 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
-                            {row.location ? row.location : <span className="text-gray-400 dark:text-slate-500">-</span>}
                           </td>
                           <td className="py-3 px-4 align-middle min-w-[220px] max-w-[260px]">
                             {/* One chip shown in full, the rest collapse into
@@ -5434,11 +5465,11 @@ export default function AITalentMatchPage({
     const candidateExportColumns: ExportColumn[] = [
       { key: 'rank', header: 'Matched Rating' },
       { key: 'name', header: 'Candidate Name' },
-      { key: 'jobTitle', header: 'Job Title' },
-      { key: 'jobVersion', header: 'Job Version' },
       { key: 'email', header: 'Email' },
       { key: 'phone', header: 'Phone' },
       { key: 'location', header: 'Location' },
+      { key: 'jobTitle', header: 'Job Title' },
+      { key: 'jobVersion', header: 'Job Version' },
       { key: 'skills', header: 'Skills' },
       { key: 'experience', header: 'Experience' },
       { key: 'uploadedBy', header: 'Uploaded By' },
@@ -5930,11 +5961,11 @@ export default function AITalentMatchPage({
           <div>
           {isLoadingResultsFromHistory ? (
             /* Selected-job candidates: select, Matched Rating, Candidate Name,
-               Job Title, Job Version, Email, Phone, Location, Skills,
+               Email, Phone, Location, Job Title, Job Version, Skills,
                Experience, Uploaded By, Uploaded Date, Resume Version,
                Attachments, Scored Status, Actions. */
             <MatchTableSkeleton
-              cols={['w-6', 'w-20', 'w-28', 'w-24', 'w-16', 'w-28', 'w-20', 'w-20', 'w-24', 'w-16', 'w-24', 'w-20', 'w-20', 'w-16', 'w-20', 'w-16']}
+              cols={['w-6', 'w-20', 'w-28', 'w-28', 'w-20', 'w-20', 'w-24', 'w-16', 'w-24', 'w-16', 'w-24', 'w-20', 'w-20', 'w-16', 'w-20', 'w-16']}
             />
           ) : matchedCandidates.length === 0 ? (
             <div className="border-2 border-dashed border-brand-blue/20 rounded-xl p-8 sm:p-10 text-center bg-white dark:bg-slate-900">
@@ -5993,16 +6024,6 @@ export default function AITalentMatchPage({
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                     Candidate Name
                   </th>
-                  {isResultColumnVisible('jobTitle') && (
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
-                    Job Title
-                  </th>
-                  )}
-                  {isResultColumnVisible('jobVersion') && (
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
-                    Job Version
-                  </th>
-                  )}
                   {isResultColumnVisible('email') && (
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                     Email
@@ -6016,6 +6037,16 @@ export default function AITalentMatchPage({
                   {isResultColumnVisible('location') && (
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                     Location
+                  </th>
+                  )}
+                  {isResultColumnVisible('jobTitle') && (
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                    Job Title
+                  </th>
+                  )}
+                  {isResultColumnVisible('jobVersion') && (
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                    Job Version
                   </th>
                   )}
                   {isResultColumnVisible('skills') && (
@@ -6106,24 +6137,6 @@ export default function AITalentMatchPage({
                         </div>
                       </div>
                     </td>
-                    {isResultColumnVisible('jobTitle') && (
-                    <td className="px-4 py-3 text-sm text-gray-700 dark:text-slate-300">
-                      <span className="block max-w-[220px] truncate">
-                        {resultsJobTitle || '-'}
-                      </span>
-                    </td>
-                    )}
-                    {isResultColumnVisible('jobVersion') && (
-                    <td className="px-4 py-3">
-                      {resultsVersionNumber ? (
-                        <span className="px-2 py-0.5 rounded-md font-semibold text-xs text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35">
-                          v{resultsVersionNumber}
-                        </span>
-                      ) : (
-                        <span className="text-gray-400 dark:text-slate-500">-</span>
-                      )}
-                    </td>
-                    )}
                     {isResultColumnVisible('email') && (
                     <td className="px-4 py-3 text-sm text-gray-700 dark:text-slate-300">
                       {candidate.email ? candidate.email : <span className="text-gray-400 dark:text-slate-500">-</span>}
@@ -6142,6 +6155,24 @@ export default function AITalentMatchPage({
                     {isResultColumnVisible('location') && (
                     <td className="px-4 py-3 text-sm text-gray-700 dark:text-slate-300">
                       {candidate.location ? candidate.location : <span className="text-gray-400 dark:text-slate-500">-</span>}
+                    </td>
+                    )}
+                    {isResultColumnVisible('jobTitle') && (
+                    <td className="px-4 py-3 text-sm text-gray-700 dark:text-slate-300">
+                      <span className="block max-w-[220px] truncate">
+                        {resultsJobTitle || '-'}
+                      </span>
+                    </td>
+                    )}
+                    {isResultColumnVisible('jobVersion') && (
+                    <td className="px-4 py-3">
+                      {resultsVersionNumber ? (
+                        <span className="px-2 py-0.5 rounded-md font-semibold text-xs text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35">
+                          v{resultsVersionNumber}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 dark:text-slate-500">-</span>
+                      )}
                     </td>
                     )}
                     {isResultColumnVisible('skills') && (
