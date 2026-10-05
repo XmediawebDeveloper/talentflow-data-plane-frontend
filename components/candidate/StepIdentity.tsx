@@ -3,7 +3,8 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { ArrowLeft,
   Shield, Camera, Lock, AlertCircle, Mail, User,
-  CheckCircle, RefreshCw, Loader2, ArrowRight, KeyRound,
+  CheckCircle, RefreshCw, Loader2, ArrowRight, KeyRound, IdCard, Check,
+  Lightbulb, Sun, ScanFace, Ban,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
@@ -11,6 +12,9 @@ import { loadFaceApiWithCpuBackend } from '@/lib/face-api-loader';
 import { FACE_API_MODEL_URLS, loadFaceApiNetWithFallback, assessCandidateFaceVisibility, type FaceRegion } from '@/lib/proctoring/faceDetection';
 // Side-effect import: global guard for face-api.js / TF.js WebGL backend crashes.
 import '@/lib/tfjs-rejection-guard';
+import { AUTH_THEME_CSS } from '@/components/auth/authTheme';
+import SuccessAnimation from '@/components/ui/success-animation';
+import type { IconComponent } from '@/lib/types/icon';
 
 interface StepIdentityProps {
   token: string;
@@ -19,10 +23,36 @@ interface StepIdentityProps {
   position?: string;
   onVerify: (data: { name: string; email: string; candidate_id?: string; photo?: Blob }) => void;
   submitting?: boolean;
+  /** Returns the candidate to the previous pre-interview step (Job Details & Consent). */
+  onBack?: () => void;
 }
+
+type OtpPhase = 'idle' | 'grid' | 'swap1' | 'swap2' | 'merge' | 'done';
 
 // Seconds counted down before the identity photo is auto-captured.
 const CAPTURE_COUNTDOWN_SECONDS = 3;
+
+// One row of the "How it works" panel — the number badge pops into an
+// animated checkmark the moment that step's own condition is met (face
+// correctly positioned, photo captured, photo verified).
+function HowItWorksStep({
+  num, done, icon: Icon, title, subtitle,
+}: { num: number; done: boolean; icon: IconComponent; title: string; subtitle: string }) {
+  return (
+    <div className={`flex items-center gap-3 ${num > 1 ? 'pt-3' : ''}`}>
+      <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 transition-colors duration-300 ${
+        done ? 'bg-success text-white' : 'bg-white border border-brand-blue/20 text-brand-blue'
+      }`}>
+        {done ? <CheckCircle className="w-4 h-4 animate-in zoom-in-50 duration-300" /> : num}
+      </span>
+      <Icon className={`w-4 h-4 flex-shrink-0 transition-colors duration-300 ${done ? 'text-success' : 'text-gray-400'}`} />
+      <div>
+        <p className="text-sm font-medium text-gray-800">{title}</p>
+        <p className="text-xs text-gray-500">{subtitle}</p>
+      </div>
+    </div>
+  );
+}
 
 export default function StepIdentity({
   token,
@@ -31,6 +61,7 @@ export default function StepIdentity({
   position = 'this position',
   onVerify,
   submitting = false,
+  onBack,
 }: StepIdentityProps) {
   const [phase, setPhase] = useState<'form' | 'photo_ready' | 'countdown' | 'verifying' | 'captured'>('form');
   const [name, setName] = useState(candidateName);
@@ -48,13 +79,52 @@ export default function StepIdentity({
 
   // OTP states
   const [otpSent, setOtpSent] = useState(false);
-  const [otpCode, setOtpCode] = useState('');
+  const [otpCode, setOtpCode] = useState<string[]>(['', '', '', '', '', '']);
   const [otpVerified, setOtpVerified] = useState(false);
   const [otpSending, setOtpSending] = useState(false);
   const [otpVerifying, setOtpVerifying] = useState(false);
   const [otpError, setOtpError] = useState<string | null>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
+  // Success choreography for the OTP step — mirrors ForgotPasswordModal's OTP
+  // animation exactly (same phases/timings) so the two flows feel like one
+  // product. `otpPhase` drives .tf-otp-stage--*; every visual is CSS, this
+  // only decides when each phase begins.
+  const [otpPhase, setOtpPhase] = useState<OtpPhase>('idle');
+  const otpTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  const clearOtpTimers = useCallback(() => {
+    otpTimers.current.forEach(clearTimeout);
+    otpTimers.current = [];
+  }, []);
+
+  const runOtpSuccess = useCallback((onDone: () => void) => {
+    const reduced =
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    const SUCCESS_LOTTIE_MS = 1502;
+    const SETTLE_MS = 400;
+    const DONE_AT = 3300;
+
+    const at = reduced
+      ? { swap1: 0, swap2: 0, merge: 0, done: 0, handover: 700 }
+      : {
+          swap1: 700,
+          swap2: 1700,
+          merge: 2700,
+          done: DONE_AT,
+          handover: DONE_AT + SUCCESS_LOTTIE_MS + SETTLE_MS,
+        };
+
+    clearOtpTimers();
+    setOtpPhase('grid');
+    (['swap1', 'swap2', 'merge', 'done'] as const).forEach((phase) => {
+      otpTimers.current.push(setTimeout(() => setOtpPhase(phase), at[phase]));
+    });
+    otpTimers.current.push(setTimeout(onDone, at.handover));
+  }, [clearOtpTimers]);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -87,7 +157,8 @@ export default function StepIdentity({
     try {
       await candidateAIInterviewService.sendOtp(token, email.trim());
       setOtpSent(true);
-      setOtpCode('');
+      setOtpCode(['', '', '', '', '', '']);
+      setOtpPhase('idle');
       setOtpVerified(false);
       startCooldown();
     } catch {
@@ -98,24 +169,60 @@ export default function StepIdentity({
   }, [isEmailValid, otpSending, token, email, startCooldown]);
 
   const handleVerifyOtp = useCallback(async (codeOverride?: string) => {
-    const code = (codeOverride ?? otpCode).trim();
-    if (code.length < 4 || otpVerifying) return;
+    const code = (codeOverride ?? otpCode.join('')).trim();
+    if (code.length !== 6 || otpVerifying) return;
     setOtpVerifying(true);
     setOtpError(null);
     try {
       const res = await candidateAIInterviewService.verifyOtp(token, email.trim(), code);
       if (res.verified) {
-        setOtpVerified(true);
         setOtpError(null);
+        // Play the same grid → swap → merge → tick choreography as the
+        // forgot-password OTP step before actually marking this verified.
+        runOtpSuccess(() => setOtpVerified(true));
       } else {
         setOtpError(res.message || 'Invalid OTP. Please try again.');
+        setOtpCode(['', '', '', '', '', '']);
+        otpRefs.current[0]?.focus();
       }
     } catch {
       setOtpError('Invalid or expired OTP. Please try again.');
+      setOtpCode(['', '', '', '', '', '']);
+      otpRefs.current[0]?.focus();
     } finally {
       setOtpVerifying(false);
     }
-  }, [otpCode, otpVerifying, token, email]);
+  }, [otpCode, otpVerifying, token, email, runOtpSuccess]);
+
+  const handleOtpChange = useCallback((index: number, value: string) => {
+    if (!/^\d*$/.test(value)) return;
+    setOtpCode(prev => {
+      const next = [...prev];
+      next[index] = value;
+      if (next.every(d => d) && next.join('').length === 6) {
+        handleVerifyOtp(next.join(''));
+      }
+      return next;
+    });
+    setOtpError(null);
+    if (value && index < 5) otpRefs.current[index + 1]?.focus();
+  }, [handleVerifyOtp]);
+
+  const handleOtpPaste = useCallback((e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const paste = (e.clipboardData?.getData('text') || '').trim();
+    if (!/^\d{6}$/.test(paste)) return;
+    setOtpCode(paste.split(''));
+    setOtpError(null);
+    otpRefs.current[5]?.focus();
+    handleVerifyOtp(paste);
+  }, [handleVerifyOtp]);
+
+  const handleOtpKeyDown = useCallback((index: number, e: React.KeyboardEvent) => {
+    if (e.key === 'Backspace' && !otpCode[index] && index > 0) {
+      otpRefs.current[index - 1]?.focus();
+    }
+  }, [otpCode]);
 
 
   const stopStream = useCallback(() => {
@@ -131,6 +238,7 @@ export default function StepIdentity({
       stopStream();
       if (photoPreview) URL.revokeObjectURL(photoPreview);
       if (cooldownRef.current) clearInterval(cooldownRef.current);
+      clearOtpTimers();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -261,14 +369,36 @@ export default function StepIdentity({
     return detectFaceInfoFromCanvas(canvas, /* useLiveOptions */ true);
   }, [detectFaceInfoFromCanvas]);
 
-  const startCamera = useCallback(async () => {
+  // Available video input devices — populated after the first getUserMedia
+  // grant (device labels/ids are blank before permission is given). Drives
+  // whether the "Switch Camera" control shows at all (hidden on single-camera
+  // laptops, shown on phones/multi-cam setups).
+  const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
+  const activeDeviceIdRef = useRef<string | null>(null);
+
+  const startCamera = useCallback(async (deviceId?: string) => {
     try {
       setCameraError(false);
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: deviceId ? { deviceId: { exact: deviceId } } : true,
+      });
       streamRef.current = stream;
       if (videoRef.current) { videoRef.current.srcObject = stream; videoRef.current.play(); }
+      activeDeviceIdRef.current = stream.getVideoTracks()[0]?.getSettings?.().deviceId ?? deviceId ?? null;
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        setVideoDevices(devices.filter(d => d.kind === 'videoinput'));
+      } catch { /* enumeration is a nice-to-have for the switch-camera button only */ }
     } catch { setCameraError(true); }
   }, []);
+
+  const handleSwitchCamera = useCallback(() => {
+    if (videoDevices.length < 2) return;
+    const currentIndex = videoDevices.findIndex(d => d.deviceId === activeDeviceIdRef.current);
+    const next = videoDevices[(currentIndex + 1) % videoDevices.length];
+    if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
+    void startCamera(next.deviceId);
+  }, [videoDevices, startCamera]);
 
   useEffect(() => {
     if (phase === 'photo_ready') startCamera();
@@ -559,36 +689,28 @@ export default function StepIdentity({
   const isComplete = phase === 'captured';
 
   const progressStepper = (
-    <div className="flex items-center justify-center mb-6">
+    <div className="flex items-center gap-3 sm:gap-4 pb-4 mb-5 border-b border-gray-100">
       {/* Step 1 */}
-      <div className="flex flex-col items-center gap-1.5">
-        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-all ${
-          isPhotoPhase
-            ? 'bg-gray-900 border-gray-900 text-white'
-            : 'bg-gray-900 border-gray-900 text-white'
-        }`}>
-          {isPhotoPhase ? <CheckCircle className="w-5 h-5" /> : '1'}
-        </div>
-        <span className={`text-xs font-medium ${isPhotoPhase ? 'text-gray-500' : 'text-gray-900'}`}>
+      <div className="flex items-center gap-2">
+        <span className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold flex-shrink-0 bg-brand-blue text-white">
+          {isPhotoPhase ? <CheckCircle className="w-4 h-4" /> : '1'}
+        </span>
+        <span className={`text-sm font-semibold whitespace-nowrap ${isPhotoPhase ? 'text-gray-500' : 'text-gray-900'}`}>
           Candidate Details
         </span>
       </div>
 
       {/* Connector */}
-      <div className={`h-0.5 w-20 mx-2 mb-5 transition-all ${isPhotoPhase ? 'bg-gray-900' : 'bg-gray-200'}`} />
+      <div className={`h-0.5 flex-1 rounded-full transition-colors ${isPhotoPhase ? 'bg-brand-blue' : 'bg-gray-200'}`} />
 
       {/* Step 2 */}
-      <div className="flex flex-col items-center gap-1.5">
-        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-all ${
-          isComplete
-            ? 'bg-gray-900 border-gray-900 text-white'
-            : isPhotoPhase
-              ? 'bg-gray-900 border-gray-900 text-white'
-              : 'bg-white border-gray-300 text-gray-400'
+      <div className="flex items-center gap-2">
+        <span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold flex-shrink-0 ${
+          isComplete || isPhotoPhase ? 'bg-brand-blue text-white' : 'bg-white border-2 border-gray-300 text-gray-400'
         }`}>
-          {isComplete ? <CheckCircle className="w-5 h-5" /> : '2'}
-        </div>
-        <span className={`text-xs font-medium ${isPhotoPhase ? 'text-gray-900' : 'text-gray-400'}`}>
+          {isComplete ? <CheckCircle className="w-4 h-4" /> : '2'}
+        </span>
+        <span className={`text-sm font-semibold whitespace-nowrap ${isPhotoPhase ? 'text-gray-900' : 'text-gray-400'}`}>
           Live Photo Capture
         </span>
       </div>
@@ -597,44 +719,74 @@ export default function StepIdentity({
 
   // ── Privacy card ──
   const privacyCard = (
-    <div className="bg-gray-50 rounded-xl p-4 flex items-start gap-3">
-      <Lock className="w-5 h-5 text-gray-500 flex-shrink-0 mt-0.5" />
-      <div>
-        <h4 className="text-sm font-semibold text-gray-900 mb-1">Privacy &amp; Security</h4>
+    <div className="bg-brand-blue/5 border border-brand-blue/15 rounded-xl p-4 flex items-start gap-3">
+      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white border border-brand-blue/20 text-brand-blue flex-shrink-0">
+        <Lock className="w-4 h-4" />
+      </span>
+      <div className="min-w-0">
+        <h4 className="text-sm font-semibold text-gray-900 mb-1">Your privacy is protected</h4>
         <p className="text-xs text-gray-600 leading-relaxed">
           Your information is encrypted and stored securely under GDPR and DPDP regulations.
-          Used only for interview verification purposes.
+          Used only for interview verification purposes.{' '}
+          <a
+            href="/privacy"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-brand-blue hover:text-brand-blue-2 underline underline-offset-2 whitespace-nowrap"
+          >
+            Privacy Policy
+          </a>
         </p>
       </div>
+    </div>
+  );
+
+  // ── Identity verification benefits sidebar (desktop only) ──
+  const benefitsSidebar = (
+    <div className="hidden lg:flex flex-col items-center text-center gap-4 bg-brand-blue/5 border-l border-gray-100 p-6 w-[280px] flex-shrink-0">
+      <span className="flex h-16 w-16 items-center justify-center rounded-full bg-white border border-brand-blue/20 shadow-sm">
+        <IdCard className="w-7 h-7 text-brand-blue" />
+      </span>
+      <h3 className="text-base font-bold text-gray-900">Identity Verification</h3>
+      <ul className="space-y-2.5 text-left w-full">
+        {[
+          'Confirms your identity',
+          'Prevents impersonation',
+          'Ensures a fair interview process',
+          'Your data is safe and secure',
+        ].map(item => (
+          <li key={item} className="flex items-center gap-2 text-sm text-gray-700">
+            <CheckCircle className="w-4 h-4 text-brand-blue flex-shrink-0" />
+            {item}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 
   // ── PHASE A: Form ──
   if (phase === 'form') {
     return (
-      <div className="w-full max-w-2xl mx-auto space-y-6">
-        {progressStepper}
-        <div className="text-center">
-          <span className="inline-flex items-center gap-1.5 bg-success-subtle text-success text-xs font-semibold px-3 py-1.5 rounded-full mb-3">
-            <Shield className="w-3.5 h-3.5" /> Identity Verification
+      <div className="w-full max-w-6xl mx-auto space-y-6">
+        <div className="flex items-start gap-3">
+          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-success-subtle text-success flex-shrink-0">
+            <Shield className="w-5 h-5" />
           </span>
-          <h1 className="text-2xl font-bold text-gray-900">Verify Your Identity</h1>
-          <p className="text-gray-600 mt-1 text-sm">
-            Confirm your details to proceed with the interview for <strong>{position}</strong>
-          </p>
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Identity Verification</h1>
+            <p className="text-gray-600 mt-0.5 text-sm">
+              Confirm your details to proceed with the interview for <strong>{position}</strong>
+            </p>
+          </div>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
-          <div className="bg-gray-800 px-6 py-4">
-            <div className="flex items-center gap-2 text-white">
-              <Shield className="w-5 h-5" />
-              <h2 className="font-semibold">Candidate Details</h2>
-            </div>
-          </div>
-          <div className="p-6 space-y-5">
-            <div className="border-l-4 border-warning-line bg-warning-subtle rounded-r-lg p-3">
-              <p className="text-sm text-warning-strong font-medium">Important</p>
-              <p className="text-xs text-warning mt-1">Enter your name exactly as it appears on your government ID.</p>
+        <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm flex flex-col lg:flex-row">
+          <div className="p-6 space-y-5 min-w-0 flex-1">
+            {progressStepper}
+
+            <div className="flex items-center gap-2 bg-warning-subtle text-warning-strong text-sm font-medium rounded-lg px-4 py-3">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              Enter your name exactly as it appears on your government ID.
             </div>
 
             <div>
@@ -645,7 +797,7 @@ export default function StepIdentity({
                 id="identity-name" type="text" value={name}
                 onChange={e => setName(e.target.value)}
                 placeholder="e.g. John Michael Smith"
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 transition-colors"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue transition-colors"
               />
             </div>
 
@@ -671,7 +823,7 @@ export default function StepIdentity({
                   >
                     {otpSending
                       ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Sending…</>
-                      : 'Get OTP'
+                      : 'Send OTP'
                     }
                   </Button>
                 )}
@@ -682,81 +834,75 @@ export default function StepIdentity({
                 )}
               </div>
 
-              {/* OTP input — shown after OTP sent, hidden once verified */}
+              {/* OTP input — shown after OTP sent, hidden once verified. Six
+                  individual cells + the grid/swap/merge/tick choreography,
+                  identical to the forgot-password OTP step. */}
               {otpSent && !otpVerified && (
                 <div className="space-y-3">
                   <label className="flex items-center gap-1.5 text-sm font-medium text-gray-900">
                     <KeyRound className="w-4 h-4 text-gray-500" /> Enter OTP <span className="text-destructive">*</span>
                   </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      maxLength={6}
-                      value={otpCode}
-                      onChange={e => {
-                        const digits = e.target.value.replace(/\D/g, '').slice(0, 6);
-                        setOtpCode(digits);
-                        setOtpError(null);
-                        // Auto-verify once the full 6-digit code is entered by
-                        // manual typing — mirrors the paste behavior so the
-                        // candidate never has to click "Verify" or press Enter.
-                        if (digits.length === 6) handleVerifyOtp(digits);
-                      }}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          const live = (e.currentTarget.value || '').replace(/\D/g, '');
-                          handleVerifyOtp(live);
-                        }
-                      }}
-                      onPaste={e => {
-                        const pasted = (e.clipboardData?.getData('text') || '').replace(/\D/g, '').slice(0, 6);
-                        if (pasted.length >= 4) {
-                          e.preventDefault();
-                          setOtpCode(pasted);
-                          setOtpError(null);
-                          handleVerifyOtp(pasted);
-                        }
-                      }}
-                      placeholder="Enter 6-digit OTP"
-                      className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 tracking-widest font-mono"
-                    />
-                    <Button
-                      type="button"
-                      variant="primary"
-                      onClick={() => handleVerifyOtp()}
-                      disabled={otpCode.length < 4 || otpVerifying}
-                      className="flex-shrink-0"
-                    >
-                      {otpVerifying ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Verifying…</> : 'Verify OTP'}
-                    </Button>
+
+                  <div className="tf-auth-scope">
+                    <style>{AUTH_THEME_CSS}</style>
+                    <div className={`tf-otp-stage tf-otp-stage--${otpPhase}`}>
+                      <div className="tf-otp-rotor" onPaste={handleOtpPaste}>
+                        {otpCode.map((digit, index) => (
+                          <input
+                            key={index}
+                            ref={(el) => { otpRefs.current[index] = el; }}
+                            type="text"
+                            inputMode="numeric"
+                            maxLength={1}
+                            value={digit}
+                            onChange={(e) => handleOtpChange(index, e.target.value)}
+                            onKeyDown={(e) => handleOtpKeyDown(index, e)}
+                            aria-label={`Digit ${index + 1} of 6`}
+                            placeholder="–"
+                            className="tf-auth-otp tf-otp-cell"
+                            readOnly={otpPhase !== 'idle'}
+                          />
+                        ))}
+                      </div>
+                      <div
+                        className="tf-otp-merged"
+                        role="status"
+                        aria-label={otpPhase === 'done' ? 'Verification code accepted' : undefined}
+                      >
+                        {otpPhase === 'done' && (
+                          <SuccessAnimation
+                            className="tf-otp-lottie"
+                            fallback={<Check className="tf-otp-tick" style={{ width: 26, height: 26, opacity: 1, transform: 'none' }} />}
+                          />
+                        )}
+                      </div>
+                    </div>
                   </div>
 
                   {/* Resend timer */}
-                  <div className="flex items-center gap-3 py-2 px-3 bg-gray-50 rounded-lg border border-gray-100">
+                  <div className="flex items-center gap-3 py-2 px-3 bg-success-subtle/60 rounded-lg border border-success-line">
                     {resendCooldown > 0 ? (
                       <>
                         {/* Circular countdown */}
                         <div className="relative flex-shrink-0 w-9 h-9">
                           <svg className="w-9 h-9 -rotate-90" viewBox="0 0 36 36">
-                            <circle cx="18" cy="18" r="15" fill="none" stroke="var(--raw-e5e7eb)" strokeWidth="3" />
+                            <circle cx="18" cy="18" r="15" fill="none" stroke="var(--success-line)" strokeWidth="3" />
                             <circle
                               cx="18" cy="18" r="15" fill="none"
-                              stroke="var(--raw-374151)" strokeWidth="3"
+                              stroke="var(--success)" strokeWidth="3"
                               strokeLinecap="round"
                               strokeDasharray={2 * Math.PI * 15}
                               strokeDashoffset={2 * Math.PI * 15 * (1 - resendCooldown / 60)}
                               style={{ transition: 'stroke-dashoffset 0.9s linear' }}
                             />
                           </svg>
-                          <span className="absolute inset-0 flex items-center justify-center text-2xs font-bold text-gray-700">
+                          <span className="absolute inset-0 flex items-center justify-center text-2xs font-bold text-success-strong">
                             {resendCooldown}
                           </span>
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-700">OTP sent to <span className="font-semibold">{email}</span></p>
-                          <p className="text-xs text-gray-500">Resend available in {resendCooldown}s</p>
+                          <p className="text-sm font-medium text-success-strong">OTP sent to <span className="font-semibold">{email}</span></p>
+                          <p className="text-xs text-success">Resend available in {resendCooldown}s</p>
                         </div>
                       </>
                     ) : (
@@ -790,9 +936,16 @@ export default function StepIdentity({
 
             {privacyCard}
           </div>
+
+          {benefitsSidebar}
         </div>
 
-        <div className="flex justify-end">
+        <div className="flex items-center justify-between">
+          {onBack ? (
+            <Button type="button" variant="secondary" onClick={onBack}>
+              <ArrowLeft className="w-4 h-4" /> Back
+            </Button>
+          ) : <span />}
           <Button
             type="button" variant="primary" onClick={handleFormSubmit}
             disabled={!isFormValid || submitting}
@@ -812,8 +965,10 @@ export default function StepIdentity({
 
   // ── PHASES B-E: Live Photo Capture ──
   return (
-    <div className="w-full max-w-4xl mx-auto space-y-6" style={{ colorScheme: 'light' }}>
-      {progressStepper}
+    <div className="w-full max-w-6xl mx-auto space-y-6" style={{ colorScheme: 'light' }}>
+      <div className="bg-white border border-gray-200 rounded-2xl px-6 py-5">
+        {progressStepper}
+      </div>
       <div className="text-center">
         <span className="inline-flex items-center gap-1.5 bg-success-subtle text-success text-xs font-semibold px-3 py-1.5 rounded-full mb-3">
           <Camera className="w-3.5 h-3.5" /> Live Photo Capture
@@ -823,17 +978,11 @@ export default function StepIdentity({
       </div>
 
       <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
-        <div className="bg-gray-800 px-6 py-4">
-          <div className="flex items-center gap-2 text-white">
-            <Shield className="w-5 h-5" />
-            <h2 className="font-semibold">Live Identity Verification</h2>
-          </div>
-        </div>
 
         <div className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Left: Video feed */}
-            <div className="relative bg-gray-900 rounded-xl aspect-video overflow-hidden flex items-center justify-center">
+            <div className="relative bg-gray-900 rounded-xl aspect-[4/3] overflow-hidden flex items-center justify-center">
               {phase !== 'captured' && (
                 <video ref={videoRef} muted playsInline className="w-full h-full object-cover" style={{ transform: 'scaleX(-1)' }} />
               )}
@@ -849,26 +998,45 @@ export default function StepIdentity({
                 </div>
               )}
 
+              {/* Switch Camera — only shown once enumeration finds more than one
+                  video input (hidden on single-camera laptops). */}
+              {phase !== 'captured' && !cameraError && videoDevices.length > 1 && (
+                <button
+                  type="button"
+                  onClick={handleSwitchCamera}
+                  className="absolute top-3 right-3 flex flex-col items-center gap-1 bg-black/60 hover:bg-black/75 text-white text-2xs font-medium rounded-lg px-2.5 py-2 transition-colors"
+                >
+                  <Camera className="w-4 h-4" />
+                  Switch Camera
+                </button>
+              )}
+
               {/* Always-visible face oval guide — border + hint reflect the live
                   face status so the candidate knows why capture is disabled. */}
               {phase !== 'captured' && !cameraError && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className={`w-36 h-44 md:w-44 md:h-52 rounded-[50%] border-[3px] transition-all duration-300 ${
+                  <div className={`w-36 h-44 md:w-44 md:h-52 rounded-[50%] border-2 border-dashed transition-all duration-300 ${
                     phase === 'countdown' || phase === 'verifying' ? 'border-warning-line shadow-[0_0_20px_rgba(250,204,21,0.4)]' :
                     phase === 'photo_ready' && liveFaceStatus === 'ok' ? 'border-success-line shadow-[0_0_20px_rgba(74,222,128,0.45)]' :
                     phase === 'photo_ready' && (liveFaceStatus === 'multiple' || liveFaceStatus === 'none') ? 'border-destructive-line shadow-[0_0_20px_rgba(248,113,113,0.45)]' :
-                    'border-white/50'
+                    'border-white/60'
                   }`} />
-                  <p className="absolute bottom-12 text-xs text-white/90 font-medium text-center px-4">
+                  <span className={`absolute bottom-3 inline-flex items-center gap-1.5 text-xs font-medium text-center px-3 py-1.5 rounded-full ${
+                    phase === 'countdown' || phase === 'verifying' ? 'bg-warning text-white' :
+                    phase === 'photo_ready' && liveFaceStatus === 'ok' ? 'bg-success text-white' :
+                    phase === 'photo_ready' && (liveFaceStatus === 'multiple' || liveFaceStatus === 'none') ? 'bg-destructive text-white' :
+                    'bg-black/60 text-white/90'
+                  }`}>
+                    {liveFaceStatus === 'ok' && phase === 'photo_ready' && <CheckCircle className="w-3.5 h-3.5" />}
                     {phase === 'countdown' ? 'Hold still…'
                       : phase === 'verifying' ? 'Verifying your photo…'
                       : liveFaceStatus === 'checking' ? 'Starting camera…'
                       : liveFaceStatus === 'multiple' ? 'Multiple people detected — only you should be visible'
                       : liveFaceStatus === 'none' ? 'No face detected — center your face in the oval'
                       : liveFaceStatus === 'off_oval' ? 'Move so your face fills the oval'
-                      : liveFaceStatus === 'ok' ? 'Looks good — you can capture'
+                      : liveFaceStatus === 'ok' ? 'Looks good! You can capture'
                       : 'Position face inside oval'}
-                  </p>
+                  </span>
                 </div>
               )}
 
@@ -892,45 +1060,64 @@ export default function StepIdentity({
 
               {/* Status badges */}
               {phase !== 'captured' && !cameraError && (
-                <div className="absolute bottom-3 left-3 flex items-center gap-1.5 bg-black/60 text-white text-xs px-2.5 py-1 rounded-full">
+                <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-black/60 text-white text-xs px-2.5 py-1 rounded-full">
                   <span className="w-2 h-2 bg-success rounded-full animate-pulse" />
                   Camera Active
                 </div>
               )}
               {phase === 'captured' && (
-                <div className="absolute bottom-3 left-3 flex items-center gap-1.5 bg-success/90 text-white text-xs px-2.5 py-1 rounded-full">
+                <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-success/90 text-white text-xs px-2.5 py-1 rounded-full">
                   <CheckCircle className="w-3 h-3" /> Captured
                 </div>
               )}
             </div>
 
             {/* Right: Instructions / status */}
-            <div className="space-y-4">
+            <div className="h-full flex flex-col gap-4">
+              {/* "How it works" — stays visible across the whole capture flow so
+                  each step's badge can pop into a tick the moment it's actually
+                  met, instead of just listing instructions. `flex-1` lets it
+                  absorb the column's extra height so the right side matches the
+                  video panel instead of leaving a gap below the button. */}
+              <div className="bg-brand-blue/5 border border-brand-blue/15 rounded-xl overflow-hidden flex-1 flex flex-col">
+                <div className="flex items-center gap-2 px-4 py-3 bg-brand-blue/5 border-b border-brand-blue/10">
+                  <Shield className="w-4 h-4 text-brand-blue" />
+                  <h4 className="text-sm font-semibold text-gray-900">How it works</h4>
+                </div>
+                <div className="px-4 py-3 space-y-3 divide-y divide-brand-blue/10 flex-1">
+                  {(() => {
+                    const positioned = liveFaceStatus === 'ok' || phase !== 'photo_ready';
+                    return (
+                      <>
+                        <HowItWorksStep
+                          num={1}
+                          done={positioned}
+                          icon={User}
+                          title="Position your face"
+                          subtitle="Center your face inside the oval, with only you in frame."
+                        />
+                        <HowItWorksStep
+                          num={2}
+                          done={positioned}
+                          icon={Camera}
+                          title="Capture"
+                          subtitle="Click “Capture Photo” when you're ready to take your photo."
+                        />
+                        <HowItWorksStep
+                          num={3}
+                          done={positioned}
+                          icon={CheckCircle}
+                          title="Verification"
+                          subtitle="Your photo will be securely verified for identity confirmation."
+                        />
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
+
               {phase === 'photo_ready' && (
                 <>
-                  <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                    <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-100">
-                      <Shield className="w-4 h-4 text-gray-600" />
-                      <h4 className="text-sm font-semibold text-gray-900">How it works</h4>
-                    </div>
-                    <div className="px-4 py-3 space-y-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-600 flex-shrink-0">1</div>
-                        <div>
-                          <p className="text-sm font-medium text-gray-800">Position your face</p>
-                          <p className="text-xs text-gray-500">Center your face inside the oval, with only you in frame.</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-600 flex-shrink-0">2</div>
-                        <div>
-                          <p className="text-sm font-medium text-gray-800">Capture</p>
-                          <p className="text-xs text-gray-500">A short countdown, then your photo is taken automatically.</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
                   {faceError && (
                     <div className="flex items-start gap-2 bg-destructive-subtle border border-destructive-line rounded-lg p-3">
                       <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0 mt-0.5" />
@@ -954,12 +1141,6 @@ export default function StepIdentity({
                       : '';
                     return (
                       <>
-                        {!captureReady && blockedMsg && (
-                          <div className="flex items-start gap-2 bg-warning-subtle border border-warning-line rounded-lg p-3">
-                            <AlertCircle className="w-4 h-4 text-warning flex-shrink-0 mt-0.5" />
-                            <p className="text-sm text-warning">{blockedMsg}</p>
-                          </div>
-                        )}
                         <Button
                           type="button"
                           variant="primary"
@@ -968,7 +1149,9 @@ export default function StepIdentity({
                           title={!captureReady ? blockedMsg : undefined}
                           className="w-full"
                         >
-                          {faceError ? 'Retake Photo' : 'Capture Photo →'}
+                          <Camera className="w-4 h-4" />
+                          {faceError ? 'Retake Photo' : 'Capture Photo'}
+                          <ArrowRight className="w-4 h-4" />
                         </Button>
                       </>
                     );
@@ -1028,14 +1211,33 @@ export default function StepIdentity({
         </div>
       </div>
 
+      {/* Tips for a clear photo */}
+      <div className="bg-brand-blue/5 border border-brand-blue/15 rounded-2xl p-4 sm:p-5">
+        <div className="flex items-center gap-2 mb-3">
+          <Lightbulb className="w-4 h-4 text-brand-blue flex-shrink-0" />
+          <h4 className="text-sm font-semibold text-gray-900">Tips for a clear photo</h4>
+        </div>
+        <div className="flex flex-col sm:flex-row divide-y sm:divide-y-0 sm:divide-x divide-brand-blue/15">
+          {[
+            { icon: Sun, text: 'Be in a well-lit place' },
+            { icon: ScanFace, text: 'Face the camera directly' },
+            { icon: Ban, text: 'Remove sunglasses or mask' },
+            { icon: User, text: 'Keep only yourself in the frame' },
+          ].map(({ icon: Icon, text }) => (
+            <div key={text} className="flex items-center gap-2 text-sm text-gray-600 py-2 sm:py-0 sm:px-4 sm:first:pl-0">
+              <Icon className="w-4 h-4 text-brand-blue flex-shrink-0" />
+              {text}
+            </div>
+          ))}
+        </div>
+      </div>
+
       {privacyCard}
 
       <div className="flex items-center justify-between pt-2">
-        <button type="button" onClick={handleGoBackFromPhoto}
-          className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 font-medium transition-colors">
-          <ArrowLeft className="w-4 h-4" />
-          Go Back
-        </button>
+        <Button type="button" variant="secondary" onClick={handleGoBackFromPhoto}>
+          <ArrowLeft className="w-4 h-4" /> Back
+        </Button>
       </div>
     </div>
   );
