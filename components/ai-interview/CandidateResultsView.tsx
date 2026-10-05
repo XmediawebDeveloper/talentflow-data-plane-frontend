@@ -1637,7 +1637,10 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
     // Exact email is the rule, whatever the invite source — the name only
     // breaks a tie (pickResumeByEmail).
     try {
-      const results = await resumeService.list({ search: email, page_size: 50 });
+      // include_archived: an archived resume still exists — the resume_id
+      // path opens it, so the email path must find it too (naveen's resume was
+      // archived, so his direct-email invite showed "invited via Direct Email").
+      const results = await resumeService.list({ search: email, page_size: 50, include_archived: true });
       const items = results.items || [];
       const match: any = pickResumeByEmail(items as any[], email, interview.candidate_name || liveSession.candidate_name);
       console.info('[CandidateResultsView] resume lookup by e-mail', { email, hits: items.length, matched: match?.id ?? null });

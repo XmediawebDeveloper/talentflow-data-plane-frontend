@@ -714,7 +714,10 @@ export default function CandidateResultDetails({
     // Exact email is the rule, whatever the invite source — the name only
     // breaks a tie (pickResumeByEmail), the same as the AI Interview page.
     try {
-      const results = await resumeService.list({ search: email, page_size: 50 });
+      // include_archived: an archived resume still exists — the resume_id
+      // path opens it, so the email path must find it too (naveen's resume was
+      // archived, so his direct-email invite showed "invited via Direct Email").
+      const results = await resumeService.list({ search: email, page_size: 50, include_archived: true });
       const items = results.items || [];
       const byEmail: any = pickResumeByEmail(items as any[], email, name);
       console.info('[CandidateResultDetails] resume lookup by e-mail', { email, hits: items.length, matched: byEmail?.id ?? null, name });
