@@ -10484,13 +10484,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                           hrVoiceBlockedQuestionNumberRef.current = null;
                           setHrExplainMore(true);
                         }}
-                        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-gray-50 text-gray-800 text-sm font-semibold hover:bg-gray-100 hover:border-gray-300 transition-colors text-left"
+                        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-blue-200 bg-blue-50 text-blue-900 text-sm font-semibold hover:bg-blue-100 hover:border-blue-300 transition-colors text-left"
                       >
-                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-gray-500 text-white text-[10px] font-bold shrink-0">C</span>
+                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold shrink-0">C</span>
                         Need to Explain More
                       </button>
                     </div>
-                    <div className="mt-2 pt-2 border-t border-gray-100 text-center text-xs font-medium text-gray-600">
+                    <div className="mt-2 pt-2 border-t border-gray-200 text-center text-xs font-semibold text-gray-700">
                       Select only one option
                     </div>
                   </div>
