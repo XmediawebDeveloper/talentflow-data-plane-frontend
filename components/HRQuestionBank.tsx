@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Search, Edit2, Trash2, ChevronDown, ChevronUp, Tag, Clock, Filter, X, Save, AlertCircle, MessageSquare, FileText, CheckCircle2 } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, ChevronDown, ChevronUp, Tag, Filter, X, Save, AlertCircle, MessageSquare, FileText, CheckCircle2 } from 'lucide-react';
 import api from '@/lib/services/api';
 import { toast } from '@/components/ui/enhanced-toast';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -676,14 +676,7 @@ export default function HRQuestionBank() {
                         ? 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20'
                         : 'bg-brand-cyan/10 text-brand-blue ring-brand-cyan/20'
                     }`}>
-                      {question.answer_type === 'yes_no' ? 'Yes / No' : 'Text Answer'}
-                    </span>
-                    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 ring-1 ring-gray-200">
-                      Not Scored
-                    </span>
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-50 text-gray-600 ring-1 ring-gray-200">
-                      <Clock className="w-3 h-3" />
-                      {question.time_minutes} min
+                      {question.answer_type === 'yes_no' ? 'Yes / No / Need to Explain More' : 'Text Answer'}
                     </span>
                   </div>
                 </div>
