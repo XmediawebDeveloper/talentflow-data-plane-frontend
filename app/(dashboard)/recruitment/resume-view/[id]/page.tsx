@@ -215,6 +215,7 @@ import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { usePlanLock } from '@/lib/hooks/usePlanFeature';
+import CandidateActivityCard from '@/components/resumes/CandidateActivityCard';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 
@@ -1527,6 +1528,10 @@ Best regards`);
               </div>
             );
           })()}
+
+          {/* Candidate Activity — scores, AI Talent Match, AI Assessment and
+              AI Interview history for this candidate, gated per module. */}
+          <CandidateActivityCard resumeId={resumeId} />
 
           {/* Professional Summary */}
           {detailedResume.summary && (
