@@ -4,6 +4,7 @@ import { X, CheckCircle, Briefcase, Loader2 } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { Resume, Job } from '@/lib/types/types';
 import JobOpeningPickerList, { JobSelection } from '@/components/jobs/JobOpeningPickerList';
+import JobEligibilityNote from '@/components/jobs/JobEligibilityNote';
 import SelectedCandidatesPanel from './SelectedCandidatesPanel';
 import CandidateVersionPicker from './CandidateVersionPicker';
 import { Button } from '@/components/ui/button';
@@ -68,6 +69,16 @@ interface ApplyToJobModalProps {
    * are listed inline with the latest pre-selected.
    */
   fixedJob?: Job;
+  /**
+   * List jobs the way the Job Descriptions page's All Jobs does, drafts left
+   * out: Published / Republished jobs can be picked, Disabled / Archived ones
+   * are shown greyed and cannot be (JobOpeningPickerList's `excludeDraftsOnly`).
+   * With it come Resume Scoring's Score Resumes extras: the Job Eligibility
+   * note and the "N assessed / N interviewed" counts on each card, so the two
+   * lists read the same. Off by default - every other host keeps its
+   * Published-only list.
+   */
+  excludeDraftsOnly?: boolean;
 }
 
 export default function ApplyToJobModal({
@@ -83,6 +94,7 @@ export default function ApplyToJobModal({
   nextSteps,
   jobOnly = false,
   fixedJob,
+  excludeDraftsOnly = false,
 }: ApplyToJobModalProps) {
   // Default titles based on mode
   const defaultTitle =
@@ -240,6 +252,7 @@ export default function ApplyToJobModal({
               the same component the Resume Scoring page renders statically
               for its own job-selection step, so the two never drift apart.
               Not shown when the job is fixed. */}
+          {!fixedJob && excludeDraftsOnly && <JobEligibilityNote className="mb-3" />}
           {!fixedJob && (
             <JobOpeningPickerList
               jobs={jobs}
@@ -247,6 +260,8 @@ export default function ApplyToJobModal({
               onSelectionChange={setSelection}
               radioGroupName={JOB_RADIO_GROUP}
               scrollContainerRef={listRef}
+              excludeDraftsOnly={excludeDraftsOnly}
+              showCandidateCounts={excludeDraftsOnly}
             />
           )}
 
