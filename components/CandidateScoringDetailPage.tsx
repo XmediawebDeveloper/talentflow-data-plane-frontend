@@ -1,6 +1,7 @@
 'use client';
 
 import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, Briefcase, GraduationCap, Star, Calendar, Zap, FileText, AlertCircle, Download, Clock, Building2, ChevronLeft, ChevronRight, ChevronDown, Code, Languages, BarChart3, CheckSquare, MessageSquare, Minus, BookOpen, ThumbsUp, ThumbsDown, Loader2, Sparkles, UserPlus, History, File, HardDrive, User, X, Eye, Share2, Paperclip, Send } from 'lucide-react';
+import { MiniPagination } from '@/components/ui/mini-pagination';
 import DetailedScorecardTab from './DetailedScorecardTab';
 import ViewResumeButton from '@/components/ui/view-resume-button';
 import { Button } from '@/components/ui/button';
@@ -121,6 +122,10 @@ interface ScoredResume {
   jobVersion?: number;  // The job's lineage version (v1, v2, ...)
 }
 
+const DETAIL_TABS = ['overview', 'scoretable', 'personalinfo', 'viewjd'] as const;
+type DetailTab = typeof DETAIL_TABS[number];
+const DETAIL_TAB_STORAGE_KEY = 'resumeScoring.candidateDetail.activeTab';
+
 interface CandidateScoringDetailPageProps {
   resume: ScoredResume;
   jobTitle: string;
@@ -132,6 +137,9 @@ interface CandidateScoringDetailPageProps {
   totalCount?: number;
   onPrev?: () => void;
   onNext?: () => void;
+  /** Steps through this candidate's other scored jobs (MiniPagination),
+   *  shown beside the Version badge. */
+  jobPager?: { page: number; total: number; onPageChange: (page: number) => void };
   /**
    * Breadcrumb crumbs for this view. Supply this when the component is rendered
    * as an in-page view (e.g. inside Resume Scoring) so the parent crumbs can use
@@ -168,7 +176,7 @@ function byNewestVersion(a: any, b: any): number {
   return bTime - aTime;
 }
 
-export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, onMinimize, currentIndex, totalCount, onPrev, onNext, breadcrumbItems, assessmentConfigured, aiInterviewConfigured }: CandidateScoringDetailPageProps) {
+export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, onMinimize, currentIndex, totalCount, onPrev, onNext, jobPager, breadcrumbItems, assessmentConfigured, aiInterviewConfigured }: CandidateScoringDetailPageProps) {
   const { isTenantAdmin, user, hasPermissionCode } = useAuth();
   const { hasPlanFeature, isPlanLocked } = usePlanLock();
   const canExport = isTenantAdmin || (user?.permissions?.canExport ?? false);
@@ -282,7 +290,19 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   const [showAssessmentPicker, setShowAssessmentPicker] = useState(false);
   const [loadingPickerAssessments, setLoadingPickerAssessments] = useState(false);
   const [showAIInviteFlow, setShowAIInviteFlow] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'scoretable' | 'personalinfo' | 'viewjd'>('overview');
+  /* The open tab survives a refresh (sessionStorage, this tab only). Read in
+     the initializer: this view only mounts client-side, after the scores load. */
+  const [activeTab, setActiveTabState] = useState<DetailTab>(() => {
+    try {
+      const saved = sessionStorage.getItem(DETAIL_TAB_STORAGE_KEY);
+      if (saved && (DETAIL_TABS as readonly string[]).includes(saved)) return saved as DetailTab;
+    } catch { /* ignore */ }
+    return 'overview';
+  });
+  const setActiveTab = (tab: DetailTab) => {
+    setActiveTabState(tab);
+    try { sessionStorage.setItem(DETAIL_TAB_STORAGE_KEY, tab); } catch { /* ignore */ }
+  };
   // The tabs + panels block, so opening the JD from the job title can bring the
   // tab strip to the top rather than jumping the whole page back to its header.
   const tabsSectionRef = useRef<HTMLDivElement>(null);
@@ -1222,6 +1242,14 @@ Best regards`);
                     Version {resume.resumeVersion}
                   </span>
                 )}
+                {jobPager && jobPager.total > 1 && (
+                  <MiniPagination
+                    page={jobPager.page}
+                    totalPages={jobPager.total}
+                    onPageChange={jobPager.onPageChange}
+                    aria-label="Scored jobs"
+                  />
+                )}
               </div>
             </div>
           </div>
@@ -1441,7 +1469,7 @@ Best regards`);
             ].map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
+                onClick={() => setActiveTab(tab.id as DetailTab)}
                 className={`px-3 sm:px-6 py-2.5 sm:py-3 text-xs sm:text-sm font-medium transition-colors rounded-t-lg whitespace-nowrap ${
                   activeTab === tab.id
                     ? 'text-gray-800 bg-gray-50 border-b-2 border-gray-600'

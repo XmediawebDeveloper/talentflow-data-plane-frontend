@@ -585,11 +585,6 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
 
   const toolbar = (
     <>
-      {/* Same heading treatment as every other tab's — title + count, right
-          above the search/filter bar. */}
-      <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight mb-3">
-        Candidate Results ({rows.length})
-      </h2>
 
       {/* Search + Filter bar — same toolbar as the per-interview results view. */}
       <ListToolbar

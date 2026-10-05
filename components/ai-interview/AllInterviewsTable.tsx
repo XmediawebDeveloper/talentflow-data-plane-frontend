@@ -296,8 +296,6 @@ export interface AllInterviewsTableProps {
    * Interviews" tab, which spans every status.
    */
   fixedStatus?: 'published' | 'draft' | 'archived';
-  /** Heading shown above the search bar. Defaults to "All Interviews". */
-  titleLabel?: string;
   /**
    * The Actions cell for one row. The AI Interview page passes the same 3-dot
    * menu its Total Jobs Interview Versions table uses, so both tabs offer the
@@ -307,7 +305,7 @@ export interface AllInterviewsTableProps {
   renderRowActions?: (config: AIInterviewResponse) => React.ReactNode;
 }
 
-export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refreshSignal, fixedStatus, titleLabel = 'All Interviews', renderRowActions }: AllInterviewsTableProps = {}) {
+export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refreshSignal, fixedStatus, renderRowActions }: AllInterviewsTableProps = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isTenantAdmin, user } = useAuth();
@@ -718,11 +716,6 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
 
   const toolbar = (
     <>
-      {/* Same heading treatment as every other tab's — title + count, right
-          above the search/filter bar. */}
-      <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight mb-3">
-        {titleLabel} ({rows.length})
-      </h2>
 
       {/* ── Search & filter toolbar ── */}
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-4">

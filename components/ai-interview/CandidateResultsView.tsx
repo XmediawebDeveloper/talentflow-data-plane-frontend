@@ -47,6 +47,7 @@ import IntegrityCheckTab from './IntegrityCheckTab';
 import { QuestionDistributionPopover } from './QuestionDistributionPopover';
 import { summarizeViolations } from './violationTaxonomy';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useUrlTab } from '@/lib/hooks/useUrlTab';
 import ResumeDetailView from '@/components/ResumeDetailView';
 import ViewResumeButton from '@/components/ui/view-resume-button';
 import { RESUME_EMAIL_MISMATCH_MESSAGE, emailsMatch, normalizeEmail, pickResumeByEmail, resumeEmailOf, verifyResumeBelongsToInvite } from '@/lib/utils/resumeEmailMatch';
@@ -58,6 +59,10 @@ import { formatScore1, truncate1 } from '@/lib/utils/matchStatus';
 interface CandidateResultsViewProps {
   interview: AIInterviewResponse;
   onBack: () => void;
+  /** Keep the open tab in the URL (`?resultTab=`) — on by default, for the
+   *  candidate result route. Off for an in-page view the URL doesn't name,
+   *  which a refresh can't restore anyway. */
+  tabInUrl?: boolean;
   /** Index of this candidate within the visible results list (for Prev/Next). */
   currentIndex?: number;
   /** Total candidates in the visible results list. */
@@ -86,7 +91,8 @@ interface CandidateResultsViewProps {
   breadcrumbItems?: { label: string; href?: string; onClick?: () => void }[];
 }
 
-type TabKey = 'overview' | 'eval' | 'evaluation' | 'eval_report' | 'eval_dashboard' | 'sentiment' | 'qa' | 'recording' | 'transcript' | 'coverage' | 'violations' | 'skill_breakdown' | 'question_analysis' | 'example_scenarios' | 'verification';
+const TAB_KEYS = ['overview', 'eval', 'evaluation', 'eval_report', 'eval_dashboard', 'sentiment', 'qa', 'recording', 'transcript', 'coverage', 'violations', 'skill_breakdown', 'question_analysis', 'example_scenarios', 'verification'] as const;
+type TabKey = typeof TAB_KEYS[number];
 
 /* ─── Proctoring helpers ─────────────────────────────────────────── */
 interface ViolationRecord {
@@ -607,12 +613,13 @@ function DiffText({ parts, tone }: { parts: DiffPart[]; tone: 'raw' | 'corrected
   );
 }
 
-export default function CandidateResultsView({ interview, onBack, currentIndex, totalCount, onPrev, onNext, onNavigateToList, breadcrumbTrail, breadcrumbItems }: CandidateResultsViewProps) {
+export default function CandidateResultsView({ interview, onBack, tabInUrl = true, currentIndex, totalCount, onPrev, onNext, onNavigateToList, breadcrumbTrail, breadcrumbItems }: CandidateResultsViewProps) {
   // Default to the combined "Evaluation Report" (key 'eval'). The old
   // 'overview' and 'eval_report' tabs are hidden (commented out below) — their
   // content is merged into the Eval tab. The render blocks are kept so any
   // deep-link / fallback still works.
-  const [activeTab, setActiveTab] = useState<TabKey>('eval');
+  // In the URL (`?resultTab=`), so a refresh reopens the same tab.
+  const [activeTab, setActiveTab] = useUrlTab<TabKey>('resultTab', TAB_KEYS, 'eval', tabInUrl);
   // View Resume — same in-place swap as the assessment candidate-result page
   // (CandidateResultDetails): the body is replaced by ResumeDetailView and the
   // breadcrumb gains a "Resume" crumb. `resumeDetail` is cached so reopening
