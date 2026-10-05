@@ -2,7 +2,7 @@
 
 import { useRef } from 'react';
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
-import { PlanFeatureKey, PLAN_FEATURE_METADATA } from '@/lib/types/planFeatures';
+import { PlanFeatureKey, PLAN_FEATURE_METADATA, PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import FeatureNotAvailablePage from './FeatureNotAvailablePage';
 import { Lock, ArrowRight, Loader2 } from 'lucide-react';
 import Link from 'next/link';
@@ -63,7 +63,7 @@ export default function FeatureGate({
   if (mode === 'section') {
     const meta = PLAN_FEATURE_METADATA[feature];
     return (
-      <div className="border border-gray-200 rounded-xl p-6 bg-gray-50">
+      <div className="border border-gray-200 rounded-xl p-6 bg-gray-50" title={PLAN_LOCKED_MESSAGE}>
         <div className="flex items-start gap-4">
           <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
             <Lock className="w-5 h-5 text-gray-400" />

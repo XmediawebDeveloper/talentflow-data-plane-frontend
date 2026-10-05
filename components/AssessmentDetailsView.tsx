@@ -1943,6 +1943,25 @@ export default function AssessmentDetailsView({
                 pencil from the reference, on the `onEdit` the route has always
                 passed. */}
             <div className="flex flex-wrap items-center gap-2 flex-shrink-0 self-start">
+              {/* On a draft the one live control on the page, placed ahead of
+                  Share: a labelled primary "Continue Editing", the AI Interview
+                  details page's draft button (`AIInterviewDetailsView`), in
+                  place of the pencil. */}
+              {onEdit && canCreateAssessments && draftLocked && (
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  onClick={onEdit}
+                  aria-label="Continue editing this draft assessment"
+                  title="Continue editing this draft assessment"
+                  icon={<Edit2 className="w-3.5 h-3.5 flex-shrink-0" />}
+                  className="gap-1.5 px-3 sm:px-4 min-h-[40px] text-xs sm:text-sm flex-shrink-0 whitespace-nowrap ring-2 ring-brand-blue/40 shadow-md shadow-brand-blue/20"
+                >
+                  <span className="hidden sm:inline">Continue Editing</span>
+                  <span className="sm:hidden">Edit</span>
+                </Button>
+              )}
               {onShare && canCreateAssessments && (() => {
         // Share is blocked for Archived (out of circulation) AND
         // once invites have been revoked (assessment is sealed —
@@ -2019,6 +2038,8 @@ export default function AssessmentDetailsView({
                    Assessments table's reason. */
                 const editLocked =
                   assessment.status === 'Active' && (assessment.invitations_count ?? 0) > 0;
+                /* A draft gets "Continue Editing" ahead of Share instead. */
+                if (draftLocked) return null;
                 return (
                 <Button
                   type="button"
@@ -2029,10 +2050,8 @@ export default function AssessmentDetailsView({
                   aria-label="Edit assessment"
                   title={editLocked
                     ? 'Cannot edit — this assessment has already been sent to candidates'
-                    : draftLocked ? 'Edit this draft assessment' : 'Edit assessment'}
-                  /* On a draft the one live control on the page: the same
-                     pencil, lifted with a brand ring so it reads as the way on. */
-                  className={`h-8 w-8 px-0 flex-shrink-0 ${draftLocked ? 'ring-2 ring-brand-blue/40 text-brand-blue shadow-md shadow-brand-blue/20' : ''}`}
+                    : 'Edit assessment'}
+                  className="h-8 w-8 px-0 flex-shrink-0"
                 >
                   <Edit2 className="w-4 h-4 text-menu-icon-edit" />
                 </Button>

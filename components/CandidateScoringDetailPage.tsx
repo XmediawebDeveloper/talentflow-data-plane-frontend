@@ -1,6 +1,7 @@
 'use client';
 
 import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, Briefcase, GraduationCap, Star, Calendar, Zap, FileText, AlertCircle, Download, Clock, Building2, ChevronLeft, ChevronRight, ChevronDown, Code, Languages, BarChart3, CheckSquare, MessageSquare, Minus, BookOpen, ThumbsUp, ThumbsDown, Loader2, Sparkles, UserPlus, History, File, HardDrive, User, X, Eye, Share2, Paperclip, Send } from 'lucide-react';
+import { MiniPagination } from '@/components/ui/mini-pagination';
 import DetailedScorecardTab from './DetailedScorecardTab';
 import ViewResumeButton from '@/components/ui/view-resume-button';
 import { Button } from '@/components/ui/button';
@@ -11,7 +12,8 @@ import InviteToAssessmentFlow from './InviteToAssessmentFlow';
 import type { Resume as ResumeRecord } from '@/lib/types/types';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
+import { usePlanLock } from '@/lib/hooks/usePlanFeature';
+import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { useJobInviteTargets } from '@/lib/hooks/useJobInviteTargets';
 import ConfirmationDialog from '@/components/ConfirmationDialog';
 import { toast } from 'sonner';
@@ -116,7 +118,13 @@ interface ScoredResume {
   lastUpdated?: string;
   uploadedBy?: string;
   versionCount?: number;
+  jobCode?: string;     // The job's display ID (JD-001), when the list row carries it
+  jobVersion?: number;  // The job's lineage version (v1, v2, ...)
 }
+
+const DETAIL_TABS = ['overview', 'scoretable', 'personalinfo', 'viewjd'] as const;
+type DetailTab = typeof DETAIL_TABS[number];
+const DETAIL_TAB_STORAGE_KEY = 'resumeScoring.candidateDetail.activeTab';
 
 interface CandidateScoringDetailPageProps {
   resume: ScoredResume;
@@ -129,6 +137,9 @@ interface CandidateScoringDetailPageProps {
   totalCount?: number;
   onPrev?: () => void;
   onNext?: () => void;
+  /** Steps through this candidate's other scored jobs (MiniPagination),
+   *  shown beside the Version badge. */
+  jobPager?: { page: number; total: number; onPageChange: (page: number) => void };
   /**
    * Breadcrumb crumbs for this view. Supply this when the component is rendered
    * as an in-page view (e.g. inside Resume Scoring) so the parent crumbs can use
@@ -165,9 +176,9 @@ function byNewestVersion(a: any, b: any): number {
   return bTime - aTime;
 }
 
-export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, onMinimize, currentIndex, totalCount, onPrev, onNext, breadcrumbItems, assessmentConfigured, aiInterviewConfigured }: CandidateScoringDetailPageProps) {
+export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, onMinimize, currentIndex, totalCount, onPrev, onNext, jobPager, breadcrumbItems, assessmentConfigured, aiInterviewConfigured }: CandidateScoringDetailPageProps) {
   const { isTenantAdmin, user, hasPermissionCode } = useAuth();
-  const { hasPlanFeature } = usePlanFeatures();
+  const { hasPlanFeature, isPlanLocked } = usePlanLock();
   const canExport = isTenantAdmin || (user?.permissions?.canExport ?? false);
   const canShareResume = isTenantAdmin || hasPermissionCode('my_resumes:share');
 
@@ -216,7 +227,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   // (see ScoredResumesTable.tsx's canCreateAssessments), which this page had
   // missed: previously, disabling Resume Scoring's "Invite" permission had
   // no effect on this button.
-  const mayInviteAssessment = (isTenantAdmin || hasPermissionCode('scoring:invite')) && hasPlanFeature('assessment');
+  const mayInviteAssessment = isTenantAdmin || hasPermissionCode('scoring:invite');
   // Same scoring:invite gate as Assessment above — this page lives on the
   // Resume Scoring surface, so disabling that module's "Invite" permission
   // should turn off BOTH invite targets reachable from it, not just
@@ -226,8 +237,12 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   // endpoints actually enforce server-side.
   const mayInviteAIInterview =
     (isTenantAdmin || hasPermissionCode('scoring:invite')) &&
-    hasPermission('canInviteAIInterviews') && hasPlanFeature('ai_interview');
+    hasPermission('canInviteAIInterviews');
   const canInvite = mayInviteAssessment || mayInviteAIInterview;
+  // Plan gates DISABLE the entry (hover explains), they never hide it:
+  // permission decides what is shown, the plan only whether it is clickable.
+  const assessmentPlanLocked = isPlanLocked('assessment');
+  const aiInterviewPlanLocked = isPlanLocked('ai_interview');
 
   /* What this JD can actually invite to. Job Details hands both flags down —
      its Assessment / AI Interview sections read the same two — so this page and
@@ -238,16 +253,20 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   const inviteTargets = useJobInviteTargets(jobId, {
     assessmentConfigured,
     aiInterviewConfigured,
-    assessmentEnabled: mayInviteAssessment,
-    aiInterviewEnabled: mayInviteAIInterview,
+    // Never look up targets for a feature outside the plan.
+    assessmentEnabled: mayInviteAssessment && hasPlanFeature('assessment'),
+    aiInterviewEnabled: mayInviteAIInterview && hasPlanFeature('ai_interview'),
   });
   // With no JD to check (the global scoring view's cross-job rows) there is
   // nothing to gate on, so the entries keep their permission-only behaviour and
   // the existing handlers report what's missing after the click.
   const canInviteAssessment =
-    mayInviteAssessment && (!inviteTargets.known || inviteTargets.assessmentConfigured);
+    mayInviteAssessment && !assessmentPlanLocked && (!inviteTargets.known || inviteTargets.assessmentConfigured);
   const canInviteAIInterview =
-    mayInviteAIInterview && (!inviteTargets.known || inviteTargets.aiInterviewConfigured);
+    mayInviteAIInterview && !aiInterviewPlanLocked && (!inviteTargets.known || inviteTargets.aiInterviewConfigured);
+  // Every option the user is permitted to pick is outside the plan.
+  const invitePlanLocked = canInvite &&
+    (!mayInviteAssessment || assessmentPlanLocked) && (!mayInviteAIInterview || aiInterviewPlanLocked);
   // Neither target exists → the Invite button itself is disabled rather than
   // opening a menu whose every entry dead-ends in "create one first".
   const inviteDisabled = !canInviteAssessment && !canInviteAIInterview;
@@ -271,7 +290,19 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   const [showAssessmentPicker, setShowAssessmentPicker] = useState(false);
   const [loadingPickerAssessments, setLoadingPickerAssessments] = useState(false);
   const [showAIInviteFlow, setShowAIInviteFlow] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'scoretable' | 'personalinfo' | 'viewjd'>('overview');
+  /* The open tab survives a refresh (sessionStorage, this tab only). Read in
+     the initializer: this view only mounts client-side, after the scores load. */
+  const [activeTab, setActiveTabState] = useState<DetailTab>(() => {
+    try {
+      const saved = sessionStorage.getItem(DETAIL_TAB_STORAGE_KEY);
+      if (saved && (DETAIL_TABS as readonly string[]).includes(saved)) return saved as DetailTab;
+    } catch { /* ignore */ }
+    return 'overview';
+  });
+  const setActiveTab = (tab: DetailTab) => {
+    setActiveTabState(tab);
+    try { sessionStorage.setItem(DETAIL_TAB_STORAGE_KEY, tab); } catch { /* ignore */ }
+  };
   // The tabs + panels block, so opening the JD from the job title can bring the
   // tab strip to the top rather than jumping the whole page back to its header.
   const tabsSectionRef = useRef<HTMLDivElement>(null);
@@ -1211,6 +1242,14 @@ Best regards`);
                     Version {resume.resumeVersion}
                   </span>
                 )}
+                {jobPager && jobPager.total > 1 && (
+                  <MiniPagination
+                    page={jobPager.page}
+                    totalPages={jobPager.total}
+                    onPageChange={jobPager.onPageChange}
+                    aria-label="Scored jobs"
+                  />
+                )}
               </div>
             </div>
           </div>
@@ -1266,7 +1305,9 @@ Best regards`);
                     inviteDisabled
                       ? (!canInvite
                           ? 'You do not have permission to invite candidates'
-                          : 'No published assessment or AI interview for this job yet')
+                          : invitePlanLocked
+                            ? PLAN_LOCKED_MESSAGE
+                            : 'No published assessment or AI interview for this job yet')
                       : undefined
                   }
                   aria-haspopup="menu"
@@ -1292,7 +1333,7 @@ Best regards`);
                         role="menuitem"
                         onClick={handleInviteForAssessment}
                         disabled={!canInviteAssessment}
-                        title={!canInviteAssessment ? 'No published assessment for this job yet' : undefined}
+                        title={assessmentPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAssessment ? 'No published assessment for this job yet' : undefined}
                         className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-brand-blue/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                       >
                         <span className="mt-0.5 w-8 h-8 rounded-lg bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
@@ -1308,7 +1349,7 @@ Best regards`);
                         role="menuitem"
                         onClick={handleInviteForAIInterview}
                         disabled={!canInviteAIInterview}
-                        title={!canInviteAIInterview ? 'No published AI interview for this job yet' : undefined}
+                        title={aiInterviewPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAIInterview ? 'No published AI interview for this job yet' : undefined}
                         className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-brand-blue/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                       >
                         <span className="mt-0.5 w-8 h-8 rounded-lg bg-brand-cyan/10 flex items-center justify-center flex-shrink-0">
@@ -1367,6 +1408,15 @@ Best regards`);
                   reading a score reach for the JD from here constantly. */}
               <span className="text-xs sm:text-sm font-normal text-gray-700 truncate">
                 <span className="font-bold text-gray-800">Job Title :</span>{' '}
+                {/* Read as one: "EDG 267 High Court Judge v3.0" - the job's
+                    ID, its title, its version, the ID and version in the JD
+                    page header's own chips (`JobDetailView`). Both come from
+                    the list row, else from the JD this page already loaded. */}
+                {(resume.jobCode || jdDetails?.job_id) && (
+                  <span className="inline-flex items-center px-2 py-0.5 mr-1.5 bg-blue-600 text-white rounded-md text-xs font-semibold font-mono tracking-wide align-middle whitespace-nowrap">
+                    {resume.jobCode || jdDetails?.job_id}
+                  </span>
+                )}
                 <button
                   type="button"
                   onClick={handleOpenJobDescription}
@@ -1375,6 +1425,11 @@ Best regards`);
                 >
                   {jobTitle}
                 </button>
+                {(resume.jobVersion ?? jdDetails?.version_number) != null && (
+                  <span className="inline-flex items-center px-2.5 py-0.5 ml-1.5 bg-purple-600 text-white rounded-full text-xs font-medium align-middle whitespace-nowrap">
+                    v{resume.jobVersion ?? jdDetails?.version_number}.0
+                  </span>
+                )}
               </span>
             </div>
             <div className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">
@@ -1414,7 +1469,7 @@ Best regards`);
             ].map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
+                onClick={() => setActiveTab(tab.id as DetailTab)}
                 className={`px-3 sm:px-6 py-2.5 sm:py-3 text-xs sm:text-sm font-medium transition-colors rounded-t-lg whitespace-nowrap ${
                   activeTab === tab.id
                     ? 'text-gray-800 bg-gray-50 border-b-2 border-gray-600'

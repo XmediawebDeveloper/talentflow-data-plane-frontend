@@ -10,7 +10,7 @@ import { useQuota } from '@/contexts/QuotaContext';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useRazorpay } from '@/lib/hooks/useRazorpay';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
-import { PlanFeatureKey } from '@/lib/types/planFeatures';
+import { PlanFeatureKey, PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import api from '@/lib/services/api';
 import { useScrollRestoration } from '@/lib/hooks/useListViewPersistence';
@@ -193,7 +193,28 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
   const canExportUsage = authHasPermission('canExportUsage');
   const canPurchaseAddons = canUpgradePlan;
   const { openCheckout, isProcessing: razorpayProcessing } = useRazorpay();
-  const { hasPlanFeature } = usePlanFeatures();
+  const { loading: planFeaturesLoading } = usePlanFeatures();
+
+  // "Is this feature in the PLAN at all?" — read from the raw is_enabled flags,
+  // NOT hasPlanFeature(), which also turns false when the feature's quota is
+  // EXCEEDED. Those two must not be confused here: an exhausted feature still
+  // needs its quota card (showing "Exceeded") and its add-on (to top up).
+  // Not-in-plan items stay visible but muted/disabled with PLAN_LOCKED_MESSAGE.
+  const PLAN_KEY_ALIASES: Record<string, string> = { assessments: 'assessment', ai_interviews: 'ai_interview' };
+  const isNotInPlan = (key: PlanFeatureKey): boolean => {
+    if (planFeaturesLoading || !contextQuotaData?.features) return false;
+    return !contextQuotaData.features.some(
+      (f) => f.is_enabled && (PLAN_KEY_ALIASES[f.feature_key] ?? f.feature_key) === key,
+    );
+  };
+  const addonFeatureKey = (addon: any): PlanFeatureKey | null => {
+    const name = (addon.name || addon.addon_name || '').toLowerCase();
+    if ((name.includes('resume') && name.includes('upload')) || name.includes('resume storage')) return 'resume_upload';
+    if ((name.includes('resume') && name.includes('scor')) || name.includes('resume scoring')) return 'resume_scoring';
+    if (name.includes('assessment')) return 'assessment';
+    if (name.includes('ai') || name.includes('interview')) return 'ai_interview';
+    return null; // seats, jobs and other generic addons
+  };
 
   // Map quota types to plan features for gating
   const quotaFeatureMap: Record<string, PlanFeatureKey> = {
@@ -1049,9 +1070,12 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                       {quotaSummary.quotas
                         ?.filter((q: QuotaInfo) => {
                           if (!(q.is_low || q.is_exhausted || q.is_exceeded)) return false;
-                          // Hide low quota warnings for features not in the plan
+                          // No low-quota warning for features not in the plan (the
+                          // quota card already says so). Uses isNotInPlan, not
+                          // hasPlanFeature — the latter is false for EXCEEDED quotas,
+                          // which are exactly the ones this banner must list.
                           const featureKey = quotaFeatureMap[q.quota_type];
-                          if (featureKey && !hasPlanFeature(featureKey)) return false;
+                          if (featureKey && isNotInPlan(featureKey)) return false;
                           return true;
                         })
                         .map((quota: QuotaInfo) => {
@@ -1132,17 +1156,17 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 mb-3">
               {quotaSummary.quotas?.filter((quota: QuotaInfo) => {
                 if (quota.quota_type === 'storage_gb') return false;
-                // Gate quota cards by plan feature — but always show for expired/inactive plans (historical usage view)
-                const isExpiredOrInactive = ['expired', 'inactive', 'suspended'].includes(
-                  subscriptionSummary?.status?.toLowerCase() || ''
-                );
-                if (!isExpiredOrInactive) {
-                  const featureKey = quotaFeatureMap[quota.quota_type];
-                  if (featureKey && !hasPlanFeature(featureKey)) return false;
-                }
+                // Every quota card is shown; one whose feature is not in the plan
+                // renders muted with the plan-locked hover (see notInPlan below).
                 return true;
               }).map((quota: QuotaInfo) => {
                 const isUnlimited = quota.limit === -1 || quota.remaining === -1;
+                // Expired/inactive plans keep the normal card (historical usage view).
+                const isExpiredOrInactive = ['expired', 'inactive', 'suspended'].includes(
+                  subscriptionSummary?.status?.toLowerCase() || ''
+                );
+                const quotaFeatureKey = quotaFeatureMap[quota.quota_type];
+                const notInPlan = !isExpiredOrInactive && !!quotaFeatureKey && isNotInPlan(quotaFeatureKey);
 
                 // Icon mapping for quota types
                 const quotaIcons: Record<string, React.ReactNode> = {
@@ -1165,6 +1189,28 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                   : quota.is_low
                   ? { label: 'Low', cls: 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-gray-200 dark:ring-slate-700' }
                   : null;
+
+                if (notInPlan) {
+                  return (
+                    <div
+                      key={quota.quota_type}
+                      aria-disabled="true"
+                      title={PLAN_LOCKED_MESSAGE}
+                      className="flex flex-col rounded-xl border border-gray-200 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/40 p-3 opacity-70 cursor-not-allowed"
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ring-1 bg-gray-100 dark:bg-slate-800 text-gray-400 ring-gray-200 dark:ring-slate-700">
+                          {quotaIcons[quota.quota_type] || <Zap className="w-4 h-4" />}
+                        </div>
+                        <span className="text-xs font-semibold text-gray-400 dark:text-slate-500 truncate flex-1 min-w-0">{quota.name}</span>
+                        <span className="inline-flex items-center text-2xs font-semibold px-1.5 py-0.5 rounded-full ring-1 whitespace-nowrap bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-400 ring-gray-200 dark:ring-slate-700">
+                          Not in plan
+                        </span>
+                      </div>
+                      <p className="text-2xs font-medium text-gray-400 dark:text-slate-500">{PLAN_LOCKED_MESSAGE}</p>
+                    </div>
+                  );
+                }
 
                 return (
                   <div
@@ -1365,16 +1411,9 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
             {!addonsLoading && addons.length > 0 && (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                 {/* Reorder addons: Extra Max Jobs before Extra Max Seats, filter by plan features */}
+                {/* Add-ons for features not in the plan stay listed but disabled
+                    (addonNotInPlan below) instead of being dropped. */}
                 {[...addons]
-                  .filter((addon) => {
-                    // Hide addons for features not in the current plan
-                    const name = (addon.name || addon.addon_name || '').toLowerCase();
-                    if ((name.includes('resume') && name.includes('upload')) || name.includes('resume storage')) return hasPlanFeature('resume_upload');
-                    if ((name.includes('resume') && name.includes('scor')) || name.includes('resume scoring')) return hasPlanFeature('resume_scoring');
-                    if (name.includes('assessment')) return hasPlanFeature('assessment');
-                    if (name.includes('ai') || name.includes('interview')) return hasPlanFeature('ai_interview');
-                    return true; // Always show seats, jobs, and other generic addons
-                  })
                   .sort((a, b) => {
                     const nameA = (a.name || a.addon_name || '').toLowerCase();
                     const nameB = (b.name || b.addon_name || '').toLowerCase();
@@ -1399,10 +1438,18 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                     return <Zap className="w-4 h-4" />;
                   };
 
+                  const addonKey = addonFeatureKey(addon);
+                  const addonNotInPlan = !!addonKey && isNotInPlan(addonKey);
+
                   return (
                     <div
                       key={addon.id}
-                      className="group flex flex-col rounded-xl border border-gray-200 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-3 shadow-sm transition-all hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10"
+                      title={addonNotInPlan ? PLAN_LOCKED_MESSAGE : undefined}
+                      className={`group flex flex-col rounded-xl border border-gray-200 dark:border-slate-700/60 p-3 shadow-sm transition-all ${
+                        addonNotInPlan
+                          ? 'bg-gray-50 dark:bg-slate-800/40 opacity-70'
+                          : 'bg-white dark:bg-slate-900 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10'
+                      }`}
                     >
                       {/* Header: icon + name */}
                       <div className="flex items-center gap-2 mb-2">
@@ -1434,15 +1481,17 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                         variant="primary"
                         size="sm"
                         onClick={() => handleBuyAddon(addon)}
-                        disabled={isAddonPurchaseBlocked}
-                        title={isAddonPurchaseBlocked ? addonBlockedMessage : ""}
+                        disabled={isAddonPurchaseBlocked || addonNotInPlan}
+                        title={addonNotInPlan ? PLAN_LOCKED_MESSAGE : isAddonPurchaseBlocked ? addonBlockedMessage : ""}
                         className="mt-auto w-full"
                       >
                         <ShoppingCart className="w-3.5 h-3.5" />
-                        {isAddonPurchaseBlocked
+                        {addonNotInPlan
+                          ? 'Not in plan'
+                          : isAddonPurchaseBlocked
                           ? (subscriptionSummary?.status?.toLowerCase() === 'expired' ? 'Renew Plan' : 'Upgrade Plan')
                           : 'Purchase Now'}
-                        {!isAddonPurchaseBlocked && <ChevronRight className="w-3.5 h-3.5" />}
+                        {!isAddonPurchaseBlocked && !addonNotInPlan && <ChevronRight className="w-3.5 h-3.5" />}
                       </Button>
                     </div>
                   );

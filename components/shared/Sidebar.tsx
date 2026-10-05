@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { User, Tenant } from '@/lib/types/tenant';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
-import { buildMenuSections, type NavSection } from '@/lib/navigation/menuSections';
+import { buildMenuSections, DISABLED_REASON_MESSAGE, type NavSection } from '@/lib/navigation/menuSections';
 
 interface SidebarProps {
   user?: User;
@@ -229,9 +229,21 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
                   }
                 }
 
-                // Plan feature gate: hide item completely if feature is not in plan
+                // Plan feature gate: keep the item visible but disabled, with a
+                // hover message — hiding it made it flash in and vanish once
+                // plan features finished loading.
                 if (item.planFeature && !planFeaturesLoading && !hasPlanFeature(item.planFeature)) {
-                  return null;
+                  return (
+                    <div
+                      key={item.id}
+                      aria-disabled="true"
+                      className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-400 cursor-not-allowed opacity-50"
+                      title={DISABLED_REASON_MESSAGE.plan}
+                    >
+                      <item.icon className="w-4 h-4 flex-shrink-0 text-gray-300" />
+                      <span>{item.label}</span>
+                    </div>
+                  );
                 }
 
                 // Lock menus if subscriptionExpired is true OR undefined (loading/unknown)

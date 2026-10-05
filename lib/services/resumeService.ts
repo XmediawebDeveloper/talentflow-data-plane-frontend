@@ -4,6 +4,90 @@
 
 import api, { handleApiError, dispatchUnitsConsumed } from './api';
 
+/** GET /resumes/{id}/activity — see app/services/resume_activity.py. */
+export interface ResumeActivitySection<T> {
+  allowed: boolean;
+  items: T[];
+  error?: boolean;
+}
+
+export interface ResumeActivityScore {
+  id: string;
+  jd_id: string;
+  jd_title: string | null;
+  jd_job_id: string | null;
+  jd_status: string | null;
+  resume_id: string;
+  resume_version: number;
+  overall_score: number;
+  overall_rating_10: number | null;
+  match_status: string;
+  run_count: number;
+  scored_by_name: string;
+  created_at: string | null;
+}
+
+export interface ResumeActivityTalentMatch {
+  id: string;
+  session_id: string;
+  jd_id: string | null;
+  jd_title: string | null;
+  jd_job_id: string | null;
+  resume_id: string;
+  resume_version: number;
+  final_score: number | null;
+  status: string;
+  run_by_name: string;
+  created_at: string | null;
+}
+
+export interface ResumeActivityAssessment {
+  id: string;
+  assessment_id: string | null;
+  assessment_title: string | null;
+  assessment_deleted: boolean;
+  attempt_id: string | null;
+  candidate_display_id: string | null;
+  resume_version: number | null;
+  linked_by: 'resume' | 'email';
+  status: string;
+  score: number | null;
+  passed: boolean | null;
+  hiring_recommendation: string | null;
+  integrity_status: string | null;
+  invited_by_name: string | null;
+  invited_at: string | null;
+  completed_at: string | null;
+  expires_at: string | null;
+}
+
+export interface ResumeActivityInterview {
+  id: string;
+  config_id: string;
+  config_display_id: string | null;
+  title: string | null;
+  display_id: string | null;
+  resume_version: number | null;
+  linked_by: 'resume' | 'email';
+  status: string;
+  ai_evaluation: Record<string, any>;
+  risk_level: string | null;
+  invited_by_name: string | null;
+  invited_at: string | null;
+  completed_at: string | null;
+  expires_at: string | null;
+}
+
+export interface ResumeActivity {
+  resume_id: string;
+  candidate_email: string | null;
+  version_count: number;
+  scores: ResumeActivitySection<ResumeActivityScore>;
+  talent_matches: ResumeActivitySection<ResumeActivityTalentMatch>;
+  assessments: ResumeActivitySection<ResumeActivityAssessment>;
+  interviews: ResumeActivitySection<ResumeActivityInterview>;
+}
+
 export interface Resume {
   // NOTE: tenant_id / uploaded_by / file_name / version / version_count /
   // certifications are optional because this interface doubles as the type for the
@@ -604,6 +688,20 @@ export const resumeService = {
   async getVersions(resumeId: string) {
     try {
       const response = await api.get(`/resumes/${resumeId}/versions`);
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Candidate Activity for the Resume View page: scores, AI Talent Match,
+   * AI Assessment and AI Interview invites across all the candidate's
+   * versions. Sections the user may not read come back `allowed: false`.
+   */
+  async getActivity(resumeId: string): Promise<ResumeActivity> {
+    try {
+      const response = await api.get<ResumeActivity>(`/resumes/${resumeId}/activity`);
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));

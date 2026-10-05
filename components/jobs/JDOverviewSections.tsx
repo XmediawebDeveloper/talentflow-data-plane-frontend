@@ -4,11 +4,12 @@ import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
-import { ChevronRight, Eye, CheckCircle, FileText } from 'lucide-react';
+import { ChevronRight, Eye, CheckCircle, FileText, Lock } from 'lucide-react';
 import type { JDResponse } from '@/lib/services/jdService';
 import { formatJobExperienceText } from '@/lib/utils/jobExperience';
 import { criterionScoringLabel, requirementBadge } from '@/lib/utils/scoringCriteria';
-import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
+import { usePlanLock } from '@/lib/hooks/usePlanFeature';
+import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 
 /**
  * ONE JD's Overview sections, exactly as the Job Details page lays them out.
@@ -106,7 +107,8 @@ export default function JDOverviewSections({
   jd,
   showScoringDetail = true,
 }: JDOverviewSectionsProps) {
-  const { hasPlanFeature } = usePlanFeatures();
+  const { isPlanLocked } = usePlanLock();
+  const assessmentLocked = isPlanLocked('assessment');
   /* Collapsed on open, as it is on the Job Details page — the summary is the
      structured cross-check, read after the description rather than with it. */
   const [showExtractedSummary, setShowExtractedSummary] = useState(false);
@@ -173,9 +175,10 @@ export default function JDOverviewSections({
       )}
 
       {/* Internal Recruiter Notes & Assessment Guidance — side by side, as on
-          the page. One column below `sm`, and one column throughout where the
-          plan has no assessment feature and the pair is a single card. */}
-      <div className={`grid grid-cols-1 ${hasPlanFeature('assessment') ? 'sm:grid-cols-2' : ''} gap-4`}>
+          the page. One column below `sm`. The guidance card always renders —
+          greyed with the plan message when the plan lacks assessments — so the
+          layout never shifts once plan features load. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className={`${CARD} p-4`}>
           <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 mb-3">Internal Recruiter Notes</h3>
           <div className="text-sm text-gray-600 dark:text-slate-400 space-y-2">
@@ -191,7 +194,18 @@ export default function JDOverviewSections({
           </div>
         </div>
 
-        {hasPlanFeature('assessment') && (
+        {assessmentLocked ? (
+          <div
+            aria-disabled="true"
+            title={PLAN_LOCKED_MESSAGE}
+            className={`${CARD} p-4 cursor-not-allowed opacity-60`}
+          >
+            <h3 className="flex items-center gap-1.5 text-sm font-medium text-gray-400 dark:text-slate-500 mb-3">
+              Assessment Guidance <Lock className="w-3 h-3" />
+            </h3>
+            <p className="text-sm text-gray-400 dark:text-slate-500 italic">{PLAN_LOCKED_MESSAGE}</p>
+          </div>
+        ) : (
           <div className={`${CARD} p-4`}>
             <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 mb-3">Assessment Guidance</h3>
             <div className="text-sm text-gray-600 dark:text-slate-400">

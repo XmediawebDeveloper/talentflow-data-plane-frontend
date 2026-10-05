@@ -19,7 +19,7 @@ import {
 // Drawn in-house because no lucide glyph carries these two meanings — see the
 // file for the reasoning. Both are lucide-shaped, so they slot in unchanged.
 import { ResumeScoringIcon, TalentMatchIcon } from '@/components/icons/nav-icons';
-import type { PlanFeatureKey } from '@/lib/types/planFeatures';
+import { PLAN_LOCKED_MESSAGE, type PlanFeatureKey } from '@/lib/types/planFeatures';
 
 export interface NavItem {
   id: string;
@@ -31,13 +31,24 @@ export interface NavItem {
   adminOnly?: boolean;
   internalUserOnly?: boolean;    // Show only to non-admin users (for internal help desk)
   planFeature?: PlanFeatureKey;  // Plan-level feature gate
-  /** Set by filterMenuSections when the item fails its permission check.
-   *  The tile stays in the list (visible) but the renderer must show it as
-   *  disabled/non-clickable instead of a working link — permission is not
-   *  the same kind of gate as adminOnly/internalUserOnly/planFeature below,
-   *  which are audience/plan-tier gates and stay hard hides. */
+  /** Set by filterMenuSections when the item fails its permission or plan
+   *  check. The tile stays in the list (visible) but the renderer must show it
+   *  as disabled/non-clickable instead of a working link, with
+   *  `disabledReason` picking the hover message. adminOnly/internalUserOnly
+   *  are audience gates and stay hard hides. */
   disabled?: boolean;
+  disabledReason?: 'permission' | 'plan';
+  /** Plan-gated item whose plan status is not known yet (first load, nothing
+   *  remembered). Renderers show a neutral, non-clickable placeholder — never
+   *  a working link that might grey out a moment later. */
+  pending?: boolean;
 }
+
+/** Hover text for a disabled menu item, keyed by why it is disabled. */
+export const DISABLED_REASON_MESSAGE: Record<'permission' | 'plan', string> = {
+  permission: 'You do not have permission to access this',
+  plan: PLAN_LOCKED_MESSAGE,
+};
 
 export interface NavSection {
   id: string;
@@ -172,15 +183,19 @@ interface FilterOptions {
 }
 
 /**
- * Apply admin / audience / plan-feature filters (hard hides) and permission
- * filters (soft: item stays, flagged `disabled`), then drop empty sections.
- * Mirrors the filtering used by the sidebar render loop.
+ * Apply admin / audience filters (hard hides) and permission + plan filters
+ * (soft: item stays, flagged `disabled` with a `disabledReason`), then drop
+ * empty sections. Mirrors the filtering used by the sidebar render loop.
  *
- * Permission gating deliberately does NOT remove the item — a module whose
- * permission is off should render visible-but-disabled, the same rule
- * applied to in-page action icons. adminOnly/internalUserOnly/planFeature
- * are a different kind of gate (audience targeting, plan-tier availability),
- * not an owner-togglable permission, so those stay hard hides.
+ * Permission and plan gating deliberately do NOT remove the item — a module
+ * the user can't open renders visible-but-disabled with a hover message, the
+ * same rule applied to in-page action icons. Hiding plan-gated items used to
+ * make them flash in and vanish once /quota-status resolved; while plan
+ * features are still loading (first ever load — later loads use the
+ * remembered plan, see PlanFeaturesProvider) the item is flagged `pending`
+ * so renderers show a neutral placeholder, never a clickable link that greys
+ * out a moment later.
+ * adminOnly/internalUserOnly are audience targeting and stay hard hides.
  */
 export function filterMenuSections(sections: NavSection[], opts: FilterOptions): NavSection[] {
   const { isTenantAdmin, hasPermission, hasAnyPermission, hasPlanFeature, planFeaturesLoading } = opts;
@@ -190,16 +205,21 @@ export function filterMenuSections(sections: NavSection[], opts: FilterOptions):
         .filter(item => {
           if (item.adminOnly && !isTenantAdmin) return false;
           if (item.internalUserOnly && isTenantAdmin) return false;
-          // Hide plan-gated items once we know the plan doesn't include the feature.
-          if (item.planFeature && !planFeaturesLoading && !hasPlanFeature(item.planFeature)) return false;
           return true;
         })
-        .map(item => {
+        .map((item): NavItem => {
+          // Plan first: no permission grant can unlock a module the plan lacks.
+          if (item.planFeature && planFeaturesLoading) {
+            return { ...item, pending: true };
+          }
+          if (item.planFeature && !hasPlanFeature(item.planFeature)) {
+            return { ...item, disabled: true, disabledReason: 'plan' };
+          }
           const lacksPermission =
             item.permissions && item.permissions.length > 0
               ? !hasAnyPermission(item.permissions)
               : !!(item.permission && !hasPermission(item.permission));
-          return lacksPermission ? { ...item, disabled: true } : item;
+          return lacksPermission ? { ...item, disabled: true, disabledReason: 'permission' } : item;
         });
 
       return { ...section, items };

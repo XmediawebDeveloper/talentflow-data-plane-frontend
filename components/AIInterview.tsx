@@ -16,6 +16,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { DateField } from '@/components/ui/date-field';
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
+import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { useQuota } from '@/contexts/QuotaContext';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse, AIInterviewStatsResponse, AIInterviewSettingsResponse, AIInterviewAuditActivity, AIInterviewAuditTrailResponse } from '@/lib/services/aiInterviewService';
@@ -164,7 +165,7 @@ export default function AIInterview() {
   const canDeleteAIInterviews = isTenantAdmin || !!user?.permissions?.canDeleteAIInterviews;
   // HR Question Bank is reached via a quick link here (moved out of the sidebar)
   const canAccessHRQuestionBank = isTenantAdmin || !!(user?.permissions?.canViewHRQuestionBank || user?.permissions?.canCreateHRQuestionBank || user?.permissions?.canUpdateHRQuestionBank || user?.permissions?.canDeleteHRQuestionBank);
-  const { available: aiInterviewAvailable } = usePlanFeature('ai_interview');
+  const { available: aiInterviewAvailable, loading: planFeaturesLoading } = usePlanFeature('ai_interview');
   const { quotaData } = useQuota();
 
   const [activeTab, setActiveTab] = useState<TabKey>('all');
@@ -990,6 +991,8 @@ export default function AIInterview() {
       // Invitation Status tab — its page, page size and filters, so coming
       // back from a candidate or job lands on the same page, not page 1.
       inviteStatusPage, inviteStatusItemsPerPage, inviteStatusFilters, inviteStatusColumnFilters,
+      // Settings tab's General / Proctoring sub-tab.
+      settingsSubTab,
       // The cards<->list drill-in. Without it the tab, filters and page were
       // all restored but pageView fell back to 'cards', so returning from an
       // interview page showed only the stat tiles — the list looked gone.
@@ -1041,6 +1044,7 @@ export default function AIInterview() {
       if (s.inviteStatusColumnFilters && typeof s.inviteStatusColumnFilters === 'object') setInviteStatusColumnFilters({ ...EMPTY_INVITE_COLUMN_FILTERS, ...s.inviteStatusColumnFilters });
       if (typeof s.inviteStatusItemsPerPage === 'number') setInviteStatusItemsPerPage(s.inviteStatusItemsPerPage);
       if (typeof s.inviteStatusPage === 'number') setInviteStatusPage(s.inviteStatusPage);
+      if (s.settingsSubTab === 'general' || s.settingsSubTab === 'proctoring') setSettingsSubTab(s.settingsSubTab);
     },
   );
 
@@ -1221,6 +1225,37 @@ export default function AIInterview() {
     setOpenMenuId(null);
   };
 
+  /* View Details from Invitation Status / Track Invites: the candidate result
+     ROUTE, same as the Candidate Results tab, so a refresh (or a shared link)
+     reopens it — the in-page view below lived only in memory and a refresh
+     dropped back to this list. `rows` seeds the route's Previous / Next.
+     `origin` names the tab to come back to; without one, Back goes to the
+     interview's own Results page. */
+  const openCandidateResultRoute = (
+    inv: { id: string; _config_id?: string; config_id?: string },
+    rows: { id: string; _config_id?: string; config_id?: string }[],
+    origin?: 'invitation-status',
+  ) => {
+    const configOf = (r: { _config_id?: string; config_id?: string }) =>
+      r._config_id || r.config_id || viewInvitationsConfig?.id;
+    const configId = configOf(inv);
+    if (!configId) {
+      void handleViewCandidateDetail(inv.id);
+      return;
+    }
+    try {
+      sessionStorage.setItem('aiInterviewResultNavList', JSON.stringify(rows.map(r => ({ id: r.id, configId: configOf(r) }))));
+    } catch { /* ignore storage failures */ }
+    if (origin) {
+      // Browser Back from the result lands on this tab.
+      try { window.history.replaceState(window.history.state, '', `/recruitment/ai-interviews?tab=${origin}`); } catch { /* ignore */ }
+    }
+    setViewInvitationsConfig(null);
+    router.push(
+      `/recruitment/ai-interviews/${configId}/results/details?session_id=${inv.id}${origin ? `&from=${origin}` : ''}`
+    );
+  };
+
   const handleViewCandidateDetail = async (candidateId: string) => {
     setCandidateDetailLoading(true);
     setViewInvitationsConfig(null);
@@ -1365,7 +1400,9 @@ export default function AIInterview() {
       return;
     }
 
-    if (loading) return;
+    // Wait for plan features too: `available` is false while they load, which
+    // used to reject a valid deep-link action as "not enabled".
+    if (loading || planFeaturesLoading) return;
 
     handledQuickActionRef.current = actionKey;
 
@@ -1374,7 +1411,7 @@ export default function AIInterview() {
     };
 
     if (!aiInterviewAvailable) {
-      toast.error('AI Interviews module is not enabled for your organization.');
+      toast.error(PLAN_LOCKED_MESSAGE);
       clearQuickActionUrl();
       return;
     }
@@ -1459,6 +1496,7 @@ export default function AIInterview() {
     configs,
     archivedConfigs,
     aiInterviewAvailable,
+    planFeaturesLoading,
     canCreateAIInterviews,
     canUpdateAIInterviews,
     canShareAIInterviews,
@@ -1476,9 +1514,16 @@ export default function AIInterview() {
   // Back return there when the result was opened from that tab.
   useEffect(() => {
     const tab = searchParams.get('tab');
-    if (tab !== 'all-interviews' && tab !== 'candidate-results') return;
+    if (tab !== 'all-interviews' && tab !== 'candidate-results' && tab !== 'invitation-status') return;
     setPageView('list');
     setActiveTab(tab);
+    /* Consumed: drop `?tab=` so it can't pin this tab — otherwise a refresh
+       after switching to another tab snapped back to the linked one. The
+       saved list state carries the tab from here on. */
+    const params = new URLSearchParams(window.location.search);
+    params.delete('tab');
+    const qs = params.toString();
+    window.history.replaceState(window.history.state, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
@@ -2136,16 +2181,6 @@ export default function AIInterview() {
     await loadAllInviteStatuses();
   };
 
-  /** The heading shown above the search/filter bar for each config-list tab —
-   *  same spot and treatment as Resume Scoring's "All Resumes (299)". */
-  const CONFIG_LIST_TAB_TITLES: Record<string, string> = {
-    all: 'Total Jobs',
-    published: 'Active Interviews',
-    draft: 'Draft Interviews',
-    archived: 'Archived Interviews',
-    completed: 'Completed Interviews',
-  };
-
   /** The three tabs the Grouped/Ungrouped toggle applies to — each a single,
    *  unambiguous status, unlike Total Jobs (every status) or Completed. */
   const isStatusTab = activeTab === 'published' || activeTab === 'draft' || activeTab === 'archived';
@@ -2197,6 +2232,7 @@ export default function AIInterview() {
     return (
       <CandidateResultsView
         interview={candidateDetailFromModal}
+        tabInUrl={false}
         onBack={() => setCandidateDetailFromModal(null)}
         onNavigateToList={() => setCandidateDetailFromModal(null)}
         currentIndex={invIdx >= 0 ? invIdx : undefined}
@@ -2498,9 +2534,6 @@ export default function AIInterview() {
             fighting over one spot. */}
         {isConfigListTab && !showUngroupedList && (
           <div className="mb-4">
-            <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight mb-3">
-              {CONFIG_LIST_TAB_TITLES[activeTab] ?? 'Jobs'} ({collapsedConfigs.length})
-            </h2>
             <ListToolbar
               searchValue={searchQuery}
               searchDebounceMs={0}
@@ -2820,7 +2853,6 @@ export default function AIInterview() {
               sortActionSlot={sortActionSlotEl}
               refreshSignal={refreshSignal}
               fixedStatus={activeTab as 'published' | 'draft' | 'archived'}
-              titleLabel={CONFIG_LIST_TAB_TITLES[activeTab]}
               renderRowActions={renderInterviewVersionActions}
             />
           )}
@@ -3461,9 +3493,6 @@ export default function AIInterview() {
                    sat below the pills. */
                 const inviteStatusToolbar = (
                   <>
-                    <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight mb-3">
-                      Invitation Status ({totalInvites})
-                    </h2>
                     <ListToolbar
                       searchValue={inviteStatusFilters.search}
                       onSearchChange={(value) => updateInviteStatusFilters({ search: value })}
@@ -3664,7 +3693,7 @@ export default function AIInterview() {
                           setEditInviteTarget(inv);
                         }}
                         onRevoke={(inv) => setRevokeInviteTarget(inv)}
-                        onViewDetails={(inv) => handleViewCandidateDetail(inv.id)}
+                        onViewDetails={(inv) => openCandidateResultRoute(inv, filtered, 'invitation-status')}
                         resendingId={resendingEmailFor}
                         revokingId={revokingInviteFor}
                       />
@@ -4472,7 +4501,7 @@ export default function AIInterview() {
                     setEditInviteTarget(inv);
                   }}
                   onRevoke={(inv) => setRevokeInviteTarget(inv)}
-                  onViewDetails={(inv) => handleViewCandidateDetail(inv.id)}
+                  onViewDetails={(inv) => openCandidateResultRoute(inv, invitations)}
                   resendingId={resendingEmailFor}
                   revokingId={revokingInviteFor}
                 />

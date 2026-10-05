@@ -8,9 +8,10 @@ import {
   FileText, Upload, Trash2, Search, X, ArrowLeft, Filter, Download, ExternalLink,
   CheckCircle2, Circle, Clock3, XCircle, ChevronDown, Mail, Phone, Globe, Book,
   Video, FileQuestion, Tag, User, Calendar, Paperclip, Loader2, Inbox,
-  Users, UserCheck, RefreshCw, KeyRound, Bug, MessageCircleQuestion, MoreHorizontal, Sparkles
+  Users, UserCheck, RefreshCw, KeyRound, Bug, MessageCircleQuestion, MoreHorizontal, Sparkles, Lock
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { internalTicketService, InternalTicket, InternalTicketAdminStats, InternalTicketPriority } from '@/lib/services';
 import ListPagination from '@/components/ListPagination';
 import FeatureGate from '@/components/shared/FeatureGate';
@@ -766,7 +767,21 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   <p className="mt-2 max-w-2xl text-sm text-white/80 sm:text-base">
                     {activeTab === 'external' ? 'Get help from the TalentFlow support team.' : 'Manage help requests from your team in one place.'}
                   </p>
-                  <FeatureGate feature="priority_support" mode="hidden">
+                  {/* Not in plan → the same pill, muted, with the plan-locked hover (never hidden). */}
+                  <FeatureGate
+                    feature="priority_support"
+                    mode="hidden"
+                    fallback={
+                      <div
+                        aria-disabled="true"
+                        title={PLAN_LOCKED_MESSAGE}
+                        className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-white/5 px-3 py-1.5 text-xs font-medium text-white/50 ring-1 ring-white/10 cursor-not-allowed"
+                      >
+                        <Lock className="h-3 w-3 text-white/40" />
+                        Priority Support is not included in your current plan.
+                      </div>
+                    }
+                  >
                     <div className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald-400/15 px-3 py-1.5 text-xs font-medium text-emerald-50 ring-1 ring-success-line/30 backdrop-blur-sm">
                       <Sparkles className="h-3 w-3 text-emerald-200" />
                       Priority Support is enabled for your plan — tickets are handled with higher priority and faster response times.

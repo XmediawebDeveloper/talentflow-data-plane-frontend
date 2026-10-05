@@ -7,6 +7,7 @@ import DetailedScorecardTab from './DetailedScorecardTab';
 import { jdService } from '@/lib/services/jdService';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import { MiniPagination } from '@/components/ui/mini-pagination';
 import type { ScoredResume } from './ScoredResumesTable';
 
 interface ScoreTableModalProps {
@@ -19,6 +20,9 @@ interface ScoreTableModalProps {
   jobCode?: string;
   jobTitle: string;
   onClose: () => void;
+  /** View by Candidates: steps through this candidate's other scored jobs,
+   *  shown before the close button. */
+  jobPager?: { page: number; total: number; onPageChange: (page: number) => void };
 }
 
 /**
@@ -26,7 +30,7 @@ interface ScoreTableModalProps {
  * CandidateScoringDetailPage's Score Table tab renders, opened in place as a
  * popup instead of navigating away to that page.
  */
-export default function ScoreTableModal({ resume, jobId, jobCode, jobTitle, onClose }: ScoreTableModalProps) {
+export default function ScoreTableModal({ resume, jobId, jobCode, jobTitle, onClose, jobPager }: ScoreTableModalProps) {
   const [detail, setDetail] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -122,25 +126,43 @@ export default function ScoreTableModal({ resume, jobId, jobCode, jobTitle, onCl
             </div>
             <div className="min-w-0">
               <h2 className="text-lg font-semibold text-gray-900 tracking-tight truncate">Score Table</h2>
-              <p className="text-sm text-gray-500 truncate">
-                {[
-                  resume.candidateName || 'Candidate',
-                  jobTitle || undefined,
-                  resume.jobCode || jobCode,
-                  resume.jobVersion ? `V${resume.jobVersion}` : undefined,
-                ].filter(Boolean).join(' · ')}
-              </p>
+              {/* Candidate · Job ID · Job Title · Job Version — the ID and
+                  version as the light brand chips the match tables use. */}
+              <div className="flex items-center gap-1.5 text-sm text-gray-500 min-w-0">
+                <span className="truncate">{resume.candidateName || 'Candidate'}</span>
+                {(resume.jobCode || jobCode) && (
+                  <span className="px-2 py-0.5 rounded-md text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 flex-shrink-0">
+                    {resume.jobCode || jobCode}
+                  </span>
+                )}
+                {jobTitle && <span className="truncate">{jobTitle}</span>}
+                {resume.jobVersion && (
+                  <span className="px-2 py-0.5 rounded-md text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 flex-shrink-0">
+                    V{resume.jobVersion}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={onClose}
-            className="px-2 flex-shrink-0"
-            aria-label="Close"
-          >
-            <X className="w-5 h-5 text-gray-500" />
-          </Button>
+          <div className="flex items-center gap-3 flex-shrink-0">
+            {jobPager && jobPager.total > 1 && (
+              <MiniPagination
+                page={jobPager.page}
+                totalPages={jobPager.total}
+                onPageChange={jobPager.onPageChange}
+                aria-label="Scored jobs"
+              />
+            )}
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={onClose}
+              className="px-2 flex-shrink-0"
+              aria-label="Close"
+            >
+              <X className="w-5 h-5 text-gray-500" />
+            </Button>
+          </div>
         </div>
         {/* score-table-modal-body: the only vertical scroller in this modal.
             DetailedScorecardTab's rubric table grows to its content (it does not

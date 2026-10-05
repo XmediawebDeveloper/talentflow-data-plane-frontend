@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useMemo } from 'react';
+import React, { createContext, useContext, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { useQuota } from '@/contexts/QuotaContext';
 import { PlanFeatureKey } from '@/lib/types/planFeatures';
 
@@ -59,10 +59,34 @@ function resolveEnabledFeatures(
   return enabled;
 }
 
+// Last resolved plan features, remembered per tenant host so the next page
+// load paints every plan-gated control in its FINAL state (clickable or
+// greyed) straight away, instead of clickable-then-greyed while
+// /quota-status is in flight. The fresh response always wins once it lands.
+const CACHE_KEY_PREFIX = 'tf_plan_features:';
+const cacheKey = () => (typeof window === 'undefined' ? '' : CACHE_KEY_PREFIX + window.location.host);
+
+function readCachedFeatures(): Record<PlanFeatureKey, boolean> | null {
+  try {
+    const raw = window.localStorage.getItem(cacheKey());
+    return raw ? (JSON.parse(raw) as Record<PlanFeatureKey, boolean>) : null;
+  } catch {
+    return null;
+  }
+}
+
+// Runs before paint on the client; plain effect on the server (no-op there).
+const useIsoLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
+
 export function PlanFeaturesProvider({ children }: { children: React.ReactNode }) {
   const { quotaData, loading: quotaLoading } = useQuota();
+  const [cachedFeatures, setCachedFeatures] = useState<Record<PlanFeatureKey, boolean> | null>(null);
+  useIsoLayoutEffect(() => {
+    setCachedFeatures(readCachedFeatures());
+  }, []);
 
   const features = useMemo<Record<PlanFeatureKey, boolean>>(() => {
+    if (!quotaData && cachedFeatures) return cachedFeatures;
     if (!quotaData) {
       return {
         seats: true,
@@ -97,7 +121,20 @@ export function PlanFeaturesProvider({ children }: { children: React.ReactNode }
       ai_talent_match: enabled.has('ai_talent_match'),
       teams: enabled.has('teams'),
     };
-  }, [quotaData]);
+  }, [quotaData, cachedFeatures]);
+
+  // Remember only a real response — never the all-false fallback.
+  useEffect(() => {
+    if (!quotaData) return;
+    try {
+      window.localStorage.setItem(cacheKey(), JSON.stringify(features));
+    } catch {
+      /* storage blocked — next load just waits for the network again */
+    }
+  }, [quotaData, features]);
+
+  // Loading only while there is neither a response nor a remembered one.
+  const loading = quotaLoading && !quotaData && !cachedFeatures;
 
   const hasPlanFeature = useMemo(() => {
     return (key: PlanFeatureKey): boolean => features[key];
@@ -106,8 +143,8 @@ export function PlanFeaturesProvider({ children }: { children: React.ReactNode }
   const value = useMemo(() => ({
     features,
     hasPlanFeature,
-    loading: quotaLoading,
-  }), [features, hasPlanFeature, quotaLoading]);
+    loading,
+  }), [features, hasPlanFeature, loading]);
 
   return (
     <PlanFeaturesContext.Provider value={value}>

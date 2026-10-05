@@ -1,7 +1,7 @@
 'use client';
 
 import ChipsReveal from '@/components/ui/chips-reveal';
-import { ArrowRight, Building2, Clock, Briefcase, Sliders, Plus, X, Share2, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Star, Video, Info, Eye, Edit3, MoreVertical, Loader2, Lock, Search, ChevronDown } from 'lucide-react';
+import { ArrowRight, Building2, Clock, Briefcase, Sliders, Plus, X, Share2, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Star, Video, Info, Eye, Edit3, MoreVertical, Loader2, Lock, Search, ChevronDown, RefreshCw } from 'lucide-react';
 import type { AssessmentResponse, HRTopic } from '@/lib/services/assessmentService';
 import { Button } from '@/components/ui/button';
 import { useState, useEffect, useCallback, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
@@ -14,7 +14,7 @@ import { assessmentService, jdService } from '@/lib/services';
 import api from '@/lib/services/api';
 import dynamic from 'next/dynamic';
 import { toast } from 'sonner';
-import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
+import { usePlanLock } from '@/lib/hooks/usePlanFeature';
 import { useAuth } from '@/components/providers/AuthProvider';
 import SuccessAnimation from '@/components/ui/success-animation';
 import PageBreadcrumb, { type BreadcrumbCrumb } from '@/components/PageBreadcrumb';
@@ -28,6 +28,8 @@ import DraftAssessmentExistsModal, { type ExistingDraftAssessment } from '@/comp
 import { loadJobAssessmentHierarchy } from '@/lib/utils/jobAssessmentHierarchy';
 import AssessmentJobBinding from '@/components/assessments/AssessmentJobBinding';
 import JobOpeningSummary from '@/components/jobs/JobOpeningSummary';
+import { useJobCandidateCounts } from '@/lib/hooks/useJobCandidateCounts';
+import JobEligibilityNote from '@/components/jobs/JobEligibilityNote';
 import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
 import ListPagination from '@/components/ListPagination';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
@@ -629,7 +631,10 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
   // add/edit/delete-question affordance this builder actually has (the bank
   // has no per-question edit or delete UI here to gate).
   const canAddQuestion = isTenantAdmin || hasPermissionCode('assessments:add_question');
-  const { available: assessmentAvailable } = usePlanFeature('assessment');
+  // Locked only once plan features have loaded — `available` is false while
+  // loading, which used to toast "not available" and blank the form on every load.
+  const { isPlanLocked } = usePlanLock();
+  const assessmentAvailable = !isPlanLocked('assessment');
 
   /* Read initial step from URL, default to 'select-jd'.
    *
@@ -716,6 +721,10 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
   // Discard button, then cleared.
   const pendingLeaveActionRef = useRef<(() => void) | null>(null);
   const [jdSearch, setJdSearch] = useState('');
+  /* The "N assessed" / "N interviewed" chips the Job Descriptions cards and
+     the Score Resume job list carry, so a job reads the same here. Fetched
+     only while the job-selection step is on screen. */
+  const candidateCounts = useJobCandidateCounts(step === 'select-jd');
   /* JD picker paging. The page is stored WITH the search it belongs to — the
      same trick the Apply to Job dialog uses — so a new query starts back at
      page one by comparison rather than by an effect that resets it a render
@@ -1175,6 +1184,13 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
   // 1:1 JD-Assessment: Track which JDs already have assessments
   const [jdsWithAssessments, setJdsWithAssessments] = useState<Set<string>>(new Set());
   const [hasLoadedAssessmentEligibility, setHasLoadedAssessmentEligibility] = useState(false);
+  /* What the mount-time read could not load, shown above the job list with a
+     Retry - the shared picker's own treatment. 'jobs': the job list itself;
+     'eligibility': only the "which versions already have an assessment"
+     index, so the jobs still show but every Add stays off until a retry
+     lands, rather than offering versions that may already be spoken for. */
+  const [jobsLoadError, setJobsLoadError] = useState<'jobs' | 'eligibility' | null>(null);
+  const [jobsReloadToken, setJobsReloadToken] = useState(0);
 
   // Auto-save draft state
   const [isAutoSaving, setIsAutoSaving] = useState(false);
@@ -1332,7 +1348,8 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
       await api.post('/hr-question-bank', {
         question_text: questionText,
         answer_type: newHRQuestion.answer_type,
-        correct_answer: newHRQuestion.answer_type === 'yes_no' ? (newHRQuestion.correct_answer || 'Yes') : null,
+        // Yes / No questions are information-only: no right answer to grade.
+        correct_answer: null,
       });
 
       const refreshedQuestions = await loadHRQuestionBank();
@@ -1396,7 +1413,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                 </button>
                 <button
                   type="button"
-                  onClick={() => setNewHRQuestion(prev => ({ ...prev, answer_type: 'yes_no', correct_answer: prev.correct_answer || 'Yes', time_minutes: 2 }))}
+                  onClick={() => setNewHRQuestion(prev => ({ ...prev, answer_type: 'yes_no', correct_answer: undefined, time_minutes: 1 }))}
                   className={`flex-1 rounded-lg border-2 px-4 py-2.5 text-sm font-medium transition-all ${
                     newHRQuestion.answer_type === 'yes_no'
                       ? 'border-brand-blue/40 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20'
@@ -1407,36 +1424,6 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                 </button>
               </div>
             </div>
-
-            {newHRQuestion.answer_type === 'yes_no' && (
-              <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700">Correct Answer *</label>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <button
-                    type="button"
-                    onClick={() => setNewHRQuestion(prev => ({ ...prev, correct_answer: 'Yes' }))}
-                    className={`flex-1 rounded-lg border-2 px-4 py-2.5 text-sm font-medium transition-all ${
-                      newHRQuestion.correct_answer === 'Yes'
-                        ? 'border-success-line bg-success-subtle text-success ring-1 ring-success-line'
-                        : 'border-gray-200 bg-white text-gray-700 hover:border-brand-blue/30 hover:text-brand-blue'
-                    }`}
-                  >
-                    Yes is correct
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setNewHRQuestion(prev => ({ ...prev, correct_answer: 'No' }))}
-                    className={`flex-1 rounded-lg border-2 px-4 py-2.5 text-sm font-medium transition-all ${
-                      newHRQuestion.correct_answer === 'No'
-                        ? 'border-success-line bg-success-subtle text-success ring-1 ring-success-line'
-                        : 'border-gray-200 bg-white text-gray-700 hover:border-brand-blue/30 hover:text-brand-blue'
-                    }`}
-                  >
-                    No is correct
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
 
           <div className="flex-shrink-0 flex flex-wrap justify-end gap-2 sm:gap-3 border-t border-gray-100 bg-slate-50 px-4 sm:px-6 py-3">
@@ -1797,16 +1784,25 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
   useEffect(() => {
     const fetchData = async () => {
       setIsLoadingJobs(true);
+      setJobsLoadError(null);
       try {
-        // Fetch both JDs and JDs with assessments in parallel
-        const [jdItems, jdsWithAssessmentsResponse] = await Promise.all([
+        /* Both in parallel, but SETTLED: the assessments index failing used to
+           reject the pair, which dropped the job list too and showed "No
+           published jobs available" for what was a network error. */
+        const [jdResult, eligibilityResult] = await Promise.allSettled([
           fetchAllJdVersions(),
           assessmentService.getJDsWithAssessments(),
         ]);
+        if (jdResult.status === 'rejected') throw jdResult.reason;
+        const jdItems = jdResult.value;
 
         // Set JDs that already have assessments (for 1:1 filtering)
-        setJdsWithAssessments(new Set(jdsWithAssessmentsResponse));
-        console.log('[TalentFlow] JDs with existing assessments:', jdsWithAssessmentsResponse.length);
+        if (eligibilityResult.status === 'fulfilled') {
+          setJdsWithAssessments(new Set(eligibilityResult.value));
+        } else {
+          console.error('[TalentFlow] Failed to load JDs with assessments:', eligibilityResult.reason);
+          setJobsLoadError('eligibility');
+        }
 
         if (jdItems.length > 0) {
           /* The shared mapper, the same one the Job Openings list and the
@@ -1892,6 +1888,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
         console.error('Failed to fetch JDs:', error);
         // Fall back to props if API fails
         setLocalJobs(jobs);
+        setJobsLoadError('jobs');
       } finally {
         setHasLoadedAssessmentEligibility(true);
         setIsLoadingJobs(false);
@@ -1899,7 +1896,8 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
     };
 
     fetchData();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobsReloadToken]);
 
   // NOTE: Auto-save on unmount is DISABLED to prevent issues with React Strict Mode
   // and unwanted saves when entering the configure page.
@@ -3399,9 +3397,6 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
                 <div className="min-w-0">
                   <h2 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Select Job Description</h2>
-                  <p className="text-xs sm:text-sm text-gray-600 mt-1">
-                    Choose the JD that this assessment will be based on
-                  </p>
                 </div>
                 <Button
                   variant="primary"
@@ -3421,6 +3416,14 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                   <span className="sm:hidden">New Job</span>
                 </Button>
               </div>
+              {/* The list's rule, in the Job Eligibility note the Score Resume
+                  lists use, worded for this list. Its own full-width row under
+                  the heading and Create New Job - inside the heading column it
+                  ran into the button. */}
+              <JobEligibilityNote
+                className="mt-3"
+                description="Only Published (or Republished) job versions without an assessment are listed. Archived, Disabled, Draft and already-assessed jobs are hidden — use View Versions to see a job's full history."
+              />
             </div>
 
             <div className="p-4 sm:p-6">
@@ -3470,6 +3473,26 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                   </div>
                 </div>
 
+                {/* A failed read, with a way to retry - the shared picker's own
+                    banner. Without it a network error read as "you have no
+                    published jobs". */}
+                {jobsLoadError && (
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    <span>
+                      {jobsLoadError === 'jobs'
+                        ? `Could not load job openings.${availableJobs.length > 0 ? ' Showing the jobs already loaded.' : ''}`
+                        : 'Could not check which job versions already have an assessment. Add is turned off until this loads.'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setJobsReloadToken(t => t + 1)}
+                      className="inline-flex items-center gap-1 font-medium text-amber-900 hover:underline"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      Retry
+                    </button>
+                  </div>
+                )}
                 {/* The count follows the search, so it always describes exactly
                     what is listed — no total beside it, nothing hardcoded. */}
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -3486,13 +3509,19 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                       radio can be a page or a search away — and while it is
                       held, every other job's versions are inert. */}
                   {jdPick && (
-                    <button
-                      type="button"
-                      onClick={() => setJdPick(null)}
-                      className="text-xs text-brand-blue hover:text-brand-blue-2 font-medium whitespace-nowrap flex-shrink-0"
-                    >
-                      Clear Selection
-                    </button>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {/* The picker's own "1 selected" chip, beside its Clear. */}
+                      <span className="text-xs font-medium text-brand-blue bg-brand-blue/10 px-2 py-0.5 rounded-full whitespace-nowrap">
+                        1 selected
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setJdPick(null)}
+                        className="text-xs text-brand-blue hover:text-brand-blue-2 font-medium whitespace-nowrap"
+                      >
+                        Clear Selection
+                      </button>
+                    </div>
                   )}
                 </div>
 
@@ -3651,7 +3680,16 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                             onClick={() => latestSelectable && pickJdVersion(job, versionKey)}
                             className={latestSelectable ? 'cursor-pointer' : 'cursor-default'}
                           >
-                            <JobOpeningSummary job={job} metaSingleLine />
+                            <JobOpeningSummary
+                              job={candidateCounts
+                                ? { ...job, assessed: candidateCounts[job.id]?.assessed ?? 0, interviewed: candidateCounts[job.id]?.interviewed ?? 0 }
+                                : job}
+                              metaSingleLine
+                              /* The picker's tick: some version of this job is the pick. */
+                              trailingBadges={lineageSelected ? (
+                                <CheckCircle2 className="w-5 h-5 text-brand-blue flex-shrink-0" />
+                              ) : null}
+                            />
                           </div>
 
                           {/* The headline above describes the LATEST version,
@@ -3731,11 +3769,11 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                               into Configure, where nothing checks again. */}
                           <button
                             type="button"
-                            disabled={!latestAdd.enabled || !!startingAssessmentFor || !hasLoadedAssessmentEligibility}
+                            disabled={!latestAdd.enabled || !!startingAssessmentFor || !hasLoadedAssessmentEligibility || jobsLoadError === 'eligibility'}
                             aria-busy={startingAssessmentFor === job.id}
                             onClick={() => latestAdd.enabled && handleCreateForVersion(job)}
                             className={`h-7 w-7 flex items-center justify-center rounded-md ring-1 transition-all flex-shrink-0 ${
-                              latestAdd.enabled && hasLoadedAssessmentEligibility && (!startingAssessmentFor || startingAssessmentFor === job.id)
+                              latestAdd.enabled && hasLoadedAssessmentEligibility && jobsLoadError !== 'eligibility' && (!startingAssessmentFor || startingAssessmentFor === job.id)
                                 ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-white/10'
                                 : ADD_BUTTON_DISABLED
                             }`}
@@ -3965,11 +4003,11 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                                     button do. */}
                                 <button
                                   type="button"
-                                  disabled={!add.enabled || !!startingAssessmentFor || !hasLoadedAssessmentEligibility}
+                                  disabled={!add.enabled || !!startingAssessmentFor || !hasLoadedAssessmentEligibility || jobsLoadError === 'eligibility'}
                                   aria-busy={startingAssessmentFor === versionJob.id}
                                   onClick={() => add.enabled && handleCreateForVersion(versionJob)}
                                   className={`h-7 w-7 flex items-center justify-center rounded-md ring-1 transition-all ${
-                                    add.enabled && hasLoadedAssessmentEligibility && (!startingAssessmentFor || startingAssessmentFor === versionJob.id)
+                                    add.enabled && hasLoadedAssessmentEligibility && jobsLoadError !== 'eligibility' && (!startingAssessmentFor || startingAssessmentFor === versionJob.id)
                                       ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-white/10'
                                       : ADD_BUTTON_DISABLED
                                   }`}
@@ -4031,8 +4069,12 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
 
                     `hasAnyPublishedVersion` reads the raw versions through the
                     same status test the list itself uses, so the two can never
-                    disagree about what "published" means. */}
-                {filteredAvailableJobs.length === 0 && (
+                    disagree about what "published" means.
+
+                    Not after a failed read with nothing loaded: the banner
+                    above says what happened, and "publish a Job first" would
+                    be wrong advice for a network error. */}
+                {filteredAvailableJobs.length === 0 && !(jobsLoadError === 'jobs' && availableJobs.length === 0) && (
                   <div className="text-center py-8 sm:py-12 text-gray-500">
                     <Briefcase className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 opacity-50" />
                     <p className="text-sm sm:text-base">

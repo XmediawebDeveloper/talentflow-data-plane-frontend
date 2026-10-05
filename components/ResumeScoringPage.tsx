@@ -8,10 +8,11 @@ import { Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, Tr
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, useId } from 'react';
 import { useDialogHeightLock } from '@/lib/hooks/useDialogHeightLock';
 import { useRouter } from 'next/navigation';
-import ScoredResumesTable from './ScoredResumesTable';
+import ScoredResumesTable, { candidateGroupKey } from './ScoredResumesTable';
 import ListPagination from './ListPagination';
 import SelectSourceModal from './SelectSourceModal';
 import JobOpeningPickerList, { JobSelection } from './jobs/JobOpeningPickerList';
+import JobEligibilityNote from './jobs/JobEligibilityNote';
 import ResumeScoringStatusPanel from './ResumeScoringStatusPanel';
 import BulkScoringProgressModal, { ScoringProgressItem } from './BulkScoringProgressModal';
 import { normalizeMatchResult } from '@/lib/utils/matchStatus';
@@ -867,6 +868,9 @@ export default function ResumeScoringPage({
     'resume-scoring',
     {
       isGlobalView, globalListMode, globalSearchQuery,
+      // The Exact / Partial / No Match pill, so a refresh stays on it rather
+      // than falling back to All Resumes.
+      matchFilter,
       historySearchQuery, historyCreatedBy, historyScoredFrom, historyScoredTo,
       historyLocation, historyWorkMode, historyJobType, historyIndustry,
       historyCurrentPage, historyItemsPerPage,
@@ -883,6 +887,9 @@ export default function ResumeScoringPage({
     (s) => {
       if (typeof s.isGlobalView === 'boolean') setIsGlobalView(s.isGlobalView);
       if (s.globalListMode === 'candidates' || s.globalListMode === 'events') setGlobalListMode(s.globalListMode);
+      if (s.matchFilter === 'Exact Match' || s.matchFilter === 'Partial Match' || s.matchFilter === 'No Match' || s.matchFilter === null) {
+        setMatchFilter(s.matchFilter);
+      }
       if (typeof s.globalSearchQuery === 'string') setGlobalSearchQuery(s.globalSearchQuery);
       if (typeof s.historySearchQuery === 'string') historySearch.setQuery(s.historySearchQuery);
       historySearch.setFilters({
@@ -1017,6 +1024,11 @@ export default function ResumeScoringPage({
       }),
     [globalScoredResumes, versionLineage.filterLineages, matchFilter],
   );
+  /* "View by Candidates": the candidates exactly as the grouped table last
+     showed them (its search and filters applied, each one's most recent
+     score), so the results page's Prev / Next steps candidate by candidate.
+     A ref, not state - the table reports on every render. */
+  const candidateNavOrderRef = useRef<any[]>([]);
 
   /**
    * Guards the prefetch below to one run per mount, and gets reset by
@@ -2016,9 +2028,49 @@ export default function ResumeScoringPage({
   if (viewMode === 'candidateView' && selectedCandidateForView && !selectedHistoryItem) {
     const candidateJdId = selectedCandidateForView.jdId || 'global';
     const candidateJobTitle = selectedCandidateForView.jobTitle || 'All Jobs';
-    const _globalIdx = globalScoredResumes.findIndex(
-      (r: any) => (r.id ?? r.resumeId) === (selectedCandidateForView.id ?? selectedCandidateForView.resumeId)
-    );
+    /* View by Candidates steps one candidate at a time, in the grouped
+       list's order; when that list never rendered (a shared link), group the
+       rows the same way here - one per email, latest score, newest first. */
+    const _byCandidate = globalListMode === 'candidates';
+    let _navList: any[] = globalScoredResumes;
+    if (_byCandidate) {
+      _navList = candidateNavOrderRef.current;
+      if (_navList.length === 0) {
+        const _time = (r: any) => new Date(r.scoredDate).getTime() || 0;
+        const _latest = new Map<string, any>();
+        globalScoredResumesWithVersion.forEach((r: any) => {
+          const k = candidateGroupKey(r);
+          const cur = _latest.get(k);
+          if (!cur || _time(r) > _time(cur)) _latest.set(k, r);
+        });
+        _navList = Array.from(_latest.values()).sort((a, b) => _time(b) - _time(a));
+      }
+    }
+    const _globalIdx = _byCandidate
+      ? _navList.findIndex((r: any) => candidateGroupKey(r) === candidateGroupKey(selectedCandidateForView))
+      : _navList.findIndex(
+          (r: any) => (r.id ?? r.resumeId) === (selectedCandidateForView.id ?? selectedCandidateForView.resumeId)
+        );
+    /* "View by Candidates": Prev/Next walks candidates, not scoring rows — the
+       same email clusters, in the same newest-first order, as
+       ScoredResumesTable's `candidateGroups` — and the job pager walks the
+       open candidate's own scored jobs (that row's dropdown). */
+    const _sameRow = (r: any) => (r.id ?? r.resumeId) === (selectedCandidateForView.id ?? selectedCandidateForView.resumeId);
+    const _dateOf = (r: any) => new Date(r.scoredDate).getTime() || 0;
+    const _candidateGroups: any[][] = globalListMode === 'candidates'
+      ? Array.from(
+          globalScoredResumesWithVersion.reduce((groups: Map<string, any[]>, r: any) => {
+            const key = String(r.email || r.candidateName || r.id).trim().toLowerCase();
+            groups.set(key, [...(groups.get(key) ?? []), r]);
+            return groups;
+          }, new Map<string, any[]>()).values(),
+        )
+          .map((rows: any[]) => [...rows].sort((a, b) => _dateOf(b) - _dateOf(a)))
+          .sort((a, b) => _dateOf(b[0]) - _dateOf(a[0]))
+      : [];
+    const _groupIdx = _candidateGroups.findIndex(rows => rows.some(_sameRow));
+    const _group = _groupIdx >= 0 ? _candidateGroups[_groupIdx] : null;
+    const _jobIdx = _group ? _group.findIndex(_sameRow) : -1;
     const _goToGlobalCandidate = (candidate: any) => {
       setSelectedCandidateForView(candidate);
       const jdId = candidate.jdId || 'global';
@@ -2032,10 +2084,24 @@ export default function ResumeScoringPage({
         resume={selectedCandidateForView}
         jobTitle={candidateJobTitle}
         jobId={candidateJdId}
-        currentIndex={_globalIdx >= 0 ? _globalIdx : undefined}
-        totalCount={globalScoredResumes.length}
-        onPrev={_globalIdx > 0 ? () => _goToGlobalCandidate(globalScoredResumes[_globalIdx - 1]) : undefined}
-        onNext={_globalIdx >= 0 && _globalIdx < globalScoredResumes.length - 1 ? () => _goToGlobalCandidate(globalScoredResumes[_globalIdx + 1]) : undefined}
+        {...(_group
+          ? {
+              currentIndex: _groupIdx,
+              totalCount: _candidateGroups.length,
+              onPrev: _groupIdx > 0 ? () => _goToGlobalCandidate(_candidateGroups[_groupIdx - 1][0]) : undefined,
+              onNext: _groupIdx < _candidateGroups.length - 1 ? () => _goToGlobalCandidate(_candidateGroups[_groupIdx + 1][0]) : undefined,
+              jobPager: {
+                page: _jobIdx + 1,
+                total: _group.length,
+                onPageChange: (page: number) => _goToGlobalCandidate(_group[page - 1]),
+              },
+            }
+          : {
+              currentIndex: _globalIdx >= 0 ? _globalIdx : undefined,
+              totalCount: _navList.length,
+              onPrev: _globalIdx > 0 ? () => _goToGlobalCandidate(_navList[_globalIdx - 1]) : undefined,
+              onNext: _globalIdx >= 0 && _globalIdx < _navList.length - 1 ? () => _goToGlobalCandidate(_navList[_globalIdx + 1]) : undefined,
+            })}
         breadcrumbItems={[
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Resume Scoring', onClick: () => {
@@ -2603,19 +2669,6 @@ export default function ResumeScoringPage({
           { exact: 0, partial: 0, none: 0 },
         );
 
-    /* The heading over the results table. It read "Scored Resumes" whichever
-       pill was selected, so all six lists looked like the same one.
-
-       Ordered to match the pills: a verdict wins, because selecting one is what
-       put that list on screen, and only one pill is ever active — so this and
-       the highlighted pill always name the same thing. */
-    /* Distinct people, not scoring events: one candidate scored against several
-       jobs (or several resume versions) is one row in the candidates view, so
-       counting rows would overstate it. Deduped by resume id, falling back to
-       email then name for the rare row carrying neither. */
-    const distinctCandidateCount = new Set(
-      allScoredResumeRows.map((r: any) => r.resumeId || r.resume_id || r.candidateEmail || r.email || r.candidateName)
-    ).size;
 
 
     // Create a processing entry from batchProgress if it exists
@@ -2663,23 +2716,6 @@ export default function ResumeScoringPage({
     const collapsedHistory = collapseHistoryToLatestVersions(filteredHistory, resolveHistoryGroupKey);
     const collapsedScoredHistoryCount = collapseHistoryToLatestVersions(scoredHistory, resolveHistoryGroupKey).length;
 
-    /* Each heading carries the size of the list under it. The count is the one
-       that view actually shows — candidates are deduped, the verdict sections
-       use their own bucket — so a heading can never disagree with the rows
-       below it or with the card it was opened from. */
-    const activeSection = matchFilter
-      ? {
-          title: matchFilter,
-          count: matchFilter === 'Exact Match' ? matchCounts.exact
-            : matchFilter === 'Partial Match' ? matchCounts.partial
-            : matchCounts.none,
-        }
-      : !isGlobalView
-        ? { title: 'View by Job', count: collapsedScoredHistoryCount }
-        : globalListMode === 'candidates'
-          ? { title: 'All Candidates', count: distinctCandidateCount }
-          : { title: 'All Resumes', count: totalResumesScored };
-    const activeSectionTitle = `${activeSection.title} (${activeSection.count.toLocaleString()})`;
 
     // Add processing entry at the top if it exists and matches filters
     const displayHistory = processingEntry && (historySearchQuery === '' || processingEntry.jobTitle.toLowerCase().includes(historySearchQuery.toLowerCase()))
@@ -2927,7 +2963,9 @@ export default function ResumeScoringPage({
         <>
         {/* Global View - All Scored Candidates */}
         {isGlobalView ? (
-          <div className="space-y-4">
+          /* No space-y: the first child is the zero-height scroll anchor, so it
+             only pushed the list further from the stat cards. */
+          <div>
             <div ref={listSectionRef} className="scroll-mt-4" aria-hidden="true" />
             {isLoadingGlobal ? (
               <TableSkeleton />
@@ -2967,7 +3005,8 @@ export default function ResumeScoringPage({
                 }}
                 onSelectAll={(ids) => setSelectedScoredResumes(ids)}
                 isGlobalView={true}
-                title={activeSectionTitle}
+                /* No heading: the active pill already names this list. */
+                title=""
                 /* The Exact / Partial / No Match sections have already been
                    narrowed to one verdict above, so the table's own Match
                    Status filter could only re-state that or contradict it. */
@@ -2976,6 +3015,7 @@ export default function ResumeScoringPage({
                    Resumes Scored" shows the identical rows flat, one per
                    scoring event, in plain newest-first order. */
                 groupByEmail={globalListMode === 'candidates'}
+                onCandidateOrderChange={(candidates) => { candidateNavOrderRef.current = candidates; }}
                 viewPillsSlot={viewPills}
               />
             )}
@@ -4396,15 +4436,7 @@ export default function ResumeScoringPage({
             by its latest non-draft version, with its non-draft versions under
             View Versions (excludeDraftsOnly). Only a Published version can be
             scored; the rest are shown greyed out and unselectable. */}
-        <div className="mb-3 flex items-start gap-2 rounded-lg bg-brand-blue/[0.06] border border-brand-blue/20 px-3 py-2.5">
-          <Info className="w-4 h-4 text-brand-blue flex-shrink-0 mt-0.5" />
-          <div className="min-w-0">
-            <p className="text-xs font-semibold text-gray-900 dark:text-slate-100">Job Eligibility</p>
-            <p className="mt-0.5 text-xs text-gray-700 dark:text-slate-300">
-              Every job is listed in every status except Draft — Published, Republished, Disabled and Archived — and View Versions shows its versions the same way. Only Published (or Republished) jobs and versions can be selected for scoring; Disabled and Archived ones are shown greyed out for reference. Drafts are not listed.
-            </p>
-          </div>
-        </div>
+        <JobEligibilityNote className="mb-3" />
 
         <JobOpeningPickerList
           listAnchorRef={jobPickerListRef}

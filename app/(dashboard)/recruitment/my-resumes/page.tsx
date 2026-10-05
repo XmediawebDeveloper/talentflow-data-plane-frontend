@@ -62,7 +62,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import FeatureGate from '@/components/shared/FeatureGate';
-import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
+import { usePlanFeatures, usePlanLock } from '@/lib/hooks/usePlanFeature';
+import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { formatOverallScore } from '@/lib/utils/matchStatus';
 
@@ -903,6 +904,9 @@ export default function MyResumesPage() {
   const canShareMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:share');
   const canMoveMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:update') || hasPermissionCode('my_resumes:upload') || hasPermissionCode('my_resumes:create');
   const { hasPlanFeature } = usePlanFeatures();
+  // Plan-gated actions stay visible but disabled (hover: PLAN_LOCKED_MESSAGE),
+  // never hidden — see usePlanLock.
+  const { isPlanLocked } = usePlanLock();
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [folders, setFolders] = useState<FolderType[]>([]);
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
@@ -3982,17 +3986,25 @@ export default function MyResumesPage() {
             selectedCount={selectedResumes.length}
             onCancel={() => setSelectedResumes([])}
             onMoveToFolder={canMoveMyResumes ? (folderId) => handleMoveToFolder(selectedResumes, folderId) : undefined}
-            onApplyToJob={!isArchivedContext && hasPlanFeature('resume_scoring') && (isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job'))) ? handleApplyToJob : undefined}
+            onApplyToJob={!isArchivedContext && (isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job'))) ? handleApplyToJob : undefined}
+            onApplyToJobDisabled={isPlanLocked('resume_scoring')}
+            onApplyToJobDisabledReason={PLAN_LOCKED_MESSAGE}
             onDownload={handleBulkDownload}
             onDelete={canDeleteMyResumes ? () => handleDeleteResumes(selectedResumes) : undefined}
             folders={folders.filter(f => f.id !== 'all')}
-            onAssessment={!isArchivedContext && hasPlanFeature('assessment') && (isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('my_resumes:assessment'))) ? handleAssessment : undefined}
+            onAssessment={!isArchivedContext && (isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('my_resumes:assessment'))) ? handleAssessment : undefined}
+            onAssessmentDisabled={isPlanLocked('assessment')}
+            onAssessmentDisabledReason={PLAN_LOCKED_MESSAGE}
             onArchive={!isArchivedContext && canArchiveMyResumes ? () => setIsArchiveModalOpen(true) : undefined}
             onUnarchive={isArchivedContext && canArchiveMyResumes ? () => handleUnarchiveResumes(selectedResumes) : undefined}
-            onAITalentMatch={!isArchivedContext && hasPlanFeature('ai_talent_match') && (isTenantAdmin || (hasPermission('canRunAiMatch') && hasPermissionCode('my_resumes:ai_match'))) ? handleAITalentMatch : undefined}
+            onAITalentMatch={!isArchivedContext && (isTenantAdmin || (hasPermission('canRunAiMatch') && hasPermissionCode('my_resumes:ai_match'))) ? handleAITalentMatch : undefined}
+            onAITalentMatchDisabled={isPlanLocked('ai_talent_match')}
+            onAITalentMatchDisabledReason={PLAN_LOCKED_MESSAGE}
             // No `my_resumes:ai_interview` action code exists yet, so this
             // follows the AI Interviews module's own share permission.
-            onAIInterview={!isArchivedContext && hasPlanFeature('ai_interview') && (isTenantAdmin || hasPermission('canInviteAIInterviews')) ? handleAIInterview : undefined}
+            onAIInterview={!isArchivedContext && (isTenantAdmin || hasPermission('canInviteAIInterviews')) ? handleAIInterview : undefined}
+            onAIInterviewDisabled={isPlanLocked('ai_interview')}
+            onAIInterviewDisabledReason={PLAN_LOCKED_MESSAGE}
           />
           );
         })()}
@@ -4193,7 +4205,9 @@ export default function MyResumesPage() {
                   onSelectResume={handleSelectResume}
                   onSelectAll={handleSelectAll}
                   onQuickView={(resume) => setQuickViewResume(resume)}
-                  onApplyToJob={hasPlanFeature('resume_scoring') && (isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job'))) ? handleSingleResumeApplyToJob : undefined}
+                  onApplyToJob={(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job'))) ? handleSingleResumeApplyToJob : undefined}
+                  onApplyToJobDisabled={isPlanLocked('resume_scoring')}
+                  onApplyToJobDisabledReason={PLAN_LOCKED_MESSAGE}
                   onDelete={canDeleteMyResumes ? (id) => handleDelete(id) : undefined}
                   onMoveToFolder={canMoveMyResumes ? handleMoveToFolder : undefined}
                   folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
@@ -4721,7 +4735,9 @@ export default function MyResumesPage() {
                               }
                             }}
                             onQuickView={(resume) => setQuickViewResume(resume)}
-                            onApplyToJob={hasPlanFeature('resume_scoring') && (isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job'))) ? handleSingleResumeApplyToJob : undefined}
+                            onApplyToJob={(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job'))) ? handleSingleResumeApplyToJob : undefined}
+                            onApplyToJobDisabled={isPlanLocked('resume_scoring')}
+                            onApplyToJobDisabledReason={PLAN_LOCKED_MESSAGE}
                             onDelete={canDeleteMyResumes ? (id) => handleDelete(id) : undefined}
                             onMoveToFolder={canMoveMyResumes ? handleMoveToFolder : undefined}
                             folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}

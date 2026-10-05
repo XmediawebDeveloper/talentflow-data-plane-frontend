@@ -56,7 +56,8 @@ import { aiInterviewService, AIInterviewResponse, AIInterviewVersionHistoryItem 
 import { formatJobExperienceBadge } from '@/lib/utils/jobExperience';
 import { formatSalaryRange } from '@/lib/utils/salary';
 import { toast } from 'sonner';
-import { usePlanFeature, usePlanFeatures } from '@/lib/hooks/usePlanFeature';
+import { usePlanFeature, usePlanFeatures, usePlanLock } from '@/lib/hooks/usePlanFeature';
+import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
@@ -304,6 +305,9 @@ interface QuickActionProps {
    *  resolves what it needs to open (e.g. fetching a config). */
   loading?: boolean;
   accent?: QuickActionAccent;
+  /** The tenant's plan lacks this feature: disabled, with PLAN_LOCKED_MESSAGE
+   *  as the tooltip (overrides `disabled`/`disabledTooltip`). */
+  planLocked?: boolean;
 }
 
 /**
@@ -315,11 +319,14 @@ function QuickActionRow({
   icon,
   label,
   onClick,
-  disabled = false,
-  disabledTooltip,
+  disabled: disabledProp = false,
+  disabledTooltip: disabledTooltipProp,
   loading = false,
   accent = 'blue',
+  planLocked = false,
 }: QuickActionProps) {
+  const disabled = planLocked || disabledProp;
+  const disabledTooltip = planLocked ? PLAN_LOCKED_MESSAGE : disabledTooltipProp;
   return (
     <div className="relative group">
       <button
@@ -364,11 +371,14 @@ function QuickActionTile({
   icon,
   label,
   onClick,
-  disabled = false,
-  disabledTooltip,
+  disabled: disabledProp = false,
+  disabledTooltip: disabledTooltipProp,
   loading = false,
   accent = 'blue',
+  planLocked = false,
 }: QuickActionProps) {
+  const disabled = planLocked || disabledProp;
+  const disabledTooltip = planLocked ? PLAN_LOCKED_MESSAGE : disabledTooltipProp;
   const colors = QUICK_ACTION_ACCENTS[accent];
   return (
     <div className="relative group">
@@ -582,6 +592,13 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   const searchParams = useSearchParams();
   const { available: aiTalentMatchAvailable } = usePlanFeature('ai_talent_match');
   const { hasPlanFeature } = usePlanFeatures();
+  // Plan-gated controls stay VISIBLE but disabled (hover: PLAN_LOCKED_MESSAGE)
+  // instead of being hidden — see usePlanLock. False while plan features load.
+  const { isPlanLocked } = usePlanLock();
+  const aiMatchPlanLocked = isPlanLocked('ai_talent_match');
+  const scoringPlanLocked = isPlanLocked('resume_scoring');
+  const assessmentPlanLocked = isPlanLocked('assessment');
+  const aiInterviewPlanLocked = isPlanLocked('ai_interview');
   const { startScoringJob, updateItemStatus } = useScoringProgress();
 
   // ---- Read-only label helpers for the Extracted Data Summary dropdown ----
@@ -2419,6 +2436,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     return (
       <CandidateResultsView
         interview={viewingAIInterviewCandidate}
+        tabInUrl={false}
         onBack={() => setViewingAIInterviewCandidate(null)}
         breadcrumbItems={[
           { label: 'Dashboard', href: '/dashboard' },
@@ -3033,11 +3051,16 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
             )}
           </button>
-          {hasPlanFeature('ai_talent_match') && (
+          {(
             <button
-              onClick={() => setActiveTab('ai-talent-match')}
+              onClick={() => !aiMatchPlanLocked && setActiveTab('ai-talent-match')}
+              disabled={aiMatchPlanLocked}
+              aria-disabled={aiMatchPlanLocked || undefined}
+              title={aiMatchPlanLocked ? PLAN_LOCKED_MESSAGE : undefined}
               className={`px-4 py-2.5 text-sm transition-colors relative flex items-center gap-2 whitespace-nowrap ${
-                activeTab === 'ai-talent-match'
+                aiMatchPlanLocked
+                  ? 'text-gray-400 dark:text-slate-600 cursor-not-allowed'
+                  : activeTab === 'ai-talent-match'
                   ? 'text-blue-600 bg-blue-50'
                   : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-50 hover:bg-gray-50 dark:hover:bg-slate-800'
               }`}
@@ -3051,7 +3074,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               }`}>
                 {/* Null while sessions are listing or the per-session dedup
                     fetch is still running — see aiMatchBadgeCount above. */}
-                {aiMatchBadgeCount === null ? (
+                {aiMatchPlanLocked ? (
+                  <Lock className="inline-block w-3 h-3 align-middle" aria-label="Not in plan" />
+                ) : aiMatchBadgeCount === null ? (
                   <span className="inline-block h-3 w-4 rounded bg-current opacity-30 animate-pulse align-middle" aria-label="Loading count" />
                 ) : (
                   aiMatchBadgeCount
@@ -3062,11 +3087,16 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               )}
             </button>
           )}
-          {hasPlanFeature('resume_scoring') && (
+          {(
             <button
-              onClick={() => handleShowScoredResumes()}
+              onClick={() => !scoringPlanLocked && handleShowScoredResumes()}
+              disabled={scoringPlanLocked}
+              aria-disabled={scoringPlanLocked || undefined}
+              title={scoringPlanLocked ? PLAN_LOCKED_MESSAGE : undefined}
               className={`px-4 py-2.5 text-sm transition-colors relative flex items-center gap-2 whitespace-nowrap ${
-                activeTab === 'scored-resumes'
+                scoringPlanLocked
+                  ? 'text-gray-400 dark:text-slate-600 cursor-not-allowed'
+                  : activeTab === 'scored-resumes'
                   ? 'text-blue-600 bg-blue-50'
                   : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-50 hover:bg-gray-50 dark:hover:bg-slate-800'
               }`}
@@ -3078,22 +3108,24 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
               }`}>
-                {scoredResumesStats.total}
+                {scoringPlanLocked ? <Lock className="inline-block w-3 h-3 align-middle" aria-label="Not in plan" /> : scoredResumesStats.total}
               </span>
               {activeTab === 'scored-resumes' && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
               )}
             </button>
           )}
-          {hasPlanFeature('assessment') && (
+          {(
             /* Disabled until an assessment is published — the tab would open on
                an empty table otherwise, which reads as a fault rather than as
                "there is nothing to report yet". */
             <button
-              onClick={() => hasAssessmentResults && setActiveTab('assessment-results')}
-              disabled={!hasAssessmentResults}
+              onClick={() => !assessmentPlanLocked && hasAssessmentResults && setActiveTab('assessment-results')}
+              disabled={assessmentPlanLocked || !hasAssessmentResults}
               title={
-                hasAssessmentResults
+                assessmentPlanLocked
+                  ? PLAN_LOCKED_MESSAGE
+                  : hasAssessmentResults
                   ? undefined
                   : !hasAnyAssessment
                     ? 'Create an assessment first'
@@ -3104,7 +3136,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                         : 'Results appear once a candidate completes or is terminated'
               }
               className={`px-4 py-2.5 text-sm transition-colors relative flex items-center gap-2 whitespace-nowrap ${
-                !hasAssessmentResults
+                assessmentPlanLocked || !hasAssessmentResults
                   ? 'text-gray-400 dark:text-slate-600 cursor-not-allowed'
                   : activeTab === 'assessment-results'
                     ? 'text-blue-600 bg-blue-50'
@@ -3118,20 +3150,22 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
               }`}>
-                {assessmentFinishedCount}
+                {assessmentPlanLocked ? <Lock className="inline-block w-3 h-3 align-middle" aria-label="Not in plan" /> : assessmentFinishedCount}
               </span>
               {activeTab === 'assessment-results' && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
               )}
             </button>
           )}
-          {hasPlanFeature('ai_interview') && features.ai_interview && permissions.canViewAIInterviews && (
+          {(aiInterviewPlanLocked || features.ai_interview) && permissions.canViewAIInterviews && (
             /* Same rule as the assessment results tab. */
             <button
-              onClick={() => hasAIInterviewResults && handleShowAIInterviewResults()}
-              disabled={!hasAIInterviewResults}
+              onClick={() => !aiInterviewPlanLocked && hasAIInterviewResults && handleShowAIInterviewResults()}
+              disabled={aiInterviewPlanLocked || !hasAIInterviewResults}
               title={
-                hasAIInterviewResults
+                aiInterviewPlanLocked
+                  ? PLAN_LOCKED_MESSAGE
+                  : hasAIInterviewResults
                   ? undefined
                   : !hasAnyAIInterview
                     ? 'Create an AI interview first'
@@ -3142,7 +3176,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                         : 'Results appear once a candidate completes or is terminated'
               }
               className={`px-4 py-2.5 text-sm transition-colors relative flex items-center gap-2 whitespace-nowrap ${
-                !hasAIInterviewResults
+                aiInterviewPlanLocked || !hasAIInterviewResults
                   ? 'text-gray-400 dark:text-slate-600 cursor-not-allowed'
                   : activeTab === 'ai-interview-results'
                     ? 'text-blue-600 bg-blue-50'
@@ -3156,7 +3190,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
               }`}>
-                {aiInterviewResultCount}
+                {aiInterviewPlanLocked ? <Lock className="inline-block w-3 h-3 align-middle" aria-label="Not in plan" /> : aiInterviewResultCount}
               </span>
               {activeTab === 'ai-interview-results' && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
@@ -3296,7 +3330,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           )}
 
           {/* Internal Recruiter Notes & Assessment Guidance - Side by Side */}
-          <div className={`grid ${hasPlanFeature('assessment') ? 'grid-cols-2' : 'grid-cols-1'} gap-4`}>
+          <div className="grid grid-cols-2 gap-4">
             {/* Internal Recruiter Notes */}
             <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4">
               <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 mb-3">Internal Recruiter Notes</h3>
@@ -3313,9 +3347,12 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               </div>
             </div>
 
-            {/* Assessment Guidance - only if plan includes assessment */}
-            {hasPlanFeature('assessment') && (
-              <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4">
+            {/* Assessment Guidance — greyed out (not hidden) when the plan lacks assessments */}
+            {(
+              <div
+                title={assessmentPlanLocked ? PLAN_LOCKED_MESSAGE : undefined}
+                aria-disabled={assessmentPlanLocked || undefined}
+                className={`${assessmentPlanLocked ? 'opacity-60 cursor-not-allowed ' : ''}bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4`}>
                 <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 mb-3">Assessment Guidance</h3>
                 <div className="text-sm text-gray-600 dark:text-slate-400">
                   {job.assessmentGuidance ? (
@@ -3561,11 +3598,12 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               )}
 
               {/* 2. AI Talent Match */}
-              {permissions.canRunAiMatch && aiTalentMatchAvailable && (
+              {permissions.canRunAiMatch && (
                 <QuickActionRow
                   icon={<Users className="w-4 h-4" />}
                   label="AI Talent Match"
                   onClick={handleAITalentMatch}
+                  planLocked={aiMatchPlanLocked}
                   disabled={!features.ai_talent_match || job.status === 'Disabled'}
                   disabledTooltip={
                     !features.ai_talent_match
@@ -3576,11 +3614,12 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               )}
 
               {/* 3. Score Resumes */}
-              {permissions.canRunScoring && hasPlanFeature('resume_scoring') && (
+              {permissions.canRunScoring && (
                 <QuickActionRow
                   icon={<ClipboardList className="w-4 h-4" />}
                   label="Score Resumes"
                   onClick={() => setShowSelectSourceModal(true)}
+                  planLocked={scoringPlanLocked}
                   disabled={job.status === 'Disabled'}
                   disabledTooltip="JD is disabled"
                 />
@@ -3589,7 +3628,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
 
             {/* Assessment — Create, Invite, Track and Result four-up. The AI
                 Interview group below mirrors it, on its own accent. */}
-            {(permissions.canCreateAssessments || permissions.canViewAssessments) && hasPlanFeature('assessment') && (
+            {(permissions.canCreateAssessments || permissions.canViewAssessments) && (
               <div className="pt-4 mt-4 border-t border-gray-100 dark:border-slate-800">
                 <QuickActionHeader
                   icon={<BarChart3 className="w-4 h-4" />}
@@ -3599,7 +3638,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                     <button
                       type="button"
                       onClick={() => setShowAssessmentVersionHistory(true)}
-                      title="Assessment version history"
+                      disabled={assessmentPlanLocked}
+                      title={assessmentPlanLocked ? PLAN_LOCKED_MESSAGE : 'Assessment version history'}
                       aria-label="Assessment version history"
                       className="w-7 h-7 inline-flex items-center justify-center rounded-md text-gray-400 hover:text-brand-cyan hover:bg-brand-cyan/10 transition-colors shrink-0"
                     >
@@ -3621,6 +3661,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                         icon={<Sparkles className="w-4 h-4" />}
                         label="Create"
                         accent="cyan"
+                        planLocked={assessmentPlanLocked}
                         onClick={handleCreateAssessment}
                         loading={resolvingAssessmentTarget}
                         disabled={
@@ -3635,6 +3676,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                         icon={<UserPlus className="w-4 h-4" />}
                         label="Invite"
                         accent="cyan"
+                        planLocked={assessmentPlanLocked}
                         onClick={handleOpenShareAssessment}
                         loading={isLoadingShareAssessments}
                         disabled={!canInviteJd || !canInviteToAssessment}
@@ -3659,6 +3701,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                         icon={<Users className="w-4 h-4" />}
                         label="Track"
                         accent="cyan"
+                        planLocked={assessmentPlanLocked}
                         onClick={handleTrackAssessmentInvites}
                         disabled={!features.assessment || !hasAssessmentInviteSent}
                         disabledTooltip={
@@ -3682,6 +3725,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                         // Terminated — same as the results tab.
                         label="Result"
                         accent="cyan"
+                        planLocked={assessmentPlanLocked}
                         onClick={handleAssessmentStatus}
                         disabled={!features.assessment || !hasAssessmentResults}
                         disabledTooltip={
@@ -3702,7 +3746,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               </div>
             )}
 
-            {(permissions.canCreateAIInterviews || permissions.canShareAIInterviews || permissions.canViewAIInterviews) && hasPlanFeature('ai_interview') && (
+            {(permissions.canCreateAIInterviews || permissions.canShareAIInterviews || permissions.canViewAIInterviews) && (
               <div className="pt-4 mt-4 border-t border-gray-100 dark:border-slate-800">
                 <QuickActionHeader
                   icon={<Video className="w-4 h-4" />}
@@ -3715,7 +3759,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                     <button
                       type="button"
                       onClick={() => setShowAIVersionHistory(true)}
-                      title="AI Interview version history"
+                      disabled={aiInterviewPlanLocked}
+                      title={aiInterviewPlanLocked ? PLAN_LOCKED_MESSAGE : 'AI Interview version history'}
                       aria-label="AI Interview version history"
                       className="w-7 h-7 inline-flex items-center justify-center rounded-md text-gray-400 hover:text-brand-orange-deep hover:bg-brand-orange/10 transition-colors shrink-0"
                     >
@@ -3733,6 +3778,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                       icon={<Sparkles className="w-4 h-4" />}
                       label="Create"
                       accent="orange"
+                      planLocked={aiInterviewPlanLocked}
                       onClick={handleCreateAIInterview}
                       loading={resolvingAIInterviewTarget}
                       disabled={
@@ -3749,6 +3795,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                       icon={<UserPlus className="w-4 h-4" />}
                       label="Invite"
                       accent="orange"
+                      planLocked={aiInterviewPlanLocked}
                       onClick={() => handleInviteAIInterview()}
                       disabled={!canInviteJd || !canInviteToAIInterview}
                       disabledTooltip={
@@ -3771,6 +3818,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                         icon={<Users className="w-4 h-4" />}
                         label="Track"
                         accent="orange"
+                      planLocked={aiInterviewPlanLocked}
                         onClick={handleTrackAIInterviewInvites}
                         loading={resolvingTrackInvitesConfig}
                         disabled={!features.ai_interview || !hasAIInterviewInviteSent}
@@ -3791,6 +3839,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                         icon={<BarChart className="w-4 h-4" />}
                         label="Result"
                         accent="orange"
+                      planLocked={aiInterviewPlanLocked}
                         onClick={handleAIInterviewStatus}
                         disabled={!features.ai_interview || !hasAIInterviewResults}
                         disabledTooltip={
@@ -5039,7 +5088,6 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         jobTitle={job.title}
         jobShortId={job.job_id}
         jobVersion={job.versionNumber && job.versionNumber > 0 ? job.versionNumber : null}
-        canEdit={permissions.canUpdateAssessments}
       />
 
       <AIInterviewVersionHistoryModal
