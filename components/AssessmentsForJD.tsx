@@ -288,7 +288,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
           {canCreateAssessments && (
             <span className="inline-flex" title={assessmentLocked ? PLAN_LOCKED_MESSAGE : undefined}>
               <Button variant="primary" size="md" onClick={handleCreateAssessment} disabled={assessmentLocked} icon={<Plus className="w-4 h-4" />}>
-                Create Assessment
+                Create AI Assessment
               </Button>
             </span>
           )}
@@ -341,7 +341,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
           {canCreateAssessments && activeTab !== 'archived' && (
             <span className="inline-flex" title={assessmentLocked ? PLAN_LOCKED_MESSAGE : undefined}>
               <Button variant="primary" size="md" onClick={handleCreateAssessment} disabled={assessmentLocked} icon={<Plus className="w-4 h-4" />}>
-                Create Assessment
+                Create AI Assessment
               </Button>
             </span>
           )}

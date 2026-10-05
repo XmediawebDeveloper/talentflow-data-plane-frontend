@@ -705,6 +705,7 @@ export default function JobOpeningsPage() {
       <AITalentMatchConfirmModal
         isOpen={!!aiMatchConfirmJob}
         jobTitle={aiMatchConfirmJob ? formatJobVersionLabel(aiMatchConfirmJob) : ''}
+        job={aiMatchConfirmJob}
         onConfirm={() => { setAiMatchRunJob(aiMatchConfirmJob); setAiMatchConfirmJob(null); }}
         onCancel={() => setAiMatchConfirmJob(null)}
       />

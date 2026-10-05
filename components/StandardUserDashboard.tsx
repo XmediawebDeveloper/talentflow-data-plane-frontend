@@ -171,7 +171,7 @@ export default function StandardUserDashboard({ user, tenant }: StandardUserDash
               )}
               {canCreateAssessments && (
                 <ActionTile
-                  label="Create assessment"
+                  label="Create AI assessment"
                   icon={<FileText className="w-5 h-5" />}
                   onClick={() => router.push('/recruitment/assessments')}
                   tone="brand-teal"

@@ -629,7 +629,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
               className="w-full px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-gray-700 to-gray-800 text-white text-sm sm:text-base rounded-lg hover:from-gray-800 hover:to-gray-900 transition-colors flex items-center justify-center gap-2 font-medium"
             >
               <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
-              Create Assessment
+              Create AI Assessment
             </button>
           </div>
         </div>
