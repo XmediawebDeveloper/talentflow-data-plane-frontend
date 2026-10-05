@@ -6028,7 +6028,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               icon={<Sparkles className="w-4 h-4" />}
               className={!canCreateAssessment ? 'opacity-50 cursor-not-allowed' : ''}
             >
-              <span className="hidden sm:inline">Create Assessment</span>
+              <span className="hidden sm:inline">Create AI Assessment</span>
                 <span className="sm:hidden">Create</span>
               </Button>
           </div>
@@ -8937,7 +8937,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       title={!canCreateAssessment ? 'You do not have permission to create assessments' : ''}
                       icon={<Sparkles className="w-4 h-4" />}
                     >
-                      Create Assessment
+                      Create AI Assessment
                     </Button>
                   ) : undefined}
                 />

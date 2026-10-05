@@ -4954,6 +4954,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       <AITalentMatchConfirmModal
         isOpen={showAIMatchConfirm}
         jobTitle={formatJobVersionLabel(job)}
+        job={job}
         onConfirm={confirmAITalentMatch}
         onCancel={() => setShowAIMatchConfirm(false)}
       />

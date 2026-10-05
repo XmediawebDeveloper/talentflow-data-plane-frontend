@@ -1250,7 +1250,8 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
         <ApplyToJobModal
           resumes={resumesForApply}
           jobs={jobs}
-          mode="apply"
+          /* Scores the resumes — so the scoring title, steps and button. */
+          mode="scoring"
           /* Score Resume: the All Jobs list - Archived / Disabled shown, not pickable. */
           excludeDraftsOnly
           onClose={() => {

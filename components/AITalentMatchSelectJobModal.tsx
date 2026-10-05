@@ -33,6 +33,9 @@ export default function AITalentMatchSelectJobModal({
   return (
     <ApplyToJobModal
       mode="match"
+      /* The AI Talent Match page's own list: Archived / Disabled shown, not
+         pickable — so matching from the Resume Database offers the same jobs. */
+      excludeDraftsOnly
       resumes={resumes}
       jobs={jobs}
       onClose={onClose}

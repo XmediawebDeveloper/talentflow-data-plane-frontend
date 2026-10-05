@@ -4,7 +4,7 @@ import { X, CheckCircle, Briefcase, Loader2 } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { Resume, Job } from '@/lib/types/types';
 import JobOpeningPickerList, { JobSelection } from '@/components/jobs/JobOpeningPickerList';
-import JobEligibilityNote from '@/components/jobs/JobEligibilityNote';
+import JobEligibilityNote, { MATCH_ELIGIBILITY } from '@/components/jobs/JobEligibilityNote';
 import SelectedCandidatesPanel from './SelectedCandidatesPanel';
 import CandidateVersionPicker from './CandidateVersionPicker';
 import { Button } from '@/components/ui/button';
@@ -98,7 +98,7 @@ export default function ApplyToJobModal({
 }: ApplyToJobModalProps) {
   // Default titles based on mode
   const defaultTitle =
-    mode === 'assessment' ? 'Create Assessment'
+    mode === 'assessment' ? 'Create AI Assessment'
     : mode === 'scoring' ? 'Resume Scoring'
     : mode === 'match' ? 'AI Talent Match'
     : 'Apply to Job';
@@ -252,7 +252,9 @@ export default function ApplyToJobModal({
               the same component the Resume Scoring page renders statically
               for its own job-selection step, so the two never drift apart.
               Not shown when the job is fixed. */}
-          {!fixedJob && excludeDraftsOnly && <JobEligibilityNote className="mb-3" />}
+          {!fixedJob && excludeDraftsOnly && (
+            <JobEligibilityNote className="mb-3" description={isMatchMode ? MATCH_ELIGIBILITY : undefined} />
+          )}
           {!fixedJob && (
             <JobOpeningPickerList
               jobs={jobs}

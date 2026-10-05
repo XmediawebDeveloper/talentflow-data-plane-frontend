@@ -716,7 +716,7 @@ const helpArticles: Record<string, {
             <div className="mb-3">
               <NavPath>Recruitment</NavPath>
               <NavPath>Assessments</NavPath>
-              <NavPath isLast>Create Assessment</NavPath>
+              <NavPath isLast>Create AI Assessment</NavPath>
             </div>
             <ul className="space-y-1 text-sm">
               <FeatureItem>Enter assessment name and description</FeatureItem>
