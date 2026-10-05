@@ -926,7 +926,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   const filters = search.filters;
   const [sortBy, setSortBy] = useState('date');
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(25);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   const [totalItems, setTotalItems] = useState(0);
   const [totalIncludingVersions, setTotalIncludingVersions] = useState<number | undefined>(undefined);
   const [totalPages, setTotalPages] = useState(1);

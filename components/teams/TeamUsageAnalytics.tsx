@@ -2,7 +2,7 @@
 
 import {
   Users, BarChart3, ChevronDown, ChevronRight,
-  Loader2, Download, FileText, ClipboardCheck, Upload,
+  Download, FileText, ClipboardCheck, Upload,
 } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import teamService, {
@@ -20,6 +20,8 @@ import { formatISTDate, formatIST } from '@/lib/utils/dateUtils';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { Skeleton } from '@/components/ui/skeleton';
+import ExportFormatModal from '@/components/ExportFormatModal';
+import { exportRows, type ExportFileFormat } from '@/lib/utils/exportUtils';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -542,29 +544,20 @@ function StatCard({ label, value, dot, loading, onClick, active }: {
 
 // ─── Export ───────────────────────────────────────────────────────────────────
 
-function exportCSV(teams: TeamUsageSummary[], fromDate: string, toDate: string) {
-  const rows = [
-    ['Team', 'RS', 'AS', 'AIU', 'Total', 'JDs Created', 'Assessments Created'],
-    ...teams.map(t => [
-      t.team_name ?? 'Unknown',
-      getCount(t, 'RS'), getCount(t, 'AS'), getCount(t, 'AIU'),
-      teamTotal(t), t.jds_created, t.assessments_created,
-    ]),
-  ];
-  const csv = rows.map(r => r.join(',')).join('\n');
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `team-usage-${fromDate}-to-${toDate}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+const TEAM_EXPORT_HEADERS = ['Team', 'RS', 'AS', 'AIU', 'Total', 'JDs Created', 'Assessments Created'];
+const USER_EXPORT_HEADERS = ['Team', 'Member Name', 'Member Email', 'RS Actions', 'AS Units', 'AIU Units', 'RU Actions', 'Total Actions', 'Last Active'];
+
+async function exportTeams(format: ExportFileFormat, teams: TeamUsageSummary[], fromDate: string, toDate: string) {
+  const rows = teams.map(t => [
+    t.team_name ?? 'Unknown',
+    getCount(t, 'RS'), getCount(t, 'AS'), getCount(t, 'AIU'),
+    teamTotal(t), t.jds_created, t.assessments_created,
+  ]);
+  await exportRows(format, TEAM_EXPORT_HEADERS, rows, `team-usage-${fromDate}-to-${toDate}`, { sheetName: 'Team Usage' });
 }
 
-async function exportUsersCSV(teams: TeamUsageSummary[], fromDate: string, toDate: string) {
-  const rows: (string | number | null)[][] = [
-    ['Team', 'Member Name', 'Member Email', 'RS Actions', 'AS Units', 'AIU Units', 'RU Actions', 'Total Actions', 'Last Active'],
-  ];
+async function exportUsers(format: ExportFileFormat, teams: TeamUsageSummary[], fromDate: string, toDate: string) {
+  const rows: (string | number | null)[][] = [];
 
   for (const team of teams) {
     try {
@@ -591,14 +584,7 @@ async function exportUsersCSV(teams: TeamUsageSummary[], fromDate: string, toDat
     }
   }
 
-  const csv = rows.map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `team-usage-by-user-${fromDate}-to-${toDate}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  await exportRows(format, USER_EXPORT_HEADERS, rows, `team-usage-by-user-${fromDate}-to-${toDate}`, { sheetName: 'Team Usage by User' });
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -614,7 +600,8 @@ export default function TeamUsageAnalytics() {
   const [loading, setLoading] = useState(true);
   const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
   const [showExportMenu, setShowExportMenu] = useState(false);
-  const [exportingUsers, setExportingUsers] = useState(false);
+  // Which export the format picker is open for — null while it's closed.
+  const [exportScope, setExportScope] = useState<'team' | 'user' | null>(null);
   const exportMenuRef = useRef<HTMLDivElement>(null);
   // Drill-in: 'cards' shows only the 5 summary tiles; clicking a card opens the
   // team usage table below. activeCard highlights which tile was clicked.
@@ -710,33 +697,36 @@ export default function TeamUsageAnalytics() {
               {showExportMenu && (
                 <div className="absolute right-0 top-full mt-1 w-52 max-w-[calc(100vw-1.5rem)] bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg shadow-lg z-20 overflow-hidden">
                   <button
-                    onClick={() => { exportCSV(teams, fromDate, toDate); setShowExportMenu(false); }}
+                    onClick={() => { setExportScope('team'); setShowExportMenu(false); }}
                     className="group w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 flex items-center gap-2"
                   >
                     <FileText className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                     <span className={MENU_ITEM_SCALE_CLASS}>Team Level</span>
                   </button>
                   <button
-                    disabled={exportingUsers}
-                    onClick={async () => {
-                      setShowExportMenu(false);
-                      setExportingUsers(true);
-                      try {
-                        await exportUsersCSV(teams, fromDate, toDate);
-                      } finally {
-                        setExportingUsers(false);
-                      }
-                    }}
-                    className="group w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 flex items-center gap-2 disabled:opacity-50"
+                    onClick={() => { setExportScope('user'); setShowExportMenu(false); }}
+                    className="group w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 flex items-center gap-2"
                   >
-                    {exportingUsers
-                      ? <Loader2 className="w-4 h-4 text-gray-400 dark:text-slate-500 animate-spin" />
-                      : <Users className="w-4 h-4 text-gray-400 dark:text-slate-500" />}
+                    <Users className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                     <span className={MENU_ITEM_SCALE_CLASS}>User Level (drill-down)</span>
                   </button>
                 </div>
               )}
             </div>
+          {/* User level fetches every team's members inside onExport, so the
+              modal's own spinner covers that wait. */}
+          <ExportFormatModal
+            open={exportScope !== null}
+            onClose={() => setExportScope(null)}
+            title={exportScope === 'user' ? 'Export Team Usage by User' : 'Export Team Usage'}
+            recordCount={exportScope === 'team' ? teams.length : undefined}
+            columns={exportScope === 'user' ? USER_EXPORT_HEADERS : TEAM_EXPORT_HEADERS}
+            onExport={(format) =>
+              exportScope === 'user'
+                ? exportUsers(format, teams, fromDate, toDate)
+                : exportTeams(format, teams, fromDate, toDate)
+            }
+          />
         </div>
       </div>
 

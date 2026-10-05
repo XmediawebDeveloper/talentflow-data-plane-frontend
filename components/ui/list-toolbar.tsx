@@ -118,6 +118,23 @@ export interface ListToolbarProps {
    */
   controlsFollowSearch?: boolean;
 
+  /**
+   * ONE LINE at every width: search and every control stay on a single row
+   * that never wraps. The search box flexes and shrinks to a floor; the
+   * controls keep their natural width. When the row still does not fit (a
+   * phone), it scrolls sideways with its scrollbar hidden instead of
+   * squeezing or wrapping anything. Takes precedence over `fitToContainer`.
+   */
+  singleLine?: boolean;
+
+  /**
+   * With `singleLine`: true while a popover anchored inside the row is open.
+   * A horizontal scroll container clips absolutely-positioned children, so the
+   * row drops its scroll for as long as the popover is up — the same switch
+   * the resume view's action bar makes for its Invite menu.
+   */
+  overflowVisible?: boolean;
+
   className?: string;
 }
 
@@ -140,6 +157,8 @@ export default function ListToolbar({
   fitToContainer = false,
   containerBreakpoint = '5xl',
   controlsFollowSearch = false,
+  singleLine = false,
+  overflowVisible = false,
   className,
 }: ListToolbarProps) {
   const container = containerBreakpoint === '4xl'
@@ -197,7 +216,11 @@ export default function ListToolbar({
   const row = (
     <div
       className={cn(
-        fitToContainer
+        singleLine
+          // `p-0.5` (offset by the negative margins) gives the controls' focus
+          // rings room inside the scroll box, which would otherwise clip them.
+          ? cn('flex flex-nowrap items-center gap-2 mb-3 p-0.5 -mx-0.5 -mt-0.5', overflowVisible ? 'overflow-visible' : 'overflow-x-auto scrollbar-hide')
+          : fitToContainer
           ? container.row
           : 'flex flex-col sm:flex-row sm:items-center gap-3 mb-3',
         // The group's own gap, so search → first control matches control → control.
@@ -205,7 +228,7 @@ export default function ListToolbar({
         filterPanel ? undefined : className
       )}
     >
-      <div className={cn(fitToContainer ? container.search : 'flex-1 relative', searchClassName)}>
+      <div className={cn(singleLine ? 'relative flex-1 min-w-[12rem]' : fitToContainer ? container.search : 'flex-1 relative', searchClassName)}>
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-brand-blue/60" />
         <input
           type="text"
@@ -220,8 +243,10 @@ export default function ListToolbar({
           a fixed width; with the default flex-1 box it has no effect. */}
       <div
         className={cn(
-          'flex flex-wrap items-center gap-2',
-          fitToContainer ? container.controls : 'sm:ml-auto',
+          singleLine
+            ? 'flex flex-nowrap items-center gap-2 flex-shrink-0 whitespace-nowrap [&>*]:flex-shrink-0'
+            : 'flex flex-wrap items-center gap-2',
+          singleLine ? undefined : fitToContainer ? container.controls : 'sm:ml-auto',
           // Controls follow the search box on desktop — see `controlsFollowSearch`.
           controlsFollowSearch && 'lg:ml-0',
         )}
@@ -281,7 +306,7 @@ export default function ListToolbar({
   );
 
   // Container mode needs an ancestor to query — the row can't measure itself.
-  const toolbarRow = fitToContainer
+  const toolbarRow = fitToContainer && !singleLine
     ? <div className="@container/toolbar">{row}</div>
     : row;
 

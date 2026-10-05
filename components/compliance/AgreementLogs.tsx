@@ -51,7 +51,7 @@ export default function AgreementLogs({ compact = false }: AgreementLogsProps) {
 
   // Pagination
   const [page, setPage] = useState(0);
-  const [limit] = useState(20);
+  const [limit] = useState(10);
 
   useEffect(() => {
     loadLogs();

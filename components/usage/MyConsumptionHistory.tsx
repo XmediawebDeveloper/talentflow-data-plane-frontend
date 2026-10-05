@@ -32,6 +32,8 @@ import {
 import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
+import ExportFormatModal from '@/components/ExportFormatModal';
+import type { ExportFileFormat } from '@/lib/utils/exportUtils';
 
 const UNIT_TYPE_ICONS: Record<UnitType, IconComponent> = {
   RS: ClipboardList,
@@ -55,6 +57,7 @@ export default function MyConsumptionHistory() {
   const [selectedType, setSelectedType] = useState<UnitType | 'all'>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [dateRange, setDateRange] = useState<number>(30); // days
+  const [showExportModal, setShowExportModal] = useState(false);
 
   // Drill-in: cards-first overview. Clicking a card opens the filtered table.
   // Total card → all types; RS / AS / AIU cards → filter the table by that type.
@@ -121,27 +124,25 @@ export default function MyConsumptionHistory() {
     setFilteredHistory(filtered);
   };
 
-  const handleExport = async () => {
-    try {
-      const blob = await unitPoolService.exportConsumptionHistory({
-        format: 'csv',
-        unit_type: selectedType !== 'all' ? selectedType : undefined,
-        status: selectedStatus !== 'all' ? selectedStatus : undefined,
-      });
+  // The backend builds the file in either format ('excel' → .xlsx). Errors
+  // propagate so the format picker toasts and stays open for a retry.
+  const handleExport = async (format: ExportFileFormat) => {
+    const blob = await unitPoolService.exportConsumptionHistory({
+      format: format === 'xlsx' ? 'excel' : 'csv',
+      unit_type: selectedType !== 'all' ? selectedType : undefined,
+      status: selectedStatus !== 'all' ? selectedStatus : undefined,
+    });
 
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `my-consumption-${new Date().toISOString().split('T')[0]}.csv`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `my-consumption-${new Date().toISOString().split('T')[0]}.${format}`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
 
-      toast.success('Export completed');
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to export data');
-    }
+    toast.success('Export completed');
   };
 
   // Calculate summary stats
@@ -201,12 +202,18 @@ export default function MyConsumptionHistory() {
             </div>
           </div>
           <button
-            onClick={handleExport}
+            onClick={() => setShowExportModal(true)}
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
           >
             <Download className="w-4 h-4" />
             Export
           </button>
+          <ExportFormatModal
+            open={showExportModal}
+            onClose={() => setShowExportModal(false)}
+            title="Export My Consumption History"
+            onExport={handleExport}
+          />
         </div>
 
         {/* Summary Stats — clicking a card drills into the consumption table filtered by that type */}

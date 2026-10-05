@@ -9,7 +9,7 @@ import {
 import { DetailedSkillsTable } from '../evaluation-dashboard/DetailedSkillsTable';
 import { buildDashboardData } from '../evaluation-dashboard/adapter';
 import { ExportMenu } from '../evaluation-dashboard/ExportMenu';
-import { exportCoverageCsv, exportCoverageXlsx, flattenCoverageRows } from '../evaluation-dashboard/coverageExport';
+import { COVERAGE_EXPORT_HEADERS, exportCoverage, flattenCoverageRows } from '../evaluation-dashboard/coverageExport';
 
 // ── Shared Types ─────────────────────────────────────────────────────────────
 
@@ -759,8 +759,10 @@ export default function CoverageTab({
               return (
                 <ExportMenu
                   variant="dark"
-                  onExportCsv={() => exportCoverageCsv(rows, 'Skill_Coverage')}
-                  onExportXlsx={() => exportCoverageXlsx(rows, 'Skill_Coverage')}
+                  title="Export Skill Coverage"
+                  recordCount={rows.length}
+                  columns={COVERAGE_EXPORT_HEADERS}
+                  onExport={format => exportCoverage(format, rows, 'Skill_Coverage')}
                 />
               );
             })()}

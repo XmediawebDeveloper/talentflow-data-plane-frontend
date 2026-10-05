@@ -50,6 +50,106 @@ export function exportToCSV<T extends Record<string, any>>(
   downloadFile(csv, `${filename}.csv`, 'text/csv;charset=utf-8;');
 }
 
+/** The two formats every Export offers (see `ExportFormatModal`). */
+export type ExportFileFormat = 'csv' | 'xlsx';
+
+/**
+ * Export a header row + value rows as a real .xlsx workbook (ExcelJS, loaded
+ * on demand) — bold shaded header, hairline borders, widths fitted to the
+ * longest value (capped), header frozen. Same layout ScoredResumesTable's
+ * Excel export established. `title` adds a title block above the table.
+ */
+export async function exportRowsToExcel(
+  headers: string[],
+  rows: unknown[][],
+  filename: string,
+  options: { sheetName?: string; title?: string } = {},
+): Promise<void> {
+  const ExcelJS = (await import('exceljs')).default;
+  const workbook = new ExcelJS.Workbook();
+  // Excel caps sheet names at 31 chars and forbids []:*?/\
+  const sheetName = (options.sheetName || 'Export').replace(/[[\]:*?/\\]/g, ' ').slice(0, 31);
+  const sheet = workbook.addWorksheet(sheetName);
+
+  if (options.title) {
+    sheet.addRow([options.title]).font = { bold: true, size: 14 };
+    sheet.addRow([`Exported: ${formatIST(new Date().toISOString())}`]);
+    sheet.addRow([`Total Records: ${rows.length}`]);
+    sheet.addRow([]);
+  }
+
+  const headerRow = sheet.addRow(headers);
+  headerRow.eachCell(cell => {
+    cell.font = { bold: true };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F0F0' } };
+  });
+  const asCell = (value: unknown) =>
+    value === null || value === undefined ? '' : typeof value === 'number' || typeof value === 'boolean' || value instanceof Date ? value : String(value);
+  rows.forEach(row => sheet.addRow(row.map(asCell)));
+
+  const thin = { style: 'thin' as const, color: { argb: 'FFD0D0D0' } };
+  for (let r = headerRow.number; r <= sheet.rowCount; r++) {
+    sheet.getRow(r).eachCell({ includeEmpty: true }, cell => {
+      cell.border = { top: thin, left: thin, bottom: thin, right: thin };
+      cell.alignment = { vertical: 'top', wrapText: true };
+    });
+  }
+  headers.forEach((header, i) => {
+    const longest = Math.max(header.length, ...rows.map(row => String(row[i] ?? '').length));
+    sheet.getColumn(i + 1).width = Math.min(60, Math.max(10, longest + 2));
+  });
+  sheet.views = [{ state: 'frozen', ySplit: headerRow.number }];
+
+  const buffer = await workbook.xlsx.writeBuffer() as ArrayBuffer;
+  downloadBlob(
+    new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+    `${stripExtension(filename)}.xlsx`,
+  );
+}
+
+/** Header row + value rows as a CSV download (quoted, BOM so Excel reads UTF-8). */
+export function exportRowsToCSV(headers: string[], rows: unknown[][], filename: string): void {
+  const quote = (value: unknown) =>
+    value === null || value === undefined ? '""' : `"${String(value).replace(/"/g, '""')}"`;
+  const csv = [headers, ...rows].map(row => row.map(quote).join(',')).join('\n');
+  downloadFile('﻿' + csv, `${stripExtension(filename)}.csv`, 'text/csv;charset=utf-8;');
+}
+
+/** One call for either format — what an `ExportFormatModal`'s onExport usually does. */
+export async function exportRows(
+  format: ExportFileFormat,
+  headers: string[],
+  rows: unknown[][],
+  filename: string,
+  options: { sheetName?: string; title?: string } = {},
+): Promise<void> {
+  if (format === 'xlsx') await exportRowsToExcel(headers, rows, filename, options);
+  else exportRowsToCSV(headers, rows, filename);
+}
+
+/** `exportToCSV`'s column-config shape, in either format. */
+export async function exportData<T extends Record<string, any>>(
+  format: ExportFileFormat,
+  data: T[],
+  columns: ExportColumn[],
+  filename: string,
+  options: { sheetName?: string; title?: string } = {},
+): Promise<void> {
+  if (format === 'csv') {
+    exportToCSV(data, columns, stripExtension(filename));
+    return;
+  }
+  const rows = data.map(item => columns.map(col => {
+    const value = getNestedValue(item, col.key);
+    return col.formatter ? col.formatter(value) : value;
+  }));
+  await exportRowsToExcel(columns.map(col => col.header), rows, filename, options);
+}
+
+function stripExtension(filename: string): string {
+  return filename.replace(/\.(csv|xlsx?|json)$/i, '');
+}
+
 /**
  * Export data to JSON format
  */
@@ -69,7 +169,10 @@ function getNestedValue(obj: any, path: string): any {
  * Helper to download a file
  */
 function downloadFile(content: string, filename: string, mimeType: string): void {
-  const blob = new Blob([content], { type: mimeType });
+  downloadBlob(new Blob([content], { type: mimeType }), filename);
+}
+
+function downloadBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;

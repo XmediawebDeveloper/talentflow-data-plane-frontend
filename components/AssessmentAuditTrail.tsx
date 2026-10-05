@@ -90,7 +90,7 @@ export default function AssessmentAuditTrail() {
   });
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const pageSize = 50;
+  const pageSize = 10;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   // Local text for the "Go to" box so a partial edit doesn't get clobbered by
   // `page` until Enter/blur commits it.

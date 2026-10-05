@@ -1,7 +1,7 @@
 import { Table2 } from 'lucide-react';
 import type { Cluster, Level } from './types';
 import { ExportMenu } from './ExportMenu';
-import { exportCoverageCsv, exportCoverageXlsx, flattenCoverageRows } from './coverageExport';
+import { COVERAGE_EXPORT_HEADERS, exportCoverage, flattenCoverageRows } from './coverageExport';
 
 interface Props {
   mustHaveClusters: Cluster[];
@@ -49,8 +49,10 @@ export function DetailedSkillsTable({ mustHaveClusters, niceToHaveClusters, expo
           <p className="text-sm text-gray-500">Comprehensive view of all evaluated skills</p>
         </div>
         <ExportMenu
-          onExportCsv={() => exportCoverageCsv(exportRows, exportName)}
-          onExportXlsx={() => exportCoverageXlsx(exportRows, exportName)}
+          title="Export Skill Coverage"
+          recordCount={exportRows.length}
+          columns={COVERAGE_EXPORT_HEADERS}
+          onExport={format => exportCoverage(format, exportRows, exportName)}
         />
       </div>
 

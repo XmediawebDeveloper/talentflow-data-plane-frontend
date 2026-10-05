@@ -16,6 +16,7 @@ import JobOpeningSummary from '@/components/jobs/JobOpeningSummary';
 import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
 import JDVersionHistoryModal from '@/components/JDVersionHistoryModal';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
+import { useJobCandidateCounts } from '@/lib/hooks/useJobCandidateCounts';
 import ListPagination from '@/components/ListPagination';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -108,6 +109,12 @@ export interface JobOpeningPickerListProps {
    * they render below it.
    */
   listAnchorRef?: RefObject<HTMLDivElement | null>;
+  /**
+   * Add the "N assessed" / "N interviewed" chips the Job Descriptions cards
+   * carry (AI Talent Match's job list). Off by default, so other hosts don't
+   * pay for the tally.
+   */
+  showCandidateCounts?: boolean;
 }
 
 /**
@@ -131,8 +138,10 @@ export default function JobOpeningPickerList({
   showAllStatuses = false,
   excludeDraftsOnly = false,
   listAnchorRef,
+  showCandidateCounts = false,
 }: JobOpeningPickerListProps) {
   const [searchQuery, setSearchQuery] = useState('');
+  const candidateCounts = useJobCandidateCounts(showCandidateCounts);
 
   /* The job list, read the way the Job Openings page reads it: `source:
      'my-jds'`, in pages of 100, mapped through the shared mapper. Every host
@@ -552,7 +561,9 @@ export default function JobOpeningPickerList({
                         className={selectable ? 'cursor-pointer' : 'cursor-not-allowed'}
                       >
                         <JobOpeningSummary
-                          job={job}
+                          job={candidateCounts
+                            ? { ...job, assessed: candidateCounts[job.id]?.assessed ?? 0, interviewed: candidateCounts[job.id]?.interviewed ?? 0 }
+                            : job}
                           metaSingleLine
                           trailingBadges={
                             /* No ml-auto: that was reaching across the row to line
