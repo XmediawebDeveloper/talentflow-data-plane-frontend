@@ -4248,6 +4248,9 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   onArchive={(resumeId) => handleArchiveResumes([resumeId])}
                   onArchiveDisabled={!canArchiveMyResumes}
                   onArchiveDisabledReason="You do not have permission to archive resumes"
+                  onUnarchive={(resumeId) => handleUnarchiveResumes([resumeId])}
+                  onUnarchiveDisabled={!canArchiveMyResumes}
+                  onUnarchiveDisabledReason="You do not have permission to unarchive resumes"
                   canShare={canShareMyResumes}
                   canTag={canUpdateMyResumes}
                   disablePagination={true}
@@ -4777,6 +4780,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                             enableRowReorder
                             reorderScopeKey={cardViewFolder || 'all'}
                             onArchive={canArchiveMyResumes ? (resumeId) => handleArchiveResumes([resumeId]) : undefined}
+                            onUnarchive={canArchiveMyResumes ? (resumeId) => handleUnarchiveResumes([resumeId]) : undefined}
                             canShare={canShareMyResumes}
                             canTag={canUpdateMyResumes}
                             disablePagination={true}

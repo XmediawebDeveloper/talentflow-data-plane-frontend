@@ -4223,6 +4223,7 @@ export default function MyResumesPage() {
                   enableRowReorder
                   reorderScopeKey={selectedFolder || 'all'}
                   onArchive={canArchiveMyResumes ? (resumeId) => handleArchiveResumes([resumeId]) : undefined}
+                  onUnarchive={canArchiveMyResumes ? (resumeId) => handleUnarchiveResumes([resumeId]) : undefined}
                   canShare={canShareMyResumes}
                   canTag={canUpdateMyResumes}
                   disablePagination={true}
@@ -4750,6 +4751,7 @@ export default function MyResumesPage() {
                             enableRowReorder
                             reorderScopeKey={cardViewFolder || 'all'}
                             onArchive={canArchiveMyResumes ? (resumeId) => handleArchiveResumes([resumeId]) : undefined}
+                            onUnarchive={canArchiveMyResumes ? (resumeId) => handleUnarchiveResumes([resumeId]) : undefined}
                             canShare={canShareMyResumes}
                             canTag={canUpdateMyResumes}
                             disablePagination={true}
