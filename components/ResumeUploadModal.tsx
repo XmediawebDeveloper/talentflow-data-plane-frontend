@@ -5,7 +5,8 @@ import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { Badge } from '@/components/ui/badge';
 import { useQuotaCheck } from '@/lib/hooks/useQuotaCheck';
-import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
+import { usePlanLock } from '@/lib/hooks/usePlanFeature';
+import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { toast } from 'sonner';
 import { resumeService } from '@/lib/services/resumeService';
 import type { DuplicateFile, ExistingResume } from './DuplicateResumeModal';
@@ -30,14 +31,27 @@ interface ResumeUploadModalProps {
   onSubmit: (files: File[]) => void;
 }
 
-export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: ResumeUploadModalProps) {
-  const { available: resumeUploadAvailable } = usePlanFeature('resume_upload');
+/**
+ * Plan gate as a wrapper: the body below has dozens of hooks, and returning
+ * early before them flipped the hook count once plan features finished
+ * loading (React "rendered fewer hooks"). Toast + close run in an effect, not
+ * during render.
+ */
+export default function ResumeUploadModal(props: ResumeUploadModalProps) {
+  const { isPlanLocked } = usePlanLock();
+  const locked = isPlanLocked('resume_upload');
+  const { onClose } = props;
+  useEffect(() => {
+    if (locked) {
+      toast.error(PLAN_LOCKED_MESSAGE);
+      onClose?.();
+    }
+  }, [locked, onClose]);
+  if (locked) return null;
+  return <ResumeUploadModalBody {...props} />;
+}
 
-  if (!resumeUploadAvailable) {
-    toast.error('Resume Storage is not available in your plan');
-    onClose?.();
-    return null;
-  }
+function ResumeUploadModalBody({ jobTitle, onClose, onSubmit }: ResumeUploadModalProps) {
 
   const [filesWithStatus, setFilesWithStatus] = useState<FileWithStatus[]>([]);
   const [dragActive, setDragActive] = useState(false);

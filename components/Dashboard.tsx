@@ -39,7 +39,8 @@ import { handleUnauthorized } from '@/lib/services/api';
 import { User, Tenant, getRemainingUnits } from '@/lib/types/tenant';
 import UnitsWarningBanner from './UnitsWarningBanner';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
+import { usePlanFeatures, usePlanLock } from '@/lib/hooks/usePlanFeature';
+import PlanLockedOverlay from '@/components/shared/PlanLockedOverlay';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { PLAN_FEATURE_METADATA, PlanFeatureKey } from '@/lib/types/planFeatures';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -94,6 +95,7 @@ export default function Dashboard({
 
   // Plan feature gating
   const { hasPlanFeature, features: planFeatures } = usePlanFeatures();
+  const { isPlanLocked } = usePlanLock();
 
   // Get usage data from tenant
   const subscription = tenant?.subscription;
@@ -463,7 +465,7 @@ export default function Dashboard({
           {/* Usage Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-6">
             {/* Resume Upload Units */}
-            {hasPlanFeature('resume_upload') && <div className="bg-gray-50 rounded-lg p-3 sm:p-4 border border-gray-200 hover:border-gray-300 transition-all">
+            {<PlanLockedOverlay locked={isPlanLocked('resume_upload')}>{<div className="bg-gray-50 rounded-lg p-3 sm:p-4 border border-gray-200 hover:border-gray-300 transition-all">
               <div className="flex items-center justify-between mb-2 sm:mb-3">
                 <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
                   <Users className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800" />
@@ -485,7 +487,7 @@ export default function Dashboard({
               <div className="text-2xs sm:text-xs text-gray-500">
                 {usage?.resumeUploads?.toLocaleString() || '1,593'} used of {limits?.resumeUploads?.toLocaleString() || '2,450'}
               </div>
-            </div>}
+            </div>}</PlanLockedOverlay>}
 
             {/* Job Posting Units */}
             <div className="bg-gray-50 rounded-lg p-3 sm:p-4 border border-gray-200 hover:border-gray-300 transition-all">
@@ -513,7 +515,7 @@ export default function Dashboard({
             </div>
 
             {/* Assessment Units */}
-            {hasPlanFeature('assessment') && <div className="bg-gray-50 rounded-lg p-3 sm:p-4 border border-gray-200 hover:border-gray-300 transition-all">
+            {<PlanLockedOverlay locked={isPlanLocked('assessment')}>{<div className="bg-gray-50 rounded-lg p-3 sm:p-4 border border-gray-200 hover:border-gray-300 transition-all">
               <div className="flex items-center justify-between mb-2 sm:mb-3">
                 <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-warning-subtle flex items-center justify-center flex-shrink-0">
                   <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-warning" />
@@ -535,10 +537,10 @@ export default function Dashboard({
               <div className="text-2xs sm:text-xs text-gray-500">
                 {assessmentStats.units_consumed} used of {limits?.assessments || '500'}
               </div>
-            </div>}
+            </div>}</PlanLockedOverlay>}
 
             {/* AI Interview Units */}
-            {hasPlanFeature('ai_interview') && <div className="bg-gray-50 rounded-lg p-3 sm:p-4 border border-gray-200 hover:border-gray-300 transition-all">
+            {<PlanLockedOverlay locked={isPlanLocked('ai_interview')}>{<div className="bg-gray-50 rounded-lg p-3 sm:p-4 border border-gray-200 hover:border-gray-300 transition-all">
               <div className="flex items-center justify-between mb-2 sm:mb-3">
                 <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
                   <Video className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800" />
@@ -569,7 +571,7 @@ export default function Dashboard({
                   ? `${usage?.aiInterviews || '87'} conducted this month`
                   : `${usage?.aiInterviews || '87'} used of ${limits?.aiInterviews || 'Unlimited'}`}
               </div>
-            </div>}
+            </div>}</PlanLockedOverlay>}
           </div>
 
           {/* Plan Features - Dynamic based on actual plan */}
@@ -705,7 +707,7 @@ export default function Dashboard({
                         </div>
                       </div>
                       <div className="flex items-center gap-2 ml-4">
-                        {onAIMatch && hasPlanFeature('ai_talent_match') && (
+                        {onAIMatch && <PlanLockedOverlay locked={isPlanLocked('ai_talent_match')}>{(
                           <Button
                             variant="primary"
                             size="sm"
@@ -717,7 +719,7 @@ export default function Dashboard({
                           >
                             AI Match
                           </Button>
-                        )}
+                        )}</PlanLockedOverlay>}
                       </div>
                     </div>
                   </div>
@@ -957,7 +959,7 @@ export default function Dashboard({
             <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
               <h3 className="text-gray-900 mb-4">Quick Actions</h3>
               <div className="space-y-3">
-                {hasPlanFeature('resume_upload') && (
+                {<PlanLockedOverlay locked={isPlanLocked('resume_upload')}>{(
                 <button
                   onClick={() => onNavigateToMyResumes?.()}
                   className="w-full flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-50 transition-all text-left"
@@ -967,7 +969,7 @@ export default function Dashboard({
                   </div>
                   <span className="text-sm text-gray-900">Upload Resume</span>
                 </button>
-                )}
+                )}</PlanLockedOverlay>}
                 <button
                   onClick={() => onNavigateToJDCreation?.()}
                   className="w-full flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-50 transition-all text-left"
@@ -977,7 +979,7 @@ export default function Dashboard({
                   </div>
                   <span className="text-sm text-gray-900">Post New Job</span>
                 </button>
-                {hasPlanFeature('ai_interview') && (
+                {<PlanLockedOverlay locked={isPlanLocked('ai_interview')}>{(
                 <button
                   onClick={() => onNavigateToAIInterview?.()}
                   className="w-full flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-50 transition-all text-left"
@@ -987,8 +989,8 @@ export default function Dashboard({
                   </div>
                   <span className="text-sm text-gray-900">Schedule Interview</span>
                 </button>
-                )}
-                {hasPlanFeature('assessment') && (
+                )}</PlanLockedOverlay>}
+                {<PlanLockedOverlay locked={isPlanLocked('assessment')}>{(
                 <button
                   onClick={() => onNavigateToAssessments?.()}
                   className="w-full flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-50 transition-all text-left"
@@ -998,7 +1000,7 @@ export default function Dashboard({
                   </div>
                   <span className="text-sm text-gray-900">Create Assessment</span>
                 </button>
-                )}
+                )}</PlanLockedOverlay>}
                 <button 
                   onClick={() => onNavigateToUsage?.()}
                   className="w-full flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-50 transition-all text-left"

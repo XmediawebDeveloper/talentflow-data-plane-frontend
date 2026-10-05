@@ -32,3 +32,10 @@ export const PLAN_FEATURE_METADATA: Record<PlanFeatureKey, { name: string; descr
   ai_talent_match: { name: 'AI Talent Match', description: 'AI-powered candidate matching', icon: 'Sparkles' },
   teams: { name: 'Teams', description: 'Team management and collaboration', icon: 'UserCog' },
 };
+
+/** Hover text for anything greyed out because the tenant's plan lacks the
+ *  feature — the plan-tier counterpart of RBAC's "You do not have permission
+ *  to access this". Plan-gated UI stays VISIBLE but disabled with this
+ *  message; it is never hidden (hiding made it flash in, then vanish once
+ *  /quota-status resolved). */
+export const PLAN_LOCKED_MESSAGE = 'Your current plan does not have access to this feature';

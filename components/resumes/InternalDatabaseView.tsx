@@ -39,7 +39,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import FeatureGate from '@/components/shared/FeatureGate';
 import { Skeleton } from '@/components/ui/skeleton';
-import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
+import { usePlanFeatures, usePlanLock } from '@/lib/hooks/usePlanFeature';
+import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 interface SearchFilters {
@@ -64,6 +65,9 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
   const router = useRouter();
   const { user, isTenantAdmin, hasPermission, hasPermissionCode } = useAuth();
   const { hasPlanFeature } = usePlanFeatures();
+  // Plan-gated actions stay visible but disabled (hover: PLAN_LOCKED_MESSAGE),
+  // never hidden — see usePlanLock.
+  const { isPlanLocked } = usePlanLock();
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
@@ -1039,18 +1043,18 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
             // `handleBulkApplyToJob` (same modal, same job picker), so the bar
             // showed "Score Resume" and "Resume Scoring" as two buttons doing
             // one thing.
-            onApplyToJob={hasPlanFeature('resume_scoring') ? handleBulkApplyToJob : undefined}
-            onApplyToJobDisabled={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('internal_db:apply_job')))}
-            onApplyToJobDisabledReason="You do not have permission to score resumes"
-            onAssessment={hasPlanFeature('assessment') ? handleBulkAssessment : undefined}
-            onAssessmentDisabled={!(isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('internal_db:assessment')))}
-            onAssessmentDisabledReason="You do not have permission to invite candidates to an assessment"
-            onAIInterview={hasPlanFeature('ai_interview') ? handleBulkAIInterview : undefined}
-            onAIInterviewDisabled={!(isTenantAdmin || hasPermission('canInviteAIInterviews'))}
-            onAIInterviewDisabledReason="You do not have permission to invite candidates to an AI interview"
-            onAITalentMatch={hasPlanFeature('ai_talent_match') ? handleBulkAITalentMatch : undefined}
-            onAITalentMatchDisabled={!(isTenantAdmin || (hasPermission('canRunAiMatch') && hasPermissionCode('internal_db:ai_match')))}
-            onAITalentMatchDisabledReason="You do not have permission to run AI talent match"
+            onApplyToJob={handleBulkApplyToJob}
+            onApplyToJobDisabled={isPlanLocked('resume_scoring') || !(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('internal_db:apply_job')))}
+            onApplyToJobDisabledReason={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('internal_db:apply_job'))) ? "You do not have permission to score resumes" : PLAN_LOCKED_MESSAGE}
+            onAssessment={handleBulkAssessment}
+            onAssessmentDisabled={isPlanLocked('assessment') || !(isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('internal_db:assessment')))}
+            onAssessmentDisabledReason={!(isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('internal_db:assessment'))) ? "You do not have permission to invite candidates to an assessment" : PLAN_LOCKED_MESSAGE}
+            onAIInterview={handleBulkAIInterview}
+            onAIInterviewDisabled={isPlanLocked('ai_interview') || !(isTenantAdmin || hasPermission('canInviteAIInterviews'))}
+            onAIInterviewDisabledReason={!(isTenantAdmin || hasPermission('canInviteAIInterviews')) ? "You do not have permission to invite candidates to an AI interview" : PLAN_LOCKED_MESSAGE}
+            onAITalentMatch={handleBulkAITalentMatch}
+            onAITalentMatchDisabled={isPlanLocked('ai_talent_match') || !(isTenantAdmin || (hasPermission('canRunAiMatch') && hasPermissionCode('internal_db:ai_match')))}
+            onAITalentMatchDisabledReason={!(isTenantAdmin || (hasPermission('canRunAiMatch') && hasPermissionCode('internal_db:ai_match'))) ? "You do not have permission to run AI talent match" : PLAN_LOCKED_MESSAGE}
             onDownload={handleBulkDownload}
             onDelete={() => handleDeleteResumes(selectedResumes)}
             onDeleteDisabled={!(isTenantAdmin || hasPermissionCode('internal_db:delete'))}
@@ -1121,9 +1125,9 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
           onSelectResume={handleSelectResume}
           onSelectAll={handleSelectAll}
           onQuickView={(resume) => setQuickViewResume(resume)}
-          onApplyToJob={hasPlanFeature('resume_scoring') ? handleApplyToJob : undefined}
-          onApplyToJobDisabled={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('internal_db:apply_job')))}
-          onApplyToJobDisabledReason="You do not have permission to score resumes"
+          onApplyToJob={handleApplyToJob}
+          onApplyToJobDisabled={isPlanLocked('resume_scoring') || !(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('internal_db:apply_job')))}
+          onApplyToJobDisabledReason={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('internal_db:apply_job'))) ? "You do not have permission to score resumes" : PLAN_LOCKED_MESSAGE}
           canShare={isTenantAdmin || hasPermissionCode('internal_db:share')}
           onDelete={(id) => handleDelete(id)}
           onDeleteDisabled={!(isTenantAdmin || hasPermissionCode('internal_db:delete'))}

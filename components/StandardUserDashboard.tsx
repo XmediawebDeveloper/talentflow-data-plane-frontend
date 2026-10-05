@@ -20,7 +20,8 @@ import { useRouter } from 'next/navigation';
 import { User, Tenant } from '@/lib/types/tenant';
 import WelcomeBanner from '@/components/dashboard/WelcomeBanner';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
+import { usePlanLock } from '@/lib/hooks/usePlanFeature';
+import PlanLockedOverlay from '@/components/shared/PlanLockedOverlay';
 
 interface StandardUserDashboardProps {
   user?: User;
@@ -30,7 +31,7 @@ interface StandardUserDashboardProps {
 export default function StandardUserDashboard({ user, tenant }: StandardUserDashboardProps) {
   const router = useRouter();
   const { hasPermission } = useAuth();
-  const { hasPlanFeature } = usePlanFeatures();
+  const { isPlanLocked } = usePlanLock();
 
   const canCreateJD = hasPermission('canCreateJD');
   const canUploadResumes = hasPermission('canUploadResumes');
@@ -176,22 +177,22 @@ export default function StandardUserDashboard({ user, tenant }: StandardUserDash
                   tone="brand-teal"
                 />
               )}
-              {hasPlanFeature('ai_interview') && (
+              {<PlanLockedOverlay locked={isPlanLocked('ai_interview')}>{(
                 <ActionTile
                   label="Schedule interview"
                   icon={<Video className="w-5 h-5" />}
                   onClick={() => router.push('/recruitment/ai-interview')}
                   tone="brand-orange"
                 />
-              )}
-              {hasPlanFeature('ai_talent_match') && (
+              )}</PlanLockedOverlay>}
+              {<PlanLockedOverlay locked={isPlanLocked('ai_talent_match')}>{(
                 <ActionTile
                   label="AI talent match"
                   icon={<Sparkles className="w-5 h-5" />}
                   onClick={() => router.push('/recruitment/job-openings')}
                   tone="brand-blue"
                 />
-              )}
+              )}</PlanLockedOverlay>}
               <ActionTile
                 label="View candidates"
                 icon={<Users className="w-5 h-5" />}

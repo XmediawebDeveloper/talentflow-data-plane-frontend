@@ -16,6 +16,8 @@ import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import api from '@/lib/services/api';
+import { usePlanLock } from '@/lib/hooks/usePlanFeature';
+import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { mapJDToJob, formatJobVersionLabel } from '@/lib/utils/jobOpeningDisplay';
 import { getJDUsageModules, type JDUsageModule } from '@/lib/utils/jdUsageModules';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
@@ -358,6 +360,9 @@ export default function JobOpeningsPage() {
   const [aiMatchRunJob, setAiMatchRunJob] = useState<Job | null>(null);
   const [scoreResumesJob, setScoreResumesJob] = useState<Job | null>(null);
 
+  // Plan-gated row actions stay in the menu, disabled with the plan hover.
+  const { isPlanLocked } = usePlanLock();
+
   const handleAIMatch = (job: Job) => {
     setAiMatchConfirmJob(job);
   };
@@ -663,9 +668,11 @@ export default function JobOpeningsPage() {
         onViewJob={handleViewJob}
         onViewApplicants={handleViewApplicants}
         onAIMatch={handleAIMatch}
-        onAIMatchDisabled={!(hasPermission('canRunAiMatch') || isTenantAdmin)}
+        onAIMatchDisabled={isPlanLocked('ai_talent_match') || !(hasPermission('canRunAiMatch') || isTenantAdmin)}
+        onAIMatchDisabledReason={isPlanLocked('ai_talent_match') ? PLAN_LOCKED_MESSAGE : undefined}
         onScoreResumes={handleScoreResumes}
-        onScoreResumesDisabled={!(hasPermission('canRunScoring') || isTenantAdmin)}
+        onScoreResumesDisabled={isPlanLocked('resume_scoring') || !(hasPermission('canRunScoring') || isTenantAdmin)}
+        onScoreResumesDisabledReason={isPlanLocked('resume_scoring') ? PLAN_LOCKED_MESSAGE : undefined}
         onUpdateJobStatus={handleUpdateJobStatus}
         onEditJob={handleEditJob}
         onPublishJob={handlePublishJob}

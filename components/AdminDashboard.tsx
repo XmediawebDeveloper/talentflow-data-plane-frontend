@@ -8,7 +8,8 @@ import { dashboardService, DashboardStats, RecentActivity, SubscriptionUnits, JD
 import WelcomeBanner from '@/components/dashboard/WelcomeBanner';
 import { useQuota } from '@/contexts/QuotaContext';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
+import { usePlanLock } from '@/lib/hooks/usePlanFeature';
+import PlanLockedOverlay from '@/components/shared/PlanLockedOverlay';
 import { formatOverallScore } from '@/lib/utils/matchStatus';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -33,7 +34,7 @@ export default function AdminDashboard({
   const { quotaData } = useQuota();
   const isTenantAdmin = user?.role === 'tenant_admin';
   const { hasPermission } = useAuth();
-  const { hasPlanFeature } = usePlanFeatures();
+  const { isPlanLocked } = usePlanLock();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [subscriptionUnits, setSubscriptionUnits] = useState<SubscriptionUnits | null>(null);  // JD02A
@@ -216,7 +217,7 @@ export default function AdminDashboard({
       {false && (
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
         {/* Resumes Card - Clickable with navigation links (only if plan includes resume_upload) */}
-        {hasPlanFeature('resume_upload') && <div className="group relative overflow-hidden bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-6 hover:shadow-lg hover:shadow-brand-blue/10 hover:border-brand-blue/30 hover:-translate-y-0.5 transition-all">
+        {<PlanLockedOverlay locked={isPlanLocked('resume_upload')}>{<div className="group relative overflow-hidden bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-6 hover:shadow-lg hover:shadow-brand-blue/10 hover:border-brand-blue/30 hover:-translate-y-0.5 transition-all">
           <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-brand-blue/5 blur-2xl group-hover:bg-brand-blue/10 transition-colors" />
           <div className="relative flex items-center justify-between">
             <div>
@@ -242,7 +243,7 @@ export default function AdminDashboard({
               <FileText className="w-6 h-6 text-brand-blue" />
             </div>
           </div>
-        </div>}
+        </div>}</PlanLockedOverlay>}
 
         {/* Job Descriptions Card - Clickable with status filters */}
         <div className="group relative overflow-hidden bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-6 hover:shadow-lg hover:shadow-brand-cyan/10 hover:border-brand-cyan/30 hover:-translate-y-0.5 transition-all">
@@ -306,7 +307,7 @@ export default function AdminDashboard({
         </div>
 
         {/* Assessments Card - Clickable (only if plan includes assessment) */}
-        {hasPlanFeature('assessment') && (
+        {<PlanLockedOverlay locked={isPlanLocked('assessment')}>{(
           <div
             className="group relative overflow-hidden bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-6 cursor-pointer hover:shadow-lg hover:shadow-brand-orange/10 hover:border-brand-orange/30 hover:-translate-y-0.5 transition-all"
             onClick={() => router.push('/recruitment/assessments')}
@@ -331,7 +332,7 @@ export default function AdminDashboard({
               </div>
             </div>
           </div>
-        )}
+        )}</PlanLockedOverlay>}
       </div>
       )}
 
@@ -346,7 +347,7 @@ export default function AdminDashboard({
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
             {/* Resume Upload Units */}
-            {subscriptionUnits.RU && hasPlanFeature('resume_upload') && (
+            {subscriptionUnits.RU && <PlanLockedOverlay locked={isPlanLocked('resume_upload')}>{(
               <div
                 className="group cursor-pointer bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-4 hover:shadow-md hover:shadow-brand-blue/10 hover:border-brand-blue/30 hover:-translate-y-0.5 transition-all"
                 onClick={() => router.push('/recruitment/resume-database?tab=my-resumes')}
@@ -374,10 +375,10 @@ export default function AdminDashboard({
                   </div>
                 )}
               </div>
-            )}
+            )}</PlanLockedOverlay>}
 
             {/* Resume Scoring Units */}
-            {subscriptionUnits.RS && hasPlanFeature('resume_scoring') && (
+            {subscriptionUnits.RS && <PlanLockedOverlay locked={isPlanLocked('resume_scoring')}>{(
               <div
                 className="group cursor-pointer bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-4 hover:shadow-md hover:shadow-brand-cyan/10 hover:border-brand-cyan/30 hover:-translate-y-0.5 transition-all"
                 onClick={() => router.push('/recruitment/resume-scoring')}
@@ -405,10 +406,10 @@ export default function AdminDashboard({
                   </div>
                 )}
               </div>
-            )}
+            )}</PlanLockedOverlay>}
 
             {/* Assessment Units */}
-            {subscriptionUnits.AS && hasPlanFeature('assessment') && (
+            {subscriptionUnits.AS && <PlanLockedOverlay locked={isPlanLocked('assessment')}>{(
               <div
                 className="group cursor-pointer bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-4 hover:shadow-md hover:shadow-brand-orange/10 hover:border-brand-orange/30 hover:-translate-y-0.5 transition-all"
                 onClick={() => router.push('/recruitment/assessments')}
@@ -436,10 +437,10 @@ export default function AdminDashboard({
                   </div>
                 )}
               </div>
-            )}
+            )}</PlanLockedOverlay>}
 
             {/* AI Interview Units */}
-            {subscriptionUnits.AIU && hasPlanFeature('ai_interview') && (
+            {subscriptionUnits.AIU && <PlanLockedOverlay locked={isPlanLocked('ai_interview')}>{(
               <div
                 className="group cursor-pointer bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-4 hover:shadow-md hover:shadow-brand-blue/10 hover:border-brand-blue-2/30 hover:-translate-y-0.5 transition-all"
                 onClick={() => router.push('/recruitment/ai-interviews')}
@@ -467,7 +468,7 @@ export default function AdminDashboard({
                   </div>
                 )}
               </div>
-            )}
+            )}</PlanLockedOverlay>}
 
             {/* Max Users */}
             {subscriptionUnits.max_seats && (
@@ -566,7 +567,7 @@ export default function AdminDashboard({
               </div>
             </button>
 
-            {hasPlanFeature('resume_scoring') && (
+            {<PlanLockedOverlay locked={isPlanLocked('resume_scoring')}>{(
               <button
                 onClick={() => router.push('/recruitment/resume-scoring?mode=new')}
                 className="group w-full flex items-center gap-3 p-3 rounded-xl border border-gray-100 bg-gradient-to-r from-white to-brand-teal/[0.02] hover:bg-brand-teal/[0.04] hover:border-brand-teal/30 hover:shadow-sm hover:shadow-brand-teal/10 transition-all"
@@ -579,9 +580,9 @@ export default function AdminDashboard({
                   <p className="text-xs text-gray-500">Review and score candidate resumes</p>
                 </div>
               </button>
-            )}
+            )}</PlanLockedOverlay>}
 
-            {hasPlanFeature('assessment') && (
+            {<PlanLockedOverlay locked={isPlanLocked('assessment')}>{(
               <button
                 onClick={() => router.push('/recruitment/assessments?create=true')}
                 className="group w-full flex items-center gap-3 p-3 rounded-xl border border-gray-100 bg-gradient-to-r from-white to-brand-orange/[0.02] hover:bg-brand-orange/[0.04] hover:border-brand-orange/30 hover:shadow-sm hover:shadow-brand-orange/10 transition-all"
@@ -594,9 +595,9 @@ export default function AdminDashboard({
                   <p className="text-xs text-gray-500">Create and manage candidate assessments</p>
                 </div>
               </button>
-            )}
+            )}</PlanLockedOverlay>}
 
-            {hasPlanFeature('ai_interview') && (
+            {<PlanLockedOverlay locked={isPlanLocked('ai_interview')}>{(
               <button
                 onClick={() => router.push('/recruitment/ai-interviews/jd-selection')}
                 className="group w-full flex items-center gap-3 p-3 rounded-xl border border-gray-100 bg-gradient-to-r from-white to-brand-blue/[0.02] hover:bg-brand-blue/[0.04] hover:border-brand-blue/30 hover:shadow-sm hover:shadow-brand-blue/10 transition-all"
@@ -609,7 +610,7 @@ export default function AdminDashboard({
                   <p className="text-xs text-gray-500">Launch and monitor interview workflows</p>
                 </div>
               </button>
-            )}
+            )}</PlanLockedOverlay>}
 
             <button
               onClick={onNavigateToTenants}

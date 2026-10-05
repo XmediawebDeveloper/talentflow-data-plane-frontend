@@ -14,7 +14,7 @@ import { assessmentService, jdService } from '@/lib/services';
 import api from '@/lib/services/api';
 import dynamic from 'next/dynamic';
 import { toast } from 'sonner';
-import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
+import { usePlanLock } from '@/lib/hooks/usePlanFeature';
 import { useAuth } from '@/components/providers/AuthProvider';
 import SuccessAnimation from '@/components/ui/success-animation';
 import PageBreadcrumb, { type BreadcrumbCrumb } from '@/components/PageBreadcrumb';
@@ -629,7 +629,10 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
   // add/edit/delete-question affordance this builder actually has (the bank
   // has no per-question edit or delete UI here to gate).
   const canAddQuestion = isTenantAdmin || hasPermissionCode('assessments:add_question');
-  const { available: assessmentAvailable } = usePlanFeature('assessment');
+  // Locked only once plan features have loaded — `available` is false while
+  // loading, which used to toast "not available" and blank the form on every load.
+  const { isPlanLocked } = usePlanLock();
+  const assessmentAvailable = !isPlanLocked('assessment');
 
   /* Read initial step from URL, default to 'select-jd'.
    *

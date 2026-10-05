@@ -19,7 +19,7 @@ import {
 // Drawn in-house because no lucide glyph carries these two meanings — see the
 // file for the reasoning. Both are lucide-shaped, so they slot in unchanged.
 import { ResumeScoringIcon, TalentMatchIcon } from '@/components/icons/nav-icons';
-import type { PlanFeatureKey } from '@/lib/types/planFeatures';
+import { PLAN_LOCKED_MESSAGE, type PlanFeatureKey } from '@/lib/types/planFeatures';
 
 export interface NavItem {
   id: string;
@@ -43,7 +43,7 @@ export interface NavItem {
 /** Hover text for a disabled menu item, keyed by why it is disabled. */
 export const DISABLED_REASON_MESSAGE: Record<'permission' | 'plan', string> = {
   permission: 'You do not have permission to access this',
-  plan: 'Your current plan does not have access to this feature',
+  plan: PLAN_LOCKED_MESSAGE,
 };
 
 export interface NavSection {

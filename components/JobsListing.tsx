@@ -97,8 +97,12 @@ interface JobsListingProps {
   onViewApplicants?: (job: Job) => void;
   onAIMatch?: (job: Job) => void;
   onAIMatchDisabled?: boolean;
+  /** Hover/toast text when onAIMatchDisabled — e.g. the plan-locked message.
+   *  Defaults to the permission message. */
+  onAIMatchDisabledReason?: string;
   onScoreResumes?: (job: Job) => void;
   onScoreResumesDisabled?: boolean;
+  onScoreResumesDisabledReason?: string;
   onUpdateJobStatus?: (jobId: string, status: Job['status']) => void;
   onEditJob?: (job: Job) => void;
   /**
@@ -159,7 +163,7 @@ const StatVersions = ({ count }: { count: number }) => (
   </span>
 );
 
-export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded = true, onCreateNew, onCreateNewDisabled = false, onViewJob, onViewApplicants, onAIMatch, onAIMatchDisabled = false, onScoreResumes, onScoreResumesDisabled = false, onUpdateJobStatus, onEditJob, versionStatusOverrides, onPublishJob, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, onBulkDelete, quotaInfo, initialStatusFilter, forceListView, configHref }: JobsListingProps) {
+export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded = true, onCreateNew, onCreateNewDisabled = false, onViewJob, onViewApplicants, onAIMatch, onAIMatchDisabled = false, onAIMatchDisabledReason = 'You do not have permission to run AI Talent Match', onScoreResumes, onScoreResumesDisabled = false, onScoreResumesDisabledReason = 'You do not have permission to run resume scoring', onUpdateJobStatus, onEditJob, versionStatusOverrides, onPublishJob, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, onBulkDelete, quotaInfo, initialStatusFilter, forceListView, configHref }: JobsListingProps) {
   const dialog = useGlobalDialog();
   const router = useRouter();
   const { isTenantAdmin, user, hasPermissionCode } = useAuth();
@@ -1389,14 +1393,14 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     if (onAIMatchDisabled) {
-                                      toast.error('You do not have permission to run AI Talent Match');
+                                      toast.error(onAIMatchDisabledReason);
                                       return;
                                     }
                                     setActiveDropdown(null);
                                     onAIMatch(job);
                                   }}
                                   aria-disabled={onAIMatchDisabled}
-                                  title={onAIMatchDisabled ? 'You do not have permission to run AI Talent Match' : ''}
+                                  title={onAIMatchDisabled ? onAIMatchDisabledReason : ''}
                                   className={`group w-full flex items-center gap-2 px-3 py-2 text-sm ${onAIMatchDisabled ? 'text-gray-400 cursor-not-allowed opacity-60' : 'text-gray-700'}`}
                                 >
                                   <Brain className={`w-4 h-4 ${onAIMatchDisabled ? 'text-gray-400' : 'text-menu-icon-ai'}`} />
@@ -1408,14 +1412,14 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     if (onScoreResumesDisabled) {
-                                      toast.error('You do not have permission to run resume scoring');
+                                      toast.error(onScoreResumesDisabledReason);
                                       return;
                                     }
                                     onScoreResumes(job);
                                     setActiveDropdown(null);
                                   }}
                                   aria-disabled={onScoreResumesDisabled}
-                                  title={onScoreResumesDisabled ? 'You do not have permission to run resume scoring' : ''}
+                                  title={onScoreResumesDisabled ? onScoreResumesDisabledReason : ''}
                                   className={`group w-full flex items-center gap-2 px-3 py-2 text-sm ${onScoreResumesDisabled ? 'text-gray-400 cursor-not-allowed opacity-60' : 'text-gray-700'}`}
                                 >
                                   <ClipboardList className={`w-4 h-4 ${onScoreResumesDisabled ? 'text-gray-400' : 'text-menu-icon-score'}`} />
@@ -1631,13 +1635,13 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                                     onSelect={(e) => {
                                       if (onAIMatchDisabled) {
                                         e.preventDefault();
-                                        toast.error('You do not have permission to run AI Talent Match');
+                                        toast.error(onAIMatchDisabledReason);
                                         return;
                                       }
                                       onAIMatch(versionJob);
                                     }}
                                     aria-disabled={onAIMatchDisabled}
-                                    title={onAIMatchDisabled ? 'You do not have permission to run AI Talent Match' : undefined}
+                                    title={onAIMatchDisabled ? onAIMatchDisabledReason : undefined}
                                     className={onAIMatchDisabled ? `${viewVersionsMenuItemClass} opacity-50 cursor-not-allowed` : viewVersionsMenuItemClass}
                                   >
                                     <Brain className="w-4 h-4 text-menu-icon-ai" />
@@ -1649,13 +1653,13 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                                     onSelect={(e) => {
                                       if (onScoreResumesDisabled) {
                                         e.preventDefault();
-                                        toast.error('You do not have permission to run resume scoring');
+                                        toast.error(onScoreResumesDisabledReason);
                                         return;
                                       }
                                       onScoreResumes(versionJob);
                                     }}
                                     aria-disabled={onScoreResumesDisabled}
-                                    title={onScoreResumesDisabled ? 'You do not have permission to run resume scoring' : undefined}
+                                    title={onScoreResumesDisabled ? onScoreResumesDisabledReason : undefined}
                                     className={onScoreResumesDisabled ? `${viewVersionsMenuItemClass} opacity-50 cursor-not-allowed` : viewVersionsMenuItemClass}
                                   >
                                     <ClipboardList className="w-4 h-4 text-menu-icon-score" />

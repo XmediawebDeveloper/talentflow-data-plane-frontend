@@ -30,6 +30,7 @@ import SearchableSelect from '@/components/ui/searchable-select';
 import { DateField } from '@/components/ui/date-field';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
+import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { useAllJobInviteTargets } from '@/lib/hooks/useAllJobInviteTargets';
 import { formatIST, formatISTDate, formatISTTime, parseIST } from '@/lib/utils/dateUtils';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
@@ -332,10 +333,15 @@ export default function ScoredResumesTable({
   // canCreateAssessments (creating a brand-new assessment is a different
   // action). Previously this checked canCreateAssessments, so disabling
   // Resume Scoring's "Invite" permission had no effect on this button.
-  const canCreateAssessments =
+  const assessmentInvitePermitted =
     (isTenantAdmin || hasPermissionCode('scoring:invite')) &&
-    hasPlanFeature('assessment') &&
     isFeatureEnabled('assessment');
+  const canCreateAssessments = assessmentInvitePermitted && hasPlanFeature('assessment');
+  // Why an Assessment invite control is off: a permitted user whose plan
+  // lacks Assessments is told so, not that they lack permission.
+  const assessmentDeniedReason = assessmentInvitePermitted
+    ? PLAN_LOCKED_MESSAGE
+    : 'You do not have permission to invite candidates to an assessment';
   // Whether the viewer may invite to AI Interview AT ALL (permission + plan +
   // tenant feature), AND there is some way to actually carry it out — either
   // the host's own handler, or its explicit opt-in into this component's
@@ -352,12 +358,18 @@ export default function ScoredResumesTable({
   // canInviteAIInterviews (ai_interview:invite) stays required alongside it,
   // since that is the permission the AI Interview invite endpoints actually
   // enforce server-side.
-  const mayInviteAIInterview =
+  const aiInterviewInvitePermitted =
     (!!onInviteAIInterview || enableInternalAIInterviewInvite) &&
     (isTenantAdmin || hasPermissionCode('scoring:invite')) &&
     hasPermission('canInviteAIInterviews') &&
-    hasPlanFeature('ai_interview') &&
     isFeatureEnabled('ai_interview');
+  const mayInviteAIInterview = aiInterviewInvitePermitted && hasPlanFeature('ai_interview');
+  const aiInterviewDeniedReason = aiInterviewInvitePermitted
+    ? PLAN_LOCKED_MESSAGE
+    : 'You do not have permission to invite candidates to an AI interview';
+  // Permitted to invite somewhere, but the plan covers neither target.
+  const invitePlanLocked =
+    (assessmentInvitePermitted || aiInterviewInvitePermitted) && !canCreateAssessments && !mayInviteAIInterview;
 
   // Only the cross-job global list needs this — a single-job host (JobDetailView,
   // or this page's own per-job "Scoring History" list) already knows its one
@@ -407,7 +419,9 @@ export default function ScoredResumesTable({
   const inviteDisabledTitle =
     canCreateAssessments || mayInviteAIInterview
       ? 'No published assessment or AI interview for this job yet'
-      : undefined;
+      : invitePlanLocked
+        ? PLAN_LOCKED_MESSAGE
+        : undefined;
   // Resume Scoring's own Export / Download Scorecard toggles — previously both
   // checked the generic, module-agnostic canExport flag (which defaults true
   // for most roles), so disabling either one here had no effect.
@@ -1462,7 +1476,7 @@ Best regards`);
       // The trigger stays visible but inert, with a tooltip naming the
       // reason, rather than disappearing outright.
       rowInviteDisabledTitle: !(canCreateAssessments || mayInviteAIInterview)
-        ? 'You do not have permission to invite candidates'
+        ? (invitePlanLocked ? PLAN_LOCKED_MESSAGE : 'You do not have permission to invite candidates')
         : 'No published assessment or AI interview for this job yet',
     };
   };
@@ -1481,7 +1495,7 @@ Best regards`);
             disabled={!canCreateAssessments || !rowCanInviteAssessment || availableUnits === 0}
             title={
               !canCreateAssessments
-                ? 'You do not have permission to invite candidates to an assessment'
+                ? assessmentDeniedReason
                 : !rowCanInviteAssessment
                   ? 'No published assessment for this job yet'
                   : availableUnits === 0
@@ -1490,7 +1504,7 @@ Best regards`);
             }
             onSelect={() => {
               if (!canCreateAssessments) {
-                toast.error('You do not have permission to invite candidates to an assessment');
+                toast.error(assessmentDeniedReason);
                 return;
               }
               setInviteCandidate(resume);
@@ -1507,14 +1521,14 @@ Best regards`);
             disabled={!mayInviteAIInterview || !rowCanInviteAIInterview}
             title={
               !mayInviteAIInterview
-                ? 'You do not have permission to invite candidates to an AI interview'
+                ? aiInterviewDeniedReason
                 : !rowCanInviteAIInterview
                   ? 'No published AI interview for this job yet'
                   : undefined
             }
             onSelect={() => {
               if (!mayInviteAIInterview) {
-                toast.error('You do not have permission to invite candidates to an AI interview');
+                toast.error(aiInterviewDeniedReason);
                 return;
               }
                 if (onInviteAIInterview) {
@@ -1690,7 +1704,7 @@ Best regards`);
         size="sm"
         onClick={() => {
           if (!canCreateAssessments) {
-            toast.error('You do not have permission to invite candidates to an assessment');
+            toast.error(assessmentDeniedReason);
             return;
           }
           setShowBulkInviteModal(true);
@@ -1703,7 +1717,7 @@ Best regards`);
         icon={<Send className="w-4 h-4" />}
         title={
           !canCreateAssessments
-            ? 'You do not have permission to invite candidates to an assessment'
+            ? assessmentDeniedReason
             : !canInviteAssessment
               ? 'No published assessment for this job yet'
               : availableUnits === 0
@@ -2764,7 +2778,7 @@ Best regards`);
                     onClick={(e) => {
                       e.stopPropagation();
                       if (!canCreateAssessments) {
-                        toast.error('You do not have permission to invite candidates to an assessment');
+                        toast.error(assessmentDeniedReason);
                         return;
                       }
                       setInviteCandidate(resume);
@@ -2782,7 +2796,7 @@ Best regards`);
                           <AlertCircle className="w-3.5 h-3.5 text-destructive" />
                           <span>
                             {!canCreateAssessments
-                              ? 'You do not have permission to invite candidates to an assessment'
+                              ? assessmentDeniedReason
                               : !canInviteAssessment
                                 ? 'No published assessment for this job yet'
                                 : 'No assessment units available'}

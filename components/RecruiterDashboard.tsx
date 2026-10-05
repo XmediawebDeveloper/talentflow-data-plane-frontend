@@ -25,7 +25,8 @@ import { useRouter } from 'next/navigation';
 import { User, Tenant } from '@/lib/types/tenant';
 import WelcomeBanner from '@/components/dashboard/WelcomeBanner';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
+import { usePlanLock } from '@/lib/hooks/usePlanFeature';
+import PlanLockedOverlay from '@/components/shared/PlanLockedOverlay';
 import { useQuota } from '@/contexts/QuotaContext';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { formatISTDate } from '@/lib/utils/dateUtils';
@@ -47,7 +48,7 @@ interface PipelineStage {
 export default function RecruiterDashboard({ user, tenant }: RecruiterDashboardProps) {
   const router = useRouter();
   const { hasPermission } = useAuth();
-  const { hasPlanFeature } = usePlanFeatures();
+  const { isPlanLocked } = usePlanLock();
   const { quotaData } = useQuota();
 
   const [myJDs, setMyJDs] = useState<JDResponse[]>([]);
@@ -216,22 +217,22 @@ export default function RecruiterDashboard({ user, tenant }: RecruiterDashboardP
               accent="from-brand-cyan to-brand-teal"
             />
           )}
-          {hasPlanFeature('ai_talent_match') && (
+          {<PlanLockedOverlay locked={isPlanLocked('ai_talent_match')}>{(
             <QuickAction
               label="Run AI Match"
               icon={<Sparkles className="w-5 h-5" />}
               onClick={() => router.push('/recruitment/job-openings')}
               accent="from-brand-teal to-brand-cyan"
             />
-          )}
-          {hasPlanFeature('ai_interview') && (
+          )}</PlanLockedOverlay>}
+          {<PlanLockedOverlay locked={isPlanLocked('ai_interview')}>{(
             <QuickAction
               label="Schedule Interview"
               icon={<Video className="w-5 h-5" />}
               onClick={() => router.push('/recruitment/ai-interview')}
               accent="from-brand-orange to-brand-orange-deep"
             />
-          )}
+          )}</PlanLockedOverlay>}
         </div>
 
         {/* My JDs + today's schedule */}
@@ -368,14 +369,14 @@ export default function RecruiterDashboard({ user, tenant }: RecruiterDashboardP
                     Review assessments
                   </Button>
                 )}
-                {hasPlanFeature('ai_interview') && (
+                {<PlanLockedOverlay locked={isPlanLocked('ai_interview')}>{(
                   <Button
                     variant="secondary"
                     onClick={() => router.push('/recruitment/ai-interview')}
                   >
                     View interview reports
                   </Button>
-                )}
+                )}</PlanLockedOverlay>}
               </div>
             </div>
           </div>

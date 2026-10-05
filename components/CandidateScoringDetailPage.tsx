@@ -11,7 +11,8 @@ import InviteToAssessmentFlow from './InviteToAssessmentFlow';
 import type { Resume as ResumeRecord } from '@/lib/types/types';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
+import { usePlanLock } from '@/lib/hooks/usePlanFeature';
+import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { useJobInviteTargets } from '@/lib/hooks/useJobInviteTargets';
 import ConfirmationDialog from '@/components/ConfirmationDialog';
 import { toast } from 'sonner';
@@ -167,7 +168,7 @@ function byNewestVersion(a: any, b: any): number {
 
 export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, onMinimize, currentIndex, totalCount, onPrev, onNext, breadcrumbItems, assessmentConfigured, aiInterviewConfigured }: CandidateScoringDetailPageProps) {
   const { isTenantAdmin, user, hasPermissionCode } = useAuth();
-  const { hasPlanFeature } = usePlanFeatures();
+  const { hasPlanFeature, isPlanLocked } = usePlanLock();
   const canExport = isTenantAdmin || (user?.permissions?.canExport ?? false);
   const canShareResume = isTenantAdmin || hasPermissionCode('my_resumes:share');
 
@@ -216,7 +217,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   // (see ScoredResumesTable.tsx's canCreateAssessments), which this page had
   // missed: previously, disabling Resume Scoring's "Invite" permission had
   // no effect on this button.
-  const mayInviteAssessment = (isTenantAdmin || hasPermissionCode('scoring:invite')) && hasPlanFeature('assessment');
+  const mayInviteAssessment = isTenantAdmin || hasPermissionCode('scoring:invite');
   // Same scoring:invite gate as Assessment above — this page lives on the
   // Resume Scoring surface, so disabling that module's "Invite" permission
   // should turn off BOTH invite targets reachable from it, not just
@@ -226,8 +227,12 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   // endpoints actually enforce server-side.
   const mayInviteAIInterview =
     (isTenantAdmin || hasPermissionCode('scoring:invite')) &&
-    hasPermission('canInviteAIInterviews') && hasPlanFeature('ai_interview');
+    hasPermission('canInviteAIInterviews');
   const canInvite = mayInviteAssessment || mayInviteAIInterview;
+  // Plan gates DISABLE the entry (hover explains), they never hide it:
+  // permission decides what is shown, the plan only whether it is clickable.
+  const assessmentPlanLocked = isPlanLocked('assessment');
+  const aiInterviewPlanLocked = isPlanLocked('ai_interview');
 
   /* What this JD can actually invite to. Job Details hands both flags down —
      its Assessment / AI Interview sections read the same two — so this page and
@@ -238,16 +243,20 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   const inviteTargets = useJobInviteTargets(jobId, {
     assessmentConfigured,
     aiInterviewConfigured,
-    assessmentEnabled: mayInviteAssessment,
-    aiInterviewEnabled: mayInviteAIInterview,
+    // Never look up targets for a feature outside the plan.
+    assessmentEnabled: mayInviteAssessment && hasPlanFeature('assessment'),
+    aiInterviewEnabled: mayInviteAIInterview && hasPlanFeature('ai_interview'),
   });
   // With no JD to check (the global scoring view's cross-job rows) there is
   // nothing to gate on, so the entries keep their permission-only behaviour and
   // the existing handlers report what's missing after the click.
   const canInviteAssessment =
-    mayInviteAssessment && (!inviteTargets.known || inviteTargets.assessmentConfigured);
+    mayInviteAssessment && !assessmentPlanLocked && (!inviteTargets.known || inviteTargets.assessmentConfigured);
   const canInviteAIInterview =
-    mayInviteAIInterview && (!inviteTargets.known || inviteTargets.aiInterviewConfigured);
+    mayInviteAIInterview && !aiInterviewPlanLocked && (!inviteTargets.known || inviteTargets.aiInterviewConfigured);
+  // Every option the user is permitted to pick is outside the plan.
+  const invitePlanLocked = canInvite &&
+    (!mayInviteAssessment || assessmentPlanLocked) && (!mayInviteAIInterview || aiInterviewPlanLocked);
   // Neither target exists → the Invite button itself is disabled rather than
   // opening a menu whose every entry dead-ends in "create one first".
   const inviteDisabled = !canInviteAssessment && !canInviteAIInterview;
@@ -1266,7 +1275,9 @@ Best regards`);
                     inviteDisabled
                       ? (!canInvite
                           ? 'You do not have permission to invite candidates'
-                          : 'No published assessment or AI interview for this job yet')
+                          : invitePlanLocked
+                            ? PLAN_LOCKED_MESSAGE
+                            : 'No published assessment or AI interview for this job yet')
                       : undefined
                   }
                   aria-haspopup="menu"
@@ -1292,7 +1303,7 @@ Best regards`);
                         role="menuitem"
                         onClick={handleInviteForAssessment}
                         disabled={!canInviteAssessment}
-                        title={!canInviteAssessment ? 'No published assessment for this job yet' : undefined}
+                        title={assessmentPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAssessment ? 'No published assessment for this job yet' : undefined}
                         className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-brand-blue/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                       >
                         <span className="mt-0.5 w-8 h-8 rounded-lg bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
@@ -1308,7 +1319,7 @@ Best regards`);
                         role="menuitem"
                         onClick={handleInviteForAIInterview}
                         disabled={!canInviteAIInterview}
-                        title={!canInviteAIInterview ? 'No published AI interview for this job yet' : undefined}
+                        title={aiInterviewPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAIInterview ? 'No published AI interview for this job yet' : undefined}
                         className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-brand-blue/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                       >
                         <span className="mt-0.5 w-8 h-8 rounded-lg bg-brand-cyan/10 flex items-center justify-center flex-shrink-0">
