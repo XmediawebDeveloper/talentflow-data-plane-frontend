@@ -7,13 +7,14 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import {
   ArrowLeft, ChevronLeft, Video, Clock, Users, Calendar, CheckCircle, Mail,
   Copy, Trash2, Archive, ArchiveRestore, GitBranch,
-  Loader2, RefreshCw, Briefcase, Globe, ChevronRight, ChevronDown, Check, Brain, Sparkles,
+  Loader2, Briefcase, Globe, ChevronRight, ChevronDown, Check, Brain, Sparkles,
   Layers, Pencil, Zap, Timer, FileText, Settings, CheckCircle2, Download,
   QrCode, AlertCircle, ExternalLink, BarChart, UserRound, Eye, User as UserIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
+import { useUrlTab } from '@/lib/hooks/useUrlTab';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import { jdService, type JDLineageVersion, type JDResponse } from '@/lib/services/jdService';
 import JDIdentityHeader from '@/components/jobs/JDIdentityHeader';
@@ -174,6 +175,9 @@ interface AIInterviewDetailsViewProps {
   draftLocked?: boolean;
 }
 
+const DETAIL_TABS = ['overview', 'activity', 'versions', 'viewjd', 'results', 'invites'] as const;
+type DetailTab = typeof DETAIL_TABS[number];
+
 export default function AIInterviewDetailsView({ config, onBack, onRefresh, currentIndex, totalCount, onPrev, onNext, breadcrumbItems, configureOnly = false, initialTab, draftLocked = false }: AIInterviewDetailsViewProps) {
   /* Greyed and out of reach — `inert` takes pointer, keyboard and assistive
      tech; the classes are the visual state. Per region, so Continue Editing,
@@ -191,17 +195,16 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   // send a candidate their interview link) — checked via the Invite
   // permission so both entry points across the app agree on one gate.
   const canShareAIInterviews = isTenantAdmin || !!user?.permissions?.canInviteAIInterviews;
-  const [activeTab, setActiveTab] = useState<'overview' | 'activity' | 'versions' | 'viewjd' | 'results' | 'invites'>(initialTab ?? 'overview');
-  // The page stays mounted when the URL moves to another version (Version
-  // History's eye icon, from inside this view), so re-apply the requested tab.
-  useEffect(() => {
-    if (initialTab) setActiveTab(initialTab);
-  }, [initialTab, config.id]);
+  /* In the URL (`?detailTab=`), so a refresh reopens the same tab; a link's
+     own `initialTab` is the default. Moving to another version is a new URL
+     without the param, so it opens on the requested tab again. Not in the
+     embedded Configure-only render, whose URL belongs to its host. */
+  const [activeTab, setActiveTab] = useUrlTab<DetailTab>('detailTab', DETAIL_TABS, initialTab ?? 'overview', !configureOnly);
   /* Interview Details' own sub-tabs — Configure Details (what the tab used to
      show outright) and Interview Info (the former standalone "AI Interview
      Info" sidebar item, folded in here since it's the same JD-derived
      metadata about the same interview, just read-only). */
-  const [detailsSubTab, setDetailsSubTab] = useState<'configure' | 'info'>('configure');
+  const [detailsSubTab, setDetailsSubTab] = useUrlTab<'configure' | 'info'>('detailSubTab', ['configure', 'info'], 'configure', !configureOnly);
   const [actionLoading, setActionLoading] = useState(false);
   // Share — a dialog off the header's Share button (Assessment Details'
   // pattern) rather than a tab of its own; ShareAIInterviewModal already
@@ -209,6 +212,18 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   const [showShareModal, setShowShareModal] = useState(false);
   // CSV / Excel picker for the clusters & HR questions export.
   const [showExportModal, setShowExportModal] = useState(false);
+
+  /* ARCHIVED — the Assessment Details page's arrival toast: once per config
+     per visit (Prev, Next or the URL), decided on its first render only, so
+     archiving it in place isn't then announced as an arrival on an archived
+     one. Not in the embedded Configure-only render. */
+  const archivedToastShownFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (configureOnly || archivedToastShownFor.current === config.id) return;
+    archivedToastShownFor.current = config.id;
+    if (config.status !== 'archived') return;
+    toast.info('This AI Interview is currently Archived. Please unarchive it to continue.');
+  }, [configureOnly, config.id, config.status]);
 
   // Activity
   const [recentActivity, setRecentActivity] = useState<AIInterviewResponse[]>([]);
@@ -540,6 +555,29 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
     } finally {
       setActionLoading(false);
       setConfirmAction(null);
+    }
+  };
+
+  /* The AI Interviews list's Unarchive (AIInterview.tsx handleUnarchiveConfig):
+     the backend restores it to Draft or Active, the toast names which. */
+  const handleUnarchive = async () => {
+    if (!canArchiveAIInterviews) {
+      toast.error('You do not have permission to unarchive AI interviews');
+      return;
+    }
+    setActionLoading(true);
+    try {
+      const restored = await aiInterviewService.unarchive(config.id);
+      toast.success(
+        restored.status === 'draft'
+          ? 'Configuration restored to Draft'
+          : 'Configuration restored to Active'
+      );
+      onRefresh?.();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to unarchive');
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -1138,6 +1176,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
     return (
       <CandidateResultsView
         interview={candidateDetail}
+        tabInUrl={false}
         onBack={backToInterview}
         // A caller-supplied trail (reached from a JD's Job Details page) is
         // anchored somewhere else entirely, so extend that one instead of the
@@ -1418,34 +1457,33 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                 </Button>
               )}
               <div {...draftLockProps} className={draftLocked ? `flex items-center gap-2 ${draftLockProps.className}` : 'contents'}>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setShowExportModal(true)}
-                title="Export clusters & HR questions"
-                aria-label="Export"
-                className="px-2 min-w-[40px] min-h-[40px]"
-              >
-                <Download className="w-4 h-4" />
-              </Button>
-              <ExportFormatModal
-                open={showExportModal}
-                onClose={() => setShowExportModal(false)}
-                title="Export Clusters & HR Questions"
-                recordCount={showExportModal ? buildConfigExportRows().length : undefined}
-                columns={CONFIG_EXPORT_HEADERS}
-                onExport={handleExport}
-              />
-              {onRefresh && (
+              {/* Archived: Share, then Unarchive (no Refresh at any status). Share
+                  stays visible but disabled — Assessment Details' archived
+                  header, where archived records cannot be shared. */}
+              {config.status === 'archived' && (
+                <>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  disabled
+                  title="Archived interviews cannot be shared"
+                  icon={<Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
+                >
+                  Share
+                </Button>
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={onRefresh}
-                  aria-label="Refresh"
-                  className="px-2 min-w-[40px] min-h-[40px]"
+                  onClick={handleUnarchive}
+                  disabled={actionLoading}
+                  aria-disabled={!canArchiveAIInterviews}
+                  title={!canArchiveAIInterviews ? 'You do not have permission to unarchive AI interviews' : ''}
+                  icon={actionLoading ? <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" /> : <ArchiveRestore className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-menu-icon-archive" />}
+                  className={`${!canArchiveAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
-                  <RefreshCw className="w-4 h-4" />
+                  Unarchive
                 </Button>
+                </>
               )}
               </div>
             </div>
@@ -1557,7 +1595,27 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
           {/* Overview Tab */}
           {activeTab === 'overview' && (
             <div className="space-y-5">
-              <TabHeading icon={FileText} title="Interview Details" />
+              <div className="flex items-start justify-between gap-3">
+                <TabHeading icon={FileText} title="Interview Details" />
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setShowExportModal(true)}
+                  title="Export clusters & HR questions"
+                  aria-label="Export"
+                  className="px-2 min-w-[40px] min-h-[40px] flex-shrink-0"
+                >
+                  <Download className="w-4 h-4" />
+                </Button>
+                <ExportFormatModal
+                  open={showExportModal}
+                  onClose={() => setShowExportModal(false)}
+                  title="Export Clusters & HR Questions"
+                  recordCount={showExportModal ? buildConfigExportRows().length : undefined}
+                  columns={CONFIG_EXPORT_HEADERS}
+                  onExport={handleExport}
+                />
+              </div>
 
               {/* Interview Details' own sub-tabs — Configure Details (this
                   tab's original content) and Interview Info (folded in from
