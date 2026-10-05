@@ -13,7 +13,7 @@ import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import ResumeDetailView from '@/components/ResumeDetailView';
 import ViewResumeButton from '@/components/ui/view-resume-button';
 import ResumeHoverPreview from '@/components/ResumeHoverPreview';
-import { RESUME_EMAIL_MISMATCH_MESSAGE, emailsMatch, normalizeEmail, resumeEmailOf, verifyResumeBelongsToInvite } from '@/lib/utils/resumeEmailMatch';
+import { RESUME_EMAIL_MISMATCH_MESSAGE, emailsMatch, normalizeEmail, pickResumeByEmail, resumeEmailOf, verifyResumeBelongsToInvite } from '@/lib/utils/resumeEmailMatch';
 import { Tooltip as HoverTooltip } from '@/components/ui/tooltip';
 import TabEmptyState, { TAB_EMPTY_ACTION_CLASS } from '@/components/ui/tab-empty-state';
 import { Button } from '@/components/ui/button';
@@ -711,23 +711,12 @@ export default function CandidateResultDetails({
       console.info('[CandidateResultDetails] resume lookup: candidate has no e-mail, not searching by name');
       return null;
     }
-    // The e-mail match must also not contradict the invited name — the same
-    // identity rule the AI Interview page applies — so a reused address can't
-    // surface a stranger's resume.
-    const tokens = (v: string) => new Set((v || '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean));
-    const inviteTokens = tokens(name || '');
-    const samePerson = (other: string) => {
-      const t = tokens(other);
-      if (inviteTokens.size === 0 || t.size === 0) return true;
-      return [...t].some(x => inviteTokens.has(x));
-    };
+    // Exact email is the rule, whatever the invite source — the name only
+    // breaks a tie (pickResumeByEmail), the same as the AI Interview page.
     try {
-      const results = await resumeService.list({ search: email, page_size: 20 });
+      const results = await resumeService.list({ search: email, page_size: 50 });
       const items = results.items || [];
-      const byEmail = items.find(
-        (item: any) => emailsMatch(resumeEmailOf(item), email)
-          && samePerson(item.candidate_name || '')
-      );
+      const byEmail: any = pickResumeByEmail(items as any[], email, name);
       console.info('[CandidateResultDetails] resume lookup by e-mail', { email, hits: items.length, matched: byEmail?.id ?? null, name });
       if (byEmail?.id) setResumeEmailMismatch(false);
       return byEmail?.id || null;

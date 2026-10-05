@@ -59,3 +59,29 @@ export async function verifyResumeBelongsToInvite(
   if (!resume) return null;
   return emailsMatch(resumeEmailOf(resume), inviteEmail) ? resumeId : null;
 }
+
+/**
+ * The resume for a candidate invited by email alone (no resume_id on the
+ * invite): any library resume whose email is exactly the invite email. The
+ * invite source doesn't matter — a direct-email invite maps to a resume
+ * uploaded later with that address.
+ *
+ * The name is NOT a gate. It used to be: the email match also had to share a
+ * name word with the invite, so "naveen" invited by email never mapped to the
+ * resume parsed as e.g. "NAVEENKUMAR" — the result page said "invited via
+ * Direct Email" though the resume was right there. The name now only breaks a
+ * tie when several resumes carry the same address.
+ */
+export function pickResumeByEmail<T extends { id?: string; candidate_name?: string | null }>(
+  items: T[],
+  inviteEmail: string | null | undefined,
+  inviteName?: string | null,
+): T | null {
+  const email = normalizeEmail(inviteEmail);
+  if (!email) return null;
+  const matches = items.filter((item) => item.id && emailsMatch(resumeEmailOf(item), email));
+  if (matches.length <= 1) return matches[0] ?? null;
+  const tokens = (v: string | null | undefined) => new Set((v || '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean));
+  const want = tokens(inviteName);
+  return matches.find((m) => [...tokens(m.candidate_name)].some((t) => want.has(t))) ?? matches[0];
+}
