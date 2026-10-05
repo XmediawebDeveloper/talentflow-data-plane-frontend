@@ -30,6 +30,7 @@ import { formatOverallScoreValue, matchBadgeClass } from '@/lib/utils/matchStatu
 import { usePlanLock } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE, type PlanFeatureKey } from '@/lib/types/planFeatures';
 import { AIInviteStatusBadge, displayInviteScore, inviteResult } from '@/components/AIInterviewInviteTable';
+import { rememberResumeActivityTrail, resumeViewFromQuery, type TrailCrumb } from '@/lib/utils/resumeActivityTrail';
 
 type TabKey = 'scores' | 'talent_matches' | 'assessments' | 'interviews';
 
@@ -127,8 +128,15 @@ function Row({
   );
 }
 
-export default function CandidateActivityCard({ resumeId }: { resumeId: string }) {
+export default function CandidateActivityCard({ resumeId, trail }: { resumeId: string; trail: TrailCrumb[] }) {
   const router = useRouter();
+  /* Every View goes through here: the destination shows THIS page's trail
+     (Resume Database › My Resumes › <candidate>) instead of its own module's,
+     and its Back returns to this resume. See lib/utils/resumeActivityTrail. */
+  const openFromResume = (url: string) => {
+    rememberResumeActivityTrail(trail);
+    router.push(`${url}${resumeViewFromQuery}`);
+  };
   const { isPlanLocked } = usePlanLock();
   const [data, setData] = useState<ResumeActivity | null>(null);
   const [loading, setLoading] = useState(true);
@@ -207,7 +215,7 @@ export default function CandidateActivityCard({ resumeId }: { resumeId: string }
               </span>
               <span className={`${BADGE} ${matchBadgeClass(s.match_status)}`}>{s.match_status}</span>
             </>}
-            onOpen={() => router.push(`/recruitment/resume-scoring?jd_id=${s.jd_id}&score_id=${s.id}`)}
+            onOpen={() => openFromResume(`/recruitment/resume-scoring?jd_id=${s.jd_id}&score_id=${s.id}`)}
             openLabel="View Score"
           />
         ))}
@@ -228,7 +236,7 @@ export default function CandidateActivityCard({ resumeId }: { resumeId: string }
               {m.final_score != null && <span className="text-sm font-semibold text-gray-900">{formatScore(m.final_score)}%</span>}
               <span className={`${BADGE} bg-slate-100 text-gray-700 ring-gray-200`}>{TALENT_MATCH_STATUS[m.status] || m.status}</span>
             </>}
-            onOpen={m.jd_id ? () => router.push(`/recruitment/ai-talent-match?jdId=${m.jd_id}`) : undefined}
+            onOpen={m.jd_id ? () => openFromResume(`/recruitment/ai-talent-match?jdId=${m.jd_id}&view=results`) : undefined}
             openLabel="Open Match"
           />
         ))}
@@ -254,7 +262,7 @@ export default function CandidateActivityCard({ resumeId }: { resumeId: string }
                 <PassFail passed={a.passed} />
                 <AssessmentStatusBadge status={a.status} />
               </>}
-              onOpen={canOpen ? () => router.push(`/recruitment/assessments/${a.assessment_id}/results/details?candidate_id=${a.attempt_id}${cid}&from=candidate-results`) : undefined}
+              onOpen={canOpen ? () => openFromResume(`/recruitment/assessments/${a.assessment_id}/results/details?candidate_id=${a.attempt_id}${cid}`) : undefined}
               openLabel="View Result"
             />
           );
@@ -284,7 +292,7 @@ export default function CandidateActivityCard({ resumeId }: { resumeId: string }
                 {result && <PassFail passed={result === 'Pass'} />}
                 <AIInviteStatusBadge inv={i} />
               </>}
-              onOpen={canOpen ? () => router.push(`/recruitment/ai-interviews/${i.config_id}/results/details?session_id=${i.id}&from=candidate-results`) : undefined}
+              onOpen={canOpen ? () => openFromResume(`/recruitment/ai-interviews/${i.config_id}/results/details?session_id=${i.id}`) : undefined}
               openLabel="View Result"
             />
           );

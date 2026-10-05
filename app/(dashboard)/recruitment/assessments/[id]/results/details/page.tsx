@@ -12,6 +12,7 @@ import FeatureGate from '@/components/shared/FeatureGate';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { RESULT_RETURN_LABEL_PARAM, RESULT_RETURN_TO_PARAM, resultReturnQuery, safeResultReturnTo } from '@/lib/utils/resultReturnContext';
 import RecordPager from '@/components/RecordPager';
+import { useResumeActivityTrail } from '@/lib/utils/resumeActivityTrail';
 
 function DetailsContent() {
   const params = useParams();
@@ -40,7 +41,11 @@ function DetailsContent() {
      to this assessment's results page, as before. */
   const returnTo = safeResultReturnTo(searchParams.get(RESULT_RETURN_TO_PARAM));
   const returnLabel = searchParams.get(RESULT_RETURN_LABEL_PARAM) || '';
-  const backHref = returnTo || `/recruitment/assessments/${assessmentId}/results`;
+  /* Opened from a resume's Candidate Activity card: the trail is that
+     resume's (Resume Database › My Resumes › <candidate>) and Back returns to
+     it. Prev/Next are hidden — the stored list belongs to some other screen. */
+  const resumeTrail = useResumeActivityTrail(searchParams);
+  const backHref = resumeTrail.backHref || returnTo || `/recruitment/assessments/${assessmentId}/results`;
 
   const [assessmentTitle, setAssessmentTitle] = useState<string>('');
   const [jdId, setJdId] = useState<string>('');
@@ -130,7 +135,7 @@ function DetailsContent() {
     router.push(backHref);
   };
 
-  const showRecordPagerRow = navList.length > 0 && !resumeView.viewing && !isPending;
+  const showRecordPagerRow = navList.length > 0 && !resumeView.viewing && !isPending && !resumeTrail.fromResumeView;
 
   // Fragment, not a wrapper div. PageBreadcrumb is sticky by default, but a
   // sticky element can only travel inside its parent's box — the div this used
@@ -155,7 +160,15 @@ function DetailsContent() {
         // Opened from the Assessments list's Candidate Results tab, the job-role
         // crumb is left out: Dashboard › Assessments › <candidate>. Every other
         // way in keeps the full chain.
-        items={[
+        items={resumeTrail.active ? [
+          ...resumeTrail.items,
+          // The assessment names this result; the candidate is already the
+          // resume crumb before it.
+          resumeView.viewing
+            ? { label: assessmentTitle || 'Assessment Result', onClick: () => resumeView.close?.() }
+            : { label: assessmentTitle || 'Assessment Result' },
+          ...(resumeView.viewing ? [{ label: 'Resume' }] : []),
+        ] : [
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Assessments', href: '/recruitment/assessments' },
           ...(fromCandidateResults

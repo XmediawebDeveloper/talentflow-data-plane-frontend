@@ -1531,7 +1531,15 @@ Best regards`);
 
           {/* Candidate Activity — scores, AI Talent Match, AI Assessment and
               AI Interview history for this candidate, gated per module. */}
-          <CandidateActivityCard resumeId={resumeId} />
+          <CandidateActivityCard
+            resumeId={resumeId}
+            // This page's own trail, so a result opened from the card keeps
+            // "Dashboard › Resume Database › My Resumes › <candidate>".
+            trail={[
+              ...sourceCrumbs.filter((c): c is { label: string; href: string } => !!c.href),
+              { label: resume?.name || 'Resume Details', href: `/recruitment/resume-view/${resumeId}` },
+            ]}
+          />
 
           {/* Professional Summary */}
           {detailedResume.summary && (
