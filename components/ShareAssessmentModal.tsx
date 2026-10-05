@@ -19,6 +19,8 @@ import ListPagination from '@/components/ListPagination';
 import ResumeTextPreviewModal from '@/components/ResumeTextPreviewModal';
 import ResumeVersionsModal from '@/components/ResumeVersionsModal';
 import { resumeService } from '@/lib/services/resumeService';
+import ResumeSelectionSummary from '@/components/ResumeSelectionSummary';
+import { togglePick, toggleAllPicks, partitionPicks, countBySource, sourceBreakdown, type ResumePicks } from '@/lib/utils/resumeSelection';
 
 /* THE SHARE ASSESSMENT VIA EMAIL DIALOG — laid out and behaving as the
    Send AI Interview via Email dialog (`ShareAIInterviewModal`) does: the same
@@ -129,7 +131,10 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
       ? prefilledCandidates
       : [{ id: '1', name: '', email: '', source: 'manual' }]
   );
-  const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
+  /* Ticked "Select From" resumes, kept across tabs and folders so a pick can
+     mix My Resumes and the Shared Database (switching tabs used to wipe it). */
+  const [picks, setPicks] = useState<ResumePicks>({});
+  const pickCount = Object.keys(picks).length;
   const [searchQuery, setSearchQuery] = useState('');
 
   // Resume opened from the eye on a "Select From" row — same preview as Scored Resumes.
@@ -221,7 +226,6 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
     if (dbTab === 'my-resumes' && !myResumesLoaded) loadMyResumes();
     if (dbTab === 'internal-db' && !internalDbLoaded) loadInternalDb();
     setSelectedFolder('all');
-    setSelectedResumes([]);
     setSearchQuery('');
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dbTab]);
@@ -640,47 +644,40 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
     );
   };
 
-  // Handle resume selection from database
-  const toggleResumeSelection = (resumeId: string) => {
-    setSelectedResumes(prev =>
-      prev.includes(resumeId)
-        ? prev.filter(id => id !== resumeId)
-        : [...prev, resumeId]
-    );
+  const pickOrigin = dbTab === 'my-resumes' ? 'my-resumes' as const : 'shared-db' as const;
+  const toggleResumeSelection = (resume: Resume) => setPicks((prev) => togglePick(prev, resume, pickOrigin));
+
+  /* The candidate list with the ticked resumes merged in — Send and the count
+     read this, so ticking is enough (no "Add to List" needed). A pick with no
+     email, or an email already listed/picked, is skipped and named in the
+     picker footer instead of silently dropping the count (4 picked, 3 sent). */
+  const validExisting = candidates.filter((c) => c.name.trim() && c.email.trim());
+  const pickPartition = partitionPicks(picks, validExisting.map((c) => c.email));
+  const mergeSelectedResumes = (): CandidateEmail[] => {
+    const newCandidates: CandidateEmail[] = pickPartition.accepted.map((p) => ({
+      id: `db-${p.id}`,
+      name: p.name,
+      email: p.email,
+      source: 'database' as const,
+      origin: p.origin,
+      resumeId: p.id,
+    }));
+    return validExisting.length > 0 ? [...validExisting, ...newCandidates] : newCandidates.length > 0 ? newCandidates : [{ id: '1', name: '', email: '', source: 'manual' }];
   };
 
-  /* The candidate list with the ticked "Select From" resumes merged in.
-     Ticking a row used to do nothing until "Add to List" (below the fold of the
-     picker) was clicked, so Send stayed disabled with "0 candidates" while
-     rows showed as selected — Send and the count now read this instead. */
-  const mergeSelectedResumes = () => {
-    // A folder's rows come from their own fetch, so look there too.
-    const pool = [...resumeDatabase, ...folderResumes.filter(fr => !resumeDatabase.some(r => r.id === fr.id))];
-    const selectedResumeData = pool.filter((r) => selectedResumes.includes(r.id));
-    const validExisting = candidates.filter((c) => c.name.trim() && c.email.trim());
-    const existingEmails = new Set(validExisting.map((c) => c.email.toLowerCase().trim()));
-    const newCandidates: CandidateEmail[] = selectedResumeData
-      .filter((resume) => resume.email && !existingEmails.has(resume.email.toLowerCase().trim()))
-      .map((resume) => ({
-        id: `db-${resume.id}`,
-        name: resume.name,
-        email: resume.email,
-        source: 'database' as const,
-        origin: dbTab === 'my-resumes' ? 'my-resumes' as const : 'shared-db' as const,
-        resumeId: resume.id,
-      }));
-    const merged: CandidateEmail[] = validExisting.length > 0 ? [...validExisting, ...newCandidates] : newCandidates.length > 0 ? newCandidates : [{ id: '1', name: '', email: '', source: 'manual' }];
-    return { merged, skipped: selectedResumeData.length - newCandidates.length };
-  };
-
-  // Add selected resumes to candidates list, skipping emails already listed
-  const handleAddFromDatabase = () => {
-    const { merged, skipped } = mergeSelectedResumes();
+  // Move the picks into the candidate list (Add to List, or leaving Select From).
+  const commitPicks = () => {
+    if (pickCount === 0) return;
+    const skipped = pickPartition.duplicate.length + pickPartition.noEmail.length;
     if (skipped > 0) {
-      toast.warning(`${skipped} candidate${skipped > 1 ? 's' : ''} skipped — already in the list`);
+      toast.warning(`${skipped} resume${skipped > 1 ? 's' : ''} skipped — no email or already in the list`);
     }
-    setCandidates(merged);
-    setSelectedResumes([]);
+    setCandidates(mergeSelectedResumes());
+    setPicks({});
+  };
+
+  const handleAddFromDatabase = () => {
+    commitPicks();
     setInputMode('manual');
   };
 
@@ -702,8 +699,11 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
   );
 
   // What Send acts on: ticked-but-not-yet-added resumes count as added.
-  const pendingDbSelection = inputMode === 'database' && selectedResumes.length > 0;
-  const sendCandidates = pendingDbSelection ? mergeSelectedResumes().merged : candidates;
+  const pendingDbSelection = pickCount > 0;
+  const sendCandidates = pendingDbSelection ? mergeSelectedResumes() : candidates;
+  const pickedBySource = countBySource(Object.values(picks));
+  const shownPickedCount = filteredResumes.filter((r) => picks[r.id]).length;
+  const allShownPicked = filteredResumes.length > 0 && shownPickedCount === filteredResumes.length;
 
   const handleSend = async () => {
     setIsSubmitting(true);
@@ -711,7 +711,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
       // Fold the ticked resumes into the list so it matches what was sent.
       if (pendingDbSelection) {
         setCandidates(sendCandidates);
-        setSelectedResumes([]);
+        setPicks({});
       }
       // Filter candidates with name and email
       const candidatesWithData = sendCandidates.filter(c => c.name.trim() && c.email.trim());
@@ -1244,11 +1244,11 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
               <label className="text-gray-900 dark:text-slate-50 font-medium">Select Candidates</label>
               <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => setInputMode('manual')} className={modeTabClass(inputMode === 'manual')}>
+                <button type="button" onClick={() => { commitPicks(); setInputMode('manual'); }} className={modeTabClass(inputMode === 'manual')}>
                   <Upload className="w-4 h-4 text-brand-blue" />
                   Manual
                 </button>
-                <button type="button" onClick={() => excelInputRef.current?.click()} className={modeTabClass(inputMode === 'excel')}>
+                <button type="button" onClick={() => { commitPicks(); excelInputRef.current?.click(); }} className={modeTabClass(inputMode === 'excel')}>
                   <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                   Upload Excel
                 </button>
@@ -1392,6 +1392,9 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                       <FolderOpen className="w-4 h-4 text-brand-orange" />
                       My Resumes
                       <span className="px-1.5 py-0.5 rounded-full text-xs bg-gray-200 dark:bg-slate-800 text-gray-700 dark:text-slate-300">{myResumesData.length}</span>
+                      {pickedBySource.myResumes > 0 && (
+                        <span title="Selected from My Resumes" className="px-1.5 py-0.5 rounded-full text-xs font-semibold bg-brand-blue text-white tabular-nums">✓ {pickedBySource.myResumes}</span>
+                      )}
                     </button>
                   )}
                   {(hasInternalDBAccess || (!hasMyResumesAccess && !hasInternalDBAccess)) && (
@@ -1407,6 +1410,9 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                       <Database className="w-4 h-4 text-brand-cyan" />
                       Shared Database
                       <span className="px-1.5 py-0.5 rounded-full text-xs bg-gray-200 dark:bg-slate-800 text-gray-700 dark:text-slate-300">{internalDbData.length}</span>
+                      {pickedBySource.sharedDb > 0 && (
+                        <span title="Selected from Shared Database" className="px-1.5 py-0.5 rounded-full text-xs font-semibold bg-brand-blue text-white tabular-nums">✓ {pickedBySource.sharedDb}</span>
+                      )}
                     </button>
                   )}
                 </div>
@@ -1464,18 +1470,12 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                       />
                       <button
                         type="button"
-                        onClick={() => {
-                          if (selectedResumes.length === filteredResumes.length && filteredResumes.length > 0) {
-                            setSelectedResumes([]);
-                          } else {
-                            setSelectedResumes(filteredResumes.map(r => r.id));
-                          }
-                        }}
+                        onClick={() => setPicks(prev => toggleAllPicks(prev, filteredResumes, pickOrigin))}
                         className="px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 whitespace-nowrap text-gray-700 dark:text-slate-300"
                       >
-                        {selectedResumes.length === filteredResumes.length && filteredResumes.length > 0 ? 'Deselect All' : 'Select All'}
+                        {allShownPicked ? 'Deselect All' : 'Select All'}
                       </button>
-                      <span className="text-sm text-gray-500 dark:text-slate-500 whitespace-nowrap">{selectedResumes.length} selected</span>
+                      <span className="text-sm text-gray-500 dark:text-slate-500 whitespace-nowrap">{shownPickedCount} of {filteredResumes.length} selected here</span>
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-2 space-y-1">
@@ -1491,15 +1491,15 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                       ) : pagedResumes.map(resume => (
                         <div
                           key={resume.id}
-                          onClick={() => toggleResumeSelection(resume.id)}
+                          onClick={() => toggleResumeSelection(resume)}
                           className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                            selectedResumes.includes(resume.id) ? 'bg-brand-blue/5 border-brand-blue/40' : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 hover:border-brand-blue/30 hover:bg-brand-blue/[0.03]'
+                            !!picks[resume.id] ? 'bg-brand-blue/5 border-brand-blue/40' : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 hover:border-brand-blue/30 hover:bg-brand-blue/[0.03]'
                           }`}
                         >
                           <div className={`w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center ${
-                            selectedResumes.includes(resume.id) ? 'bg-brand-blue border-brand-blue' : 'border-gray-300 dark:border-slate-700'
+                            !!picks[resume.id] ? 'bg-brand-blue border-brand-blue' : 'border-gray-300 dark:border-slate-700'
                           }`}>
-                            {selectedResumes.includes(resume.id) && <CheckCircle className="w-3 h-3 text-white" />}
+                            {!!picks[resume.id] && <CheckCircle className="w-3 h-3 text-white" />}
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between gap-2">
@@ -1557,22 +1557,21 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                       </div>
                     )}
 
-                    {/* Action footer */}
-                    <div className="flex items-center justify-between px-3 py-2 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 flex-wrap gap-2">
-                      <span className="text-xs text-gray-500 dark:text-slate-500">{selectedResumes.length} candidate{selectedResumes.length !== 1 ? 's' : ''} selected</span>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={handleAddFromDatabase}
-                          disabled={selectedResumes.length === 0}
-                          icon={<Users className="w-4 h-4" />}
-                        >
-                          Add to List
-                        </Button>
-                      </div>
-                    </div>
                   </div>
+                </div>
+
+                {/* Selection footer — outside the scroll-capped area so it's always in view. */}
+                <div className="flex items-start justify-between px-3 py-2 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 flex-wrap gap-2">
+                  <ResumeSelectionSummary partition={pickPartition} onClear={() => setPicks({})} />
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleAddFromDatabase}
+                    disabled={pickCount === 0}
+                    icon={<Users className="w-4 h-4" />}
+                  >
+                    Add to List
+                  </Button>
                 </div>
               </div>
             )}
@@ -1710,7 +1709,9 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
         <div className="px-4 sm:px-6 py-4 bg-gray-50 dark:bg-slate-800/50 border-t border-gray-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3 shrink-0">
           <div className="text-sm text-gray-600 dark:text-slate-400 min-w-0">
             {(() => {
-              const validCount = sendCandidates.filter(c => c.name.trim() && c.email.trim()).length;
+              const validRows = sendCandidates.filter(c => c.name.trim() && c.email.trim());
+              const validCount = validRows.length;
+              const breakdown = validCount > 0 ? sourceBreakdown(validRows) : '';
               const needed = validCount * allAssessments.length;
               const available = quotaStats?.available ?? null;
               const isUnlimited = available !== null && available >= 999999;
@@ -1718,6 +1719,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
               return (
                 <span className={insufficientQuota ? 'text-destructive' : ''}>
                   {validCount} candidate{validCount !== 1 ? 's' : ''} will receive {allAssessments.length > 1 ? `${allAssessments.length} assessments` : 'this assessment'}
+                  {breakdown && <span className="block text-xs text-gray-500 dark:text-slate-500">{breakdown}</span>}
                   {insufficientQuota && (
                     <span className="ml-2 font-medium">— only {available} unit{available !== 1 ? 's' : ''} available</span>
                   )}
