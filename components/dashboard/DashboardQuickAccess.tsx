@@ -137,6 +137,23 @@ function TileCard({ item, tone }: { item: NavItem; tone: TileTone }) {
     </>
   );
 
+  // Plan status not known yet: same footprint, not clickable, no tooltip —
+  // resolves straight to clickable or greyed, never one then the other.
+  if (item.pending) {
+    return (
+      <div
+        aria-busy="true"
+        className="group relative flex cursor-default items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700/60 dark:bg-slate-800/40 sm:gap-3 sm:p-4"
+      >
+        <span className="h-10 w-10 shrink-0 animate-pulse rounded-[14px] bg-slate-200 dark:bg-slate-700 sm:h-11 sm:w-11" />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-slate-400 dark:text-slate-500">{item.label}</p>
+          {subtitle && <p className="mt-0.5 line-clamp-1 text-xs text-slate-400 dark:text-slate-600">{subtitle}</p>}
+        </div>
+      </div>
+    );
+  }
+
   if (disabled) {
     return (
       <div

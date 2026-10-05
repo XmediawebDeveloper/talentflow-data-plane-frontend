@@ -38,6 +38,10 @@ export interface NavItem {
    *  are audience gates and stay hard hides. */
   disabled?: boolean;
   disabledReason?: 'permission' | 'plan';
+  /** Plan-gated item whose plan status is not known yet (first load, nothing
+   *  remembered). Renderers show a neutral, non-clickable placeholder — never
+   *  a working link that might grey out a moment later. */
+  pending?: boolean;
 }
 
 /** Hover text for a disabled menu item, keyed by why it is disabled. */
@@ -187,8 +191,10 @@ interface FilterOptions {
  * the user can't open renders visible-but-disabled with a hover message, the
  * same rule applied to in-page action icons. Hiding plan-gated items used to
  * make them flash in and vanish once /quota-status resolved; while plan
- * features are still loading the item renders normally (no layout shift),
- * and only greys out if the plan turns out not to include it.
+ * features are still loading (first ever load — later loads use the
+ * remembered plan, see PlanFeaturesProvider) the item is flagged `pending`
+ * so renderers show a neutral placeholder, never a clickable link that greys
+ * out a moment later.
  * adminOnly/internalUserOnly are audience targeting and stay hard hides.
  */
 export function filterMenuSections(sections: NavSection[], opts: FilterOptions): NavSection[] {
@@ -203,7 +209,10 @@ export function filterMenuSections(sections: NavSection[], opts: FilterOptions):
         })
         .map((item): NavItem => {
           // Plan first: no permission grant can unlock a module the plan lacks.
-          if (item.planFeature && !planFeaturesLoading && !hasPlanFeature(item.planFeature)) {
+          if (item.planFeature && planFeaturesLoading) {
+            return { ...item, pending: true };
+          }
+          if (item.planFeature && !hasPlanFeature(item.planFeature)) {
             return { ...item, disabled: true, disabledReason: 'plan' };
           }
           const lacksPermission =

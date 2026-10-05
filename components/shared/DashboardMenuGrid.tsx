@@ -58,12 +58,12 @@ export default function DashboardMenuGrid() {
                 const Icon = item.icon;
                 const href = item.href || '#';
                 const isCurrent = !!item.href && (pathname === item.href || pathname.startsWith(item.href + '/'));
-                if (item.disabled) {
+                if (item.disabled || item.pending) {
                   return (
                     <li key={item.id}>
                       <div
                         aria-disabled="true"
-                        title={DISABLED_REASON_MESSAGE[item.disabledReason ?? 'permission']}
+                        title={item.pending ? undefined : DISABLED_REASON_MESSAGE[item.disabledReason ?? 'permission']}
                         className="flex cursor-not-allowed items-center gap-2.5 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 opacity-70"
                       >
                         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-400 ring-1 ring-gray-200">
