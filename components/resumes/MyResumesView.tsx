@@ -61,7 +61,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import FeatureGate from '@/components/shared/FeatureGate';
-import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
+import { usePlanFeatures, usePlanLock } from '@/lib/hooks/usePlanFeature';
+import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { formatOverallScore } from '@/lib/utils/matchStatus';
 
@@ -909,6 +910,9 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   const canShareMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:share');
   const canMoveMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:update') || hasPermissionCode('my_resumes:upload') || hasPermissionCode('my_resumes:create');
   const { hasPlanFeature } = usePlanFeatures();
+  // Plan-gated actions stay visible but disabled (hover: PLAN_LOCKED_MESSAGE),
+  // never hidden — see usePlanLock.
+  const { isPlanLocked } = usePlanLock();
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [folders, setFolders] = useState<FolderType[]>([]);
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
@@ -3991,31 +3995,31 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
             onMoveToFolder={(folderId) => handleMoveToFolder(selectedResumes, folderId)}
             onMoveToFolderDisabled={!canMoveMyResumes}
             onMoveToFolderDisabledReason="You do not have permission to move resumes to a folder"
-            onApplyToJob={!isArchivedContext && hasPlanFeature('resume_scoring') ? handleApplyToJob : undefined}
-            onApplyToJobDisabled={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job')))}
-            onApplyToJobDisabledReason="You do not have permission to score resumes"
+            onApplyToJob={!isArchivedContext ? handleApplyToJob : undefined}
+            onApplyToJobDisabled={isPlanLocked('resume_scoring') || !(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job')))}
+            onApplyToJobDisabledReason={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job'))) ? "You do not have permission to score resumes" : PLAN_LOCKED_MESSAGE}
             onDownload={handleBulkDownload}
             onDelete={() => handleDeleteResumes(selectedResumes)}
             onDeleteDisabled={!canDeleteMyResumes}
             onDeleteDisabledReason="You do not have permission to delete resumes"
             folders={folders.filter(f => f.id !== 'all')}
-            onAssessment={!isArchivedContext && hasPlanFeature('assessment') ? handleAssessment : undefined}
-            onAssessmentDisabled={!(isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('my_resumes:assessment')))}
-            onAssessmentDisabledReason="You do not have permission to invite candidates to an assessment"
+            onAssessment={!isArchivedContext ? handleAssessment : undefined}
+            onAssessmentDisabled={isPlanLocked('assessment') || !(isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('my_resumes:assessment')))}
+            onAssessmentDisabledReason={!(isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('my_resumes:assessment'))) ? "You do not have permission to invite candidates to an assessment" : PLAN_LOCKED_MESSAGE}
             onArchive={!isArchivedContext ? () => setIsArchiveModalOpen(true) : undefined}
             onArchiveDisabled={!canArchiveMyResumes}
             onArchiveDisabledReason="You do not have permission to archive resumes"
             onUnarchive={isArchivedContext ? () => handleUnarchiveResumes(selectedResumes) : undefined}
             onUnarchiveDisabled={!canArchiveMyResumes}
             onUnarchiveDisabledReason="You do not have permission to unarchive resumes"
-            onAITalentMatch={!isArchivedContext && hasPlanFeature('ai_talent_match') ? handleAITalentMatch : undefined}
-            onAITalentMatchDisabled={!(isTenantAdmin || (hasPermission('canRunAiMatch') && hasPermissionCode('my_resumes:ai_match')))}
-            onAITalentMatchDisabledReason="You do not have permission to run AI talent match"
+            onAITalentMatch={!isArchivedContext ? handleAITalentMatch : undefined}
+            onAITalentMatchDisabled={isPlanLocked('ai_talent_match') || !(isTenantAdmin || (hasPermission('canRunAiMatch') && hasPermissionCode('my_resumes:ai_match')))}
+            onAITalentMatchDisabledReason={!(isTenantAdmin || (hasPermission('canRunAiMatch') && hasPermissionCode('my_resumes:ai_match'))) ? "You do not have permission to run AI talent match" : PLAN_LOCKED_MESSAGE}
             // No `my_resumes:ai_interview` action code exists yet, so this
             // follows the AI Interviews module's own share permission.
-            onAIInterview={!isArchivedContext && hasPlanFeature('ai_interview') ? handleAIInterview : undefined}
-            onAIInterviewDisabled={!(isTenantAdmin || hasPermission('canInviteAIInterviews'))}
-            onAIInterviewDisabledReason="You do not have permission to invite candidates to an AI interview"
+            onAIInterview={!isArchivedContext ? handleAIInterview : undefined}
+            onAIInterviewDisabled={isPlanLocked('ai_interview') || !(isTenantAdmin || hasPermission('canInviteAIInterviews'))}
+            onAIInterviewDisabledReason={!(isTenantAdmin || hasPermission('canInviteAIInterviews')) ? "You do not have permission to invite candidates to an AI interview" : PLAN_LOCKED_MESSAGE}
           />
           );
         })()}
@@ -4222,9 +4226,9 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   onSelectResume={handleSelectResume}
                   onSelectAll={handleSelectAll}
                   onQuickView={(resume) => setQuickViewResume(resume)}
-                  onApplyToJob={hasPlanFeature('resume_scoring') ? handleSingleResumeApplyToJob : undefined}
-                  onApplyToJobDisabled={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job')))}
-                  onApplyToJobDisabledReason="You do not have permission to score resumes"
+                  onApplyToJob={handleSingleResumeApplyToJob}
+                  onApplyToJobDisabled={isPlanLocked('resume_scoring') || !(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job')))}
+                  onApplyToJobDisabledReason={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job'))) ? "You do not have permission to score resumes" : PLAN_LOCKED_MESSAGE}
                   onDelete={(id) => handleDelete(id)}
                   onDeleteDisabled={!canDeleteMyResumes}
                   onDeleteDisabledReason="You do not have permission to delete resumes"
@@ -4756,9 +4760,9 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                               }
                             }}
                             onQuickView={(resume) => setQuickViewResume(resume)}
-                            onApplyToJob={hasPlanFeature('resume_scoring') ? handleSingleResumeApplyToJob : undefined}
-                            onApplyToJobDisabled={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job')))}
-                            onApplyToJobDisabledReason="You do not have permission to score resumes"
+                            onApplyToJob={handleSingleResumeApplyToJob}
+                            onApplyToJobDisabled={isPlanLocked('resume_scoring') || !(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job')))}
+                            onApplyToJobDisabledReason={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job'))) ? "You do not have permission to score resumes" : PLAN_LOCKED_MESSAGE}
                             onDelete={(id) => handleDelete(id)}
                             onDeleteDisabled={!canDeleteMyResumes}
                             onDeleteDisabledReason="You do not have permission to delete resumes"
@@ -4923,6 +4927,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                 : resumes.filter(r => selectedResumes.includes(r.id))
           }
           jobs={publishedJobs}
+          /* Score Resume: the All Jobs list - Archived / Disabled shown, not pickable. */
+          excludeDraftsOnly
           onClose={() => {
             setIsApplyToJobModalOpen(false);
             setUploadedResumeToScore(null);

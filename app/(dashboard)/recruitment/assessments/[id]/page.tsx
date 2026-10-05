@@ -293,7 +293,7 @@ function AssessmentDetailsContent() {
    * on an Active one; every other status opens normally.
    *
    * No popup. The page opens with every region greyed out and inert
-   * except the header's Edit pencil, which stays live and highlighted
+   * except the header's Continue Editing button, which stays live and highlighted
    * (`draftLocked` on the view), and arriving by Prev / Next says why in a
    * toast. This replaced a redirect that sent drafts off to the create flow,
    * which took Prev / Next with it.

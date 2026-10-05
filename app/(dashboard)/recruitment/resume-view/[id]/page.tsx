@@ -214,7 +214,8 @@ import type { AssessmentResponse } from '@/lib/services/assessmentService';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
+import { usePlanLock } from '@/lib/hooks/usePlanFeature';
+import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 
 export default function ResumeViewPage() {
@@ -222,7 +223,7 @@ export default function ResumeViewPage() {
   const router = useRouter();
   const dialog = useGlobalDialog();
   const { isTenantAdmin, hasPermission, hasPermissionCode } = useAuth();
-  const { hasPlanFeature } = usePlanFeatures();
+  const { isPlanLocked } = usePlanLock();
   const resumeId = params.id as string;
 
   const [resume, setResume] = useState<Resume | null>(null);
@@ -356,9 +357,11 @@ export default function ResumeViewPage() {
       ? hasPermissionCode('internal_db:delete')
       : hasPermission('canDeleteResumes') || hasPermissionCode('my_resumes:delete')
   );
+  // Plan gates DISABLE (hover explains), they never hide: permission decides
+  // whether a control is shown, the plan only whether it is clickable.
   const canApplyResumeToJob =
-    hasPlanFeature('resume_scoring') &&
-    (isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job')));
+    isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job'));
+  const applyPlanLocked = isPlanLocked('resume_scoring');
   const hasAITalentMatchSourcePermission =
     viewSource === 'resume-database'
       ? hasPermissionCode('internal_db:ai_match')
@@ -366,23 +369,25 @@ export default function ResumeViewPage() {
         ? hasPermissionCode('my_resumes:ai_match')
         : true;
   const canRunAITalentMatch =
-    hasPlanFeature('ai_talent_match') &&
-    (isTenantAdmin || (hasPermission('canRunAiMatch') && hasAITalentMatchSourcePermission));
+    isTenantAdmin || (hasPermission('canRunAiMatch') && hasAITalentMatchSourcePermission);
+  const aiMatchPlanLocked = isPlanLocked('ai_talent_match');
 
   // ── Invite (Assessment / AI Interview) ──────────────────────────────────
   // Same two flows the Resume Scoring candidate page offers. A resume has no
   // job context here, so the user picks the JD first.
-  const canInviteAssessment = (
+  const canInviteAssessment =
     isTenantAdmin || (
       hasPermission('canCreateAssessments') && hasPermissionCode(
         viewSource === 'resume-database' ? 'internal_db:assessment' : 'my_resumes:assessment'
       )
-    )
-  ) && hasPlanFeature('assessment');
-  const canInviteAIInterview =
-    (isTenantAdmin || hasPermission('canInviteAIInterviews')) &&
-    hasPlanFeature('ai_interview');
+    );
+  const canInviteAIInterview = isTenantAdmin || hasPermission('canInviteAIInterviews');
+  const assessmentPlanLocked = isPlanLocked('assessment');
+  const aiInterviewPlanLocked = isPlanLocked('ai_interview');
   const canInvite = canInviteAssessment || canInviteAIInterview;
+  // Every option the user could pick is outside the plan → lock the button itself.
+  const invitePlanLocked =
+    (!canInviteAssessment || assessmentPlanLocked) && (!canInviteAIInterview || aiInterviewPlanLocked);
 
   const [showInviteMenu, setShowInviteMenu] = useState(false);
   const inviteMenuRef = useRef<HTMLDivElement>(null);
@@ -1295,10 +1300,15 @@ Best regards`);
               <div className="relative" ref={inviteMenuRef}>
                 <button
                   onClick={() => setShowInviteMenu(!showInviteMenu)}
-                  disabled={loadingInvite}
+                  disabled={loadingInvite || invitePlanLocked}
+                  title={invitePlanLocked ? PLAN_LOCKED_MESSAGE : undefined}
                   aria-haspopup="menu"
                   aria-expanded={showInviteMenu}
-                  className="flex items-center gap-2 px-4 py-2 bg-white border border-brand-blue/40 text-brand-blue rounded-lg hover:bg-brand-blue/5 transition-colors text-sm font-medium"
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${
+                    invitePlanLocked
+                      ? 'bg-gray-50 border border-gray-200 text-gray-400 cursor-not-allowed'
+                      : 'bg-white border border-brand-blue/40 text-brand-blue hover:bg-brand-blue/5'
+                  }`}
                 >
                   {loadingInvite ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
                   Invite
@@ -1311,7 +1321,11 @@ Best regards`);
                       <button
                         role="menuitem"
                         onClick={() => startInvite('assessment')}
-                        className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-brand-blue/5 transition-colors"
+                        disabled={assessmentPlanLocked}
+                        title={assessmentPlanLocked ? PLAN_LOCKED_MESSAGE : undefined}
+                        className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${
+                          assessmentPlanLocked ? 'opacity-50 cursor-not-allowed' : 'hover:bg-brand-blue/5'
+                        }`}
                       >
                         <span className="w-8 h-8 rounded-lg bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
                           <Mail className="w-4 h-4 text-brand-blue" />
@@ -1323,7 +1337,11 @@ Best regards`);
                       <button
                         role="menuitem"
                         onClick={() => startInvite('ai-interview')}
-                        className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-brand-blue/5 transition-colors"
+                        disabled={aiInterviewPlanLocked}
+                        title={aiInterviewPlanLocked ? PLAN_LOCKED_MESSAGE : undefined}
+                        className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${
+                          aiInterviewPlanLocked ? 'opacity-50 cursor-not-allowed' : 'hover:bg-brand-blue/5'
+                        }`}
                       >
                         <span className="w-8 h-8 rounded-lg bg-brand-cyan/10 flex items-center justify-center flex-shrink-0">
                           <Sparkles className="w-4 h-4 text-brand-cyan" />
@@ -1340,7 +1358,13 @@ Best regards`);
             {canRunAITalentMatch && viewSource !== 'ai-talent-match' && (
               <button
                 onClick={handleAITalentMatch}
-                className="flex items-center gap-2 px-4 py-2 bg-white border border-brand-cyan/40 text-brand-cyan rounded-lg hover:bg-brand-cyan/5 transition-colors text-sm font-medium"
+                disabled={aiMatchPlanLocked}
+                title={aiMatchPlanLocked ? PLAN_LOCKED_MESSAGE : undefined}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${
+                  aiMatchPlanLocked
+                    ? 'bg-gray-50 border border-gray-200 text-gray-400 cursor-not-allowed'
+                    : 'bg-white border border-brand-cyan/40 text-brand-cyan hover:bg-brand-cyan/5'
+                }`}
               >
                 <Sparkles className="w-4 h-4" />
                 AI Talent Match
@@ -1368,7 +1392,13 @@ Best regards`);
           ) : canApplyResumeToJob && (
             <button
               onClick={handleApplyToJob}
-              className="flex items-center gap-2 px-6 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all text-sm shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+              disabled={applyPlanLocked}
+              title={applyPlanLocked ? PLAN_LOCKED_MESSAGE : undefined}
+              className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-all text-sm ${
+                applyPlanLocked
+                  ? 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed'
+                  : 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
+              }`}
             >
               <Send className="w-4 h-4" />
               Score Resume
@@ -2507,6 +2537,9 @@ Best regards`);
           mode="scoring"
           stayOnCurrentPage
           fixedJob={aiMatchScoringJob ?? undefined}
+          /* The Resume DB's Score Resume job list: Archived / Disabled shown
+             greyed and unpickable, the Job Eligibility note, candidate counts. */
+          excludeDraftsOnly
           onClose={() => {
             setIsApplyToJobModalOpen(false);
             setSelectedVersionForApply(null);

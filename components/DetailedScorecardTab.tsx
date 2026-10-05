@@ -716,7 +716,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
               globals.css calls the shell opt-in for exactly this reason. */}
           <div className="overflow-x-auto">
             <table className="w-full table-fixed">
-              <thead className="bg-gray-50 border-b border-gray-200">
+              <thead className="bg-brand-sky dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
                 <tr>
                   <th className="w-[20%] px-3 py-2.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
                     Category

@@ -1,10 +1,12 @@
 import { X, Mail, Plus, Trash2, Send, CheckCircle, FileText, AlertTriangle, Loader2, Sparkles, ShieldAlert, Info, Database, FolderOpen, Folder, ChevronRight, ChevronDown, Users, Upload } from 'lucide-react';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { toast } from '@/components/ui/enhanced-toast';
 import { assessmentService } from '@/lib/services/assessmentService';
 import { useAuth } from '@/lib/hooks/useAuth';
 import api from '@/lib/services/api';
 import { Skeleton } from '@/components/ui/skeleton';
+import ResumeSelectionSummary from '@/components/ResumeSelectionSummary';
+import { togglePick, toggleAllPicks, partitionPicks, countBySource, sourceBreakdown, type ResumePicks, type PickSource } from '@/lib/utils/resumeSelection';
 
 interface InviteToAssessmentModalProps {
   onClose: () => void;
@@ -22,6 +24,7 @@ interface CandidateEmail {
   name: string;
   email: string;
   source?: 'manual' | 'database';
+  origin?: PickSource;
   resumeId?: string;
 }
 
@@ -75,54 +78,81 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
   const [myFolders, setMyFolders] = useState<{ id: string; name: string; parentId?: string | null }[]>([]);
   const [selectedFolder, setSelectedFolder] = useState<string>('all');
   const [expandedFolders, setExpandedFolders] = useState<string[]>([]);
-  const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
+  /* Ticked "Select From" resumes, kept across tabs and folders so a pick can
+     mix My Resumes and the Shared Database (switching tabs used to wipe it). */
+  const [picks, setPicks] = useState<ResumePicks>({});
+  const pickCount = Object.keys(picks).length;
   const [dbSearchQuery, setDbSearchQuery] = useState('');
   const [myResumesLoaded, setMyResumesLoaded] = useState(false);
   const [internalDbLoaded, setInternalDbLoaded] = useState(false);
-  const [isLoadingResumes, setIsLoadingResumes] = useState(false);
+  // Per source — both tabs now load together, so one flag would clear early.
+  const [isLoadingMy, setIsLoadingMy] = useState(false);
+  const [isLoadingInternal, setIsLoadingInternal] = useState(false);
+  const isLoadingResumes = dbTab === 'my-resumes' ? isLoadingMy : isLoadingInternal;
+  const loadingSources = useRef<Set<string>>(new Set());
 
   const hasMyResumesAccess = !!(user?.permissions?.canUploadResumes || user?.permissions?.canViewResumes);
   const hasInternalDBAccess = !!(user?.permissions?.canAccessInternalDB || user?.permissions?.canViewInternalDB);
 
+  // folderId feeds the folder counts and folder filter — it was never mapped,
+  // so every folder read 0 and picking one emptied the list.
   const mapResume = (r: any) => ({
     id: r.id,
     name: r.candidate_name || 'Unknown',
     email: r.email || r.candidate_email || '',
     position: r.current_title || 'Not specified',
     experience: r.experience_years ? `${r.experience_years} years` : '',
+    folderId: r.folder_id ?? null,
   });
 
+  /* Every page of a source. One 200-row page silently dropped the rest, and the
+     tab badge counted only what came back. */
+  const fetchAllResumes = async (source: 'my-resumes' | 'internal-db') => {
+    const pageSize = 200;
+    const first = await api.get('/resumes', { params: { source, page: 1, page_size: pageSize } });
+    const items: any[] = [...(first.data?.items ?? [])];
+    const totalPages: number = first.data?.total_pages ?? 1;
+    for (let page = 2; page <= totalPages; page++) {
+      const res = await api.get('/resumes', { params: { source, page, page_size: pageSize } });
+      items.push(...(res.data?.items ?? []));
+    }
+    return items.map(mapResume);
+  };
+
   const loadMyResumes = async () => {
-    if (myResumesLoaded) return;
-    setIsLoadingResumes(true);
+    if (myResumesLoaded || loadingSources.current.has('my-resumes')) return;
+    loadingSources.current.add('my-resumes');
+    setIsLoadingMy(true);
     try {
-      const [resumeRes, folderRes] = await Promise.all([
-        api.get('/resumes', { params: { source: 'my-resumes', page_size: 200 } }),
+      const [resumes, folderRes] = await Promise.all([
+        fetchAllResumes('my-resumes'),
         api.get('/folders'),
       ]);
-      setMyResumesData((resumeRes.data?.items ?? []).map(mapResume));
+      setMyResumesData(resumes);
       setMyFolders((folderRes.data ?? []).map((f: any) => ({ id: f.id, name: f.name, parentId: f.parent_id ?? null })));
       setMyResumesLoaded(true);
     } catch { toast.error({ title: 'Error', description: 'Failed to load My Resumes' }); }
-    finally { setIsLoadingResumes(false); }
+    finally { loadingSources.current.delete('my-resumes'); setIsLoadingMy(false); }
   };
 
   const loadInternalDb = async () => {
-    if (internalDbLoaded) return;
-    setIsLoadingResumes(true);
+    if (internalDbLoaded || loadingSources.current.has('internal-db')) return;
+    loadingSources.current.add('internal-db');
+    setIsLoadingInternal(true);
     try {
-      const res = await api.get('/resumes', { params: { source: 'internal-db', page_size: 200 } });
-      setInternalDbData((res.data?.items ?? []).map(mapResume));
+      setInternalDbData(await fetchAllResumes('internal-db'));
       setInternalDbLoaded(true);
     } catch { toast.error({ title: 'Error', description: 'Failed to load Shared Database' }); }
-    finally { setIsLoadingResumes(false); }
+    finally { loadingSources.current.delete('internal-db'); setIsLoadingInternal(false); }
   };
 
+  // Both tabs load up front — the Shared Database badge read 0 until clicked.
   useEffect(() => {
     if (inputMode === 'database') {
       const tab = hasMyResumesAccess ? 'my-resumes' : 'internal-db';
       setDbTab(tab);
-      if (tab === 'my-resumes') loadMyResumes(); else loadInternalDb();
+      if (hasMyResumesAccess) loadMyResumes();
+      if (hasInternalDBAccess || !hasMyResumesAccess) loadInternalDb();
     }
   }, [inputMode]);
 
@@ -131,7 +161,6 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
     if (dbTab === 'my-resumes' && !myResumesLoaded) loadMyResumes();
     if (dbTab === 'internal-db' && !internalDbLoaded) loadInternalDb();
     setSelectedFolder('all');
-    setSelectedResumes([]);
     setDbSearchQuery('');
   }, [dbTab]);
 
@@ -182,19 +211,48 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
     r.position.toLowerCase().includes(dbSearchQuery.toLowerCase())
   );
 
-  const handleAddFromDatabase = () => {
-    const selected = activeDbResumes.filter(r => selectedResumes.includes(r.id) && r.email);
-    const newCandidates = selected.map(r => ({
-      id: Date.now().toString() + Math.random(),
-      name: r.name,
-      email: r.email,
+  const pickOrigin: PickSource = dbTab === 'my-resumes' ? 'my-resumes' : 'shared-db';
+
+  /* The candidate list with the ticked resumes merged in — Send and the count
+     read this, so ticking is enough (no "Add Selected" needed). A pick with no
+     email, or an email already listed/picked, is skipped and named in the
+     picker footer instead of silently dropping the count. */
+  const validExisting = candidates.filter((c) => c.name.trim() && c.email.trim());
+  const pickPartition = partitionPicks(picks, validExisting.map((c) => c.email));
+  const mergeSelectedResumes = (): CandidateEmail[] => {
+    const newCandidates: CandidateEmail[] = pickPartition.accepted.map((p) => ({
+      id: `db-${p.id}`,
+      name: p.name,
+      email: p.email,
       source: 'database' as const,
+      origin: p.origin,
+      resumeId: p.id,
     }));
-    const existing = candidates.filter(c => c.source !== 'database' && (c.name.trim() || c.email.trim()));
-    setCandidates([...existing, ...newCandidates]);
-    setSelectedResumes([]);
+    return validExisting.length > 0 ? [...validExisting, ...newCandidates] : newCandidates.length > 0 ? newCandidates : [{ id: '1', name: '', email: '', source: 'manual' }];
+  };
+
+  // Move the picks into the candidate list (Add Selected, or leaving Select From).
+  const commitPicks = () => {
+    if (pickCount === 0) return;
+    const skipped = pickPartition.duplicate.length + pickPartition.noEmail.length;
+    if (skipped > 0) {
+      toast.warning({ title: 'Some resumes skipped', description: `${skipped} resume${skipped > 1 ? 's' : ''} skipped — no email or already in the list` });
+    }
+    setCandidates(mergeSelectedResumes());
+    setPicks({});
+  };
+
+  const handleAddFromDatabase = () => {
+    commitPicks();
     setInputMode('manual');
   };
+
+  // What Send acts on: ticked-but-not-yet-added resumes count as added.
+  const pendingDbSelection = pickCount > 0;
+  const sendCandidates = pendingDbSelection ? mergeSelectedResumes() : candidates;
+  const pickedBySource = countBySource(Object.values(picks));
+  const shownPickedCount = filteredDbResumes.filter((r) => picks[r.id]).length;
+  const allShownPicked = filteredDbResumes.length > 0 && shownPickedCount === filteredDbResumes.length;
 
   // Note: Assessment creation is now handled by redirecting to /recruitment/assessments/create page
   // No need for inline assessment creation state
@@ -274,7 +332,12 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
       return;
     }
 
-    const validCandidates = candidates.filter(c => c.name.trim() && c.email.trim() && c.email.includes('@'));
+    // Fold the ticked resumes into the list so it matches what was sent.
+    if (pendingDbSelection) {
+      setCandidates(sendCandidates);
+      setPicks({});
+    }
+    const validCandidates = sendCandidates.filter(c => c.name.trim() && c.email.trim() && c.email.includes('@'));
     if (validCandidates.length === 0) {
       toast.error({ title: 'No Valid Candidates', description: 'Please add at least one candidate with valid name and email' });
       return;
@@ -367,7 +430,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
 
 
   const isValid =
-    candidates.some(c => c.name.trim() && c.email.trim() && c.email.includes('@')) &&
+    sendCandidates.some(c => c.name.trim() && c.email.trim() && c.email.includes('@')) &&
     selectedAssessment !== '';
 
   const selectedAssessmentData = assessments.find(a => a.id === selectedAssessment);
@@ -681,7 +744,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
               <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300">Candidates *</label>
               <div className="flex flex-wrap items-center gap-2">
                 <button
-                  onClick={() => setInputMode('manual')}
+                  onClick={() => { commitPicks(); setInputMode('manual'); }}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-colors ${
                     inputMode === 'manual' ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10' : 'bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
                   }`}
@@ -764,6 +827,9 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
                       <FolderOpen className="w-3.5 h-3.5" />
                       My Resumes
                       <span className="px-1.5 py-0.5 rounded-full text-xs bg-gray-200 dark:bg-slate-800 text-gray-700 dark:text-slate-300">{myResumesData.length}</span>
+                      {pickedBySource.myResumes > 0 && (
+                        <span title="Selected from My Resumes" className="px-1.5 py-0.5 rounded-full text-xs font-semibold bg-brand-blue text-white tabular-nums">✓ {pickedBySource.myResumes}</span>
+                      )}
                     </button>
                   )}
                   {(hasInternalDBAccess || (!hasMyResumesAccess && !hasInternalDBAccess)) && (
@@ -774,6 +840,9 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
                       <Database className="w-3.5 h-3.5" />
                       Shared Database
                       <span className="px-1.5 py-0.5 rounded-full text-xs bg-gray-200 dark:bg-slate-800 text-gray-700 dark:text-slate-300">{internalDbData.length}</span>
+                      {pickedBySource.sharedDb > 0 && (
+                        <span title="Selected from Shared Database" className="px-1.5 py-0.5 rounded-full text-xs font-semibold bg-brand-blue text-white tabular-nums">✓ {pickedBySource.sharedDb}</span>
+                      )}
                     </button>
                   )}
                 </div>
@@ -806,17 +875,12 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
                         className="w-full min-w-0 sm:min-w-[220px] sm:flex-1 h-[38px] px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                       />
                       <button
-                        onClick={() => {
-                          if (selectedResumes.length === filteredDbResumes.length && filteredDbResumes.length > 0) {
-                            setSelectedResumes([]);
-                          } else {
-                            setSelectedResumes(filteredDbResumes.map(r => r.id));
-                          }
-                        }}
+                        onClick={() => setPicks(prev => toggleAllPicks(prev, filteredDbResumes, pickOrigin))}
                         className="h-[38px] shrink-0 px-3 py-2 text-sm border border-gray-300 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 whitespace-nowrap text-gray-700 dark:text-slate-300"
                       >
-                        {selectedResumes.length === filteredDbResumes.length && filteredDbResumes.length > 0 ? 'Deselect All' : 'Select All'}
+                        {allShownPicked ? 'Deselect All' : 'Select All'}
                       </button>
+                      <span className="text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap">{shownPickedCount} of {filteredDbResumes.length} selected here</span>
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-2 space-y-1">
@@ -847,15 +911,15 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
                       ) : filteredDbResumes.map(resume => (
                         <div
                           key={resume.id}
-                          onClick={() => setSelectedResumes(prev => prev.includes(resume.id) ? prev.filter(id => id !== resume.id) : [...prev, resume.id])}
+                          onClick={() => setPicks(prev => togglePick(prev, resume, pickOrigin))}
                           className={`flex items-center gap-2 p-2.5 rounded-lg border cursor-pointer transition-all ${
-                            selectedResumes.includes(resume.id) ? 'bg-brand-blue/5 border-brand-blue/40' : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 hover:border-brand-blue/30 hover:bg-brand-blue/[0.03]'
+                            !!picks[resume.id] ? 'bg-brand-blue/5 border-brand-blue/40' : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 hover:border-brand-blue/30 hover:bg-brand-blue/[0.03]'
                           }`}
                         >
                           <div className={`w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center ${
-                            selectedResumes.includes(resume.id) ? 'bg-brand-blue border-brand-blue' : 'border-gray-300 dark:border-slate-700'
+                            !!picks[resume.id] ? 'bg-brand-blue border-brand-blue' : 'border-gray-300 dark:border-slate-700'
                           }`}>
-                            {selectedResumes.includes(resume.id) && <CheckCircle className="w-3 h-3 text-white" />}
+                            {!!picks[resume.id] && <CheckCircle className="w-3 h-3 text-white" />}
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between gap-2">
@@ -869,18 +933,20 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
                       ))}
                     </div>
 
-                    <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50">
-                      <span className="text-xs text-gray-500 dark:text-slate-500">{selectedResumes.length} selected</span>
-                      <button
-                        onClick={handleAddFromDatabase}
-                        disabled={selectedResumes.length === 0}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 text-xs transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-                      >
-                        <Users className="w-3.5 h-3.5" />
-                        Add Selected
-                      </button>
-                    </div>
                   </div>
+                </div>
+
+                {/* Selection footer — outside the scroll-capped area so it's always in view. */}
+                <div className="flex flex-wrap items-start justify-between gap-2 px-3 py-2 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50">
+                  <ResumeSelectionSummary partition={pickPartition} onClear={() => setPicks({})} />
+                  <button
+                    onClick={handleAddFromDatabase}
+                    disabled={pickCount === 0}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 text-xs transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                  >
+                    <Users className="w-3.5 h-3.5" />
+                    Add Selected
+                  </button>
                 </div>
               </div>
             )}
@@ -912,7 +978,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
               <div className="text-xs sm:text-sm text-green-700 space-y-1">
                 <p className="[overflow-wrap:anywhere]"><strong>Assessment:</strong> {selectedAssessmentData?.title}</p>
                 <p><strong>Duration:</strong> {selectedAssessmentData?.duration_minutes} minutes</p>
-                <p><strong>Recipients:</strong> {candidates.filter(c => c.name.trim() && c.email.trim()).length} candidate(s)</p>
+                <p><strong>Recipients:</strong> {sendCandidates.filter(c => c.name.trim() && c.email.trim()).length} candidate(s)</p>
                 <p><strong>Expires in:</strong> {expiryDays} day{expiryDays > 1 ? 's' : ''}</p>
               </div>
             </div>
@@ -923,11 +989,14 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
         <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 dark:bg-slate-800/50 border-t border-gray-200 dark:border-slate-700 flex flex-col sm:flex-row items-stretch sm:items-center sm:justify-between gap-3 shrink-0">
           <div className="text-xs sm:text-sm text-center sm:text-left">
             {(() => {
-              const validCount = candidates.filter(c => c.name.trim() && c.email.trim()).length;
+              const validRows = sendCandidates.filter(c => c.name.trim() && c.email.trim());
+              const validCount = validRows.length;
+              const breakdown = validCount > 0 ? sourceBreakdown(validRows) : '';
               const insufficient = quotaStats !== null && quotaStats.total_quota < 999999 && quotaStats.available < validCount && validCount > 0;
               return (
                 <span className={insufficient ? 'text-red-600 font-medium' : 'text-gray-600 dark:text-slate-400'}>
                   {validCount} candidate{validCount !== 1 ? 's' : ''} will receive invitations
+                  {breakdown && <span className="block text-xs text-gray-500 dark:text-slate-500">{breakdown}</span>}
                   {insufficient && ` — only ${quotaStats!.available} unit(s) available`}
                 </span>
               );

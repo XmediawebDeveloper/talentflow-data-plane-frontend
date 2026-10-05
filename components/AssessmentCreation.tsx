@@ -14,7 +14,7 @@ import { assessmentService, jdService } from '@/lib/services';
 import api from '@/lib/services/api';
 import dynamic from 'next/dynamic';
 import { toast } from 'sonner';
-import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
+import { usePlanLock } from '@/lib/hooks/usePlanFeature';
 import { useAuth } from '@/components/providers/AuthProvider';
 import SuccessAnimation from '@/components/ui/success-animation';
 import PageBreadcrumb, { type BreadcrumbCrumb } from '@/components/PageBreadcrumb';
@@ -629,7 +629,10 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
   // add/edit/delete-question affordance this builder actually has (the bank
   // has no per-question edit or delete UI here to gate).
   const canAddQuestion = isTenantAdmin || hasPermissionCode('assessments:add_question');
-  const { available: assessmentAvailable } = usePlanFeature('assessment');
+  // Locked only once plan features have loaded — `available` is false while
+  // loading, which used to toast "not available" and blank the form on every load.
+  const { isPlanLocked } = usePlanLock();
+  const assessmentAvailable = !isPlanLocked('assessment');
 
   /* Read initial step from URL, default to 'select-jd'.
    *
@@ -1332,7 +1335,8 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
       await api.post('/hr-question-bank', {
         question_text: questionText,
         answer_type: newHRQuestion.answer_type,
-        correct_answer: newHRQuestion.answer_type === 'yes_no' ? (newHRQuestion.correct_answer || 'Yes') : null,
+        // Yes / No questions are information-only: no right answer to grade.
+        correct_answer: null,
       });
 
       const refreshedQuestions = await loadHRQuestionBank();
@@ -1396,7 +1400,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                 </button>
                 <button
                   type="button"
-                  onClick={() => setNewHRQuestion(prev => ({ ...prev, answer_type: 'yes_no', correct_answer: prev.correct_answer || 'Yes', time_minutes: 1 }))}
+                  onClick={() => setNewHRQuestion(prev => ({ ...prev, answer_type: 'yes_no', correct_answer: undefined, time_minutes: 1 }))}
                   className={`flex-1 rounded-lg border-2 px-4 py-2.5 text-sm font-medium transition-all ${
                     newHRQuestion.answer_type === 'yes_no'
                       ? 'border-brand-blue/40 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20'
@@ -1407,36 +1411,6 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                 </button>
               </div>
             </div>
-
-            {newHRQuestion.answer_type === 'yes_no' && (
-              <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700">Correct Answer *</label>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <button
-                    type="button"
-                    onClick={() => setNewHRQuestion(prev => ({ ...prev, correct_answer: 'Yes' }))}
-                    className={`flex-1 rounded-lg border-2 px-4 py-2.5 text-sm font-medium transition-all ${
-                      newHRQuestion.correct_answer === 'Yes'
-                        ? 'border-success-line bg-success-subtle text-success ring-1 ring-success-line'
-                        : 'border-gray-200 bg-white text-gray-700 hover:border-brand-blue/30 hover:text-brand-blue'
-                    }`}
-                  >
-                    Yes is correct
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setNewHRQuestion(prev => ({ ...prev, correct_answer: 'No' }))}
-                    className={`flex-1 rounded-lg border-2 px-4 py-2.5 text-sm font-medium transition-all ${
-                      newHRQuestion.correct_answer === 'No'
-                        ? 'border-success-line bg-success-subtle text-success ring-1 ring-success-line'
-                        : 'border-gray-200 bg-white text-gray-700 hover:border-brand-blue/30 hover:text-brand-blue'
-                    }`}
-                  >
-                    No is correct
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
 
           <div className="flex-shrink-0 flex flex-wrap justify-end gap-2 sm:gap-3 border-t border-gray-100 bg-slate-50 px-4 sm:px-6 py-3">

@@ -762,9 +762,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      showing it until the new table reports in. */
   const [clearAssessmentSortSignal, setClearAssessmentSortSignal] = useState(0);
   const [sortedAssessmentTab, setSortedAssessmentTab] = useState<string | null>(null);
-  /* The Archived tab's row count, reported by its table — see the Archived
-     entry in `sectionHeading`. */
-  const [archivedRowCount, setArchivedRowCount] = useState<number | null>(null);
   // Clone confirmation state — simple confirm-only modal. The recruiter
   // invites V2 candidates manually via the normal invite flow.
   const [cloneTargetAssessment, setCloneTargetAssessment] = useState<any | null>(null);
@@ -5046,7 +5043,20 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
            instead of a spinner. Every lookup below reads this one value, so
            the panel and its row actions never disagree about what's on
            screen. */
-        const displayedRows = assessmentLineages[jdId] ?? getOptimisticAssessmentRows(jdId);
+        /* On the Active / Draft / Archived pills the panel lists only that
+           status, like the rows it opens from - not the job's whole history,
+           which put Active and Draft versions on the Archived pill. All, Total
+           Jobs and the Send Invite picker keep every version. */
+        const panelStatus = selectMode ? undefined : (
+          activeTab === 'active' ? 'published'
+            : activeTab === 'draft' ? 'draft'
+              : activeTab === 'archived' ? 'archived'
+                : undefined
+        );
+        const lineageRows = assessmentLineages[jdId] ?? getOptimisticAssessmentRows(jdId);
+        const displayedRows = panelStatus
+          ? lineageRows.filter((v: any) => String(v.status || 'draft').toLowerCase() === panelStatus)
+          : lineageRows;
         const hasRowsToShow = !!assessmentLineages[jdId] || displayedRows.length > 0;
         /* The Send Invite picker's eye on a version row: a read-only preview
            over the picker (see `previewAssessmentInPicker`). */
@@ -5063,7 +5073,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             assessments={displayedRows}
             /* The backend's per-version "has an assessment" index,
                read beside the rows - see the prop for why both. */
-            jdsWithAssessments={jdsWithAssessments}
+            /* Not on a status pill: the index knows a version has SOME
+               assessment, not one of this status, so it would keep job
+               versions listed with nothing under them. */
+            jdsWithAssessments={panelStatus ? undefined : jdsWithAssessments}
             loading={!hasRowsToShow && (!!loadingLineages[assessment.jd_id] || jdLineage.isLoading(assessment.jd_id))}
             currentAssessmentId={assessment.id}
             latestJobVersion={getLatestJobVersion(assessment)}
@@ -6212,78 +6225,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         <ListToolbarSlotProvider value={toolbarSlot.node}>
         <div ref={listSectionRef} className="scroll-mt-4" aria-hidden="true" />
 
-        {/* ── Section heading — the active tab's name and the size of the list
-            under it, on one line directly above the search row.
-
-            Lifted from /recruitment/resume-scoring, which is where this shape
-            comes from: that page heads its list with `All Candidates (73)` —
-            `${section.title} (${count})` in an <h2> above the same ListToolbar
-            — and keeps the toolbar's own "24 of 56" badge below it. The two
-            are not a duplicate pair, they answer different questions: the
-            heading is how big this list IS, the badge is how much of it you
-            are currently seeing. Only the badge moves as you type.
-
-            Which count each tab states is decided by what that tab actually
-            lists, so a heading can never disagree with its own rows:
-
-              Total Jobs / Archived   the page lists these itself, as JOB rows
-                                      — `assessmentResultCount`, the same
-                                      figure the "Job List (N)" heading this
-                                      replaces always used.
-              All / Active / Draft    the rows live in `AllAssessmentsTable`,
-                                      so the count comes from /assessments/stats
-                                      instead — the same fields the summary
-                                      cards above read, so the heading and the
-                                      card that opened it always match.
-              Candidate Results       the loaded fan-out, before this tab's own
-                                      search narrows it.
-
-            An em dash while the figure is still loading rather than a 0: "(0)"
-            is a claim, and a heading that reads 0 and then 25 has moved the
-            search row under it.
-
-            The four tabs with no entry are the ones that are not a cut of the
-            assessment list — Invitation Status, the two log tabs and Settings
-            — and each already carries its own card header. */}
-        {(() => {
-          const sectionHeading: Partial<Record<AssessmentPageTab, { title: string; count: number; loading: boolean }>> = {
-            jobs: { title: 'Job List', count: assessmentResultCount, loading: isLoading },
-            all: { title: 'All Assessments', count: stats.total_assessments, loading: isLoadingStats },
-            active: { title: 'Active Assessments', count: stats.active_assessments, loading: isLoadingStats },
-            draft: { title: 'Draft Assessments', count: stats.draft_assessments, loading: isLoadingStats },
-            /* Stats, not `assessmentResultCount`, now that Archived lists
-               assessments in `AllAssessmentsTable` alongside Draft rather than
-               the page's own job rows — the count has to be of the same thing
-               the rows are. */
-            /* The Archived count is the table's own loaded rows once they
-               land (`archivedRowCount`), so the count and the list it heads
-               are the same data; the stats figure only fills the gap while
-               the table loads. */
-            archived: {
-              title: 'Archived',
-              count: archivedRowCount ?? stats.archived_assessments,
-              loading: archivedRowCount === null && isLoadingStats,
-            },
-            'completed-candidates': {
-              title: 'Candidate Results',
-              count: completedCandidates.length,
-              loading: isLoadingCompletedCandidates,
-            },
-          };
-          const section = sectionHeading[activeTab];
-          if (!section) return null;
-          return (
-            /* The page's own heading treatment, unchanged — it is the one the
-               "Job List (N)" header wore, down to the lighter weight on the
-               figure so the line reads as a name first and a number second. */
-            <h2 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 tracking-tight mb-3">
-              {section.title}{' '}
-              <span className="font-normal text-gray-500 dark:text-slate-500 tabular-nums">
-                ({section.loading ? '—' : section.count.toLocaleString()})
-              </span>
-            </h2>
-          );
-        })()}
+        {/* No section heading above the search row - the pills already name
+            the tab, and the counts are the search row's "X of Y" badge and the
+            Grouped / Ungrouped switch. */}
 
         {/* THE search position for this page: one row, directly above the tab
             pills, for every tab.
@@ -6651,7 +6595,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   fixedStatus={config.fixedStatus}
                   clearSortSignal={clearAssessmentSortSignal}
                   onSortDefaultChange={(isDefault) => setSortedAssessmentTab(isDefault ? null : activeTab)}
-                  onRowCountChange={activeTab === 'archived' ? setArchivedRowCount : undefined}
                 />
               );
             })() : activeTab === 'completed-candidates' ? (() => {

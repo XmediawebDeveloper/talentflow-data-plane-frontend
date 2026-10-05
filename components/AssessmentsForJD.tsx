@@ -26,7 +26,8 @@ import {
 import { useAuth } from '@/lib/hooks/useAuth';
 import { assessmentService } from '@/lib/services';
 import { toast } from 'sonner';
-import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
+import { usePlanLock } from '@/lib/hooks/usePlanFeature';
+import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 // dateUtils exports neither of these names. formatDateTimeIST was imported but never
 // used; formatDateOnlyIST is used below and resolved to undefined at runtime, so the
 // call crashed. formatISTDate is dateUtils' own date-only formatter and is what the
@@ -47,7 +48,9 @@ interface AssessmentsForJDProps {
 export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProps) {
   const router = useRouter();
   const { user, hasPermission } = useAuth();
-  const { available: assessmentAvailable } = usePlanFeature('assessment');
+  // Plan-gated Create stays visible but disabled (hover explains) — never hidden.
+  const { isPlanLocked } = usePlanLock();
+  const assessmentLocked = isPlanLocked('assessment');
   const [isLoading, setIsLoading] = useState(true);
   const [assessments, setAssessments] = useState<any[]>([]);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -282,10 +285,12 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
         </div>
         <div className="flex flex-wrap items-center gap-2 shrink-0">
           {/* Create Assessment Button */}
-          {canCreateAssessments && assessmentAvailable && (
-            <Button variant="primary" size="md" onClick={handleCreateAssessment} icon={<Plus className="w-4 h-4" />}>
-              Create Assessment
-            </Button>
+          {canCreateAssessments && (
+            <span className="inline-flex" title={assessmentLocked ? PLAN_LOCKED_MESSAGE : undefined}>
+              <Button variant="primary" size="md" onClick={handleCreateAssessment} disabled={assessmentLocked} icon={<Plus className="w-4 h-4" />}>
+                Create Assessment
+              </Button>
+            </span>
           )}
         </div>
       </div>
@@ -333,10 +338,12 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
               ? 'Create an assessment to start testing candidates for this job'
               : 'Assessments will appear here once created'}
           </p>
-          {canCreateAssessments && assessmentAvailable && activeTab !== 'archived' && (
-            <Button variant="primary" size="md" onClick={handleCreateAssessment} icon={<Plus className="w-4 h-4" />}>
-              Create Assessment
-            </Button>
+          {canCreateAssessments && activeTab !== 'archived' && (
+            <span className="inline-flex" title={assessmentLocked ? PLAN_LOCKED_MESSAGE : undefined}>
+              <Button variant="primary" size="md" onClick={handleCreateAssessment} disabled={assessmentLocked} icon={<Plus className="w-4 h-4" />}>
+                Create Assessment
+              </Button>
+            </span>
           )}
         </div>
       )}

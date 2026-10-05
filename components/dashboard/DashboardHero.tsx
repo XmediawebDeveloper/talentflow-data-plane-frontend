@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { ArrowUpRight, Calendar, Plus } from 'lucide-react';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { usePlanLock } from '@/lib/hooks/usePlanFeature';
+import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 
 const ROLE_LABELS: Record<string, string> = {
   tenant_admin: 'Owner',
@@ -30,6 +32,9 @@ export default function DashboardHero() {
   const role = ROLE_LABELS[user?.role || ''] || '';
   const canCreateJob = isTenantAdmin || hasPermission('canCreateJD');
   const canRunMatch = isTenantAdmin || hasPermission('canRunAiMatch');
+  // Plan lacks AI Talent Match → the button stays, disabled with the plan hover.
+  const { isPlanLocked } = usePlanLock();
+  const matchPlanLocked = isPlanLocked('ai_talent_match');
 
   const dateLabel = new Date().toLocaleDateString(undefined, {
     weekday: 'long',
@@ -82,7 +87,17 @@ export default function DashboardHero() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          {canRunMatch && (
+          {canRunMatch && matchPlanLocked && (
+            <span
+              aria-disabled="true"
+              title={PLAN_LOCKED_MESSAGE}
+              className="inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-xl bg-white/5 px-4 py-2.5 text-sm font-medium text-white/50 ring-1 ring-white/10"
+            >
+              AI Talent Match
+              <ArrowUpRight className="h-4 w-4" />
+            </span>
+          )}
+          {canRunMatch && !matchPlanLocked && (
             <Link
               href="/recruitment/ai-talent-match"
               prefetch={false}

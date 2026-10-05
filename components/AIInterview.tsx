@@ -16,6 +16,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { DateField } from '@/components/ui/date-field';
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
+import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { useQuota } from '@/contexts/QuotaContext';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse, AIInterviewStatsResponse, AIInterviewSettingsResponse, AIInterviewAuditActivity, AIInterviewAuditTrailResponse } from '@/lib/services/aiInterviewService';
@@ -164,7 +165,7 @@ export default function AIInterview() {
   const canDeleteAIInterviews = isTenantAdmin || !!user?.permissions?.canDeleteAIInterviews;
   // HR Question Bank is reached via a quick link here (moved out of the sidebar)
   const canAccessHRQuestionBank = isTenantAdmin || !!(user?.permissions?.canViewHRQuestionBank || user?.permissions?.canCreateHRQuestionBank || user?.permissions?.canUpdateHRQuestionBank || user?.permissions?.canDeleteHRQuestionBank);
-  const { available: aiInterviewAvailable } = usePlanFeature('ai_interview');
+  const { available: aiInterviewAvailable, loading: planFeaturesLoading } = usePlanFeature('ai_interview');
   const { quotaData } = useQuota();
 
   const [activeTab, setActiveTab] = useState<TabKey>('all');
@@ -1399,7 +1400,9 @@ export default function AIInterview() {
       return;
     }
 
-    if (loading) return;
+    // Wait for plan features too: `available` is false while they load, which
+    // used to reject a valid deep-link action as "not enabled".
+    if (loading || planFeaturesLoading) return;
 
     handledQuickActionRef.current = actionKey;
 
@@ -1408,7 +1411,7 @@ export default function AIInterview() {
     };
 
     if (!aiInterviewAvailable) {
-      toast.error('AI Interviews module is not enabled for your organization.');
+      toast.error(PLAN_LOCKED_MESSAGE);
       clearQuickActionUrl();
       return;
     }
@@ -1493,6 +1496,7 @@ export default function AIInterview() {
     configs,
     archivedConfigs,
     aiInterviewAvailable,
+    planFeaturesLoading,
     canCreateAIInterviews,
     canUpdateAIInterviews,
     canShareAIInterviews,

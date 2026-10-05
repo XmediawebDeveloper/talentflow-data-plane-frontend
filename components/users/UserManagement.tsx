@@ -50,6 +50,7 @@ import ListPagination from '@/components/ListPagination';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useQuota } from '@/contexts/QuotaContext';
 import { usePlanFeaturesContext } from '@/components/providers/PlanFeaturesProvider';
+import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import OrganizationTabs from '@/components/organization/OrganizationTabs';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { formatISTDate, formatIST } from '@/lib/utils/dateUtils';
@@ -2101,6 +2102,21 @@ export default function UserManagement() {
   };
 
 
+  /** A permission category whose feature is not in the plan: shown, greyed,
+   *  non-interactive, with the plan-locked hover — never hidden. */
+  const renderPlanLockedCategory = (key: string, name: string) => (
+    <div
+      key={key}
+      aria-disabled="true"
+      title={PLAN_LOCKED_MESSAGE}
+      className="flex items-center gap-2 p-2 sm:p-3 rounded-lg border border-gray-100 dark:border-slate-700/60 bg-slate-50/50 dark:bg-slate-800/50 opacity-60 cursor-not-allowed select-none"
+    >
+      <Lock className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 flex-shrink-0" />
+      <span className="text-sm font-medium text-gray-500 dark:text-slate-400 flex-1 min-w-0 truncate">{name}</span>
+      <span className="text-2xs font-medium text-gray-500 dark:text-slate-400 bg-gray-100 dark:bg-slate-800 px-1.5 py-0.5 rounded whitespace-nowrap">Not in plan</span>
+    </div>
+  );
+
   // Returns false if a permission category or sub-category is for a feature not in the tenant's plan
   const isCategoryVisible = (categoryId: string, subCategoryName?: string): boolean => {
     // Sub-category gating (Subscription & Billing / Settings sub-categories)
@@ -2807,9 +2823,6 @@ export default function UserManagement() {
                   ) : (
                     <div className="space-y-3 max-h-[250px] overflow-y-auto border border-gray-200 dark:border-slate-700 rounded-lg p-3 bg-gray-50 dark:bg-slate-800/50">
                       {CUSTOM_PERMISSION_CATEGORIES.map(category => {
-                        // Hide categories for features not in the tenant's plan
-                        if (!isCategoryVisible(category.id)) return null;
-
                         // Check if any permission in this category is selected
                         const hasAnyPermission = () => {
                           if (category.actions) {
@@ -2825,6 +2838,9 @@ export default function UserManagement() {
 
                         // Only show categories that have at least one permission
                         if (!hasAnyPermission()) return null;
+
+                        // Feature not in the plan: shown greyed with the plan hover, not hidden.
+                        if (!isCategoryVisible(category.id)) return renderPlanLockedCategory(category.id, category.name);
 
                         // Collect all selected actions for this category
                         const selectedActions: string[] = [];
@@ -3013,8 +3029,8 @@ export default function UserManagement() {
                   ) : (
                     <div className="space-y-4">
                       {CUSTOM_PERMISSION_CATEGORIES.map(category => {
-                        // Hide categories for features not in the tenant's plan
-                        if (!isCategoryVisible(category.id)) return null;
+                        // Feature not in the plan: shown greyed with the plan hover, not hidden.
+                        if (!isCategoryVisible(category.id)) return renderPlanLockedCategory(category.id, category.name);
 
                         // Pure codes-only toggle — no dual-state sync needed
                         const toggleCode = (code: string) => {
@@ -3236,7 +3252,7 @@ export default function UserManagement() {
 
                             {/* Sub-categories */}
                             {category.subCategories?.map(sub => {
-                              if (!isCategoryVisible(category.id, sub.name)) return null;
+                              if (!isCategoryVisible(category.id, sub.name)) return renderPlanLockedCategory(`${category.id}:${sub.name}`, sub.name);
 
                               const isSubActive = sub.viewCode
                                 ? editSelectedPermissionCodes.has(sub.viewCode) || sub.actions.some(a => editSelectedPermissionCodes.has(a.code))

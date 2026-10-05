@@ -2,7 +2,7 @@ import { SCORE_CELL_TEXT } from '@/lib/utils/score';
 import { Mail, Phone, Calendar, Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, ClipboardList, Share2, Paperclip, FileText, FileSpreadsheet, MoreVertical, Award, ChevronDown, ChevronRight, Video, BarChart3 } from 'lucide-react';
 import { matchBadgeClass, MATCH_SCORE_TEXT_CLASS, normalizeMatchResult, formatOverallScore, formatOverallScoreValue } from '@/lib/utils/matchStatus';
 import { truncateJobTitle } from '@/lib/utils/jobOpeningDisplay';
-import { useState, useEffect, useMemo, Fragment } from 'react';
+import { useState, useEffect, useMemo, useRef, Fragment } from 'react';
 import { toast } from 'sonner';
 import ColumnCustomizationModal from './ColumnCustomizationModal';
 import ZipDownloadConfirmModal from './ZipDownloadConfirmModal';
@@ -30,6 +30,7 @@ import SearchableSelect from '@/components/ui/searchable-select';
 import { DateField } from '@/components/ui/date-field';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
+import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { useAllJobInviteTargets } from '@/lib/hooks/useAllJobInviteTargets';
 import { formatIST, formatISTDate, formatISTTime, parseIST } from '@/lib/utils/dateUtils';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
@@ -96,11 +97,12 @@ const DEFAULT_COLUMNS = [
   // The Invite menu — a column like the rest so it sits in this order rather
   // than trailing after every customizable one. Never exported (EXPORT_EXCLUDED).
   { id: 'invitation', label: 'Invitation', enabled: true },
-  { id: 'jdId', label: 'JD ID', enabled: true },
-  { id: 'jobTitle', label: 'Job Title', enabled: true }, // Always show job title
-  { id: 'jobVersion', label: 'Job Version', enabled: true },
   { id: 'phone', label: 'Phone', enabled: true },
   { id: 'experience', label: 'Experience', enabled: true },  // Enable by default
+  // The job's identity follows the candidate's details, in this order.
+  { id: 'jdId', label: 'Job ID', enabled: true },
+  { id: 'jobTitle', label: 'Job Title', enabled: true }, // Always show job title
+  { id: 'jobVersion', label: 'Job Version', enabled: true },
   { id: 'education', label: 'Education', enabled: false },
   { id: 'certifications', label: 'Certifications', enabled: false },
   { id: 'scoredDate', label: 'Scored By / Date', enabled: true },
@@ -109,6 +111,10 @@ const DEFAULT_COLUMNS = [
 
 /* Columns that are controls, not data — shown in the table, left out of CSV/XLS. */
 const EXPORT_EXCLUDED_COLUMNS = new Set(['invitation']);
+
+/** The key "View by Candidates" groups rows by: one candidate per email. */
+export const candidateGroupKey = (r: { email?: string; candidateName?: string; id: string }) =>
+  (r.email || r.candidateName || r.id).trim().toLowerCase();
 
 export interface ScoredResume {
   id: string;
@@ -232,6 +238,12 @@ interface ScoredResumesTableProps {
    */
   groupByEmail?: boolean;
   /**
+   * Grouped view only: told the candidates in on-screen order (search and
+   * filters applied, one row per candidate - their most recent score), so
+   * the host's results page can step Prev / Next candidate by candidate.
+   */
+  onCandidateOrderChange?: (candidates: ScoredResume[]) => void;
+  /**
    * Opens the caller's "Select Applicants to Score" flow. Optional so the
    * button only appears where a host has somewhere to send it — JobDetailView
    * owns SelectSourceModal; ResumeScoringPage has its own scoring entry points.
@@ -306,6 +318,7 @@ export default function ScoredResumesTable({
   isGlobalView = false,
   title = 'Scored Resumes',
   groupByEmail = false,
+  onCandidateOrderChange,
   onScoreResumes,
   onScoreResumesFromEmptyState,
   scoreResumesDisabled,
@@ -332,10 +345,15 @@ export default function ScoredResumesTable({
   // canCreateAssessments (creating a brand-new assessment is a different
   // action). Previously this checked canCreateAssessments, so disabling
   // Resume Scoring's "Invite" permission had no effect on this button.
-  const canCreateAssessments =
+  const assessmentInvitePermitted =
     (isTenantAdmin || hasPermissionCode('scoring:invite')) &&
-    hasPlanFeature('assessment') &&
     isFeatureEnabled('assessment');
+  const canCreateAssessments = assessmentInvitePermitted && hasPlanFeature('assessment');
+  // Why an Assessment invite control is off: a permitted user whose plan
+  // lacks Assessments is told so, not that they lack permission.
+  const assessmentDeniedReason = assessmentInvitePermitted
+    ? PLAN_LOCKED_MESSAGE
+    : 'You do not have permission to invite candidates to an assessment';
   // Whether the viewer may invite to AI Interview AT ALL (permission + plan +
   // tenant feature), AND there is some way to actually carry it out — either
   // the host's own handler, or its explicit opt-in into this component's
@@ -352,12 +370,18 @@ export default function ScoredResumesTable({
   // canInviteAIInterviews (ai_interview:invite) stays required alongside it,
   // since that is the permission the AI Interview invite endpoints actually
   // enforce server-side.
-  const mayInviteAIInterview =
+  const aiInterviewInvitePermitted =
     (!!onInviteAIInterview || enableInternalAIInterviewInvite) &&
     (isTenantAdmin || hasPermissionCode('scoring:invite')) &&
     hasPermission('canInviteAIInterviews') &&
-    hasPlanFeature('ai_interview') &&
     isFeatureEnabled('ai_interview');
+  const mayInviteAIInterview = aiInterviewInvitePermitted && hasPlanFeature('ai_interview');
+  const aiInterviewDeniedReason = aiInterviewInvitePermitted
+    ? PLAN_LOCKED_MESSAGE
+    : 'You do not have permission to invite candidates to an AI interview';
+  // Permitted to invite somewhere, but the plan covers neither target.
+  const invitePlanLocked =
+    (assessmentInvitePermitted || aiInterviewInvitePermitted) && !canCreateAssessments && !mayInviteAIInterview;
 
   // Only the cross-job global list needs this — a single-job host (JobDetailView,
   // or this page's own per-job "Scoring History" list) already knows its one
@@ -407,7 +431,9 @@ export default function ScoredResumesTable({
   const inviteDisabledTitle =
     canCreateAssessments || mayInviteAIInterview
       ? 'No published assessment or AI interview for this job yet'
-      : undefined;
+      : invitePlanLocked
+        ? PLAN_LOCKED_MESSAGE
+        : undefined;
   // Resume Scoring's own Export / Download Scorecard toggles — previously both
   // checked the generic, module-agnostic canExport flag (which defaults true
   // for most roles), so disabling either one here had no effect.
@@ -749,15 +775,10 @@ Best regards`);
   // person can appear several times: once per job, or once per resume
   // version. Rather than a flat, mixed-candidate list, `groupByEmail` hosts
   // cluster those rows by email into one card per person, each expandable
-  // to its own scoring history. `isGrouped` is the LOCAL on/off switch the
-  // "Group by: Candidate" control below toggles — seeded from the prop and
-  // re-synced whenever it changes (a host can move between a grouped and an
-  // ungrouped table reusing this same component instance), so a host that
-  // never opts in via the prop never shows the grouping control at all.
-  const [isGrouped, setIsGrouped] = useState(groupByEmail);
-  useEffect(() => {
-    setIsGrouped(groupByEmail);
-  }, [groupByEmail]);
+  // to its own scoring history. `isGrouped` is the on/off switch, and the
+  // host decides alone: "View by Candidates" is always grouped by candidate,
+  // with no Group by control to switch it off.
+  const isGrouped = groupByEmail;
   const [expandedGroupKeys, setExpandedGroupKeys] = useState<Set<string>>(new Set());
   const toggleGroupExpanded = (key: string) => {
     setExpandedGroupKeys((prev) => {
@@ -787,7 +808,7 @@ Best regards`);
   const candidateGroups = useMemo(() => {
     const groups = new Map<string, ScoredResume[]>();
     filteredResumes.forEach((r) => {
-      const key = (r.email || r.candidateName || r.id).trim().toLowerCase();
+      const key = candidateGroupKey(r);
       const group = groups.get(key);
       if (group) group.push(r);
       else groups.set(key, [r]);
@@ -797,11 +818,18 @@ Best regards`);
       .sort((a, b) => dateOf(b.rows[0]) - dateOf(a.rows[0]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredResumes]);
+  // Hand the host the candidate order the grouped list shows. Through a ref:
+  // the callback is usually an inline arrow, so it is not an effect dep.
+  const onCandidateOrderChangeRef = useRef(onCandidateOrderChange);
+  onCandidateOrderChangeRef.current = onCandidateOrderChange;
+  useEffect(() => {
+    if (isGrouped) onCandidateOrderChangeRef.current?.(candidateGroups.map((g) => g.rows[0]));
+  }, [isGrouped, candidateGroups]);
   // The unfiltered candidate-group count — the "total" half of the count
   // badge in grouped mode, same role `resumes.length` plays in ungrouped
   // mode.
   const totalDistinctCandidates = useMemo(
-    () => new Set(resumes.map((r) => (r.email || r.candidateName || r.id).trim().toLowerCase())).size,
+    () => new Set(resumes.map(candidateGroupKey)).size,
     [resumes],
   );
 
@@ -1488,7 +1516,7 @@ Best regards`);
       // The trigger stays visible but inert, with a tooltip naming the
       // reason, rather than disappearing outright.
       rowInviteDisabledTitle: !(canCreateAssessments || mayInviteAIInterview)
-        ? 'You do not have permission to invite candidates'
+        ? (invitePlanLocked ? PLAN_LOCKED_MESSAGE : 'You do not have permission to invite candidates')
         : 'No published assessment or AI interview for this job yet',
     };
   };
@@ -1507,7 +1535,7 @@ Best regards`);
             disabled={!canCreateAssessments || !rowCanInviteAssessment || availableUnits === 0}
             title={
               !canCreateAssessments
-                ? 'You do not have permission to invite candidates to an assessment'
+                ? assessmentDeniedReason
                 : !rowCanInviteAssessment
                   ? 'No published assessment for this job yet'
                   : availableUnits === 0
@@ -1516,7 +1544,7 @@ Best regards`);
             }
             onSelect={() => {
               if (!canCreateAssessments) {
-                toast.error('You do not have permission to invite candidates to an assessment');
+                toast.error(assessmentDeniedReason);
                 return;
               }
               setInviteCandidate(resume);
@@ -1533,14 +1561,14 @@ Best regards`);
             disabled={!mayInviteAIInterview || !rowCanInviteAIInterview}
             title={
               !mayInviteAIInterview
-                ? 'You do not have permission to invite candidates to an AI interview'
+                ? aiInterviewDeniedReason
                 : !rowCanInviteAIInterview
                   ? 'No published AI interview for this job yet'
                   : undefined
             }
             onSelect={() => {
               if (!mayInviteAIInterview) {
-                toast.error('You do not have permission to invite candidates to an AI interview');
+                toast.error(aiInterviewDeniedReason);
                 return;
               }
                 if (onInviteAIInterview) {
@@ -1721,7 +1749,7 @@ Best regards`);
         size="sm"
         onClick={() => {
           if (!canCreateAssessments) {
-            toast.error('You do not have permission to invite candidates to an assessment');
+            toast.error(assessmentDeniedReason);
             return;
           }
           setShowBulkInviteModal(true);
@@ -1734,7 +1762,7 @@ Best regards`);
         icon={<Send className="w-4 h-4" />}
         title={
           !canCreateAssessments
-            ? 'You do not have permission to invite candidates to an assessment'
+            ? assessmentDeniedReason
             : !canInviteAssessment
               ? 'No published assessment for this job yet'
               : availableUnits === 0
@@ -1782,7 +1810,7 @@ Best regards`);
           onSearchChange={search.setQuery}
           // The hook debounces into `appliedQuery`, so keystrokes pass through.
           searchDebounceMs={0}
-          searchPlaceholder="Search by name, email, phone, or JD ID..."
+          searchPlaceholder="Search by name, email, phone, or Job ID..."
           onToggleFilters={() => setShowFilters(!showFilters)}
           filtersOpen={showFilters}
           activeFilterCount={search.activeFilterCount}
@@ -1971,15 +1999,15 @@ Best regards`);
                   that did render. `Scored By` has always shown even with a
                   single recruiter; these now match it. */}
               <div className={FILTER_FIELD_CLASS}>
-                <label className={FILTER_LABEL_CLASS}>JD ID</label>
+                <label className={FILTER_LABEL_CLASS}>Job ID</label>
                 <SearchableSelect
                   value={filterJdId === 'all' ? '' : filterJdId}
                   onChange={(v) => search.setFilter('jdId', v || 'all')}
                   options={uniqueJdIds.map((code) => ({ value: code, label: code }))}
-                  allLabel="All JD IDs"
-                  placeholder="All JD IDs"
-                  searchPlaceholder="Search JD ID..."
-                  ariaLabel="Filter by JD ID"
+                  allLabel="All Job IDs"
+                  placeholder="All Job IDs"
+                  searchPlaceholder="Search Job ID..."
+                  ariaLabel="Filter by Job ID"
                 />
               </div>
 
@@ -2068,40 +2096,6 @@ Best regards`);
           </div>
         )}
       </div>
-
-      {/* "Group by: Candidate" control — only offered by hosts that opted
-          into grouping via the `groupByEmail` prop (the "View by Candidates"
-          card). `isGrouped` is this table's own on/off switch; the prop only
-          sets its starting value each time the host hands this table a
-          differently-scoped list. */}
-      {groupByEmail && (
-        <div className="flex flex-wrap items-center gap-3 mb-4">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">
-                Group by: <span className="font-medium text-gray-900">{isGrouped ? 'Candidate' : 'Ungrouped'}</span>
-                <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-40">
-              <DropdownMenuItem className="group" onSelect={() => setIsGrouped(true)}>
-                <span className={MENU_ITEM_SCALE_CLASS}>Candidate</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem className="group" onSelect={() => setIsGrouped(false)}>
-                <span className={MENU_ITEM_SCALE_CLASS}>Ungrouped</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          {isGrouped && (
-            <button
-              onClick={() => setIsGrouped(false)}
-              className="text-sm font-medium text-brand-blue hover:text-brand-blue-2 transition-colors"
-            >
-              Clear Grouping
-            </button>
-          )}
-        </div>
-      )}
 
       {displayMode === 'grid' ? (
         <div className="rounded-xl border border-gray-200 overflow-hidden">
@@ -2798,7 +2792,7 @@ Best regards`);
                     onClick={(e) => {
                       e.stopPropagation();
                       if (!canCreateAssessments) {
-                        toast.error('You do not have permission to invite candidates to an assessment');
+                        toast.error(assessmentDeniedReason);
                         return;
                       }
                       setInviteCandidate(resume);
@@ -2816,7 +2810,7 @@ Best regards`);
                           <AlertCircle className="w-3.5 h-3.5 text-destructive" />
                           <span>
                             {!canCreateAssessments
-                              ? 'You do not have permission to invite candidates to an assessment'
+                              ? assessmentDeniedReason
                               : !canInviteAssessment
                                 ? 'No published assessment for this job yet'
                                 : 'No assessment units available'}

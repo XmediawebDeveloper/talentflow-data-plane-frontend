@@ -114,12 +114,17 @@ const canResendInvite = (inv: any): boolean =>
   !inv.started_at &&
   !inv.completed_at;
 
-/** Copy Link disappears once revoked — only Edit remains from there.
- *  Revoked is listed explicitly (rather than relying on it not being
- *  'invited') so the intent reads at the call site. */
+/** Copy Link disappears as soon as the candidate STARTS the interview
+ *  (in_progress / started_at set) — a link to an interview already under way
+ *  is no use to share — and stays gone through completed/terminated. Also
+ *  gone once revoked (only Edit remains from there). Revoked is listed
+ *  explicitly (rather than relying on it not being 'invited') so the intent
+ *  reads at the call site. */
 export const isInterviewLinkLive = (inv: any): boolean =>
   !!inv.interview_token &&
-  !['completed', 'cancelled', 'terminated', 'expired', 'revoked'].includes(resolveInviteStatus(inv)) &&
+  !inv.started_at &&
+  !['in_progress', 'completed', 'cancelled', 'terminated', 'expired', 'revoked'].includes(resolveInviteStatus(inv)) &&
+  !['in_progress', 'completed', 'terminated'].includes(inv.status) &&
   !isInviteExpired(inv);
 
 /** Invite/list Score is ALWAYS the Must-Have Skills percentage (MHS section

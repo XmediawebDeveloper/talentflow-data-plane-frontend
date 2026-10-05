@@ -8,7 +8,8 @@ import { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import { Folder } from '@/lib/types/types';
 import { Tenant } from '@/lib/types/tenant';
 import { hasAvailableQuota, checkQuotaStatus, QuotaInfo } from '@/lib/services/usageTrackingService';
-import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
+import { usePlanLock } from '@/lib/hooks/usePlanFeature';
+import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { toast } from 'sonner';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { FOLDER_NAME_MAX_LENGTH } from './FolderTree';
@@ -109,14 +110,27 @@ interface UploadModalProps {
   targetFolder?: string;
 }
 
-export default function UploadModal({ folders, tenant, uploadSection, onClose, onUpload, onCreateFolder, onViewResume, onScoreResume, onScoreResumes, onDuplicateDetected, targetFolder }: UploadModalProps) {
-  const { available: resumeUploadAvailable } = usePlanFeature('resume_upload');
+/**
+ * Plan gate as a wrapper: the body below has dozens of hooks, and returning
+ * early before them flipped the hook count once plan features finished
+ * loading (React "rendered fewer hooks"). Toast + close run in an effect, not
+ * during render.
+ */
+export default function UploadModal(props: UploadModalProps) {
+  const { isPlanLocked } = usePlanLock();
+  const locked = isPlanLocked('resume_upload');
+  const { onClose } = props;
+  useEffect(() => {
+    if (locked) {
+      toast.error(PLAN_LOCKED_MESSAGE);
+      onClose?.();
+    }
+  }, [locked, onClose]);
+  if (locked) return null;
+  return <UploadModalBody {...props} />;
+}
 
-  if (!resumeUploadAvailable) {
-    toast.error('Resume Storage is not available in your plan');
-    onClose?.();
-    return null;
-  }
+function UploadModalBody({ folders, tenant, uploadSection, onClose, onUpload, onCreateFolder, onViewResume, onScoreResume, onScoreResumes, onDuplicateDetected, targetFolder }: UploadModalProps) {
 
   const [activeTab, setActiveTab] = useState<'single' | 'bulk'>('single');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
