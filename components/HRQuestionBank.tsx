@@ -113,7 +113,7 @@ const DEFAULT_HR_QUESTIONS: HRQuestion[] = [
     answer_type: 'yes_no',
     expected_answer_points: ['Clear yes/no answer', 'Flexibility and openness', 'Any conditions or preferences'],
     evaluation_criteria: 'Direct and honest response, shows flexibility if applicable to the role',
-    time_minutes: 1,
+    time_minutes: 2,
     is_active: true,
   },
   {
@@ -125,7 +125,7 @@ const DEFAULT_HR_QUESTIONS: HRQuestion[] = [
     answer_type: 'yes_no',
     expected_answer_points: ['Clear yes/no answer', 'Preference for work mode', 'Flexibility for hybrid/onsite'],
     evaluation_criteria: 'Direct response about onsite availability, shows flexibility if role requires it',
-    time_minutes: 1,
+    time_minutes: 2,
     is_active: true,
   },
   {
@@ -137,7 +137,7 @@ const DEFAULT_HR_QUESTIONS: HRQuestion[] = [
     answer_type: 'yes_no',
     expected_answer_points: ['Clear yes/no with examples', 'Strategies for handling pressure', 'Past experience under deadlines'],
     evaluation_criteria: 'Provides real examples of working under pressure, shows resilience and coping strategies',
-    time_minutes: 1,
+    time_minutes: 2,
     is_active: true,
   },
   {
@@ -149,7 +149,7 @@ const DEFAULT_HR_QUESTIONS: HRQuestion[] = [
     answer_type: 'yes_no',
     expected_answer_points: ['Clear yes/no answer', 'Examples of teamwork', 'Collaboration style'],
     evaluation_criteria: 'Shows willingness to collaborate, provides examples of successful teamwork',
-    time_minutes: 1,
+    time_minutes: 2,
     is_active: true,
   },
   {
@@ -161,7 +161,7 @@ const DEFAULT_HR_QUESTIONS: HRQuestion[] = [
     answer_type: 'yes_no',
     expected_answer_points: ['Clear yes/no answer', 'Examples of self-learning', 'Enthusiasm for growth'],
     evaluation_criteria: 'Shows growth mindset and willingness to upskill, provides examples if possible',
-    time_minutes: 1,
+    time_minutes: 2,
     is_active: true,
   },
   {
@@ -173,7 +173,7 @@ const DEFAULT_HR_QUESTIONS: HRQuestion[] = [
     answer_type: 'yes_no',
     expected_answer_points: ['Clear availability date', 'Notice period details', 'Flexibility if needed'],
     evaluation_criteria: 'Provides specific timeline, honest about notice period obligations',
-    time_minutes: 1,
+    time_minutes: 2,
     is_active: true,
   },
 ];
@@ -260,7 +260,7 @@ export default function HRQuestionBank() {
         correct_answer: q.correct_answer,
         expected_answer_points: [],
         evaluation_criteria: '',
-        time_minutes: q.answer_type === 'yes_no' ? 1 : 3,
+        time_minutes: q.answer_type === 'yes_no' ? 2 : 3,
         is_active: q.is_active ?? true,
         created_at: q.created_at,
       }));
@@ -544,7 +544,7 @@ export default function HRQuestionBank() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setFormData(prev => ({ ...prev, answer_type: 'yes_no', time_minutes: 1 }))}
+                  onClick={() => setFormData(prev => ({ ...prev, answer_type: 'yes_no', time_minutes: 2 }))}
                   className={`flex-1 px-4 py-3 rounded-lg border-2 text-sm font-medium transition-all flex items-center justify-center gap-2 ${
                     formData.answer_type === 'yes_no'
                       ? 'border-brand-orange bg-gradient-to-br from-brand-orange/10 to-brand-orange/5 text-brand-orange-deep shadow-sm shadow-brand-orange/20 ring-1 ring-brand-orange/30'
@@ -552,7 +552,7 @@ export default function HRQuestionBank() {
                   }`}
                 >
                   <CheckCircle2 className="w-4 h-4" />
-                  Yes / No
+                  Yes / No / Need to Explain More (2 min)
                 </button>
               </div>
             </div>
@@ -671,7 +671,7 @@ export default function HRQuestionBank() {
                         ? 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20'
                         : 'bg-brand-cyan/10 text-brand-blue ring-brand-cyan/20'
                     }`}>
-                      {question.answer_type === 'yes_no' ? 'Yes / No' : 'Text Answer'}
+                      {question.answer_type === 'yes_no' ? 'Yes / No / Need to Explain More' : 'Text Answer'}
                     </span>
                   </div>
                 </div>
