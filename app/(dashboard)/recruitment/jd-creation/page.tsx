@@ -615,7 +615,7 @@ function JDCreationContent() {
       ? [
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Assessments', href: '/recruitment/assessments' },
-          { label: 'Create Assessment', href: ASSESSMENT_CREATE_HREF },
+          { label: 'Create AI Assessment', href: ASSESSMENT_CREATE_HREF },
           { label: jdLeafLabel },
         ]
       : fromResumeScoring

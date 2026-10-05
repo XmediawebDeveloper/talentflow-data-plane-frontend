@@ -1,7 +1,7 @@
 'use client';
 
-import { Briefcase, Plus, Search, Sparkles, Eye, ChevronDown, CheckCircle2, Loader2 } from 'lucide-react';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { Briefcase, Plus, Search, Sparkles, Eye, ChevronDown, CheckCircle2, RefreshCw } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
@@ -15,25 +15,13 @@ import JobOpeningSummary from '@/components/jobs/JobOpeningSummary';
 import ListPagination from '@/components/ListPagination';
 import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
-import { lineageKey, isSelectableVersion } from '@/lib/utils/jobOpeningDisplay';
+import { lineageKey, isSelectableVersion, mapJDToJob, jobSearchMatcher, sortJobs, buildAssessmentJobList } from '@/lib/utils/jobOpeningDisplay';
 import type { Job } from '@/lib/types/types';
-import { publishedJdToJob as toJob } from '@/lib/utils/publishedJdToJob';
-import { ListSkeleton } from '@/components/ui/skeleton-loader';
-
-const normalizeSearchValue = (value?: string | null) => (value || '').toLowerCase().trim();
-const normalizeIdentifier = (value?: string | null) => normalizeSearchValue(value).replace(/[^a-z0-9]/g, '');
-const normalizeTitleSearch = (value?: string | null) =>
-  normalizeSearchValue(value).replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
-
-/** Newest version of a lineage first — publish count, then creation date as
- *  the tie-break for rows the endpoint sends without one. */
-const latestVersionFirst = (a: PublishedJD, b: PublishedJD): number => {
-  const versionDelta = (b.current_version ?? 1) - (a.current_version ?? 1);
-  if (versionDelta !== 0) return versionDelta;
-  const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
-  const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
-  return bTime - aTime;
-};
+import { publishedJdToJob } from '@/lib/utils/publishedJdToJob';
+import { jdService } from '@/lib/services';
+import { useJobCandidateCounts } from '@/lib/hooks/useJobCandidateCounts';
+import JobEligibilityNote from '@/components/jobs/JobEligibilityNote';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const JD_RADIO_GROUP = 'ai-interview-jd-version-selection';
 const ADD_BUTTON_DISABLED = 'bg-slate-200 text-slate-400 ring-slate-300/60 shadow-none cursor-not-allowed';
@@ -75,24 +63,43 @@ export default function AIInterviewJDSelection() {
     setJdPick(prev => (prev?.job.id === job.id ? null : { job, lineage }));
   /* JD version ids that already carry an AI interview — one per version. */
   const [jdsWithInterview, setJdsWithInterview] = useState<Set<string>>(new Set());
+  const [eligibilityLoaded, setEligibilityLoaded] = useState(false);
+  /* The full Job Openings rows, by version id. The interview endpoint sends a
+     slimmer JD (no salary, work mode, applicants, last updated or lineage
+     version number), so each card is drawn from the same row the Assessments
+     picker draws, falling back to the slim one where the list lacks it. */
+  const [fullJobsById, setFullJobsById] = useState<Map<string, Job>>(new Map());
+  const [loadError, setLoadError] = useState<'jobs' | 'eligibility' | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
+  const candidateCounts = useJobCandidateCounts();
   const jdListRef = useRef<HTMLDivElement | null>(null);
 
-  const loadJDs = useCallback(async () => {
-    try {
-      setLoadingJds(true);
-      const result = await aiInterviewService.getPublishedJDs();
-      setJds(result.items);
-    } catch (error) {
-      console.error('Failed to load JDs:', error);
-      toast.error('Failed to load job descriptions');
-    } finally {
-      setLoadingJds(false);
-    }
-  }, []);
-
+  /* Loading is raised by whoever asks for the read (initial state, Retry), not
+     here — setState only lands once the requests settle. */
   useEffect(() => {
-    loadJDs();
-  }, [loadJDs]);
+    let cancelled = false;
+    const jdParams = { source: 'my-jds' as const };
+    Promise.allSettled([
+      aiInterviewService.getPublishedJDs(),
+      jdService.list({ ...jdParams, page_size: 1 }).then((probe) =>
+        probe.total > probe.items.length ? jdService.list({ ...jdParams, page_size: probe.total }) : probe,
+      ),
+    ]).then(([published, full]) => {
+      if (cancelled) return;
+      if (published.status === 'fulfilled') {
+        setJds(published.value.items);
+        setLoadError(prev => (prev === 'jobs' ? null : prev));
+      } else {
+        console.error('Failed to load JDs:', published.reason);
+        setLoadError('jobs');
+      }
+      if (full.status === 'fulfilled' && full.value?.items) {
+        setFullJobsById(new Map(full.value.items.map((row: Parameters<typeof mapJDToJob>[0]) => [row.id, mapJDToJob(row)] as const)));
+      }
+      setLoadingJds(false);
+    });
+    return () => { cancelled = true; };
+  }, [reloadToken]);
 
   useEffect(() => {
     let cancelled = false;
@@ -109,67 +116,49 @@ export default function AIInterviewJDSelection() {
         if (cancelled) return;
         const items = [...first.items, ...rest.flatMap((page) => page.items)];
         setJdsWithInterview(new Set(items.map((c) => c.jd_id).filter((id): id is string => !!id)));
+        setEligibilityLoaded(true);
+        setLoadError(prev => (prev === 'eligibility' ? null : prev));
       } catch {
-        /* the list still works; versions just read as Not Created */
+        if (!cancelled) setLoadError(prev => prev ?? 'eligibility');
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [reloadToken]);
 
   const versionHasInterview = (versionId: string) => jdsWithInterview.has(versionId);
+  /* Add stays off until we know which versions are taken — before that every
+     version reads as free, and a press would carry a taken one into Configure. */
+  const addReady = eligibilityLoaded && loadError !== 'eligibility';
 
-  // Only surface JDs that DON'T already have a published AI interview config —
-  // a JD can't be configured twice, so configured ones are hidden entirely
-  // (previously they showed disabled with an "AI Config Created" badge).
+  const toJob = (jd: PublishedJD): Job => fullJobsById.get(jd.id) ?? publishedJdToJob(jd);
+
+  // Versions with a published AI interview config never reach the list — a JD
+  // can't be configured twice.
   const selectableJds = jds.filter(jd => jd.has_published_config !== true);
-  const searchQuery = normalizeSearchValue(jdSearch);
-  const titleSearchQuery = normalizeTitleSearch(jdSearch);
-  const searchTerms = titleSearchQuery.split(/\s+/).filter(Boolean);
-  const normalizedSearchIdentifier = normalizeIdentifier(jdSearch);
-  const filteredJds = selectableJds.filter(jd => {
-    if (!searchQuery) return true;
 
-    const normalizedTitle = normalizeTitleSearch(jd.title);
-    const matchesTitle = searchTerms.length > 0 && searchTerms.every(term => normalizedTitle.includes(term));
-    const matchesIdentifier = normalizedSearchIdentifier
-      ? normalizeIdentifier(jd.job_id).includes(normalizedSearchIdentifier)
-      : false;
+  /* ONE CARD PER JOB, on the Assessments picker's own rule and through its
+     own helper, so the two lists cannot drift: each job is listed on its
+     newest version that is Published (or Republished) AND has no AI
+     interview yet — draft config or published. A job with no such version
+     gets no card; its versions, taken ones included, are still in Job
+     Openings and in View Versions. Newest job first. */
+  const availableJobs = sortJobs(
+    buildAssessmentJobList(selectableJds.map(toJob), version => versionHasInterview(version.id)),
+    'date',
+    'desc',
+  );
+  // True when published versions exist but every one already has an AI
+  // interview — the empty state then says so instead of "create a JD first".
+  const allConfigured = jds.length > 0 && availableJobs.length === 0;
+  /* The shared matcher: JD number, role, department, location — the fields the
+     Assessments picker and the Apply to Job dialog search. */
+  const lineageJobs = availableJobs.filter(jobSearchMatcher(jdSearch));
 
-    return matchesTitle || matchesIdentifier;
-  });
-  // True when JDs exist but every one is already configured — lets the empty
-  // state say something accurate instead of "create a JD first".
-  const allConfigured = jds.length > 0 && selectableJds.length === 0;
-
-  /* ONE CARD PER JOB, not per version.
-     `/ai-interview/jds-for-interview` can return several versions of the same
-     lineage, and every one of them carries the same `job_id` — which IS the
-     lineage key the selection is held against. Rendered raw, ticking one
-     card's radio lit every sibling card as selected (each matched
-     `jdPick.lineage`) and pushed the rest of the list into its
-     blocked-by-another-pick state. Collapsing restores this picker's contract,
-     the same one the Assessments picker keeps: a card is a JOB, and its other
-     versions are reached through View Versions. */
-  const lineageBuckets = new Map<string, PublishedJD[]>();
-  for (const jd of filteredJds) {
-    const key = lineageKey(toJob(jd));
-    const bucket = lineageBuckets.get(key);
-    if (bucket) bucket.push(jd);
-    else lineageBuckets.set(key, [jd]);
-  }
-  /* The row stands on the newest version that can still take an interview, so
-     a job whose latest version is already configured still offers the one
-     below it instead of dropping off the list. */
-  const lineageJds = Array.from(lineageBuckets.values(), bucket => {
-    const newestFirst = [...bucket].sort(latestVersionFirst);
-    return newestFirst.find(jd => !versionHasInterview(jd.id)) ?? newestFirst[0];
-  });
-
-  const jdTotalPages = Math.max(1, Math.ceil(lineageJds.length / jdItemsPerPage));
+  const jdTotalPages = Math.max(1, Math.ceil(lineageJobs.length / jdItemsPerPage));
   const jdSafePage = Math.min(jdPage, jdTotalPages);
-  const pagedJds = lineageJds.slice((jdSafePage - 1) * jdItemsPerPage, jdSafePage * jdItemsPerPage);
+  const pagedJobs = lineageJobs.slice((jdSafePage - 1) * jdItemsPerPage, jdSafePage * jdItemsPerPage);
 
-  const jdPickOnThisPage = !!jdPick && pagedJds.some(jd => lineageKey(toJob(jd)) === jdPick.lineage);
+  const jdPickOnThisPage = !!jdPick && pagedJobs.some(job => lineageKey(job) === jdPick.lineage);
 
   const handleCreateForVersion = (jdId: string) => {
     router.push(`/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${jdId}`);
@@ -212,9 +201,6 @@ export default function AIInterviewJDSelection() {
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
                   <div className="min-w-0">
                     <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Select Job Description</h2>
-                    <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mt-1">
-                      Choose the JD that this AI interview will be based on
-                    </p>
                   </div>
                   <Button
                     variant="primary"
@@ -235,11 +221,38 @@ export default function AIInterviewJDSelection() {
                     <span className="sm:hidden">New Job</span>
                   </Button>
                 </div>
+                <JobEligibilityNote
+                  className="mt-3"
+                  description="Only Published (or Republished) job versions without an AI interview are listed. Archived, Disabled, Draft and already-configured jobs are hidden — use View Versions to see a job's full history."
+                />
               </div>
 
               <div className="p-4 sm:p-6">
-                {loadingJds ? (
-                  <ListSkeleton rows={5} />
+                {loadingJds || (!eligibilityLoaded && loadError !== 'eligibility') ? (
+                  <div className="space-y-3">
+                    <div className="mb-4 space-y-2">
+                      <Skeleton className="h-3.5 w-24" />
+                      <Skeleton className="h-10 w-full rounded-lg" />
+                    </div>
+                    <div className="mb-3 flex items-center justify-between">
+                      <Skeleton className="h-4 w-40" />
+                    </div>
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <div key={i} className="rounded-lg border-2 border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 sm:p-4">
+                        <div className="flex flex-wrap sm:flex-nowrap items-start gap-2 sm:gap-4">
+                          <Skeleton className="w-4 h-4 rounded-full mt-1 flex-shrink-0" />
+                          <div className="flex-1 min-w-0 space-y-2">
+                            <Skeleton className="h-4 w-56 max-w-full" />
+                            <Skeleton className="h-3 w-72 max-w-full" />
+                          </div>
+                          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+                            <Skeleton className="h-7 w-7 rounded-md" />
+                            <Skeleton className="h-7 w-7 rounded-md" />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 ) : (
                   <div className="space-y-3" ref={jdListRef}>
                     <div className="mb-4">
@@ -248,31 +261,56 @@ export default function AIInterviewJDSelection() {
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                         <input
                           type="text"
-                          placeholder="Search by JD number or title..."
+                          placeholder="Search by JD number, role, department or location..."
                           value={jdSearch}
                           onChange={e => { setJdSearch(e.target.value); setJdPage(1); }}
-                          className="w-full pl-10 pr-4 py-2 text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                          className="w-full min-w-0 pl-10 pr-4 py-2 text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                         />
                       </div>
                     </div>
 
+                    {/* A failed read, with a way to retry — without it a network
+                        error read as "no published jobs". */}
+                    {loadError && (
+                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                        <span>
+                          {loadError === 'jobs'
+                            ? `Could not load job openings.${jds.length > 0 ? ' Showing the jobs already loaded.' : ''}`
+                            : 'Could not check which job versions already have an AI interview. Add is turned off until this loads.'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => { setLoadingJds(true); setReloadToken(t => t + 1); }}
+                          className="inline-flex items-center gap-1 font-medium text-amber-900 hover:underline"
+                        >
+                          <RefreshCw className="w-3 h-3" />
+                          Retry
+                        </button>
+                      </div>
+                    )}
+
                     <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                       <span className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300">
                         Select a Job Opening
-                        {lineageJds.length > 0 && (
-                          <span className="ml-2 font-normal text-gray-500">
-                            &mdash; {lineageJds.length} available
+                        {lineageJobs.length > 0 && (
+                          <span className="ml-2 font-normal text-gray-500 whitespace-nowrap">
+                            &mdash; {lineageJobs.length} available
                           </span>
                         )}
                       </span>
                       {jdPick && (
-                        <button
-                          type="button"
-                          onClick={() => setJdPick(null)}
-                          className="text-xs text-brand-blue hover:text-brand-blue-2 font-medium"
-                        >
-                          Clear Selection
-                        </button>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className="text-xs font-medium text-brand-blue bg-brand-blue/10 px-2 py-0.5 rounded-full whitespace-nowrap">
+                            1 selected
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setJdPick(null)}
+                            className="text-xs text-brand-blue hover:text-brand-blue-2 font-medium whitespace-nowrap"
+                          >
+                            Clear Selection
+                          </button>
+                        </div>
                       )}
                     </div>
 
@@ -289,8 +327,7 @@ export default function AIInterviewJDSelection() {
                       </div>
                     )}
 
-                    {pagedJds.map(jd => {
-                      const job = toJob(jd);
+                    {pagedJobs.map(job => {
                       const versionKey = lineageKey(job);
                       const versionsExpanded = jdLineage.isExpanded(versionKey);
                       const isPicked = jdPick?.job.id === job.id;
@@ -301,23 +338,34 @@ export default function AIInterviewJDSelection() {
                         ? `v${jdPick!.job.versionNumber ?? 1} of "${jdPick!.job.title}" is selected — clear it to choose a version here`
                         : undefined;
                       const latestHasInterview = versionHasInterview(job.id);
-                      const latestSelectable = !latestHasInterview && !blockedByOtherPick;
+                      const latestSelectableStatus = isSelectableVersion(job);
+                      const latestSelectable = !latestHasInterview && !blockedByOtherPick && latestSelectableStatus;
+                      const latestUnpublishedReason = `v${job.versionNumber ?? 1} is ${String(job.status || 'not published').toLowerCase()} — open View Versions to build against a published version`;
                       /* The card's + builds against this job's picked version
                          when one is ticked, otherwise the latest. */
                       const cardTarget = lineageSelected ? jdPick!.job : job;
-                      const cardAddEnabled = canCreateAIInterviews && !blockedByOtherPick && !versionHasInterview(cardTarget.id);
+                      const cardAddEnabled = canCreateAIInterviews && addReady && !blockedByOtherPick
+                        && isSelectableVersion(cardTarget) && !versionHasInterview(cardTarget.id);
                       const cardAddLabel = !canCreateAIInterviews
                         ? 'You do not have permission to create AI interviews'
                         : blockedByOtherPick
                           ? otherPickReason!
                           : versionHasInterview(cardTarget.id)
                             ? `v${cardTarget.versionNumber ?? 1} already has an AI interview`
-                            : `Create AI interview for v${cardTarget.versionNumber ?? 1}`;
+                            : !isSelectableVersion(cardTarget)
+                              ? 'Only published versions can have an AI interview'
+                              : `Create AI interview for v${cardTarget.versionNumber ?? 1}`;
 
                       return (
                         <div
-                          key={jd.id}
-                          title={blockedByOtherPick ? otherPickReason : undefined}
+                          key={job.id}
+                          title={
+                            blockedByOtherPick
+                              ? otherPickReason
+                              : !latestSelectableStatus
+                                ? `${latestUnpublishedReason}. View Versions opens this job's full version history.`
+                                : 'View Versions opens this job’s version history — every version of this job, and the one to build the AI interview against.'
+                          }
                           aria-disabled={blockedByOtherPick}
                           className={`rounded-lg border-2 p-3 sm:p-4 transition-all ${
                             blockedByOtherPick
@@ -327,7 +375,7 @@ export default function AIInterviewJDSelection() {
                                 : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 hover:border-brand-blue/30 hover:bg-brand-blue/[0.03]'
                           }`}
                         >
-                          <div className="flex items-start gap-2 sm:gap-4">
+                          <div className="flex flex-wrap sm:flex-nowrap items-start gap-2 sm:gap-4">
                             <label
                               className={`flex items-center pt-1 ${latestSelectable ? 'cursor-pointer' : 'cursor-not-allowed'}`}
                               title={
@@ -335,7 +383,9 @@ export default function AIInterviewJDSelection() {
                                   ? otherPickReason
                                   : latestHasInterview
                                     ? `v${job.versionNumber ?? 1} already has an AI interview — open View Versions to build against another version`
-                                    : `Select the latest version (v${job.versionNumber ?? 1})`
+                                    : !latestSelectableStatus
+                                      ? latestUnpublishedReason
+                                      : `Select the latest version (v${job.versionNumber ?? 1})`
                               }
                             >
                               <input
@@ -355,18 +405,25 @@ export default function AIInterviewJDSelection() {
                                 onClick={() => latestSelectable && pickJdVersion(job, versionKey)}
                                 className={latestSelectable ? 'cursor-pointer' : 'cursor-default'}
                               >
-                                <JobOpeningSummary job={job} metaSingleLine />
+                                <JobOpeningSummary
+                                  job={candidateCounts
+                                    ? { ...job, assessed: candidateCounts[job.id]?.assessed ?? 0, interviewed: candidateCounts[job.id]?.interviewed ?? 0 }
+                                    : job}
+                                  metaSingleLine
+                                  trailingBadges={lineageSelected ? (
+                                    <CheckCircle2 className="w-5 h-5 text-brand-blue flex-shrink-0" />
+                                  ) : null}
+                                />
                               </div>
                               {pickedVersionOfThisJob && (
-                                <p className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-brand-blue/10 px-2 py-1 text-xs font-medium text-brand-blue">
+                                <p className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-brand-blue/10 px-2 py-1 text-xs font-medium text-brand-blue max-w-full">
                                   <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
                                   v{pickedVersionOfThisJob.versionNumber ?? 1} selected, chosen from Version History
                                 </p>
                               )}
                             </div>
 
-                            <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-                              <InterviewCreatedLabel created={latestHasInterview} />
+                            <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3 w-full sm:w-auto sm:flex-shrink-0">
                               <button
                                 type="button"
                                 disabled={!cardAddEnabled}
@@ -386,7 +443,7 @@ export default function AIInterviewJDSelection() {
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setVersionHistoryVersion(null);
-                                  setVersionHistoryFor({ id: jd.id, title: jd.title });
+                                  setVersionHistoryFor({ id: job.id, title: job.title });
                                 }}
                                 className="h-7 w-7 flex items-center justify-center bg-white dark:bg-slate-900 text-brand-blue border border-brand-blue/40 rounded-md hover:bg-brand-blue/10 hover:border-brand-blue transition-all flex-shrink-0"
                                 aria-label="View version history"
@@ -456,6 +513,7 @@ export default function AIInterviewJDSelection() {
                               ]}
                               renderAction={(versionJob) => {
                                 const enabled = canCreateAIInterviews
+                                  && addReady
                                   && isSelectableVersion(versionJob)
                                   && !versionHasInterview(versionJob.id);
                                 const label = !canCreateAIInterviews
@@ -503,24 +561,24 @@ export default function AIInterviewJDSelection() {
                       );
                     })}
 
-                    {lineageJds.length === 0 && (
+                    {lineageJobs.length === 0 && !(loadError === 'jobs' && jds.length === 0) && (
                       <div className="text-center py-8 sm:py-12 text-gray-500">
                         <Briefcase className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 opacity-50" />
                         <p className="text-sm sm:text-base">
-                          {selectableJds.length > 0
+                          {availableJobs.length > 0
                             ? 'No matching job descriptions found'
                             : allConfigured
                               ? 'No jobs available for a new AI interview'
                               : 'No published jobs available'}
                         </p>
                         <p className="text-xs sm:text-sm mt-1">
-                          {selectableJds.length > 0
+                          {availableJobs.length > 0
                             ? 'Try searching with a JD ID like JD-450 or a title like senior python developer'
                             : allConfigured
                               ? 'Every published job already has an AI interview. Publish a new job to create another one.'
                               : 'Create and publish a Job first to create AI interviews'}
                         </p>
-                        {selectableJds.length === 0 && (
+                        {availableJobs.length === 0 && (
                           <Button
                             variant="primary"
                             size="md"
@@ -542,11 +600,11 @@ export default function AIInterviewJDSelection() {
                       </div>
                     )}
 
-                    {lineageJds.length > 0 && (
+                    {lineageJobs.length > 0 && (
                       <ListPagination
                         currentPage={jdSafePage}
                         itemsPerPage={jdItemsPerPage}
-                        totalItems={lineageJds.length}
+                        totalItems={lineageJobs.length}
                         onPageChange={setJdPage}
                         onItemsPerPageChange={(size) => { setJdItemsPerPage(size); setJdPage(1); }}
                         itemLabel="published jobs"

@@ -7653,7 +7653,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   // Names where `onBack` actually lands, which is the flow's own screen rather
   // than the JD list whenever this page was opened mid-flow.
   const backDestinationLabel =
-    flowOrigin === 'assessment' ? 'Create Assessment'
+    flowOrigin === 'assessment' ? 'Create AI Assessment'
     : flowOrigin ? 'Select Job Description'
     : 'View All Jobs';
   const createAnotherJdUrl = originQuery

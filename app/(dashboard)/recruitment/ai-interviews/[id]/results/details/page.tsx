@@ -6,6 +6,7 @@ import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import CandidateResultsView from '@/components/ai-interview/CandidateResultsView';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useResumeActivityTrail } from '@/lib/utils/resumeActivityTrail';
 
 // Neutral-gray skeleton mirroring the AI Interview candidate result details:
 // breadcrumb, header (icon + title + subtitle + action buttons), a tab bar,
@@ -87,6 +88,10 @@ function DetailsContent() {
     : fromInvitationStatus ? INVITATION_STATUS_HREF
     : null;
 
+  /* Opened from a resume's Candidate Activity card: that resume's trail, Back
+     to it, and no Prev/Next (the stored list belongs to another screen). */
+  const resumeTrail = useResumeActivityTrail(searchParams);
+
   const [session, setSession] = useState<AIInterviewResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -135,9 +140,10 @@ function DetailsContent() {
   }, [sessionId]);
 
   const handleBack = () => {
-    router.push(originTabHref ?? `/recruitment/ai-interviews/${configId}/results`);
+    router.push(resumeTrail.backHref ?? originTabHref ?? `/recruitment/ai-interviews/${configId}/results`);
   };
-  const backLabel = fromCandidateResults ? 'Back to Candidate Results'
+  const backLabel = resumeTrail.active ? 'Back to Resume'
+    : fromCandidateResults ? 'Back to Candidate Results'
     : fromInvitationStatus ? 'Back to Invitation Status'
     : 'Back to Results';
 
@@ -197,15 +203,19 @@ function DetailsContent() {
       /* Opened from the cross-interview Candidate Results tab: no interview
          crumb, and "AI Interviews" leads back to that tab — the list the
          recruiter came from (Back and browser Back land there too). */
-      breadcrumbItems={originTabHref ? [
+      breadcrumbItems={resumeTrail.active ? [
+        ...resumeTrail.items,
+        // The interview names this result; the candidate is the resume crumb.
+        { label: session.position || session.jd_title || 'AI Interview Result' },
+      ] : originTabHref ? [
         { label: 'Dashboard', href: '/dashboard' },
         { label: 'AI Interviews', href: originTabHref },
         { label: session.candidate_name || 'Candidate Results' },
       ] : undefined}
-      currentIndex={navIndex >= 0 ? navIndex : undefined}
-      totalCount={navList.length || undefined}
-      onPrev={prevSession ? () => router.replace(buildNavUrl(prevSession)) : undefined}
-      onNext={nextSession ? () => router.replace(buildNavUrl(nextSession)) : undefined}
+      currentIndex={!resumeTrail.fromResumeView && navIndex >= 0 ? navIndex : undefined}
+      totalCount={!resumeTrail.fromResumeView ? navList.length || undefined : undefined}
+      onPrev={!resumeTrail.fromResumeView && prevSession ? () => router.replace(buildNavUrl(prevSession)) : undefined}
+      onNext={!resumeTrail.fromResumeView && nextSession ? () => router.replace(buildNavUrl(nextSession)) : undefined}
     />
   );
 }

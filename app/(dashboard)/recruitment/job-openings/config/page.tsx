@@ -2,7 +2,7 @@
 
 import { Suspense, useState, useEffect } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { Clock, GraduationCap, Factory, Settings, Sparkles } from 'lucide-react';
+import { Clock, GraduationCap, Factory, Settings } from 'lucide-react';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import MasterDataManagement from '@/components/masters/MasterDataManagement';
 import { PageSkeleton } from '@/components/ui/skeleton';
@@ -71,50 +71,36 @@ function JobOpeningsConfigContent() {
             ]}
           />
 
-          {/* One hero for the page, where each master-data route carries its own
-              when visited standalone. */}
-          <section className="relative mb-5 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
-            <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
-            <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />
-            <div
-              className="pointer-events-none absolute inset-0 opacity-[0.06]"
-              style={{
-                backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)',
-                backgroundSize: '24px 24px',
-              }}
-            />
-            <div className="relative">
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
-                <Sparkles className="h-3.5 w-3.5 text-brand-orange" />
-                Master data
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15 backdrop-blur-sm">
-                  <Settings className="h-6 w-6 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-                    Job Description Configuration
-                  </h1>
-                  <p className="mt-2 max-w-2xl text-sm text-white/80 sm:text-base">
-                    The lists every job description is built from. Pick a section to add, edit or
-                    reorder its options.
-                  </p>
-                </div>
-              </div>
+          {/* One header for the page, where each master-data route carries its
+              own when visited standalone — the module page-header pattern
+              (Resume Scoring, Assessments): a tinted icon tile, then title and
+              subtitle, no banner. */}
+          <div className="mb-5 flex items-start gap-3">
+            <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
+              <Settings className="h-4 w-4 text-brand-blue" />
             </div>
-          </section>
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight">
+                Job Description Configuration
+              </h1>
+              <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mt-0.5">
+                The lists every job description is built from. Pick a section to add, edit or
+                reorder its options.
+              </p>
+            </div>
+          </div>
 
-          {/* Tab bar — the Job Details pattern: a bordered card, the active tab
-              tinted with an underline bar. Deliberately NOT sticky, unlike that
-              page: the breadcrumb above is already sticky, and a second sticky
-              layer is what let the crumb overlap and swallow clicks meant for
-              the tabs there. Nothing here needs pinning. */}
-          <div className="mb-5 rounded-xl border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
-            <div
+          {/* Sections on the left, the chosen list on the right. Below `md`
+              the nav folds into a scrolling row above the list, so a phone
+              keeps the full width for the table. Deliberately NOT sticky: the
+              breadcrumb above is already sticky, and a second sticky layer is
+              what let the crumb overlap and swallow clicks on Job Details. */}
+          <div className="flex flex-col md:flex-row gap-4 md:gap-5">
+            <nav
               role="tablist"
               aria-label="Configuration sections"
-              className="flex items-center border-b border-gray-200 dark:border-slate-700 overflow-x-auto"
+              aria-orientation="vertical"
+              className="md:w-60 md:flex-shrink-0 md:self-start flex md:flex-col gap-1 overflow-x-auto md:overflow-visible rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-1.5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5"
             >
               {TABS.map(({ id, label, icon: TabIcon }) => {
                 const active = activeTab === id;
@@ -126,29 +112,29 @@ function JobOpeningsConfigContent() {
                     aria-selected={active}
                     aria-controls={`config-panel-${id}`}
                     onClick={() => setActiveTab(id)}
-                    className={`px-4 py-2.5 text-sm transition-colors relative flex items-center gap-2 whitespace-nowrap rounded-t-[11px] ${
+                    className={`relative flex items-center gap-2.5 whitespace-nowrap rounded-lg px-3 py-2.5 text-sm text-left transition-colors md:w-full ${
                       active
-                        ? 'text-blue-600 bg-blue-50'
+                        ? 'bg-brand-blue/10 text-brand-blue font-medium'
                         : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-50 hover:bg-gray-50 dark:hover:bg-slate-800'
                     }`}
                   >
-                    <TabIcon className="h-4 w-4" />
-                    {label}
                     {active && (
-                      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600" />
+                      <span className="absolute left-0 top-2 bottom-2 hidden md:block w-0.5 rounded-full bg-brand-blue" />
                     )}
+                    <TabIcon className="h-4 w-4 flex-shrink-0" />
+                    {label}
                   </button>
                 );
               })}
-            </div>
-          </div>
+            </nav>
 
-          {/* Only the active panel is mounted. Each fetches its own list, so
-              rendering all three would fire three requests to show one. Keying
-              on the tab makes the switch a remount, which is what resets the
-              previous panel's pagination and any open modal. */}
-          <div role="tabpanel" id={`config-panel-${activeTab}`}>
-            <MasterDataManagement key={activeTab} type={activeTab} embedded />
+            {/* Only the active panel is mounted. Each fetches its own list, so
+                rendering all three would fire three requests to show one.
+                Keying on the tab makes the switch a remount, which is what
+                resets the previous panel's pagination and any open modal. */}
+            <div role="tabpanel" id={`config-panel-${activeTab}`} className="flex-1 min-w-0">
+              <MasterDataManagement key={activeTab} type={activeTab} embedded />
+            </div>
           </div>
         </div>
       </div>

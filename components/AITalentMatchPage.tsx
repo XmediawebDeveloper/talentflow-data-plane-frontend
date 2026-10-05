@@ -49,6 +49,7 @@ import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import SkillsList from '@/components/ui/SkillsList';
 import { useAuth } from '@/lib/hooks/useAuth';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import { useResumeActivityTrail } from '@/lib/utils/resumeActivityTrail';
 import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 import { Cell, Pie, PieChart as RechartsPieChart, ResponsiveContainer } from 'recharts';
 /* The shared formatters, so a JD's industry and employment type read the same
@@ -328,6 +329,9 @@ export default function AITalentMatchPage({
 }: AITalentMatchPageProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  /* Results opened from a resume's Candidate Activity card keep that resume's
+     trail (Resume Database › My Resumes › <candidate>); see resumeActivityTrail. */
+  const resumeTrail = useResumeActivityTrail(searchParams);
   const { hasPermission, hasPermissionCode, isTenantAdmin, user } = useAuth();
   const { quotaData } = useQuota();
 
@@ -683,6 +687,12 @@ export default function AITalentMatchPage({
   // Helper to update URL params - use shallow routing to prevent full page reload
   const updateUrlParams = (params: { jdId?: string; view?: string }, options?: { replace?: boolean }) => {
     const url = new URL(window.location.href);
+
+    // Leaving the job a resume's Candidate Activity opened: the resume trail
+    // no longer describes where the recruiter is.
+    if (url.searchParams.get('jdId') !== (params.jdId ?? null)) {
+      url.searchParams.delete('from');
+    }
 
     if (params.jdId) {
       url.searchParams.set('jdId', params.jdId);
@@ -5552,15 +5562,19 @@ export default function AITalentMatchPage({
         <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
           <PageBreadcrumb
             className="mb-4 md:mb-6"
-            items={[
+            items={resumeTrail.active ? [
+              ...resumeTrail.items,
+              { label: `AI Talent Match: ${resultsJobTitle || 'Results'}` },
+            ] : [
               { label: 'Dashboard', href: '/dashboard' },
               { label: 'AI Talent Match', onClick: () => setViewMode('history') },
               { label: resultsJobTitle || 'Results' },
             ]}
             // Previous / Next job rides inside the breadcrumb bar, as on the
             // other detail pages — through the Matched Jobs list in its
-            // current order.
-            actions={showJobNavigation ? (
+            // current order. Not when opened from one resume: that list is
+            // every matched job, not this candidate's.
+            actions={showJobNavigation && !resumeTrail.fromResumeView ? (
               <RecordPager
                 currentIndex={currentListIndex}
                 totalCount={sortedHistory.length}

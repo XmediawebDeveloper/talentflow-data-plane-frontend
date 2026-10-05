@@ -4,6 +4,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { Button } from '@/components/ui/button';
 import JobOpeningPickerList, { type JobSelection } from '@/components/jobs/JobOpeningPickerList';
+import JobEligibilityNote, { MATCH_ELIGIBILITY } from '@/components/jobs/JobEligibilityNote';
 
 /* AI TALENT MATCH — SELECT JOB.
 
@@ -119,6 +120,7 @@ export default function AITalentMatchPageJobsList({
 
       {/* Job list */}
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 lg:p-5">
+        <JobEligibilityNote className="mb-3" description={MATCH_ELIGIBILITY} />
         <JobOpeningPickerList
           excludeDraftsOnly
           showCandidateCounts

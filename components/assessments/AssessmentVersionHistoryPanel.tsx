@@ -911,13 +911,14 @@ export default function AssessmentVersionHistoryPanel({
 
 
   /* Wide enough for the eye plus the longer of the two actions the cell can
-     hold. "Create Assessment" is the widest thing it ever renders — but only
+     hold. "Create AI Assessment" is the widest thing it ever renders — but only
      when the host passes `onCreateAssessment`. Without it the widest is "View
      Assessment", so reserving the full 280px leaves a ragged gap on the right
-     of every row. Measured against what this host can actually render. */
+     of every row. Measured against what this host can actually render (300px
+     since the label gained "AI"). */
   const jobColumns = [
     ...jobColumnsFor(vocabulary),
-    { label: 'Actions', minW: onCreateAssessment ? 'min-w-[280px]' : 'min-w-[180px]' },
+    { label: 'Actions', minW: onCreateAssessment ? 'min-w-[300px]' : 'min-w-[180px]' },
   ];
   const assessmentRows = assessments ?? [];
 
@@ -1346,7 +1347,7 @@ export default function AssessmentVersionHistoryPanel({
                                     aria-label={reason}
                                     icon={<Plus className="w-3.5 h-3.5" />}
                                   >
-                                    Create {vocabulary.childSingular}
+                                    Create {vocabulary.childSingular === 'Assessment' ? 'AI Assessment' : vocabulary.childSingular}
                                   </Button>
                                 );
                               })()

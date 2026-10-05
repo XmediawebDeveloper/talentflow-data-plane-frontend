@@ -998,7 +998,7 @@ export default function Dashboard({
                   <div className="w-8 h-8 rounded-lg bg-warning-subtle flex items-center justify-center">
                     <FileText className="w-4 h-4 text-warning" />
                   </div>
-                  <span className="text-sm text-gray-900">Create Assessment</span>
+                  <span className="text-sm text-gray-900">Create AI Assessment</span>
                 </button>
                 )}</PlanLockedOverlay>}
                 <button 

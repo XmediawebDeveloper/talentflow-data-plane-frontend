@@ -7,7 +7,8 @@ import { Cell, Pie, PieChart as RechartsPieChart, ResponsiveContainer } from 're
 import { Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, TrendingUp, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, Loader2, Square, CheckSquare, Building2, Calendar, Users, ChevronDown, ChevronsUpDown, MoreVertical, Info, PieChart, RefreshCw, Layers, ClipboardList } from 'lucide-react';
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, useId } from 'react';
 import { useDialogHeightLock } from '@/lib/hooks/useDialogHeightLock';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useResumeActivityTrail } from '@/lib/utils/resumeActivityTrail';
 import ScoredResumesTable, { candidateGroupKey } from './ScoredResumesTable';
 import ListPagination from './ListPagination';
 import SelectSourceModal from './SelectSourceModal';
@@ -392,6 +393,9 @@ export default function ResumeScoringPage({
   batchProgress = null
 }: ResumeScoringPageProps) {
   const router = useRouter();
+  /* A score opened from a resume's Candidate Activity card keeps that resume's
+     trail (Resume Database › My Resumes › <candidate>) and returns to it. */
+  const resumeTrail = useResumeActivityTrail(useSearchParams());
 
   // ✅ RBAC: Get user permissions (bypass for tenant admin)
   const { user, isTenantAdmin } = useAuth();
@@ -1991,11 +1995,19 @@ export default function ResumeScoringPage({
            the row it was opened from. The AI Interview side isn't resolved on
            this page, so it's left for the detail view to look up itself. */
         assessmentConfigured={jdInviteTargets.known ? jdInviteTargets.assessmentConfigured : undefined}
-        currentIndex={_currentIdx >= 0 ? _currentIdx : undefined}
-        totalCount={_scoredList.length}
-        onPrev={_currentIdx > 0 ? () => _goToCandidate(_scoredList[_currentIdx - 1]) : undefined}
-        onNext={_currentIdx < _scoredList.length - 1 ? () => _goToCandidate(_scoredList[_currentIdx + 1]) : undefined}
-        breadcrumbItems={[
+        // Prev/Next walk this JOB's other candidates — not where a recruiter
+        // who came from one resume is headed, so hidden in that case.
+        {...(resumeTrail.fromResumeView ? {} : {
+          currentIndex: _currentIdx >= 0 ? _currentIdx : undefined,
+          totalCount: _scoredList.length,
+          onPrev: _currentIdx > 0 ? () => _goToCandidate(_scoredList[_currentIdx - 1]) : undefined,
+          onNext: _currentIdx < _scoredList.length - 1 ? () => _goToCandidate(_scoredList[_currentIdx + 1]) : undefined,
+        })}
+        breadcrumbItems={resumeTrail.active ? [
+          ...resumeTrail.items,
+          // The job this score is for; the candidate is the resume crumb.
+          { label: selectedHistoryItem.jobTitle || 'Score' },
+        ] : [
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Resume Scoring', onClick: () => {
             setSelectedCandidateForView(null);
@@ -2011,11 +2023,13 @@ export default function ResumeScoringPage({
           { label: selectedCandidateForView.candidateName || 'Candidate' },
         ]}
         onBack={() => {
+          if (resumeTrail.backHref) { router.push(resumeTrail.backHref); return; }
           setSelectedCandidateForView(null);
           setViewMode('details');
           router.push(`/recruitment/resume-scoring?jd_id=${selectedHistoryItem.jobId}`, { scroll: false });
         }}
         onMinimize={() => {
+          if (resumeTrail.backHref) { router.push(resumeTrail.backHref); return; }
           setSelectedCandidateForView(null);
           setViewMode('details');
           router.push(`/recruitment/resume-scoring?jd_id=${selectedHistoryItem.jobId}`, { scroll: false });

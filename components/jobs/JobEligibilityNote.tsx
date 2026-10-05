@@ -9,6 +9,10 @@ import { Info } from 'lucide-react';
 const SCORING_ELIGIBILITY =
   'Every job is listed in every status except Draft — Published, Republished, Disabled and Archived — and View Versions shows its versions the same way. Only Published (or Republished) jobs and versions can be selected for scoring; Disabled and Archived ones are shown greyed out for reference. Drafts are not listed.';
 
+/** The same rule, worded for AI Talent Match's job lists. */
+export const MATCH_ELIGIBILITY =
+  'Every job is listed in every status except Draft — Published, Republished, Disabled and Archived — and View Versions shows its versions the same way. Only Published (or Republished) jobs and versions can be selected for AI Talent Match; Disabled and Archived ones are shown greyed out for reference. Drafts are not listed.';
+
 export default function JobEligibilityNote({
   className = '',
   description = SCORING_ELIGIBILITY,

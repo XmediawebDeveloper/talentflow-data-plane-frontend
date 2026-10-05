@@ -2,7 +2,7 @@
 
 // `Folder` is already taken by the type imported below, so the icon comes in
 // under an alias.
-import { Eye, Briefcase, Download, MoreVertical, Paperclip, Upload, Zap, FileSearch, Edit3, FolderOpen, Folder as FolderIcon, Trash2, Copy, Share2, Mail, Send, Star, Tag, Archive, Clock, GripVertical, FileText, Loader2, X } from 'lucide-react';
+import { Eye, Briefcase, Download, MoreVertical, Paperclip, Upload, Zap, FileSearch, Edit3, FolderOpen, Folder as FolderIcon, Trash2, Copy, Share2, Mail, Send, Star, Tag, Archive, ArchiveRestore, Clock, GripVertical, FileText, Loader2, X } from 'lucide-react';
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
@@ -237,6 +237,12 @@ interface ResumeTableProps {
    * menu item stays visible but disabled with this reason instead of firing. */
   onArchiveDisabled?: boolean;
   onArchiveDisabledReason?: string;
+  /** Row-menu Unarchive — shown INSTEAD of Archive in the Archived Resumes
+   *  folder or on an archived row. Without it the menu offered "Archive
+   *  Resume" on resumes that were already archived. */
+  onUnarchive?: (resumeId: string) => void;
+  onUnarchiveDisabled?: boolean;
+  onUnarchiveDisabledReason?: string;
   disablePagination?: boolean;
   isArchivedFolder?: boolean;
   archivedFolderId?: string;
@@ -321,6 +327,9 @@ export default function ResumeTable({
   onArchive,
   onArchiveDisabled,
   onArchiveDisabledReason,
+  onUnarchive,
+  onUnarchiveDisabled,
+  onUnarchiveDisabledReason,
   disablePagination = false,
   isArchivedFolder = false,
   archivedFolderId,
@@ -1054,7 +1063,26 @@ export default function ResumeTable({
                               <Tag className="w-4 h-4 text-menu-icon-edit" />
                               <span className={MENU_ITEM_SCALE_CLASS}>Add Tags</span>
                             </button>
-                            {onArchive && (
+                            {(isArchivedFolder || resume.isArchived) ? (onUnarchive && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (onUnarchiveDisabled) {
+                                    toast.error(onUnarchiveDisabledReason || 'You do not have permission to unarchive resumes');
+                                    closeActionMenu();
+                                    return;
+                                  }
+                                  onUnarchive(resume.id);
+                                  closeActionMenu();
+                                }}
+                                disabled={onUnarchiveDisabled}
+                                title={onUnarchiveDisabled ? (onUnarchiveDisabledReason || 'You do not have permission to unarchive resumes') : ''}
+                                className={onUnarchiveDisabled ? `${resumeActionMenuItemClass} !text-gray-400 cursor-not-allowed` : resumeActionMenuItemClass}
+                              >
+                                <ArchiveRestore className="w-4 h-4 text-menu-icon-archive" />
+                                <span className={MENU_ITEM_SCALE_CLASS}>Unarchive Resume</span>
+                              </button>
+                            )) : onArchive && (
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();

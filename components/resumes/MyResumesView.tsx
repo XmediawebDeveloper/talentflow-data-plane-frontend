@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ChevronDown, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, FileArchive, Users, Info, ClipboardCheck, UserPlus, Sparkles, RefreshCw, Ban, Brain, Edit2, Lightbulb, ShieldAlert, Lock, HelpCircle } from 'lucide-react';
-import Link from 'next/link';
 import { DndProvider, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import dynamic from 'next/dynamic';
@@ -4248,6 +4247,9 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   onArchive={(resumeId) => handleArchiveResumes([resumeId])}
                   onArchiveDisabled={!canArchiveMyResumes}
                   onArchiveDisabledReason="You do not have permission to archive resumes"
+                  onUnarchive={(resumeId) => handleUnarchiveResumes([resumeId])}
+                  onUnarchiveDisabled={!canArchiveMyResumes}
+                  onUnarchiveDisabledReason="You do not have permission to unarchive resumes"
                   canShare={canShareMyResumes}
                   canTag={canUpdateMyResumes}
                   disablePagination={true}
@@ -4777,6 +4779,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                             enableRowReorder
                             reorderScopeKey={cardViewFolder || 'all'}
                             onArchive={canArchiveMyResumes ? (resumeId) => handleArchiveResumes([resumeId]) : undefined}
+                            onUnarchive={canArchiveMyResumes ? (resumeId) => handleUnarchiveResumes([resumeId]) : undefined}
                             canShare={canShareMyResumes}
                             canTag={canUpdateMyResumes}
                             disablePagination={true}
@@ -4927,6 +4930,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                 : resumes.filter(r => selectedResumes.includes(r.id))
           }
           jobs={publishedJobs}
+          /* Scores the resumes — so the scoring title, steps and button. */
+          mode="scoring"
           /* Score Resume: the All Jobs list - Archived / Disabled shown, not pickable. */
           excludeDraftsOnly
           onClose={() => {
@@ -5594,20 +5599,13 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                             }
                           />
 
-                          <div className="mt-4 flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2.5 sm:px-4 sm:py-3">
-                            <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15">
-                              <Lightbulb className="h-4 w-4 text-brand-blue" />
-                            </span>
-                            <span className="min-w-0 text-xs text-gray-700 sm:text-sm">
-                              Tip: You can upload a single resume or bulk upload multiple resumes at once.
-                            </span>
-                            <Link
-                              href="/help"
-                              onClick={handleCloseUploadHistory}
-                              className="ml-auto flex-shrink-0 text-xs font-medium text-brand-blue transition-colors hover:text-brand-blue-2 hover:underline sm:text-sm"
-                            >
-                              Learn more
-                            </Link>
+                          {/* The Upload Resume popup's own Tip — the brand's amber,
+                              so it reads as guidance rather than a warning. */}
+                          <div className="mt-4 flex items-start gap-2.5 rounded-xl bg-brand-orange/[0.08] border border-brand-orange/20 px-3 py-2.5">
+                            <Lightbulb className="w-4 h-4 text-brand-orange flex-shrink-0 mt-0.5" />
+                            <p className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+                              <span className="font-semibold">Tip:</span> You can upload a single resume or bulk upload multiple resumes at once.
+                            </p>
                           </div>
                         </>
                       ) : (

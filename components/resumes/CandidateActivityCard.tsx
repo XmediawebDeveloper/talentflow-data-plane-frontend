@@ -26,10 +26,11 @@ import {
 } from '@/lib/services/resumeService';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { formatScore } from '@/lib/utils/score';
-import { formatOverallScoreValue, matchBadgeClass } from '@/lib/utils/matchStatus';
+import { formatOverallScoreValue, matchBadgeClass, normalizeMatchResult, MATCH_SCORE_TEXT_CLASS } from '@/lib/utils/matchStatus';
 import { usePlanLock } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE, type PlanFeatureKey } from '@/lib/types/planFeatures';
 import { AIInviteStatusBadge, displayInviteScore, inviteResult } from '@/components/AIInterviewInviteTable';
+import { rememberResumeActivityTrail, resumeViewFromQuery, type TrailCrumb } from '@/lib/utils/resumeActivityTrail';
 
 type TabKey = 'scores' | 'talent_matches' | 'assessments' | 'interviews';
 
@@ -97,38 +98,92 @@ const PassFail = ({ passed }: { passed: boolean | null | undefined }) =>
     </span>
   );
 
+/* One column layout for every row of every tab, so the cells line up no
+   matter what a row carries: Score | Result | Status | Action, each a fixed
+   width. A missing value leaves its cell empty (score shows a dash, as the
+   module lists do) instead of letting the row's badges slide over. On a phone
+   the cells simply wrap under the title. */
+const ROW_GRID = 'sm:grid sm:grid-cols-[minmax(0,1fr)_5.5rem_7.5rem_8.5rem_7rem] sm:items-center sm:gap-x-3';
+
+const NoValue = () => <span className="text-sm text-gray-400">—</span>;
+
+/* Every tab colours its score the same way: by that row's own result —
+   Pass green / Fail red (assessments, interviews), the verdict's colour
+   (resume scoring), plain where there is no result to judge by. */
+const SCORE_TEXT = 'text-sm font-semibold';
+const passColour = (passed: boolean | null | undefined) =>
+  passed == null ? 'text-gray-900' : passed ? 'text-success' : 'text-destructive';
+const verdictColour = (matchStatus: string) => {
+  const verdict = normalizeMatchResult(matchStatus);
+  return verdict ? MATCH_SCORE_TEXT_CLASS[verdict] : 'text-gray-900';
+};
+
 function Row({
-  title, meta, right, onOpen, openLabel,
+  title, meta, score, result, status, onOpen, openLabel,
 }: {
   title: ReactNode;
   meta: ReactNode;
-  right: ReactNode;
+  score?: ReactNode;
+  result?: ReactNode;
+  status?: ReactNode;
   onOpen?: () => void;
   openLabel?: string;
 }) {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 py-3 px-3 rounded-lg ring-1 ring-gray-100 hover:ring-brand-blue/20 hover:bg-brand-blue/[0.02] transition-all">
-      <div className="min-w-0 flex-1">
+    <div className={`flex flex-col gap-2 ${ROW_GRID} py-3 px-3 rounded-lg ring-1 ring-gray-100 hover:ring-brand-blue/20 hover:bg-brand-blue/[0.02] transition-all`}>
+      <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-1.5 text-sm font-medium text-gray-900">{title}</div>
         <div className="mt-0.5 text-xs text-gray-500 flex flex-wrap gap-x-3 gap-y-0.5">{meta}</div>
       </div>
-      <div className="flex flex-wrap items-center gap-2 sm:justify-end">{right}</div>
-      {onOpen ? (
-        <button
-          onClick={onOpen}
-          className="inline-flex items-center gap-1 text-xs font-medium text-brand-blue hover:text-brand-blue-2 whitespace-nowrap"
-        >
-          {openLabel || 'View'} <ChevronRight className="w-3.5 h-3.5" />
-        </button>
-      ) : (
-        <span className="hidden sm:inline-block w-[64px]" />
-      )}
+      <div className="flex flex-wrap items-center gap-2 sm:contents">
+        <div className="sm:text-right">{score ?? <NoValue />}</div>
+        <div className="sm:flex sm:justify-center">{result}</div>
+        <div className="sm:flex sm:justify-center">{status}</div>
+        <div className="sm:flex sm:justify-end">
+          {onOpen && (
+            <button
+              onClick={onOpen}
+              className="inline-flex items-center gap-1 text-xs font-medium text-brand-blue hover:text-brand-blue-2 whitespace-nowrap"
+            >
+              {openLabel || 'View'} <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
-export default function CandidateActivityCard({ resumeId }: { resumeId: string }) {
+/* Column headings over the rows (desktop only), named per tab. */
+const COLUMN_HEADS: Record<TabKey, [string, string, string]> = {
+  scores: ['Rating', 'Match', ''],
+  talent_matches: ['Match %', '', 'Status'],
+  assessments: ['Score', 'Result', 'Status'],
+  interviews: ['MHS Score', 'Result', 'Status'],
+};
+
+function ColumnHeader({ tab }: { tab: TabKey }) {
+  const [score, result, status] = COLUMN_HEADS[tab];
+  return (
+    <div className={`hidden ${ROW_GRID} px-3 pb-1 text-2xs font-semibold uppercase tracking-wide text-gray-400`}>
+      <span>Details</span>
+      <span className="text-right">{score}</span>
+      <span className="text-center">{result}</span>
+      <span className="text-center">{status}</span>
+      <span className="text-right">View</span>
+    </div>
+  );
+}
+
+export default function CandidateActivityCard({ resumeId, trail }: { resumeId: string; trail: TrailCrumb[] }) {
   const router = useRouter();
+  /* Every View goes through here: the destination shows THIS page's trail
+     (Resume Database › My Resumes › <candidate>) instead of its own module's,
+     and its Back returns to this resume. See lib/utils/resumeActivityTrail. */
+  const openFromResume = (url: string) => {
+    rememberResumeActivityTrail(trail);
+    router.push(`${url}${resumeViewFromQuery}`);
+  };
   const { isPlanLocked } = usePlanLock();
   const [data, setData] = useState<ResumeActivity | null>(null);
   const [loading, setLoading] = useState(true);
@@ -187,6 +242,7 @@ export default function CandidateActivityCard({ resumeId }: { resumeId: string }
 
     return (
       <div className="space-y-2">
+        <ColumnHeader tab={active} />
         {active === 'scores' && visible.map(s => (
           <Row
             key={s.id}
@@ -200,14 +256,14 @@ export default function CandidateActivityCard({ resumeId }: { resumeId: string }
               <span>{formatIST(s.created_at)}</span>
               {s.run_count > 1 && <span title="Same resume version scored against this job more than once — the latest run is shown">Re-scored {s.run_count - 1}×</span>}
             </>}
-            right={<>
-              <span className="text-sm font-semibold text-gray-900" title="Overall rating out of 10">
+            score={
+              <span className={`${SCORE_TEXT} ${verdictColour(s.match_status)}`} title="Overall rating out of 10">
                 {formatOverallScoreValue(s.overall_rating_10, s.overall_score)}
                 {s.overall_rating_10 != null && <span className="text-xs font-normal text-gray-500">/10</span>}
               </span>
-              <span className={`${BADGE} ${matchBadgeClass(s.match_status)}`}>{s.match_status}</span>
-            </>}
-            onOpen={() => router.push(`/recruitment/resume-scoring?jd_id=${s.jd_id}&score_id=${s.id}`)}
+            }
+            result={<span className={`${BADGE} ${matchBadgeClass(s.match_status)}`}>{s.match_status}</span>}
+            onOpen={() => openFromResume(`/recruitment/resume-scoring?jd_id=${s.jd_id}&score_id=${s.id}`)}
             openLabel="View Score"
           />
         ))}
@@ -224,12 +280,10 @@ export default function CandidateActivityCard({ resumeId }: { resumeId: string }
               <span>Matched by {m.run_by_name}</span>
               <span>{formatIST(m.created_at)}</span>
             </>}
-            right={<>
-              {m.final_score != null && <span className="text-sm font-semibold text-gray-900">{formatScore(m.final_score)}%</span>}
-              <span className={`${BADGE} bg-slate-100 text-gray-700 ring-gray-200`}>{TALENT_MATCH_STATUS[m.status] || m.status}</span>
-            </>}
-            onOpen={m.jd_id ? () => router.push(`/recruitment/ai-talent-match?jdId=${m.jd_id}`) : undefined}
-            openLabel="Open Match"
+            score={m.final_score != null ? <span className={`${SCORE_TEXT} text-gray-900`}>{formatScore(m.final_score)}%</span> : undefined}
+            status={<span className={`${BADGE} bg-slate-100 text-gray-700 ring-gray-200`}>{TALENT_MATCH_STATUS[m.status] || m.status}</span>}
+            onOpen={m.jd_id ? () => openFromResume(`/recruitment/ai-talent-match?jdId=${m.jd_id}&view=results`) : undefined}
+            openLabel="View Match"
           />
         ))}
 
@@ -249,12 +303,10 @@ export default function CandidateActivityCard({ resumeId }: { resumeId: string }
                 <span>Invited {formatIST(a.invited_at)}</span>
                 {a.completed_at && <span>Completed {formatIST(a.completed_at)}</span>}
               </>}
-              right={<>
-                {a.score != null && <span className="text-sm font-semibold text-gray-900">{formatScore(a.score)}%</span>}
-                <PassFail passed={a.passed} />
-                <AssessmentStatusBadge status={a.status} />
-              </>}
-              onOpen={canOpen ? () => router.push(`/recruitment/assessments/${a.assessment_id}/results/details?candidate_id=${a.attempt_id}${cid}&from=candidate-results`) : undefined}
+              score={a.score != null ? <span className={`${SCORE_TEXT} ${passColour(a.passed)}`}>{formatScore(a.score)}%</span> : undefined}
+              result={<PassFail passed={a.passed} />}
+              status={<AssessmentStatusBadge status={a.status} />}
+              onOpen={canOpen ? () => openFromResume(`/recruitment/assessments/${a.assessment_id}/results/details?candidate_id=${a.attempt_id}${cid}`) : undefined}
               openLabel="View Result"
             />
           );
@@ -277,14 +329,12 @@ export default function CandidateActivityCard({ resumeId }: { resumeId: string }
                 <span>Invited {formatIST(i.invited_at)}</span>
                 {i.completed_at && <span>Completed {formatIST(i.completed_at)}</span>}
               </>}
-              right={<>
-                {score != null && (
-                  <span className={`text-sm font-semibold ${score >= 60 ? 'text-success' : 'text-destructive'}`} title="Must-Have Skills score">{score}%</span>
-                )}
-                {result && <PassFail passed={result === 'Pass'} />}
-                <AIInviteStatusBadge inv={i} />
-              </>}
-              onOpen={canOpen ? () => router.push(`/recruitment/ai-interviews/${i.config_id}/results/details?session_id=${i.id}&from=candidate-results`) : undefined}
+              score={score != null ? (
+                <span className={`${SCORE_TEXT} ${passColour(result ? result === 'Pass' : null)}`} title="Must-Have Skills score">{score}%</span>
+              ) : undefined}
+              result={result ? <PassFail passed={result === 'Pass'} /> : undefined}
+              status={<AIInviteStatusBadge inv={i} />}
+              onOpen={canOpen ? () => openFromResume(`/recruitment/ai-interviews/${i.config_id}/results/details?session_id=${i.id}`) : undefined}
               openLabel="View Result"
             />
           );
@@ -327,7 +377,7 @@ export default function CandidateActivityCard({ resumeId }: { resumeId: string }
         <p className="text-sm text-destructive py-6 text-center">Could not load candidate activity. Please refresh to try again.</p>
       ) : (
         <>
-          <div role="tablist" className="flex gap-1 overflow-x-auto border-b border-gray-100 mb-4 -mx-1 px-1">
+          <div role="tablist" className="flex gap-1 overflow-x-auto overflow-y-hidden border-b border-gray-100 mb-4 -mx-1 px-1">
             {tabs.map(({ key, label, Icon, plan }) => {
               const locked = isPlanLocked(plan);
               const selected = active === key;
