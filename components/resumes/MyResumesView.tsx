@@ -4923,6 +4923,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                 : resumes.filter(r => selectedResumes.includes(r.id))
           }
           jobs={publishedJobs}
+          /* Score Resume: the All Jobs list - Archived / Disabled shown, not pickable. */
+          excludeDraftsOnly
           onClose={() => {
             setIsApplyToJobModalOpen(false);
             setUploadedResumeToScore(null);

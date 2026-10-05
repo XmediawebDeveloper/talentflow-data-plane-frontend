@@ -5039,7 +5039,6 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         jobTitle={job.title}
         jobShortId={job.job_id}
         jobVersion={job.versionNumber && job.versionNumber > 0 ? job.versionNumber : null}
-        canEdit={permissions.canUpdateAssessments}
       />
 
       <AIInterviewVersionHistoryModal

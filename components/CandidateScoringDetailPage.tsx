@@ -116,6 +116,8 @@ interface ScoredResume {
   lastUpdated?: string;
   uploadedBy?: string;
   versionCount?: number;
+  jobCode?: string;     // The job's display ID (JD-001), when the list row carries it
+  jobVersion?: number;  // The job's lineage version (v1, v2, ...)
 }
 
 interface CandidateScoringDetailPageProps {
@@ -1367,6 +1369,15 @@ Best regards`);
                   reading a score reach for the JD from here constantly. */}
               <span className="text-xs sm:text-sm font-normal text-gray-700 truncate">
                 <span className="font-bold text-gray-800">Job Title :</span>{' '}
+                {/* Read as one: "EDG 267 High Court Judge v3.0" - the job's
+                    ID, its title, its version, the ID and version in the JD
+                    page header's own chips (`JobDetailView`). Both come from
+                    the list row, else from the JD this page already loaded. */}
+                {(resume.jobCode || jdDetails?.job_id) && (
+                  <span className="inline-flex items-center px-2 py-0.5 mr-1.5 bg-blue-600 text-white rounded-md text-xs font-semibold font-mono tracking-wide align-middle whitespace-nowrap">
+                    {resume.jobCode || jdDetails?.job_id}
+                  </span>
+                )}
                 <button
                   type="button"
                   onClick={handleOpenJobDescription}
@@ -1375,6 +1386,11 @@ Best regards`);
                 >
                   {jobTitle}
                 </button>
+                {(resume.jobVersion ?? jdDetails?.version_number) != null && (
+                  <span className="inline-flex items-center px-2.5 py-0.5 ml-1.5 bg-purple-600 text-white rounded-full text-xs font-medium align-middle whitespace-nowrap">
+                    v{resume.jobVersion ?? jdDetails?.version_number}.0
+                  </span>
+                )}
               </span>
             </div>
             <div className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">
