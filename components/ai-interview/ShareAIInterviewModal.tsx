@@ -173,7 +173,10 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
   }, []);
   const [myResumesLoaded, setMyResumesLoaded] = useState(false);
   const [internalDbLoaded, setInternalDbLoaded] = useState(false);
-  const [isLoadingResumes, setIsLoadingResumes] = useState(false);
+  // Per source — both tabs now load together, so one flag would clear early.
+  const [isLoadingMy, setIsLoadingMy] = useState(false);
+  const [isLoadingInternal, setIsLoadingInternal] = useState(false);
+  const isLoadingResumes = dbTab === 'my-resumes' ? isLoadingMy : isLoadingInternal;
 
   // RBAC checks
   const hasMyResumesAccess = !!(user?.permissions?.canUploadResumes || user?.permissions?.canViewResumes);
@@ -238,13 +241,14 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
     };
   }, [isOpen, onClose]);
 
-  // Load resumes when database mode is selected
+  // Load resumes when database mode is selected. Both tabs load up front —
+  // the Shared Database badge read 0 until its tab was clicked.
   useEffect(() => {
     if (inputMode === 'database') {
       const tab = hasMyResumesAccess ? 'my-resumes' : 'internal-db';
       setDbTab(tab);
-      if (tab === 'my-resumes') loadMyResumes();
-      else loadInternalDb();
+      if (hasMyResumesAccess) loadMyResumes();
+      if (hasInternalDBAccess || !hasMyResumesAccess) loadInternalDb();
     }
   }, [inputMode]);
 
@@ -268,15 +272,31 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
     versionCount: r.version_count ?? r.versionCount ?? r.versions?.length ?? 1,
   });
 
+  /* Every page of a source. One 200-row page silently dropped the rest, and the
+     tab badge counted only what came back. */
+  const fetchAllResumes = async (source: 'my-resumes' | 'internal-db', extra: Record<string, string> = {}): Promise<Resume[]> => {
+    const pageSize = 200;
+    const first = await api.get('/resumes', { params: { ...extra, source, page: 1, page_size: pageSize } });
+    const items: any[] = [...(first.data?.items ?? [])];
+    const totalPages: number = first.data?.total_pages ?? 1;
+    for (let page = 2; page <= totalPages; page++) {
+      const res = await api.get('/resumes', { params: { ...extra, source, page, page_size: pageSize } });
+      items.push(...(res.data?.items ?? []));
+    }
+    return items.map(mapResume);
+  };
+  const loadingSources = useRef<Set<string>>(new Set());
+
   const loadMyResumes = async () => {
-    if (myResumesLoaded) return;
-    setIsLoadingResumes(true);
+    if (myResumesLoaded || loadingSources.current.has('my-resumes')) return;
+    loadingSources.current.add('my-resumes');
+    setIsLoadingMy(true);
     try {
-      const [resumeRes, folderRes] = await Promise.all([
-        api.get('/resumes', { params: { source: 'my-resumes', page_size: 200 } }),
+      const [resumes, folderRes] = await Promise.all([
+        fetchAllResumes('my-resumes'),
         api.get('/folders'),
       ]);
-      setMyResumesData((resumeRes.data?.items ?? []).map(mapResume));
+      setMyResumesData(resumes);
       // The folders API may nest subfolders under `children` — flatten so the tree can walk parentId.
       const flat: { id: string; name: string; parentId: string | null; count: number }[] = [];
       const walk = (list: any[], parentId: string | null) => {
@@ -291,21 +311,23 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
     } catch {
       toast.error('Failed to load My Resumes');
     } finally {
-      setIsLoadingResumes(false);
+      loadingSources.current.delete('my-resumes');
+      setIsLoadingMy(false);
     }
   };
 
   const loadInternalDb = async () => {
-    if (internalDbLoaded) return;
-    setIsLoadingResumes(true);
+    if (internalDbLoaded || loadingSources.current.has('internal-db')) return;
+    loadingSources.current.add('internal-db');
+    setIsLoadingInternal(true);
     try {
-      const res = await api.get('/resumes', { params: { source: 'internal-db', page_size: 200 } });
-      setInternalDbData((res.data?.items ?? []).map(mapResume));
+      setInternalDbData(await fetchAllResumes('internal-db'));
       setInternalDbLoaded(true);
     } catch {
       toast.error('Failed to load Shared Database');
     } finally {
-      setIsLoadingResumes(false);
+      loadingSources.current.delete('internal-db');
+      setIsLoadingInternal(false);
     }
   };
 
@@ -351,8 +373,8 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
     }
     let cancelled = false;
     setIsLoadingFolder(true);
-    api.get('/resumes', { params: { source: 'my-resumes', folder_id: selectedFolder, page_size: 200 } })
-      .then(res => { if (!cancelled) setFolderResumes((res.data?.items ?? []).map(mapResume)); })
+    fetchAllResumes('my-resumes', { folder_id: selectedFolder })
+      .then(rows => { if (!cancelled) setFolderResumes(rows); })
       .catch(() => { if (!cancelled) { setFolderResumes([]); toast.error('Failed to load this folder'); } })
       .finally(() => { if (!cancelled) setIsLoadingFolder(false); });
     return () => { cancelled = true; };
@@ -483,8 +505,11 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
 
   const clearSelection = () => setSelectedResumes([]);
 
-  // Add selected resumes to candidates list and switch to manual view
-  const handleAddFromDatabase = () => {
+  /* The candidate list with the ticked "Select From" resumes merged in.
+     Ticking a row used to do nothing until "Add to List" (below the fold of the
+     picker) was clicked, so Send stayed disabled with "0 candidates" while
+     rows showed as selected — Send and the count now read this instead. */
+  const mergeSelectedResumes = () => {
     // A folder's rows come from their own fetch, so look there too.
     const pool = [...resumeDatabase, ...folderResumes.filter(fr => !resumeDatabase.some(r => r.id === fr.id))];
     const selectedResumeData = pool.filter((r) => selectedResumes.includes(r.id));
@@ -493,18 +518,24 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
     const newCandidates: CandidateEmail[] = selectedResumeData
       .filter((resume) => resume.email && !existingEmails.has(resume.email.toLowerCase().trim()))
       .map((resume) => ({
-        id: Date.now().toString() + Math.random(),
+        id: `db-${resume.id}`,
         name: resume.name,
         email: resume.email,
         source: 'database' as const,
         origin: dbTab === 'my-resumes' ? 'my-resumes' as const : 'shared-db' as const,
         resumeId: resume.id,
       }));
-    const duplicateCount = selectedResumeData.length - newCandidates.length;
-    if (duplicateCount > 0) {
-      toast.warning(`${duplicateCount} candidate${duplicateCount > 1 ? 's' : ''} skipped — already in the list`);
+    const merged: CandidateEmail[] = validExisting.length > 0 ? [...validExisting, ...newCandidates] : newCandidates.length > 0 ? newCandidates : [{ id: '1', name: '', email: '', source: 'manual' }];
+    return { merged, skipped: selectedResumeData.length - newCandidates.length };
+  };
+
+  // Add selected resumes to candidates list and switch to manual view
+  const handleAddFromDatabase = () => {
+    const { merged, skipped } = mergeSelectedResumes();
+    if (skipped > 0) {
+      toast.warning(`${skipped} candidate${skipped > 1 ? 's' : ''} skipped — already in the list`);
     }
-    setCandidates(validExisting.length > 0 ? [...validExisting, ...newCandidates] : newCandidates.length > 0 ? newCandidates : [{ id: '1', name: '', email: '', source: 'manual' }]);
+    setCandidates(merged);
     setSelectedResumes([]);
     setInputMode('manual');
   };
@@ -739,12 +770,21 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
     }
   };
 
+  // What Send acts on: ticked-but-not-yet-added resumes count as added.
+  const pendingDbSelection = inputMode === 'database' && selectedResumes.length > 0;
+  const sendCandidates = pendingDbSelection ? mergeSelectedResumes().merged : candidates;
+
   const handleSend = async () => {
     setIsSubmitting(true);
     try {
+      // Fold the ticked resumes into the list so it matches what was sent.
+      if (pendingDbSelection) {
+        setCandidates(sendCandidates);
+        setSelectedResumes([]);
+      }
       // Filter candidates with name and email, then deduplicate by email (keep first occurrence)
       const seen = new Set<string>();
-      const candidatesWithData = candidates
+      const candidatesWithData = sendCandidates
         .filter((c) => c.name.trim() && c.email.trim())
         .filter((c) => {
           const key = c.email.trim().toLowerCase();
@@ -918,17 +958,17 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
   //     row. This is what the per-row red errors show ("This email is already
   //     in the list" / invalid email), so the button now disables whenever any
   //     of those are visible instead of letting the recruiter click Send.
-  const hasAtLeastOneValid = candidates.some(
+  const hasAtLeastOneValid = sendCandidates.some(
     (c) => c.name.trim() && c.email.trim() && isValidEmail(c.email),
   );
-  const hasBlockingRowError = candidates.some((c) => {
+  const hasBlockingRowError = sendCandidates.some((c) => {
     const inUse = c.name.trim() || c.email.trim();
     if (!inUse) return false; // fully-empty row is ignored, not an error
     return (
       !c.name.trim() ||
       !c.email.trim() ||
       !isValidEmail(c.email) ||
-      isDuplicateEmail(c.id, c.email)
+      sendCandidates.some((o) => o.id !== c.id && o.email.trim().toLowerCase() === c.email.trim().toLowerCase())
     );
   });
   const isValid = hasAtLeastOneValid && !hasBlockingRowError;
@@ -1870,7 +1910,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
         <div className="px-6 py-4 bg-gray-50 dark:bg-slate-800/50 border-t border-gray-200 dark:border-slate-700 flex items-center justify-between shrink-0">
           <div className="text-sm text-gray-600 dark:text-slate-400">
             {(() => {
-              const validCount = candidates.filter((c) => c.name.trim() && c.email.trim()).length;
+              const validCount = sendCandidates.filter((c) => c.name.trim() && c.email.trim()).length;
               const available = quotaStats?.available ?? null;
               const isUnlimited = available !== null && available >= 999999;
               const insufficientQuota = !isUnlimited && available !== null && available < validCount;

@@ -1,5 +1,5 @@
 import { X, Mail, Plus, Trash2, Send, CheckCircle, FileText, AlertTriangle, Loader2, Sparkles, ShieldAlert, Info, Database, FolderOpen, Folder, ChevronRight, ChevronDown, Users, Upload } from 'lucide-react';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { toast } from '@/components/ui/enhanced-toast';
 import { assessmentService } from '@/lib/services/assessmentService';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -79,50 +79,74 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
   const [dbSearchQuery, setDbSearchQuery] = useState('');
   const [myResumesLoaded, setMyResumesLoaded] = useState(false);
   const [internalDbLoaded, setInternalDbLoaded] = useState(false);
-  const [isLoadingResumes, setIsLoadingResumes] = useState(false);
+  // Per source — both tabs now load together, so one flag would clear early.
+  const [isLoadingMy, setIsLoadingMy] = useState(false);
+  const [isLoadingInternal, setIsLoadingInternal] = useState(false);
+  const isLoadingResumes = dbTab === 'my-resumes' ? isLoadingMy : isLoadingInternal;
+  const loadingSources = useRef<Set<string>>(new Set());
 
   const hasMyResumesAccess = !!(user?.permissions?.canUploadResumes || user?.permissions?.canViewResumes);
   const hasInternalDBAccess = !!(user?.permissions?.canAccessInternalDB || user?.permissions?.canViewInternalDB);
 
+  // folderId feeds the folder counts and folder filter — it was never mapped,
+  // so every folder read 0 and picking one emptied the list.
   const mapResume = (r: any) => ({
     id: r.id,
     name: r.candidate_name || 'Unknown',
     email: r.email || r.candidate_email || '',
     position: r.current_title || 'Not specified',
     experience: r.experience_years ? `${r.experience_years} years` : '',
+    folderId: r.folder_id ?? null,
   });
 
+  /* Every page of a source. One 200-row page silently dropped the rest, and the
+     tab badge counted only what came back. */
+  const fetchAllResumes = async (source: 'my-resumes' | 'internal-db') => {
+    const pageSize = 200;
+    const first = await api.get('/resumes', { params: { source, page: 1, page_size: pageSize } });
+    const items: any[] = [...(first.data?.items ?? [])];
+    const totalPages: number = first.data?.total_pages ?? 1;
+    for (let page = 2; page <= totalPages; page++) {
+      const res = await api.get('/resumes', { params: { source, page, page_size: pageSize } });
+      items.push(...(res.data?.items ?? []));
+    }
+    return items.map(mapResume);
+  };
+
   const loadMyResumes = async () => {
-    if (myResumesLoaded) return;
-    setIsLoadingResumes(true);
+    if (myResumesLoaded || loadingSources.current.has('my-resumes')) return;
+    loadingSources.current.add('my-resumes');
+    setIsLoadingMy(true);
     try {
-      const [resumeRes, folderRes] = await Promise.all([
-        api.get('/resumes', { params: { source: 'my-resumes', page_size: 200 } }),
+      const [resumes, folderRes] = await Promise.all([
+        fetchAllResumes('my-resumes'),
         api.get('/folders'),
       ]);
-      setMyResumesData((resumeRes.data?.items ?? []).map(mapResume));
+      setMyResumesData(resumes);
       setMyFolders((folderRes.data ?? []).map((f: any) => ({ id: f.id, name: f.name, parentId: f.parent_id ?? null })));
       setMyResumesLoaded(true);
     } catch { toast.error({ title: 'Error', description: 'Failed to load My Resumes' }); }
-    finally { setIsLoadingResumes(false); }
+    finally { loadingSources.current.delete('my-resumes'); setIsLoadingMy(false); }
   };
 
   const loadInternalDb = async () => {
-    if (internalDbLoaded) return;
-    setIsLoadingResumes(true);
+    if (internalDbLoaded || loadingSources.current.has('internal-db')) return;
+    loadingSources.current.add('internal-db');
+    setIsLoadingInternal(true);
     try {
-      const res = await api.get('/resumes', { params: { source: 'internal-db', page_size: 200 } });
-      setInternalDbData((res.data?.items ?? []).map(mapResume));
+      setInternalDbData(await fetchAllResumes('internal-db'));
       setInternalDbLoaded(true);
     } catch { toast.error({ title: 'Error', description: 'Failed to load Shared Database' }); }
-    finally { setIsLoadingResumes(false); }
+    finally { loadingSources.current.delete('internal-db'); setIsLoadingInternal(false); }
   };
 
+  // Both tabs load up front — the Shared Database badge read 0 until clicked.
   useEffect(() => {
     if (inputMode === 'database') {
       const tab = hasMyResumesAccess ? 'my-resumes' : 'internal-db';
       setDbTab(tab);
-      if (tab === 'my-resumes') loadMyResumes(); else loadInternalDb();
+      if (hasMyResumesAccess) loadMyResumes();
+      if (hasInternalDBAccess || !hasMyResumesAccess) loadInternalDb();
     }
   }, [inputMode]);
 
@@ -182,19 +206,30 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
     r.position.toLowerCase().includes(dbSearchQuery.toLowerCase())
   );
 
-  const handleAddFromDatabase = () => {
+  /* The candidate list with the ticked "Select From" resumes merged in. Ticking
+     a row did nothing until "Add to List" was clicked, so Send stayed disabled
+     with "0 candidates" while rows showed as selected — Send reads this now. */
+  const mergeSelectedResumes = (): CandidateEmail[] => {
     const selected = activeDbResumes.filter(r => selectedResumes.includes(r.id) && r.email);
     const newCandidates = selected.map(r => ({
-      id: Date.now().toString() + Math.random(),
+      id: `db-${r.id}`,
       name: r.name,
       email: r.email,
       source: 'database' as const,
     }));
     const existing = candidates.filter(c => c.source !== 'database' && (c.name.trim() || c.email.trim()));
-    setCandidates([...existing, ...newCandidates]);
+    return [...existing, ...newCandidates];
+  };
+
+  const handleAddFromDatabase = () => {
+    setCandidates(mergeSelectedResumes());
     setSelectedResumes([]);
     setInputMode('manual');
   };
+
+  // What Send acts on: ticked-but-not-yet-added resumes count as added.
+  const pendingDbSelection = inputMode === 'database' && selectedResumes.length > 0;
+  const sendCandidates = pendingDbSelection ? mergeSelectedResumes() : candidates;
 
   // Note: Assessment creation is now handled by redirecting to /recruitment/assessments/create page
   // No need for inline assessment creation state
@@ -274,7 +309,12 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
       return;
     }
 
-    const validCandidates = candidates.filter(c => c.name.trim() && c.email.trim() && c.email.includes('@'));
+    // Fold the ticked resumes into the list so it matches what was sent.
+    if (pendingDbSelection) {
+      setCandidates(sendCandidates);
+      setSelectedResumes([]);
+    }
+    const validCandidates = sendCandidates.filter(c => c.name.trim() && c.email.trim() && c.email.includes('@'));
     if (validCandidates.length === 0) {
       toast.error({ title: 'No Valid Candidates', description: 'Please add at least one candidate with valid name and email' });
       return;
@@ -367,7 +407,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
 
 
   const isValid =
-    candidates.some(c => c.name.trim() && c.email.trim() && c.email.includes('@')) &&
+    sendCandidates.some(c => c.name.trim() && c.email.trim() && c.email.includes('@')) &&
     selectedAssessment !== '';
 
   const selectedAssessmentData = assessments.find(a => a.id === selectedAssessment);
@@ -912,7 +952,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
               <div className="text-xs sm:text-sm text-green-700 space-y-1">
                 <p className="[overflow-wrap:anywhere]"><strong>Assessment:</strong> {selectedAssessmentData?.title}</p>
                 <p><strong>Duration:</strong> {selectedAssessmentData?.duration_minutes} minutes</p>
-                <p><strong>Recipients:</strong> {candidates.filter(c => c.name.trim() && c.email.trim()).length} candidate(s)</p>
+                <p><strong>Recipients:</strong> {sendCandidates.filter(c => c.name.trim() && c.email.trim()).length} candidate(s)</p>
                 <p><strong>Expires in:</strong> {expiryDays} day{expiryDays > 1 ? 's' : ''}</p>
               </div>
             </div>
@@ -923,7 +963,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
         <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 dark:bg-slate-800/50 border-t border-gray-200 dark:border-slate-700 flex flex-col sm:flex-row items-stretch sm:items-center sm:justify-between gap-3 shrink-0">
           <div className="text-xs sm:text-sm text-center sm:text-left">
             {(() => {
-              const validCount = candidates.filter(c => c.name.trim() && c.email.trim()).length;
+              const validCount = sendCandidates.filter(c => c.name.trim() && c.email.trim()).length;
               const insufficient = quotaStats !== null && quotaStats.total_quota < 999999 && quotaStats.available < validCount && validCount > 0;
               return (
                 <span className={insufficient ? 'text-red-600 font-medium' : 'text-gray-600 dark:text-slate-400'}>
