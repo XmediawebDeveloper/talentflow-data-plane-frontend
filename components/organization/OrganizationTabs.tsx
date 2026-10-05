@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { usePlanFeaturesContext } from '@/components/providers/PlanFeaturesProvider';
+import { DISABLED_REASON_MESSAGE } from '@/lib/navigation/menuSections';
 
 /**
  * Shared tab bar for the organization / user-management area.
@@ -17,9 +18,9 @@ import { usePlanFeaturesContext } from '@/components/providers/PlanFeaturesProvi
 export default function OrganizationTabs() {
   const pathname = usePathname();
   const { isTenantAdmin, hasPermission } = useAuth();
-  const { hasPlanFeature } = usePlanFeaturesContext();
+  const { hasPlanFeature, loading: planLoading } = usePlanFeaturesContext();
 
-  const tabs = [
+  const tabs: { id: string; label: string; href: string; visible: boolean; planLocked?: boolean }[] = [
     // Visibility mirrors each destination page's own access guard exactly —
     // UserManagement.tsx checks canManageUsers/canViewUsers, UsageHistory.tsx
     // checks canViewUsage (also declared in lib/navigation/routeAccess.ts for
@@ -29,7 +30,8 @@ export default function OrganizationTabs() {
     { id: 'users', label: 'Users', href: '/organization/user-management', visible: isTenantAdmin || hasPermission('canManageUsers') || hasPermission('canViewUsers') },
     { id: 'usage-history', label: 'Usage History', href: '/organization/usage-history', visible: isTenantAdmin || hasPermission('canViewUsage') },
     { id: 'role-management', label: 'Roles & Permissions', href: '/organization/role-management', visible: isTenantAdmin || hasPermission('canManageUsers') },
-    { id: 'team-management', label: 'Teams', href: '/organization/team-management', visible: (isTenantAdmin || hasPermission('canViewTeams')) && hasPlanFeature('teams') },
+    // Plan-gated: stays visible but disabled (hover explains) when the plan lacks Teams.
+    { id: 'team-management', label: 'Teams', href: '/organization/team-management', visible: isTenantAdmin || hasPermission('canViewTeams'), planLocked: !planLoading && !hasPlanFeature('teams') },
     { id: 'team-chat', label: 'Chat', href: '/organization/team-chat', visible: true },
   ].filter(tab => tab.visible);
 
@@ -42,6 +44,18 @@ export default function OrganizationTabs() {
         <nav className="flex gap-1 overflow-x-auto scrollbar-hide -mb-px" aria-label="User management tabs">
           {tabs.map((tab) => {
             const isActive = pathname === tab.href || pathname.startsWith(`${tab.href}/`);
+            if (tab.planLocked) {
+              return (
+                <span
+                  key={tab.id}
+                  aria-disabled="true"
+                  title={DISABLED_REASON_MESSAGE.plan}
+                  className="whitespace-nowrap px-3 sm:px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-400 dark:text-slate-600 cursor-not-allowed"
+                >
+                  {tab.label}
+                </span>
+              );
+            }
             return (
               <Link
                 key={tab.id}

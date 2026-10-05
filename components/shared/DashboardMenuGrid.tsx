@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { ArrowUpRight } from 'lucide-react';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
-import { buildMenuSections, filterMenuSections } from '@/lib/navigation/menuSections';
+import { buildMenuSections, filterMenuSections, DISABLED_REASON_MESSAGE } from '@/lib/navigation/menuSections';
 import type { Permission } from '@/lib/types/tenant';
 
 /**
@@ -58,6 +58,22 @@ export default function DashboardMenuGrid() {
                 const Icon = item.icon;
                 const href = item.href || '#';
                 const isCurrent = !!item.href && (pathname === item.href || pathname.startsWith(item.href + '/'));
+                if (item.disabled) {
+                  return (
+                    <li key={item.id}>
+                      <div
+                        aria-disabled="true"
+                        title={DISABLED_REASON_MESSAGE[item.disabledReason ?? 'permission']}
+                        className="flex cursor-not-allowed items-center gap-2.5 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 opacity-70"
+                      >
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-400 ring-1 ring-gray-200">
+                          <Icon className="h-4 w-4" />
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-400">{item.label}</span>
+                      </div>
+                    </li>
+                  );
+                }
                 return (
                   <li key={item.id}>
                     <Link

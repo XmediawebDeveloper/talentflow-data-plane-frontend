@@ -5,7 +5,7 @@ import { useMemo } from 'react';
 import { ArrowUpRight, Rocket, LayoutGrid } from 'lucide-react';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
-import { buildMenuSections, filterMenuSections, type NavItem } from '@/lib/navigation/menuSections';
+import { buildMenuSections, filterMenuSections, DISABLED_REASON_MESSAGE, type NavItem } from '@/lib/navigation/menuSections';
 import type { Permission } from '@/lib/types/tenant';
 
 // One-line subtitle per nav item.
@@ -141,7 +141,7 @@ function TileCard({ item, tone }: { item: NavItem; tone: TileTone }) {
     return (
       <div
         aria-disabled="true"
-        title="You do not have permission to access this"
+        title={DISABLED_REASON_MESSAGE[item.disabledReason ?? 'permission']}
         className="group relative flex cursor-not-allowed items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 p-3 opacity-70 dark:border-slate-700/60 dark:bg-slate-800/40 sm:gap-3 sm:p-4"
       >
         {inner}
@@ -201,7 +201,7 @@ export default function DashboardQuickAccess() {
         .map((s) => ({ ...s, items: s.items.filter((i) => i.id !== 'dashboard') }))
         .filter((s) => s.items.length > 0),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [isTenantAdmin, user?.permissions, planFeaturesLoading],
+    [isTenantAdmin, user?.permissions, planFeaturesLoading, hasPlanFeature],
   );
 
   const totalItems = sections.reduce((acc, s) => acc + s.items.length, 0);
