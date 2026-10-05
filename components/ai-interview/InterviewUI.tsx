@@ -193,6 +193,7 @@ interface InterviewVadConfig {
 interface InterviewSocketMessage {
   type?: string;
   action?: string;
+  answer_type?: 'text' | 'yes_no';
   buffer_minutes?: number;
   cluster?: string;
   clusters?: ClusterData[];
@@ -207,6 +208,7 @@ interface InterviewSocketMessage {
   for_previous_question?: boolean;
   from_cluster?: string;
   global_remaining_seconds?: number;
+  hr_question_id?: string;
   hr_topics?: Record<string, string>;
   is_clarification?: boolean;
   is_enhanced?: boolean;
@@ -729,6 +731,56 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   const isClarificationRef = useRef(false);
   // Question progress counter (sent with question_timer_started)
   const [questionNumber, setQuestionNumber] = useState<number | null>(null);
+  // AII-20: HR Tagged Question Types. Set from the question_meta WS event
+  // when the upcoming HR question is Text-based or Yes/No/Other — tagged
+  // with the question_number it belongs to so a later question that sends
+  // no question_meta (ordinary free-form questions, unchanged) can never
+  // render stale buttons: the render guard below requires an exact match
+  // against the live `questionNumber`.
+  const [structuredHrPrompt, setStructuredHrPrompt] = useState<{
+    questionNumber: number;
+    answerType: 'yes_no' | 'text';
+    hrQuestionId: string;
+  } | null>(null);
+  // "Need to Explain More" was clicked — hide the buttons and fall through
+  // to the existing voice-answer UI (already recording underneath; this
+  // flag changes nothing about mic/timer, it just stops rendering buttons).
+  const [hrExplainMore, setHrExplainMore] = useState(false);
+  // Guards submitStructuredHrAnswer against a double-click/double-Enter
+  // double-send (see that function for why a ref, not state, is needed).
+  const hrSubmitInFlightRef = useRef(false);
+  // AII-20: hr_question_id (or a question_number fallback) of the structured
+  // HR question we've already armed the UI for. A backend retry/re-speak
+  // path can send `question_meta` again for the SAME still-unanswered
+  // question — without this guard, that re-announcement would reset
+  // hrExplainMore/hrSubmitInFlightRef, making the Yes/No buttons reappear
+  // (or reopen the double-submit window) even after the candidate already
+  // answered or chose "Need to Explain More", producing a duplicate answer.
+  const armedHrQuestionIdRef = useRef<string>('');
+  // AII-20: holds the hr_question_id of a yes_no HR question whose voice
+  // answer must be discarded — read synchronously inside stopRecording /
+  // stopRecordingSilent (stale-closure callbacks) so a stray/overlapping
+  // VAD-ASR turn never gets submitted as a second answer.
+  //
+  // This intentionally does NOT clear the instant Yes/No is clicked
+  // (submitStructuredHrAnswer nulls structuredHrPrompt immediately, but the
+  // mic can still be mid-recording the candidate's simultaneous or trailing
+  // spoken "Yes" — VAD only calls stopRecording once it detects a pause
+  // AFTER that speech, which can land well after the click). Deriving this
+  // from live structuredHrPrompt state used to turn the guard off exactly
+  // at click-time, letting that trailing voice sail through as a real
+  // second ASR answer (observed: "Yes" recorded twice, once via the click's
+  // text_input, once via the candidate's own voice). Instead this ref is
+  // set directly when the question is armed and cleared directly only when
+  // "Need to Explain More" is clicked or a genuinely different question
+  // becomes current — never by a stale-closure re-render.
+  const hrVoiceBlockedForQidRef = useRef<string>('');
+  // question_number the block above applies to. question_meta is only ever
+  // sent for a structured HR question, so an ordinary question that follows
+  // one sends no event to clear the block — question_timer_started fires for
+  // EVERY question instead, so it's used as the reliable "a different
+  // question is now current" signal (comparing against this stored number).
+  const hrVoiceBlockedQuestionNumberRef = useRef<number | null>(null);
   const [totalQuestions, setTotalQuestions] = useState<number | null>(null);
   const questionNumberRef = useRef<number | null>(null); // sync ref for stale-closure reads
   // Clarification mode — true when backend signals is_clarification on a same-Q timer event
@@ -5445,6 +5497,44 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         } else {
           isCurrentFollowupRef.current = false;
         }
+        // AII-20: HR Tagged Question Types — backend sends this when the
+        // upcoming HR question is Text-based or Yes/No/Other and has been
+        // forced verbatim. Tag with question_number so the render guard
+        // self-invalidates once the interview moves to a different
+        // question, even on a later turn that sends no question_meta at
+        // all (ordinary free-form questions — completely unaffected).
+        if (data.answer_type === 'yes_no' || data.answer_type === 'text') {
+          const _hrQid = data.hr_question_id || `q${data.question_number}`;
+          // See armedHrQuestionIdRef's declaration: ignore a re-announcement
+          // of the same still-unanswered question instead of re-arming it.
+          if (armedHrQuestionIdRef.current !== _hrQid) {
+            armedHrQuestionIdRef.current = _hrQid;
+            setStructuredHrPrompt({
+              questionNumber: data.question_number,
+              answerType: data.answer_type,
+              hrQuestionId: data.hr_question_id || '',
+            });
+            setHrExplainMore(false);
+            hrSubmitInFlightRef.current = false;
+            // Only yes_no blocks voice (until "Need to Explain More" is
+            // clicked) — text-type behaves like an ordinary question, voice
+            // is always the answer path for it.
+            if (data.answer_type === 'yes_no') {
+              hrVoiceBlockedForQidRef.current = _hrQid;
+              hrVoiceBlockedQuestionNumberRef.current = data.question_number;
+            } else {
+              hrVoiceBlockedForQidRef.current = '';
+              hrVoiceBlockedQuestionNumberRef.current = null;
+            }
+          } else {
+            console.log(`[WS ${timestamp}] question_meta: duplicate re-announcement of hr_question_id=${_hrQid} ignored`);
+          }
+        } else {
+          // Ordinary free-form question (no HR tag at all) — make sure no
+          // stale block from a prior yes_no question lingers onto it.
+          hrVoiceBlockedForQidRef.current = '';
+          hrVoiceBlockedQuestionNumberRef.current = null;
+        }
         break;
       case "llm_token":
         console.log(`[WS ${timestamp}] LLM token: token_length=${data.token?.length}, buffer_length=${tokenBufferRef.current.length}`);
@@ -6100,6 +6190,30 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         // / repeat) — arm the pre-turn "get ready" 5→1 countdown. Consumed by
         // finalizePlayback when the mic is about to open. Nudges never send this.
         getReadyArmedRef.current = true;
+        // AII-20: question_timer_started fires for EVERY question (unlike
+        // question_meta, which only fires for a structured HR one) — use it
+        // as the fallback signal to lift a stale yes_no voice block once a
+        // genuinely different question is now current. A matching
+        // question_number means this event belongs to the SAME HR question
+        // question_meta just armed (sent first, per _speak()'s ordering), so
+        // the block must NOT be cleared in that case. Also require a real
+        // MAIN question (not is_follow_up/is_clarification) — a follow-up or
+        // clarification re-send for the SAME in-progress HR turn must never
+        // clear the block either, even on the rare chance it carries a
+        // different question_number than expected (observed: "No" still
+        // double-submitted via a stray post-click voice capture — the block
+        // was being lifted by exactly this kind of re-send before the
+        // candidate's trailing speech had been fully discarded).
+        if (
+          hrVoiceBlockedForQidRef.current &&
+          data.question_number != null &&
+          data.question_number !== hrVoiceBlockedQuestionNumberRef.current &&
+          data.is_follow_up !== true &&
+          data.is_clarification !== true
+        ) {
+          hrVoiceBlockedForQidRef.current = '';
+          hrVoiceBlockedQuestionNumberRef.current = null;
+        }
         console.log('[INTERVIEW-DEBUG] question_timer_started received', {
           seconds: data.seconds,
           total_seconds: data.total_seconds,
@@ -7002,7 +7116,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     // No real speech this turn — stop silently instead of sending end_turn.
     // Sending end_turn without speech makes Whisper process silence/noise and
     // return hallucinated text that would be incorrectly saved as the answer.
-    if (!hadSpeech) {
+    //
+    // AII-20: same silent-discard path for a yes_no HR question whose voice
+    // answer is blocked (see hrVoiceBlockedForQidRef) — covers both speech
+    // caught before a button click AND speech trailing/overlapping the click
+    // itself, which must never be submitted as a second answer.
+    if (!hadSpeech || !!hrVoiceBlockedForQidRef.current) {
       setCurrentTranscript(""); // clear immediately — no speech, nothing to keep showing
       voiceVerifBufferRef.current = [];
       setTimeout(() => {
@@ -7122,7 +7241,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     clearNoResponseTimer();
     clearMaxRecordingTimer();
 
-    if (hadSpeech) {
+    // AII-20: same voice-blocked check as stopRecording above.
+    if (hadSpeech && !hrVoiceBlockedForQidRef.current) {
       const remainingFinalized = webSpeechFinalizedRef.current.slice(liveBatchSentCharsRef.current).trim();
       if (remainingFinalized && (isFlexibleMode || isNewFlexibleMode)) {
         sendLiveTranscriptBatch(remainingFinalized, "candidate_stop");
@@ -7569,6 +7689,20 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       const processAudioChunk = (input: Float32Array) => {
         if (!isRecordingRef.current) return;
         if (isMutedRef.current) return;
+        // AII-20: a yes_no HR question's buttons are the candidate's only
+        // valid input until "Need to Explain More" is clicked. Earlier fixes
+        // only stopped the CLIENT from treating its own VAD/end_turn as a
+        // submission — but the mic was still streaming raw PCM to the
+        // backend the whole time, and the backend's OWN independent
+        // mechanisms (background/decoupled transcription, server-side
+        // Deepgram EndOfTurn) could turn that streamed audio into a second,
+        // backend-originated answer for the same question, bypassing every
+        // client-side guard entirely (observed: "Yes" still recorded twice
+        // even with the click-time and stale-closure guards fixed). Dropping
+        // the chunk here means no audio for this turn ever reaches the
+        // backend at all while blocked, so none of its paths have anything
+        // left to transcribe.
+        if (hrVoiceBlockedForQidRef.current) return;
 
         // Collect raw audio at native sample rate for voice verification.
         // Skip while Bina is speaking or during the post-TTS echo-guard
@@ -9360,6 +9494,38 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     !isAiSpeaking && !isProcessing &&
     questionTimerSeconds !== null && !questionTimerExpired;
 
+  // AII-20: submit a Yes/No click or a Text-based typed answer. Reuses the
+  // EXISTING `text_input` WS message the backend already handles end-to-end
+  // (run_text_pipeline) — no new message type, no new backend workflow.
+  // "Need to Explain More" does NOT call this — it just hides the buttons
+  // and falls through to the voice answer already recording underneath.
+  //
+  // hrSubmitInFlightRef guards against a double-send: setStructuredHrPrompt
+  // below is async, so a second click/Enter landing before that re-render
+  // clears the buttons would otherwise fire this twice (observed: "Yes"
+  // recorded as two separate answer bubbles). Reset on the NEXT question's
+  // question_meta, not here, so it stays true for the rest of this turn.
+  const submitStructuredHrAnswer = (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed || hrSubmitInFlightRef.current) return;
+    hrSubmitInFlightRef.current = true;
+    // Stop the mic SILENTLY right now (no end_turn) — exactly like the Next
+    // and Repeat-Question buttons do. The mic/recording session is already
+    // open underneath the Yes/No buttons (audio is blocked from being SENT
+    // via hrVoiceBlockedForQidRef, but the recording UI itself was never
+    // torn down), so without this the "recording" indicator stayed visible
+    // for several seconds after the click until the backend's next-question
+    // response arrived and force-interrupted it (reported: "if i selected
+    // the first 2 option also opens the recorder then only after some
+    // seconds moved to next question").
+    abortRecordingForSkipRef.current();
+    try {
+      wsRef.current?.send(JSON.stringify({ type: 'text_input', text: trimmed }));
+    } catch { /* best-effort, mirrors other wsRef.current?.send call sites */ }
+    setStructuredHrPrompt(null);
+    setHrExplainMore(false);
+  };
+
   // Post a candidate-initiated action into the chat as a distinct chip. Tagged
   // isActionRequest so the answer-transcript logic never overwrites it. Returns
   // the new message id so callers can later remove it (e.g. drop the "moved on"
@@ -9551,6 +9717,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     // The big pre-turn "get ready" countdown owns the screen — suppress the small
     // banner while it runs so we don't show two "getting ready" messages at once.
     if (preTurnCountdown != null) return null;
+    // AII-20: while the Yes/No/Need-to-Explain-More buttons are showing,
+    // hide the voice banner — the candidate picks an option first; voice
+    // only becomes relevant once they click Need to Explain More. A
+    // Text-based question has no buttons at all — it must show the normal
+    // banner exactly like any other free-form question.
+    if (structuredHrPrompt && structuredHrPrompt.questionNumber === questionNumber && structuredHrPrompt.answerType === 'yes_no' && !hrExplainMore) return null;
     let variant: 'silence' | 'timesup' | 'hold' | 'turn' | 'prepare' | null = null;
     if (showSilenceBanner) variant = 'silence';
     else if (questionTimerExpired) variant = 'timesup';
@@ -10267,6 +10439,65 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               <MessageRowMemo key={msg.id} msg={msg} candidatePhotoUrl={candidatePhotoUrl} />
             ))}
 
+            {/* AII-20: HR Tagged Question Types — Yes/No/Need-to-Explain-More
+                buttons, or a Text-based input box. Gated on an EXACT
+                questionNumber match so this can never show for a different
+                (ordinary free-form) question — including one that sends no
+                question_meta at all. "Need to Explain More" renders nothing
+                further here: it just hides these buttons (setHrExplainMore)
+                and the existing voice-answer bubble below takes over exactly
+                as it already does for every other question — no new voice
+                workflow, no new timer. */}
+            {structuredHrPrompt &&
+              structuredHrPrompt.questionNumber === questionNumber &&
+              structuredHrPrompt.answerType === 'yes_no' &&
+              isCandidateTurn &&
+              !hrExplainMore && (
+              <div className="flex gap-2 flex-row-reverse">
+                <YouAvatar photoUrl={candidatePhotoUrl} />
+                <div className="max-w-[260px] w-full">
+                  <div className="w-full rounded-2xl border border-gray-200 bg-white shadow-sm p-2.5">
+                    <div className="flex flex-col gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => submitStructuredHrAnswer('Yes')}
+                        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800 text-sm font-semibold hover:bg-emerald-100 hover:border-emerald-300 transition-colors text-left"
+                      >
+                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500 text-white text-[10px] font-bold shrink-0">A</span>
+                        Yes
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => submitStructuredHrAnswer('No')}
+                        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-rose-200 bg-rose-50 text-rose-800 text-sm font-semibold hover:bg-rose-100 hover:border-rose-300 transition-colors text-left"
+                      >
+                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-bold shrink-0">B</span>
+                        No
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // Voice is now the intended answer path for this
+                          // question — lift the block so the candidate's
+                          // spoken answer actually gets submitted.
+                          hrVoiceBlockedForQidRef.current = '';
+                          hrVoiceBlockedQuestionNumberRef.current = null;
+                          setHrExplainMore(true);
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-blue-200 bg-blue-50 text-blue-900 text-sm font-semibold hover:bg-blue-100 hover:border-blue-300 transition-colors text-left"
+                      >
+                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold shrink-0">C</span>
+                        Need to Explain More
+                      </button>
+                    </div>
+                    <div className="mt-2 pt-2 border-t border-gray-200 text-center text-xs font-semibold text-gray-700">
+                      Select only one option
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Candidate live/processing bubble — ONE persistent bubble across
                 the whole recording → processing phase so its inner content
                 MORPHS (waveform/live text → loading dots) instead of two
@@ -10275,7 +10506,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 + emerald container stay mounted; only the inner content swaps. It
                 unmounts once the final transcript lands in `messages` (identical
                 emerald "Your Response" styling → visually seamless handoff). */}
-            {(isRecording || currentTranscript || (isCandidateTranscriptProcessing && !currentTranscript)) && (
+            {(isRecording || currentTranscript || (isCandidateTranscriptProcessing && !currentTranscript)) &&
+              // AII-20: hide the recording bubble while the Yes/No/Need-to-
+              // Explain-More buttons are showing — it reappears once "Need
+              // to Explain More" is clicked (or immediately for Text-based
+              // questions, which don't show buttons at all).
+              !(structuredHrPrompt && structuredHrPrompt.questionNumber === questionNumber && structuredHrPrompt.answerType === 'yes_no' && !hrExplainMore) && (
               <div className="flex gap-2 flex-row-reverse">
                 <YouAvatar photoUrl={candidatePhotoUrl} />
                 <div className="max-w-[80%]">

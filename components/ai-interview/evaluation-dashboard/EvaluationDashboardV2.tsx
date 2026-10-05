@@ -383,7 +383,7 @@ export function QuestionsView({ data }: { data: DashboardData }) {
   if (delivered.length === 0) {
     return (
       <div className="rounded-2xl border border-gray-200 p-10 text-center text-sm text-gray-400 italic">
-        No question-level data available.
+        The candidate exited the interview without answering any questions, so question-level details are not shown here.
       </div>
     );
   }
