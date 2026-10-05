@@ -2537,6 +2537,9 @@ Best regards`);
           mode="scoring"
           stayOnCurrentPage
           fixedJob={aiMatchScoringJob ?? undefined}
+          /* The Resume DB's Score Resume job list: Archived / Disabled shown
+             greyed and unpickable, the Job Eligibility note, candidate counts. */
+          excludeDraftsOnly
           onClose={() => {
             setIsApplyToJobModalOpen(false);
             setSelectedVersionForApply(null);

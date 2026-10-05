@@ -550,6 +550,9 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
         return false;
       }
       if (!fixedStatus && filters.status && row.rawStatus !== filters.status) return false;
+      /* A status page shows that status only. The request already asks for
+         it; this holds even if the API hands back other statuses. */
+      if (fixedStatus && row.rawStatus !== fixedStatus) return false;
       if (filters.createdFrom || filters.createdTo) {
         const day = dayOf(row);
         if (!day) return false;

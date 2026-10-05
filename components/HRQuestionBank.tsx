@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Search, Edit2, Trash2, ChevronDown, ChevronUp, Tag, Clock, Filter, X, Save, AlertCircle, MessageSquare, FileText, CheckCircle2 } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, ChevronDown, ChevronUp, Tag, Filter, X, Save, AlertCircle, MessageSquare, FileText, CheckCircle2 } from 'lucide-react';
 import api from '@/lib/services/api';
 import { toast } from '@/components/ui/enhanced-toast';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -9,6 +9,7 @@ import ListPagination from '@/components/ListPagination';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 
 // Question categories for HR round
 const HR_CATEGORIES = [
@@ -110,7 +111,6 @@ const DEFAULT_HR_QUESTIONS: HRQuestion[] = [
     difficulty: 'easy',
     question_type: 'behavioral',
     answer_type: 'yes_no',
-    correct_answer: 'Yes',
     expected_answer_points: ['Clear yes/no answer', 'Flexibility and openness', 'Any conditions or preferences'],
     evaluation_criteria: 'Direct and honest response, shows flexibility if applicable to the role',
     time_minutes: 1,
@@ -123,7 +123,6 @@ const DEFAULT_HR_QUESTIONS: HRQuestion[] = [
     difficulty: 'easy',
     question_type: 'behavioral',
     answer_type: 'yes_no',
-    correct_answer: 'Yes',
     expected_answer_points: ['Clear yes/no answer', 'Preference for work mode', 'Flexibility for hybrid/onsite'],
     evaluation_criteria: 'Direct response about onsite availability, shows flexibility if role requires it',
     time_minutes: 1,
@@ -136,7 +135,6 @@ const DEFAULT_HR_QUESTIONS: HRQuestion[] = [
     difficulty: 'medium',
     question_type: 'situational',
     answer_type: 'yes_no',
-    correct_answer: 'Yes',
     expected_answer_points: ['Clear yes/no with examples', 'Strategies for handling pressure', 'Past experience under deadlines'],
     evaluation_criteria: 'Provides real examples of working under pressure, shows resilience and coping strategies',
     time_minutes: 1,
@@ -149,7 +147,6 @@ const DEFAULT_HR_QUESTIONS: HRQuestion[] = [
     difficulty: 'easy',
     question_type: 'behavioral',
     answer_type: 'yes_no',
-    correct_answer: 'Yes',
     expected_answer_points: ['Clear yes/no answer', 'Examples of teamwork', 'Collaboration style'],
     evaluation_criteria: 'Shows willingness to collaborate, provides examples of successful teamwork',
     time_minutes: 1,
@@ -162,7 +159,6 @@ const DEFAULT_HR_QUESTIONS: HRQuestion[] = [
     difficulty: 'easy',
     question_type: 'behavioral',
     answer_type: 'yes_no',
-    correct_answer: 'Yes',
     expected_answer_points: ['Clear yes/no answer', 'Examples of self-learning', 'Enthusiasm for growth'],
     evaluation_criteria: 'Shows growth mindset and willingness to upskill, provides examples if possible',
     time_minutes: 1,
@@ -175,7 +171,6 @@ const DEFAULT_HR_QUESTIONS: HRQuestion[] = [
     difficulty: 'easy',
     question_type: 'behavioral',
     answer_type: 'yes_no',
-    correct_answer: 'Yes',
     expected_answer_points: ['Clear availability date', 'Notice period details', 'Flexibility if needed'],
     evaluation_criteria: 'Provides specific timeline, honest about notice period obligations',
     time_minutes: 1,
@@ -201,6 +196,8 @@ export default function HRQuestionBank() {
   const [formData, setFormData] = useState(EMPTY_QUESTION);
   const [saving, setSaving] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // The question waiting on the delete confirmation, or null.
+  const [deleteTarget, setDeleteTarget] = useState<HRQuestion | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
@@ -288,7 +285,8 @@ export default function HRQuestionBank() {
       const apiPayload = {
         question_text: formData.question_text,
         answer_type: formData.answer_type,
-        correct_answer: formData.answer_type === 'yes_no' ? (formData.correct_answer || 'Yes') : null,
+        // Yes / No questions are information-only: no right answer to grade.
+        correct_answer: null,
       };
 
       if (editingId) {
@@ -310,18 +308,34 @@ export default function HRQuestionBank() {
     }
   };
 
+  const closeForm = () => {
+    setShowAddForm(false);
+    setEditingId(null);
+    setFormData(EMPTY_QUESTION);
+  };
+
+  // Escape closes the Add / Edit popup, as it does the app's other dialogs.
+  useEffect(() => {
+    if (!deleteTarget) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setDeleteTarget(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [deleteTarget]);
+
+  useEffect(() => {
+    if (!showAddForm) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !saving) closeForm(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showAddForm, saving]);
+
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this question?')) return;
     try {
       await api.delete(`/hr-question-bank/${id}`);
       toast.success({ title: 'Question deleted' });
       await loadQuestions(); // Reload from API
     } catch (error: any) {
-      if (error?.response?.status === 400) {
-        toast.error({ title: 'Cannot delete default questions' });
-      } else {
-        toast.error({ title: 'Failed to delete question' });
-      }
+      toast.error({ title: 'Failed to delete question', description: error?.response?.data?.detail || error?.message });
     }
   };
 
@@ -425,7 +439,7 @@ export default function HRQuestionBank() {
           <div>
             <h2 className="text-lg sm:text-xl font-semibold text-gray-900 tracking-tight">HR Question Bank</h2>
             <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
-              Manage reusable HR questions for assessments. These questions can be used across multiple assessments.
+              Manage reusable HR questions for AI Assessments and AI Interviews. The same questions can be used across both.
             </p>
           </div>
         </div>
@@ -456,7 +470,7 @@ export default function HRQuestionBank() {
           <AlertCircle className="w-4 h-4" />
         </div>
         <p className="text-xs text-gray-700 leading-relaxed pt-1">
-          HR questions are <strong className="text-gray-900">informational only</strong> — not scored. Responses are shared with the recruiter for review. Only Technical and Coding questions are marked.
+          <span className="font-semibold text-gray-900">Note:</span> HR questions are <strong className="text-gray-900">informational only</strong> — not scored in AI Assessments or AI Interviews. Responses are shared with the recruiter for review.
         </p>
       </div>
 
@@ -472,27 +486,33 @@ export default function HRQuestionBank() {
         />
       </div>
 
-      {/* Add/Edit Form */}
+      {/* Add / Edit popup - a dialog over the list rather than a card pushed
+          in above it, so the list never jumps and editing a question far down
+          the page does not open the form somewhere else. The shell is the
+          Assessment flow's own "Add New Question" popup (AssessmentCreation). */}
       {showAddForm && (editingId ? canUpdateHRQuestionBank : canCreateHRQuestionBank) && (
-        <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between px-6 py-4 bg-brand-blue text-white">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/15 backdrop-blur-sm ring-1 ring-white/25">
-                {editingId ? <Edit2 className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-3 sm:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="hr-question-form-title"
+        >
+        <div className="w-full max-w-[95vw] sm:max-w-2xl rounded-xl border border-gray-100 bg-white ring-1 ring-black/[0.02] shadow-2xl shadow-brand-blue/10 max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
+          <div className="flex-shrink-0 flex items-center justify-between gap-3 border-b border-gray-100 px-4 sm:px-6 py-3 sm:py-4">
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
+                {editingId ? <Edit2 className="w-4 h-4 text-brand-blue" /> : <Plus className="w-4 h-4 text-brand-blue" />}
               </div>
-              <h3 className="text-sm font-semibold">
+              <h3 id="hr-question-form-title" className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight min-w-0 truncate">
                 {editingId ? 'Edit Question' : 'Add New Question'}
               </h3>
             </div>
-            <button
-              onClick={() => { setShowAddForm(false); setEditingId(null); setFormData(EMPTY_QUESTION); }}
-              className="p-1.5 rounded-lg bg-white/15 hover:bg-white/25 transition-colors ring-1 ring-white/25"
-             aria-label="Close">
-              <X className="w-4 h-4 text-white" />
-            </button>
+            <Button variant="secondary" size="sm" type="button" onClick={closeForm} disabled={saving} className="px-2 flex-shrink-0" aria-label="Close">
+              <X className="w-5 h-5" />
+            </Button>
           </div>
 
-          <div className="p-6 space-y-5">
+          <div className="flex-1 min-h-0 overflow-y-auto space-y-5 px-4 sm:px-6 py-4">
             {/* Question Text */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Question Text *</label>
@@ -501,6 +521,7 @@ export default function HRQuestionBank() {
                 value={formData.question_text}
                 onChange={(e) => setFormData(prev => ({ ...prev, question_text: e.target.value }))}
                 placeholder="Enter the HR question..."
+                autoFocus
                 className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-gray-900 bg-white transition-all"
               />
             </div>
@@ -508,7 +529,7 @@ export default function HRQuestionBank() {
             {/* Answer Type */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Answer Type</label>
-              <div className="flex gap-3">
+              <div className="flex flex-col sm:flex-row gap-3">
                 <button
                   type="button"
                   onClick={() => setFormData(prev => ({ ...prev, answer_type: 'text', time_minutes: 3 }))}
@@ -519,7 +540,7 @@ export default function HRQuestionBank() {
                   }`}
                 >
                   <FileText className="w-4 h-4" />
-                  Text Answer (3 min)
+                  Text Answer
                 </button>
                 <button
                   type="button"
@@ -531,119 +552,62 @@ export default function HRQuestionBank() {
                   }`}
                 >
                   <CheckCircle2 className="w-4 h-4" />
-                  Yes / No (1 min)
+                  Yes / No
                 </button>
               </div>
             </div>
 
-            {/* Correct Answer - Only for Yes/No questions */}
-            {formData.answer_type === 'yes_no' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Correct Answer *</label>
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({ ...prev, correct_answer: 'Yes' }))}
-                    className={`flex-1 px-4 py-3 rounded-lg border-2 text-sm font-medium transition-all ${
-                      formData.correct_answer === 'Yes'
-                        ? 'border-green-500 bg-green-50 text-green-700 shadow-sm ring-1 ring-green-500/30'
-                        : 'border-gray-200 bg-white text-gray-500 hover:border-green-300 hover:bg-green-50/50'
-                    }`}
-                  >
-                    Yes is correct
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({ ...prev, correct_answer: 'No' }))}
-                    className={`flex-1 px-4 py-3 rounded-lg border-2 text-sm font-medium transition-all ${
-                      formData.correct_answer === 'No'
-                        ? 'border-green-500 bg-green-50 text-green-700 shadow-sm ring-1 ring-green-500/30'
-                        : 'border-gray-200 bg-white text-gray-500 hover:border-green-300 hover:bg-green-50/50'
-                    }`}
-                  >
-                    No is correct
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Save / Cancel */}
-            <div className="flex justify-end gap-3 pt-3 border-t border-gray-100">
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="flex items-center gap-2 px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg text-sm font-medium disabled:opacity-50 transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
-              >
-                <Save className="w-4 h-4" />
-                {saving ? 'Saving...' : editingId ? 'Update Question' : 'Save Question'}
-              </button>
-            </div>
           </div>
+
+          {/* Save - the header's X is the way out. */}
+          <div className="flex-shrink-0 flex flex-wrap justify-end gap-2 sm:gap-3 border-t border-gray-100 bg-slate-50 px-4 sm:px-6 py-3">
+            <Button
+              variant="primary"
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+              icon={<Save className="w-4 h-4" />}
+            >
+              {saving ? 'Saving...' : editingId ? 'Update Question' : 'Save Question'}
+            </Button>
+          </div>
+        </div>
         </div>
       )}
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <button
-          type="button"
-          onClick={() => setAnswerTypeFilter('all')}
-          aria-pressed={answerTypeFilter === 'all'}
-          className={`text-left bg-white border rounded-xl p-4 shadow-sm hover:shadow-md transition-all ${
-            answerTypeFilter === 'all'
-              ? 'border-brand-blue ring-2 ring-brand-blue/30'
-              : 'border-gray-200 hover:border-brand-blue/30'
-          }`}
-        >
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
-              <MessageSquare className="w-4 h-4" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Total Questions</p>
-              <p className="text-xl font-semibold text-gray-900 leading-tight tracking-tight">{questions.length}</p>
-            </div>
-          </div>
-        </button>
-        <button
-          type="button"
-          onClick={() => setAnswerTypeFilter(prev => (prev === 'text' ? 'all' : 'text'))}
-          aria-pressed={answerTypeFilter === 'text'}
-          className={`text-left bg-white border rounded-xl p-4 shadow-sm hover:shadow-md transition-all ${
-            answerTypeFilter === 'text'
-              ? 'border-brand-cyan ring-2 ring-brand-cyan/30'
-              : 'border-gray-200 hover:border-brand-cyan/40'
-          }`}
-        >
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-brand-cyan to-brand-blue text-white shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10">
-              <FileText className="w-4 h-4" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Text Answer</p>
-              <p className="text-xl font-semibold text-gray-900 leading-tight tracking-tight">{questions.filter(q => q.answer_type !== 'yes_no').length}</p>
-            </div>
-          </div>
-        </button>
-        <button
-          type="button"
-          onClick={() => setAnswerTypeFilter(prev => (prev === 'yes_no' ? 'all' : 'yes_no'))}
-          aria-pressed={answerTypeFilter === 'yes_no'}
-          className={`text-left bg-white border rounded-xl p-4 shadow-sm hover:shadow-md transition-all ${
-            answerTypeFilter === 'yes_no'
-              ? 'border-brand-orange ring-2 ring-brand-orange/30'
-              : 'border-gray-200 hover:border-brand-orange/40'
-          }`}
-        >
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-orange text-white shadow-sm shadow-brand-orange/25 ring-1 ring-white/10">
-              <CheckCircle2 className="w-4 h-4" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Yes / No</p>
-              <p className="text-xl font-semibold text-gray-900 leading-tight tracking-tight">{questions.filter(q => q.answer_type === 'yes_no').length}</p>
-            </div>
-          </div>
-        </button>
+      {/* Answer-type filter - one row of pills, the Resume Scoring "Show:"
+          pills (ResumeScoringPage), each with its count. These replaced three
+          stat cards that filtered the list too but read as plain figures, so
+          few people found the filter in them. */}
+      <div className="flex items-center gap-2 flex-wrap" role="group" aria-label="Filter by answer type">
+        <span className="text-sm text-gray-600">Show:</span>
+        {([
+          { id: 'all', label: 'All Questions', count: questions.length },
+          { id: 'text', label: 'Text Answer', count: questions.filter(q => q.answer_type !== 'yes_no').length },
+          { id: 'yes_no', label: 'Yes / No', count: questions.filter(q => q.answer_type === 'yes_no').length },
+        ] as const).map(pill => {
+          const active = answerTypeFilter === pill.id;
+          return (
+            <button
+              key={pill.id}
+              type="button"
+              onClick={() => setAnswerTypeFilter(pill.id)}
+              aria-pressed={active}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all ${
+                active
+                  ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
+                  : 'bg-brand-blue/5 text-gray-700 hover:bg-brand-blue/10 hover:text-brand-blue'
+              }`}
+            >
+              {pill.label}
+              <span className={`min-w-[1.25rem] px-1.5 rounded-full text-2xs font-semibold leading-5 text-center ${
+                active ? 'bg-white/20 text-white' : 'bg-white text-gray-600 ring-1 ring-gray-200'
+              }`}>
+                {pill.count}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Question List */}
@@ -709,13 +673,6 @@ export default function HRQuestionBank() {
                     }`}>
                       {question.answer_type === 'yes_no' ? 'Yes / No' : 'Text Answer'}
                     </span>
-                    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 ring-1 ring-gray-200">
-                      Not Scored
-                    </span>
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-50 text-gray-600 ring-1 ring-gray-200">
-                      <Clock className="w-3 h-3" />
-                      {question.time_minutes} min
-                    </span>
                   </div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
@@ -746,7 +703,7 @@ export default function HRQuestionBank() {
                         toast.error({ title: 'You do not have permission to delete questions' });
                         return;
                       }
-                      handleDelete(question.id);
+                      setDeleteTarget(question);
                     }}
                     aria-disabled={!canDeleteHRQuestionBank}
                     className={`p-2 rounded-lg transition-colors ${
@@ -774,6 +731,57 @@ export default function HRQuestionBank() {
         onItemsPerPageChange={setItemsPerPage}
         itemLabel="questions"
       />
+
+      {/* Delete confirmation - the same popup shell as Add / Edit above, so
+          it opens the same way: at once, no fade-in on the blurred backdrop
+          (the shared ConfirmationDialog fades its backdrop in, which read as
+          the page dimming slowly after the click). */}
+      {deleteTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-3 sm:p-6"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="hr-question-delete-title"
+          aria-describedby="hr-question-delete-desc"
+        >
+          <div className="w-full max-w-[95vw] sm:max-w-md rounded-xl border border-gray-100 bg-white ring-1 ring-black/[0.02] shadow-2xl shadow-brand-blue/10 flex flex-col overflow-hidden">
+            <div className="flex-shrink-0 flex items-center justify-between gap-3 border-b border-gray-100 px-4 sm:px-6 py-3 sm:py-4">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-red-50 ring-1 ring-red-100 flex-shrink-0">
+                  <Trash2 className="w-4 h-4 text-red-600" />
+                </div>
+                <h3 id="hr-question-delete-title" className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight min-w-0 truncate">
+                  Delete Question
+                </h3>
+              </div>
+              <Button variant="secondary" size="sm" type="button" onClick={() => setDeleteTarget(null)} className="px-2 flex-shrink-0" aria-label="Close">
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+
+            <div id="hr-question-delete-desc" className="px-4 sm:px-6 py-4 space-y-2">
+              <p className="text-sm font-semibold text-gray-900 break-words">&ldquo;{deleteTarget.question_text}&rdquo;</p>
+              <p className="text-sm text-gray-500">
+                This question will be removed from the HR Question Bank. This cannot be undone.
+              </p>
+            </div>
+
+            <div className="flex-shrink-0 flex flex-wrap justify-end gap-2 sm:gap-3 border-t border-gray-100 bg-slate-50 px-4 sm:px-6 py-3">
+              <Button
+                variant="destructive"
+                type="button"
+                onClick={() => {
+                  handleDelete(deleteTarget.id);
+                  setDeleteTarget(null);
+                }}
+                icon={<Trash2 className="w-4 h-4" />}
+              >
+                Delete
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
         </>
       )}
           </div>

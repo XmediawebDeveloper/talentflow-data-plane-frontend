@@ -1251,6 +1251,8 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
           resumes={resumesForApply}
           jobs={jobs}
           mode="apply"
+          /* Score Resume: the All Jobs list - Archived / Disabled shown, not pickable. */
+          excludeDraftsOnly
           onClose={() => {
             setShowApplyToJobModal(false);
             setResumesForApply([]);
