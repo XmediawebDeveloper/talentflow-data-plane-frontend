@@ -7,9 +7,11 @@ import remarkBreaks from 'remark-breaks';
 import {
   Video, Mic, Eye, Shield, Clock, Trash2, CheckCircle, AlertTriangle,
   Circle, Briefcase, MapPin, Building2, Award, ExternalLink, X,
-  FileText, Timer, HelpCircle, ChevronRight, Smartphone,
+  FileText, Timer, HelpCircle, ChevronRight, ChevronDown, Smartphone, Wifi,
+  Lightbulb, ListChecks, Info, Star, Sparkles, Globe,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import type { IconComponent } from '@/lib/types/icon';
 
 interface StepConsentProps {
   onAccept: (consents: {
@@ -77,6 +79,25 @@ const GDPR_RIGHTS = [
   'Right to object to processing',
   'Right to withdraw consent at any time',
 ];
+
+// Visual-only mapping for the "Before You Begin" notice — each bullet gets an
+// icon that matches its meaning. Order/text matches the original list 1:1; no
+// content was changed.
+const BEFORE_YOU_BEGIN_ITEMS: { icon: IconComponent; text: string }[] = [
+  { icon: Video, text: 'Camera and microphone access are required' },
+  { icon: Wifi, text: 'If a genuine network or client failure occurs, the assessment can recover from the saved server state' },
+  { icon: Lightbulb, text: 'Ensure you are in a quiet, well-lit environment' },
+  { icon: Eye, text: 'Tab switching and copy/paste are monitored' },
+];
+
+// Full, static class strings (not interpolated) so Tailwind's build-time
+// scanner can find and generate them — see statTiles below.
+const STAT_ACCENT_CLASSES = {
+  orange: 'bg-brand-orange/10 text-brand-orange',
+  blue: 'bg-brand-blue/10 text-brand-blue',
+  teal: 'bg-brand-teal/10 text-brand-teal',
+  blue2: 'bg-brand-blue-2/10 text-brand-blue-2',
+} as const;
 
 export default function StepConsent({
   onAccept,
@@ -169,298 +190,361 @@ export default function StepConsent({
     : null;
   const isLongDesc = (jdDescription?.length ?? 0) > 600;
   const descToShow = isLongDesc && !showFullDesc ? jdDescription!.slice(0, 600) + '…' : jdDescription;
+  const seniority = jdExperienceLevel || jdJobLevel;
+
+  // Top stat strip — only includes tiles backed by real data (no "TBD" filler).
+  // `accent` keys into STAT_ACCENT_CLASSES below (Tailwind needs full static
+  // class strings to detect them at build time, so they aren't interpolated).
+  const statTiles: { icon: IconComponent; label: string; value: string; accent: keyof typeof STAT_ACCENT_CLASSES }[] = [
+    { icon: Briefcase, label: 'Target Role', value: title, accent: 'orange' },
+    ...(interviewMode === 'flexible'
+      ? [{ icon: Timer, label: 'Estimated Duration', value: duration != null && duration > 0 ? `${duration} min` : '~30 min', accent: 'blue' as const }]
+      : duration != null && duration > 0
+        ? [{ icon: Timer, label: 'Estimated Duration', value: `${duration} min`, accent: 'blue' as const }]
+        : []),
+    ...(interviewMode === 'flexible'
+      ? [{ icon: Sparkles, label: 'Session Format', value: 'Conversational', accent: 'teal' as const }]
+      : totalQuestions != null && totalQuestions > 0
+        ? [{ icon: HelpCircle, label: 'Total Questions', value: `${totalQuestions} questions`, accent: 'teal' as const }]
+        : []),
+    ...(seniority ? [{ icon: Award, label: 'Target Seniority', value: seniority, accent: 'blue2' as const }] : []),
+  ];
 
   return (
     <div className="w-full space-y-6" style={{ colorScheme: 'light' }}>
 
-      {/* ── Hero banner ── */}
-      <div className="rounded-2xl overflow-hidden shadow-sm">
-        <div className="bg-gradient-to-r from-gray-900 via-gray-800 to-gray-700 px-6 py-7">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <Briefcase className="w-5 h-5 text-gray-300" />
-                <span className="text-gray-300 text-sm font-medium">Position</span>
+      {/* ── Top stat strip ── */}
+      {statTiles.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+          <div className="grid grid-cols-2 lg:grid-cols-4 divide-y lg:divide-y-0 divide-x-0 lg:divide-x divide-gray-200">
+            {statTiles.map(tile => (
+              <div key={tile.label} className="flex items-center gap-3 p-4 min-w-0">
+                <span className={`flex h-10 w-10 items-center justify-center rounded-lg flex-shrink-0 ${STAT_ACCENT_CLASSES[tile.accent]}`}>
+                  <tile.icon className="w-5 h-5" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-2xs text-gray-500 uppercase tracking-wide font-medium truncate">{tile.label}</p>
+                  <p className="text-sm font-bold text-gray-900 truncate" title={tile.value}>{tile.value}</p>
+                </div>
               </div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-white">{title}</h1>
-              {jdJobLevel && <p className="text-gray-300 mt-1 text-sm">{jdJobLevel} Level</p>}
-            </div>
-            <div className="flex flex-wrap gap-2">
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Two-column layout: details (left) + action panel (right) ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1.7fr_1fr] gap-6 items-start">
+
+        {/* ═══════════ LEFT COLUMN ═══════════ */}
+        <div className="space-y-6 min-w-0">
+
+          {/* Title card */}
+          <div className="bg-white border border-gray-200 rounded-2xl p-6">
+            <div className="flex flex-wrap gap-2 mb-4">
               {jdEmploymentType && (
-                <span className="bg-white/10 border border-white/20 text-white text-xs font-medium px-3 py-1 rounded-full">
-                  {jdEmploymentType}
+                <span className="inline-flex items-center gap-1.5 bg-brand-blue/10 text-brand-blue border border-brand-blue/20 text-xs font-medium px-3 py-1 rounded-full">
+                  <Clock className="w-3 h-3" /> {jdEmploymentType}
                 </span>
               )}
               {jdRemoteType && (
-                <span className="bg-white/10 border border-white/20 text-white text-xs font-medium px-3 py-1 rounded-full">
-                  {jdRemoteType}
+                <span className="inline-flex items-center gap-1.5 bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/20 text-xs font-medium px-3 py-1 rounded-full">
+                  <Globe className="w-3 h-3" /> {jdRemoteType}
                 </span>
               )}
               {jdExperienceLevel && (
-                <span className="bg-white/10 border border-white/20 text-white text-xs font-medium px-3 py-1 rounded-full">
-                  {jdExperienceLevel}
+                <span className="inline-flex items-center gap-1.5 bg-brand-orange/10 text-brand-orange border border-brand-orange/20 text-xs font-medium px-3 py-1 rounded-full">
+                  <Sparkles className="w-3 h-3" /> {jdExperienceLevel}
+                </span>
+              )}
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 leading-tight">{title}</h1>
+            <div className="flex flex-wrap gap-x-5 gap-y-1.5 mt-3 text-sm text-gray-500">
+              {jdDepartment && (
+                <span className="flex items-center gap-1.5">
+                  <Building2 className="w-3.5 h-3.5 text-gray-400" /> {jdDepartment}
+                </span>
+              )}
+              {jdLocation && (
+                <span className="flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-gray-400" /> {jdLocation}
+                </span>
+              )}
+              {expStr && (
+                <span className="flex items-center gap-1.5">
+                  <Award className="w-3.5 h-3.5 text-gray-400" /> {expStr} experience
                 </span>
               )}
             </div>
           </div>
-        </div>
 
-        {/* Meta row */}
-        <div className="bg-white border-b border-gray-100 px-6 py-3 flex flex-wrap gap-4 text-sm text-gray-600">
-          {jdDepartment && (
-            <span className="flex items-center gap-1.5">
-              <Building2 className="w-3.5 h-3.5 text-gray-400" /> {jdDepartment}
-            </span>
-          )}
-          {jdLocation && (
-            <span className="flex items-center gap-1.5">
-              <MapPin className="w-3.5 h-3.5 text-gray-400" /> {jdLocation}
-            </span>
-          )}
-          {expStr && (
-            <span className="flex items-center gap-1.5">
-              <Award className="w-3.5 h-3.5 text-gray-400" /> {expStr} experience
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* ── Interview stats cards ── */}
-      {interviewMode === 'flexible' ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="bg-white border border-gray-200 rounded-xl p-4">
-            <p className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1.5">
-              <span className="flex items-center gap-1"><Timer className="w-3 h-3" /> Expected Duration</span>
-            </p>
-            <p className="text-lg font-bold text-gray-900">{duration != null && duration > 0 ? `${duration} min` : '~30 min'}</p>
-          </div>
-          <div className="bg-white border border-gray-200 rounded-xl p-4">
-            <p className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1.5">Interview Format</p>
-            <p className="text-lg font-bold text-gray-900">Conversational</p>
-          </div>
-        </div>
-      ) : ((duration != null && duration > 0) || (totalQuestions != null && totalQuestions > 0)) ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {duration != null && duration > 0 && (
-            <div className="bg-white border border-gray-200 rounded-xl p-4">
-              <p className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1.5">
-                <span className="flex items-center gap-1"><Timer className="w-3 h-3" /> Expected Duration</span>
-              </p>
-              <p className="text-lg font-bold text-gray-900">{duration} min</p>
+          {/* Experience / Work mode mini-cards */}
+          {(expStr || jdRemoteType) && (
+            <div className="flex flex-wrap gap-4">
+              {expStr && (
+                <div className="w-full sm:w-64 bg-white border border-gray-200 rounded-xl p-4 flex items-center gap-3">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-orange/10 text-brand-orange flex-shrink-0">
+                    <Award className="w-5 h-5" />
+                  </span>
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Experience Level</p>
+                    <p className="text-base font-bold text-gray-900">{expStr}</p>
+                  </div>
+                </div>
+              )}
+              {jdRemoteType && (
+                <div className="w-full sm:w-64 bg-white border border-gray-200 rounded-xl p-4 flex items-center gap-3">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-cyan/10 text-brand-cyan flex-shrink-0">
+                    <Globe className="w-5 h-5" />
+                  </span>
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Work Mode</p>
+                    <p className="text-base font-bold text-gray-900">{jdRemoteType}</p>
+                  </div>
+                </div>
+              )}
             </div>
           )}
-          {totalQuestions != null && totalQuestions > 0 && (
-            <div className="bg-white border border-gray-200 rounded-xl p-4">
-              <p className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1.5">Total Questions</p>
-              <p className="text-lg font-bold text-gray-900">{totalQuestions} questions</p>
-            </div>
-          )}
-        </div>
-      ) : null}
 
-      {/* ── JD Description ── */}
-      {jdDescription && (
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden" style={{ colorScheme: 'light' }}>
-          <div className="px-5 py-3 border-b border-gray-100 bg-gray-50">
-            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">About the Role</h2>
-          </div>
-          <div className="p-5">
-            {/* prose-invert must NOT apply here — force light mode via inline style so
-                the dark class on <html> (from OS dark mode / next-themes) cannot invert
-                the typography plugin's colors inside this container. */}
-            <div
-              className="prose prose-sm max-w-none leading-relaxed
-                prose-headings:font-semibold
-                prose-p:my-1.5
-                prose-li:my-0.5
-                prose-a:no-underline
-                prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-code:font-normal prose-code:before:content-none prose-code:after:content-none
-                prose-pre:rounded-lg prose-pre:text-sm prose-pre:font-normal"
-              style={{
-                color: 'var(--raw-374151)',
-                colorScheme: 'light',
-              }}
-            >
-              <style>{`
-                .jd-prose * { color: var(--raw-374151) !important; background-color: transparent !important; }
-                .jd-prose h1, .jd-prose h2, .jd-prose h3, .jd-prose h4 { color: var(--raw-111827) !important; }
-                .jd-prose strong { color: var(--raw-111827) !important; }
-                .jd-prose code { background-color: var(--raw-f3f4f6) !important; color: var(--raw-1f2937) !important; }
-                .jd-prose pre { background-color: var(--raw-f9fafb) !important; color: var(--raw-374151) !important; border: 1px solid var(--raw-e5e7eb) !important; }
-              `}</style>
-              <div className="jd-prose">
-                <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{descToShow || ''}</ReactMarkdown>
+          {/* JD Description */}
+          {jdDescription && (
+            <div className="bg-brand-sky/40 border border-brand-blue/15 rounded-xl overflow-hidden" style={{ colorScheme: 'light' }}>
+              <div className="px-5 py-3 border-b border-brand-blue/10 flex items-center gap-2">
+                <span className="flex h-6 w-6 items-center justify-center rounded-md bg-white text-brand-blue border border-brand-blue/20 flex-shrink-0">
+                  <FileText className="w-3.5 h-3.5" />
+                </span>
+                <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">About the Role</h2>
+              </div>
+              <div className="p-5">
+                {/* prose-invert must NOT apply here — force light mode via inline style so
+                    the dark class on <html> (from OS dark mode / next-themes) cannot invert
+                    the typography plugin's colors inside this container. */}
+                <div
+                  className="prose prose-sm max-w-none leading-relaxed
+                    prose-headings:font-semibold
+                    prose-p:my-1.5
+                    prose-li:my-0.5
+                    prose-a:no-underline
+                    prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-code:font-normal prose-code:before:content-none prose-code:after:content-none
+                    prose-pre:rounded-lg prose-pre:text-sm prose-pre:font-normal"
+                  style={{
+                    color: 'var(--raw-374151)',
+                    colorScheme: 'light',
+                  }}
+                >
+                  <style>{`
+                    .jd-prose * { color: var(--raw-374151) !important; background-color: transparent !important; }
+                    .jd-prose h1, .jd-prose h2, .jd-prose h3, .jd-prose h4 { color: var(--raw-111827) !important; }
+                    .jd-prose strong { color: var(--raw-111827) !important; }
+                    .jd-prose code { background-color: var(--raw-f3f4f6) !important; color: var(--raw-1f2937) !important; }
+                    .jd-prose pre { background-color: var(--raw-f9fafb) !important; color: var(--raw-374151) !important; border: 1px solid var(--raw-e5e7eb) !important; }
+                  `}</style>
+                  <div className="jd-prose">
+                    <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{descToShow || ''}</ReactMarkdown>
+                  </div>
+                </div>
+                {isLongDesc && (
+                  <button
+                    type="button"
+                    onClick={() => setShowFullDesc(!showFullDesc)}
+                    className="text-sm text-brand-blue hover:text-brand-blue-2 mt-2 underline underline-offset-2"
+                  >
+                    {showFullDesc ? 'Show less' : 'Read more'}
+                  </button>
+                )}
               </div>
             </div>
-            {isLongDesc && (
-              <button
-                type="button"
-                onClick={() => setShowFullDesc(!showFullDesc)}
-                className="text-sm text-gray-500 hover:text-gray-700 mt-2 underline underline-offset-2"
-              >
-                {showFullDesc ? 'Show less' : 'Read more'}
-              </button>
-            )}
-          </div>
-        </div>
-      )}
+          )}
 
-      {/* ── JD22 Additional Details ──
-          Its own card directly under the role description, NOT appended to that
-          markdown: the recruiter typed this after the JD was generated, and the
-          description is AI-written prose that gets rewritten on every reformat.
-          Keeping it separate is what guarantees the candidate reads the recruiter's
-          exact words. Plain pre-wrapped text for the same reason - no markdown pass
-          to reinterpret what they typed. Hidden entirely when empty. */}
-      {jdAdditionalDetails && jdAdditionalDetails.trim() && (
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden" style={{ colorScheme: 'light' }}>
-          <div className="px-5 py-3 border-b border-gray-100 bg-gray-50">
-            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Additional Details</h2>
-          </div>
-          <div className="p-5">
-            <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--raw-374151)' }}>
-              {jdAdditionalDetails}
-            </p>
-          </div>
-        </div>
-      )}
+          {/* JD22 Additional Details ──
+              Its own card directly under the role description, NOT appended to that
+              markdown: the recruiter typed this after the JD was generated, and the
+              description is AI-written prose that gets rewritten on every reformat.
+              Keeping it separate is what guarantees the candidate reads the recruiter's
+              exact words. Plain pre-wrapped text for the same reason - no markdown pass
+              to reinterpret what they typed. Hidden entirely when empty. */}
+          {jdAdditionalDetails && jdAdditionalDetails.trim() && (
+            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden" style={{ colorScheme: 'light' }}>
+              <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
+                <span className="flex h-6 w-6 items-center justify-center rounded-md bg-gray-100 text-gray-500 flex-shrink-0">
+                  <Info className="w-3.5 h-3.5" />
+                </span>
+                <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Additional Details</h2>
+              </div>
+              <div className="p-5">
+                <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--raw-374151)' }}>
+                  {jdAdditionalDetails}
+                </p>
+              </div>
+            </div>
+          )}
 
-      {/* ── Skills ── */}
-      {((jdMustHaveSkills?.length ?? 0) > 0 || (jdNiceToHaveSkills?.length ?? 0) > 0) && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Required Skills */}
           {jdMustHaveSkills && jdMustHaveSkills.length > 0 && (
             <div className="bg-white border border-gray-200 rounded-xl p-4">
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">Required Skills</h3>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="flex h-6 w-6 items-center justify-center rounded-md bg-brand-blue/10 text-brand-blue flex-shrink-0">
+                  <ListChecks className="w-3.5 h-3.5" />
+                </span>
+                <h3 className="text-sm font-semibold text-gray-700">Required Skills</h3>
+              </div>
               <div className="flex flex-wrap gap-1.5">
                 {jdMustHaveSkills.map(skill => (
-                  <span key={skill} className="inline-flex items-center gap-1 bg-gray-100 text-gray-700 text-xs px-2.5 py-1 rounded-full">
-                    <CheckCircle className="w-3 h-3 text-gray-500" /> {skill}
+                  <span key={skill} className="inline-flex items-center gap-1 bg-brand-blue/10 text-brand-blue border border-brand-blue/20 text-xs px-2.5 py-1 rounded-full">
+                    <CheckCircle className="w-3 h-3 text-brand-blue" /> {skill}
                   </span>
                 ))}
               </div>
             </div>
           )}
+
+          {/* Nice to Have — collapsible, mirrors "Preferred & Secondary Qualifications" */}
           {jdNiceToHaveSkills && jdNiceToHaveSkills.length > 0 && (
-            <div className="bg-white border border-gray-200 rounded-xl p-4">
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">Nice to Have</h3>
-              <div className="flex flex-wrap gap-1.5">
+            <details className="group bg-white border border-gray-200 rounded-xl">
+              <summary className="flex items-center justify-between gap-2 px-4 py-3 cursor-pointer select-none [&::-webkit-details-marker]:hidden">
+                <span className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-md bg-brand-orange/10 text-brand-orange flex-shrink-0">
+                    <Star className="w-3.5 h-3.5" />
+                  </span>
+                  Preferred &amp; Secondary Qualifications (&quot;Nice to Have&quot;)
+                </span>
+                <ChevronDown className="w-4 h-4 text-gray-400 transition-transform group-open:rotate-180 flex-shrink-0" />
+              </summary>
+              <div className="px-4 pb-4 flex flex-wrap gap-1.5">
                 {jdNiceToHaveSkills.map(skill => (
-                  <span key={skill} className="bg-gray-50 text-gray-600 text-xs px-2.5 py-1 rounded-full border border-gray-200">
-                    {skill}
+                  <span key={skill} className="inline-flex items-center gap-1 bg-gray-50 text-gray-600 text-xs px-2.5 py-1 rounded-full border border-gray-200">
+                    <Star className="w-3 h-3 text-gray-400" /> {skill}
                   </span>
                 ))}
               </div>
-            </div>
+            </details>
           )}
         </div>
-      )}
 
-      {/* ── What's required ── */}
-      <div className="bg-warning-subtle border border-warning-line rounded-xl p-4">
-        <div className="flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 text-warning flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="font-semibold text-warning-strong mb-1">Before You Begin</p>
-            <ul className="text-warning text-sm space-y-1">
-              <li>• Camera and microphone access are required</li>
-              <li>• If a genuine network or client failure occurs, the assessment can recover from the saved server state</li>
-              <li>• Ensure you are in a quiet, well-lit environment</li>
-              <li>• Tab switching and copy/paste are monitored</li>
-            </ul>
-          </div>
-        </div>
-      </div>
+        {/* ═══════════ RIGHT COLUMN — action panel ═══════════ */}
+        <div className="lg:sticky lg:top-6 bg-white border border-gray-200 rounded-2xl overflow-hidden min-w-0">
+          <div className="h-1 bg-gradient-to-r from-brand-orange to-brand-orange-deep" />
 
-      {/* ── Mobile verification notice — kept separate from the general
-          "Before You Begin" list above since it's a distinct requirement
-          (its own acceptance criteria: mobile phone required, no app
-          install, camera/mic permission, may trigger at any point). ── */}
-      {environmentVerificationEnabled && (
-        <div className="bg-brand-blue/5 border border-brand-blue/20 rounded-xl p-4">
-          <div className="flex items-start gap-3">
-            <Smartphone className="w-5 h-5 text-brand-blue flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="font-semibold text-gray-900 mb-1">Mobile Verification Required</p>
-              <p className="text-sm text-gray-600 leading-relaxed">
-                At any point during the interview, you may be asked to scan a QR code with your{' '}
-                <strong>mobile phone</strong> to briefly verify your physical environment — have your
-                phone within reach. No app installation is required; it opens directly in your phone&apos;s
-                browser, which may ask for camera and microphone permission.
-              </p>
-              <label className="mt-3 flex items-start gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={mobileVerificationAcknowledged}
-                  onChange={() => setMobileVerificationAcknowledged(prev => !prev)}
-                  className="mt-0.5 w-4 h-4 rounded border-gray-300 text-brand-blue focus:ring-brand-blue flex-shrink-0"
-                />
-                <span className="text-sm text-gray-700">
-                  I have read and understood the mobile verification requirement above.
-                </span>
-              </label>
+          {/* Before You Begin */}
+          <div className="p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-orange/10 text-brand-orange flex-shrink-0">
+                <AlertTriangle className="w-4 h-4" />
+              </span>
+              <p className="font-semibold text-gray-900">Before You Begin</p>
+            </div>
+            <div className="space-y-3">
+              {BEFORE_YOU_BEGIN_ITEMS.map(({ icon: Icon, text }) => (
+                <div key={text} className="flex items-start gap-3">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-blue/10 text-brand-blue flex-shrink-0">
+                    <Icon className="w-4 h-4" />
+                  </span>
+                  <span className="text-sm text-gray-600 leading-snug pt-1.5">{text}</span>
+                </div>
+              ))}
             </div>
           </div>
-        </div>
-      )}
 
-      {/* ── Consent acceptance row ── */}
-      <div className={`bg-white border rounded-xl p-5 transition-colors ${consentAccepted ? 'border-success-line bg-success-subtle/30' : 'border-gray-200'}`}>
-        <div className="flex items-start gap-3">
-          <div
-            className={`mt-0.5 w-5 h-5 rounded flex items-center justify-center flex-shrink-0 border-2 cursor-pointer transition-all ${
-              consentAccepted ? 'bg-gray-900 border-gray-900' : 'border-gray-300 hover:border-gray-500'
-            }`}
-            onClick={handleCheckboxClick}
-          >
-            {consentAccepted && <CheckCircle className="w-3.5 h-3.5 text-white" />}
+          {/* Mobile verification notice — kept separate from the general
+              "Before You Begin" list above since it's a distinct requirement
+              (its own acceptance criteria: mobile phone required, no app
+              install, camera/mic permission, may trigger at any point). */}
+          {environmentVerificationEnabled && (
+            <div className="px-5 pb-5 pt-5 border-t border-gray-100">
+              <div className="flex items-start gap-3">
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 text-brand-blue flex-shrink-0">
+                  <Smartphone className="w-5 h-5" />
+                </span>
+                <div>
+                  <p className="font-semibold text-gray-900 mb-1">Mobile Verification Required</p>
+                  <p className="text-sm text-gray-600 leading-relaxed">
+                    At any point during the interview, you may be asked to scan a QR code with your{' '}
+                    <strong>mobile phone</strong> to briefly verify your physical environment — have your
+                    phone within reach. No app installation is required; it opens directly in your phone&apos;s
+                    browser, which may ask for camera and microphone permission.
+                  </p>
+                  <label className="mt-3 flex items-start gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={mobileVerificationAcknowledged}
+                      onChange={() => setMobileVerificationAcknowledged(prev => !prev)}
+                      className="mt-0.5 w-4 h-4 rounded border-gray-300 text-brand-blue focus:ring-brand-blue flex-shrink-0"
+                    />
+                    <span className="text-sm text-gray-700">
+                      I have read and understood the mobile verification requirement above.
+                    </span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Consent acceptance */}
+          <div className="px-5 pb-5 pt-5 border-t border-gray-100">
+            <div className={`rounded-xl p-4 transition-colors ${consentAccepted ? 'bg-success-subtle/40 border border-success-line' : 'bg-brand-blue/5 border border-brand-blue/15'}`}>
+              <div className="flex items-start gap-3">
+                <span className={`flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0 transition-colors ${consentAccepted ? 'bg-success-subtle text-success' : 'bg-white text-brand-blue border border-brand-blue/20'}`}>
+                  <Shield className="w-4 h-4" />
+                </span>
+                <div
+                  className={`mt-1 w-5 h-5 rounded flex items-center justify-center flex-shrink-0 border-2 cursor-pointer transition-all ${
+                    consentAccepted ? 'bg-gray-900 border-gray-900' : 'border-gray-300 hover:border-gray-500'
+                  }`}
+                  onClick={handleCheckboxClick}
+                >
+                  {consentAccepted && <CheckCircle className="w-3.5 h-3.5 text-white" />}
+                </div>
+                <div className="text-sm text-gray-700 leading-relaxed">
+                  I accept the{' '}
+                  <button
+                    type="button"
+                    onClick={() => setShowConsentModal(true)}
+                    className="text-gray-900 font-semibold underline underline-offset-2 hover:text-gray-600 transition-colors"
+                  >
+                    consent and terms
+                  </button>
+                  {' '}for AI Interview
+                  <p className="text-xs text-gray-500 mt-1">
+                    Checking this box selects all consents. You may click &ldquo;consent and terms&rdquo; to review the full privacy policy and terms.
+                  </p>
+                </div>
+              </div>
+
+              {consentAccepted && (
+                <div className="mt-3 ml-11 flex items-center gap-2 text-success text-sm font-medium">
+                  <CheckCircle className="w-4 h-4" />
+                  All consents accepted
+                </div>
+              )}
+            </div>
           </div>
-          <div className="text-sm text-gray-700 leading-relaxed">
-            I accept the{' '}
-            <button
+
+          {/* Proceed button */}
+          <div className="px-5 pb-5">
+            <Button
               type="button"
-              onClick={() => setShowConsentModal(true)}
-              className="text-gray-900 font-semibold underline underline-offset-2 hover:text-gray-600 transition-colors"
+              variant="primary"
+              onClick={handleProceed}
+              disabled={!consentAccepted || submitting || (environmentVerificationEnabled && !mobileVerificationAcknowledged)}
+              className="w-full"
             >
-              consent and terms
-            </button>
-            {' '}for AI Interview
-            <p className="text-xs text-gray-500 mt-1">
-              Checking this box selects all consents. You may click &ldquo;consent and terms&rdquo; to review the full privacy policy and terms.
-            </p>
+              {submitting ? 'Submitting…' : (
+                <>
+                  Proceed
+                  <ChevronRight className="w-4 h-4" />
+                </>
+              )}
+            </Button>
+          </div>
+
+          {/* Help */}
+          <div className="flex items-center gap-2 text-sm text-gray-400 justify-center pb-5">
+            <HelpCircle className="w-4 h-4" />
+            Questions? Contact{' '}
+            <a href="mailto:support@talentflow.com" className="text-gray-600 hover:underline">
+              support@talentflow.com
+            </a>
           </div>
         </div>
-
-        {consentAccepted && (
-          <div className="mt-3 flex items-center gap-2 text-success text-sm font-medium">
-            <CheckCircle className="w-4 h-4" />
-            All consents accepted
-          </div>
-        )}
-      </div>
-
-      {/* ── Proceed button ── */}
-      <Button
-        type="button"
-        variant="primary"
-        onClick={handleProceed}
-        disabled={!consentAccepted || submitting || (environmentVerificationEnabled && !mobileVerificationAcknowledged)}
-        className="w-full"
-      >
-        {submitting ? 'Submitting…' : (
-          <>
-            Proceed
-            <ChevronRight className="w-4 h-4" />
-          </>
-        )}
-      </Button>
-
-      {/* ── Help ── */}
-      <div className="flex items-center gap-2 text-sm text-gray-400 justify-center pb-2">
-        <HelpCircle className="w-4 h-4" />
-        Questions? Contact{' '}
-        <a href="mailto:support@talentflow.com" className="text-gray-600 hover:underline">
-          support@talentflow.com
-        </a>
       </div>
 
       {/* ═══════════════════════════════════════════════════

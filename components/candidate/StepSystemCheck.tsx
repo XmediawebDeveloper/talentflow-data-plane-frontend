@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import Image from 'next/image';
 // Side-effect import: global guard for face-api.js / TF.js WebGL backend crashes.
 import '@/lib/tfjs-rejection-guard';
 import { loadFaceApiWithCpuBackend } from '@/lib/face-api-loader';
@@ -28,11 +29,15 @@ import {
   RefreshCw,
   Settings,
   MicOff,
+  Maximize2,
+  FileCheck,
+  Info,
 } from 'lucide-react';
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
 import { prefetchObjectDetectionModel } from '@/components/ai-interview/proctoring/InterviewObjectDetection';
 import { checkVirtualCamera, isVirtualCameraLabel, INVALID_CAMERA_SELECTION_MESSAGE } from '@/lib/proctoring/virtualCameraDetection';
 import { canOpenDevice, enumerateAudioInputIds, saveVerifiedAudioInputs, currentAudioInputId } from '@/lib/utils/mediaDeviceProbe';
+import { Button } from '@/components/ui/button';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -203,6 +208,14 @@ const SUPPORTED_BROWSERS = [
   { name: 'Safari', minVersion: 'v14+' },
 ];
 
+// Real browser logo marks, supplied as assets (lucide-react has no brand
+// icon set to draw the actual Chrome/Edge/Safari logos).
+const BROWSER_LOGOS: Record<string, string> = {
+  Chrome: '/logos/browsers/chrome.png',
+  Edge: '/logos/browsers/edge.png',
+  Safari: '/logos/browsers/safari.png',
+};
+
 const MIN_INTERNET_MBPS = 1.0;
 // Face baseline registration loads face-api models on first use and may need
 // a few seconds on a cold browser cache. 3s was too short and let the UI move
@@ -283,9 +296,9 @@ function ProgressStepper({ phase }: { phase: Phase }) {
               <div
                 className={`w-9 h-9 rounded-full flex items-center justify-center font-semibold text-sm select-none ${
                   isCompleted
-                    ? 'bg-gray-900 text-white'
+                    ? 'bg-brand-blue text-white'
                     : isActive
-                    ? 'bg-gray-900 text-white'
+                    ? 'bg-brand-blue text-white'
                     : 'bg-white border-2 border-gray-300 text-gray-400'
                 }`}
               >
@@ -308,7 +321,7 @@ function ProgressStepper({ phase }: { phase: Phase }) {
             {idx < STEPPER_STEPS.length - 1 && (
               <div
                 className={`h-0.5 flex-1 mx-3 mb-5 ${
-                  idx < activeStep ? 'bg-gray-900' : 'bg-gray-200'
+                  idx < activeStep ? 'bg-brand-blue' : 'bg-gray-200'
                 }`}
               />
             )}
@@ -417,6 +430,16 @@ export default function StepSystemCheck({
   // Refs for cleanup
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Scroll target for the Camera Preview's gear-icon shortcut, and a handler
+  // for its fullscreen icon — both purely navigational/presentational, no
+  // check state involved.
+  const deviceSettingsRef = useRef<HTMLDivElement>(null);
+  const scrollToDeviceSettings = useCallback(() => {
+    deviceSettingsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, []);
+  const handleFullscreenPreview = useCallback(() => {
+    void videoRef.current?.requestFullscreen?.();
+  }, []);
   const streamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -539,9 +562,9 @@ export default function StepSystemCheck({
   }, [stopFacePoll]);
 
   const INITIAL_CHECKS: SystemCheckItem[] = [
-    { id: 'device', label: 'Device Type', detail: 'Pending...', icon: <Monitor className="w-4 h-4" />, status: 'pending', colorClass: 'text-gray-600' },
+    { id: 'device', label: 'Device Type', detail: 'Pending...', icon: <Image src="/logos/devices/desktop.png" alt="" width={16} height={16} unoptimized />, status: 'pending', colorClass: 'text-gray-600' },
     { id: 'webcam', label: 'Webcam', detail: 'Pending...', icon: <Camera className="w-4 h-4" />, status: 'pending', colorClass: 'text-gray-600' },
-    { id: 'microphone', label: 'Microphone', detail: 'Pending...', icon: <Mic className="w-4 h-4" />, status: 'pending', colorClass: 'text-indigo-600' },
+    { id: 'microphone', label: 'Microphone', detail: 'Pending...', icon: <Mic className="w-4 h-4" />, status: 'pending', colorClass: 'text-brand-blue' },
     { id: 'internet', label: 'Internet Connection', detail: `Required: ≥ ${MIN_INTERNET_MBPS} Mbps`, icon: <Wifi className="w-4 h-4" />, status: 'pending', colorClass: 'text-cyan-600' },
     { id: 'ai_engine', label: 'AI Engine', detail: 'Pending...', icon: <Zap className="w-4 h-4" />, status: 'pending', colorClass: 'text-purple-600' },
     { id: 'websocket', label: 'WebSocket Connection', detail: 'Pending...', icon: <Radio className="w-4 h-4" />, status: 'pending', colorClass: 'text-teal-600' },
@@ -1993,14 +2016,14 @@ export default function StepSystemCheck({
   // ────────────────────────────────────────
   if (phase === 'browser_check') {
     return (
-      <div className="w-full max-w-3xl mx-auto px-4 py-8 space-y-6" style={{ colorScheme: 'light' }}>
+      <div className="w-full max-w-5xl mx-auto px-4 py-8 space-y-6" style={{ colorScheme: 'light' }}>
         <ProgressStepper phase={phase} />
 
         {/* Pill badge */}
         <div className="flex justify-center">
           <span className="inline-flex items-center gap-1.5 bg-success-subtle text-success text-xs font-semibold px-3 py-1.5 rounded-full">
-            <Shield className="w-3.5 h-3.5" />
-            Browser Verification
+            <Monitor className="w-3.5 h-3.5" />
+            Browser Check
           </span>
         </div>
 
@@ -2022,7 +2045,7 @@ export default function StepSystemCheck({
               <h2 className="text-lg font-semibold">System Requirements Check</h2>
             </div>
             <p className="text-gray-300 text-sm">
-              Verifying device and browser compatibility for{' '}
+              Verify the device and browser compatibility for{' '}
               <span className="font-medium text-white">{position}</span>
             </p>
           </div>
@@ -2049,14 +2072,14 @@ export default function StepSystemCheck({
   // ────────────────────────────────────────
   if (phase === 'browser_results' && deviceInfo) {
     return (
-      <div className="w-full max-w-3xl mx-auto px-4 py-8 space-y-6" style={{ colorScheme: 'light' }}>
+      <div className="w-full max-w-5xl mx-auto px-4 py-8 space-y-6" style={{ colorScheme: 'light' }}>
         <ProgressStepper phase={phase} />
 
         {/* Pill badge */}
         <div className="flex justify-center">
           <span className="inline-flex items-center gap-1.5 bg-success-subtle text-success text-xs font-semibold px-3 py-1.5 rounded-full">
-            <Shield className="w-3.5 h-3.5" />
-            Browser Verification
+            <Monitor className="w-3.5 h-3.5" />
+            Browser Check
           </span>
         </div>
 
@@ -2078,7 +2101,7 @@ export default function StepSystemCheck({
               <h2 className="text-lg font-semibold">System Requirements Check</h2>
             </div>
             <p className="text-gray-300 text-sm">
-              Verifying device and browser compatibility for{' '}
+              Verify the device and browser compatibility for{' '}
               <span className="font-medium text-white">{position}</span>
             </p>
           </div>
@@ -2087,9 +2110,13 @@ export default function StepSystemCheck({
           <div className="bg-white rounded-b-xl p-6 space-y-5">
             {/* All Requirements Met banner */}
             {deviceAllPass ? (
-              <div className="bg-success-subtle border border-success-line rounded-xl p-4 flex items-center gap-3">
-                <CheckCircle className="w-5 h-5 text-success flex-shrink-0" />
-                <p className="font-semibold text-success-strong">All Requirements Met!</p>
+              <div className="relative bg-success-subtle border border-success-line rounded-xl p-4 flex items-center gap-3 overflow-hidden">
+                <CheckCircle className="w-9 h-9 text-success/20 absolute -right-2 top-1/2 -translate-y-1/2" />
+                <CheckCircle className="w-5 h-5 text-success flex-shrink-0 relative" />
+                <div className="relative">
+                  <p className="font-semibold text-success-strong">All Requirements Met!</p>
+                  <p className="text-sm text-success">Your device and browser are compatible for the interview.</p>
+                </div>
               </div>
             ) : (
               <div className="bg-destructive-subtle border border-destructive-line rounded-xl p-4 flex items-center gap-3">
@@ -2110,11 +2137,15 @@ export default function StepSystemCheck({
               </div>
             )}
 
+            {/* Device Type + Browser Compatibility — side by side, matching
+                the reference layout exactly (not just recolored, actually
+                paired into one row instead of stacked full-width). */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Device Type card */}
             <div className="bg-white border border-gray-200 rounded-xl p-4">
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0">
-                  <Monitor className="w-5 h-5 text-gray-600" />
+                <div className="w-10 h-10 bg-brand-blue/10 rounded-full flex items-center justify-center flex-shrink-0">
+                  <Image src="/logos/devices/desktop.png" alt="" width={24} height={24} unoptimized />
                 </div>
                 <div className="flex items-center gap-2">
                   <h3 className="font-semibold text-gray-900">Device Type</h3>
@@ -2152,8 +2183,8 @@ export default function StepSystemCheck({
             {/* Browser Compatibility card */}
             <div className="bg-white border border-gray-200 rounded-xl p-4">
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0">
-                  <Globe className="w-5 h-5 text-gray-600" />
+                <div className="w-10 h-10 bg-brand-blue/10 rounded-full flex items-center justify-center flex-shrink-0">
+                  <Globe className="w-5 h-5 text-brand-blue" />
                 </div>
                 <div className="flex items-center gap-2">
                   <h3 className="font-semibold text-gray-900">Browser Compatibility</h3>
@@ -2171,20 +2202,25 @@ export default function StepSystemCheck({
                 </p>
                 <div>
                   <p className="text-sm text-gray-500 mb-2">Supported Browsers:</p>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-3 gap-1.5">
                     {SUPPORTED_BROWSERS.map((b) => {
                       const isCurrent = deviceInfo.browser.name === b.name;
                       return (
                         <div
                           key={b.name}
-                          className={`rounded-lg p-3 text-center text-sm font-medium border ${
+                          className={`rounded-lg p-2 flex items-center gap-1.5 border min-w-0 ${
                             isCurrent
-                              ? 'bg-success-subtle border-success-line text-success-strong'
-                              : 'bg-gray-50 border-gray-200 text-gray-700'
+                              ? 'bg-success-subtle border-success-line'
+                              : 'bg-gray-50 border-gray-200'
                           }`}
                         >
-                          <p className="font-semibold">{b.name}</p>
-                          <p className="text-xs text-gray-500 mt-0.5">{b.minVersion}</p>
+                          <span className="flex h-7 w-7 items-center justify-center flex-shrink-0">
+                            <Image src={BROWSER_LOGOS[b.name]} alt={b.name} width={28} height={28} unoptimized />
+                          </span>
+                          <div className="text-left min-w-0">
+                            <p className={`font-semibold text-xs truncate ${isCurrent ? 'text-success-strong' : 'text-gray-900'}`}>{b.name}</p>
+                            <p className="text-2xs text-gray-500 truncate">{b.minVersion}</p>
+                          </div>
                         </div>
                       );
                     })}
@@ -2200,11 +2236,24 @@ export default function StepSystemCheck({
                 )}
               </div>
             </div>
+            </div>
 
             {/* System Requirements checklist card */}
             <div className="bg-white border border-gray-200 rounded-xl p-4">
-              <h3 className="font-semibold text-gray-900 mb-3">System Requirements</h3>
-              <div className="space-y-2.5">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 bg-brand-blue/10 rounded-full flex items-center justify-center flex-shrink-0">
+                  <FileCheck className="w-5 h-5 text-brand-blue" />
+                </div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-semibold text-gray-900">System Requirements</h3>
+                  {SYSTEM_REQUIREMENTS.every(req => req.check(deviceInfo)) ? (
+                    <CheckCircle className="w-4 h-4 text-success" />
+                  ) : (
+                    <XCircle className="w-4 h-4 text-destructive" />
+                  )}
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 sm:grid-rows-2 sm:grid-flow-col gap-x-6 gap-y-3">
                 {SYSTEM_REQUIREMENTS.map((req, idx) => {
                   const passed = req.check(deviceInfo);
                   return (
@@ -2230,35 +2279,51 @@ export default function StepSystemCheck({
 
             {/* Detected System Information card */}
             <div className="bg-white border border-gray-200 rounded-xl p-4">
-              <h3 className="font-semibold text-gray-900 mb-3">Detected System Information</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-xs text-gray-500 mb-1">Device Type</p>
-                  <p className="text-sm font-medium text-gray-900">{deviceInfo.deviceType}</p>
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 bg-brand-blue/10 rounded-full flex items-center justify-center flex-shrink-0">
+                  <Info className="w-5 h-5 text-brand-blue" />
                 </div>
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-xs text-gray-500 mb-1">Browser</p>
-                  <p className="text-sm font-medium text-gray-900">
-                    {deviceInfo.browser.name} {deviceInfo.browser.version}
-                  </p>
+                <h3 className="font-semibold text-gray-900">Detected System Information</h3>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="bg-gray-50 rounded-lg p-3 flex items-center gap-3">
+                  <div className="w-8 h-8 bg-white border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <Image src="/logos/devices/desktop.png" alt="" width={18} height={18} unoptimized />
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Device Type</p>
+                    <p className="text-sm font-medium text-gray-900">{deviceInfo.deviceType}</p>
+                  </div>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-3 flex items-center gap-3">
+                  <div className="w-8 h-8 bg-white border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
+                    {BROWSER_LOGOS[deviceInfo.browser.name] ? (
+                      <Image src={BROWSER_LOGOS[deviceInfo.browser.name]} alt={deviceInfo.browser.name} width={20} height={20} unoptimized />
+                    ) : (
+                      <Globe className="w-4 h-4 text-brand-blue" />
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Browser</p>
+                    <p className="text-sm font-medium text-gray-900">
+                      {deviceInfo.browser.name} {deviceInfo.browser.version}
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
 
             {/* Continue to System Checks button */}
-            <button
+            <Button
               type="button"
+              variant="primary"
               onClick={() => setPhase('system_checks')}
               disabled={!deviceAllPass}
-              className={`w-full inline-flex items-center justify-center gap-2 font-semibold py-3 px-6 rounded-lg transition-all text-sm ${
-                deviceAllPass
-                  ? 'bg-gray-900 text-white hover:bg-gray-800'
-                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              }`}
+              className="w-full"
             >
               Continue to System Checks
               <ArrowRight className="w-4 h-4" />
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -2285,6 +2350,14 @@ export default function StepSystemCheck({
           </span>
         </div>
 
+        {/* Heading */}
+        <div className="text-center">
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">System Check</h1>
+          <p className="text-gray-600 mt-2">
+            Let&apos;s make sure your system is ready for the interview. Please complete all the checks below.
+          </p>
+        </div>
+
         {/* Voice Verification — its own standalone card, entirely OUTSIDE and
             ABOVE the "System Checks" card below. Shown whenever voice
             enrollment is available (onEnrollVoice set). Voice Verification is
@@ -2292,10 +2365,10 @@ export default function StepSystemCheck({
             Checks card below (see runCheckLocked there) — so it must read as
             a clearly separate step, not something tucked inside that card. */}
         {onEnrollVoice && (
-          <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-4 shadow-lg">
+          <div className="rounded-xl border border-brand-blue/20 bg-brand-blue/5 p-4 shadow-lg">
             <div className="flex items-center gap-2 mb-3">
-              <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
-                <Mic className="w-4 h-4 text-indigo-600" />
+              <div className="w-8 h-8 rounded-full bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
+                <Mic className="w-4 h-4 text-brand-blue" />
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2">
@@ -2316,8 +2389,8 @@ export default function StepSystemCheck({
 
             {/* A suggested line — NOT required. The candidate can say anything;
                 we only need to hear their voice (no word-matching). */}
-            <div className="rounded-lg border border-indigo-200 bg-white px-4 py-3">
-              <p className="text-2xs font-medium uppercase tracking-wide text-indigo-500 mb-1">
+            <div className="rounded-lg border border-brand-blue/20 bg-white px-4 py-3">
+              <p className="text-2xs font-medium uppercase tracking-wide text-brand-blue mb-1">
                 Just speak naturally — say anything, or read this
               </p>
               <p className="text-base font-medium text-gray-900 leading-snug">
@@ -2347,7 +2420,7 @@ export default function StepSystemCheck({
                   <button
                     type="button"
                     onClick={startVoiceEnroll}
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold rounded-lg px-3 py-2 transition-colors text-white bg-indigo-600 hover:bg-indigo-700 cursor-pointer flex-shrink-0"
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold rounded-lg px-3 py-2 transition-colors text-white bg-brand-blue hover:bg-brand-blue-2 cursor-pointer flex-shrink-0"
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
                     Retry
@@ -2375,7 +2448,7 @@ export default function StepSystemCheck({
                   <button
                     type="button"
                     onClick={startVoiceEnroll}
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold rounded-lg px-3 py-2 transition-colors bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer"
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold rounded-lg px-3 py-2 transition-colors bg-brand-blue text-white hover:bg-brand-blue-2 cursor-pointer"
                   >
                     <Mic className="w-3.5 h-3.5" />
                     Start recording
@@ -2386,13 +2459,13 @@ export default function StepSystemCheck({
               {/* RECORDING — live progress */}
               {voiceEnrollStatus === 'recording' && (
                 <div className="space-y-1.5">
-                  <p className="text-xs font-medium text-indigo-700 flex items-center gap-1.5">
+                  <p className="text-xs font-medium text-brand-blue flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
                     Recording — keep speaking…
                   </p>
-                  <div className="h-1.5 w-full rounded-full bg-indigo-100 overflow-hidden">
+                  <div className="h-1.5 w-full rounded-full bg-brand-blue/10 overflow-hidden">
                     <div
-                      className="h-full bg-indigo-500 transition-all duration-200 ease-linear"
+                      className="h-full bg-brand-blue transition-all duration-200 ease-linear"
                       style={{ width: `${voiceEnrollProgress}%` }}
                     />
                   </div>
@@ -2421,7 +2494,7 @@ export default function StepSystemCheck({
                     disabled={!micReadyForVoice}
                     className={`inline-flex items-center gap-1.5 text-xs font-semibold rounded-lg px-3 py-2 transition-colors flex-shrink-0 ${
                       micReadyForVoice
-                        ? 'text-white bg-indigo-600 hover:bg-indigo-700 cursor-pointer'
+                        ? 'text-white bg-brand-blue hover:bg-brand-blue-2 cursor-pointer'
                         : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                     }`}
                   >
@@ -2464,7 +2537,7 @@ export default function StepSystemCheck({
                     disabled={!micReadyForVoice}
                     className={`inline-flex items-center gap-1.5 text-xs font-semibold rounded-lg px-3 py-2 transition-colors flex-shrink-0 ${
                       micReadyForVoice
-                        ? 'text-white bg-indigo-600 hover:bg-indigo-700 cursor-pointer'
+                        ? 'text-white bg-brand-blue hover:bg-brand-blue-2 cursor-pointer'
                         : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                     }`}
                   >
@@ -2544,9 +2617,25 @@ export default function StepSystemCheck({
               {/* Left column: Camera Preview + Device Settings */}
               <div className="space-y-4">
                 <div className="rounded-xl overflow-hidden border border-gray-200">
-                  <div className="bg-gray-900 px-4 py-3 flex items-center gap-2">
-                    <CircleDot className="w-4 h-4 text-white" />
-                    <h3 className="text-sm font-semibold text-white">Camera Preview</h3>
+                  <div className="px-4 py-3 flex items-center justify-between gap-2 bg-white border-b border-gray-100">
+                    <div className="flex items-center gap-2">
+                      <CircleDot className="w-4 h-4 text-brand-blue" />
+                      <h3 className="text-sm font-semibold text-gray-900">Camera Preview</h3>
+                    </div>
+                    {/* Camera Active / Unavailable badge — reflects the
+                        video element's actual playback state (cameraLive)
+                        instead of always claiming "Camera Active". */}
+                    {cameraLive ? (
+                      <span className="inline-flex items-center gap-1.5 bg-success-subtle text-success text-xs font-medium px-2.5 py-1 rounded-full flex-shrink-0">
+                        <span className="w-2 h-2 bg-success rounded-full animate-pulse" />
+                        Camera Active
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 bg-destructive-subtle text-destructive text-xs font-medium px-2.5 py-1 rounded-full flex-shrink-0">
+                        <span className="w-2 h-2 bg-destructive rounded-full" />
+                        No Camera Signal
+                      </span>
+                    )}
                   </div>
                   <div className="relative bg-gray-900 aspect-video">
                     <video
@@ -2562,27 +2651,29 @@ export default function StepSystemCheck({
                       onError={() => setCameraLive(false)}
                       onStalled={() => setCameraLive(false)}
                     />
-                    {/* Camera Active / Unavailable badge — reflects the
-                        video element's actual playback state (cameraLive)
-                        instead of always claiming "Camera Active". */}
-                    {cameraLive ? (
-                      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-success/90 text-white text-xs font-medium px-3 py-1.5 rounded-full backdrop-blur-sm">
-                        <span className="w-2 h-2 bg-success rounded-full animate-pulse" />
-                        Camera Active
-                      </div>
-                    ) : (
-                      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-destructive/90 text-white text-xs font-medium px-3 py-1.5 rounded-full backdrop-blur-sm">
-                        <span className="w-2 h-2 bg-destructive rounded-full" />
-                        No Camera Signal
-                      </div>
-                    )}
+                    <button
+                      type="button"
+                      onClick={scrollToDeviceSettings}
+                      title="Device Settings"
+                      className="absolute top-3 right-3 flex items-center justify-center w-8 h-8 rounded-lg bg-black/50 hover:bg-black/65 text-white transition-colors"
+                    >
+                      <Settings className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleFullscreenPreview}
+                      title="Fullscreen"
+                      className="absolute bottom-3 right-3 flex items-center justify-center w-8 h-8 rounded-lg bg-black/50 hover:bg-black/65 text-white transition-colors"
+                    >
+                      <Maximize2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
 
                 {/* Device Settings — lets the candidate pick whichever connected
                     camera/microphone is actually compatible, instead of being
                     stuck with whatever the OS treats as default. */}
-                <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
+                <div ref={deviceSettingsRef} className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
                   <div className="flex items-center gap-2">
                     <Settings className="w-4 h-4 text-gray-500" />
                     <h3 className="text-sm font-semibold text-gray-900">Device Settings</h3>
@@ -2703,7 +2794,10 @@ export default function StepSystemCheck({
                     {/* Right: status icon + per-check retry (only that row re-runs) */}
                     <div className="flex-shrink-0 flex items-center gap-2">
                       {check.status === 'pass' && (
-                        <CheckCircle className="w-5 h-5 text-success" />
+                        <span className="inline-flex items-center gap-1.5 bg-success-subtle text-success text-xs font-semibold px-2.5 py-1 rounded-full">
+                          <CheckCircle className="w-3.5 h-3.5" />
+                          Working
+                        </span>
                       )}
                       {check.status === 'fail' && (
                         <>
@@ -2783,16 +2877,13 @@ export default function StepSystemCheck({
 
               {/* Proceed — enabled only when all checks passed. Environment scan removed. */}
               {checksCompleted && (
-                <button
+                <Button
                   type="button"
+                  variant="primary"
                   onClick={() => { if (allSystemPassed && voiceGateOk && !isProceedLoading && !micDisconnectedPopup) handleProceed(); }}
                   disabled={!allSystemPassed || !voiceGateOk || isProceedLoading || micDisconnectedPopup}
                   title={micDisconnectedPopup ? 'Please reconnect your microphone to continue' : !voiceGateOk ? 'Record your voice sample first' : undefined}
-                  className={`flex-1 inline-flex items-center justify-center gap-2 font-semibold py-3 px-6 rounded-lg text-sm transition-all ${
-                    allSystemPassed && voiceGateOk && !isProceedLoading && !micDisconnectedPopup
-                      ? 'bg-gray-900 text-white hover:bg-gray-800 cursor-pointer'
-                      : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                  }`}
+                  className="flex-1"
                 >
                   {isProceedLoading ? (
                     <><Loader2 className="w-4 h-4 animate-spin" /> Finishing…</>
@@ -2803,7 +2894,7 @@ export default function StepSystemCheck({
                   ) : (
                     <>Continue <ArrowRight className="w-4 h-4" /></>
                   )}
-                </button>
+                </Button>
               )}
             </div>
           </div>

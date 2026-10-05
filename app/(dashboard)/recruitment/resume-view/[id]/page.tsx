@@ -534,44 +534,12 @@ export default function ResumeViewPage() {
     }
   };
 
-  // State for fetched preview text (when extractedText not pre-loaded)
-  const [fetchedPreviewText, setFetchedPreviewText] = useState<string | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
-
-  // Preview a specific version or resume in modal
-  const handleVersionPreview = async (versionId: string, label: string) => {
-    // Check if extracted text is already available
-    const version = resume?.versions?.find(v => v.id === versionId);
-    const existingText = version?.extractedText || (versionId === resumeId ? resume?.extractedText : null);
-
-    if (existingText) {
-      setFetchedPreviewText(null);
-      setVersionPreviewLabel(label);
-      setVersionPreviewUrl(versionId);
-      return;
-    }
-
-    // Not available - fetch from API
-    setPreviewLoading(true);
+  // Preview a specific version or resume in modal — rendered by
+  // ResumeTextPreviewModal, which shows the actual file (PDF inline, Word via
+  // docx-preview) instead of a reformatted guess at its layout.
+  const handleVersionPreview = (versionId: string, label: string) => {
     setVersionPreviewLabel(label);
-    try {
-      // User explicitly asked to preview this version, so it counts as a
-      // real view for the Audit Log.
-      const data = await resumeService.get(versionId, true);
-      if (data?.extracted_text) {
-        setFetchedPreviewText(data.extracted_text);
-        setVersionPreviewUrl(versionId);
-      } else {
-        setFetchedPreviewText('');
-        setVersionPreviewUrl(versionId);
-        toast.info('Preview not available for this file.');
-      }
-    } catch (err) {
-      console.error('Failed to fetch preview text:', err);
-      toast.error('Failed to load preview');
-    } finally {
-      setPreviewLoading(false);
-    }
+    setVersionPreviewUrl(versionId);
   };
 
   useEffect(() => {
@@ -2261,154 +2229,21 @@ Best regards`);
         );
       })()}
 
-      {/* Version Preview Modal - shows extracted text content */}
-      {/* Loading state for preview fetch — skeleton mirroring the preview modal
-          that replaces it: same modal shell + header, and a document card of
-          skeleton lines (section headings + tapering paragraph lines) in the
-          gray content area. */}
-      {previewLoading && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl h-[90dvh] flex flex-col overflow-hidden">
-            {/* Header */}
-            <div className="flex items-center justify-between gap-3 px-6 py-4 border-b border-gray-100 bg-gray-50 flex-shrink-0">
-              <div className="flex items-center gap-3 min-w-0">
-                <Skeleton className="w-10 h-10 rounded-xl" />
-                <div className="min-w-0 space-y-1.5">
-                  <Skeleton className="h-5 w-40" />
-                  <Skeleton className="h-4 w-32" />
-                </div>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <Skeleton className="h-9 w-24 rounded-lg" />
-                <Skeleton className="h-9 w-9 rounded-lg" />
-              </div>
-            </div>
-            {/* Document content */}
-            <div className="flex-1 overflow-y-auto bg-gray-100 p-6">
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 max-w-2xl mx-auto min-h-full space-y-3">
-                <Skeleton className="h-6 w-48 mb-4" />
-                {Array.from({ length: 3 }).map((_, s) => (
-                  <div key={s} className="space-y-2 pt-3">
-                    <Skeleton className="h-4 w-32 mb-2" />
-                    <Skeleton className="h-3 w-full" />
-                    <Skeleton className="h-3 w-11/12" />
-                    <Skeleton className="h-3 w-4/5" />
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
+      {/* Version Preview Modal — same ResumeTextPreviewModal the share dialog's
+          attachment preview uses, so "View" shows the actual file (PDF inline,
+          Word via docx-preview) instead of a reformatted guess at its layout. */}
       {versionPreviewUrl && (() => {
         const previewVersion = resume?.versions?.find(v => v.id === versionPreviewUrl);
-        const isCurrentPreview = versionPreviewUrl === resumeId;
-        const previewText = previewVersion?.extractedText || (isCurrentPreview ? (resume?.extractedText || fetchedPreviewText) : fetchedPreviewText) || '';
-
-        // Parse text into sections for document-like display
-        const lines = previewText.split('\n');
-        const sectionHeaders = [
-          'experience', 'work experience', 'employment', 'professional experience',
-          'education', 'academic', 'qualifications',
-          'skills', 'technical skills', 'core competencies', 'expertise', 'key skills',
-          'summary', 'professional summary', 'objective', 'profile', 'about',
-          'certifications', 'certificates', 'licenses',
-          'projects', 'key projects',
-          'achievements', 'accomplishments', 'awards',
-          'languages', 'contact', 'personal', 'references', 'hobbies', 'interests'
-        ];
-
         return (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl h-[90dvh] flex flex-col overflow-hidden">
-              {/* Header */}
-              <div className="flex items-center justify-between gap-3 px-6 py-4 border-b border-gray-100 bg-gray-50 flex-shrink-0">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-brand-blue flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
-                    <Eye className="w-5 h-5 text-white" />
-                  </div>
-                  <div className="min-w-0">
-                    <h2 className="text-lg font-semibold text-gray-900 tracking-tight truncate">{versionPreviewLabel}</h2>
-                    <p className="text-sm text-gray-500 truncate">{previewVersion?.name || resume?.fileName}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <button
-                    onClick={() => handleDownload(
-                      versionPreviewUrl,
-                      previewVersion?.fileName || previewVersion?.name || resume?.fileName || `resume-${versionPreviewUrl}.${resume?.fileType || 'pdf'}`,
-                      previewVersion ? 'Failed to download version' : 'Failed to download resume'
-                    )}
-                    className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-sm"
-                  >
-                    <Download className="w-4 h-4" />
-                    <span className="hidden sm:inline">Download</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      setVersionPreviewUrl(null);
-                      setVersionPreviewLabel('');
-                      setFetchedPreviewText(null);
-                    }}
-                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                   aria-label="Close">
-                    <X className="w-5 h-5 text-gray-500" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Resume content - document style */}
-              <div className="flex-1 overflow-y-auto bg-gray-100 p-6">
-                {previewText ? (
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 max-w-2xl mx-auto min-h-full">
-                    {lines.map((line, idx) => {
-                    const trimmed = line.trim();
-                    if (!trimmed) return <div key={idx} className="h-3" />;
-
-                    const lowerLine = trimmed.toLowerCase().replace(/[:\-_]/g, ' ').trim();
-                    const isHeader = sectionHeaders.some(h =>
-                      lowerLine === h || lowerLine.startsWith(h + ' ') || lowerLine.endsWith(' ' + h)
-                    ) && trimmed.length < 50;
-
-                    if (isHeader) {
-                      return (
-                        <h3 key={idx} className="text-base font-bold text-gray-900 mt-5 mb-2 pb-1 border-b border-gray-300 uppercase tracking-wide">
-                          {trimmed}
-                        </h3>
-                      );
-                    }
-
-                    // First non-empty line could be the name
-                    const firstNonEmpty = lines.findIndex(l => l.trim().length > 0);
-                    if (idx === firstNonEmpty) {
-                      return (
-                        <h2 key={idx} className="text-xl font-bold text-gray-900 mb-1">{trimmed}</h2>
-                      );
-                    }
-
-                    // Bullet points
-                    if (trimmed.startsWith('•') || trimmed.startsWith('-') || trimmed.startsWith('*')) {
-                      return (
-                        <p key={idx} className="text-sm text-gray-700 leading-relaxed pl-4 mb-0.5">{trimmed}</p>
-                      );
-                    }
-
-                    return (
-                      <p key={idx} className="text-sm text-gray-700 leading-relaxed mb-0.5">{trimmed}</p>
-                    );
-                    })}
-                  </div>
-                ) : (
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 max-w-2xl mx-auto min-h-full flex flex-col items-center justify-center text-center">
-                    <FileText className="w-10 h-10 text-gray-400 mb-3" />
-                    <p className="text-sm font-medium text-gray-900">Preview not available</p>
-                    <p className="text-sm text-gray-500 mt-1">Download the resume to view the original file.</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+          <ResumeTextPreviewModal
+            resumeId={versionPreviewUrl}
+            title={versionPreviewLabel}
+            subtitle={previewVersion?.fileName || previewVersion?.name || resume?.fileName}
+            onClose={() => {
+              setVersionPreviewUrl(null);
+              setVersionPreviewLabel('');
+            }}
+          />
         );
       })()}
 

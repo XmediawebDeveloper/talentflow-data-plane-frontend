@@ -3457,6 +3457,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
           onVerify={handleIdentityVerify}
           submitting={identitySubmitting}
           position={interview.position}
+          onBack={goBack}
         />
       </PreInterviewLayout>
     );

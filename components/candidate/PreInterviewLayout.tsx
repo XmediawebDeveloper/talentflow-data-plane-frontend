@@ -55,25 +55,25 @@ export default function PreInterviewLayout({
     <div className="flex min-h-[100dvh] flex-col bg-gray-50 !bg-gray-50 [color-scheme:light]">
       {/* Header with logo */}
       <header className="w-full bg-white border-b border-gray-200">
-        <div className="w-full px-6 lg:px-12 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+        <div className="w-full px-4 sm:px-6 lg:px-12 py-3 sm:py-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
               <Image
                 src="/logos/talent_flow_logo.png"
                 alt="TalentFlow"
                 width={200}
                 height={70}
-                className="h-16 w-auto"
+                className="h-10 sm:h-12 lg:h-16 w-auto shrink-0"
                 priority
                 unoptimized
               />
             </div>
             <a
               href="mailto:support@talentflow.com"
-              className="flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900 transition-colors"
+              className="flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900 transition-colors shrink-0"
             >
               <HelpCircle className="w-4 h-4" />
-              Need help?
+              <span className="hidden sm:inline">Need help?</span>
             </a>
           </div>
         </div>
@@ -95,14 +95,14 @@ export default function PreInterviewLayout({
                     {/* Dot */}
                     <div className="relative flex items-center justify-center">
                       {isCompleted && (
-                        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-800 shadow-sm sm:h-8 sm:w-8">
+                        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-blue shadow-sm sm:h-8 sm:w-8">
                           <CheckCircle className="h-4 w-4 text-white sm:h-5 sm:w-5" />
                         </div>
                       )}
                       {isCurrent && (
                         <div className="relative flex items-center justify-center">
-                          <span className="absolute inline-flex h-10 w-10 animate-ping rounded-full bg-gray-400 opacity-20 sm:h-11 sm:w-11" />
-                          <div className="relative flex h-9 w-9 items-center justify-center rounded-full bg-gray-900 shadow-md shadow-gray-300 sm:h-10 sm:w-10">
+                          <span className="absolute inline-flex h-10 w-10 animate-ping rounded-full bg-brand-blue opacity-20 sm:h-11 sm:w-11" />
+                          <div className="relative flex h-9 w-9 items-center justify-center rounded-full bg-brand-blue shadow-md shadow-brand-blue/30 sm:h-10 sm:w-10">
                             <span className="text-xs font-bold text-white sm:text-sm">
                               {stepNumber}
                             </span>
