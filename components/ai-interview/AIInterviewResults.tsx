@@ -20,17 +20,17 @@ import {
   ChevronLeft, ChevronRight, Eye, Loader2,
   Users, CheckCircle, Clock, Mail, XCircle, AlertTriangle, CalendarDays,
   Ban, SlidersHorizontal, FileDown, FileText, FileSpreadsheet, Info, Download, X,
-  Square, CheckSquare, Play, Calendar,
+  Square, CheckSquare, Play,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse, AIInterviewInvitationListResponse } from '@/lib/services/aiInterviewService';
-import { formatISTDate, formatIST, parseIST } from '@/lib/utils/dateUtils';
+import { formatIST, parseIST } from '@/lib/utils/dateUtils';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import ColumnCustomizationModal from '@/components/ColumnCustomizationModal';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { INVITE_SOURCE_FILTER_OPTIONS, RESULT_FILTER_OPTIONS } from './ColumnFilterFields';
-import { InviteSourceValue, inviteSourceLabel, isRevocableInvite, isExpiredForActions, displayInviteScore, inviteResult, matchesInviteResultFilter, ResultBadge } from '@/components/AIInterviewInviteTable';
+import { InviteSourceValue, inviteSourceLabel, isRevocableInvite, isExpiredForActions, displayInviteScore, inviteResult, matchesInviteResultFilter, ResultBadge, InviteTimelineLines } from '@/components/AIInterviewInviteTable';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 
 interface AIInterviewResultsProps {
@@ -97,16 +97,14 @@ interface AIInterviewResultsProps {
 /* Toggleable table columns (Actions always shows). Same Customize Columns
  * modal the resume scoring All Resumes tab uses. */
 const RESULT_COLUMNS = [
-  { id: 'cid', label: 'CID' },
   { id: 'candidate', label: 'Candidate' },
-  { id: 'email', label: 'Email' },
-  { id: 'invitedOn', label: 'Invited On' },
   { id: 'timeline', label: 'Timeline' },
   { id: 'status', label: 'Status' },
   { id: 'score', label: 'Score' },
   { id: 'result', label: 'Result' },
   { id: 'proctoring', label: 'Proctoring Risk' },
   { id: 'inviteSource', label: 'Invite Source' },
+  { id: 'cid', label: 'CID' },
   { id: 'jobVersion', label: 'Job Version' },
   { id: 'interviewVersion', label: 'Interview Version' },
 ] as const;
@@ -553,13 +551,17 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
   // One export cell per column; Timeline splits into its three parts so each
   // lands in its own spreadsheet column.
   const exportHeaders = (): string[] =>
-    enabledColumns.flatMap((c) => (c.id === 'timeline' ? ['Started At', 'Completed At', 'Duration'] : [c.label]));
+    enabledColumns.flatMap((c) => (
+      c.id === 'timeline' ? ['Started At', 'Completed At', 'Duration']
+      // Email lives under the name on screen, but stays its own spreadsheet column.
+      : c.id === 'candidate' ? ['Candidate', 'Email']
+      : [c.label]
+    ));
   const exportRow = (session: AIInterviewResponse): string[] =>
     enabledColumns.flatMap((c): string[] => {
       switch (c.id) {
         case 'cid': return [session.candidate_cid || ''];
-        case 'candidate': return [session.candidate_name || ''];
-        case 'email': return [session.candidate_email || ''];
+        case 'candidate': return [session.candidate_name || '', session.candidate_email || ''];
         case 'jobVersion': return [jobVersion != null ? `V${jobVersion}` : ''];
         case 'interviewVersion': return [interviewVersion != null ? `V${interviewVersion}` : ''];
         case 'inviteSource': return [inviteSourceLabel(session) || ''];
@@ -1219,16 +1221,14 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                         )}
                       </button>
                     </th>
-                    {col('cid') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">CID</th>}
                     {col('candidate') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide">Candidate</th>}
-                    {col('email') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide">Email</th>}
-                    {col('invitedOn') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Invited On</th>}
                     {col('timeline') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Timeline</th>}
                     {col('status') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide">Status</th>}
                     {col('score') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Score</th>}
                     {col('result') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Result</th>}
                     {col('proctoring') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Proctoring Risk</th>}
                     {col('inviteSource') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Invite Source</th>}
+                    {col('cid') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">CID</th>}
                     {col('jobVersion') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Job Version</th>}
                     {col('interviewVersion') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Interview Version</th>}
                     <th className="text-right px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide tf-sticky-col">Actions</th>
@@ -1257,67 +1257,30 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                             )}
                           </button>
                         </td>
-                        {col('cid') && (
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            {session.candidate_cid ? (
-                              <span className="text-xs font-mono font-medium text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 px-2 py-1 rounded">
-                                {session.candidate_cid}
-                              </span>
-                            ) : (
-                              <span className="text-gray-400">—</span>
-                            )}
-                          </td>
-                        )}
                         {col('candidate') && (
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2">
                               <div className="w-7 h-7 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-semibold text-xs flex-shrink-0">
                                 {(session.candidate_name || 'U')[0].toUpperCase()}
                               </div>
-                              <span className="font-medium text-gray-900 truncate max-w-[160px]">
-                                {session.candidate_name || 'Unknown'}
-                              </span>
-                            </div>
-                          </td>
-                        )}
-                        {col('email') && (
-                          <td className="px-4 py-3">
-                            <span className="text-gray-600 truncate max-w-[180px] block">
-                              {session.candidate_email || '—'}
-                            </span>
-                          </td>
-                        )}
-                        {col('invitedOn') && (
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            {/* Invite send time (last send, resend included); created_at for
-                                a row from before that column — the Assessments column's rule. */}
-                            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
-                              <Calendar className="w-4 h-4" />
-                              {row.invitation_sent_at || row.created_at ? formatISTDate(row.invitation_sent_at || row.created_at) : '-'}
+                              {/* Email under the name, as on Track Invites,
+                                  rather than a column of its own. */}
+                              <div className="min-w-0 max-w-[220px]">
+                                <p className="font-medium text-gray-900 truncate" title={session.candidate_name || 'Unknown'}>
+                                  {session.candidate_name || 'Unknown'}
+                                </p>
+                                <p className="text-xs text-gray-500 truncate" title={session.candidate_email || undefined}>
+                                  {session.candidate_email || '—'}
+                                </p>
+                              </div>
                             </div>
                           </td>
                         )}
                         {col('timeline') && (
-                          <td className="px-4 py-3 whitespace-nowrap text-gray-600">
-                            {/* Results only care about the interview itself —
-                                Started and Completed, the same two times the
-                                export writes. Invite history stays on Track Invites. */}
-                            <div className="flex flex-col gap-0.5 text-xs">
-                              {session.started_at && (
-                                <span className="flex items-center gap-1.5">
-                                  <Play className="w-3 h-3 shrink-0 text-brand-orange-deep" />
-                                  <span>Started: {formatIST(session.started_at)}</span>
-                                </span>
-                              )}
-                              {session.completed_at && (
-                                <span className="flex items-center gap-1.5">
-                                  <CheckCircle className="w-3 h-3 shrink-0 text-success" />
-                                  <span>Completed: {formatIST(session.completed_at)}</span>
-                                </span>
-                              )}
-                              {!session.started_at && !session.completed_at && <span>—</span>}
-                              <span><span className="text-gray-400">Duration:</span> {formatDuration(session)}</span>
-                            </div>
+                          <td className="px-4 py-3 align-top whitespace-nowrap text-gray-600">
+                            {/* The Track Invites timeline (Invited, System Check,
+                                Started, Completed) plus this table's Duration. */}
+                            <InviteTimelineLines inv={session} duration={formatDuration(session)} />
                           </td>
                         )}
                         {col('status') && (
@@ -1392,6 +1355,17 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                             {inviteSourceLabel(session)
                               ? <InviteSourceValue inv={session} iconClassName="w-3.5 h-3.5" />
                               : <span className="text-gray-400">—</span>}
+                          </td>
+                        )}
+                        {col('cid') && (
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {session.candidate_cid ? (
+                              <span className="text-xs font-mono font-medium text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 px-2 py-1 rounded">
+                                {session.candidate_cid}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
                           </td>
                         )}
                         {col('jobVersion') && (

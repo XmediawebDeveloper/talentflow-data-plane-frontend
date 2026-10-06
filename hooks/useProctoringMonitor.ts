@@ -63,10 +63,14 @@ const IDENTITY_BOOTSTRAP_CAPTURES = 3;
 const IDENTITY_MISMATCH_THRESHOLD = 0.8;
 const IDENTITY_MISMATCH_CONFIRMATIONS = 2;
 const IDENTITY_EVENT_COOLDOWN_MS = 15000;
-// Gaze confirmations now live in hooks/assessmentFaceMonitor.ts (3 away / 2 restored at 2 s).
+// Gaze confirmations live in hooks/assessmentFaceMonitor.ts (3 away / 1 restored at 1 s).
 
 // Minimum gap between two backend rows / candidate warnings of the same type.
 // Mirrors components/ai-interview/proctoring/InterviewProctoringMonitor.ts.
+// NOT applied to episode events (face_missing / multiple_faces / gaze_away,
+// emitted with a holdKey): like the AI interview, those are logged once per
+// episode, and the detector can't start a new episode until the old one has
+// ended — a cooldown there only dropped the record of a quick second episode.
 const EVENT_COOLDOWN_MS: Partial<Record<ProctoringEventType, number>> = {
   tab_switch: 5000,
   window_blur: 5000,
@@ -634,18 +638,17 @@ export function useProctoringMonitor({
   const emitEvent = useCallback((
     eventType: ProctoringEventType,
     details?: Record<string, any>,
-    // holdKey → HELD toast (stays up until ProctoringEventBus.release(holdKey));
-    // silent → backend row only, no toast (re-logs of an already-held warning).
-    toast?: { holdKey?: string; silent?: boolean },
+    // holdKey → HELD toast (stays up until ProctoringEventBus.release(holdKey)).
+    toast?: { holdKey?: string },
   ) => {
     if (!enabledRef.current) return;
 
     // Per-type cooldown (same idea as InterviewProctoringMonitor's table): a
     // condition that persists must not become hundreds of identical rows.
-    // 0 = never throttled (discrete candidate actions). It throttles the
-    // backend row and the auto-dismissing toast — never a HELD toast, which
-    // must appear every time its condition starts.
-    const cooldownMs = EVENT_COOLDOWN_MS[eventType] ?? 0;
+    // 0 = never throttled (discrete candidate actions). Episode starts (held
+    // toast) are never throttled — AI interview parity: one record + one
+    // fixed toast every time the condition starts.
+    const cooldownMs = toast?.holdKey ? 0 : (EVENT_COOLDOWN_MS[eventType] ?? 0);
     let throttled = false;
     if (cooldownMs > 0) {
       const now = Date.now();
@@ -666,7 +669,7 @@ export function useProctoringMonitor({
 
     // 2. Show the warning
     if (toast?.holdKey) ProctoringEventBus.emitHeld(eventType, toast.holdKey, details);
-    else if (!toast?.silent && !throttled) ProctoringEventBus.emit(eventType, details);
+    else if (!throttled) ProctoringEventBus.emit(eventType, details);
   }, []);
 
   const emitEventRef = useRef(emitEvent);
@@ -700,16 +703,17 @@ export function useProctoringMonitor({
       return;
     }
 
-    // Held types (face not detected / multiple faces) show ONE fixed toast for
-    // the whole episode — same as the AI interview — and the periodic re-logs
-    // below stay backend-only. Others keep a fresh toast per re-log.
+    // Held types (face not detected / multiple faces) are EPISODES, same as the
+    // AI interview: ONE record + ONE fixed toast when the condition starts, no
+    // re-logs while it lasts (the timer below only marks the episode open; it
+    // used to add a row every ~8 s). Others keep a re-log + toast per interval.
     const held = HELD_CONTINUOUS_TYPES.has(eventType);
     emitEventRef.current(eventType, state.details, held ? { holdKey: eventType } : undefined);
     state.timer = setInterval(() => {
-      if (!isMonitoringRef.current) return;
+      if (held || !isMonitoringRef.current) return;
       const latest = continuousViolationStateRef.current[eventType].details;
       if (!latest) return;
-      emitEventRef.current(eventType, latest, held ? { silent: true } : undefined);
+      emitEventRef.current(eventType, latest);
     }, CONTINUOUS_WARNING_INTERVAL_MS);
   }, [clearContinuousViolation]);
 
@@ -1178,7 +1182,7 @@ export function useProctoringMonitor({
         },
         onGazeAway: (direction, metrics) => {
           // One event per episode (monitor gates re-entry on a restored state);
-          // emitEvent adds the per-type cooldown on top.
+          // No cooldown: held episode starts are never throttled (AI interview parity).
           // HELD toast for the whole episode (AI interview parity) — it used
           // to auto-dismiss after 2 s while the candidate was still looking away.
           emitEventRef.current('gaze_away', {

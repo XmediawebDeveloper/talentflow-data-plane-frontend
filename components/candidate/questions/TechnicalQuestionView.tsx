@@ -269,7 +269,7 @@ export function TechnicalQuestionView({ question, answer, onAnswerChange, isLock
                     {optionLetter}
                   </span>
                 </div>
-                <p className={`text-base ${selected ? 'text-gray-800' : 'text-gray-700'}`}>
+                <p className={`text-base break-words ${selected ? 'text-gray-800' : 'text-gray-700'}`}>
                   {option.text}
                 </p>
               </div>

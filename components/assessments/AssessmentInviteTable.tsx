@@ -1,7 +1,7 @@
 'use client';
 
-import { Mail, Play, CheckCircle, Clock, Ban, Loader2, Users, Eye, Pencil, MoreVertical, Check, Monitor, RefreshCw, Send, X, Calendar } from 'lucide-react';
-import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
+import { Mail, Play, CheckCircle, Clock, Ban, Loader2, Users, Eye, Pencil, MoreVertical, Check, Monitor, RefreshCw, Send, X } from 'lucide-react';
+import { formatIST } from '@/lib/utils/dateUtils';
 import { isValidEmailFormat } from '@/lib/utils/email';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { TRACKER_DIALOG_PLACEHOLDER_CLASS } from '@/lib/constants/trackerDialog';
@@ -257,11 +257,7 @@ export default function AssessmentInviteTable({
             <thead>
               <tr className="border-b border-gray-200 dark:border-slate-700">
                 <th className="w-8 py-3 pl-4 pr-0 tf-sticky-col-left" aria-label="Select" />
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">CID</th>
                 <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Candidate</th>
-                {/* Invited On — the send date at a glance, the order every
-                    Results/Tracking table shares (Invited On, then Timeline). */}
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Invited On</th>
                 {/* hidden md:table-cell mirrors this column's <td>. Without
                     it the header carried one more cell than the body between
                     sm and md, shifting every heading after Timeline off its
@@ -280,6 +276,7 @@ export default function AssessmentInviteTable({
                   <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Coding Score</th>
                 )}
                 <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Invite Source</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">CID</th>
                 {/* Job scope only: with invites from several
                     assessments in one table, the row has to say which
                     job version its assessment belongs to - that is the
@@ -362,11 +359,6 @@ export default function AssessmentInviteTable({
                       )}
                     </td>
                     <td className="py-3 px-4 align-top">
-                      <span className="inline-block text-xs font-mono font-medium text-brand-blue bg-brand-blue/5 px-2 py-1 rounded ring-1 ring-brand-blue/20">
-                        {invitation.candidate_display_id || '-'}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 align-top">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-medium text-sm flex-shrink-0">
                           {initials}
@@ -378,12 +370,6 @@ export default function AssessmentInviteTable({
                           <p className="font-medium text-gray-900 dark:text-slate-50 text-sm truncate" title={invitation.candidate_name}>{invitation.candidate_name}</p>
                           <p className="text-xs text-gray-500 dark:text-slate-500 truncate" title={invitation.candidate_email}>{invitation.candidate_email}</p>
                         </div>
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 align-top whitespace-nowrap">
-                      <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
-                        <Calendar className="w-4 h-4" />
-                        {invitation.sent_at || invitation.created_at ? formatISTDate(invitation.sent_at || invitation.created_at) : '-'}
                       </div>
                     </td>
                         <td className="py-3 px-4 align-top text-xs text-gray-500 dark:text-slate-500 hidden md:table-cell">
@@ -529,6 +515,11 @@ export default function AssessmentInviteTable({
                         invited, from the invitation's own resume_id. */}
                     <td className="py-3 px-4 align-top text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">
                       <InviteSourceValue inv={assessmentInviteSource(invitation)} iconClassName="w-3.5 h-3.5" />
+                    </td>
+                    <td className="py-3 px-4 align-top">
+                      <span className="inline-block text-xs font-mono font-medium text-brand-blue bg-brand-blue/5 px-2 py-1 rounded ring-1 ring-brand-blue/20">
+                        {invitation.candidate_display_id || '-'}
+                      </span>
                     </td>
                     {/* The job version this invite's assessment was
                         built against - the version panel's own blue

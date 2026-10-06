@@ -31,6 +31,10 @@ const ACTIVITY_ICONS: Record<string, React.ReactNode> = {
   candidate_completed: <Award className="w-4 h-4" />,
   candidate_failed: <UserX className="w-4 h-4" />,
   candidate_expired: <TimerOff className="w-4 h-4" />,
+  /* The lifecycle rows arrive keyed by the raw audit action value. */
+  ai_interview_recording_downloaded: <Download className="w-4 h-4" />,
+  ai_interview_report_downloaded: <Download className="w-4 h-4" />,
+  ai_interview_config_exported: <Download className="w-4 h-4" />,
 };
 
 const ACTIVITY_COLORS: Record<string, { bg: string; text: string; icon: string; border: string }> = {
@@ -44,6 +48,9 @@ const ACTIVITY_COLORS: Record<string, { bg: string; text: string; icon: string; 
   candidate_completed: { bg: 'bg-success-subtle', text: 'text-success', icon: 'text-success', border: 'border-success-line' },
   candidate_failed: { bg: 'bg-destructive-subtle', text: 'text-destructive', icon: 'text-destructive', border: 'border-destructive-line' },
   candidate_expired: { bg: 'bg-orange-50', text: 'text-orange-700', icon: 'text-orange-500', border: 'border-orange-200' },
+  ai_interview_recording_downloaded: { bg: 'bg-blue-50', text: 'text-blue-700', icon: 'text-blue-500', border: 'border-blue-200' },
+  ai_interview_report_downloaded: { bg: 'bg-blue-50', text: 'text-blue-700', icon: 'text-blue-500', border: 'border-blue-200' },
+  ai_interview_config_exported: { bg: 'bg-blue-50', text: 'text-blue-700', icon: 'text-blue-500', border: 'border-blue-200' },
 };
 
 export interface AIInterviewAuditTrailProps {
@@ -130,6 +137,10 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal }: AI
         search: searchTerm || undefined,
         page,
         page_size: pageSize,
+        // The Date From/To panel already triggered this reload but its
+        // values were never sent, so the filter did nothing.
+        date_from: filterDateFrom || undefined,
+        date_to: filterDateTo || undefined,
       });
 
       if (response) {
@@ -200,6 +211,18 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal }: AI
       title: 'AI Interview Audit Logs',
     });
     toast.success(`Exported ${rows.length} audit log entries to ${format === 'xlsx' ? 'Excel' : 'CSV'}`);
+    // Record the export on the audit trail, as Assessment's Activity Logs
+    // export does. The file is already saved, so a failed audit call is
+    // logged rather than shown as a failed export.
+    aiInterviewService.logActivityLogsExport({
+      format: format === 'xlsx' ? 'excel' : 'csv',
+      record_count: rows.length,
+      selected: selectedKeys.size > 0,
+      category: categoryFilter === 'all' ? undefined : categoryFilter,
+      search: searchTerm || undefined,
+      date_from: filterDateFrom || undefined,
+      date_to: filterDateTo || undefined,
+    }).catch((error) => console.log('[TalentFlow] Failed to record activity logs export:', error));
   };
 
   const formatTimestamp = (timestamp: string) => {
@@ -301,7 +324,10 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal }: AI
             <span className="text-sm text-gray-600">Total Events</span>
             <Activity className="w-4 h-4 text-gray-400" />
           </div>
-          <div className="text-2xl text-gray-900">{total}</div>
+          {/* Both categories, whatever chip is selected: the card is the
+              overall figure, like the two beside it. `total` is the selected
+              category's count, which the heading and pagination follow. */}
+          <div className="text-2xl text-gray-900">{stats.total_lifecycle_events + stats.total_candidate_events}</div>
         </div>
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
