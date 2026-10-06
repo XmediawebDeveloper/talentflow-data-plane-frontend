@@ -417,6 +417,12 @@ type PickerPreviewAssessment = { id: string; jd_id?: string; [key: string]: unkn
 
 /** A completed attempt, tagged with the assessment it belongs to. */
 type CandidateResultRow = AssessmentAttemptResponse & {
+  /* The invitation's send / birth time — the backend's attempt response
+     carries both (AssessmentAttemptResponse.sent_at / created_at in
+     app/schemas/assessment.py), the TS interface just never declared them.
+     They feed the Invited On column, the Invitation Status tab's rule. */
+  sent_at?: string;
+  created_at?: string;
   _assessment_id: string;
   _assessment_short_id?: string;
   _assessment_title?: string;
@@ -6801,10 +6807,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           {/* Same floor as the loaded table below, so the rows
                               do not shift sideways when the skeleton swaps
                               out. */}
-                          <table className="w-full min-w-[1930px] table-auto">
+                          <table className="w-full min-w-[2060px] table-auto">
                             <thead className="[&_th]:bg-slate-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                               <tr>
-                                {['CID', 'Candidate', 'Email', 'Job ID', 'JD Title', 'Job Version', 'Assessment Version', 'Resume Version', 'Phone', 'Tech Score', 'Coding Score', 'Invite Source', 'Result Status', 'Timeline', 'Completed', 'Duration', 'Actions'].map((c) => (
+                                {['CID', 'Candidate', 'Email', 'Phone', 'Invited On', 'Timeline', 'Completed', 'Duration', 'Result Status', 'Tech Score', 'Coding Score', 'Invite Source', 'Job ID', 'JD Title', 'Job Version', 'Assessment Version', 'Resume Version', 'Actions'].map((c) => (
                                   <th key={c} className="px-3 sm:px-4 py-2.5 sm:py-3"><Skeleton className="h-3 w-20" /></th>
                                 ))}
                               </tr>
@@ -6820,6 +6826,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     </div>
                                   </td>
                                   <td className="px-3 sm:px-4 py-3"><Skeleton className="h-4 w-40" /></td>
+                                  <td className="px-3 sm:px-4 py-3"><Skeleton className="h-4 w-28" /></td>
+                                  <td className="px-3 sm:px-4 py-3"><Skeleton className="h-4 w-24" /></td>
+                                  <td className="px-3 sm:px-4 py-3"><Skeleton className="h-4 w-40" /></td>
+                                  <td className="px-3 sm:px-4 py-3"><Skeleton className="h-4 w-24" /></td>
+                                  <td className="px-3 sm:px-4 py-3"><Skeleton className="h-4 w-16 mx-auto" /></td>
+                                  <td className="px-3 sm:px-4 py-3"><Skeleton className="h-6 w-20 rounded-full" /></td>
+                                  <td className="px-3 sm:px-4 py-3"><Skeleton className="h-5 w-20 rounded" /></td>
+                                  <td className="px-3 sm:px-4 py-3"><Skeleton className="h-6 w-12 mx-auto" /></td>
+                                  <td className="px-3 sm:px-4 py-3"><Skeleton className="h-6 w-12 mx-auto" /></td>
                                   {/* Job ID — badge-shaped, like the CID chip
                                       in the first column. */}
                                   <td className="px-3 sm:px-4 py-3"><Skeleton className="h-5 w-16 rounded" /></td>
@@ -6830,14 +6845,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                       into the same short `v3`. */}
                                   <td className="px-3 sm:px-4 py-3"><Skeleton className="h-4 w-10" /></td>
                                   <td className="px-3 sm:px-4 py-3"><Skeleton className="h-5 w-10 rounded-full" /></td>
-                                  <td className="px-3 sm:px-4 py-3"><Skeleton className="h-4 w-28" /></td>
-                                  <td className="px-3 sm:px-4 py-3"><Skeleton className="h-5 w-20 rounded" /></td>
-                                  <td className="px-3 sm:px-4 py-3"><Skeleton className="h-6 w-12 mx-auto" /></td>
-                                  <td className="px-3 sm:px-4 py-3"><Skeleton className="h-6 w-12 mx-auto" /></td>
-                                  <td className="px-3 sm:px-4 py-3"><Skeleton className="h-6 w-20 rounded-full" /></td>
-                                  <td className="px-3 sm:px-4 py-3"><Skeleton className="h-4 w-40" /></td>
-                                  <td className="px-3 sm:px-4 py-3"><Skeleton className="h-4 w-24" /></td>
-                                  <td className="px-3 sm:px-4 py-3"><Skeleton className="h-4 w-16 mx-auto" /></td>
                                   <td className="px-3 sm:px-4 py-3"><Skeleton className="h-8 w-8 rounded-md mx-auto" /></td>
                                 </tr>
                               ))}
@@ -6927,7 +6934,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         <div className="min-h-[320px] max-h-[calc(100dvh-24rem)] overflow-auto tf-table-shell">
                         {/* 1500 -> 1720 for the two version columns, then
                             1720 -> 1830 for Assessment Version, then
-                            1830 -> 1930 for Job ID. The shell
+                            1830 -> 1930 for Job ID, then 1930 -> 2060 for Invited On. The shell
                             already scrolls horizontally (tf-table-shell), so
                             each widening changes nothing but which point the
                             scroll starts at; leaving the floor where it was
@@ -6937,12 +6944,23 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             — the widest thing in the column, since the cells
                             under it are a three-character `v3` — and 100px is
                             what a JD-014 badge needs beside its heading. */}
-                        <table className="w-full min-w-[1930px] table-auto">
+                        <table className="w-full min-w-[2060px] table-auto">
                           <thead className="sticky top-0 z-10 [&_th]:bg-slate-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                             <tr>
                               <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">CID</th>
                               <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Candidate</th>
                               <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Email</th>
+                              <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Phone</th>
+                              {/* Invited On — the Invitation Status tab's column: the
+                                  invitation's send date (its creation date if never sent). */}
+                              <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Invited On</th>
+                              <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Timeline</th>
+                              <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Completed</th>
+                              <th className="text-center px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Duration</th>
+                              <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Result Status</th>
+                              <th className="text-center px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Tech Score</th>
+                              <th className="text-center px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Coding Score</th>
+                              <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Invite Source</th>
                               {/* Job ID leads the job group — the id first,
                                   then the name, then the versions — which is
                                   the order the Invitation Status rows and the
@@ -6967,14 +6985,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Job Version</th>
                               <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Assessment Version</th>
                               <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Resume Version</th>
-                              <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Phone</th>
-                              <th className="text-center px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Tech Score</th>
-                              <th className="text-center px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Coding Score</th>
-                              <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Invite Source</th>
-                              <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Result Status</th>
-                              <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Timeline</th>
-                              <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Completed</th>
-                              <th className="text-center px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Duration</th>
                               <th className="text-center px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle tf-sticky-col">Actions</th>
                             </tr>
                           </thead>
@@ -7011,6 +7021,60 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   </td>
                                   <td className="px-3 sm:px-4 py-3 align-middle text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">
                                     <span className="block max-w-[16rem] truncate" title={result.candidate_email || undefined}>{result.candidate_email || '-'}</span>
+                                  </td>
+                                  <td className="px-3 sm:px-4 py-3 align-middle text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">
+                                    {result.candidate_phone || '-'}
+                                  </td>
+                                  <td className="px-3 sm:px-4 py-3 align-middle whitespace-nowrap">
+                                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
+                                      <Calendar className="w-4 h-4" />
+                                      {result.sent_at || result.created_at ? formatISTDate((result.sent_at || result.created_at)!) : '-'}
+                                    </div>
+                                  </td>
+                                  <td className="px-3 sm:px-4 py-3 align-middle text-xs text-gray-500 dark:text-slate-500">
+                                    <div className="space-y-1">
+                                      {result.started_at && (
+                                        <div className="flex items-center gap-2 whitespace-nowrap">
+                                          <Play className="w-3 h-3 flex-shrink-0 text-brand-orange-deep" />
+                                          <span>Started: {formatIST(result.started_at)}</span>
+                                        </div>
+                                      )}
+                                      {result.completed_at && (
+                                        <div className="flex items-center gap-2 whitespace-nowrap">
+                                          <CheckCircle className="w-3 h-3 flex-shrink-0 text-success" />
+                                          <span>Completed: {formatIST(result.completed_at)}</span>
+                                        </div>
+                                      )}
+                                      {!result.started_at && !result.completed_at && <span>-</span>}
+                                    </div>
+                                  </td>
+                                  <td className="px-3 sm:px-4 py-3 align-middle whitespace-nowrap">
+                                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
+                                      <Calendar className="w-4 h-4" />
+                                      {result.completed_at ? formatISTDate(result.completed_at) : '-'}
+                                    </div>
+                                  </td>
+                                  <td className="px-3 sm:px-4 py-3 align-middle text-center whitespace-nowrap">
+                                    <div className="flex items-center justify-center gap-2 text-sm text-gray-600 dark:text-slate-400">
+                                      <Clock className="w-4 h-4" />
+                                      {formatTimeSpent(result.time_spent_seconds)}
+                                    </div>
+                                  </td>
+                                  <td className="px-3 sm:px-4 py-3 align-middle">
+                                    {renderInviteBadgeForStatus(
+                                      result.status === 'completed' ? 'completed' : result.status === 'in_progress' ? 'started' : 'pending',
+                                      {},
+                                    )}
+                                  </td>
+                                  {/* Tech / Coding Score — the Invitation Status
+                                      tab's own cell (`renderInviteScoreCell`). */}
+                                  {renderInviteScoreCell(result, 'technical')}
+                                  {renderInviteScoreCell(result, 'coding')}
+                                  {/* Invite Source — how this candidate was
+                                      actually invited, from the invitation's
+                                      own resume_id. */}
+                                  <td className="px-3 sm:px-4 py-3 align-middle text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">
+                                    <InviteSourceValue inv={assessmentInviteSource(result)} iconClassName="w-3.5 h-3.5" />
                                   </td>
                                   {/* Job ID — the shared `JobIdBadge`, which is
                                       the one definition of this identifier in
@@ -7068,54 +7132,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     ) : (
                                       <span className="text-xs text-gray-400">—</span>
                                     )}
-                                  </td>
-                                  <td className="px-3 sm:px-4 py-3 align-middle text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">
-                                    {result.candidate_phone || '-'}
-                                  </td>
-                                  {/* Tech / Coding Score — the Invitation Status
-                                      tab's own cell (`renderInviteScoreCell`). */}
-                                  {renderInviteScoreCell(result, 'technical')}
-                                  {renderInviteScoreCell(result, 'coding')}
-                                  {/* Invite Source — how this candidate was
-                                      actually invited, from the invitation's
-                                      own resume_id; sits right before Status. */}
-                                  <td className="px-3 sm:px-4 py-3 align-middle text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">
-                                    <InviteSourceValue inv={assessmentInviteSource(result)} iconClassName="w-3.5 h-3.5" />
-                                  </td>
-                                  <td className="px-3 sm:px-4 py-3 align-middle">
-                                    {renderInviteBadgeForStatus(
-                                      result.status === 'completed' ? 'completed' : result.status === 'in_progress' ? 'started' : 'pending',
-                                      {},
-                                    )}
-                                  </td>
-                                  <td className="px-3 sm:px-4 py-3 align-middle text-xs text-gray-500 dark:text-slate-500">
-                                    <div className="space-y-1">
-                                      {result.started_at && (
-                                        <div className="flex items-center gap-2 whitespace-nowrap">
-                                          <Play className="w-3 h-3 flex-shrink-0 text-brand-orange-deep" />
-                                          <span>Started: {formatIST(result.started_at)}</span>
-                                        </div>
-                                      )}
-                                      {result.completed_at && (
-                                        <div className="flex items-center gap-2 whitespace-nowrap">
-                                          <CheckCircle className="w-3 h-3 flex-shrink-0 text-success" />
-                                          <span>Completed: {formatIST(result.completed_at)}</span>
-                                        </div>
-                                      )}
-                                      {!result.started_at && !result.completed_at && <span>-</span>}
-                                    </div>
-                                  </td>
-                                  <td className="px-3 sm:px-4 py-3 align-middle whitespace-nowrap">
-                                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
-                                      <Calendar className="w-4 h-4" />
-                                      {result.completed_at ? formatISTDate(result.completed_at) : '-'}
-                                    </div>
-                                  </td>
-                                  <td className="px-3 sm:px-4 py-3 align-middle text-center whitespace-nowrap">
-                                    <div className="flex items-center justify-center gap-2 text-sm text-gray-600 dark:text-slate-400">
-                                      <Clock className="w-4 h-4" />
-                                      {formatTimeSpent(result.time_spent_seconds)}
-                                    </div>
                                   </td>
                                   {/* The Invitation Status kebab and its View
                                       Result item. The cell stops the click so
@@ -7437,7 +7453,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             <thead className="[&_th]:bg-slate-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                               <tr>
                                 <th className="px-3 sm:px-4 py-2.5 sm:py-3 w-12"><Skeleton className="h-4 w-4 rounded" /></th>
-                                {['CID', 'Candidate', 'Job & Assessment', 'Invite Source', 'Status', 'Invited On', 'Timeline', 'Tech Score', 'Coding Score', 'Action'].map((c) => (
+                                {['CID', 'Candidate', 'Invited On', 'Timeline', 'Status', 'Tech Score', 'Coding Score', 'Invite Source', 'Job & Assessment', 'Action'].map((c) => (
                                   <th key={c} className="px-3 sm:px-4 py-2.5 sm:py-3"><Skeleton className="h-3 w-20" /></th>
                                 ))}
                               </tr>
@@ -7456,18 +7472,18 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                       </div>
                                     </div>
                                   </td>
+                                  <td className="px-3 sm:px-4 py-3"><Skeleton className="h-4 w-24" /></td>
+                                  <td className="px-3 sm:px-4 py-3"><Skeleton className="h-4 w-40" /></td>
+                                  <td className="px-3 sm:px-4 py-3"><Skeleton className="h-6 w-20 rounded-full" /></td>
+                                  <td className="px-3 sm:px-4 py-3"><Skeleton className="h-6 w-12 mx-auto" /></td>
+                                  <td className="px-3 sm:px-4 py-3"><Skeleton className="h-6 w-12 mx-auto" /></td>
+                                  <td className="px-3 sm:px-4 py-3"><Skeleton className="h-4 w-24" /></td>
                                   <td className="px-3 sm:px-4 py-3">
                                     <div className="space-y-1.5">
                                       <Skeleton className="h-4 w-48" />
                                       <Skeleton className="h-3 w-32" />
                                     </div>
                                   </td>
-                                  <td className="px-3 sm:px-4 py-3"><Skeleton className="h-4 w-24" /></td>
-                                  <td className="px-3 sm:px-4 py-3"><Skeleton className="h-6 w-20 rounded-full" /></td>
-                                  <td className="px-3 sm:px-4 py-3"><Skeleton className="h-4 w-24" /></td>
-                                  <td className="px-3 sm:px-4 py-3"><Skeleton className="h-4 w-40" /></td>
-                                  <td className="px-3 sm:px-4 py-3"><Skeleton className="h-6 w-12 mx-auto" /></td>
-                                  <td className="px-3 sm:px-4 py-3"><Skeleton className="h-6 w-12 mx-auto" /></td>
                                   <td className="px-3 sm:px-4 py-3"><Skeleton className="h-8 w-8 rounded-md mx-auto" /></td>
                                 </tr>
                               ))}
@@ -7762,21 +7778,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 )}
                                 <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">CID</th>
                                 <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Candidate</th>
-                                {/* One column for all four job/assessment
-                                    fields — together they identify a single
-                                    thing (the job version this candidate was
-                                    assessed against), so four headers spent on
-                                    it widened every row without telling a
-                                    recruiter anything more. Same th classes as
-                                    every other column. */}
-                                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Job ID</th>
-                                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Job Role</th>
-                                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Job Version</th>
-                                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Assessment Version</th>
-                                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Invite Source</th>
-                                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Status</th>
                                 <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Invited On</th>
                                 <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Timeline</th>
+                                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Status</th>
                                 {/* Centred, like the score columns on the
                                     Candidate Results table — a percentage over
                                     its Pass/Fail chip reads as a unit, and
@@ -7791,6 +7795,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     without the round show a dash. */}
                                 <th className="text-center px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Tech Score</th>
                                 <th className="text-center px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Coding Score</th>
+                                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Invite Source</th>
+                                {/* Job ID / Job Role / Job Version / Assessment Version —
+                                    the job group, after Invite Source: the same place the
+                                    Track Invites popup and the Results page put it. */}
+                                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Job ID</th>
+                                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Job Role</th>
+                                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Job Version</th>
+                                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Assessment Version</th>
                                 {/* Action — pinned to the right edge with
                                     `tf-sticky-col`, the mirror of the Select
                                     All column's `tf-sticky-col-left`, so on
@@ -7867,6 +7879,50 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                         )}
                                       </div>
                                     </td>
+                                    <td className="px-3 sm:px-4 py-3 align-middle whitespace-nowrap">
+                                      <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
+                                        <Calendar className="w-4 h-4" />
+                                        {inv.sent_at || inv.created_at ? formatISTDate(inv.sent_at || inv.created_at) : '-'}
+                                      </div>
+                                    </td>
+                                    {/* Every audit-logged event on its own line, oldest
+                                        first (timelineEvents/buildFullTimeline in
+                                        AssessmentInviteActions) — not just the latest
+                                        per milestone type, so a revoke followed by an
+                                        edited resend shows both, not just the resend. */}
+                                    <td className="px-3 sm:px-4 py-3 align-middle text-xs text-gray-500 dark:text-slate-500">
+                                      <div className="space-y-1">
+                                        {timelineEvents(inv).length === 0 ? (
+                                          <div className="flex items-center gap-2 whitespace-nowrap">
+                                            <Clock className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                                            <span>Created: {formatIST(inv.created_at)}</span>
+                                          </div>
+                                        ) : (
+                                          timelineEvents(inv).map(({ label, at, Icon, tone }, i) => (
+                                            <div key={`${label}-${i}`} className="flex items-center gap-2 whitespace-nowrap">
+                                              <Icon className={`w-3 h-3 flex-shrink-0 ${tone}`} />
+                                              <span className={tone}>{label}: {formatIST(at)}</span>
+                                            </div>
+                                          ))
+                                        )}
+                                      </div>
+                                      {hasMoreTimelineHistory(inv) && (
+                                        <ViewFullHistoryLink onClick={() => setHistoryInviteTarget(inv)} />
+                                      )}
+                                    </td>
+                                    {/* The Timeline's latest status, on every
+                                        tab — the same value that decided
+                                        which tab this row is under. */}
+                                    <td className="px-3 sm:px-4 py-3 align-middle">
+                                      {renderInviteBadgeForStatus(statusOf(inv), inv)}
+                                    </td>
+                                    {renderInviteScoreCell(inv, 'technical')}
+                                    {renderInviteScoreCell(inv, 'coding')}
+                                    {/* Invite Source — how this candidate was actually
+                                        invited, from the invitation's own resume_id. */}
+                                    <td className="px-3 sm:px-4 py-3 align-middle text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">
+                                      <InviteSourceValue inv={assessmentInviteSource(inv)} iconClassName="w-3.5 h-3.5" />
+                                    </td>
                                     {/* Job ID / Job Role / Job Version /
                                         Assessment Version — four columns, each
                                         drawn exactly as the All Assessments
@@ -7907,50 +7963,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                         <span className="text-xs text-gray-400">—</span>
                                       )}
                                     </td>
-                                    {/* The Timeline's latest status, on every
-                                        tab — the same value that decided
-                                        which tab this row is under. */}
-                                    {/* Invite Source — how this candidate was actually
-                                        invited, from the invitation's own resume_id. */}
-                                    <td className="px-3 sm:px-4 py-3 align-middle text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">
-                                      <InviteSourceValue inv={assessmentInviteSource(inv)} iconClassName="w-3.5 h-3.5" />
-                                    </td>
-                                    <td className="px-3 sm:px-4 py-3 align-middle">
-                                      {renderInviteBadgeForStatus(statusOf(inv), inv)}
-                                    </td>
-                                    <td className="px-3 sm:px-4 py-3 align-middle whitespace-nowrap">
-                                      <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
-                                        <Calendar className="w-4 h-4" />
-                                        {inv.sent_at || inv.created_at ? formatISTDate(inv.sent_at || inv.created_at) : '-'}
-                                      </div>
-                                    </td>
-                                    {/* Every audit-logged event on its own line, oldest
-                                        first (timelineEvents/buildFullTimeline in
-                                        AssessmentInviteActions) — not just the latest
-                                        per milestone type, so a revoke followed by an
-                                        edited resend shows both, not just the resend. */}
-                                    <td className="px-3 sm:px-4 py-3 align-middle text-xs text-gray-500 dark:text-slate-500">
-                                      <div className="space-y-1">
-                                        {timelineEvents(inv).length === 0 ? (
-                                          <div className="flex items-center gap-2 whitespace-nowrap">
-                                            <Clock className="w-3 h-3 text-gray-400 flex-shrink-0" />
-                                            <span>Created: {formatIST(inv.created_at)}</span>
-                                          </div>
-                                        ) : (
-                                          timelineEvents(inv).map(({ label, at, Icon, tone }, i) => (
-                                            <div key={`${label}-${i}`} className="flex items-center gap-2 whitespace-nowrap">
-                                              <Icon className={`w-3 h-3 flex-shrink-0 ${tone}`} />
-                                              <span className={tone}>{label}: {formatIST(at)}</span>
-                                            </div>
-                                          ))
-                                        )}
-                                      </div>
-                                      {hasMoreTimelineHistory(inv) && (
-                                        <ViewFullHistoryLink onClick={() => setHistoryInviteTarget(inv)} />
-                                      )}
-                                    </td>
-                                    {renderInviteScoreCell(inv, 'technical')}
-                                    {renderInviteScoreCell(inv, 'coding')}
                                     {/* Actions in a kebab, using Radix's
                                         DropdownMenu for the same reason the
                                         popup's does: this table sits inside
@@ -9838,7 +9850,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     <thead>
                       <tr className="border-b border-gray-200 dark:border-slate-700">
                         <th className="w-8 py-3 pl-4 pr-0"><Skeleton className="h-4 w-4 rounded-full" /></th>
-                        {['CID', 'Candidate', 'Invite Source', 'Status', 'Timeline', 'Actions'].map((c) => (
+                        {['CID', 'Candidate', 'Invited On', 'Timeline', 'Status', 'Invite Source', 'Actions'].map((c) => (
                           <th key={c} className="px-3 sm:px-4 py-2.5 sm:py-3 text-left"><Skeleton className="h-3 w-16" /></th>
                         ))}
                       </tr>
@@ -9858,8 +9870,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             </div>
                           </td>
                           <td className="px-3 sm:px-4 py-3"><Skeleton className="h-4 w-24" /></td>
-                          <td className="px-3 sm:px-4 py-3"><Skeleton className="h-6 w-20 rounded-full" /></td>
                           <td className="px-3 sm:px-4 py-3"><Skeleton className="h-4 w-40" /></td>
+                          <td className="px-3 sm:px-4 py-3"><Skeleton className="h-6 w-20 rounded-full" /></td>
+                          <td className="px-3 sm:px-4 py-3"><Skeleton className="h-4 w-24" /></td>
                           <td className="px-3 sm:px-4 py-3"><Skeleton className="h-8 w-8 rounded-md" /></td>
                         </tr>
                       ))}
@@ -9897,6 +9910,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         <th className="w-8 py-3 pl-4 pr-0 tf-sticky-col-left" aria-label="Select" />
                         <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">CID</th>
                         <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Candidate</th>
+                        {/* Invited On — the Invitation Status tab's column, in the
+                            same place: just before the Timeline it summarises. */}
+                        <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Invited On</th>
                         {/* hidden md:table-cell mirrors this column's <td>. Without
                             it the header carried one more cell than the body between
                             sm and md, shifting every heading after Timeline off its
@@ -10013,6 +10029,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   <p className="font-medium text-gray-900 dark:text-slate-50 text-sm truncate" title={invitation.candidate_name}>{invitation.candidate_name}</p>
                                   <p className="text-xs text-gray-500 dark:text-slate-500 truncate" title={invitation.candidate_email}>{invitation.candidate_email}</p>
                                 </div>
+                              </div>
+                            </td>
+                            <td className="px-3 sm:px-4 py-3 align-top whitespace-nowrap">
+                              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
+                                <Calendar className="w-4 h-4" />
+                                {invitation.sent_at || invitation.created_at ? formatISTDate(invitation.sent_at || invitation.created_at) : '-'}
                               </div>
                             </td>
                                 <td className="px-3 sm:px-4 py-3 align-top text-xs text-gray-500 dark:text-slate-500 hidden md:table-cell">

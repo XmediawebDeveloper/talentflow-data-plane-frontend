@@ -220,15 +220,22 @@ const COMPACT_TIMELINE_LIMIT = 4;
 const inviteSentAt = (inv: any): string | undefined =>
   inv.invitation_sent_at || inv.sent_at || inv.created_at || undefined;
 
+/** A candidate who reloads or reconnects lands on the system check again, and
+ *  every visit is logged — seven back-to-back "System Check" rows filled the
+ *  4-line cell and pushed "Invited" out of it. The compact cell keeps the
+ *  first of each unbroken run (when the check began); the full history modal
+ *  still lists every visit. */
+const collapseRepeatedSystemChecks = (events: TimelineEntry[]): TimelineEntry[] =>
+  events.filter((e, i) => !(e.label === 'System Check' && events[i - 1]?.label === 'System Check'));
+
 export const timelineEvents = (inv: any): TimelineEntry[] =>
-  buildFullTimeline(inv, inv.timeline || []).slice(-COMPACT_TIMELINE_LIMIT);
+  collapseRepeatedSystemChecks(buildFullTimeline(inv, inv.timeline || [])).slice(-COMPACT_TIMELINE_LIMIT);
 
 /** "View full history" only earns its place once something is actually
- *  hidden by the cap above — at 4 events or fewer the compact list already
- *  shows everything, so the link would open a modal identical to what's
- *  already on screen. */
+ *  hidden from the compact cell — by the cap or the System Check collapse —
+ *  otherwise the link would open a modal identical to what's on screen. */
 const hasMoreTimelineHistory = (inv: any): boolean =>
-  buildFullTimeline(inv, inv.timeline || []).length > COMPACT_TIMELINE_LIMIT;
+  buildFullTimeline(inv, inv.timeline || []).length > timelineEvents(inv).length;
 
 /** Every occurrence of an invitation-management action (not just the latest)
  *  reads the same audit trail the Activity Log is built from — see
@@ -923,46 +930,30 @@ export default function AIInterviewInviteTable({
               )}
               <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">CID</th>
               <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Candidate</th>
-              {/* Column order mirrors the Assessments tables, mode for mode:
-                  - Invitation Status tab (showJobColumn) = the Assessments
-                    Invitation Status tab: job group, Invite Source, Status,
-                    Timeline, then the score.
-                  - Track popup = the Assessments Track Invites popup:
-                    Timeline, Status, Score, Invite Source, then the two
-                    version columns just before Actions. */}
-              {showJobColumn ? (
+              {/* One column order for both modes — the order every AI Interview and
+                  Assessment tracking/results table shares: Invited On, Timeline,
+                  Status, Score, Invite Source, then the job group (Job ID and Job
+                  Title on the Invitation Status tab only; the two versions wherever
+                  they're known) just before Actions. */}
+              <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Invited On</th>
+              {/* hidden md:table-cell mirrors this column's <td> — without it the
+                  header carries one more cell than the body between sm and md and
+                  every heading after Timeline shifts off its column. */}
+              <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider hidden md:table-cell">Timeline</th>
+              <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Status</th>
+              <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Score</th>
+              <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Invite Source</th>
+              {showJobColumn && (
                 <>
-                  {/* Four columns, not one compound cell — the Candidate Results
-                      tab's split: job id, job title, job version, interview
-                      version, each readable (and scannable) on its own. */}
                   <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Job ID</th>
                   <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Job Title</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Job Version</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Interview Version</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Invite Source</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Status</th>
-                  {/* Invited On — the Assessments Invitation Status column:
-                      the send date at a glance, the Timeline carrying the rest. */}
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Invited On</th>
-                  {/* hidden md:table-cell mirrors this column's <td> — without it the
-                      header carries one more cell than the body between sm and md and
-                      every heading after Timeline shifts off its column. */}
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider hidden md:table-cell">Timeline</th>
-                  <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Score</th>
                 </>
-              ) : (
-                <>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider hidden md:table-cell">Timeline</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Status</th>
-                  <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Score</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Invite Source</th>
-                  {(jobVersion != null || showRowVersions) && (
-                    <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Job Version</th>
-                  )}
-                  {(interviewVersion != null || showRowVersions) && (
-                    <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Interview Version</th>
-                  )}
-                </>
+              )}
+              {(showJobColumn || jobVersion != null || showRowVersions) && (
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Job Version</th>
+              )}
+              {(showJobColumn || interviewVersion != null || showRowVersions) && (
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Interview Version</th>
               )}
               <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider tf-sticky-col">Actions</th>
             </tr>
@@ -990,6 +981,14 @@ export default function AIInterviewInviteTable({
                         <Clock className="w-3 h-3" /> Expired
                       </span>
                     )}
+                  </div>
+                </td>
+              );
+              const invitedOnCell = (
+                <td className="py-3 px-4 align-middle whitespace-nowrap">
+                  <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
+                    <Calendar className="w-4 h-4" />
+                    {inviteSentAt(inv) ? formatISTDate(inviteSentAt(inv)) : '-'}
                   </div>
                 </td>
               );
@@ -1068,7 +1067,12 @@ export default function AIInterviewInviteTable({
                     </div>
                   </td>
 
-                  {showJobColumn ? (
+                  {invitedOnCell}
+                  {timelineCell}
+                  {statusCell}
+                  {scoreCell}
+                  {sourceCell}
+                  {showJobColumn && (
                     <>
                       <td className="py-3 px-4 align-middle whitespace-nowrap">
                         {inv._jd_short_id
@@ -1080,48 +1084,21 @@ export default function AIInterviewInviteTable({
                           {inv._config_title || <span className="text-gray-400 dark:text-slate-500">—</span>}
                         </p>
                       </td>
-                      <td className="py-3 px-4 align-middle whitespace-nowrap">
-                        {inv._jd_version != null
-                          ? <VersionPill kind="job" version={inv._jd_version} />
-                          : <span className="text-gray-400 dark:text-slate-500">—</span>}
-                      </td>
-                      <td className="py-3 px-4 align-middle whitespace-nowrap">
-                        {inv._interview_version != null
-                          ? <VersionPill kind="interview" version={inv._interview_version} />
-                          : <span className="text-gray-400 dark:text-slate-500">—</span>}
-                      </td>
-                      {sourceCell}
-                      {statusCell}
-                      <td className="py-3 px-4 align-middle whitespace-nowrap">
-                        <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
-                          <Calendar className="w-4 h-4" />
-                          {inviteSentAt(inv) ? formatISTDate(inviteSentAt(inv)) : '-'}
-                        </div>
-                      </td>
-                      {timelineCell}
-                      {scoreCell}
                     </>
-                  ) : (
-                    <>
-                      {timelineCell}
-                      {statusCell}
-                      {scoreCell}
-                      {sourceCell}
-                      {(jobVersion != null || showRowVersions) && (
-                        <td className="py-3 px-4 align-middle whitespace-nowrap">
-                          {(jobVersion ?? inv._jd_version) != null
-                            ? <VersionPill kind="job" version={jobVersion ?? inv._jd_version} />
-                            : <span className="text-gray-400 dark:text-slate-500">—</span>}
-                        </td>
-                      )}
-                      {(interviewVersion != null || showRowVersions) && (
-                        <td className="py-3 px-4 align-middle whitespace-nowrap">
-                          {(interviewVersion ?? inv._interview_version) != null
-                            ? <VersionPill kind="interview" version={interviewVersion ?? inv._interview_version} />
-                            : <span className="text-gray-400 dark:text-slate-500">—</span>}
-                        </td>
-                      )}
-                    </>
+                  )}
+                  {(showJobColumn || jobVersion != null || showRowVersions) && (
+                    <td className="py-3 px-4 align-middle whitespace-nowrap">
+                      {(jobVersion ?? inv._jd_version) != null
+                        ? <VersionPill kind="job" version={jobVersion ?? inv._jd_version} />
+                        : <span className="text-gray-400 dark:text-slate-500">—</span>}
+                    </td>
+                  )}
+                  {(showJobColumn || interviewVersion != null || showRowVersions) && (
+                    <td className="py-3 px-4 align-middle whitespace-nowrap">
+                      {(interviewVersion ?? inv._interview_version) != null
+                        ? <VersionPill kind="interview" version={interviewVersion ?? inv._interview_version} />
+                        : <span className="text-gray-400 dark:text-slate-500">—</span>}
+                    </td>
                   )}
 
                   <td className="py-3 px-4 align-middle tf-sticky-col" onClick={(e) => e.stopPropagation()}>
