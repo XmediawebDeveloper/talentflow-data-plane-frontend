@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useRef, RefObject } from 'react';
-import Image from 'next/image';
 import {
   Clock,
   ChevronRight,
@@ -11,7 +10,8 @@ import {
   CheckCircle,
   Video,
   FileText,
-  Code,
+  Cpu,
+  CodeXml,
   Users,
   Camera,
   Mic,
@@ -43,6 +43,9 @@ import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useRetryQueue } from '@/hooks/useRetryQueue';
 import { getFullscreenChangeEvent, isFullscreen as getIsFullscreen, exitFullscreen as compatExitFullscreen, requestFullscreen as compatRequestFullscreen, playVideo } from '@/lib/utils/browserCompat';
 import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
+import CandidateHeader from './CandidateHeader';
+import CandidateStepper from './CandidateStepper';
+import { CANDIDATE_PAGE, CARD, RECRUITER_BAR_ROW, RECRUITER_SHELL, T_EYEBROW, T_SECTION } from '@/lib/constants/candidateLayout';
 
 interface Round {
   round_type: string;
@@ -1670,9 +1673,9 @@ export function AssessmentInterface({
       case 'hr':
         return Users;
       case 'technical':
-        return FileText;
+        return Cpu;
       case 'coding':
-        return Code;
+        return CodeXml;
       default:
         return FileText;
     }
@@ -1686,8 +1689,11 @@ export function AssessmentInterface({
         return 'bg-brand-cyan';
       case 'technical':
         return 'bg-brand-blue';
+      /* Coding: brand orange - a non-blue colour from the logo palette
+         (globals.css). This one helper colours both the round tab's icon
+         tile and the question card's heading icon, so the two stay equal. */
       case 'coding':
-        return 'bg-success';
+        return 'bg-brand-orange';
       default:
         return 'bg-gray-500';
     }
@@ -1701,17 +1707,11 @@ export function AssessmentInterface({
   const isFullscreenInvalid = isFullscreenRequired && !isFullscreen;
   const isAssessmentAccessBlocked = isFullscreenInvalid || isDeviceDisabled;
 
-  // Progress steps
-  const progressSteps = [
-    { label: 'Terms & Consent', active: false, completed: true },
-    { label: 'Assessment Details', active: false, completed: true },
-    { label: 'System Check', active: false, completed: true },
-    { label: 'HR Questions', active: false, completed: true },
-    { label: 'Assessment', active: true, completed: false }
-  ];
+  const jobRole = assessmentInfo.jd_title;
+  const candidateName = assessmentInfo.candidate_name;
 
   return (
-    <div className="min-h-[100dvh] bg-white flex flex-col relative">
+    <div className={`${CANDIDATE_PAGE} relative`}>
       {/* DISQUALIFICATION Modal - Shows when fullscreen is exited */}
       {showDisqualificationModal && (
         <div className="fixed inset-0 bg-black/98 backdrop-blur-lg flex items-center justify-center z-[10000]">
@@ -1837,8 +1837,10 @@ export function AssessmentInterface({
       {/* Proctoring blocker overlay removed — the parent CandidateAssessmentPortal
           handles the fullscreen-exit overlay (shows a "Return to Fullscreen" button). */}
 
-      {/* Sticky Header Container */}
-      <div className="sticky top-0 z-50">
+      {/* Sticky Header Container - pinned from `sm` up. On a phone the
+          header and step form are ~150px, a quarter of the screen, so there
+          they scroll away and the question gets the whole viewport. */}
+      <div className="relative z-50 sm:sticky sm:top-0">
         {/* Network Status Banner */}
         {/* Two different facts, two different messages. A backend restart used
             to render as "No internet connection", which blames the candidate's
@@ -1873,67 +1875,16 @@ export function AssessmentInterface({
           </div>
         )}
 
-        {/* Main Header */}
-        <header className="bg-white border-b border-gray-200 px-4 py-3">
-          <div className="w-full px-2 sm:px-4 lg:px-6 flex items-center justify-between gap-2">
-            {/* Logo & Title */}
-            <div className="flex items-center gap-3">
-              {/* TalentFlow Logo - Always Visible */}
-              <div className="flex-shrink-0">
-                <Image
-                  src="/logos/talent_flow_logo.png"
-                  alt="TalentFlow"
-                  width={140}
-                  height={35}
-                  className="h-7 sm:h-8 w-auto"
-                  unoptimized
-                  priority
-                />
-              </div>
-              {/* Assessment Info - Hidden on very small screens */}
-              <div className="hidden md:block">
-                <h1 className="font-semibold text-gray-800 text-sm lg:text-base">{assessmentInfo.assessment_title}</h1>
-                <p className="text-xs lg:text-sm text-gray-500">{assessmentInfo.candidate_name}</p>
-              </div>
-            </div>
-
-            {/* Right Side - Timer, Progress, Camera */}
-            <div className="flex items-center gap-1.5 sm:gap-3">
-              {/* Global Assessment Timer */}
-              <div className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg ${
-                  globalTimeRemaining < 300 ? 'bg-destructive-subtle text-destructive animate-pulse' :
-                  globalTimeRemaining < 600 ? 'bg-warning-subtle text-warning' : 'bg-success-subtle text-success'
-                }`}>
-                  <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                  <div className="flex flex-col items-center">
-                    <span className="font-mono font-bold text-sm sm:text-lg">{formatTime(globalTimeRemaining)}</span>
-                    <span className="hidden sm:block text-2xs uppercase tracking-wide opacity-75">Total Time</span>
-                  </div>
-                </div>
-
-              {/* Question Timer */}
-              {timeRemaining !== null && (
-                <div className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg ${
-                  timeRemaining < 30 ? 'bg-destructive-subtle text-destructive' : 'bg-gray-100 text-gray-700'
-                }`}>
-                  <span className="text-xs text-gray-500">Q:</span>
-                  <span className="font-mono font-medium text-sm">{formatTime(timeRemaining)}</span>
-                </div>
-              )}
-
-              {/* Overall Progress */}
-              <div className="hidden sm:flex items-center gap-2">
-                <span className="text-sm text-gray-500">
-                  {currentQuestion.question_number} / {currentQuestion.total_questions}
-                </span>
-                <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gray-800 transition-all duration-300"
-                    style={{ width: `${(currentQuestion.question_number / currentQuestion.total_questions) * 100}%` }}
-                  />
-                </div>
-              </div>
-
+        {/* Main Header - the shared candidate header, so this step keeps the
+            bar height, logo and left edge of every other step. The camera,
+            timers and progress moved out of it (see the aside in Main
+            Content): at 72px the bar cannot hold a preview large enough to see
+            a face. */}
+        <CandidateHeader showHelp={false}>
+            {/* Right side - auto-save warnings. The candidate / job / version
+                details sit in the context row below the stepper, and the
+                timers and progress under the camera, so nothing is shown twice. */}
+            <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
               {/* Auto-save warnings only. Success/saving badges are intentionally hidden to avoid constant flashing. */}
               {(autoSaveStatus === 'offline' || autoSaveStatus === 'retrying' || autoSaveStatus === 'error') && (
                 <div className={`hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-lg ${
@@ -1962,8 +1913,49 @@ export function AssessmentInterface({
                 </div>
               )}
 
-              {/* Camera Preview */}
-              <div className="hidden sm:block w-16 h-12 sm:w-20 sm:h-14 bg-gray-900 rounded-lg overflow-hidden relative">
+            </div>
+        </CandidateHeader>
+
+        {/* Progress Stepper - the shared one, as on every other step. No
+            bottom rule here: the card below is what separates it. */}
+        <CandidateStepper current={5} bordered={false} />
+      </div>
+
+      {/* Main Content */}
+      <main className={RECRUITER_SHELL}>
+        <div className={`${RECRUITER_BAR_ROW} py-4 md:py-5`}>
+          {/* Round tabs - above the question, same items as before. */}
+          <div className="mb-4 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-center sm:gap-3">
+            {rounds.map((round, idx) => {
+              const Icon = getRoundIcon(round.round_type);
+              const isActive = round.round_type === currentQuestion.round_type;
+              return (
+                <div
+                  key={`${round.round_type}-${idx}`}
+                  className={`flex min-w-0 items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 rounded-lg ${
+                    isActive ? 'bg-white shadow-sm border border-gray-200' : ''
+                  }`}
+                >
+                  <div className={`w-6 h-6 shrink-0 rounded ${getRoundColor(round.round_type)} flex items-center justify-center`}>
+                    <Icon className="w-4 h-4 text-white" />
+                  </div>
+                  <span className={`min-w-0 truncate text-xs sm:text-sm ${isActive ? 'text-gray-900' : 'text-gray-500'}`}>
+                    {round.round_name}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Recording panel on the right on desktop, above the question on
+              smaller screens - first in the DOM, so `lg:flex-row-reverse` puts
+              it on the right. The camera with the timer and question progress
+              under it, then the candidate details card directly below. The one
+              <video> stays mounted at every size for proctoring. */}
+          <div className="flex flex-col lg:flex-row-reverse lg:items-start gap-4 lg:gap-6">
+          <aside className="lg:w-72 shrink-0 lg:sticky lg:top-40 flex flex-col gap-4">
+            <div className={`${CARD} flex items-center gap-3 lg:flex-col lg:items-stretch`}>
+              <div className="w-1/2 sm:w-44 md:w-60 lg:w-full aspect-video bg-gray-900 rounded-lg overflow-hidden relative shrink-0">
                 <video
                   ref={videoRef}
                   autoPlay
@@ -1972,76 +1964,66 @@ export function AssessmentInterface({
                   className="w-full h-full object-cover"
                   style={{ transform: 'scaleX(-1)' }}
                 />
-                <div className="absolute bottom-1 right-1 w-2 h-2 bg-destructive rounded-full animate-pulse" />
+                <div className="absolute bottom-1.5 right-1.5 w-2.5 h-2.5 bg-destructive rounded-full animate-pulse" />
+              </div>
+              <div className="flex-1 min-w-0 flex flex-col gap-2 lg:gap-3">
+                {/* Global Assessment Timer */}
+                <div className={`flex items-center justify-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg ${
+                    globalTimeRemaining < 300 ? 'bg-destructive-subtle text-destructive animate-pulse' :
+                    globalTimeRemaining < 600 ? 'bg-warning-subtle text-warning' : 'bg-success-subtle text-success'
+                  }`}>
+                  <Clock className="w-4 h-4 shrink-0" />
+                  <div className="flex flex-col items-center">
+                    <span className="font-semibold tabular-nums text-base sm:text-lg">{formatTime(globalTimeRemaining)}</span>
+                    <span className="text-2xs uppercase tracking-wide opacity-75">Total Time</span>
+                  </div>
+                </div>
+
+                {/* Question Timer */}
+                {timeRemaining !== null && (
+                  <div className={`flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg ${
+                    timeRemaining < 30 ? 'bg-destructive-subtle text-destructive' : 'bg-gray-100 text-gray-700'
+                  }`}>
+                    <span className="text-xs text-gray-500">Q:</span>
+                    <span className="font-medium tabular-nums text-sm">{formatTime(timeRemaining)}</span>
+                  </div>
+                )}
+
+                {/* Overall Progress */}
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-500 whitespace-nowrap tabular-nums">
+                    {currentQuestion.question_number} / {currentQuestion.total_questions}
+                  </span>
+                  <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-brand-blue transition-all duration-300"
+                      style={{ width: `${(currentQuestion.question_number / currentQuestion.total_questions) * 100}%` }}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        </header>
 
-        {/* Progress Stepper */}
-        <div className="w-full bg-white border-b border-gray-200">
-          <div className="w-full px-2 sm:px-4 lg:px-8 py-2 sm:py-3">
-            <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 mx-auto">
-              {progressSteps.map((step, index) => (
-                <div key={index} className="flex items-center">
-                  <div className="flex items-center gap-2">
-                    <div className={`w-5 h-5 sm:w-7 sm:h-7 rounded-full flex items-center justify-center text-xs font-medium transition-all ${
-                      step.completed
-                        ? 'bg-success text-white'
-                        : step.active
-                          ? 'bg-brand-blue text-white'
-                          : 'bg-gray-300 text-gray-600'
-                    }`}>
-                      {step.completed ? <Check className="w-3 h-3" /> : index + 1}
-                    </div>
-                    <span className={`text-xs font-medium hidden lg:block ${
-                      step.active ? 'text-gray-900' : step.completed ? 'text-success' : 'text-gray-500'
-                    }`}>
-                      {step.label}
-                    </span>
-                  </div>
-                  {index < progressSteps.length - 1 && (
-                    <div className={`hidden sm:block w-6 sm:w-12 h-0.5 mx-2 ${
-                      step.completed ? 'bg-success' : 'bg-gray-300'
-                    }`} />
-                  )}
+            {/* Candidate details - the only place this step shows them. */}
+            <div className={CARD}>
+              <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3 sm:gap-4">
+                <div className="min-w-0">
+                  <dt className={T_EYEBROW}>Candidate Name</dt>
+                  <dd className={`mt-1 ${T_SECTION} truncate`} title={candidateName || undefined}>
+                    {candidateName || '-'}
+                  </dd>
                 </div>
-              ))}
+                <div className="min-w-0">
+                  <dt className={T_EYEBROW}>Candidate Role</dt>
+                  <dd className={`mt-1 ${T_SECTION} truncate`} title={jobRole || undefined}>
+                    {jobRole || '-'}
+                  </dd>
+                </div>
+              </dl>
             </div>
-          </div>
-        </div>
+          </aside>
 
-        {/* Round Progress Bar */}
-        <div className="w-full bg-gray-50 border-b border-gray-200">
-          <div className="w-full px-2 sm:px-4 lg:px-8 py-1.5 sm:py-2">
-            <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 mx-auto">
-              {rounds.map((round, idx) => {
-                const Icon = getRoundIcon(round.round_type);
-                const isActive = round.round_type === currentQuestion.round_type;
-                return (
-                  <div
-                    key={`${round.round_type}-${idx}`}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ${
-                      isActive ? 'bg-white shadow-sm border border-gray-200' : ''
-                    }`}
-                  >
-                    <div className={`w-6 h-6 rounded ${getRoundColor(round.round_type)} flex items-center justify-center`}>
-                      <Icon className="w-4 h-4 text-white" />
-                    </div>
-                    <span className={`text-sm ${isActive ? 'font-medium text-gray-800' : 'text-gray-500'}`}>
-                      {round.round_name}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <main className="flex-1 overflow-auto">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-6">
+          <div className="min-w-0 flex-1">
           {/* Review Mode Banner — informational only; Submit & Confirm at the
               bottom of the question card is the sole submission path. */}
           {allQuestionsAnswered && (
@@ -2069,7 +2051,7 @@ export function AssessmentInterface({
                     })()}
                   </div>
                   <div>
-                    <p className="font-medium text-gray-800">
+                    <p className={T_SECTION}>
                       {currentQuestion.round_name}
                     </p>
                   </div>
@@ -2129,8 +2111,9 @@ export function AssessmentInterface({
                 )}
               </div>
 
-              {/* Right side - Submit and Next buttons */}
-              <div className="flex items-center gap-3">
+              {/* Right side - Submit and Next buttons. Wraps on a narrow phone
+                  rather than pushing a button past the screen edge. */}
+              <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
                 {/* Submit button - locks the answer (optional for candidate) */}
                 {!isCurrentAnswerLocked && isAnswerValid() && (
                   <Button
@@ -2181,24 +2164,39 @@ export function AssessmentInterface({
             </div>
           </div>
 
-          {/* Progress Indicator - Click to Navigate */}
+          {/* Progress Indicator - Click to Navigate.
+              Colours are the global status tokens (globals.css): neutral
+              muted for not answered, warning for answered-not-submitted,
+              success for submitted, brand blue for the current question. The
+              counts read the same `answerStatuses` the grid colours from. */}
           <div className="mt-3 sm:mt-4 bg-white rounded-lg border border-gray-200 shadow-sm p-3 sm:p-4">
             <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-              <p className="text-sm font-medium text-gray-700">Progress</p>
-              <div className="flex items-center gap-3 text-xs flex-wrap">
-                <span className="flex items-center gap-1">
-                  <div className="w-3 h-3 rounded bg-purple-100 border border-purple-300"></div>
-                  Not answered
-                </span>
-                <span className="flex items-center gap-1">
-                  <div className="w-3 h-3 rounded bg-orange-100 border border-orange-300" />
-                  Answered
-                </span>
-                <span className="flex items-center gap-1">
-                  <div className="w-3 h-3 rounded bg-success-subtle border border-success-line"></div>
-                  Submitted
-                </span>
-              </div>
+              <p className={T_SECTION}>Progress</p>
+              {(() => {
+                let submittedCount = 0;
+                let answeredCount = 0;
+                for (let n = 1; n <= currentQuestion.total_questions; n++) {
+                  const st = answerStatuses.get(`question_${n}`);
+                  if (st?.isLocked) submittedCount++;
+                  else if (st?.hasDraft) answeredCount++;
+                }
+                const notAnsweredCount = currentQuestion.total_questions - submittedCount - answeredCount;
+                const legend = [
+                  { label: 'Not answered', count: notAnsweredCount, tone: 'bg-muted text-muted-foreground ring-border' },
+                  { label: 'Answered', count: answeredCount, tone: 'bg-warning-subtle text-warning-strong ring-warning-line' },
+                  { label: 'Submitted', count: submittedCount, tone: 'bg-success-subtle text-success-strong ring-success-line' },
+                ];
+                return (
+                  <div className="flex items-center gap-2 text-xs flex-wrap">
+                    {legend.map((item) => (
+                      <span key={item.label} className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-medium ring-1 ${item.tone}`}>
+                        {item.label}
+                        <span className="font-semibold tabular-nums">{item.count}</span>
+                      </span>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
             <div className="flex flex-wrap gap-2">
               {Array.from({ length: currentQuestion.total_questions }, (_, i) => {
@@ -2208,19 +2206,19 @@ export function AssessmentInterface({
                 const questionStatus = answerStatuses.get(`question_${num}`);
                 const isLocked = questionStatus?.isLocked || false;
                 const hasDraft = questionStatus?.hasDraft || false;
-                let colorClass = 'bg-purple-100 text-purple-700'; // Not answered (violet)
+                let colorClass = 'bg-muted text-muted-foreground ring-1 ring-border'; // Not answered
                 let icon = null;
                 let titleText = `Question ${num} - Not answered`;
 
                 if (isCurrent) {
-                  colorClass = 'bg-gray-800 text-white ring-2 ring-gray-800 ring-offset-2';
+                  colorClass = 'bg-brand-blue text-primary-foreground ring-2 ring-brand-blue ring-offset-2';
                   titleText = 'Current question';
                 } else if (isLocked) {
-                  colorClass = 'bg-success-subtle text-success';
+                  colorClass = 'bg-success-subtle text-success-strong ring-1 ring-success-line';
                   icon = <Lock className="w-4 h-4" />;
                   titleText = `Question ${num} - Submitted`;
                 } else if (hasDraft) {
-                  colorClass = 'bg-orange-100 text-orange-700'; // Answered, not yet submitted (orange)
+                  colorClass = 'bg-warning-subtle text-warning-strong ring-1 ring-warning-line'; // Answered, not yet submitted
                   icon = <Save className="w-4 h-4" />;
                   titleText = `Question ${num} - Answered (not submitted)`;
                 }
@@ -2235,7 +2233,7 @@ export function AssessmentInterface({
                         void handleJumpToQuestion(num);
                       }
                     }}
-                    className={`w-10 h-10 rounded-lg text-sm font-medium flex items-center justify-center transition-transform ${colorClass} ${
+                    className={`w-10 h-10 rounded-lg text-sm font-medium tabular-nums flex items-center justify-center transition-transform ${colorClass} ${
                       isCurrent ? '' : 'cursor-pointer hover:scale-110 hover:shadow-md'
                     } disabled:cursor-default disabled:hover:scale-100 disabled:hover:shadow-none`}
                     title={titleText}
@@ -2245,9 +2243,11 @@ export function AssessmentInterface({
                 );
               })}
             </div>
-            <p className="text-xs text-gray-500 mt-2">
+            <p className="text-xs text-gray-500 mt-2 tabular-nums">
               Question {currentQuestion.question_number} of {currentQuestion.total_questions}
             </p>
+          </div>
+          </div>
           </div>
         </div>
       </main>
