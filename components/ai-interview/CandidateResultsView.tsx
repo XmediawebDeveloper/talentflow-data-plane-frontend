@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useMemo, useEffect, useRef } from 'react';
+// Shared with the assessment results page — one duration probe for all four recordings.
+import { VideoWithDuration } from '@/components/recording/RecordingPlayer';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -243,7 +245,7 @@ function VideoPane({
   }
   if (blobUrl) {
     return (
-      <VideoWithDuration blobUrl={blobUrl} onError={onError} onDuration={onDuration} seekTo={seekTo} seekKey={seekKey} />
+      <VideoWithDuration src={blobUrl} onError={onError} onDuration={onDuration} seekTo={seekTo} seekKey={seekKey} />
     );
   }
   return null;
@@ -256,80 +258,6 @@ function formatDuration(seconds: number): string {
   const s = Math.floor(seconds % 60);
   const pad = (n: number) => n.toString().padStart(2, '0');
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
-}
-
-function VideoWithDuration({ blobUrl, onError, onDuration, seekTo, seekKey }: { blobUrl: string; onError: () => void; onDuration?: (seconds: number) => void; seekTo?: number | null; seekKey?: number }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [duration, setDuration] = useState<number | null>(null);
-  // True once metadata (and, for webm, duration) has resolved so it's safe to
-  // set currentTime. Seek requests that arrive before this are applied on ready.
-  const readyRef = useRef(false);
-
-  const applyDuration = (d: number) => {
-    setDuration(d);
-    if (onDuration && isFinite(d) && d > 0) onDuration(d);
-  };
-
-  const applySeek = () => {
-    const v = videoRef.current;
-    if (!v || !readyRef.current || seekTo == null) return;
-    const max = isFinite(v.duration) && v.duration > 0 ? v.duration - 0.25 : seekTo;
-    try {
-      v.currentTime = Math.max(0, Math.min(seekTo, max));
-      // Best-effort autoplay from the seeked point; ignore blocked-autoplay.
-      void v.play?.().catch(() => {});
-    } catch { /* setting currentTime can throw on not-yet-seekable media */ }
-  };
-
-  const markReady = () => {
-    readyRef.current = true;
-    applySeek();
-  };
-
-  // A new seek request (seekKey change) after the video is already loaded.
-  useEffect(() => {
-    applySeek();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seekKey]);
-
-  const handleLoadedMetadata = () => {
-    const v = videoRef.current;
-    if (!v) return;
-    if (isFinite(v.duration) && v.duration > 0) {
-      applyDuration(v.duration);
-      markReady();
-      return;
-    }
-    const onTimeUpdate = () => {
-      v.removeEventListener('timeupdate', onTimeUpdate);
-      v.currentTime = 0;
-      applyDuration(v.duration);
-      markReady();
-    };
-    v.addEventListener('timeupdate', onTimeUpdate);
-    v.currentTime = 1e9;
-  };
-
-  return (
-    <div className="relative">
-      <video
-        ref={videoRef}
-        controls
-        preload="metadata"
-        className="w-full max-h-[500px] rounded-xl bg-slate-900 ring-1 ring-black/[0.04]"
-        src={blobUrl}
-        onLoadedMetadata={handleLoadedMetadata}
-        onError={onError}
-      >
-        Your browser does not support video playback.
-      </video>
-      {duration !== null && (
-        <div className="absolute top-2 right-2 flex items-center gap-1 px-2 py-1 rounded-md bg-slate-900/80 backdrop-blur-sm text-white text-xs font-medium ring-1 ring-white/10">
-          <Clock className="w-3 h-3" /> {formatDuration(duration)}
-        </div>
-      )}
-    </div>
-  );
 }
 
 function formatBytes(bytes: number | null): string {
@@ -1096,8 +1024,24 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
   //     row is transiently 'in_progress' + partial/stub while the detached
   //     finalize runs. Both render the friendly "Generating results" spinner and
   //     poll until the real evaluation arrives — NOT the disconnected banner.
-  const evaluationInFlight = reachedEnd && !wasTerminated && !evaluationReady;
-  const evaluationPending = (isCompleted && !evaluationReady) || evaluationInFlight;
+  // "Completed (Auto)" with NOTHING recorded: the candidate's socket never
+  // delivered a single turn (WS failed before Q1 / dropped immediately) and the
+  // timeout monitor auto-finalized the row with a stub. There is no transcript
+  // to score — the evaluate endpoint answers 400 "No transcript available" —
+  // so "still generating" would spin forever. Treat it as a TERMINAL state.
+  // Both signals must be empty: a stub row that still has a transcript is a
+  // real "eval did not run" case and keeps the spinner + auto re-eval below.
+  const noAnswersRecorded = useMemo(() => {
+    if (!isCompleted || !evalIncomplete || wasTerminated) return false;
+    const transcript = (liveSession as any)?.conversation_transcript;
+    const qh = (eval_ as any)?.question_history;
+    const transcriptEmpty = !Array.isArray(transcript) || transcript.length === 0;
+    const qhEmpty = !Array.isArray(qh) || qh.length === 0;
+    return transcriptEmpty && qhEmpty;
+  }, [isCompleted, evalIncomplete, wasTerminated, liveSession, eval_]);
+
+  const evaluationInFlight = reachedEnd && !wasTerminated && !evaluationReady && !noAnswersRecorded;
+  const evaluationPending = ((isCompleted && !evaluationReady) || evaluationInFlight) && !noAnswersRecorded;
 
   // Polling fallback — when the page loads after interview ended but before
   // evaluation finished, there's no WS to receive evaluation_ready. Poll
@@ -1123,15 +1067,26 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
   // of spinning forever. Guarded by a ref so the 5s poll can't re-trigger it.
   const _autoReevalFiredRef = useRef<string | null>(null);
   const [retryingEval, setRetryingEval] = useState(false);
+  // Last error from the evaluate endpoint (e.g. 400 "No transcript available").
+  // Surfaced inside the spinner so a failed trigger is visible instead of
+  // silently swallowed while the page keeps polling.
+  const [evalTriggerError, setEvalTriggerError] = useState<string | null>(null);
+  const describeEvalError = (err: any): string => {
+    const detail = err?.response?.data?.detail;
+    if (typeof detail === 'string' && detail.trim()) return detail;
+    if (detail && typeof detail === 'object') { try { return JSON.stringify(detail); } catch { /* fall through */ } }
+    return err?.message || 'Evaluation request failed';
+  };
   useEffect(() => {
-    if (!isCompleted || !evalIncomplete || wasTerminated) return;
+    if (!isCompleted || !evalIncomplete || wasTerminated || noAnswersRecorded) return;
     if (_autoReevalFiredRef.current === liveSession.id) return;
     _autoReevalFiredRef.current = liveSession.id;
+    setEvalTriggerError(null);
     aiInterviewService.triggerEvaluation(liveSession.id)
       .then(() => aiInterviewService.get(liveSession.id))
       .then(updated => setLiveSession(updated))
-      .catch(() => { /* poll fallback keeps trying; stub remains re-evaluable */ });
-  }, [isCompleted, evalIncomplete, wasTerminated, liveSession.id]);
+      .catch((err: any) => { setEvalTriggerError(describeEvalError(err)); /* poll fallback keeps trying; stub remains re-evaluable */ });
+  }, [isCompleted, evalIncomplete, wasTerminated, noAnswersRecorded, liveSession.id]);
 
   // ── Recruiter "Re-Evaluate" (SAFE, ONE-TIME) ──────────────────────────────
   // Fallback for an interview whose candidate reached the END but whose result is
@@ -1560,11 +1515,17 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
           failed to land (OpenAI hiccup / interrupted save). Offer an explicit
           Retry so a non-terminated interview never spins forever: it re-runs
           the same transcript evaluation and refreshes. */}
-      {evalElapsedSec >= 180 && (
+      {evalTriggerError && (
+        <p className="mt-4 text-xs text-destructive text-center max-w-sm">
+          Evaluation request failed: {evalTriggerError}
+        </p>
+      )}
+      {(evalElapsedSec >= 180 || !!evalTriggerError) && (
         <div className="mt-6 flex flex-col items-center gap-2">
           <p className="text-xs text-gray-400 text-center max-w-xs">
-            Taking longer than usual. You can retry the evaluation — it re-scores
-            from the saved transcript.
+            {evalTriggerError
+              ? 'You can retry the evaluation — it re-scores from the saved transcript.'
+              : 'Taking longer than usual. You can retry the evaluation — it re-scores from the saved transcript.'}
           </p>
           <Button
             variant="primary"
@@ -1572,12 +1533,13 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
             disabled={retryingEval}
             onClick={async () => {
               setRetryingEval(true);
+              setEvalTriggerError(null);
               _autoReevalFiredRef.current = null; // allow the auto-effect to re-fire too
               try {
                 await aiInterviewService.triggerEvaluation(liveSession.id);
                 const updated = await aiInterviewService.get(liveSession.id);
                 setLiveSession(updated);
-              } catch { /* keep spinner + polling; user can retry again */ }
+              } catch (err: any) { setEvalTriggerError(describeEvalError(err)); /* keep spinner + polling; user can retry again */ }
               finally { setRetryingEval(false); }
             }}
           >
@@ -1596,6 +1558,8 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
   const getPlaceholderMessage = (tabKey?: string) => {
     // While evaluation is being generated, all tabs show the spinner
     if (evaluationPending) return null; // handled by renderEvaluationSpinner below
+    // Terminal: auto-completed with nothing recorded — nothing to score or show.
+    if (noAnswersRecorded) return 'No answers were recorded — the candidate never connected to the interview, so there is nothing to evaluate.';
     // Coverage tab handles its own in-progress state — don't block it
     if (isInProgress && tabKey !== 'coverage') {
       return 'Interview in progress — data will appear once completed';
@@ -1979,6 +1943,19 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
           </div>
         )}
 
+        {/* Auto-completed with NOTHING recorded — terminal, not "generating". */}
+        {noAnswersRecorded && (
+          <div className="mb-4 flex items-start gap-2 px-4 py-3 bg-warning-subtle border border-warning-line ring-1 ring-warning-line/50 rounded-xl text-sm text-warning-strong shadow-sm">
+            <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+            <span>
+              <strong>No answers were recorded.</strong> The candidate never connected to
+              the interview (the session was auto-closed when the time limit elapsed), so
+              there is no transcript to evaluate and no score can be produced. Re-invite the
+              candidate to run the interview again.
+            </span>
+          </div>
+        )}
+
         {/* Interview TERMINATED — candidate left the interview screen (proctoring).
             Prominent red banner so the recruiter immediately sees the session was
             cut short for an integrity violation, independent of the eval flow. */}
@@ -2239,13 +2216,6 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                 rounds_config: (interview as any).rounds_config || (liveSession as any).rounds_config,
                 conversation_transcript: (liveSession as any).conversation_transcript || (interview as any).conversation_transcript,
               });
-              // Compute avg response time from evaluations (seconds)
-              const responseTimes = (eval_.evaluations || [])
-                .map((e: any) => e?.response_time_seconds ?? e?.duration_seconds ?? null)
-                .filter((v: number | null): v is number => typeof v === 'number' && v > 0);
-              const avgResponseSeconds = responseTimes.length > 0
-                ? responseTimes.reduce((a: number, b: number) => a + b, 0) / responseTimes.length
-                : null;
               // AI confidence: prefer backend-provided, fallback in component to scaled final
               const aiConfidence = typeof eval_.ai_confidence === 'number'
                 ? eval_.ai_confidence
@@ -2257,7 +2227,6 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                   data={data}
                   livenessVerified={!!interview.identity_verified}
                   candidateImage={identityPhotoUrl}
-                  avgResponseSeconds={avgResponseSeconds}
                   aiConfidence={aiConfidence}
                 />
               );
@@ -4441,12 +4410,6 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                 conversation_transcript: (liveSession as any).conversation_transcript || (interview as any).conversation_transcript,
                 special_instructions: (interview as any).special_instructions || (liveSession as any).special_instructions,
               });
-              const responseTimes = (eval_.evaluations || [])
-                .map((e: any) => e?.response_time_seconds ?? e?.duration_seconds ?? null)
-                .filter((v: number | null): v is number => typeof v === 'number' && v > 0);
-              const avgResponseSeconds = responseTimes.length > 0
-                ? responseTimes.reduce((a: number, b: number) => a + b, 0) / responseTimes.length
-                : null;
               const aiConfidence = typeof eval_.ai_confidence === 'number'
                 ? eval_.ai_confidence
                 : typeof eval_.confidence === 'number' ? eval_.confidence : null;
@@ -4455,7 +4418,6 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                   data={data}
                   aiConfidence={aiConfidence}
                   candidateImage={identityPhotoUrl}
-                  avgResponseSeconds={avgResponseSeconds}
                   evaluationId={liveSession.display_id || null}
                   sessionId={liveSession.id}
                 />

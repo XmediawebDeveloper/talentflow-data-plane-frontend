@@ -1,7 +1,7 @@
 // Overview tab — converted from Vite source:
 // /root/staging/MVP 1- Timed mode (Evaluation) 12-5-26/src/app/components/EvaluationOverview.tsx
 // MUI Box/Card/Typography → Tailwind. Wired to live DashboardData (no mocks).
-import { CheckCircle, XCircle, Play, Clock, TrendingUp } from 'lucide-react';
+import { CheckCircle, XCircle, Play, TrendingUp } from 'lucide-react';
 import {
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, ResponsiveContainer,
 } from 'recharts';
@@ -12,8 +12,6 @@ interface Props {
   data: DashboardData;
   livenessVerified?: boolean;
   candidateImage?: string | null;
-  /** Average response time across questions (seconds). Optional. */
-  avgResponseSeconds?: number | null;
   /** AI confidence percentage (0–100). Optional — falls back to scaled final score. */
   aiConfidence?: number | null;
 }
@@ -24,7 +22,6 @@ export function OverviewSectionV2({
   data,
   livenessVerified = false,
   candidateImage,
-  avgResponseSeconds,
   aiConfidence,
 }: Props) {
   const {
@@ -121,12 +118,7 @@ export function OverviewSectionV2({
 
   // ── Interview stat tiles ────────────────────────────────────────────
   const stats: { label: string; value: string; icon: React.ReactNode }[] = [
-    { label: 'Questions Answered', value: String(interviewResponses.length), icon: <Play className="w-5 h-5" /> },
-    {
-      label: 'Average Response Time',
-      value: avgResponseSeconds && avgResponseSeconds > 0 ? `${Math.round(avgResponseSeconds)}s` : '—',
-      icon: <Clock className="w-5 h-5" />,
-    },
+    { label: 'Questions Answered', value: `${data.questionsAnswered} / ${data.questionsAsked}`, icon: <Play className="w-5 h-5" /> },
     {
       // "Evaluated" = skills that were actually scored (score > 0). Previously
       // this showed `allSkills.length` which is the total JD config count and
@@ -257,7 +249,7 @@ export function OverviewSectionV2({
       </div>
 
       {/* ── Interview Stats ──────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {stats.map((s, i) => (
           <div key={i} className="rounded-2xl bg-white border border-gray-200 p-6 shadow-sm">
             <div className="flex items-center gap-4">

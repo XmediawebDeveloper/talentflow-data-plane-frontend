@@ -54,8 +54,9 @@ export interface GazeEstimator {
   /**
    * One FaceMesh result. `landmarks` is multiFaceLandmarks[0] (or undefined
    * when the mesh found no face); `faceVisible` is whether the face DETECTOR
-   * still sees a face. Returns null when there is nothing to judge (no face at
-   * all — face_missing owns that), so the caller leaves its counters as-is.
+   * currently sees a face. Returns null when there is nothing to judge (no
+   * visible face — face_missing owns that); the caller must then drop any
+   * "away" streak so it can't carry across the no-face stretch.
    */
   read(landmarks: Landmark[] | null | undefined, faceVisible: boolean): GazeReading | null;
 }
@@ -98,11 +99,16 @@ export function createGazeEstimator(logPrefix = '[GAZE]'): GazeEstimator {
 
   return {
     read(lm, faceVisible) {
+      // FACE FIRST, GAZE SECOND. When the face detector sees no face, "looking
+      // away" must not be judged at all — that's face_missing's warning. FaceMesh
+      // (confidence 0.5) can still return landmarks on a frame the detector
+      // (0.6) rejects, and a stale "away" streak used to carry on into the
+      // no-face stretch, so candidates with no face in the recording were
+      // shown "Looking away" instead of "Face not detected".
+      if (!faceVisible) return null;
       if (!lm) {
-        // FaceMesh lost the landmarks. If the detector still sees a face, the
-        // head is turned too far for the mesh — the most obvious look-away,
-        // which used to log nothing. No face at all → not ours to judge.
-        if (!faceVisible) return null;
+        // FaceMesh lost the landmarks while the detector still sees a face:
+        // the head is turned too far for the mesh — the most obvious look-away.
         return { away: true, direction: 'profile', metrics: { cue: 'profile' } };
       }
 
@@ -124,7 +130,12 @@ export function createGazeEstimator(logPrefix = '[GAZE]'): GazeEstimator {
       const eyeRatio = irisPosition(lm, eyeAOuter, eyeAInner, eyeBInner, eyeBOuter);
 
       const base = baseline;
-      if (!base) {
+      // Calibrate only on readings that aren't already a clear look-away (the
+      // same large turn that is flagged pre-baseline). Otherwise a candidate
+      // who looks away during the first readings teaches the baseline that
+      // "away" is their neutral pose — afterwards looking away reads as
+      // normal and looking at the screen reads as away.
+      if (!base && Math.abs(yawRatio) <= YAW_ABS_PRE_BASELINE) {
         samples.yaw.push(yawRatio);
         samples.pitch.push(pitchRatio);
         if (eyeRatio != null) samples.eye.push(eyeRatio);

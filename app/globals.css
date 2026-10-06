@@ -81,6 +81,26 @@
   animation: tf-step-pulse-dot 1.4s ease-in-out infinite;
 }
 
+/* "Click me next": a call-to-action that has to be noticed before anything
+   else can happen (the candidate System Check's Run Checks button, before the
+   first run). A brand-blue ring swells out of the button and fades, with a
+   slight lift on each beat. Stops for anyone who asked for reduced motion. */
+@keyframes tf-attention-pulse {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand-blue) 60%, transparent); transform: scale(1); }
+  50%  { transform: scale(1.04); }
+  70%  { box-shadow: 0 0 0 12px color-mix(in srgb, var(--brand-blue) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand-blue) 0%, transparent); transform: scale(1); }
+}
+.tf-attention-pulse {
+  animation: tf-attention-pulse 1.6s ease-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tf-attention-pulse {
+    animation: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-blue) 35%, transparent);
+  }
+}
+
 /* ── App-shell scroll lock ──────────────────────────────────────────────
    Set on <html> by the (dashboard) layout while it is mounted. The dashboard
    shell is 100dvh tall with its own scroll container, so the document has

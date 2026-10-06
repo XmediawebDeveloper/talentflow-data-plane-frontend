@@ -36,6 +36,8 @@ export interface ProctoringEvent {
   severity: 'low' | 'medium' | 'high';
   timestamp: Date;
   details?: Record<string, any>;
+  /** Held toast: stays up (no auto-dismiss) until release(holdKey) is called. */
+  holdKey?: string;
 }
 
 // Warning messages
@@ -85,9 +87,11 @@ const EVENT_SEVERITY: Record<ProctoringEventType, 'low' | 'medium' | 'high'> = {
 };
 
 type Listener = (event: ProctoringEvent) => void;
+type ReleaseListener = (holdKey: string) => void;
 
 class ProctoringEventBusClass {
   private listeners = new Set<Listener>();
+  private releaseListeners = new Set<ReleaseListener>();
 
   /** Subscribe to proctoring events */
   subscribe(listener: Listener): () => void {
@@ -97,6 +101,32 @@ class ProctoringEventBusClass {
 
   /** Emit a proctoring event to all subscribers */
   emit(type: ProctoringEventType, details?: Record<string, any>): ProctoringEvent {
+    return this.publish(type, details);
+  }
+
+  /**
+   * Emit a HELD warning (same as the AI interview's InterviewEventBus): the
+   * toast stays on screen until release(holdKey) — used for conditions that
+   * last (face not detected, looking away, multiple faces).
+   */
+  emitHeld(type: ProctoringEventType, holdKey: string, details?: Record<string, any>): ProctoringEvent {
+    return this.publish(type, details, holdKey);
+  }
+
+  /** Subscribe to held-warning releases */
+  subscribeRelease(listener: ReleaseListener): () => void {
+    this.releaseListeners.add(listener);
+    return () => this.releaseListeners.delete(listener);
+  }
+
+  /** Take down the held warning emitted with this holdKey */
+  release(holdKey: string): void {
+    this.releaseListeners.forEach(fn => {
+      try { fn(holdKey); } catch (e) { console.error('[EventBus] Release listener error:', e); }
+    });
+  }
+
+  private publish(type: ProctoringEventType, details?: Record<string, any>, holdKey?: string): ProctoringEvent {
     const event: ProctoringEvent = {
       id: `evt-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
       type,
@@ -104,6 +134,7 @@ class ProctoringEventBusClass {
       severity: EVENT_SEVERITY[type],
       timestamp: new Date(),
       details,
+      holdKey,
     };
     this.listeners.forEach(fn => {
       try { fn(event); } catch (e) { console.error('[EventBus] Listener error:', e); }
@@ -114,6 +145,7 @@ class ProctoringEventBusClass {
   /** Remove all listeners (cleanup) */
   clear(): void {
     this.listeners.clear();
+    this.releaseListeners.clear();
   }
 }
 

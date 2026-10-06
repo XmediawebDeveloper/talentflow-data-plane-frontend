@@ -36,11 +36,13 @@ interface CandidateStepperProps {
    * shorter list, and the numbering follows the list rather than being fixed.
    */
   steps?: readonly string[];
+  /** Bottom rule. Step 5 turns it off: the card under it does the separating. */
+  bordered?: boolean;
 }
 
-export default function CandidateStepper({ current, steps = ASSESSMENT_STEPS }: CandidateStepperProps) {
+export default function CandidateStepper({ current, steps = ASSESSMENT_STEPS, bordered = true }: CandidateStepperProps) {
   return (
-    <div className="w-full bg-white border-b border-gray-200">
+    <div className={`w-full bg-white ${bordered ? 'border-b border-gray-200' : ''}`}>
       <div className={`${RECRUITER_BAR_ROW} py-3 sm:py-4`}>
         {/* Below `sm` the labels are hidden to keep the row on one line, so
             this states the position in words instead — otherwise the dots say

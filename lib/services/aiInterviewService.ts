@@ -967,10 +967,31 @@ export const aiInterviewService = {
     search?: string;
     page?: number;
     page_size?: number;
+    /** YYYY-MM-DD, inclusive, app timezone. */
+    date_from?: string;
+    date_to?: string;
   }): Promise<AIInterviewAuditTrailResponse> {
     try {
       const response = await api.get<AIInterviewAuditTrailResponse>('/ai-interview/audit-trail/combined', { params });
       return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /** Puts an Activity Logs export on the audit trail. The file is built in
+   *  the browser, so nothing server-side would otherwise know it happened. */
+  async logActivityLogsExport(payload: {
+    format: 'csv' | 'excel';
+    record_count: number;
+    selected: boolean;
+    category?: string;
+    search?: string;
+    date_from?: string;
+    date_to?: string;
+  }): Promise<void> {
+    try {
+      await api.post('/ai-interview/audit-trail/export-log', payload);
     } catch (error) {
       throw new Error(handleApiError(error));
     }
