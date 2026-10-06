@@ -6100,6 +6100,21 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               return;
             }
             console.warn("[Safety-net] TalkingHead onAudioEnd never fired — starting mic manually");
+            // Role-intro warm-up: mirror the primary finalizePlayback path above —
+            // this message is NOT a question, so do NOT open the mic (Q1's own
+            // turn arms that). Without this guard, a heavily-loaded browser (e.g.
+            // two interview tabs open at once, observed FPS dropping to ~1.7fps)
+            // can starve TalkingHead's onAudioEnd long enough for THIS safety net
+            // to fire during the role intro. saveAiMessage() above still commits
+            // the greeting bubble either way, but falling through here opened the
+            // mic a full turn early and left isRecordingRef stuck true, which
+            // then silently blocked Q1's own startRecordingInternal call
+            // ("blocked by state") right after.
+            if (roleIntroActiveRef.current) {
+              roleIntroActiveRef.current = false;
+              setStatus("Bina is speaking...");
+              return;
+            }
             // Point 4: clarification ends when Bina stops speaking
             setIsClarification(false);
             isClarificationRef.current = false;
