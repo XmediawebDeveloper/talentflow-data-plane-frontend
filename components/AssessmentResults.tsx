@@ -385,6 +385,39 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
   const enabledColumnsCount = columns.filter(c => c.enabled).length;
 
+  // The list table's width floor, in px: the sum of the fixed widths of the
+  // columns actually rendered (each matches its <th>'s w-* class below). It
+  // used to be a constant 2424px — the width with EVERY column on — so with
+  // fewer columns `table-fixed` spread the surplus over the visible ones and
+  // opened wide gaps between them. Summing what's shown keeps each column at
+  // its own width and the shell scrolls only when they really don't fit.
+  const listTableMinWidth = (() => {
+    const COLUMN_PX: Record<string, number> = {
+      candidate: 256,        // w-64
+      timeline: 384,         // w-96
+      status: 112,           // w-28
+      techScore: 112,        // w-28
+      codingScore: 128,      // w-32
+      inviteSource: 144,     // w-36
+      phone: 144,            // w-36
+      cid: 96,               // w-24
+      jdId: 112,             // w-28
+      jdTitle: 224,          // w-56
+      jobVersion: 112,       // w-28
+      assessmentVersion: 160, // w-40
+    };
+    const rendered = (id: string) =>
+      isColumnEnabled(id) &&
+      (id !== 'techScore' || !!assessmentDetails?.technical_enabled) &&
+      (id !== 'codingScore' || !!assessmentDetails?.coding_enabled);
+    const CHECKBOX_PX = 40; // w-10
+    const ACTIONS_PX = 80;  // w-20
+    return Object.entries(COLUMN_PX).reduce(
+      (sum, [id, px]) => (rendered(id) ? sum + px : sum),
+      CHECKBOX_PX + ACTIONS_PX,
+    );
+  })();
+
   // Check if columns are customized (different from default)
   const areColumnsCustomized = () => {
     if (columns.length === 0) return false;
@@ -2302,11 +2335,12 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           {/* List view: the table, at every width (the shell scrolls
               sideways where it does not fit). */}
           <div className={displayMode === 'grid' ? 'hidden' : 'tf-table-shell'}>
-            {/* 2264px + the Assessment Version column's own w-40 (160px).
-                The table is `table-fixed` over fixed per-column widths, so the
-                floor has to grow with the columns — left at 2264 the browser
-                would squeeze every column to fit instead of letting the shell
-                scroll, which is how one added column narrows all the others.
+            {/* Width floor = listTableMinWidth, the sum of the RENDERED
+                columns' fixed widths. The table is `table-fixed` over those
+                widths, so the floor has to track the columns: too low and the
+                browser squeezes every column instead of letting the shell
+                scroll; too high (the old constant 2424px, i.e. every column
+                on) and it stretches the visible ones apart with wide gaps.
 
                 WITH NO ROWS the floor is dropped, along with the header that
                 carries the per-column widths. A 2424px table holding one empty
@@ -2316,7 +2350,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 lay out means nothing to be wide for: the table becomes as wide
                 as the shell, `TABLE_EMPTY_PANEL_CLASS` centres in it, and the scrollbar
                 goes away. */}
-            <table className={`w-full text-sm border-collapse [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap [&_td]:align-middle ${paginatedCandidates.length === 0 ? '' : 'min-w-[2424px] table-fixed'}`}>
+            <table
+              className={`w-full text-sm border-collapse [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap [&_td]:align-middle ${paginatedCandidates.length === 0 ? '' : 'table-fixed'}`}
+              style={paginatedCandidates.length === 0 ? undefined : { minWidth: listTableMinWidth }}
+            >
               {/* The All Assessments header: white, one rule under it,
                   uppercase semibold labels, each sortable column a button
                   with its ArrowUpDown / ArrowUp / ArrowDown. The column widths
