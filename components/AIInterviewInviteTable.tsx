@@ -951,7 +951,6 @@ export default function AIInterviewInviteTable({
                   )}
                 </th>
               )}
-              <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">CID</th>
               <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Candidate</th>
               {/* One column order for both modes — the order every AI Interview and
                   Assessment tracking/results table shares: Timeline (which
@@ -965,6 +964,7 @@ export default function AIInterviewInviteTable({
               <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Status</th>
               <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Score</th>
               <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Invite Source</th>
+              <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">CID</th>
               {showJobColumn && (
                 <>
                   <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Job ID</th>
@@ -1059,10 +1059,6 @@ export default function AIInterviewInviteTable({
                     </td>
                   )}
 
-                  <td className="py-3 px-4 align-middle whitespace-nowrap text-xs font-medium text-gray-600 dark:text-slate-400">
-                    {inv.candidate_cid || <span className="text-gray-400 dark:text-slate-500">—</span>}
-                  </td>
-
                   <td className="py-3 px-4 align-middle whitespace-nowrap">
                     <div className="flex items-center gap-3">
                       <div className="w-9 h-9 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center text-brand-blue font-medium text-xs flex-shrink-0">
@@ -1085,6 +1081,9 @@ export default function AIInterviewInviteTable({
                   {statusCell}
                   {scoreCell}
                   {sourceCell}
+                  <td className="py-3 px-4 align-middle whitespace-nowrap text-xs font-medium text-gray-600 dark:text-slate-400">
+                    {inv.candidate_cid || <span className="text-gray-400 dark:text-slate-500">—</span>}
+                  </td>
                   {showJobColumn && (
                     <>
                       <td className="py-3 px-4 align-middle whitespace-nowrap">

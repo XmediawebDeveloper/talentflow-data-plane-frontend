@@ -257,6 +257,19 @@ export function createAssessmentFaceMonitor(
     }
   };
 
+  // The two MediaPipe solutions MUST finish loading one after the other.
+  // Their emscripten loader scripts share ONE global `Module`: FaceMesh's
+  // packed-assets loader reads `Module.dataFileDownloads[url]` back on every
+  // download-progress event, and if FaceDetection's loader runs in between it
+  // swaps `Module` out → "Cannot read properties of undefined (reading
+  // '…face_mesh_solution_packed_assets.data')" → the mesh graph can't read its
+  // model ("Failed to read file face_detection_short_range.tflite") → gaze is
+  // dead for the whole session. That's what happened here: the first detector
+  // pass (which is what used to trigger the download) was capped at 1.5 s by
+  // sendWithTimeout, so the gaze pass started FaceMesh's download while
+  // FaceDetection's was still running. The AI interview never hit it only
+  // because it awaits that first pass with no timeout. initialize() makes the
+  // order explicit: detector fully loaded, THEN the mesh.
   const initMediaPipe = async (): Promise<boolean> => {
     try {
       await loadScript(`${MP_FACE_DETECTION_URL}/face_detection.js`);
@@ -267,6 +280,7 @@ export function createAssessmentFaceMonitor(
       fd.onResults((r: any) => {
         try { handleFaceResults(r); } finally { pendingFaceResolve?.(); pendingFaceResolve = null; }
       });
+      await fd.initialize(); // download + compile fully before anything else loads
       faceDetector = fd;
     } catch (err) {
       console.warn('[FACE-MONITOR] MediaPipe FaceDetection unavailable, falling back to face-api tiny detector:', err);
@@ -283,6 +297,7 @@ export function createAssessmentFaceMonitor(
         fm.onResults((r: any) => {
           try { handleMeshResults(r); } finally { pendingMeshResolve?.(); pendingMeshResolve = null; }
         });
+        await fm.initialize(); // also before the first tick, so no pass can overlap the download
         faceMesh = fm;
       } catch (err) {
         console.warn('[FACE-MONITOR] FaceMesh unavailable — gaze tracking disabled:', err);
@@ -437,7 +452,14 @@ export function createAssessmentFaceMonitor(
       if (running) return;
       running = true;
       const ok = await initMediaPipe();
-      if (!running) return;
+      if (!running) {
+        // stop() ran while the models were still loading — release what loaded.
+        try { faceDetector?.close?.(); } catch { /* ignore */ }
+        try { faceMesh?.close?.(); } catch { /* ignore */ }
+        faceDetector = null;
+        faceMesh = null;
+        return;
+      }
       if (!ok) {
         usingFallbackDetector = true;
         await ensureFaceApi();

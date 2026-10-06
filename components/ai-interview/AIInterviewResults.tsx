@@ -97,7 +97,6 @@ interface AIInterviewResultsProps {
 /* Toggleable table columns (Actions always shows). Same Customize Columns
  * modal the resume scoring All Resumes tab uses. */
 const RESULT_COLUMNS = [
-  { id: 'cid', label: 'CID' },
   { id: 'candidate', label: 'Candidate' },
   { id: 'timeline', label: 'Timeline' },
   { id: 'status', label: 'Status' },
@@ -105,6 +104,7 @@ const RESULT_COLUMNS = [
   { id: 'result', label: 'Result' },
   { id: 'proctoring', label: 'Proctoring Risk' },
   { id: 'inviteSource', label: 'Invite Source' },
+  { id: 'cid', label: 'CID' },
   { id: 'jobVersion', label: 'Job Version' },
   { id: 'interviewVersion', label: 'Interview Version' },
 ] as const;
@@ -1221,7 +1221,6 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                         )}
                       </button>
                     </th>
-                    {col('cid') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">CID</th>}
                     {col('candidate') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide">Candidate</th>}
                     {col('timeline') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Timeline</th>}
                     {col('status') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide">Status</th>}
@@ -1229,6 +1228,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                     {col('result') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Result</th>}
                     {col('proctoring') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Proctoring Risk</th>}
                     {col('inviteSource') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Invite Source</th>}
+                    {col('cid') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">CID</th>}
                     {col('jobVersion') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Job Version</th>}
                     {col('interviewVersion') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Interview Version</th>}
                     <th className="text-right px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide tf-sticky-col">Actions</th>
@@ -1257,17 +1257,6 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                             )}
                           </button>
                         </td>
-                        {col('cid') && (
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            {session.candidate_cid ? (
-                              <span className="text-xs font-mono font-medium text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 px-2 py-1 rounded">
-                                {session.candidate_cid}
-                              </span>
-                            ) : (
-                              <span className="text-gray-400">—</span>
-                            )}
-                          </td>
-                        )}
                         {col('candidate') && (
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2">
@@ -1366,6 +1355,17 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                             {inviteSourceLabel(session)
                               ? <InviteSourceValue inv={session} iconClassName="w-3.5 h-3.5" />
                               : <span className="text-gray-400">—</span>}
+                          </td>
+                        )}
+                        {col('cid') && (
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {session.candidate_cid ? (
+                              <span className="text-xs font-mono font-medium text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 px-2 py-1 rounded">
+                                {session.candidate_cid}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
                           </td>
                         )}
                         {col('jobVersion') && (
