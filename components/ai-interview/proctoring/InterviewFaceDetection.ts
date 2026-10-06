@@ -29,7 +29,12 @@ interface UseInterviewFaceDetectionConfig {
    * (cue + yaw/pitch/eye deviations) so the recruiter record is auditable.
    */
   onGazeAway?: (direction: string, metrics?: Record<string, any>) => void;
-  onGazeRestored?: () => void;
+  /**
+   * Looking-away episode ended: the candidate looked back ("restored"), or the
+   * face left the camera ("face_missing") — gaze is only judged while a face
+   * is visible, so the face-missing warning takes over from it.
+   */
+  onGazeRestored?: (reason: 'restored' | 'face_missing') => void;
   /** Low-tier device: check gaze every 2 s instead of every 1 s. */
   lowTier?: boolean;
 }
@@ -167,6 +172,17 @@ export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConf
               lastFaceStateRef.current = false;
               isFaceDetectedRef.current = false;
               faceCountRef.current = 0;
+              // Face first, gaze second: no face means no "looking away". Close
+              // any open gaze episode BEFORE raising face_missing, so the held
+              // "Looking away" toast is replaced by "Face not detected" rather
+              // than staying up over an empty camera.
+              gazeAwayCountRef.current = 0;
+              gazeRestoredCountRef.current = 0;
+              if (!lastGazeStateRef.current) {
+                lastGazeStateRef.current = true;
+                isGazeOnScreenRef.current = true;
+                callbacksRef.current?.onGazeRestored?.("face_missing");
+              }
               callbacksRef.current?.onFaceMissing?.();
             }
           } else if (numFaces === 1) {
@@ -225,11 +241,17 @@ export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConf
               if (!mounted) return;
               const reading = gazeEstimatorRef.current?.read(
                 results.multiFaceLandmarks?.[0],
-                // Latest raw FaceDetection count: tells "head turned so far the
-                // mesh lost it" (face still there) from "nobody there".
-                lastRawFaceCountRef.current >= 1,
+                // Gaze is judged only while the face DETECTOR sees a face right
+                // now and face_missing isn't active. Also tells "head turned so
+                // far the mesh lost it" (face still there) from "nobody there".
+                lastRawFaceCountRef.current >= 1 && lastFaceStateRef.current,
               );
-              if (!reading) return; // no face at all — face_missing owns it
+              if (!reading) {
+                // No visible face — face_missing owns it. Drop any partial
+                // "away" streak so it can't complete across the no-face gap.
+                gazeAwayCountRef.current = 0;
+                return;
+              }
               const { away: isLookingAway, direction: gazeDirection, metrics } = reading;
 
               if (isLookingAway) {
@@ -247,7 +269,7 @@ export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConf
                 if (!lastGazeStateRef.current && gazeRestoredCountRef.current >= FRAMES_GAZE_RESTORED) {
                   lastGazeStateRef.current = true;
                   isGazeOnScreenRef.current = true;
-                  callbacksRef.current?.onGazeRestored?.();
+                  callbacksRef.current?.onGazeRestored?.("restored");
                 }
               }
             });

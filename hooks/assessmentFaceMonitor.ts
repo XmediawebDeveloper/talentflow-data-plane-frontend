@@ -40,6 +40,8 @@ export type GazeDirection =
   // Head turned so far FaceMesh lost the landmarks while the detector still sees a face.
   | 'profile';
 
+export type GazeEndReason = 'restored' | 'face_missing' | 'camera_obstructed';
+
 export interface FaceMonitorCallbacks {
   /** Called on every detection tick (~1.5 s) with the plausible face count. */
   onFaceCount: (count: number, details: Record<string, unknown>) => void;
@@ -50,8 +52,13 @@ export interface FaceMonitorCallbacks {
    * `metrics` is what tripped it (cue + yaw/pitch/eye deviations from baseline).
    */
   onGazeAway?: (direction: GazeDirection, metrics: Record<string, string | number | boolean>) => void;
-  /** Gaze came back for ≥ 2 consecutive checks. Carries the episode length. */
-  onGazeRestored?: (episodeMs: number) => void;
+  /**
+   * Looking-away episode ended. Carries the episode length and why: the
+   * candidate looked back ("restored"), or the caller ended it via resetGaze()
+   * because the face is no longer visible ("face_missing" / "camera_obstructed")
+   * — gaze is only judged while a face is visible.
+   */
+  onGazeRestored?: (episodeMs: number, reason: GazeEndReason) => void;
   /** Descriptor distance to the baseline exceeded the threshold twice in a row. */
   onIdentityMismatch?: (distance: number) => void;
   /** No baseline existed; three captures were averaged into one. */
@@ -81,6 +88,13 @@ export interface AssessmentFaceMonitor {
   setIdentityBaseline: (descriptor: Float32Array | null) => void;
   /** Last plausible face count seen by the detector. */
   getLastFaceCount: () => number;
+  /**
+   * Face first, gaze second: end any open looking-away episode (and drop a
+   * partial "away" streak) because the face is no longer visible. Call it
+   * BEFORE raising face_missing / camera_obstructed so that warning replaces
+   * "Looking away" instead of sitting under it.
+   */
+  resetGaze: (reason: Exclude<GazeEndReason, 'restored'>) => void;
 }
 
 const MIN_FACE_BOX_AREA = 0.025;   // ≥2.5 % of the frame — filters spurious boxes
@@ -90,7 +104,9 @@ const MIN_DETECTION_CONFIDENCE = 0.6;
 // low-tier setting — the gaze cadence stays 2 s here because this page has a
 // history of main-thread hangs (see the file header).
 const FRAMES_GAZE_AWAY = 2;
-const FRAMES_GAZE_RESTORED = 2;
+// 1 check: the "looking away" warning is HELD on screen for the whole episode
+// (same as the interview), so it must clear promptly once they look back.
+const FRAMES_GAZE_RESTORED = 1;
 const FALLBACK_FACE_INTERVAL_MS = 3000;
 // When the identity worker cannot start, the main-thread descriptor (5–8 s on
 // slow CPUs) runs only this often so the page is never blocked for long.
@@ -212,8 +228,13 @@ export function createAssessmentFaceMonitor(
   const handleMeshResults = (results: any) => {
     // lastFaceCount (detector, 1.5 s) tells "head turned so far the mesh lost
     // it" (face still there) from "nobody there" (face-count path owns that).
+    // Gaze is judged only while the detector sees a face (face first, gaze
+    // second): no face → face_missing owns the warning, never "looking away".
     const reading = gazeEstimator.read(results?.multiFaceLandmarks?.[0], lastFaceCount >= 1);
-    if (!reading) return;
+    if (!reading) {
+      gazeAwayCount = 0; // a partial "away" streak must not carry across the no-face gap
+      return;
+    }
     const lookingAway = reading.away;
 
     if (lookingAway) {
@@ -230,7 +251,7 @@ export function createAssessmentFaceMonitor(
       gazeAwayCount = 0;
       if (!gazeOnScreen && gazeRestoredCount >= FRAMES_GAZE_RESTORED) {
         gazeOnScreen = true;
-        callbacks.onGazeRestored?.(Date.now() - gazeEpisodeStartedAt);
+        callbacks.onGazeRestored?.(Date.now() - gazeEpisodeStartedAt, 'restored');
         gazeEpisodeStartedAt = 0;
       }
     }
@@ -454,5 +475,13 @@ export function createAssessmentFaceMonitor(
       bootstrap.length = 0;
     },
     getLastFaceCount: () => lastFaceCount,
+    resetGaze(reason) {
+      gazeAwayCount = 0;
+      gazeRestoredCount = 0;
+      if (gazeOnScreen) return;
+      gazeOnScreen = true;
+      callbacks.onGazeRestored?.(Date.now() - gazeEpisodeStartedAt, reason);
+      gazeEpisodeStartedAt = 0;
+    },
   };
 }

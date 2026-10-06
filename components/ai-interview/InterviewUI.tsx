@@ -2394,25 +2394,21 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // Detected" overlay made it worse by hiding the question + timer from
   // the candidate. Violation is still surfaced via the toast warning system
   // (InterviewProctoringWarnings) and logged to the recruiter timeline.
-  const handleFaceMissing = useCallback(() => {
-    emitEvent('face_missing', { timestamp: new Date().toISOString() });
-  }, [emitEvent]);
-
-  const handleFaceRestored = useCallback(() => {
-    // No-op: we never blocked the interview, so nothing to restore.
-  }, []);
-
-  // ── Held attention warnings (gaze_away / multiple_faces) ────────────────
+  // ── Held attention warnings (face_missing / gaze_away / multiple_faces) ──
   // These no longer go through emitEvent's 2s toast + 8s cooldown. Each
-  // occurrence is an EPISODE: the warning stays on screen until the candidate
-  // looks back / is alone again, then disappears; the next occurrence shows it
-  // again (no cooldown). Every episode is logged to the recruiter timeline:
-  //   start -> `gaze_away` / `multiple_faces` (counts as the violation)
-  //   end   -> `gaze_away_ended` / `multiple_faces_ended` (info, not scored)
+  // occurrence is an EPISODE: the warning stays on screen until the face is
+  // back / the candidate looks back / is alone again, then disappears; the
+  // next occurrence shows it again (no cooldown). Every episode is logged to
+  // the recruiter timeline:
+  //   start -> `face_missing` / `gaze_away` / `multiple_faces` (the violation)
+  //   end   -> `<kind>_ended` (info, not scored)
   // paired by episode_id and carrying the duration.
   // The warning is the normal proctoring toaster (bottom-right), emitted as a
   // HELD toast: no auto-dismiss, removed via InterviewEventBus.release(id).
-  type AttentionKind = 'gaze_away' | 'multiple_faces';
+  // Face first, gaze second: the detector closes an open gaze episode
+  // (ended_by "face_missing") before it raises face_missing, so an empty
+  // camera shows "Face not detected", never "Looking away".
+  type AttentionKind = 'face_missing' | 'gaze_away' | 'multiple_faces';
   interface AttentionEpisode { id: string; startedAt: number; details: Record<string, any> }
   const attentionEpisodesRef = useRef<Partial<Record<AttentionKind, AttentionEpisode>>>({});
 
@@ -2429,7 +2425,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     }).catch(() => { /* best-effort */ });
   }, [token]);
 
-  const endAttentionEpisode = useCallback((kind: AttentionKind, endedBy: 'restored' | 'interview_end') => {
+  const endAttentionEpisode = useCallback((kind: AttentionKind, endedBy: 'restored' | 'face_missing' | 'interview_end') => {
     const ep = attentionEpisodesRef.current[kind];
     if (!ep) return;
     delete attentionEpisodesRef.current[kind];
@@ -2451,6 +2447,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     }).catch(() => { /* best-effort */ });
   }, [token]);
 
+  const handleFaceMissing = useCallback(() => {
+    startAttentionEpisode('face_missing', { reason: 'no_face_detected' });
+  }, [startAttentionEpisode]);
+
+  const handleFaceRestored = useCallback(() => {
+    // We never blocked the interview — just take the held warning down and
+    // log how long the face was gone.
+    endAttentionEpisode('face_missing', 'restored');
+  }, [endAttentionEpisode]);
+
   const handleMultipleFaces = useCallback((count: number) => {
     startAttentionEpisode('multiple_faces', { face_count: count });
   }, [startAttentionEpisode]);
@@ -2463,8 +2469,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     startAttentionEpisode('gaze_away', { direction, ...(metrics ?? {}) });
   }, [startAttentionEpisode]);
 
-  const handleGazeRestored = useCallback(() => {
-    endAttentionEpisode('gaze_away', 'restored');
+  const handleGazeRestored = useCallback((reason: 'restored' | 'face_missing') => {
+    endAttentionEpisode('gaze_away', reason);
   }, [endAttentionEpisode]);
 
   // Distinct (event_type:object_class) keys already screenshotted this session —
@@ -2587,10 +2593,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   const faceDetectionActive = isConnected && webcamReady;
   useEffect(() => {
     if (faceDetectionActive && !isClosing) return;
+    endAttentionEpisode('face_missing', 'interview_end');
     endAttentionEpisode('gaze_away', 'interview_end');
     endAttentionEpisode('multiple_faces', 'interview_end');
   }, [faceDetectionActive, isClosing, endAttentionEpisode]);
   useEffect(() => () => {
+    endAttentionEpisode('face_missing', 'interview_end');
     endAttentionEpisode('gaze_away', 'interview_end');
     endAttentionEpisode('multiple_faces', 'interview_end');
   }, [endAttentionEpisode]);

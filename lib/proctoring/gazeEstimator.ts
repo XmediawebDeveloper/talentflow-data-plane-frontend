@@ -54,8 +54,9 @@ export interface GazeEstimator {
   /**
    * One FaceMesh result. `landmarks` is multiFaceLandmarks[0] (or undefined
    * when the mesh found no face); `faceVisible` is whether the face DETECTOR
-   * still sees a face. Returns null when there is nothing to judge (no face at
-   * all — face_missing owns that), so the caller leaves its counters as-is.
+   * currently sees a face. Returns null when there is nothing to judge (no
+   * visible face — face_missing owns that); the caller must then drop any
+   * "away" streak so it can't carry across the no-face stretch.
    */
   read(landmarks: Landmark[] | null | undefined, faceVisible: boolean): GazeReading | null;
 }
@@ -98,11 +99,16 @@ export function createGazeEstimator(logPrefix = '[GAZE]'): GazeEstimator {
 
   return {
     read(lm, faceVisible) {
+      // FACE FIRST, GAZE SECOND. When the face detector sees no face, "looking
+      // away" must not be judged at all — that's face_missing's warning. FaceMesh
+      // (confidence 0.5) can still return landmarks on a frame the detector
+      // (0.6) rejects, and a stale "away" streak used to carry on into the
+      // no-face stretch, so candidates with no face in the recording were
+      // shown "Looking away" instead of "Face not detected".
+      if (!faceVisible) return null;
       if (!lm) {
-        // FaceMesh lost the landmarks. If the detector still sees a face, the
-        // head is turned too far for the mesh — the most obvious look-away,
-        // which used to log nothing. No face at all → not ours to judge.
-        if (!faceVisible) return null;
+        // FaceMesh lost the landmarks while the detector still sees a face:
+        // the head is turned too far for the mesh — the most obvious look-away.
         return { away: true, direction: 'profile', metrics: { cue: 'profile' } };
       }
 
