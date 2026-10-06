@@ -23,21 +23,27 @@ import {
   XCircle,
   Loader2,
   ArrowRight,
-  Shield,
-  CircleDot,
   Play,
+  Pause,
   RefreshCw,
   Settings,
   MicOff,
   Maximize2,
-  FileCheck,
+  Webcam,
+  AppWindow,
+  Check,
+  Shield,
   Info,
+  Lightbulb,
+  ScanFace,
+  VolumeX,
 } from 'lucide-react';
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
 import { prefetchObjectDetectionModel } from '@/components/ai-interview/proctoring/InterviewObjectDetection';
 import { checkVirtualCamera, isVirtualCameraLabel, INVALID_CAMERA_SELECTION_MESSAGE } from '@/lib/proctoring/virtualCameraDetection';
 import { canOpenDevice, enumerateAudioInputIds, saveVerifiedAudioInputs, currentAudioInputId } from '@/lib/utils/mediaDeviceProbe';
 import { Button } from '@/components/ui/button';
+import SubStepProgress from './SubStepProgress';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -245,28 +251,63 @@ const FACE_POLL_BUSY_FACTOR = 3;
 // further down already uses, and for the same reason.
 const FACE_MISS_STREAK = 2;
 
-const SYSTEM_REQUIREMENTS = [
+const SYSTEM_REQUIREMENTS: { label: string; note: string; icon: typeof Monitor; check: (d: DeviceInfo) => boolean }[] = [
   {
     label: 'Desktop or Laptop Computer',
-    note: 'Mobile devices not supported',
+    note: 'Windows, macOS or Linux — mobile devices are not supported',
+    icon: Monitor,
     check: (d: DeviceInfo) => !d.isMobile,
   },
   {
-    label: 'Supported Browser',
-    note: 'Chrome, Edge, or Safari',
-    check: (d: DeviceInfo) => d.browser.supported,
-  },
-  {
     label: 'Stable Internet Connection',
-    note: `Required: ${MIN_INTERNET_MBPS} Mbps or higher`,
+    note: `Minimum ${MIN_INTERNET_MBPS} Mbps`,
+    icon: Wifi,
     check: () => true, // Always passes for device check phase
   },
   {
     label: 'Webcam & Microphone Access',
-    note: 'Required for video interview',
+    note: 'Allow access when prompted by your browser',
+    icon: Webcam,
     check: () => true, // Checked later in system_checks phase
   },
+  {
+    label: 'Supported Browser',
+    note: 'Google Chrome, Microsoft Edge or Safari',
+    icon: Globe,
+    check: (d: DeviceInfo) => d.browser.supported,
+  },
 ];
+
+/** Browser Check's blue banner — shared by the loading and results views so
+ *  the page doesn't shift when detection finishes. */
+function RequirementsBanner({ position }: { position?: string }) {
+  return (
+    <div className="bg-gradient-to-r from-brand-blue-2 via-brand-blue to-brand-blue-2 px-6 py-5 flex items-center gap-4 text-white">
+      <Monitor className="w-9 h-9 flex-shrink-0" strokeWidth={1.75} />
+      <div className="min-w-0">
+        <h2 className="text-lg sm:text-xl font-semibold leading-tight">System Requirements Check</h2>
+        <p className="text-sm text-white/85 mt-0.5">
+          Verify the device and browser compatibility for{' '}
+          <span className="font-semibold text-white">{position}</span>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** Filled round status mark: green tick when met, red cross when not. */
+function StatusDot({ ok, size = 'sm' }: { ok: boolean; size?: 'sm' | 'lg' }) {
+  const box = size === 'lg' ? 'w-12 h-12' : 'w-7 h-7';
+  const glyph = size === 'lg' ? 'w-6 h-6' : 'w-4 h-4';
+  return (
+    <span className={`${box} rounded-full flex items-center justify-center flex-shrink-0 ${ok ? 'bg-success' : 'bg-destructive'}`}>
+      {ok
+        ? <Check className={`${glyph} text-white`} strokeWidth={3} />
+        : <XCircle className={`${glyph} text-white`} />}
+    </span>
+  );
+}
+
 
 // ────────────────────────────────────────
 // Progress Stepper Component
@@ -279,56 +320,76 @@ function getStepIndex(phase: Phase): number {
   return 0;
 }
 
+/** Browser Check → System Checks — the shared in-step progress card, first
+ *  on every sub-page so it stays put while the content below swaps. */
 function ProgressStepper({ phase }: { phase: Phase }) {
-  const activeStep = getStepIndex(phase);
+  return <SubStepProgress steps={STEPPER_STEPS} activeIndex={getStepIndex(phase)} />;
+}
 
+// ── System Checks screen pieces ──────────────────────────────────────────────
+
+/** Smooth scrolling unless the user asked the OS for reduced motion. */
+const scrollBehavior = (): ScrollBehavior =>
+  typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+
+/** Length of the voice-enrollment capture — drives the progress bar and the
+ *  record bar's "00:05 / 00:12" clock. */
+const VOICE_CAPTURE_SECONDS = 12;
+
+/** Bar heights (%) for the record bar's waveform-shaped progress meter. */
+const VOICE_WAVE_BARS = [
+  30, 55, 40, 75, 50, 90, 60, 35, 70, 45, 85, 55, 30, 65, 95, 50, 40, 80, 60, 35,
+  70, 50, 90, 45, 30, 60, 80, 40, 55, 75, 35, 65, 50, 85, 45, 30,
+];
+
+const VOICE_TIPS: { icon: typeof Mic; text: string }[] = [
+  { icon: Mic, text: 'Be in a quiet place' },
+  { icon: Volume2, text: 'Speak clearly' },
+  { icon: ScanFace, text: 'Face the camera' },
+  { icon: VolumeX, text: 'No background noise' },
+];
+
+/** Blue gradient header shared by the Voice Verification and System Checks
+ *  cards: optional step number, title (+ badge), subtitle, optional action. */
+function SystemCheckCardHeader({
+  step,
+  title,
+  subtitle,
+  badge,
+  action,
+}: {
+  step?: number;
+  title: string;
+  subtitle: string;
+  badge?: React.ReactNode;
+  action?: React.ReactNode;
+}) {
   return (
-    <div className="flex items-center justify-center w-full mb-6">
-      {STEPPER_STEPS.map((label, idx) => {
-        const isCompleted = idx < activeStep;
-        const isActive = idx === activeStep;
-        const isPending = idx > activeStep;
-
-        return (
-          <React.Fragment key={label}>
-            {/* Step circle + label */}
-            <div className="flex flex-col items-center gap-1.5">
-              <div
-                className={`w-9 h-9 rounded-full flex items-center justify-center font-semibold text-sm select-none ${
-                  isCompleted
-                    ? 'bg-brand-blue text-white'
-                    : isActive
-                    ? 'bg-brand-blue text-white'
-                    : 'bg-white border-2 border-gray-300 text-gray-400'
-                }`}
-              >
-                {isCompleted ? (
-                  <CheckCircle className="w-5 h-5 text-white" />
-                ) : (
-                  <span>{idx + 1}</span>
-                )}
-              </div>
-              <span
-                className={`text-xs font-medium whitespace-nowrap ${
-                  isActive ? 'text-gray-900' : isPending ? 'text-gray-400' : 'text-gray-600'
-                }`}
-              >
-                {label}
-              </span>
-            </div>
-
-            {/* Connector line (not after last step) */}
-            {idx < STEPPER_STEPS.length - 1 && (
-              <div
-                className={`h-0.5 flex-1 mx-3 mb-5 ${
-                  idx < activeStep ? 'bg-brand-blue' : 'bg-gray-200'
-                }`}
-              />
-            )}
-          </React.Fragment>
-        );
-      })}
+    <div className="bg-gradient-to-r from-brand-blue-2 via-brand-blue to-brand-blue-2 px-5 py-4 flex items-center gap-4 text-white">
+      {step != null && (
+        <span className="w-11 h-11 rounded-full bg-white text-brand-blue text-lg font-bold flex items-center justify-center flex-shrink-0">
+          {step}
+        </span>
+      )}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <h2 className="text-lg sm:text-xl font-semibold leading-tight">{title}</h2>
+          {badge}
+        </div>
+        <p className="text-sm text-white/85 mt-0.5">{subtitle}</p>
+      </div>
+      {action}
     </div>
+  );
+}
+
+/** One-line status under the record bar (errors / what to do next). */
+function VoiceNotice({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-xs font-medium text-brand-orange-deep flex items-start gap-1.5">
+      <MicOff className="w-4 h-4 flex-shrink-0" />
+      <span>{children}</span>
+    </p>
   );
 }
 
@@ -365,6 +426,13 @@ export default function StepSystemCheck({
   const [voiceEnrollStatus, setVoiceEnrollStatus] =
     useState<'idle' | 'recording' | 'success' | 'failed' | 'disconnected'>('idle');
   const [voiceEnrollProgress, setVoiceEnrollProgress] = useState(0); // 0..100
+  // Local playback copy of the voice sample (object URL) — recorded in
+  // parallel from the same mic track purely so the candidate can listen back;
+  // the enrollment itself still goes through onEnrollVoice.
+  const [voicePlaybackUrl, setVoicePlaybackUrl] = useState<string | null>(null);
+  const voicePlaybackUrlRef = useRef<string | null>(null);
+  const voicePlaybackAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [voicePlaying, setVoicePlaying] = useState(false);
   // Whether a live mic stream/analyser is up, acquired proactively (below)
   // instead of waiting for "Run Check" — Voice Verification must be
   // completable before Run Check is even enabled.
@@ -430,16 +498,6 @@ export default function StepSystemCheck({
   // Refs for cleanup
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  // Scroll target for the Camera Preview's gear-icon shortcut, and a handler
-  // for its fullscreen icon — both purely navigational/presentational, no
-  // check state involved.
-  const deviceSettingsRef = useRef<HTMLDivElement>(null);
-  const scrollToDeviceSettings = useCallback(() => {
-    deviceSettingsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }, []);
-  const handleFullscreenPreview = useCallback(() => {
-    void videoRef.current?.requestFullscreen?.();
-  }, []);
   const streamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -480,8 +538,17 @@ export default function StepSystemCheck({
   // click on Browser Check that reveals System Checks (and, above it, the
   // Voice Verification card) — otherwise the browser can keep whatever
   // scroll position Browser Check was left at and land mid-page.
+  //
+  // System Checks goes one step further and brings its own "System Checks"
+  // card heading into view, and a freshly recorded voice sample moves the
+  // candidate on to the camera row (the next thing to set up).
+  const systemChecksCardRef = useRef<HTMLElement>(null);
+  const cameraRowRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
+    if (phase === 'system_checks') {
+      systemChecksCardRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
+    }
   }, [phase]);
 
   // ────────────────────────────────────────
@@ -514,11 +581,60 @@ export default function StepSystemCheck({
 
   useEffect(() => { voiceEnrollStatusRef.current = voiceEnrollStatus; }, [voiceEnrollStatus]);
 
+  // Capture the playback copy while a voice attempt records. The effect's
+  // cleanup stops the recorder the moment the status leaves 'recording'; the
+  // clip is only offered back once the attempt succeeded (see the record bar).
+  useEffect(() => {
+    if (voiceEnrollStatus !== 'recording') return;
+    const tracks = streamRef.current?.getAudioTracks().filter((t) => t.readyState === 'live') ?? [];
+    if (tracks.length === 0 || typeof MediaRecorder === 'undefined') return;
+    let recorder: MediaRecorder;
+    try {
+      recorder = new MediaRecorder(new MediaStream(tracks));
+    } catch {
+      return;
+    }
+    const chunks: Blob[] = [];
+    recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+    recorder.onstop = () => {
+      if (!mountedRef.current || chunks.length === 0) return;
+      const url = URL.createObjectURL(new Blob(chunks, { type: recorder.mimeType || 'audio/webm' }));
+      if (voicePlaybackUrlRef.current) URL.revokeObjectURL(voicePlaybackUrlRef.current);
+      voicePlaybackUrlRef.current = url;
+      setVoicePlaybackUrl(url);
+    };
+    recorder.start();
+    return () => {
+      if (recorder.state !== 'inactive') recorder.stop();
+    };
+  }, [voiceEnrollStatus]);
+
+  useEffect(() => () => {
+    if (voicePlaybackUrlRef.current) URL.revokeObjectURL(voicePlaybackUrlRef.current);
+  }, []);
+
+  const toggleVoicePlayback = useCallback(() => {
+    const audio = voicePlaybackAudioRef.current;
+    if (!audio) return;
+    if (audio.paused) {
+      audio.currentTime = 0;
+      void audio.play().then(() => setVoicePlaying(true)).catch(() => setVoicePlaying(false));
+    } else {
+      audio.pause();
+      setVoicePlaying(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (voiceEnrollStatus !== 'success') return;
+    cameraRowRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
+  }, [voiceEnrollStatus]);
+
   // Drive the recording progress bar (~12 s capture) for visible feedback.
   useEffect(() => {
     if (voiceEnrollStatus !== 'recording') return;
     const started = performance.now();
-    const CAPTURE_MS = 12000;
+    const CAPTURE_MS = VOICE_CAPTURE_SECONDS * 1000;
     const iv = setInterval(() => {
       const pct = Math.min(100, ((performance.now() - started) / CAPTURE_MS) * 100);
       setVoiceEnrollProgress(pct);
@@ -562,7 +678,7 @@ export default function StepSystemCheck({
   }, [stopFacePoll]);
 
   const INITIAL_CHECKS: SystemCheckItem[] = [
-    { id: 'device', label: 'Device Type', detail: 'Pending...', icon: <Image src="/logos/devices/desktop.png" alt="" width={16} height={16} unoptimized />, status: 'pending', colorClass: 'text-gray-600' },
+    { id: 'device', label: 'Device Type', detail: 'Pending...', icon: <Monitor className="w-4 h-4" />, status: 'pending', colorClass: 'text-gray-600' },
     { id: 'webcam', label: 'Webcam', detail: 'Pending...', icon: <Camera className="w-4 h-4" />, status: 'pending', colorClass: 'text-gray-600' },
     { id: 'microphone', label: 'Microphone', detail: 'Pending...', icon: <Mic className="w-4 h-4" />, status: 'pending', colorClass: 'text-brand-blue' },
     { id: 'internet', label: 'Internet Connection', detail: `Required: ≥ ${MIN_INTERNET_MBPS} Mbps`, icon: <Wifi className="w-4 h-4" />, status: 'pending', colorClass: 'text-cyan-600' },
@@ -720,6 +836,8 @@ export default function StepSystemCheck({
 
   // Re-run voice enrollment (from the panel's Retry / Record-again button).
   const retryVoiceEnroll = useCallback(() => {
+    voicePlaybackAudioRef.current?.pause();
+    setVoicePlaying(false);
     voiceEnrollPromiseRef.current = null;
     setVoiceEnrollStatus('idle');
     setVoiceEnrollProgress(0);
@@ -2033,25 +2151,15 @@ export default function StepSystemCheck({
             Browser Requirement Verification
           </h1>
           <p className="text-gray-600 mt-2">
-            Checking your browser compatibility for the interview.
+            Checking your device and browser compatibility for the interview.
           </p>
         </div>
 
-        {/* Gradient header card */}
-        <div className="rounded-xl overflow-hidden shadow-lg">
-          <div className="bg-gray-800 px-6 py-5 rounded-t-xl">
-            <div className="flex items-center gap-2 text-white mb-1">
-              <Monitor className="w-5 h-5" />
-              <h2 className="text-lg font-semibold">System Requirements Check</h2>
-            </div>
-            <p className="text-gray-300 text-sm">
-              Verify the device and browser compatibility for{' '}
-              <span className="font-medium text-white">{position}</span>
-            </p>
-          </div>
+        <div className="rounded-2xl overflow-hidden border border-gray-200 bg-white shadow-lg">
+          <RequirementsBanner position={position} />
 
           {/* Card body: Loading */}
-          <div className="bg-white rounded-b-xl p-8 flex flex-col items-center justify-center min-h-[200px] space-y-4">
+          <div className="p-8 flex flex-col items-center justify-center min-h-[200px] space-y-4">
             <div className="bg-gray-100 rounded-full p-3">
               <Zap className="w-8 h-8 text-gray-600" />
             </div>
@@ -2071,8 +2179,14 @@ export default function StepSystemCheck({
   // Phase 1: browser_results
   // ────────────────────────────────────────
   if (phase === 'browser_results' && deviceInfo) {
+    const detectedLogo = BROWSER_LOGOS[deviceInfo.browser.name];
+    const deviceRows = [
+      { label: 'Device', value: deviceInfo.deviceType, icon: Monitor },
+      { label: 'Operating System', value: deviceInfo.os, icon: AppWindow },
+      { label: 'Screen Resolution', value: `${deviceInfo.screenWidth} × ${deviceInfo.screenHeight}`, icon: Maximize2 },
+    ];
     return (
-      <div className="w-full max-w-5xl mx-auto px-4 py-8 space-y-6" style={{ colorScheme: 'light' }}>
+      <div className="w-full max-w-6xl mx-auto px-4 py-8 space-y-6" style={{ colorScheme: 'light' }}>
         <ProgressStepper phase={phase} />
 
         {/* Pill badge */}
@@ -2089,42 +2203,14 @@ export default function StepSystemCheck({
             Browser Requirement Verification
           </h1>
           <p className="text-gray-600 mt-2">
-            Checking your browser compatibility for the interview.
+            Checking your device and browser compatibility for the interview.
           </p>
         </div>
 
-        {/* Gradient header card */}
-        <div className="rounded-xl overflow-hidden shadow-lg">
-          <div className="bg-gray-800 px-6 py-5 rounded-t-xl">
-            <div className="flex items-center gap-2 text-white mb-1">
-              <Monitor className="w-5 h-5" />
-              <h2 className="text-lg font-semibold">System Requirements Check</h2>
-            </div>
-            <p className="text-gray-300 text-sm">
-              Verify the device and browser compatibility for{' '}
-              <span className="font-medium text-white">{position}</span>
-            </p>
-          </div>
+        <div className="rounded-2xl overflow-hidden border border-gray-200 bg-white shadow-lg">
+          <RequirementsBanner position={position} />
 
-          {/* Card body: Results */}
-          <div className="bg-white rounded-b-xl p-6 space-y-5">
-            {/* All Requirements Met banner */}
-            {deviceAllPass ? (
-              <div className="relative bg-success-subtle border border-success-line rounded-xl p-4 flex items-center gap-3 overflow-hidden">
-                <CheckCircle className="w-9 h-9 text-success/20 absolute -right-2 top-1/2 -translate-y-1/2" />
-                <CheckCircle className="w-5 h-5 text-success flex-shrink-0 relative" />
-                <div className="relative">
-                  <p className="font-semibold text-success-strong">All Requirements Met!</p>
-                  <p className="text-sm text-success">Your device and browser are compatible for the interview.</p>
-                </div>
-              </div>
-            ) : (
-              <div className="bg-destructive-subtle border border-destructive-line rounded-xl p-4 flex items-center gap-3">
-                <XCircle className="w-5 h-5 text-destructive flex-shrink-0" />
-                <p className="font-semibold text-destructive-strong">Requirements Not Met</p>
-              </div>
-            )}
-
+          <div className="p-5 sm:p-6 space-y-5">
             {blockedBrowserName && (
               <div className="bg-warning-subtle border border-warning-line rounded-xl p-4 flex items-start gap-3">
                 <XCircle className="w-5 h-5 text-warning flex-shrink-0 mt-0.5" />
@@ -2137,186 +2223,151 @@ export default function StepSystemCheck({
               </div>
             )}
 
-            {/* Device Type + Browser Compatibility — side by side, matching
-                the reference layout exactly (not just recolored, actually
-                paired into one row instead of stacked full-width). */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Device Type card */}
-            <div className="bg-white border border-gray-200 rounded-xl p-4">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 bg-brand-blue/10 rounded-full flex items-center justify-center flex-shrink-0">
-                  <Image src="/logos/devices/desktop.png" alt="" width={24} height={24} unoptimized />
-                </div>
-                <div className="flex items-center gap-2">
-                  <h3 className="font-semibold text-gray-900">Device Type</h3>
-                  {!deviceInfo.isMobile ? (
-                    <CheckCircle className="w-4 h-4 text-success" />
-                  ) : (
-                    <XCircle className="w-4 h-4 text-destructive" />
-                  )}
-                </div>
-              </div>
-              <div className="space-y-1.5 ml-[52px]">
-                <p className="text-sm text-gray-700">
-                  <span className="text-gray-500">Detected:</span>{' '}
-                  <span className="font-medium">{deviceInfo.deviceType}</span>
-                </p>
-                <p className="text-sm text-gray-700">
-                  <span className="text-gray-500">Operating System:</span>{' '}
-                  <span className="font-medium">{deviceInfo.os}</span>
-                </p>
-                <p className="text-sm text-gray-700">
-                  <span className="text-gray-500">Screen Resolution:</span>{' '}
-                  <span className="font-medium">{deviceInfo.screenWidth} x {deviceInfo.screenHeight}</span>
-                </p>
-                {deviceInfo.isMobile && (
-                  <div className="mt-2 p-3 bg-destructive-subtle border border-destructive-line rounded-lg">
-                    <p className="text-sm text-destructive font-medium">Mobile devices are not supported</p>
-                    <p className="text-xs text-destructive mt-0.5">
-                      AI interviews must be completed on a desktop or laptop computer. Switching to "Desktop Mode" in your mobile browser does not bypass this restriction.
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Browser Compatibility card */}
-            <div className="bg-white border border-gray-200 rounded-xl p-4">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 bg-brand-blue/10 rounded-full flex items-center justify-center flex-shrink-0">
-                  <Globe className="w-5 h-5 text-brand-blue" />
-                </div>
-                <div className="flex items-center gap-2">
-                  <h3 className="font-semibold text-gray-900">Browser Compatibility</h3>
-                  {deviceInfo.browser.supported ? (
-                    <CheckCircle className="w-4 h-4 text-success" />
-                  ) : (
-                    <XCircle className="w-4 h-4 text-destructive" />
-                  )}
-                </div>
-              </div>
-              <div className="ml-[52px] space-y-3">
-                <p className="text-sm text-gray-700">
-                  <span className="text-gray-500">Detected Browser:</span>{' '}
-                  <span className="font-medium">{deviceInfo.browser.name} {deviceInfo.browser.version}</span>
-                </p>
-                <div>
-                  <p className="text-sm text-gray-500 mb-2">Supported Browsers:</p>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {SUPPORTED_BROWSERS.map((b) => {
-                      const isCurrent = deviceInfo.browser.name === b.name;
+            {/* items-stretch + flex columns: both sides end level — the checklist
+                rows share the spare height on the left, the Browser
+                Compatibility card absorbs it on the right. */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
+              {/* ═══ LEFT: requirement checklist, then the verdict ═══ */}
+              <div className="flex flex-col gap-5 min-w-0">
+                <div className="flex-1 flex flex-col border border-gray-200 rounded-xl">
+                  <ul className="flex-1 flex flex-col divide-y divide-gray-100 px-5">
+                    {SYSTEM_REQUIREMENTS.map((req) => {
+                      const passed = req.check(deviceInfo);
+                      const RowIcon = req.icon;
                       return (
-                        <div
-                          key={b.name}
-                          className={`rounded-lg p-2 flex items-center gap-1.5 border min-w-0 ${
-                            isCurrent
-                              ? 'bg-success-subtle border-success-line'
-                              : 'bg-gray-50 border-gray-200'
-                          }`}
-                        >
-                          <span className="flex h-7 w-7 items-center justify-center flex-shrink-0">
-                            <Image src={BROWSER_LOGOS[b.name]} alt={b.name} width={28} height={28} unoptimized />
-                          </span>
-                          <div className="text-left min-w-0">
-                            <p className={`font-semibold text-xs truncate ${isCurrent ? 'text-success-strong' : 'text-gray-900'}`}>{b.name}</p>
-                            <p className="text-2xs text-gray-500 truncate">{b.minVersion}</p>
+                        <li key={req.label} className="flex-1 flex items-center gap-4 py-3.5">
+                          <StatusDot ok={passed} />
+                          <RowIcon className="w-6 h-6 text-brand-blue flex-shrink-0" strokeWidth={1.75} />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold text-gray-900">{req.label}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">{req.note}</p>
                           </div>
-                        </div>
+                          <span className={`text-xs font-semibold px-3 py-1.5 rounded-lg whitespace-nowrap flex-shrink-0 ${
+                            passed ? 'bg-success-subtle text-success' : 'bg-destructive-subtle text-destructive'
+                          }`}>
+                            {passed ? 'Supported' : 'Not supported'}
+                          </span>
+                        </li>
                       );
                     })}
-                  </div>
+                  </ul>
                 </div>
-                {blockedBrowserName === 'Brave' && (
-                  <div className="p-3 bg-warning-subtle border border-warning-line rounded-lg">
-                    <p className="text-sm text-warning-strong font-medium">Brave browser is blocked for AI interviews.</p>
-                    <p className="text-xs text-warning mt-1">
-                      Please open this interview link in Chrome, Edge, or Safari.
-                    </p>
+                {deviceAllPass ? (
+                  <div className="bg-success-subtle border border-success-line rounded-xl px-5 py-4 flex items-center gap-4">
+                    <StatusDot ok size="lg" />
+                    <div>
+                      <p className="text-lg font-bold text-success-strong leading-tight">All Requirements Met!</p>
+                      <p className="text-sm text-gray-600 mt-0.5">Your device and browser are compatible for the interview.</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-destructive-subtle border border-destructive-line rounded-xl px-5 py-4 flex items-center gap-4">
+                    <StatusDot ok={false} size="lg" />
+                    <div>
+                      <p className="text-lg font-bold text-destructive-strong leading-tight">Requirements Not Met</p>
+                      <p className="text-sm text-gray-600 mt-0.5">Fix the items marked above to continue with the interview.</p>
+                    </div>
                   </div>
                 )}
               </div>
-            </div>
-            </div>
 
-            {/* System Requirements checklist card */}
-            <div className="bg-white border border-gray-200 rounded-xl p-4">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 bg-brand-blue/10 rounded-full flex items-center justify-center flex-shrink-0">
-                  <FileCheck className="w-5 h-5 text-brand-blue" />
-                </div>
-                <div className="flex items-center gap-2">
-                  <h3 className="font-semibold text-gray-900">System Requirements</h3>
-                  {SYSTEM_REQUIREMENTS.every(req => req.check(deviceInfo)) ? (
-                    <CheckCircle className="w-4 h-4 text-success" />
-                  ) : (
-                    <XCircle className="w-4 h-4 text-destructive" />
+              {/* ═══ RIGHT: what was detected ═══ */}
+              <div className="flex flex-col gap-5 min-w-0">
+                {/* Device Type */}
+                <div className="relative border border-gray-200 rounded-xl overflow-hidden">
+                  {!deviceInfo.isMobile && (
+                    <span aria-hidden className="pointer-events-none absolute -right-3 -top-3 w-16 h-16 rounded-full bg-success/10 flex items-center justify-center">
+                      <Check className="w-7 h-7 text-success/40" strokeWidth={3} />
+                    </span>
+                  )}
+                  <div className="flex items-center gap-3 px-5 py-3.5 bg-gray-50 border-b border-gray-100">
+                    <span className="w-10 h-10 rounded-full bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
+                      <Monitor className="w-5 h-5 text-brand-blue" />
+                    </span>
+                    <h3 className="text-base font-semibold text-gray-900">Device Type</h3>
+                    {!deviceInfo.isMobile
+                      ? <CheckCircle className="w-5 h-5 text-success" />
+                      : <XCircle className="w-5 h-5 text-destructive" />}
+                  </div>
+                  <dl className="px-5 py-4 space-y-3">
+                    {deviceRows.map(({ label, value, icon: RowIcon }) => (
+                      <div key={label} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] items-center gap-3 text-sm">
+                        <dt className="text-gray-500">{label}</dt>
+                        <dd className="flex items-center gap-2.5 font-semibold text-gray-900 min-w-0">
+                          <RowIcon className="w-5 h-5 text-brand-blue flex-shrink-0" />
+                          <span className="truncate">{value}</span>
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                  {deviceInfo.isMobile && (
+                    <div className="mx-5 mb-4 p-3 bg-destructive-subtle border border-destructive-line rounded-lg">
+                      <p className="text-sm text-destructive font-medium">Mobile devices are not supported</p>
+                      <p className="text-xs text-destructive mt-0.5">
+                        AI interviews must be completed on a desktop or laptop computer. Switching to &quot;Desktop Mode&quot; in your mobile browser does not bypass this restriction.
+                      </p>
+                    </div>
                   )}
                 </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 sm:grid-rows-2 sm:grid-flow-col gap-x-6 gap-y-3">
-                {SYSTEM_REQUIREMENTS.map((req, idx) => {
-                  const passed = req.check(deviceInfo);
-                  return (
-                    <div key={idx} className="flex items-start gap-3">
-                      {passed ? (
-                        <div className="w-5 h-5 bg-success rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                          <CheckCircle className="w-3.5 h-3.5 text-white" />
-                        </div>
-                      ) : (
-                        <div className="w-5 h-5 bg-destructive rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                          <XCircle className="w-3.5 h-3.5 text-white" />
-                        </div>
-                      )}
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">{req.label}</p>
-                        <p className="text-xs text-gray-500">{req.note}</p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
 
-            {/* Detected System Information card */}
-            <div className="bg-white border border-gray-200 rounded-xl p-4">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 bg-brand-blue/10 rounded-full flex items-center justify-center flex-shrink-0">
-                  <Info className="w-5 h-5 text-brand-blue" />
-                </div>
-                <h3 className="font-semibold text-gray-900">Detected System Information</h3>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="bg-gray-50 rounded-lg p-3 flex items-center gap-3">
-                  <div className="w-8 h-8 bg-white border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Image src="/logos/devices/desktop.png" alt="" width={18} height={18} unoptimized />
+                {/* Browser Compatibility */}
+                <div className="flex-1 border border-gray-200 rounded-xl overflow-hidden">
+                  <div className="flex items-center gap-3 px-5 py-3.5 bg-gray-50 border-b border-gray-100">
+                    <span className="w-10 h-10 rounded-full bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
+                      <Globe className="w-5 h-5 text-brand-blue" />
+                    </span>
+                    <h3 className="text-base font-semibold text-gray-900">Browser Compatibility</h3>
+                    {deviceInfo.browser.supported
+                      ? <CheckCircle className="w-5 h-5 text-success" />
+                      : <XCircle className="w-5 h-5 text-destructive" />}
                   </div>
-                  <div>
-                    <p className="text-xs text-gray-500">Device Type</p>
-                    <p className="text-sm font-medium text-gray-900">{deviceInfo.deviceType}</p>
-                  </div>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-3 flex items-center gap-3">
-                  <div className="w-8 h-8 bg-white border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
-                    {BROWSER_LOGOS[deviceInfo.browser.name] ? (
-                      <Image src={BROWSER_LOGOS[deviceInfo.browser.name]} alt={deviceInfo.browser.name} width={20} height={20} unoptimized />
-                    ) : (
-                      <Globe className="w-4 h-4 text-brand-blue" />
+                  <div className="px-5 py-4 space-y-3">
+                    <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] items-center gap-3 text-sm">
+                      <span className="text-gray-500">Detected Browser</span>
+                      <span className="flex items-center gap-2.5 font-semibold text-gray-900 min-w-0">
+                        {detectedLogo
+                          ? <Image src={detectedLogo} alt="" width={22} height={22} unoptimized className="flex-shrink-0" />
+                          : <Globe className="w-5 h-5 text-brand-blue flex-shrink-0" />}
+                        <span className="truncate">{deviceInfo.browser.name} {deviceInfo.browser.version}</span>
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-500">Supported Browsers</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                      {SUPPORTED_BROWSERS.map((b) => {
+                        const isCurrent = deviceInfo.browser.name === b.name;
+                        return (
+                          <div
+                            key={b.name}
+                            className={`rounded-xl px-3 py-2.5 flex items-center gap-3 border min-w-0 ${
+                              isCurrent ? 'bg-success-subtle border-success-line' : 'bg-white border-gray-200'
+                            }`}
+                          >
+                            <Image src={BROWSER_LOGOS[b.name]} alt="" width={36} height={36} unoptimized className="flex-shrink-0" />
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-gray-900 truncate">{b.name}</p>
+                              <p className="text-xs text-gray-500 truncate">{b.minVersion}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {blockedBrowserName === 'Brave' && (
+                      <div className="p-3 bg-warning-subtle border border-warning-line rounded-lg">
+                        <p className="text-sm text-warning-strong font-medium">Brave browser is blocked for AI interviews.</p>
+                        <p className="text-xs text-warning mt-1">
+                          Please open this interview link in Chrome, Edge, or Safari.
+                        </p>
+                      </div>
                     )}
                   </div>
-                  <div>
-                    <p className="text-xs text-gray-500">Browser</p>
-                    <p className="text-sm font-medium text-gray-900">
-                      {deviceInfo.browser.name} {deviceInfo.browser.version}
-                    </p>
-                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Continue to System Checks button */}
             <Button
               type="button"
               variant="primary"
+              size="lg"
               onClick={() => setPhase('system_checks')}
               disabled={!deviceAllPass}
               className="w-full"
@@ -2338,14 +2389,26 @@ export default function StepSystemCheck({
     // micReadyForVoice / the mic-acquisition effect above, which make the
     // Voice Verification panel usable from the moment this screen loads.
     const runCheckLocked = !!onEnrollVoice && voiceEnrollStatus !== 'success';
+    // Brand-palette only on this screen: blue = primary, orange = needs
+    // attention (required, recording, failed), sky = soft accents; green is
+    // kept for the per-check "Working" badge only.
+    const recordSeconds = Math.round((voiceEnrollProgress / 100) * VOICE_CAPTURE_SECONDS);
+    const fmtClock = (sec: number) => `00:${String(sec).padStart(2, '0')}`;
+    const canStartRecording = voiceEnrollStatus === 'idle' && !micAcquireFailed && (micDevices.length <= 1 || !!selectedMicId);
+
     return (
-      <div className="w-full max-w-5xl mx-auto px-4 py-8 space-y-6">
+      <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 py-8 space-y-6" style={{ colorScheme: 'light' }}>
+        <style>{`
+          @keyframes tf-checks-fade-in { from { opacity: 0; } to { opacity: 1; } }
+          .tf-checks-fade-in { animation: tf-checks-fade-in 0.6s ease-out both; }
+          @media (prefers-reduced-motion: reduce) { .tf-checks-fade-in { animation: none; } }
+        `}</style>
         <ProgressStepper phase={phase} />
 
         {/* Pill badge */}
         <div className="flex justify-center">
-          <span className="inline-flex items-center gap-1.5 bg-success-subtle text-success text-xs font-semibold px-3 py-1.5 rounded-full">
-            <Shield className="w-3.5 h-3.5" />
+          <span className="inline-flex items-center gap-1.5 bg-brand-blue/10 text-brand-blue text-xs font-semibold px-3 py-1.5 rounded-full">
+            <Monitor className="w-3.5 h-3.5" />
             System Checks
           </span>
         </div>
@@ -2358,568 +2421,537 @@ export default function StepSystemCheck({
           </p>
         </div>
 
-        {/* Voice Verification — its own standalone card, entirely OUTSIDE and
-            ABOVE the "System Checks" card below. Shown whenever voice
-            enrollment is available (onEnrollVoice set). Voice Verification is
-            now the required first step, gating "Run Check" inside the System
-            Checks card below (see runCheckLocked there) — so it must read as
-            a clearly separate step, not something tucked inside that card. */}
-        {onEnrollVoice && (
-          <div className="rounded-xl border border-brand-blue/20 bg-brand-blue/5 p-4 shadow-lg">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-8 h-8 rounded-full bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
-                <Mic className="w-4 h-4 text-brand-blue" />
-              </div>
-              <div className="flex-1">
+        {/* One full-width card, top to bottom: voice verification (read
+            aloud, record, tips) → camera & devices → once the voice sample is
+            in, the environment checks fade in → Continue. */}
+        <section ref={systemChecksCardRef} className="scroll-mt-4 rounded-2xl overflow-hidden border border-gray-200 bg-white shadow-lg">
+          <SystemCheckCardHeader
+            title={checksRunning ? 'Running System Checks…' : 'System Checks'}
+            subtitle={checksRunning ? 'Please wait while we verify your environment.'
+              : checksCompleted && allSystemPassed ? 'All environment checks have been completed.'
+              : checksCompleted ? 'Fix the issues below and retry.'
+              : runCheckLocked ? 'Set up your camera and microphone, then record a short voice sample to unlock the checks.'
+              : "We'll check your device, browser, and system setup to ensure a smooth interview experience."}
+          />
+
+          <div className="p-5 sm:p-6 space-y-6">
+            {/* ── 1. Voice Verification: read aloud → record → tips ── */}
+            {onEnrollVoice && (
+              <div className="space-y-4">
                 <div className="flex items-center gap-2">
-                  <p className="text-sm font-semibold text-gray-900">Voice Verification</p>
-                  <span className={`text-2xs font-bold uppercase tracking-wide px-1.5 py-0.5 rounded ${
-                    voiceEnrollStatus === 'success'
-                      ? 'bg-success-subtle text-success'
-                      : 'bg-warning-subtle text-warning'
+                  <Mic className="w-5 h-5 text-brand-blue" />
+                  <h3 className="text-base font-semibold text-gray-900">Voice Verification</h3>
+                  <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${
+                    voiceEnrollStatus === 'success' ? 'bg-brand-blue/10 text-brand-blue' : 'bg-brand-orange text-white'
                   }`}>
                     {voiceEnrollStatus === 'success' ? 'Done' : 'Required'}
                   </span>
                 </div>
-                <p className="text-xs text-gray-500">
-                  Click record and speak for a few seconds — this captures your voice so we can confirm it&apos;s you throughout the interview.
-                </p>
-              </div>
-            </div>
 
-            {/* A suggested line — NOT required. The candidate can say anything;
-                we only need to hear their voice (no word-matching). */}
-            <div className="rounded-lg border border-brand-blue/20 bg-white px-4 py-3">
-              <p className="text-2xs font-medium uppercase tracking-wide text-brand-blue mb-1">
-                Just speak naturally — say anything, or read this
-              </p>
-              <p className="text-base font-medium text-gray-900 leading-snug">
-                &ldquo;{ENROLL_PASSAGE}&rdquo;
-              </p>
-              <p className="text-2xs text-gray-400 mt-1.5">
-                You don&apos;t have to read this exactly — we only check that you spoke.
-              </p>
-            </div>
-
-            {/* Status area + manual record control */}
-            <div className="mt-3">
-              {/* IDLE — must click to record. The mic is requested on-demand,
-                  inside startVoiceEnroll, only once the candidate clicks — so
-                  this button is enabled from the start rather than waiting on
-                  a background acquisition. If that click's getUserMedia call
-                  fails (permission denied/blocked, no device, hardware busy
-                  elsewhere), micAcquireFailed switches this to an explicit
-                  error + Retry — which just calls startVoiceEnroll again, so
-                  retrying is a real new attempt, not a no-op. */}
-              {voiceEnrollStatus === 'idle' && micAcquireFailed && (
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-xs font-medium text-destructive flex items-center gap-1.5">
-                    <MicOff className="w-4 h-4 text-destructive flex-shrink-0" />
-                    Couldn&apos;t access your microphone. Check your browser&apos;s site permissions, or pick a different device below, then retry.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={startVoiceEnroll}
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold rounded-lg px-3 py-2 transition-colors text-white bg-brand-blue hover:bg-brand-blue-2 cursor-pointer flex-shrink-0"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    Retry
-                  </button>
-                </div>
-              )}
-              {/* Ambiguous device: 2+ mics connected and none picked yet.
-                  Recording now would fall back to getUserMedia's own
-                  "default" guess, which can silently point at the wrong
-                  device — every attempt would then fail as "no speech heard"
-                  with nothing telling the candidate why. Block the record
-                  button until they resolve it via the dropdown below, same
-                  rule the Microphone check itself already enforces. */}
-              {voiceEnrollStatus === 'idle' && !micAcquireFailed && micDevices.length > 1 && !selectedMicId && (
-                <p className="text-xs font-medium text-destructive flex items-center gap-1.5">
-                  <MicOff className="w-4 h-4 text-destructive flex-shrink-0" />
-                  Select your microphone in Device Settings below, then click Start recording — with more than one device connected we can&apos;t guess which one you&apos;ll speak into.
-                </p>
-              )}
-              {voiceEnrollStatus === 'idle' && !micAcquireFailed && (micDevices.length <= 1 || selectedMicId) && (
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-xs text-gray-500">
-                    Click record, then speak for a few seconds.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={startVoiceEnroll}
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold rounded-lg px-3 py-2 transition-colors bg-brand-blue text-white hover:bg-brand-blue-2 cursor-pointer"
-                  >
-                    <Mic className="w-3.5 h-3.5" />
-                    Start recording
-                  </button>
-                </div>
-              )}
-
-              {/* RECORDING — live progress */}
-              {voiceEnrollStatus === 'recording' && (
-                <div className="space-y-1.5">
-                  <p className="text-xs font-medium text-brand-blue flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
-                    Recording — keep speaking…
-                  </p>
-                  <div className="h-1.5 w-full rounded-full bg-brand-blue/10 overflow-hidden">
-                    <div
-                      className="h-full bg-brand-blue transition-all duration-200 ease-linear"
-                      style={{ width: `${voiceEnrollProgress}%` }}
-                    />
+                {/* A suggested line — NOT required. The candidate can say
+                    anything; we only need to hear their voice. */}
+                <div className="rounded-xl border border-brand-blue/15 bg-brand-sky/40 overflow-hidden">
+                  <div className="flex items-start gap-3 p-4">
+                    <span className="w-7 h-7 rounded-full bg-brand-blue text-white flex items-center justify-center flex-shrink-0">
+                      <Info className="w-4 h-4" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-brand-blue">
+                        Read this aloud — or just speak naturally:
+                      </p>
+                      <p className="mt-1 text-sm text-gray-800 leading-relaxed">&ldquo;{ENROLL_PASSAGE}&rdquo;</p>
+                      <p className="text-2xs text-gray-500 mt-1.5">
+                        You don&apos;t have to read this exactly — we only check that you spoke.
+                      </p>
+                    </div>
                   </div>
+                  {voiceEnrollStatus === 'success' && (
+                    <div className="flex items-center gap-3 px-4 py-3 bg-brand-blue/10 border-t border-brand-blue/15">
+                      <span className="w-6 h-6 rounded-full bg-brand-blue text-white flex items-center justify-center flex-shrink-0">
+                        <Check className="w-3.5 h-3.5" strokeWidth={3} />
+                      </span>
+                      <p className="text-sm font-semibold text-brand-blue">Voice sample captured successfully! You&apos;re all set.</p>
+                    </div>
+                  )}
                 </div>
-              )}
 
-              {/* SUCCESS */}
-              {voiceEnrollStatus === 'success' && (
-                <p className="text-xs font-medium text-success flex items-center gap-1.5">
-                  <CheckCircle className="w-4 h-4 text-success" />
-                  Voice sample captured — you&apos;re all set.
-                </p>
-              )}
-
-              {/* FAILED — now only the "no speech" case: the server/VAD
-                  rejects a silent or noise-only clip. No word-matching. */}
-              {voiceEnrollStatus === 'failed' && (
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-xs font-medium text-destructive flex items-center gap-1.5">
-                    <XCircle className="w-4 h-4 text-destructive flex-shrink-0" />
-                    We didn&apos;t hear any speech. Please speak clearly for a few seconds, then record again.
-                  </p>
+                {/* Record bar: control · label · progress waveform · timer · action */}
+                <div className="rounded-xl border border-gray-200 px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-3">
                   <button
                     type="button"
-                    onClick={retryVoiceEnroll}
-                    disabled={!micReadyForVoice}
-                    className={`inline-flex items-center gap-1.5 text-xs font-semibold rounded-lg px-3 py-2 transition-colors flex-shrink-0 ${
-                      micReadyForVoice
-                        ? 'text-white bg-brand-blue hover:bg-brand-blue-2 cursor-pointer'
-                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    onClick={startVoiceEnroll}
+                    disabled={!canStartRecording}
+                    title={canStartRecording ? 'Start recording' : undefined}
+                    aria-label="Start recording"
+                    className={`w-10 h-10 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                      canStartRecording
+                        ? 'border-brand-orange/40 hover:border-brand-orange cursor-pointer'
+                        : 'border-gray-200 cursor-default'
                     }`}
                   >
-                    <Mic className="w-3.5 h-3.5" />
-                    Record again
+                    {voiceEnrollStatus === 'success' ? (
+                      <span className="w-5 h-5 rounded-full bg-brand-blue text-white flex items-center justify-center">
+                        <Check className="w-3 h-3" strokeWidth={3} />
+                      </span>
+                    ) : (
+                      <span className={`w-4 h-4 rounded-full ${
+                        voiceEnrollStatus === 'recording'
+                          ? 'bg-brand-orange animate-pulse'
+                          : canStartRecording ? 'bg-brand-orange' : 'bg-gray-300'
+                      }`} />
+                    )}
                   </button>
-                </div>
-              )}
+                  <p className="text-sm font-semibold text-gray-900 whitespace-nowrap">
+                    {voiceEnrollStatus === 'recording' ? 'Recording — keep speaking…'
+                      : voiceEnrollStatus === 'success' ? 'Voice sample recorded'
+                      : 'Record Voice Sample'}
+                  </p>
+                  {/* Bars fill with the capture's real progress — a progress
+                      meter shaped like a waveform, not live audio levels. */}
+                  <div className="flex-1 min-w-[120px] flex items-center gap-[3px] h-8" aria-hidden>
+                    {VOICE_WAVE_BARS.map((h, i) => {
+                      const filled = voiceEnrollStatus === 'success'
+                        || (i / VOICE_WAVE_BARS.length) * 100 < voiceEnrollProgress;
+                      return (
+                        <span
+                          key={i}
+                          className={`flex-1 rounded-full transition-colors ${filled ? 'bg-brand-blue' : 'bg-brand-blue/15'}`}
+                          style={{ height: `${h}%` }}
+                        />
+                      );
+                    })}
+                  </div>
+                  <span className="text-sm tabular-nums text-gray-600 whitespace-nowrap">
+                    {fmtClock(voiceEnrollStatus === 'success' ? VOICE_CAPTURE_SECONDS : recordSeconds)} / {fmtClock(VOICE_CAPTURE_SECONDS)}
+                  </span>
 
-              {/* DISCONNECTED — the mic died partway through the read-aloud
-                  capture (see MicDisconnectedDuringRecordingError). The
-                  partial audio was already discarded, so this is NOT a
-                  pause: the only way forward is a brand-new capture from
-                  0:00. Two sub-states:
-                    • mic still gone  → "No microphone detected", button
-                      disabled so the candidate can't restart onto a dead
-                      device (micReadyForVoice tracks micStreamReady,
-                      which the reconnect watcher flips back to true by
-                      itself the moment a device is live again).
-                    • mic reconnected → button enabled and reads "Start
-                      recording" (the message above it already explains the
-                      earlier take was discarded, so the button itself
-                      matches the idle-state action rather than implying
-                      there's still something to "start over"). */}
-              {voiceEnrollStatus === 'disconnected' && (
-                <div className="flex items-center justify-between gap-3">
-                  <p className={`text-xs font-medium flex items-center gap-1.5 ${
-                    micReadyForVoice ? 'text-warning' : 'text-destructive'
-                  }`}>
-                    <MicOff className={`w-4 h-4 flex-shrink-0 ${
-                      micReadyForVoice ? 'text-warning' : 'text-destructive'
-                    }`} />
+                  {canStartRecording && (
+                    <button
+                      type="button"
+                      onClick={startVoiceEnroll}
+                      className="inline-flex items-center gap-1.5 text-sm font-semibold rounded-lg px-4 py-2 transition-colors bg-brand-blue text-white hover:bg-brand-blue-2"
+                    >
+                      <Mic className="w-4 h-4" />
+                      Start recording
+                    </button>
+                  )}
+                  {voiceEnrollStatus === 'idle' && micAcquireFailed && (
+                    <button
+                      type="button"
+                      onClick={startVoiceEnroll}
+                      className="inline-flex items-center gap-1.5 text-sm font-semibold rounded-lg px-4 py-2 transition-colors bg-brand-blue text-white hover:bg-brand-blue-2"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      Retry
+                    </button>
+                  )}
+                  {voiceEnrollStatus === 'success' && (
+                    <>
+                      {voicePlaybackUrl && (
+                        <>
+                          <audio
+                            ref={voicePlaybackAudioRef}
+                            src={voicePlaybackUrl}
+                            onEnded={() => setVoicePlaying(false)}
+                            onPause={() => setVoicePlaying(false)}
+                            className="hidden"
+                          />
+                          <button
+                            type="button"
+                            onClick={toggleVoicePlayback}
+                            aria-label={voicePlaying ? 'Pause your recording' : 'Play your recording'}
+                            className="inline-flex items-center gap-1.5 text-sm font-semibold rounded-lg px-4 py-2 transition-colors border border-brand-blue/30 text-brand-blue bg-white hover:bg-brand-blue/5"
+                          >
+                            {voicePlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                            {voicePlaying ? 'Pause' : 'Play'}
+                          </button>
+                        </>
+                      )}
+                      {/* Locked while the checks run (they use the mic) or
+                          while Continue is finishing up. */}
+                      <button
+                        type="button"
+                        onClick={retryVoiceEnroll}
+                        disabled={!micReadyForVoice || checksRunning || isProceedLoading}
+                        className={`inline-flex items-center gap-1.5 text-sm font-semibold rounded-lg px-4 py-2 transition-colors border ${
+                          micReadyForVoice && !checksRunning && !isProceedLoading
+                            ? 'border-brand-blue/30 text-brand-blue bg-white hover:bg-brand-blue/5'
+                            : 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
+                        }`}
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                        Re-record
+                      </button>
+                    </>
+                  )}
+                  {(voiceEnrollStatus === 'failed' || voiceEnrollStatus === 'disconnected') && (
+                    <button
+                      type="button"
+                      onClick={retryVoiceEnroll}
+                      disabled={!micReadyForVoice}
+                      className={`inline-flex items-center gap-1.5 text-sm font-semibold rounded-lg px-4 py-2 transition-colors border ${
+                        micReadyForVoice
+                          ? 'border-brand-blue/30 text-brand-blue bg-white hover:bg-brand-blue/5'
+                          : 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
+                      }`}
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      {voiceEnrollStatus === 'failed' ? 'Re-record' : micReadyForVoice ? 'Start recording' : 'Start over'}
+                    </button>
+                  )}
+                </div>
+
+                {/* Why recording can't start / what went wrong. The mic is
+                    requested on-demand inside startVoiceEnroll, so Retry is a
+                    real new attempt. With 2+ mics and none picked, recording
+                    would fall back to the browser's "default" guess and could
+                    silently use the wrong device — so it's blocked until the
+                    candidate picks one. A mid-capture disconnect discards the
+                    partial audio (see MicDisconnectedDuringRecordingError);
+                    the button stays disabled until a mic is live again. */}
+                {voiceEnrollStatus === 'idle' && micAcquireFailed && (
+                  <VoiceNotice>Couldn&apos;t access your microphone. Check your browser&apos;s site permissions, or pick a different device in Device Settings, then retry.</VoiceNotice>
+                )}
+                {voiceEnrollStatus === 'idle' && !micAcquireFailed && micDevices.length > 1 && !selectedMicId && (
+                  <VoiceNotice>Select your microphone in Device Settings, then click Start recording — with more than one device connected we can&apos;t guess which one you&apos;ll speak into.</VoiceNotice>
+                )}
+                {voiceEnrollStatus === 'failed' && (
+                  <VoiceNotice>We didn&apos;t hear any speech. Please speak clearly for a few seconds, then record again.</VoiceNotice>
+                )}
+                {voiceEnrollStatus === 'disconnected' && (
+                  <VoiceNotice>
                     {micReadyForVoice
                       ? 'Microphone reconnected. Your earlier recording was discarded — start the voice verification again from the beginning.'
                       : 'No microphone detected. Please connect a microphone.'}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={retryVoiceEnroll}
-                    disabled={!micReadyForVoice}
-                    className={`inline-flex items-center gap-1.5 text-xs font-semibold rounded-lg px-3 py-2 transition-colors flex-shrink-0 ${
-                      micReadyForVoice
-                        ? 'text-white bg-brand-blue hover:bg-brand-blue-2 cursor-pointer'
-                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                    }`}
-                  >
-                    <Mic className="w-3.5 h-3.5" />
-                    {micReadyForVoice ? 'Start recording' : 'Start over'}
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Gradient header */}
-        <div className="rounded-xl overflow-hidden shadow-lg">
-          <div className="bg-gray-900 px-6 py-5 rounded-t-xl flex items-start justify-between gap-4">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 text-white mb-1">
-                {checksRunning ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : checksCompleted && allSystemPassed ? (
-                  <CheckCircle className="w-5 h-5 text-success" />
-                ) : checksCompleted ? (
-                  <XCircle className="w-5 h-5 text-warning" />
-                ) : (
-                  <Shield className="w-5 h-5" />
+                  </VoiceNotice>
                 )}
-                <h2 className="text-lg font-semibold">
-                  {checksRunning ? 'Running System Checks…'
-                    : checksCompleted && allSystemPassed ? 'System Checks Complete'
-                    : checksCompleted ? 'Some Checks Failed'
-                    : 'System Checks'}
-                </h2>
-              </div>
-              <p className="text-success text-sm">
-                {checksRunning ? 'Please wait while we verify your environment'
-                  : checksCompleted && allSystemPassed ? 'All environment checks have been completed'
-                  : checksCompleted ? 'Fix the issues below and retry'
-                  : runCheckLocked ? 'Complete Voice Verification below first, then click "Run Check"'
-                  : 'Click "Run Check" to begin verifying your environment'}
-              </p>
-            </div>
-            {/* Top-right action — only the initial "Run Check". After the run,
-                any FAILED check is retried individually from its own row (below),
-                and a fully-passed run shows the bottom Continue button. */}
-            {!checksRunning && !checksCompleted && (
-              <>
-                {/* Attention-grabbing keyframes: a gentle scale "breathe" plus an
-                    expanding ring ripple so the candidate can't miss the button. */}
-                <style>{`
-                  @keyframes tfRunCheckPulse {
-                    0%, 100% { transform: scale(1);    box-shadow: 0 0 0 0 rgba(251,191,36,0.75); }
-                    50%      { transform: scale(1.06); box-shadow: 0 0 0 10px rgba(251,191,36,0); }
-                  }
-                `}</style>
-                <button
-                  type="button"
-                  onClick={handleRunChecks}
-                  disabled={runCheckLocked}
-                  title={runCheckLocked ? 'Complete Voice Verification below first' : undefined}
-                  style={runCheckLocked ? undefined : { animation: 'tfRunCheckPulse 1.2s ease-in-out infinite' }}
-                  className={`flex-shrink-0 inline-flex items-center gap-2 font-bold py-2.5 px-5 rounded-lg text-sm transition-colors ${
-                    runCheckLocked
-                      ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                      : 'bg-warning hover:bg-warning text-gray-900 ring-2 ring-white/80 shadow-lg'
-                  }`}
-                >
-                  <Play className="w-4 h-4" />
-                  Run Check
-                </button>
-              </>
-            )}
-          </div>
 
-          {/* Card body: 2-column layout */}
-          <div className="bg-white rounded-b-xl p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Left column: Camera Preview + Device Settings */}
-              <div className="space-y-4">
-                <div className="rounded-xl overflow-hidden border border-gray-200">
-                  <div className="px-4 py-3 flex items-center justify-between gap-2 bg-white border-b border-gray-100">
-                    <div className="flex items-center gap-2">
-                      <CircleDot className="w-4 h-4 text-brand-blue" />
-                      <h3 className="text-sm font-semibold text-gray-900">Camera Preview</h3>
-                    </div>
-                    {/* Camera Active / Unavailable badge — reflects the
-                        video element's actual playback state (cameraLive)
-                        instead of always claiming "Camera Active". */}
-                    {cameraLive ? (
-                      <span className="inline-flex items-center gap-1.5 bg-success-subtle text-success text-xs font-medium px-2.5 py-1 rounded-full flex-shrink-0">
-                        <span className="w-2 h-2 bg-success rounded-full animate-pulse" />
-                        Camera Active
+                {/* Tips */}
+                <div className="rounded-xl bg-brand-sky/40 border border-brand-blue/10 px-4 py-3">
+                  <p className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                    <Lightbulb className="w-4 h-4 text-brand-orange" />
+                    Tips for a clear recording
+                  </p>
+                  <div className="mt-2.5 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {VOICE_TIPS.map(({ icon: TipIcon, text }) => (
+                      <span key={text} className="flex items-center gap-2 text-xs text-gray-600">
+                        <TipIcon className="w-4 h-4 text-brand-blue flex-shrink-0" />
+                        {text}
                       </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5 bg-destructive-subtle text-destructive text-xs font-medium px-2.5 py-1 rounded-full flex-shrink-0">
-                        <span className="w-2 h-2 bg-destructive rounded-full" />
-                        No Camera Signal
-                      </span>
-                    )}
-                  </div>
-                  <div className="relative bg-gray-900 aspect-video">
-                    <video
-                      ref={videoRef}
-                      autoPlay
-                      playsInline
-                      muted
-                      className="w-full h-full object-cover"
-                      style={{ transform: 'scaleX(-1)' }}
-                      onLoadedData={() => setCameraLive(true)}
-                      onPlaying={() => setCameraLive(true)}
-                      onEmptied={() => setCameraLive(false)}
-                      onError={() => setCameraLive(false)}
-                      onStalled={() => setCameraLive(false)}
-                    />
-                    <button
-                      type="button"
-                      onClick={scrollToDeviceSettings}
-                      title="Device Settings"
-                      className="absolute top-3 right-3 flex items-center justify-center w-8 h-8 rounded-lg bg-black/50 hover:bg-black/65 text-white transition-colors"
-                    >
-                      <Settings className="w-4 h-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleFullscreenPreview}
-                      title="Fullscreen"
-                      className="absolute bottom-3 right-3 flex items-center justify-center w-8 h-8 rounded-lg bg-black/50 hover:bg-black/65 text-white transition-colors"
-                    >
-                      <Maximize2 className="w-4 h-4" />
-                    </button>
+                    ))}
                   </div>
                 </div>
+              </div>
+            )}
 
-                {/* Device Settings — lets the candidate pick whichever connected
-                    camera/microphone is actually compatible, instead of being
-                    stuck with whatever the OS treats as default. */}
-                <div ref={deviceSettingsRef} className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Settings className="w-4 h-4 text-gray-500" />
-                    <h3 className="text-sm font-semibold text-gray-900">Device Settings</h3>
-                    {isSwitchingDevice && <Loader2 className="w-3.5 h-3.5 text-gray-400 animate-spin" />}
+            {/* ── 2. Camera Preview + Device Settings ── */}
+            <div ref={cameraRowRef} className={`scroll-mt-4 grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-5 ${onEnrollVoice ? 'border-t border-gray-100 pt-6' : ''}`}>
+              <div className="rounded-xl border border-gray-200 p-3">
+                <div className="relative bg-gray-900 aspect-video rounded-lg overflow-hidden">
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-full object-cover"
+                    style={{ transform: 'scaleX(-1)' }}
+                    onLoadedData={() => setCameraLive(true)}
+                    onPlaying={() => setCameraLive(true)}
+                    onEmptied={() => setCameraLive(false)}
+                    onError={() => setCameraLive(false)}
+                    onStalled={() => setCameraLive(false)}
+                  />
+                  {/* Reflects the video element's actual playback state
+                      (cameraLive) instead of always claiming "Camera Active". */}
+                  {cameraLive ? (
+                    <span className="absolute top-2.5 right-2.5 inline-flex items-center gap-1.5 bg-white/90 text-success text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
+                      <span className="w-2 h-2 bg-success rounded-full animate-pulse" />
+                      Active
+                    </span>
+                  ) : (
+                    <span className="absolute top-2.5 right-2.5 inline-flex items-center gap-1.5 bg-white/90 text-brand-orange-deep text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
+                      <span className="w-2 h-2 bg-brand-orange rounded-full" />
+                      No Camera Signal
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Device Settings — lets the candidate pick whichever connected
+                  camera/microphone is actually compatible, instead of being
+                  stuck with whatever the OS treats as default. */}
+              <div className="rounded-xl border border-gray-200 overflow-hidden">
+                <div className="px-4 py-3 flex items-center gap-2 border-b border-gray-100">
+                  <Settings className="w-4 h-4 text-brand-blue" />
+                  <h3 className="text-sm font-semibold text-gray-900">Device Settings</h3>
+                  {isSwitchingDevice && <Loader2 className="w-3.5 h-3.5 text-brand-blue animate-spin" />}
+                </div>
+                <div className="p-4 space-y-5">
+                  <div className="flex items-start gap-3">
+                    <Camera className="w-5 h-5 text-brand-blue flex-shrink-0 mt-6" />
+                    <div className="min-w-0 flex-1">
+                      <label htmlFor="tf-camera-select" className="block text-sm font-semibold text-gray-900 mb-1">Camera</label>
+                      <select
+                        id="tf-camera-select"
+                        value={selectedCameraId}
+                        onChange={(e) => switchCamera(e.target.value)}
+                        disabled={isSwitchingDevice || checksRunning}
+                        className="w-full text-sm rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 disabled:bg-gray-50 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+                      >
+                        {cameraDevices.length === 0 && <option value="">System Default</option>}
+                        {cameraDevices.map((d, i) => (
+                          <option
+                            key={d.deviceId}
+                            value={d === defaultCameraDevice ? '' : d.deviceId}
+                            disabled={isVirtualCameraLabel(d.label)}
+                          >
+                            {getCameraDeviceLabel(d, i)}
+                          </option>
+                        ))}
+                      </select>
+                      {cameraSelectionError && (
+                        <p className="mt-1 text-xs font-medium text-brand-orange-deep">{cameraSelectionError}</p>
+                      )}
+                    </div>
                   </div>
 
-                  <div>
-                    <label htmlFor="tf-camera-select" className="flex items-center gap-1.5 text-xs font-medium text-gray-500 mb-1">
-                      <Camera className="w-3.5 h-3.5" /> Camera
-                    </label>
-                    <select
-                      id="tf-camera-select"
-                      value={selectedCameraId}
-                      onChange={(e) => switchCamera(e.target.value)}
-                      disabled={isSwitchingDevice || checksRunning}
-                      className="w-full text-sm rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 disabled:bg-gray-50 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/20"
-                    >
-                      {cameraDevices.length === 0 && <option value="">System Default</option>}
-                      {cameraDevices.map((d, i) => (
-                        <option
-                          key={d.deviceId}
-                          value={d === defaultCameraDevice ? '' : d.deviceId}
-                          disabled={isVirtualCameraLabel(d.label)}
-                        >
-                          {getCameraDeviceLabel(d, i)}
-                        </option>
-                      ))}
-                    </select>
-                    {cameraSelectionError && (
-                      <p className="mt-1 text-xs font-medium text-destructive">{cameraSelectionError}</p>
-                    )}
+                  <div className="flex items-start gap-3">
+                    <Mic className="w-5 h-5 text-brand-blue flex-shrink-0 mt-6" />
+                    <div className="min-w-0 flex-1">
+                      <label htmlFor="tf-mic-select" className="block text-sm font-semibold text-gray-900 mb-1">
+                        Microphone <span className="text-brand-orange-deep">*</span>
+                      </label>
+                      <select
+                        id="tf-mic-select"
+                        value={selectedMicId}
+                        onChange={(e) => switchMicrophone(e.target.value)}
+                        disabled={isSwitchingDevice || checksRunning}
+                        className="w-full text-sm rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 disabled:bg-gray-50 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+                      >
+                        <option value="" disabled>Select your microphone…</option>
+                        {micDevices.map((d, i) => (
+                          <option key={d.deviceId} value={d.deviceId}>{d.label || `Microphone ${i + 1}`}</option>
+                        ))}
+                      </select>
+                      {/* The Microphone check cannot pass until an explicit
+                          device is chosen here — "System Default" does not
+                          count. Some browsers won't list real devices until
+                          mic permission has been granted once, hence the hint. */}
+                      {micDevices.length === 0 ? (
+                        <p className="mt-1 text-xs text-gray-500">
+                          No microphones detected yet — {onEnrollVoice
+                            ? <>click <strong>Start recording</strong> above to allow microphone access</>
+                            : <>click <strong>Run Check</strong> below to detect your connected microphone(s)</>}, then select one here.
+                        </p>
+                      ) : !selectedMicId && (
+                        <p className="mt-1 text-xs text-brand-orange-deep font-medium">
+                          Required — select your microphone to complete the Microphone check.
+                        </p>
+                      )}
+                    </div>
                   </div>
 
-                  <div>
-                    <label htmlFor="tf-mic-select" className="flex items-center gap-1.5 text-xs font-medium text-gray-500 mb-1">
-                      <Mic className="w-3.5 h-3.5" /> Microphone
-                      <span className="text-destructive font-semibold">*</span>
-                    </label>
-                    <select
-                      id="tf-mic-select"
-                      value={selectedMicId}
-                      onChange={(e) => switchMicrophone(e.target.value)}
-                      disabled={isSwitchingDevice || checksRunning}
-                      className="w-full text-sm rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 disabled:bg-gray-50 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/20"
-                    >
-                      <option value="" disabled>Select your microphone…</option>
-                      {micDevices.map((d, i) => (
-                        <option key={d.deviceId} value={d.deviceId}>{d.label || `Microphone ${i + 1}`}</option>
-                      ))}
-                    </select>
-                    {/* The Microphone check in the list on the right cannot pass
-                        until an explicit device is chosen here — "System Default"
-                        does not count, so this option is disabled and the placeholder
-                        stays selected until the candidate actively picks one. */}
-                    {micDevices.length === 0 ? (
-                      // Some browsers won't reveal real per-device entries until
-                      // mic permission has been granted at least once — which
-                      // hasn't happened yet if the candidate hasn't clicked "Run
-                      // Check" yet. The dropdown looks empty in the meantime even
-                      // though a device IS physically connected; this explains why
-                      // rather than leaving it looking silently broken.
-                      <p className="mt-1 text-xs text-gray-400">
-                        No microphones detected yet — click <strong>Run Check</strong> above
-                        to detect your connected microphone(s), then select one here.
-                      </p>
-                    ) : !selectedMicId && (
-                      <p className="mt-1 text-xs text-warning font-medium">
-                        Required — select your microphone to complete the Microphone check.
-                      </p>
-                    )}
-                  </div>
-
-                  <p className="text-xs text-gray-400">
+                  <p className="text-xs text-gray-500">
                     Not seeing the right device? Choose a different one above — we&apos;ll re-check it automatically.
                   </p>
                 </div>
               </div>
+            </div>
 
-              {/* Right column: Check items */}
-              <div className="space-y-2">
-                {systemChecks.map((check) => (
-                  <div
-                    key={check.id}
-                    className="bg-white border border-gray-200 rounded-lg p-3 flex items-center gap-3"
-                  >
-                    {/* Left: colored circle icon */}
-                    <div
-                      className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                        check.status === 'pass'
-                          ? 'bg-success-subtle'
-                          : check.status === 'fail'
-                          ? 'bg-destructive-subtle'
-                          : 'bg-gray-100'
-                      }`}
-                    >
-                      <span
-                        className={
-                          check.status === 'pass'
-                            ? 'text-success'
-                            : check.status === 'fail'
-                            ? 'text-destructive'
-                            : 'text-gray-400'
+            {/* ── 3. Environment checks — fade in once the voice sample is
+                recorded (immediately when voice verification is off). ── */}
+            {!runCheckLocked && (
+              <div className="tf-checks-fade-in space-y-4 border-t border-gray-100 pt-6">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <Shield className="w-5 h-5 text-brand-blue" />
+                    <h3 className="text-base font-semibold text-gray-900">Environment Checks</h3>
+                  </div>
+                  {/* Only the initial "Run Check" lives here. After the run, a
+                      FAILED check is retried from its own row, and a
+                      fully-passed run shows Continue below. */}
+                  {!checksRunning && !checksCompleted && (
+                    <>
+                      <style>{`
+                        @keyframes tfRunCheckPulse {
+                          0%, 100% { transform: scale(1);    box-shadow: 0 0 0 0 rgba(237,136,28,0.75); }
+                          50%      { transform: scale(1.06); box-shadow: 0 0 0 10px rgba(237,136,28,0); }
                         }
+                      `}</style>
+                      <button
+                        type="button"
+                        onClick={handleRunChecks}
+                        style={{ animation: 'tfRunCheckPulse 1.2s ease-in-out infinite' }}
+                        className="flex-shrink-0 inline-flex items-center gap-2 font-bold py-2.5 px-5 rounded-lg text-sm transition-colors bg-brand-orange hover:bg-brand-orange-deep text-white shadow-lg"
                       >
-                        {check.icon}
-                      </span>
-                    </div>
+                        <Play className="w-4 h-4" />
+                        Run Check
+                      </button>
+                    </>
+                  )}
+                </div>
 
-                    {/* Middle: label + detail (hide the "Pending..." placeholder
-                        until a check actually runs) */}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900">{check.label}</p>
-                      {check.detail && check.detail !== 'Pending...' && (
-                        <p className="text-xs text-gray-500 truncate">{check.detail}</p>
-                      )}
-                    </div>
-
-                    {/* Right: status icon + per-check retry (only that row re-runs) */}
-                    <div className="flex-shrink-0 flex items-center gap-2">
-                      {check.status === 'pass' && (
-                        <span className="inline-flex items-center gap-1.5 bg-success-subtle text-success text-xs font-semibold px-2.5 py-1 rounded-full">
-                          <CheckCircle className="w-3.5 h-3.5" />
-                          Working
-                        </span>
-                      )}
-                      {check.status === 'fail' && (
-                        <>
-                          <XCircle className="w-5 h-5 text-destructive" />
-                          {/* Microphone can only get its first pass from the real
-                              "Run Check" flow (see retryCheck's guard above) — before
-                              that's ever completed once, a per-row Retry here would be
-                              a dead click, so it's hidden rather than shown disabled. */}
-                          {(check.id !== 'microphone' || checksCompleted) && (
-                            <button
-                              type="button"
-                              onClick={() => retryCheck(check.id)}
-                              className="inline-flex items-center gap-1 text-xs font-semibold text-destructive hover:text-destructive border border-destructive-line hover:border-destructive-line rounded-md px-2 py-1 transition-colors"
-                              title={`Retry ${check.label}`}
-                            >
-                              <RefreshCw className="w-3 h-3" />
-                              Retry
-                            </button>
-                          )}
-                        </>
-                      )}
-                      {check.status === 'checking' && (
-                        <Loader2 className="w-5 h-5 text-gray-400 animate-spin" />
-                      )}
+                {/* Overall result */}
+                {checksCompleted && allSystemPassed && (
+                  <div className="relative overflow-hidden rounded-xl border border-brand-blue/15 bg-brand-blue/[0.06] px-4 py-3.5 flex items-center gap-4">
+                    <span aria-hidden className="absolute -right-3 top-1/2 -translate-y-1/2 w-14 h-14 rounded-full bg-brand-blue/10 flex items-center justify-center">
+                      <Check className="w-7 h-7 text-brand-blue/30" strokeWidth={3} />
+                    </span>
+                    <span className="w-11 h-11 rounded-full bg-brand-blue text-white flex items-center justify-center flex-shrink-0">
+                      <Check className="w-6 h-6" strokeWidth={3} />
+                    </span>
+                    <div className="relative">
+                      <p className="font-bold text-brand-blue">All Systems Ready</p>
+                      <p className="text-sm text-gray-600">Your device and system meet all the requirements for the interview.</p>
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
+                )}
+                {checksCompleted && !allSystemPassed && (
+                  <div className="rounded-xl border border-brand-orange/25 bg-brand-orange/[0.07] px-4 py-3.5 flex items-start gap-4">
+                    <span className="w-11 h-11 rounded-full bg-brand-orange text-white flex items-center justify-center flex-shrink-0">
+                      <XCircle className="w-6 h-6" />
+                    </span>
+                    <div>
+                      <p className="font-bold text-brand-orange-deep">Some checks failed</p>
+                      <p className="text-sm text-gray-600 mt-0.5">
+                        {systemChecks.find((c) => c.id === 'webcam' && c.status === 'fail')
+                          ? 'Camera access is required for the interview. Allow camera access in your browser settings, then click Retry on that check.'
+                          : systemChecks.find((c) => c.id === 'microphone' && c.status === 'fail')
+                          ? (!selectedMicId
+                              ? 'Select your microphone from the Device Settings panel above to complete this check.'
+                              : 'Click Retry on the Microphone check below to verify your selected device.')
+                          : 'Fix the issues and click Retry on each failed check to re-run just that one.'}
+                      </p>
+                    </div>
+                  </div>
+                )}
 
-            {/* Status banners — shown ABOVE the Voice Verification panel so the
-                overall system-check result reads first, then the (separate)
-                voice enrollment step. */}
-            {checksCompleted && allSystemPassed && (
-              <div className="mt-5 bg-success-subtle border border-success-line rounded-xl p-4 flex items-center gap-3">
-                <CheckCircle className="w-5 h-5 text-success flex-shrink-0" />
-                <div>
-                  <p className="font-semibold text-success-strong">All Checks Passed!</p>
-                  <p className="text-sm text-success">Your environment is ready for the interview.</p>
+                {/* Checks — two columns, five rows */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {systemChecks.map((check) => (
+                    <div
+                      key={check.id}
+                      className={`rounded-xl border px-3 py-2.5 flex items-center gap-3 min-w-0 ${
+                        check.status === 'fail' ? 'border-brand-orange/30 bg-brand-orange/[0.04]' : 'border-gray-200 bg-white'
+                      }`}
+                    >
+                      <span className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 [&_svg]:w-5 [&_svg]:h-5 ${
+                        check.status === 'fail' ? 'bg-brand-orange/10 text-brand-orange-deep' : 'bg-brand-blue/10 text-brand-blue'
+                      }`}>
+                        {check.icon}
+                      </span>
+
+                      {/* Label + detail (the "Pending..." placeholder stays
+                          hidden until a check actually runs) */}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-900">{check.label}</p>
+                        {check.detail && check.detail !== 'Pending...' && (
+                          <p className="text-xs text-gray-500 truncate" title={check.detail}>{check.detail}</p>
+                        )}
+                      </div>
+
+                      {/* Status + per-check retry (only that row re-runs) */}
+                      <div className="flex-shrink-0 flex items-center gap-2">
+                        {check.status === 'pass' && (
+                          <span className="inline-flex items-center gap-1.5 bg-success-subtle text-success text-xs font-semibold pl-1 pr-3 py-1 rounded-full">
+                            <span className="w-5 h-5 rounded-full bg-success text-white flex items-center justify-center">
+                              <Check className="w-3 h-3" strokeWidth={3} />
+                            </span>
+                            Working
+                          </span>
+                        )}
+                        {check.status === 'fail' && (
+                          <>
+                            <span className="inline-flex items-center gap-1.5 bg-brand-orange/10 text-brand-orange-deep text-xs font-semibold px-3 py-1 rounded-full">
+                              <XCircle className="w-3.5 h-3.5" />
+                              Failed
+                            </span>
+                            {/* Microphone can only get its first pass from the
+                                real "Run Check" flow (see retryCheck's guard
+                                above) — before that's completed once, a per-row
+                                Retry would be a dead click, so it's hidden. */}
+                            {(check.id !== 'microphone' || checksCompleted) && (
+                              <button
+                                type="button"
+                                onClick={() => retryCheck(check.id)}
+                                className="inline-flex items-center gap-1 text-xs font-semibold text-brand-blue border border-brand-blue/30 hover:bg-brand-blue/5 rounded-md px-2 py-1 transition-colors"
+                                title={`Retry ${check.label}`}
+                              >
+                                <RefreshCw className="w-3 h-3" />
+                                Retry
+                              </button>
+                            )}
+                          </>
+                        )}
+                        {check.status === 'checking' && (
+                          <Loader2 className="w-5 h-5 text-brand-blue animate-spin" />
+                        )}
+                        {check.status === 'pending' && (
+                          <span className="text-xs font-medium text-gray-400">Pending</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
+
+                {/* Running indicator / Continue — bottom right. */}
+                {(checksRunning || checksCompleted) && (
+                  <div className="flex justify-end pt-2">
+                    {checksRunning ? (
+                      <div className="inline-flex items-center justify-center gap-2 bg-gray-100 text-gray-500 font-semibold py-3 px-6 rounded-lg text-sm cursor-not-allowed">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Running checks…
+                      </div>
+                    ) : (
+                      /* Proceed — enabled only when all checks passed. */
+                      <Button
+                        type="button"
+                        variant="primary"
+                        size="lg"
+                        onClick={() => { if (allSystemPassed && voiceGateOk && !isProceedLoading && !micDisconnectedPopup) handleProceed(); }}
+                        disabled={!allSystemPassed || !voiceGateOk || isProceedLoading || micDisconnectedPopup}
+                        title={micDisconnectedPopup ? 'Please reconnect your microphone to continue' : !voiceGateOk ? 'Record your voice sample first' : undefined}
+                        className="w-full sm:w-auto sm:min-w-[260px]"
+                      >
+                        {isProceedLoading ? (
+                          <><Loader2 className="w-4 h-4 animate-spin" /> Finishing…</>
+                        ) : micDisconnectedPopup ? (
+                          <>Please reconnect your microphone</>
+                        ) : !voiceGateOk ? (
+                          <>Record your voice to continue</>
+                        ) : (
+                          <>Continue to Practice <ArrowRight className="w-4 h-4" /></>
+                        )}
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
             )}
-            {checksCompleted && !allSystemPassed && (
-              <div className="mt-5 bg-warning-subtle border border-warning-line rounded-xl p-4 flex items-start gap-3">
-                <XCircle className="w-5 h-5 text-warning flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-semibold text-warning-strong">Some checks failed</p>
-                  <p className="text-sm text-warning mt-0.5">
-                    {systemChecks.find((c) => c.id === 'webcam' && c.status === 'fail')
-                      ? 'Camera access is required for the interview. Allow camera access in your browser settings, then click Retry on that check.'
-                      : systemChecks.find((c) => c.id === 'microphone' && c.status === 'fail')
-                      ? (!selectedMicId
-                          ? 'Select your microphone from the Device Settings panel below to complete this check.'
-                          : 'Click Retry on the Microphone check below to verify your selected device.')
-                      : 'Fix the issues above and click Retry on each failed check to re-run just that one.'}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Hidden canvas for frame analysis */}
-            <canvas ref={canvasRef} className="hidden" />
-
-            {/* Action buttons — Run Check / Retry now live in the header's
-                top-right corner (see the gradient header above). The bottom
-                row is reserved for the running indicator and the Continue
-                button so the primary trigger is always visible at the same
-                spot regardless of state. */}
-            <div className="mt-5 flex flex-col sm:flex-row gap-3">
-              {/* Running indicator */}
-              {checksRunning && (
-                <div className="flex-1 inline-flex items-center justify-center gap-2 bg-gray-100 text-gray-500 font-semibold py-3 px-6 rounded-lg text-sm cursor-not-allowed">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Running checks…
-                </div>
-              )}
-
-              {/* Proceed — enabled only when all checks passed. Environment scan removed. */}
-              {checksCompleted && (
-                <Button
-                  type="button"
-                  variant="primary"
-                  onClick={() => { if (allSystemPassed && voiceGateOk && !isProceedLoading && !micDisconnectedPopup) handleProceed(); }}
-                  disabled={!allSystemPassed || !voiceGateOk || isProceedLoading || micDisconnectedPopup}
-                  title={micDisconnectedPopup ? 'Please reconnect your microphone to continue' : !voiceGateOk ? 'Record your voice sample first' : undefined}
-                  className="flex-1"
-                >
-                  {isProceedLoading ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" /> Finishing…</>
-                  ) : micDisconnectedPopup ? (
-                    <>Please reconnect your microphone</>
-                  ) : !voiceGateOk ? (
-                    <>Record your voice to continue</>
-                  ) : (
-                    <>Continue <ArrowRight className="w-4 h-4" /></>
-                  )}
-                </Button>
-              )}
-            </div>
           </div>
-        </div>
+        </section>
+
+        {/* Hidden canvas for frame analysis */}
+        <canvas ref={canvasRef} className="hidden" />
 
         {/* Headset/microphone disconnected popup — appears the instant a
             PREVIOUSLY-PASSING microphone check goes dead (see the track
             'ended' + poll effect above). Continue is disabled via its own
             `disabled` attribute (not by this overlay blocking clicks) —
-            deliberately NOT a full-screen click-blocking modal, so the
-            Device Settings dropdown underneath stays reachable in case the
-            candidate needs to pick a DIFFERENT microphone (new deviceId)
-            rather than the original one reconnecting. Auto-dismisses the
-            moment the device is back — no button to click here. */}
+            deliberately NOT a full-screen click-blocking modal, so Device
+            Settings stays reachable in case the candidate needs to pick a
+            DIFFERENT microphone. Auto-dismisses once the device is back. */}
         {micDisconnectedPopup && (
           <div className="fixed top-4 inset-x-0 z-[200] flex justify-center px-4 pointer-events-none">
-            <div className="w-full max-w-md bg-white border border-destructive-line rounded-2xl shadow-2xl p-5 flex items-start gap-3 pointer-events-auto">
-              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-destructive-subtle flex-shrink-0">
-                <MicOff className="w-5 h-5 text-destructive" />
+            <div className="w-full max-w-md bg-white border border-brand-orange/30 rounded-2xl shadow-2xl p-5 flex items-start gap-3 pointer-events-auto">
+              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-brand-orange/10 flex-shrink-0">
+                <MicOff className="w-5 h-5 text-brand-orange-deep" />
               </div>
               <div className="min-w-0">
                 <h3 className="text-gray-900 font-semibold text-sm mb-0.5">No microphone detected.</h3>
                 <p className="text-gray-500 text-xs leading-relaxed">
                   Please connect a microphone. This is detected automatically — if it&apos;s a
-                  different device, you can also select it from Device Settings below.
+                  different device, you can also select it from Device Settings.
                 </p>
               </div>
             </div>
@@ -2927,15 +2959,14 @@ export default function StepSystemCheck({
         )}
 
         {/* External-mic-removed notice — a system/built-in mic was still
-            available, so tryMicFallbackOrFail already switched to it
-            silently and the check stayed 'pass'. This is purely informational
-            (the candidate can keep going on the fallback device), so unlike
-            the popup above it never blocks Continue and dismisses itself. */}
+            available, so tryMicFallbackOrFail already switched to it silently
+            and the check stayed 'pass'. Purely informational: never blocks
+            Continue and dismisses itself. */}
         {micFallbackNotice && (
           <div className="fixed top-4 inset-x-0 z-[200] flex justify-center px-4 pointer-events-none">
-            <div className="w-full max-w-md bg-white border border-warning-line rounded-2xl shadow-2xl p-5 flex items-start gap-3 pointer-events-auto">
-              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-warning-subtle flex-shrink-0">
-                <MicOff className="w-5 h-5 text-warning" />
+            <div className="w-full max-w-md bg-white border border-brand-orange/30 rounded-2xl shadow-2xl p-5 flex items-start gap-3 pointer-events-auto">
+              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-brand-orange/10 flex-shrink-0">
+                <MicOff className="w-5 h-5 text-brand-orange-deep" />
               </div>
               <div className="min-w-0">
                 <h3 className="text-gray-900 font-semibold text-sm mb-0.5">Your device removed</h3>

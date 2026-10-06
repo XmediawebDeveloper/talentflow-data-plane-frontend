@@ -917,6 +917,12 @@ export default function AIInterviewInviteTable({
               )}
               <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">CID</th>
               <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Candidate</th>
+              <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Status</th>
+              <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Score</th>
+              {/* hidden md:table-cell mirrors this column's <td> — without it the
+                  header carries one more cell than the body between sm and md and
+                  every heading after Timeline shifts off its column. */}
+              <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider hidden md:table-cell">Timeline</th>
               {/* Track popup only: Job Version, then Interview Version. */}
               {(jobVersion != null || showRowVersions) && (
                 <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Job Version</th>
@@ -936,12 +942,6 @@ export default function AIInterviewInviteTable({
                 </>
               )}
               <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Invite Source</th>
-              <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Status</th>
-              <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Score</th>
-              {/* hidden md:table-cell mirrors this column's <td> — without it the
-                  header carries one more cell than the body between sm and md and
-                  every heading after Timeline shifts off its column. */}
-              <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider hidden md:table-cell">Timeline</th>
               <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider tf-sticky-col">Actions</th>
             </tr>
           </thead>
@@ -994,6 +994,47 @@ export default function AIInterviewInviteTable({
                     </div>
                   </td>
 
+                  <td className="py-3 px-4 align-middle whitespace-nowrap">
+                    <div className="flex items-center gap-1.5 flex-nowrap">
+                      <AIInviteStatusBadge inv={inv} />
+                      {isInviteExpired(inv) && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0">
+                          <Clock className="w-3 h-3" /> Expired
+                        </span>
+                      )}
+                    </div>
+                  </td>
+
+                  <td className="py-3 px-4 align-middle text-center text-sm whitespace-nowrap">
+                    <ScoreCell value={score} result={inviteResult(inv, score)} />
+                  </td>
+
+                  {/* Every milestone on its own line, oldest first. align-top so
+                      the first line sits level with the other columns. */}
+                  <td className="py-3 px-4 align-top text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap hidden md:table-cell">
+                    {events.length > 0 ? (
+                      <div className="space-y-1">
+                        {events.map(({ label, at, Icon, tone }, i) => (
+                          <div key={`${label}-${i}`} className="flex items-center gap-2 whitespace-nowrap">
+                            <Icon className={`w-3 h-3 flex-shrink-0 ${tone}`} />
+                            <span className={tone}>{label}: {formatIST(at)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-gray-400 dark:text-slate-500">—</span>
+                    )}
+                    {hasMoreTimelineHistory(inv) && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); openTimeline(inv); }}
+                        className="flex items-center gap-1 text-2xs font-medium text-brand-blue hover:underline mt-1"
+                      >
+                        <History className="w-3 h-3" /> View full history
+                      </button>
+                    )}
+                  </td>
+
                   {(jobVersion != null || showRowVersions) && (
                     <td className="py-3 px-4 align-middle whitespace-nowrap">
                       {(jobVersion ?? inv._jd_version) != null
@@ -1038,47 +1079,6 @@ export default function AIInterviewInviteTable({
                     {inviteSourceLabel(inv)
                       ? <InviteSourceValue inv={inv} iconClassName="w-3.5 h-3.5" />
                       : <span className="text-gray-400 dark:text-slate-500">—</span>}
-                  </td>
-
-                  <td className="py-3 px-4 align-middle whitespace-nowrap">
-                    <div className="flex items-center gap-1.5 flex-nowrap">
-                      <AIInviteStatusBadge inv={inv} />
-                      {isInviteExpired(inv) && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0">
-                          <Clock className="w-3 h-3" /> Expired
-                        </span>
-                      )}
-                    </div>
-                  </td>
-
-                  <td className="py-3 px-4 align-middle text-center text-sm whitespace-nowrap">
-                    <ScoreCell value={score} result={inviteResult(inv, score)} />
-                  </td>
-
-                  {/* Every milestone on its own line, oldest first. align-top so
-                      the first line sits level with the other columns. */}
-                  <td className="py-3 px-4 align-top text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap hidden md:table-cell">
-                    {events.length > 0 ? (
-                      <div className="space-y-1">
-                        {events.map(({ label, at, Icon, tone }, i) => (
-                          <div key={`${label}-${i}`} className="flex items-center gap-2 whitespace-nowrap">
-                            <Icon className={`w-3 h-3 flex-shrink-0 ${tone}`} />
-                            <span className={tone}>{label}: {formatIST(at)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <span className="text-gray-400 dark:text-slate-500">—</span>
-                    )}
-                    {hasMoreTimelineHistory(inv) && (
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); openTimeline(inv); }}
-                        className="flex items-center gap-1 text-2xs font-medium text-brand-blue hover:underline mt-1"
-                      >
-                        <History className="w-3 h-3" /> View full history
-                      </button>
-                    )}
                   </td>
 
                   <td className="py-3 px-4 align-middle tf-sticky-col" onClick={(e) => e.stopPropagation()}>

@@ -77,16 +77,16 @@ const CANDIDATE_COLUMNS = [
   { id: 'cid', label: 'CID' },
   { id: 'candidate', label: 'Candidate' },
   { id: 'email', label: 'Email' },
-  { id: 'jobId', label: 'Job ID' },
-  { id: 'jobTitle', label: 'Job Title' },
-  { id: 'jobVersion', label: 'Job Version' },
-  { id: 'interviewVersion', label: 'Interview Version' },
-  { id: 'inviteSource', label: 'Invite Source' },
   { id: 'status', label: 'Status' },
   { id: 'score', label: 'Score' },
   { id: 'result', label: 'Result' },
   { id: 'timeline', label: 'Timeline' },
+  { id: 'jobId', label: 'Job ID' },
+  { id: 'jobTitle', label: 'Job Title' },
+  { id: 'jobVersion', label: 'Job Version' },
+  { id: 'interviewVersion', label: 'Interview Version' },
   { id: 'proctoring', label: 'Proctoring Risk' },
+  { id: 'inviteSource', label: 'Invite Source' },
 ] as const;
 type CandidateColumnId = (typeof CANDIDATE_COLUMNS)[number]['id'];
 
@@ -881,16 +881,16 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                     {col('cid') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">CID</th>}
                     {col('candidate') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Candidate</th>}
                     {col('email') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Email</th>}
-                    {col('jobId') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Job ID</th>}
-                    {col('jobTitle') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Job Title</th>}
-                    {col('jobVersion') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Job Version</th>}
-                    {col('interviewVersion') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Interview Version</th>}
-                    {col('inviteSource') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Invite Source</th>}
                     {col('status') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Status</th>}
                     {col('score') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Score</th>}
                     {col('result') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Result</th>}
                     {col('timeline') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Timeline</th>}
+                    {col('jobId') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Job ID</th>}
+                    {col('jobTitle') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Job Title</th>}
+                    {col('jobVersion') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Job Version</th>}
+                    {col('interviewVersion') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Interview Version</th>}
                     {col('proctoring') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Proctoring Risk</th>}
+                    {col('inviteSource') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Invite Source</th>}
                     <th className="text-right px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide tf-sticky-col">Actions</th>
                   </tr>
                 </thead>
@@ -947,39 +947,6 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                             </span>
                           </td>
                         )}
-                        {col('jobId') && (
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            {row._job_id ? (
-                              <JobIdBadge>{row._job_id}</JobIdBadge>
-                            ) : (
-                              <span className="text-gray-400">—</span>
-                            )}
-                          </td>
-                        )}
-                        {col('jobTitle') && (
-                          <td className="px-4 py-3">
-                            <span className="text-gray-700 dark:text-slate-300 truncate max-w-[180px] block">
-                              {row._config_title}
-                            </span>
-                          </td>
-                        )}
-                        {col('jobVersion') && (
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <VersionPill kind="job" version={row._job_version} />
-                          </td>
-                        )}
-                        {col('interviewVersion') && (
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <VersionPill kind="interview" version={row._interview_version} />
-                          </td>
-                        )}
-                        {col('inviteSource') && (
-                          <td className="px-4 py-3 whitespace-nowrap text-gray-700 dark:text-slate-300">
-                            {inviteSourceLabel(row)
-                              ? <InviteSourceValue inv={row} iconClassName="w-3.5 h-3.5" />
-                              : <span className="text-gray-400">—</span>}
-                          </td>
-                        )}
                         {col('status') && (
                           <td className="px-4 py-3 whitespace-nowrap">
                             <div className="flex items-center gap-1.5 flex-wrap">
@@ -1014,6 +981,32 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                             <TimelineStamps startedAt={row.started_at} completedAt={row.completed_at} format={formatIST} duration={formatDuration(row)} />
                           </td>
                         )}
+                        {col('jobId') && (
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {row._job_id ? (
+                              <JobIdBadge>{row._job_id}</JobIdBadge>
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
+                          </td>
+                        )}
+                        {col('jobTitle') && (
+                          <td className="px-4 py-3">
+                            <span className="text-gray-700 dark:text-slate-300 truncate max-w-[180px] block">
+                              {row._config_title}
+                            </span>
+                          </td>
+                        )}
+                        {col('jobVersion') && (
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <VersionPill kind="job" version={row._job_version} />
+                          </td>
+                        )}
+                        {col('interviewVersion') && (
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <VersionPill kind="interview" version={row._interview_version} />
+                          </td>
+                        )}
                         {col('proctoring') && (
                           <td className="px-4 py-3 whitespace-nowrap">
                             {(row.status === 'completed' || row.status === 'terminated') ? (
@@ -1023,6 +1016,13 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                             ) : (
                               <span className="text-gray-400">—</span>
                             )}
+                          </td>
+                        )}
+                        {col('inviteSource') && (
+                          <td className="px-4 py-3 whitespace-nowrap text-gray-700 dark:text-slate-300">
+                            {inviteSourceLabel(row)
+                              ? <InviteSourceValue inv={row} iconClassName="w-3.5 h-3.5" />
+                              : <span className="text-gray-400">—</span>}
                           </td>
                         )}
                         <td className="px-4 py-3 text-right whitespace-nowrap tf-sticky-col">
