@@ -262,6 +262,14 @@ export interface DashboardData {
   mustHaveClusters: Cluster[];
   niceToHaveClusters: Cluster[];
   interviewResponses: InterviewResponse[];
+  /** Questions the candidate actually answered (response_type 'answered').
+   *  NOT interviewResponses.length — that includes `not_asked` padding rows
+   *  and skipped / unanswered slots, so it over-reported (e.g. "12 answered"
+   *  for an interview where a single question was delivered). */
+  questionsAnswered: number;
+  /** Questions actually delivered to the candidate (answered, skipped or
+   *  unanswered — but never `not_asked` / coverage-bypassed padding). */
+  questionsAsked: number;
 
   // ── Timed-mode doc-spec fields (simplified evaluation) ──────────────────
   /** Pass/Fail result driven by MHS section_question_avg ≥ mhsThreshold.

@@ -575,6 +575,29 @@ function hrScoreFromEval(eval_: any): number {
   return 0;
 }
 
+/** Honest question counts for the report's "Questions Answered" tile.
+ *  Source: question_history (every row carries response_type since the
+ *  response-type backfill). Rows that were never delivered (`not_asked`,
+ *  coverage-bypassed) are excluded from both numbers; a slot counts as
+ *  answered only when response_type is 'answered' — or, for legacy rows that
+ *  predate response_type, when it holds a real (non-placeholder) answer. */
+function countQuestions(eval_: any): { questionsAnswered: number; questionsAsked: number } {
+  const history: any[] = Array.isArray(eval_?.question_history) ? eval_.question_history : [];
+  let asked = 0;
+  let answered = 0;
+  for (const h of history) {
+    if (!h || isUndeliveredHistoryRow(h)) continue;
+    asked += 1;
+    const rt = String(h?.response_type || '').trim().toLowerCase();
+    if (rt === 'answered') { answered += 1; continue; }
+    if (!rt) {
+      const ans = String(h?.response_text || h?.answer || '').trim();
+      if (ans && !ans.startsWith('[')) answered += 1;
+    }
+  }
+  return { questionsAnswered: answered, questionsAsked: asked };
+}
+
 /** Build interview response timeline from question_groups (preferred) or question_history. */
 function buildInterviewResponses(eval_: any): InterviewResponse[] {
   const groups = eval_?.question_groups || [];
@@ -2854,6 +2877,7 @@ export function buildDashboardData(params: {
     mustHaveClusters:  mustHaveClustersQA,
     niceToHaveClusters: niceToHaveClustersQA,
     interviewResponses: buildInterviewResponses(eval_),
+    ...countQuestions(eval_),
     finalResult: finalResultQA,
     mhsThreshold: MHS_THRESHOLD,
     questionScores,

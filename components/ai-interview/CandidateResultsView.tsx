@@ -2288,13 +2288,6 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                 rounds_config: (interview as any).rounds_config || (liveSession as any).rounds_config,
                 conversation_transcript: (liveSession as any).conversation_transcript || (interview as any).conversation_transcript,
               });
-              // Compute avg response time from evaluations (seconds)
-              const responseTimes = (eval_.evaluations || [])
-                .map((e: any) => e?.response_time_seconds ?? e?.duration_seconds ?? null)
-                .filter((v: number | null): v is number => typeof v === 'number' && v > 0);
-              const avgResponseSeconds = responseTimes.length > 0
-                ? responseTimes.reduce((a: number, b: number) => a + b, 0) / responseTimes.length
-                : null;
               // AI confidence: prefer backend-provided, fallback in component to scaled final
               const aiConfidence = typeof eval_.ai_confidence === 'number'
                 ? eval_.ai_confidence
@@ -2306,7 +2299,6 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                   data={data}
                   livenessVerified={!!interview.identity_verified}
                   candidateImage={identityPhotoUrl}
-                  avgResponseSeconds={avgResponseSeconds}
                   aiConfidence={aiConfidence}
                 />
               );
@@ -4490,12 +4482,6 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                 conversation_transcript: (liveSession as any).conversation_transcript || (interview as any).conversation_transcript,
                 special_instructions: (interview as any).special_instructions || (liveSession as any).special_instructions,
               });
-              const responseTimes = (eval_.evaluations || [])
-                .map((e: any) => e?.response_time_seconds ?? e?.duration_seconds ?? null)
-                .filter((v: number | null): v is number => typeof v === 'number' && v > 0);
-              const avgResponseSeconds = responseTimes.length > 0
-                ? responseTimes.reduce((a: number, b: number) => a + b, 0) / responseTimes.length
-                : null;
               const aiConfidence = typeof eval_.ai_confidence === 'number'
                 ? eval_.ai_confidence
                 : typeof eval_.confidence === 'number' ? eval_.confidence : null;
@@ -4504,7 +4490,6 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                   data={data}
                   aiConfidence={aiConfidence}
                   candidateImage={identityPhotoUrl}
-                  avgResponseSeconds={avgResponseSeconds}
                   evaluationId={liveSession.display_id || null}
                   sessionId={liveSession.id}
                 />
