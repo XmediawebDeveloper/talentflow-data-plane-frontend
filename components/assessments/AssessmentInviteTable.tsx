@@ -1,7 +1,7 @@
 'use client';
 
-import { Mail, Play, CheckCircle, Clock, Ban, Loader2, Users, Eye, Pencil, MoreVertical, Check, Monitor, RefreshCw, Send, X, Calendar } from 'lucide-react';
-import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
+import { Mail, Play, CheckCircle, Clock, Ban, Loader2, Users, Eye, Pencil, MoreVertical, Check, Monitor, RefreshCw, Send, X } from 'lucide-react';
+import { formatIST } from '@/lib/utils/dateUtils';
 import { isValidEmailFormat } from '@/lib/utils/email';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { TRACKER_DIALOG_PLACEHOLDER_CLASS } from '@/lib/constants/trackerDialog';
@@ -259,9 +259,6 @@ export default function AssessmentInviteTable({
                 <th className="w-8 py-3 pl-4 pr-0 tf-sticky-col-left" aria-label="Select" />
                 <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">CID</th>
                 <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Candidate</th>
-                {/* Invited On — the send date at a glance, the order every
-                    Results/Tracking table shares (Invited On, then Timeline). */}
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Invited On</th>
                 {/* hidden md:table-cell mirrors this column's <td>. Without
                     it the header carried one more cell than the body between
                     sm and md, shifting every heading after Timeline off its
@@ -378,12 +375,6 @@ export default function AssessmentInviteTable({
                           <p className="font-medium text-gray-900 dark:text-slate-50 text-sm truncate" title={invitation.candidate_name}>{invitation.candidate_name}</p>
                           <p className="text-xs text-gray-500 dark:text-slate-500 truncate" title={invitation.candidate_email}>{invitation.candidate_email}</p>
                         </div>
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 align-top whitespace-nowrap">
-                      <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
-                        <Calendar className="w-4 h-4" />
-                        {invitation.sent_at || invitation.created_at ? formatISTDate(invitation.sent_at || invitation.created_at) : '-'}
                       </div>
                     </td>
                         <td className="py-3 px-4 align-top text-xs text-gray-500 dark:text-slate-500 hidden md:table-cell">

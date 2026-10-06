@@ -3340,7 +3340,7 @@ export default function AIInterview() {
                       <table className="w-full min-w-[1000px] table-auto">
                         <thead className="[&_th]:bg-slate-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                           <tr>
-                            {['Select', 'CID', 'Candidate', 'Invited On', 'Timeline', 'Status', 'Score', 'Invite Source', 'Job ID', 'Job Title', 'Job Version', 'Interview Version', 'Actions'].map((c) => (
+                            {['Select', 'CID', 'Candidate', 'Timeline', 'Status', 'Score', 'Invite Source', 'Job ID', 'Job Title', 'Job Version', 'Interview Version', 'Actions'].map((c) => (
                               <th key={c} className="px-4 py-3"><Skeleton className="h-3 w-20" /></th>
                             ))}
                           </tr>

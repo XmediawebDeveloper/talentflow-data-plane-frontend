@@ -1,4 +1,4 @@
-import { ArrowLeft, User, Clock, Award, XCircle, ChevronUp, FileText, TrendingUp, AlertCircle, Info, Filter, Layers, ArrowUpDown, Loader2, BarChart3, SlidersHorizontal, Columns3, Trash2, Users, Download, X, Play, CheckSquare, Eye, ArrowUp, ArrowDown, MoreVertical, Calendar } from 'lucide-react';
+import { ArrowLeft, User, Clock, Award, XCircle, ChevronUp, FileText, TrendingUp, AlertCircle, Info, Filter, Layers, ArrowUpDown, Loader2, BarChart3, SlidersHorizontal, Columns3, Trash2, Users, Download, X, Play, CheckSquare, Eye, ArrowUp, ArrowDown, MoreVertical } from 'lucide-react';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { assessmentService, jdService } from '@/lib/services';
@@ -308,8 +308,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
          name in the identity cell. It is still EXPORTED (see
          downloadScopedExport), which is why it is not simply gone. */
       { id: 'candidate', label: 'Candidate', enabled: true },
-      { id: 'phone', label: 'Phone', enabled: true },
-      { id: 'invitedOn', label: 'Invited On', enabled: true },
       { id: 'timeline', label: 'Timeline', enabled: true },
       { id: 'duration', label: 'Duration', enabled: true },
       { id: 'status', label: 'Status', enabled: true },
@@ -325,6 +323,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
     baseColumns.push(
       { id: 'inviteSource', label: 'Invite Source', enabled: true },
+      { id: 'phone', label: 'Phone', enabled: true },
       { id: 'jdId', label: 'JD ID', enabled: true },
       { id: 'jdTitle', label: 'Job Title', enabled: true },
       { id: 'jobVersion', label: 'Job Version', enabled: true },
@@ -2360,12 +2359,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       })()}
                     </th>
                   )}
-                  {isColumnEnabled('phone') && (
-                    <th scope="col" className={`w-36 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${stickyHeaderClass}`}>Phone</th>
-                  )}
-                  {isColumnEnabled('invitedOn') && (
-                    <th scope="col" className={`w-36 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${stickyHeaderClass}`}>Invited On</th>
-                  )}
                   {isColumnEnabled('timeline') && (
                     <th
                       scope="col"
@@ -2460,6 +2453,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   {isColumnEnabled('inviteSource') && (
                     <th scope="col" className={`w-36 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${stickyHeaderClass}`}>Invite Source</th>
                   )}
+                  {isColumnEnabled('phone') && (
+                    <th scope="col" className={`w-36 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${stickyHeaderClass}`}>Phone</th>
+                  )}
                   {isColumnEnabled('jdId') && (
                     <th scope="col" className={`w-28 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${stickyHeaderClass}`}>JD ID</th>
                   )}
@@ -2549,21 +2545,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           </div>
                         </td>
                       )}
-                      {isColumnEnabled('phone') && (
-                        <td className="px-3 py-2.5">
-                          <div className="truncate text-gray-600 dark:text-slate-400" title={candidate.phone || '-'}>{candidate.phone || '-'}</div>
-                        </td>
-                      )}
-                      {isColumnEnabled('invitedOn') && (
-                        /* When the invite went out — the Invitation Status
-                           tab's column; created_at for a row never sent. */
-                        <td className="px-3 py-2.5 whitespace-nowrap">
-                          <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
-                            <Calendar className="w-4 h-4" />
-                            {candidate.sent_at || candidate.created_at ? formatISTDate((candidate.sent_at || candidate.created_at)!) : '-'}
-                          </div>
-                        </td>
-                      )}
                       {isColumnEnabled('timeline') && (
                         <td className="px-3 py-2.5 overflow-hidden text-xs text-gray-500 dark:text-slate-400">
                           {/* One event per line, in chronological order — the events
@@ -2637,6 +2618,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       {isColumnEnabled('inviteSource') && (
                         <td className="px-3 py-2.5 text-gray-700 dark:text-slate-300 whitespace-nowrap">
                           <InviteSourceValue inv={{ invite_source: candidate.inviteSource }} iconClassName="w-3.5 h-3.5" />
+                        </td>
+                      )}
+                      {isColumnEnabled('phone') && (
+                        <td className="px-3 py-2.5">
+                          <div className="truncate text-gray-600 dark:text-slate-400" title={candidate.phone || '-'}>{candidate.phone || '-'}</div>
                         </td>
                       )}
                       {isColumnEnabled('jdId') && (

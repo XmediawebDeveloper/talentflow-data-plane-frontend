@@ -130,6 +130,10 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal }: AI
         search: searchTerm || undefined,
         page,
         page_size: pageSize,
+        // The Date From/To panel already triggered this reload but its
+        // values were never sent, so the filter did nothing.
+        date_from: filterDateFrom || undefined,
+        date_to: filterDateTo || undefined,
       });
 
       if (response) {
@@ -200,6 +204,18 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal }: AI
       title: 'AI Interview Audit Logs',
     });
     toast.success(`Exported ${rows.length} audit log entries to ${format === 'xlsx' ? 'Excel' : 'CSV'}`);
+    // Record the export on the audit trail, as Assessment's Activity Logs
+    // export does. The file is already saved, so a failed audit call is
+    // logged rather than shown as a failed export.
+    aiInterviewService.logActivityLogsExport({
+      format: format === 'xlsx' ? 'excel' : 'csv',
+      record_count: rows.length,
+      selected: selectedKeys.size > 0,
+      category: categoryFilter === 'all' ? undefined : categoryFilter,
+      search: searchTerm || undefined,
+      date_from: filterDateFrom || undefined,
+      date_to: filterDateTo || undefined,
+    }).catch((error) => console.log('[TalentFlow] Failed to record activity logs export:', error));
   };
 
   const formatTimestamp = (timestamp: string) => {
