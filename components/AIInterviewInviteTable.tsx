@@ -5,7 +5,7 @@ import { useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   X, Mail, Play, CheckCircle, Clock, Ban, Copy, Loader2, Users, Eye, Pencil,
-  MoreVertical, Monitor, History, XCircle, FileText, Square, CheckSquare,
+  MoreVertical, Monitor, History, XCircle, FileText, Square, CheckSquare, Timer,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatIST } from '@/lib/utils/dateUtils';
@@ -225,6 +225,34 @@ const collapseRepeatedSystemChecks = (events: TimelineEntry[]): TimelineEntry[] 
 
 export const timelineEvents = (inv: any): TimelineEntry[] =>
   collapseRepeatedSystemChecks(buildFullTimeline(inv, inv.timeline || [])).slice(-COMPACT_TIMELINE_LIMIT);
+
+/** The Timeline cell's lines (Invited, System Check, Started, Completed...)
+ *  for any AI interview row, so the Results tables read exactly like the
+ *  Track Invites table. A results row is the same session/invite record,
+ *  so it carries the same fields timelineEvents reads. `duration` adds the
+ *  results-only Duration line underneath. */
+export const InviteTimelineLines = ({ inv, duration }: { inv: any; duration?: string | null }) => {
+  const events = timelineEvents(inv);
+  if (events.length === 0 && !duration) {
+    return <span className="text-xs text-gray-400 dark:text-slate-500">—</span>;
+  }
+  return (
+    <div className="space-y-1 text-xs">
+      {events.map(({ label, at, Icon, tone }, i) => (
+        <div key={`${label}-${i}`} className="flex items-center gap-2 whitespace-nowrap">
+          <Icon className={`w-3 h-3 flex-shrink-0 ${tone}`} />
+          <span className={tone}>{label}: {formatIST(at)}</span>
+        </div>
+      ))}
+      {duration && (
+        <div className="flex items-center gap-2 whitespace-nowrap">
+          <Timer className="w-3 h-3 flex-shrink-0 text-gray-400" />
+          <span><span className="text-gray-400 dark:text-slate-500">Duration:</span> {duration}</span>
+        </div>
+      )}
+    </div>
+  );
+};
 
 /** "View full history" only earns its place once something is actually
  *  hidden from the compact cell — by the cap or the System Check collapse —

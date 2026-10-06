@@ -317,7 +317,10 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal }: AI
             <span className="text-sm text-gray-600">Total Events</span>
             <Activity className="w-4 h-4 text-gray-400" />
           </div>
-          <div className="text-2xl text-gray-900">{total}</div>
+          {/* Both categories, whatever chip is selected: the card is the
+              overall figure, like the two beside it. `total` is the selected
+              category's count, which the heading and pagination follow. */}
+          <div className="text-2xl text-gray-900">{stats.total_lifecycle_events + stats.total_candidate_events}</div>
         </div>
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">

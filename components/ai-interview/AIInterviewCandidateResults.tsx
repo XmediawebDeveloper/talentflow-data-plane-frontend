@@ -33,7 +33,7 @@ import {
   getProctoringRisk,
   formatDuration,
 } from './AIInterviewResults';
-import { InviteSourceValue, inviteSourceLabel, displayInviteScore, inviteResult, matchesInviteResultFilter } from '@/components/AIInterviewInviteTable';
+import { InviteSourceValue, inviteSourceLabel, displayInviteScore, inviteResult, matchesInviteResultFilter, InviteTimelineLines } from '@/components/AIInterviewInviteTable';
 import SearchableSelect from '@/components/ui/searchable-select';
 import {
   FilterSelect,
@@ -76,7 +76,6 @@ const RISK_FILTER_OPTIONS = ['High', 'Medium', 'Low', 'None'].map((level) => ({ 
 const CANDIDATE_COLUMNS = [
   { id: 'cid', label: 'CID' },
   { id: 'candidate', label: 'Candidate' },
-  { id: 'email', label: 'Email' },
   { id: 'timeline', label: 'Timeline' },
   { id: 'status', label: 'Status' },
   { id: 'score', label: 'Score' },
@@ -396,13 +395,17 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
   // One export cell per column; Timeline splits into its three parts so each
   // lands in its own spreadsheet column.
   const exportHeaders = (): string[] =>
-    enabledColumns.flatMap((c) => (c.id === 'timeline' ? ['Started At', 'Completed At', 'Duration'] : [c.label]));
+    enabledColumns.flatMap((c) => (
+      c.id === 'timeline' ? ['Started At', 'Completed At', 'Duration']
+      // Email lives under the name on screen, but stays its own spreadsheet column.
+      : c.id === 'candidate' ? ['Candidate', 'Email']
+      : [c.label]
+    ));
   const exportRow = (row: CandidateSessionRow): string[] =>
     enabledColumns.flatMap((c): string[] => {
       switch (c.id) {
         case 'cid': return [row.candidate_cid || ''];
-        case 'candidate': return [row.candidate_name || ''];
-        case 'email': return [row.candidate_email || ''];
+        case 'candidate': return [row.candidate_name || '', row.candidate_email || ''];
         case 'jobId': return [row._job_id || ''];
         case 'jobTitle': return [row._config_title || ''];
         case 'jobVersion': return [`V${row._job_version}`];
@@ -880,7 +883,6 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                     </th>
                     {col('cid') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">CID</th>}
                     {col('candidate') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Candidate</th>}
-                    {col('email') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Email</th>}
                     {col('timeline') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Timeline</th>}
                     {col('status') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Status</th>}
                     {col('score') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Score</th>}
@@ -934,22 +936,24 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                               <div className="w-7 h-7 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-semibold text-xs flex-shrink-0">
                                 {(row.candidate_name || 'U')[0].toUpperCase()}
                               </div>
-                              <span className="font-medium text-gray-900 dark:text-slate-50 truncate max-w-[160px]">
-                                {row.candidate_name || 'Unknown'}
-                              </span>
+                              {/* Email under the name, as on Track Invites,
+                                  rather than a column of its own. */}
+                              <div className="min-w-0 max-w-[220px]">
+                                <p className="font-medium text-gray-900 dark:text-slate-50 truncate" title={row.candidate_name || 'Unknown'}>
+                                  {row.candidate_name || 'Unknown'}
+                                </p>
+                                <p className="text-xs text-gray-500 dark:text-slate-500 truncate" title={row.candidate_email || undefined}>
+                                  {row.candidate_email || '—'}
+                                </p>
+                              </div>
                             </div>
                           </td>
                         )}
-                        {col('email') && (
-                          <td className="px-4 py-3">
-                            <span className="text-gray-600 dark:text-slate-400 truncate max-w-[180px] block">
-                              {row.candidate_email || '—'}
-                            </span>
-                          </td>
-                        )}
                         {col('timeline') && (
-                          <td className="px-4 py-3 whitespace-nowrap text-gray-600 dark:text-slate-400">
-                            <TimelineStamps startedAt={row.started_at} completedAt={row.completed_at} format={formatIST} duration={formatDuration(row)} />
+                          <td className="px-4 py-3 align-top whitespace-nowrap text-gray-600 dark:text-slate-400">
+                            {/* The Track Invites timeline (Invited, System Check,
+                                Started, Completed) plus this table's Duration. */}
+                            <InviteTimelineLines inv={row} duration={formatDuration(row)} />
                           </td>
                         )}
                         {col('status') && (
