@@ -1096,8 +1096,24 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
   //     row is transiently 'in_progress' + partial/stub while the detached
   //     finalize runs. Both render the friendly "Generating results" spinner and
   //     poll until the real evaluation arrives — NOT the disconnected banner.
-  const evaluationInFlight = reachedEnd && !wasTerminated && !evaluationReady;
-  const evaluationPending = (isCompleted && !evaluationReady) || evaluationInFlight;
+  // "Completed (Auto)" with NOTHING recorded: the candidate's socket never
+  // delivered a single turn (WS failed before Q1 / dropped immediately) and the
+  // timeout monitor auto-finalized the row with a stub. There is no transcript
+  // to score — the evaluate endpoint answers 400 "No transcript available" —
+  // so "still generating" would spin forever. Treat it as a TERMINAL state.
+  // Both signals must be empty: a stub row that still has a transcript is a
+  // real "eval did not run" case and keeps the spinner + auto re-eval below.
+  const noAnswersRecorded = useMemo(() => {
+    if (!isCompleted || !evalIncomplete || wasTerminated) return false;
+    const transcript = (liveSession as any)?.conversation_transcript;
+    const qh = (eval_ as any)?.question_history;
+    const transcriptEmpty = !Array.isArray(transcript) || transcript.length === 0;
+    const qhEmpty = !Array.isArray(qh) || qh.length === 0;
+    return transcriptEmpty && qhEmpty;
+  }, [isCompleted, evalIncomplete, wasTerminated, liveSession, eval_]);
+
+  const evaluationInFlight = reachedEnd && !wasTerminated && !evaluationReady && !noAnswersRecorded;
+  const evaluationPending = ((isCompleted && !evaluationReady) || evaluationInFlight) && !noAnswersRecorded;
 
   // Polling fallback — when the page loads after interview ended but before
   // evaluation finished, there's no WS to receive evaluation_ready. Poll
@@ -1123,15 +1139,26 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
   // of spinning forever. Guarded by a ref so the 5s poll can't re-trigger it.
   const _autoReevalFiredRef = useRef<string | null>(null);
   const [retryingEval, setRetryingEval] = useState(false);
+  // Last error from the evaluate endpoint (e.g. 400 "No transcript available").
+  // Surfaced inside the spinner so a failed trigger is visible instead of
+  // silently swallowed while the page keeps polling.
+  const [evalTriggerError, setEvalTriggerError] = useState<string | null>(null);
+  const describeEvalError = (err: any): string => {
+    const detail = err?.response?.data?.detail;
+    if (typeof detail === 'string' && detail.trim()) return detail;
+    if (detail && typeof detail === 'object') { try { return JSON.stringify(detail); } catch { /* fall through */ } }
+    return err?.message || 'Evaluation request failed';
+  };
   useEffect(() => {
-    if (!isCompleted || !evalIncomplete || wasTerminated) return;
+    if (!isCompleted || !evalIncomplete || wasTerminated || noAnswersRecorded) return;
     if (_autoReevalFiredRef.current === liveSession.id) return;
     _autoReevalFiredRef.current = liveSession.id;
+    setEvalTriggerError(null);
     aiInterviewService.triggerEvaluation(liveSession.id)
       .then(() => aiInterviewService.get(liveSession.id))
       .then(updated => setLiveSession(updated))
-      .catch(() => { /* poll fallback keeps trying; stub remains re-evaluable */ });
-  }, [isCompleted, evalIncomplete, wasTerminated, liveSession.id]);
+      .catch((err: any) => { setEvalTriggerError(describeEvalError(err)); /* poll fallback keeps trying; stub remains re-evaluable */ });
+  }, [isCompleted, evalIncomplete, wasTerminated, noAnswersRecorded, liveSession.id]);
 
   // ── Recruiter "Re-Evaluate" (SAFE, ONE-TIME) ──────────────────────────────
   // Fallback for an interview whose candidate reached the END but whose result is
@@ -1560,11 +1587,17 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
           failed to land (OpenAI hiccup / interrupted save). Offer an explicit
           Retry so a non-terminated interview never spins forever: it re-runs
           the same transcript evaluation and refreshes. */}
-      {evalElapsedSec >= 180 && (
+      {evalTriggerError && (
+        <p className="mt-4 text-xs text-destructive text-center max-w-sm">
+          Evaluation request failed: {evalTriggerError}
+        </p>
+      )}
+      {(evalElapsedSec >= 180 || !!evalTriggerError) && (
         <div className="mt-6 flex flex-col items-center gap-2">
           <p className="text-xs text-gray-400 text-center max-w-xs">
-            Taking longer than usual. You can retry the evaluation — it re-scores
-            from the saved transcript.
+            {evalTriggerError
+              ? 'You can retry the evaluation — it re-scores from the saved transcript.'
+              : 'Taking longer than usual. You can retry the evaluation — it re-scores from the saved transcript.'}
           </p>
           <Button
             variant="primary"
@@ -1572,12 +1605,13 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
             disabled={retryingEval}
             onClick={async () => {
               setRetryingEval(true);
+              setEvalTriggerError(null);
               _autoReevalFiredRef.current = null; // allow the auto-effect to re-fire too
               try {
                 await aiInterviewService.triggerEvaluation(liveSession.id);
                 const updated = await aiInterviewService.get(liveSession.id);
                 setLiveSession(updated);
-              } catch { /* keep spinner + polling; user can retry again */ }
+              } catch (err: any) { setEvalTriggerError(describeEvalError(err)); /* keep spinner + polling; user can retry again */ }
               finally { setRetryingEval(false); }
             }}
           >
@@ -1596,6 +1630,8 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
   const getPlaceholderMessage = (tabKey?: string) => {
     // While evaluation is being generated, all tabs show the spinner
     if (evaluationPending) return null; // handled by renderEvaluationSpinner below
+    // Terminal: auto-completed with nothing recorded — nothing to score or show.
+    if (noAnswersRecorded) return 'No answers were recorded — the candidate never connected to the interview, so there is nothing to evaluate.';
     // Coverage tab handles its own in-progress state — don't block it
     if (isInProgress && tabKey !== 'coverage') {
       return 'Interview in progress — data will appear once completed';
@@ -1975,6 +2011,19 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
               Generating evaluation results — typically 1–3 minutes
               {evalElapsedSec > 0 && ` (${Math.floor(evalElapsedSec / 60)}:${String(evalElapsedSec % 60).padStart(2, '0')})`}
               …
+            </span>
+          </div>
+        )}
+
+        {/* Auto-completed with NOTHING recorded — terminal, not "generating". */}
+        {noAnswersRecorded && (
+          <div className="mb-4 flex items-start gap-2 px-4 py-3 bg-warning-subtle border border-warning-line ring-1 ring-warning-line/50 rounded-xl text-sm text-warning-strong shadow-sm">
+            <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+            <span>
+              <strong>No answers were recorded.</strong> The candidate never connected to
+              the interview (the session was auto-closed when the time limit elapsed), so
+              there is no transcript to evaluate and no score can be produced. Re-invite the
+              candidate to run the interview again.
             </span>
           </div>
         )}

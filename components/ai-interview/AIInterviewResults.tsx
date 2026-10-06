@@ -166,6 +166,16 @@ export function getStatusLabel(status: string) {
   }
 }
 
+/** Mirrors AIInviteStatusBadge in AIInterviewInviteTable.tsx: the timeout monitor
+ *  stamps closing_reason 'time_limit: …' when it auto-finalizes an abandoned
+ *  session and the tracking modal renders "(Auto)" for it. Same rule here so the
+ *  results list and the tracking modal never disagree about the same row. */
+export function isAutoCompleted(session: any): boolean {
+  if (session?.status !== 'completed') return false;
+  const reason = (session?.ai_evaluation?.closing_reason || '').toString().toLowerCase();
+  return reason.startsWith('time_limit');
+}
+
 export function getStatusIcon(status: string) {
   switch (status) {
     case 'completed': return <CheckCircle className="w-4 h-4 text-success" />;
@@ -552,7 +562,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
         case 'jobVersion': return [jobVersion != null ? `V${jobVersion}` : ''];
         case 'interviewVersion': return [interviewVersion != null ? `V${interviewVersion}` : ''];
         case 'inviteSource': return [inviteSourceLabel(session) || ''];
-        case 'status': return [getStatusLabel(session.status)];
+        case 'status': return [getStatusLabel(session.status) + (isAutoCompleted(session) ? ' (Auto)' : '')];
         case 'score': { const score = displayInviteScore(session); return [score != null ? `${score}%` : '']; }
         case 'result': return [inviteResult(session, displayInviteScore(session)) || ''];
         case 'timeline': return [
@@ -1064,6 +1074,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                         <Badge variant={getStatusVariant(session.status)}>
                           {getStatusIcon(session.status)}
                           {getStatusLabel(session.status)}
+                          {isAutoCompleted(session) && <span className="opacity-80" title="Auto-completed when the interview duration elapsed">(Auto)</span>}
                         </Badge>
                         {session.status === 'in_progress' && (
                           <span className="flex items-center gap-1 px-1.5 py-0.5 bg-destructive text-white text-2xs font-bold rounded-full">
@@ -1297,6 +1308,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                               <Badge variant={getStatusVariant(session.status)}>
                                 {getStatusIcon(session.status)}
                                 {getStatusLabel(session.status)}
+                                {isAutoCompleted(session) && <span className="opacity-80" title="Auto-completed when the interview duration elapsed">(Auto)</span>}
                               </Badge>
                               {session.status === 'in_progress' && (
                                 <span className="flex items-center gap-1 px-1.5 py-0.5 bg-destructive text-white text-2xs font-bold rounded-full">
