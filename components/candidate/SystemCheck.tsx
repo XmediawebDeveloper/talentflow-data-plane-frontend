@@ -216,6 +216,10 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
   const [browserWarning, setBrowserWarning] = useState<string | null>(null);
   const [cameraInUseError, setCameraInUseError] = useState<string>('');
   const [hasCameraPreview, setHasCameraPreview] = useState(false);
+  // Before the first run every row still reads "Not checked": the Run Checks
+  // button is then the only thing the candidate can usefully do.
+  const checksNotStarted = !isChecking
+    && [browserCheck, internetCheck, cameraCheck, multipleCheck, micCheck].every((c) => c.status === 'pending');
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -1364,8 +1368,13 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
             <div>
               <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
                 <h2 className={T_SECTION}>System Requirements</h2>
+                {/* Nothing runs until this is clicked, so before the first run
+                    it is the filled brand button with a pulsing ring — the
+                    candidate's obvious next step — and settles back to the
+                    outline style once the checks have started. */}
                 <Button
-                  variant="outline"
+                  variant={checksNotStarted ? 'primary' : 'outline'}
+                  className={checksNotStarted ? 'tf-attention-pulse' : ''}
                   onClick={runAllChecks}
                   disabled={isChecking}
                 >
@@ -1373,6 +1382,11 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
                   {isChecking ? 'Checking...' : 'Run Checks'}
                 </Button>
               </div>
+              {checksNotStarted && (
+                <p className="-mt-2 mb-4 text-sm font-medium text-brand-blue">
+                  Click &quot;Run Checks&quot; to test your camera, microphone and connection.
+                </p>
+              )}
 
               <div className="space-y-4">
                 {/* Browser */}
