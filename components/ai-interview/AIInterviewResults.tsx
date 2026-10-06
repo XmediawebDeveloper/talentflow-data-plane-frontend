@@ -102,10 +102,10 @@ const RESULT_COLUMNS = [
   { id: 'email', label: 'Email' },
   { id: 'jobVersion', label: 'Job Version' },
   { id: 'interviewVersion', label: 'Interview Version' },
-  { id: 'inviteSource', label: 'Invite Source' },
-  { id: 'status', label: 'Status' },
   { id: 'score', label: 'Score' },
   { id: 'result', label: 'Result' },
+  { id: 'inviteSource', label: 'Invite Source' },
+  { id: 'status', label: 'Status' },
   { id: 'timeline', label: 'Timeline' },
   { id: 'proctoring', label: 'Proctoring Risk' },
 ] as const;
@@ -1223,10 +1223,10 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                     {col('email') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide">Email</th>}
                     {col('jobVersion') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Job Version</th>}
                     {col('interviewVersion') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Interview Version</th>}
-                    {col('inviteSource') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Invite Source</th>}
-                    {col('status') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide">Status</th>}
                     {col('score') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Score</th>}
                     {col('result') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Result</th>}
+                    {col('inviteSource') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Invite Source</th>}
+                    {col('status') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide">Status</th>}
                     {col('timeline') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Timeline</th>}
                     {col('proctoring') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Proctoring Risk</th>}
                     <th className="text-right px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide tf-sticky-col">Actions</th>
@@ -1295,6 +1295,26 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                             {interviewVersion != null ? <VersionPill kind="interview" version={interviewVersion} /> : <span className="text-gray-400">—</span>}
                           </td>
                         )}
+                        {col('score') && (
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {displayInviteScore(session) != null ? (
+                              <span className={`${SCORE_CELL_TEXT} ${displayInviteScore(session)! >= 60 ? 'text-success' : 'text-destructive'}`}>
+                                {displayInviteScore(session)}%
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
+                          </td>
+                        )}
+                        {col('result') && (
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {inviteResult(session, displayInviteScore(session)) ? (
+                              <ResultBadge result={inviteResult(session, displayInviteScore(session))} />
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
+                          </td>
+                        )}
                         {col('inviteSource') && (
                           <td className="px-4 py-3 whitespace-nowrap text-gray-700">
                             {inviteSourceLabel(session)
@@ -1336,26 +1356,6 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                                 </div>
                               );
                             })()}
-                          </td>
-                        )}
-                        {col('score') && (
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            {displayInviteScore(session) != null ? (
-                              <span className={`${SCORE_CELL_TEXT} ${displayInviteScore(session)! >= 60 ? 'text-success' : 'text-destructive'}`}>
-                                {displayInviteScore(session)}%
-                              </span>
-                            ) : (
-                              <span className="text-gray-400">—</span>
-                            )}
-                          </td>
-                        )}
-                        {col('result') && (
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            {inviteResult(session, displayInviteScore(session)) ? (
-                              <ResultBadge result={inviteResult(session, displayInviteScore(session))} />
-                            ) : (
-                              <span className="text-gray-400">—</span>
-                            )}
                           </td>
                         )}
                         {col('timeline') && (

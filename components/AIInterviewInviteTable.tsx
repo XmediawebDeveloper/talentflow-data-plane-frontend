@@ -5,10 +5,10 @@ import { useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   X, Mail, Play, CheckCircle, Clock, Ban, Copy, Loader2, Users, Eye, Pencil,
-  MoreVertical, Monitor, History, XCircle, FileText, Square, CheckSquare,
+  MoreVertical, Monitor, History, XCircle, FileText, Square, CheckSquare, Calendar,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { formatIST } from '@/lib/utils/dateUtils';
+import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { MENU_ITEM_SCALE_CLASS, MENU_ITEM_LIGHT_HIGHLIGHT_CLASS, MENU_ITEM_DESTRUCTIVE_HIGHLIGHT_CLASS, MENU_PANEL_BORDER_CLASS } from '@/lib/constants/menuAnimation';
 import { TRACKER_DIALOG_PLACEHOLDER_CLASS } from '@/lib/constants/trackerDialog';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
@@ -214,6 +214,12 @@ type TimelineEntry = { label: string; at: string; Icon: LucideIcon; tone: string
  *  cell but stay reachable via "View full history", which reads the uncapped
  *  trail separately. */
 const COMPACT_TIMELINE_LIMIT = 4;
+/** The Invited On date: AI invite rows carry the send time as
+ *  invitation_sent_at (sent_at on older payloads), falling back to
+ *  created_at for a row never sent — the Assessments column's rule. */
+const inviteSentAt = (inv: any): string | undefined =>
+  inv.invitation_sent_at || inv.sent_at || inv.created_at || undefined;
+
 export const timelineEvents = (inv: any): TimelineEntry[] =>
   buildFullTimeline(inv, inv.timeline || []).slice(-COMPACT_TIMELINE_LIMIT);
 
@@ -935,6 +941,9 @@ export default function AIInterviewInviteTable({
                   <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Interview Version</th>
                   <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Invite Source</th>
                   <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Status</th>
+                  {/* Invited On — the Assessments Invitation Status column:
+                      the send date at a glance, the Timeline carrying the rest. */}
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Invited On</th>
                   {/* hidden md:table-cell mirrors this column's <td> — without it the
                       header carries one more cell than the body between sm and md and
                       every heading after Timeline shifts off its column. */}
@@ -1083,6 +1092,12 @@ export default function AIInterviewInviteTable({
                       </td>
                       {sourceCell}
                       {statusCell}
+                      <td className="py-3 px-4 align-middle whitespace-nowrap">
+                        <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
+                          <Calendar className="w-4 h-4" />
+                          {inviteSentAt(inv) ? formatISTDate(inviteSentAt(inv)) : '-'}
+                        </div>
+                      </td>
                       {timelineCell}
                       {scoreCell}
                     </>
