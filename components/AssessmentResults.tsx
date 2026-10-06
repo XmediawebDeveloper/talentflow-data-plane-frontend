@@ -1,4 +1,4 @@
-import { ArrowLeft, User, Clock, Award, XCircle, ChevronUp, FileText, TrendingUp, AlertCircle, Info, Filter, Layers, ArrowUpDown, Loader2, BarChart3, SlidersHorizontal, Columns3, Trash2, Users, Download, X, Play, CheckSquare, Eye, ArrowUp, ArrowDown, MoreVertical } from 'lucide-react';
+import { ArrowLeft, User, Clock, Award, XCircle, ChevronUp, FileText, TrendingUp, AlertCircle, Info, Filter, Layers, ArrowUpDown, Loader2, BarChart3, SlidersHorizontal, Columns3, Trash2, Users, Download, X, Play, CheckSquare, Eye, ArrowUp, ArrowDown, MoreVertical, Calendar } from 'lucide-react';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { assessmentService, jdService } from '@/lib/services';
@@ -298,15 +298,20 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   // Dynamic columns based on assessment details
   const getDefaultColumns = (): ColumnConfig[] => {
     /* The order the table draws its columns in, so the column picker lists
-       them the same way: who the candidate is, how they were invited and where
-       their result stands, their scores and timeline, then the job / version
-       detail and completion columns. */
+       them the same way — the order every Results/Tracking table shares: who
+       the candidate is, when they were invited and what happened, where the
+       result stands and the scores, how they were invited, then the job /
+       version detail. */
     const baseColumns: ColumnConfig[] = [
+      { id: 'cid', label: 'CID', enabled: true },
       /* Email is no longer a column of its own — it sits under the candidate
          name in the identity cell. It is still EXPORTED (see
          downloadScopedExport), which is why it is not simply gone. */
       { id: 'candidate', label: 'Candidate', enabled: true },
+      { id: 'phone', label: 'Phone', enabled: true },
+      { id: 'invitedOn', label: 'Invited On', enabled: true },
       { id: 'timeline', label: 'Timeline', enabled: true },
+      { id: 'duration', label: 'Duration', enabled: true },
       { id: 'status', label: 'Status', enabled: true },
     ];
 
@@ -319,10 +324,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     }
 
     baseColumns.push(
-      { id: 'duration', label: 'Duration', enabled: true },
       { id: 'inviteSource', label: 'Invite Source', enabled: true },
-      { id: 'phone', label: 'Phone', enabled: true },
-      { id: 'cid', label: 'CID', enabled: true },
       { id: 'jdId', label: 'JD ID', enabled: true },
       { id: 'jdTitle', label: 'Job Title', enabled: true },
       { id: 'jobVersion', label: 'Job Version', enabled: true },
@@ -2333,6 +2335,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       className="w-4 h-4 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
                     />
                   </th>
+                  {isColumnEnabled('cid') && (
+                    <th scope="col" className={`w-24 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${stickyHeaderClass}`}>CID</th>
+                  )}
                   {isColumnEnabled('candidate') && (
                     <th
                       scope="col"
@@ -2355,6 +2360,12 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       })()}
                     </th>
                   )}
+                  {isColumnEnabled('phone') && (
+                    <th scope="col" className={`w-36 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${stickyHeaderClass}`}>Phone</th>
+                  )}
+                  {isColumnEnabled('invitedOn') && (
+                    <th scope="col" className={`w-36 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${stickyHeaderClass}`}>Invited On</th>
+                  )}
                   {isColumnEnabled('timeline') && (
                     <th
                       scope="col"
@@ -2376,6 +2387,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         );
                       })()}
                     </th>
+                  )}
+                  {isColumnEnabled('duration') && (
+                    <th scope="col" className={`w-28 text-right px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${stickyHeaderClass}`}>Duration</th>
                   )}
                   {isColumnEnabled('status') && (
                     <th
@@ -2443,17 +2457,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       })()}
                     </th>
                   )}
-                  {isColumnEnabled('duration') && (
-                    <th scope="col" className={`w-28 text-right px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${stickyHeaderClass}`}>Duration</th>
-                  )}
                   {isColumnEnabled('inviteSource') && (
                     <th scope="col" className={`w-36 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${stickyHeaderClass}`}>Invite Source</th>
-                  )}
-                  {isColumnEnabled('phone') && (
-                    <th scope="col" className={`w-36 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${stickyHeaderClass}`}>Phone</th>
-                  )}
-                  {isColumnEnabled('cid') && (
-                    <th scope="col" className={`w-24 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${stickyHeaderClass}`}>CID</th>
                   )}
                   {isColumnEnabled('jdId') && (
                     <th scope="col" className={`w-28 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${stickyHeaderClass}`}>JD ID</th>
@@ -2521,6 +2526,13 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           className="w-4 h-4 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
                         />
                       </td>
+                      {isColumnEnabled('cid') && (
+                        <td className="px-3 py-2.5 whitespace-nowrap">
+                          <span className="inline-flex items-center whitespace-nowrap text-xs font-mono font-medium bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 px-2 py-1 rounded">
+                            {candidate.candidateDisplayId || '-'}
+                          </span>
+                        </td>
+                      )}
                       {isColumnEnabled('candidate') && (
                         <td className="px-3 py-2.5">
                           <div className="flex min-w-0 items-center gap-2">
@@ -2534,6 +2546,21 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                               <div className="truncate font-medium text-gray-900 dark:text-slate-50" title={candidate.name || 'Unknown'}>{candidate.name || 'Unknown'}</div>
                               <div className="truncate text-xs text-gray-500 dark:text-slate-400" title={candidate.email || ''}>{candidate.email || '-'}</div>
                             </div>
+                          </div>
+                        </td>
+                      )}
+                      {isColumnEnabled('phone') && (
+                        <td className="px-3 py-2.5">
+                          <div className="truncate text-gray-600 dark:text-slate-400" title={candidate.phone || '-'}>{candidate.phone || '-'}</div>
+                        </td>
+                      )}
+                      {isColumnEnabled('invitedOn') && (
+                        /* When the invite went out — the Invitation Status
+                           tab's column; created_at for a row never sent. */
+                        <td className="px-3 py-2.5 whitespace-nowrap">
+                          <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
+                            <Calendar className="w-4 h-4" />
+                            {candidate.sent_at || candidate.created_at ? formatISTDate((candidate.sent_at || candidate.created_at)!) : '-'}
                           </div>
                         </td>
                       )}
@@ -2556,6 +2583,14 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                                 <span className="truncate">-</span>
                               </div>
                             )}
+                          </div>
+                        </td>
+                      )}
+                      {isColumnEnabled('duration') && (
+                        <td className="px-3 py-2.5 text-right">
+                          <div className="flex items-center justify-end gap-1.5 text-gray-600 dark:text-slate-400 tabular-nums">
+                            <Clock className="w-3.5 h-3.5 shrink-0" />
+                            {candidate.duration}
                           </div>
                         </td>
                       )}
@@ -2599,29 +2634,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           </div>
                         </td>
                       )}
-                      {isColumnEnabled('duration') && (
-                        <td className="px-3 py-2.5 text-right">
-                          <div className="flex items-center justify-end gap-1.5 text-gray-600 dark:text-slate-400 tabular-nums">
-                            <Clock className="w-3.5 h-3.5 shrink-0" />
-                            {candidate.duration}
-                          </div>
-                        </td>
-                      )}
                       {isColumnEnabled('inviteSource') && (
                         <td className="px-3 py-2.5 text-gray-700 dark:text-slate-300 whitespace-nowrap">
                           <InviteSourceValue inv={{ invite_source: candidate.inviteSource }} iconClassName="w-3.5 h-3.5" />
-                        </td>
-                      )}
-                      {isColumnEnabled('phone') && (
-                        <td className="px-3 py-2.5">
-                          <div className="truncate text-gray-600 dark:text-slate-400" title={candidate.phone || '-'}>{candidate.phone || '-'}</div>
-                        </td>
-                      )}
-                      {isColumnEnabled('cid') && (
-                        <td className="px-3 py-2.5 whitespace-nowrap">
-                          <span className="inline-flex items-center whitespace-nowrap text-xs font-mono font-medium bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 px-2 py-1 rounded">
-                            {candidate.candidateDisplayId || '-'}
-                          </span>
                         </td>
                       )}
                       {isColumnEnabled('jdId') && (

@@ -12,7 +12,7 @@ import { useRouter } from 'next/navigation';
 import {
   ChevronLeft, ChevronRight, Eye, Users, CheckCircle, XCircle,
   SlidersHorizontal, FileDown, FileText, FileSpreadsheet, Info, Download, X,
-  Square, CheckSquare,
+  Square, CheckSquare, Calendar,
 } from 'lucide-react';
 import ColumnCustomizationModal from '@/components/ColumnCustomizationModal';
 import { toast } from 'sonner';
@@ -24,7 +24,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
-import { formatIST } from '@/lib/utils/dateUtils';
+import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { Badge } from '@/components/ui/badge';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import {
@@ -77,16 +77,17 @@ const CANDIDATE_COLUMNS = [
   { id: 'cid', label: 'CID' },
   { id: 'candidate', label: 'Candidate' },
   { id: 'email', label: 'Email' },
+  { id: 'invitedOn', label: 'Invited On' },
+  { id: 'timeline', label: 'Timeline' },
+  { id: 'status', label: 'Status' },
+  { id: 'score', label: 'Score' },
+  { id: 'result', label: 'Result' },
+  { id: 'proctoring', label: 'Proctoring Risk' },
+  { id: 'inviteSource', label: 'Invite Source' },
   { id: 'jobId', label: 'Job ID' },
   { id: 'jobTitle', label: 'Job Title' },
   { id: 'jobVersion', label: 'Job Version' },
   { id: 'interviewVersion', label: 'Interview Version' },
-  { id: 'score', label: 'Score' },
-  { id: 'result', label: 'Result' },
-  { id: 'inviteSource', label: 'Invite Source' },
-  { id: 'status', label: 'Status' },
-  { id: 'timeline', label: 'Timeline' },
-  { id: 'proctoring', label: 'Proctoring Risk' },
 ] as const;
 type CandidateColumnId = (typeof CANDIDATE_COLUMNS)[number]['id'];
 
@@ -881,16 +882,17 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                     {col('cid') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">CID</th>}
                     {col('candidate') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Candidate</th>}
                     {col('email') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Email</th>}
+                    {col('invitedOn') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Invited On</th>}
+                    {col('timeline') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Timeline</th>}
+                    {col('status') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Status</th>}
+                    {col('score') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Score</th>}
+                    {col('result') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Result</th>}
+                    {col('proctoring') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Proctoring Risk</th>}
+                    {col('inviteSource') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Invite Source</th>}
                     {col('jobId') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Job ID</th>}
                     {col('jobTitle') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Job Title</th>}
                     {col('jobVersion') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Job Version</th>}
                     {col('interviewVersion') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Interview Version</th>}
-                    {col('score') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Score</th>}
-                    {col('result') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Result</th>}
-                    {col('inviteSource') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Invite Source</th>}
-                    {col('status') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Status</th>}
-                    {col('timeline') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Timeline</th>}
-                    {col('proctoring') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Proctoring Risk</th>}
                     <th className="text-right px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide tf-sticky-col">Actions</th>
                   </tr>
                 </thead>
@@ -947,6 +949,68 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                             </span>
                           </td>
                         )}
+                        {col('invitedOn') && (
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {/* Invite send time (last send, resend included); created_at for
+                                a row from before that column — the Assessments column's rule. */}
+                            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
+                              <Calendar className="w-4 h-4" />
+                              {row.invitation_sent_at || row.created_at ? formatISTDate(row.invitation_sent_at || row.created_at) : '-'}
+                            </div>
+                          </td>
+                        )}
+                        {col('timeline') && (
+                          <td className="px-4 py-3 whitespace-nowrap text-gray-600 dark:text-slate-400">
+                            <TimelineStamps startedAt={row.started_at} completedAt={row.completed_at} format={formatIST} duration={formatDuration(row)} />
+                          </td>
+                        )}
+                        {col('status') && (
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <Badge variant={getStatusVariant(row.status)}>{getStatusLabel(row.status)}</Badge>
+                              {row.status === 'in_progress' && (
+                                <span className="flex items-center gap-1 px-1.5 py-0.5 bg-destructive text-white text-2xs font-bold rounded-full">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                                  LIVE
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                        )}
+                        {col('score') && (
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {mhsScore(row) != null ? (
+                              <span className={`${SCORE_CELL_TEXT} ${mhsScore(row)! >= 60 ? 'text-success' : 'text-destructive'}`}>
+                                {mhsScore(row)}%
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
+                          </td>
+                        )}
+                        {col('result') && (
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {sessionResult(row) ? <PassFailBadge result={sessionResult(row)!} /> : <span className="text-gray-400">—</span>}
+                          </td>
+                        )}
+                        {col('proctoring') && (
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {(row.status === 'completed' || row.status === 'terminated') ? (
+                              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${risk.badge}`}>
+                                {risk.level}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
+                          </td>
+                        )}
+                        {col('inviteSource') && (
+                          <td className="px-4 py-3 whitespace-nowrap text-gray-700 dark:text-slate-300">
+                            {inviteSourceLabel(row)
+                              ? <InviteSourceValue inv={row} iconClassName="w-3.5 h-3.5" />
+                              : <span className="text-gray-400">—</span>}
+                          </td>
+                        )}
                         {col('jobId') && (
                           <td className="px-4 py-3 whitespace-nowrap">
                             {row._job_id ? (
@@ -971,58 +1035,6 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                         {col('interviewVersion') && (
                           <td className="px-4 py-3 whitespace-nowrap">
                             <VersionPill kind="interview" version={row._interview_version} />
-                          </td>
-                        )}
-                        {col('score') && (
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            {mhsScore(row) != null ? (
-                              <span className={`${SCORE_CELL_TEXT} ${mhsScore(row)! >= 60 ? 'text-success' : 'text-destructive'}`}>
-                                {mhsScore(row)}%
-                              </span>
-                            ) : (
-                              <span className="text-gray-400">—</span>
-                            )}
-                          </td>
-                        )}
-                        {col('result') && (
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            {sessionResult(row) ? <PassFailBadge result={sessionResult(row)!} /> : <span className="text-gray-400">—</span>}
-                          </td>
-                        )}
-                        {col('inviteSource') && (
-                          <td className="px-4 py-3 whitespace-nowrap text-gray-700 dark:text-slate-300">
-                            {inviteSourceLabel(row)
-                              ? <InviteSourceValue inv={row} iconClassName="w-3.5 h-3.5" />
-                              : <span className="text-gray-400">—</span>}
-                          </td>
-                        )}
-                        {col('status') && (
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <Badge variant={getStatusVariant(row.status)}>{getStatusLabel(row.status)}</Badge>
-                              {row.status === 'in_progress' && (
-                                <span className="flex items-center gap-1 px-1.5 py-0.5 bg-destructive text-white text-2xs font-bold rounded-full">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                                  LIVE
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                        )}
-                        {col('timeline') && (
-                          <td className="px-4 py-3 whitespace-nowrap text-gray-600 dark:text-slate-400">
-                            <TimelineStamps startedAt={row.started_at} completedAt={row.completed_at} format={formatIST} duration={formatDuration(row)} />
-                          </td>
-                        )}
-                        {col('proctoring') && (
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            {(row.status === 'completed' || row.status === 'terminated') ? (
-                              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${risk.badge}`}>
-                                {risk.level}
-                              </span>
-                            ) : (
-                              <span className="text-gray-400">—</span>
-                            )}
                           </td>
                         )}
                         <td className="px-4 py-3 text-right whitespace-nowrap tf-sticky-col">
