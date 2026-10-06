@@ -552,7 +552,7 @@ export default function HRQuestionBank() {
                   }`}
                 >
                   <CheckCircle2 className="w-4 h-4" />
-                  Yes / No / Need to Explain More (2 min)
+                  Yes / No / Need to Explain More
                 </button>
               </div>
             </div>
