@@ -15,7 +15,8 @@ import {
   RefreshCw,
   ArrowLeft,
   ArrowRight,
-  Loader2
+  Loader2,
+  Users
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import CandidateHeader from './CandidateHeader';
@@ -48,6 +49,7 @@ import {
   MIN_CONFIDENT_FACE_SCORE,
   pickPrimaryFace,
 } from '@/lib/proctoring/faceDetection';
+import { createMediaPipeFaceCounter, type MediaPipeFaceCounter } from '@/lib/proctoring/mediapipeFaceCounter';
 import { candidateService, SystemCheckResult } from '@/lib/services/candidateService';
 import { getUserMedia, getErrorMessage, detectBrowser, checkBrowserCompatibility, playVideo, shouldUseAdaptiveAssessmentMode } from '@/lib/utils/browserCompat';
 
@@ -199,6 +201,10 @@ function analyzeSystemCheckFaceDetections<T>({
 
 export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: SystemCheckProps) {
   const [cameraCheck, setCameraCheck] = useState<CheckStatus>({ status: 'pending', message: 'Not checked' });
+  // Its own row (AI interview parity): "is the candidate's face there" and
+  // "is anyone ELSE there" are different questions. Folded into the Camera
+  // row, a second person who wasn't counted simply left it green.
+  const [multipleCheck, setMultipleCheck] = useState<CheckStatus>({ status: 'pending', message: 'Not checked' });
   const [micCheck, setMicCheck] = useState<CheckStatus>({ status: 'pending', message: 'Not checked' });
   const [internetCheck, setInternetCheck] = useState<CheckStatus>({ status: 'pending', message: 'Not checked' });
   const [browserCheck, setBrowserCheck] = useState<CheckStatus>({ status: 'pending', message: 'Not checked' });
@@ -224,6 +230,10 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
   const faceDetectionFailureCountRef = useRef(0);
   const faceApiModuleRef = useRef<Awaited<ReturnType<typeof loadFaceApiWithCpuBackend>> | null>(null);
   const faceApiLoadPromiseRef = useRef<Promise<Awaited<ReturnType<typeof loadFaceApiWithCpuBackend>>> | null>(null);
+  // Second opinion on "how many people": the in-test MediaPipe model. The
+  // face-api pass below runs small (224 px) for CPU reasons and misses smaller /
+  // partly covered faces — two people passed this screen that way.
+  const faceCounterRef = useRef<MediaPipeFaceCounter | null>(null);
 
   // Face verification must pass before the candidate can proceed.
   // We allow a short grace window for the detector to stabilize, but we no
@@ -257,6 +267,8 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
     window.scrollTo(0, 0);
 
     return () => {
+      faceCounterRef.current?.close();
+      faceCounterRef.current = null;
       // Stop periodic face detection
       if (faceCheckIntervalRef.current) {
         clearInterval(faceCheckIntervalRef.current);
@@ -355,11 +367,12 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
     // All other checks must be 'success'.
     const allSuccess =
       cameraCheck.status === 'success' &&
+      multipleCheck.status === 'success' &&
       micCheck.status === 'success' &&
       (internetCheck.status === 'success' || internetCheck.status === 'warning') &&
       browserCheck.status === 'success';
     setAllChecksComplete(allSuccess);
-  }, [cameraCheck, micCheck, internetCheck, browserCheck]);
+  }, [cameraCheck, multipleCheck, micCheck, internetCheck, browserCheck]);
 
   // Cancels the face poll for good: clears the pending timer AND invalidates
   // any tick already running, which clearTimeout alone cannot do (that tick
@@ -480,6 +493,7 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
 
     // Reset all checks including camera in use error
     setCameraCheck({ status: 'checking', message: 'Checking...' });
+    setMultipleCheck({ status: 'checking', message: 'Checking...' });
     setMicCheck({ status: 'checking', message: 'Checking...' });
     setInternetCheck({ status: 'checking', message: 'Checking...' });
     setBrowserCheck({ status: 'checking', message: 'Checking...' });
@@ -692,36 +706,53 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
     }
   };
 
-  const applyFaceDetectionResult = (result: SystemCheckFaceResult) => {
-    if (result.visibleCount === 1 && result.candidateVisible) {
+  // Multiple People row: purely about EXTRA people (AI interview parity) —
+  // passes at 0 or 1, fails at 2+ once confirmed on MULTI_FACE_HARD_FAIL
+  // consecutive ticks (a lone false box must not block the candidate). During
+  // the grace tick the row keeps its status; handleProceed re-checks anyway.
+  const applyPeopleCount = (count: number) => {
+    if (count >= 2) {
+      multiFaceCountRef.current += 1;
+      if (multiFaceCountRef.current >= MULTI_FACE_HARD_FAIL) {
+        setMultipleCheck({
+          status: 'error',
+          message: `${count} people detected — only you should be in frame.`,
+        });
+      } else {
+        setMultipleCheck((prev) => ({
+          status: prev.status === 'success' ? 'success' : 'checking',
+          message: 'Confirming you are alone in frame…',
+        }));
+      }
+      return;
+    }
+    multiFaceCountRef.current = 0;
+    setMultipleCheck({
+      status: 'success',
+      message: count === 1 ? 'Only you are in frame' : 'No other people detected',
+    });
+  };
+
+  const countPeopleWithMediaPipe = (video: HTMLVideoElement): Promise<number | null> => {
+    if (!faceCounterRef.current) faceCounterRef.current = createMediaPipeFaceCounter();
+    return faceCounterRef.current.count(video);
+  };
+
+  const applyFaceDetectionResult = (result: SystemCheckFaceResult, mediaPipeCount: number | null = null) => {
+    // People count = the larger of the two detectors (either one seeing a
+    // second face is enough to stop the candidate and ask).
+    applyPeopleCount(Math.max(result.visibleCount, mediaPipeCount ?? 0));
+
+    // Camera row: is the candidate's OWN face visible? With 2+ faces it is —
+    // the extra person is the Multiple People row's job.
+    if (result.visibleCount >= 2 || (result.visibleCount === 1 && result.candidateVisible)) {
       noFaceCountRef.current = 0;
-      multiFaceCountRef.current = 0;
       faceDetectionFailureCountRef.current = 0;
       setCameraCheck({ status: 'success', message: 'Camera ready — face detected' });
       return;
     }
 
-    if (result.visibleCount >= 2) {
-      // Multiple faces — strict path.
-      noFaceCountRef.current = 0;
-      multiFaceCountRef.current += 1;
-      if (multiFaceCountRef.current >= MULTI_FACE_HARD_FAIL) {
-        setCameraCheck({
-          status: 'error',
-          message: `Multiple faces detected (${result.visibleCount}). Only you should be in frame.`,
-        });
-      } else {
-        // Grace tick — see the note on the no-face branch below.
-        setCameraCheck((prev) => ({
-          status: prev.status === 'success' ? 'success' : 'checking',
-          message: 'Verifying you are alone in frame…',
-        }));
-      }
-      return;
-    }
-
-    // visibleCount === 0 — the candidate must be visible before system check can pass.
-    multiFaceCountRef.current = 0;
+    // No usable face — the candidate must be visible before system check can pass.
     noFaceCountRef.current += 1;
     const frameAnalysis = analyzeCurrentVideoFrame();
     if (frameAnalysis?.obstructed) {
@@ -841,7 +872,7 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
         }
       }
 
-      applyFaceDetectionResult(effectiveResult);
+      applyFaceDetectionResult(effectiveResult, await countPeopleWithMediaPipe(video));
     } catch {
       // Native API failed — caller will switch to face-api.js path
       throw new Error('native_face_detector_unavailable');
@@ -867,7 +898,7 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
       }
 
       const result = await detectWithFaceApi(video);
-      applyFaceDetectionResult(result);
+      applyFaceDetectionResult(result, await countPeopleWithMediaPipe(video));
     } catch (err) {
       faceDetectionFailureCountRef.current += 1;
       console.warn('[SYSTEM CHECK] face-api.js detection failed:', err);
@@ -1090,6 +1121,31 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
         await new Promise((resolve) => setTimeout(resolve, 50));
       }
 
+      // Final "alone in frame" check at the moment of Start (AI interview
+      // parity): the poll runs every few seconds and the row passes during its
+      // grace tick, so someone stepping in just before the click got through.
+      const startVideo = videoRef.current;
+      if (startVideo && startVideo.readyState >= 2) {
+        const mediaPipeCount = await countPeopleWithMediaPipe(startVideo);
+        let fallbackCount = 0;
+        try {
+          fallbackCount = (await detectWithFaceApi(startVideo)).visibleCount;
+        } catch {
+          // fallback detector unavailable — the MediaPipe count stands alone
+        }
+        const people = Math.max(mediaPipeCount ?? 0, fallbackCount);
+        if (people >= 2) {
+          multiFaceCountRef.current = MULTI_FACE_HARD_FAIL;
+          setMultipleCheck({
+            status: 'error',
+            message: `${people} people detected — only you should be in frame before starting.`,
+          });
+          // Keep watching so the row turns green once they are alone.
+          startFaceDetectionPolling(!('FaceDetector' in window));
+          return;
+        }
+      }
+
       const results: SystemCheckResult = {
         camera_available: cameraCheck.status === 'success',
         microphone_available: micCheck.status === 'success',
@@ -1299,6 +1355,20 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
                   <span className="flex shrink-0"><StatusIcon status={cameraCheck.status} /></span>
                 </div>
 
+                {/* Multiple People */}
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 sm:p-4">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`${ICON_TILE} bg-destructive-subtle text-destructive`}>
+                      <Users className={ICON} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className={T_CARD_TITLE}>Multiple People Check</p>
+                      <p className="text-sm text-gray-500 [overflow-wrap:anywhere]">{multipleCheck.message}</p>
+                    </div>
+                  </div>
+                  <span className="flex shrink-0"><StatusIcon status={multipleCheck.status} /></span>
+                </div>
+
                 {/* Microphone */}
                 <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 sm:p-4">
                   <div className="flex items-center gap-3 min-w-0">
@@ -1332,7 +1402,12 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
                 // previous condition fired while Camera/Microphone were still
                 // in 'checking' (e.g., showing "Detecting face..."), making
                 // the warning appear before any check had actually failed.
-                const checks = [cameraCheck, micCheck, internetCheck, browserCheck];
+                // Multiple People only settles once the camera works — a
+                // camera error leaves it 'checking' and must not hide this.
+                const checks = [
+                  cameraCheck, micCheck, internetCheck, browserCheck,
+                  ...(cameraCheck.status === 'success' ? [multipleCheck] : []),
+                ];
                 const inProgress = checks.some(c => c.status === 'pending' || c.status === 'checking');
                 const anyError = checks.some(c => c.status === 'error');
                 if (inProgress || !anyError) return null;

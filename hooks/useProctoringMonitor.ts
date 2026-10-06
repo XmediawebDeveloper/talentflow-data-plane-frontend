@@ -124,6 +124,9 @@ type ContinuousViolationType =
   | 'multiple_faces'
   | 'multiple_voices';
 
+// Continuous conditions shown as ONE held toast per episode (AI interview parity).
+const HELD_CONTINUOUS_TYPES = new Set<ContinuousViolationType>(['face_missing', 'multiple_faces']);
+
 interface ContinuousViolationState {
   timer: ReturnType<typeof setInterval> | null;
   details: Record<string, any> | null;
@@ -631,32 +634,39 @@ export function useProctoringMonitor({
   const emitEvent = useCallback((
     eventType: ProctoringEventType,
     details?: Record<string, any>,
+    // holdKey → HELD toast (stays up until ProctoringEventBus.release(holdKey));
+    // silent → backend row only, no toast (re-logs of an already-held warning).
+    toast?: { holdKey?: string; silent?: boolean },
   ) => {
     if (!enabledRef.current) return;
 
     // Per-type cooldown (same idea as InterviewProctoringMonitor's table): a
     // condition that persists must not become hundreds of identical rows.
-    // 0 = never throttled (discrete candidate actions).
+    // 0 = never throttled (discrete candidate actions). It throttles the
+    // backend row and the auto-dismissing toast — never a HELD toast, which
+    // must appear every time its condition starts.
     const cooldownMs = EVENT_COOLDOWN_MS[eventType] ?? 0;
+    let throttled = false;
     if (cooldownMs > 0) {
       const now = Date.now();
       const last = lastEmitAtRef.current[eventType] ?? 0;
-      if (now - last < cooldownMs) return;
-      lastEmitAtRef.current[eventType] = now;
+      if (now - last < cooldownMs) throttled = true;
+      else lastEmitAtRef.current[eventType] = now;
     }
 
-    const timestamp = new Date().toISOString();
+    if (!throttled) {
+      // 1. Queue for backend
+      backendQueueRef.current.push({
+        event_type: eventType,
+        timestamp: new Date().toISOString(),
+        severity: getSeverity(eventType),
+        details: details || {},
+      });
+    }
 
-    // 1. ALWAYS queue for backend — no event is ever lost
-    backendQueueRef.current.push({
-      event_type: eventType,
-      timestamp,
-      severity: getSeverity(eventType),
-      details: details || {},
-    });
-
-    // 2. Show a warning for every emitted violation
-    ProctoringEventBus.emit(eventType, details);
+    // 2. Show the warning
+    if (toast?.holdKey) ProctoringEventBus.emitHeld(eventType, toast.holdKey, details);
+    else if (!toast?.silent && !throttled) ProctoringEventBus.emit(eventType, details);
   }, []);
 
   const emitEventRef = useRef(emitEvent);
@@ -667,6 +677,8 @@ export function useProctoringMonitor({
     if (state.timer) {
       clearInterval(state.timer);
       state.timer = null;
+      // Condition cleared → take its held warning down.
+      if (HELD_CONTINUOUS_TYPES.has(eventType)) ProctoringEventBus.release(eventType);
     }
     state.details = null;
   }, []);
@@ -688,18 +700,23 @@ export function useProctoringMonitor({
       return;
     }
 
-    emitEventRef.current(eventType, state.details);
+    // Held types (face not detected / multiple faces) show ONE fixed toast for
+    // the whole episode — same as the AI interview — and the periodic re-logs
+    // below stay backend-only. Others keep a fresh toast per re-log.
+    const held = HELD_CONTINUOUS_TYPES.has(eventType);
+    emitEventRef.current(eventType, state.details, held ? { holdKey: eventType } : undefined);
     state.timer = setInterval(() => {
       if (!isMonitoringRef.current) return;
       const latest = continuousViolationStateRef.current[eventType].details;
       if (!latest) return;
-      emitEventRef.current(eventType, latest);
+      emitEventRef.current(eventType, latest, held ? { silent: true } : undefined);
     }, CONTINUOUS_WARNING_INTERVAL_MS);
   }, [clearContinuousViolation]);
 
   const clearAllContinuousViolations = useCallback(() => {
     (Object.keys(continuousViolationStateRef.current) as ContinuousViolationType[])
       .forEach(clearContinuousViolation);
+    ProctoringEventBus.release('gaze_away'); // monitoring stopped — no held toast may linger
   }, [clearContinuousViolation]);
 
   const beginNavigationSequence = useCallback((durationMs = 1500) => {
@@ -903,6 +920,8 @@ export function useProctoringMonitor({
           if (data.kind === 'obstruction' && data.obstructed) {
             isCameraObstructedRef.current = true;
             setState(prev => prev.isCameraObstructed ? prev : { ...prev, isCameraObstructed: true });
+            // Face can't be seen → gaze isn't judged; close any looking-away episode.
+            faceMonitorRef.current?.resetGaze('camera_obstructed');
             syncContinuousViolation('camera_obstructed', true, {
               reason: data.reason,
               avgBrightness: data.avgBrightness,
@@ -1103,7 +1122,12 @@ export function useProctoringMonitor({
 
       const NO_FACE_THRESHOLD = 2;          // 2 x 1.5 s = 3 s without a face before face_missing
       const DETECTION_FAILURE_THRESHOLD = 2;
+      // 2 x 1.5 s ≈ 3 s of 2+ faces before "Multiple faces" — same as the AI
+      // interview, so a hand raised to the face or someone walking past the
+      // background doesn't raise it on a single frame.
+      const MULTI_FACE_THRESHOLD = 2;
       let consecutiveNoFace = 0;
+      let consecutiveMultiFace = 0;
       let consecutiveDetectionFailures = 0;
       const baseline = readAssessmentFaceBaseline(tokenRef.current);
 
@@ -1116,16 +1140,24 @@ export function useProctoringMonitor({
         consecutiveDetectionFailures = 0;
         if (count >= 2) {
           consecutiveNoFace = 0;
+          consecutiveMultiFace += 1;
           clearContinuousViolation('face_missing');
-          syncContinuousViolation('multiple_faces', true, { face_count: count, ...details });
+          if (consecutiveMultiFace >= MULTI_FACE_THRESHOLD) {
+            syncContinuousViolation('multiple_faces', true, { face_count: count, ...details });
+          }
         } else if (count === 0) {
+          consecutiveMultiFace = 0;
           clearContinuousViolation('multiple_faces');
           consecutiveNoFace += 1;
           if (consecutiveNoFace >= NO_FACE_THRESHOLD) {
+            // Face first, gaze second: no face → no "looking away". Close any
+            // open episode BEFORE raising face_missing so its toast replaces it.
+            faceMonitorRef.current?.resetGaze('face_missing');
             syncContinuousViolation('face_missing', true, { reason: 'no_face_detected', ...details });
           }
         } else {
           consecutiveNoFace = 0;
+          consecutiveMultiFace = 0;
           clearContinuousViolation('multiple_faces');
           clearContinuousViolation('face_missing');
         }
@@ -1137,6 +1169,7 @@ export function useProctoringMonitor({
           consecutiveDetectionFailures += 1;
           if (consecutiveDetectionFailures >= DETECTION_FAILURE_THRESHOLD) {
             clearContinuousViolation('multiple_faces');
+            faceMonitorRef.current?.resetGaze('face_missing');
             syncContinuousViolation('face_missing', true, {
               reason: 'detection_failed',
               error: error instanceof Error ? error.message : String(error),
@@ -1146,14 +1179,17 @@ export function useProctoringMonitor({
         onGazeAway: (direction, metrics) => {
           // One event per episode (monitor gates re-entry on a restored state);
           // emitEvent adds the per-type cooldown on top.
+          // HELD toast for the whole episode (AI interview parity) — it used
+          // to auto-dismiss after 2 s while the candidate was still looking away.
           emitEventRef.current('gaze_away', {
             direction,
             ...metrics,
             method: 'mediapipe_face_mesh',
-          });
+          }, { holdKey: 'gaze_away' });
         },
-        onGazeRestored: (episodeMs) => {
-          console.log(`[PROCTORING] Gaze restored after ${Math.round(episodeMs / 1000)}s`);
+        onGazeRestored: (episodeMs, reason) => {
+          ProctoringEventBus.release('gaze_away');
+          console.log(`[PROCTORING] Gaze episode ended (${reason}) after ${Math.round(episodeMs / 1000)}s`);
         },
         onIdentityMismatch: (distance) => {
           if (Date.now() - lastIdentityMismatchEventAtRef.current < IDENTITY_EVENT_COOLDOWN_MS) return;
