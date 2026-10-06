@@ -41,7 +41,15 @@ import { RECRUITER_BAR_ROW, RECRUITER_HEADER_H, RECRUITER_LOGO_H, ICON_INLINE } 
  * same column, so the logo, the stepper and the page card share one left edge
  * — and it is the same edge a recruiter sees.
  */
-export default function CandidateHeader({ children }: { children?: React.ReactNode }) {
+export default function CandidateHeader({
+  children,
+  showHelp = true,
+}: {
+  children?: React.ReactNode;
+  /** The assessment screen turns the mailto link off: opening a mail client
+   *  mid-test takes focus from the proctored fullscreen window. */
+  showHelp?: boolean;
+}) {
   return (
     <header className={`${RECRUITER_HEADER_H} w-full bg-white border-b border-gray-200`}>
       <div className={`${RECRUITER_BAR_ROW} flex h-full items-center justify-between gap-3`}>
@@ -56,15 +64,17 @@ export default function CandidateHeader({ children }: { children?: React.ReactNo
           {/* Anything a step wants beside the help link — the HR step's
               "No Timer" badge is the only caller so far. */}
           {children}
-          <a
-            href="mailto:support@talentflow.com"
-            className="flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900 transition-colors shrink-0"
-          >
-            <HelpCircle className={ICON_INLINE} />
-            {/* The label goes on a small phone; the icon alone still reads as
-                help and the row stops competing with the logo. */}
-            <span className="hidden sm:inline">Need help?</span>
-          </a>
+          {showHelp && (
+            <a
+              href="mailto:support@talentflow.com"
+              className="flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900 transition-colors shrink-0"
+            >
+              <HelpCircle className={ICON_INLINE} />
+              {/* The label goes on a small phone; the icon alone still reads as
+                  help and the row stops competing with the logo. */}
+              <span className="hidden sm:inline">Need help?</span>
+            </a>
+          )}
         </div>
       </div>
     </header>

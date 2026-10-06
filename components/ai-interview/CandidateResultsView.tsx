@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useMemo, useEffect, useRef } from 'react';
+// Shared with the assessment results page — one duration probe for all four recordings.
+import { VideoWithDuration } from '@/components/recording/RecordingPlayer';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -243,7 +245,7 @@ function VideoPane({
   }
   if (blobUrl) {
     return (
-      <VideoWithDuration blobUrl={blobUrl} onError={onError} onDuration={onDuration} seekTo={seekTo} seekKey={seekKey} />
+      <VideoWithDuration src={blobUrl} onError={onError} onDuration={onDuration} seekTo={seekTo} seekKey={seekKey} />
     );
   }
   return null;
@@ -256,80 +258,6 @@ function formatDuration(seconds: number): string {
   const s = Math.floor(seconds % 60);
   const pad = (n: number) => n.toString().padStart(2, '0');
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
-}
-
-function VideoWithDuration({ blobUrl, onError, onDuration, seekTo, seekKey }: { blobUrl: string; onError: () => void; onDuration?: (seconds: number) => void; seekTo?: number | null; seekKey?: number }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [duration, setDuration] = useState<number | null>(null);
-  // True once metadata (and, for webm, duration) has resolved so it's safe to
-  // set currentTime. Seek requests that arrive before this are applied on ready.
-  const readyRef = useRef(false);
-
-  const applyDuration = (d: number) => {
-    setDuration(d);
-    if (onDuration && isFinite(d) && d > 0) onDuration(d);
-  };
-
-  const applySeek = () => {
-    const v = videoRef.current;
-    if (!v || !readyRef.current || seekTo == null) return;
-    const max = isFinite(v.duration) && v.duration > 0 ? v.duration - 0.25 : seekTo;
-    try {
-      v.currentTime = Math.max(0, Math.min(seekTo, max));
-      // Best-effort autoplay from the seeked point; ignore blocked-autoplay.
-      void v.play?.().catch(() => {});
-    } catch { /* setting currentTime can throw on not-yet-seekable media */ }
-  };
-
-  const markReady = () => {
-    readyRef.current = true;
-    applySeek();
-  };
-
-  // A new seek request (seekKey change) after the video is already loaded.
-  useEffect(() => {
-    applySeek();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seekKey]);
-
-  const handleLoadedMetadata = () => {
-    const v = videoRef.current;
-    if (!v) return;
-    if (isFinite(v.duration) && v.duration > 0) {
-      applyDuration(v.duration);
-      markReady();
-      return;
-    }
-    const onTimeUpdate = () => {
-      v.removeEventListener('timeupdate', onTimeUpdate);
-      v.currentTime = 0;
-      applyDuration(v.duration);
-      markReady();
-    };
-    v.addEventListener('timeupdate', onTimeUpdate);
-    v.currentTime = 1e9;
-  };
-
-  return (
-    <div className="relative">
-      <video
-        ref={videoRef}
-        controls
-        preload="metadata"
-        className="w-full max-h-[500px] rounded-xl bg-slate-900 ring-1 ring-black/[0.04]"
-        src={blobUrl}
-        onLoadedMetadata={handleLoadedMetadata}
-        onError={onError}
-      >
-        Your browser does not support video playback.
-      </video>
-      {duration !== null && (
-        <div className="absolute top-2 right-2 flex items-center gap-1 px-2 py-1 rounded-md bg-slate-900/80 backdrop-blur-sm text-white text-xs font-medium ring-1 ring-white/10">
-          <Clock className="w-3 h-3" /> {formatDuration(duration)}
-        </div>
-      )}
-    </div>
-  );
 }
 
 function formatBytes(bytes: number | null): string {

@@ -130,7 +130,12 @@ export function createGazeEstimator(logPrefix = '[GAZE]'): GazeEstimator {
       const eyeRatio = irisPosition(lm, eyeAOuter, eyeAInner, eyeBInner, eyeBOuter);
 
       const base = baseline;
-      if (!base) {
+      // Calibrate only on readings that aren't already a clear look-away (the
+      // same large turn that is flagged pre-baseline). Otherwise a candidate
+      // who looks away during the first readings teaches the baseline that
+      // "away" is their neutral pose — afterwards looking away reads as
+      // normal and looking at the screen reads as away.
+      if (!base && Math.abs(yawRatio) <= YAW_ABS_PRE_BASELINE) {
         samples.yaw.push(yawRatio);
         samples.pitch.push(pitchRatio);
         if (eyeRatio != null) samples.eye.push(eyeRatio);

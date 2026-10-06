@@ -14,8 +14,8 @@
  * components/ai-interview/proctoring/InterviewFaceDetection.ts and
  * InterviewFaceVerification.ts, which candidates run without hanging):
  *   - MediaPipe FaceDetection (short model, WASM/WebGL, CDN) every 1.5 s → face count
- *   - MediaPipe FaceMesh every 2 s → gaze direction via the shared
- *     lib/proctoring/gazeEstimator (same measures as the interview; 2 away /
+ *   - MediaPipe FaceMesh every 1 s → gaze direction via the shared
+ *     lib/proctoring/gazeEstimator (same measures as the interview; 3 away /
  *     2 restored confirmations, ONE event per episode)
  *   - face-api.js identity descriptor every 10 s, ONLY when exactly one face
  *     is present and the page is visible; never per-cycle, never on snapshots
@@ -48,7 +48,7 @@ export interface FaceMonitorCallbacks {
   /** Detector threw or produced nothing usable. */
   onDetectionFailure?: (error: unknown) => void;
   /**
-   * Gaze left the screen for ≥ 2 consecutive checks (~2-4 s). Once per episode.
+   * Gaze left the screen for ≥ 3 consecutive 1 s checks (~3 s). Once per episode.
    * `metrics` is what tripped it (cue + yaw/pitch/eye deviations from baseline).
    */
   onGazeAway?: (direction: GazeDirection, metrics: Record<string, string | number | boolean>) => void;
@@ -69,7 +69,7 @@ export interface FaceMonitorCallbacks {
 
 export interface FaceMonitorOptions {
   faceIntervalMs?: number;      // default 1500
-  gazeIntervalMs?: number;      // default 2000
+  gazeIntervalMs?: number;      // default 1000
   identityIntervalMs?: number;  // default 10000
   pollMs?: number;              // default 250
   enableGaze?: boolean;         // default true
@@ -99,11 +99,13 @@ export interface AssessmentFaceMonitor {
 
 const MIN_FACE_BOX_AREA = 0.025;   // ≥2.5 % of the frame — filters spurious boxes
 const MIN_DETECTION_CONFIDENCE = 0.6;
-// BUG03: was 3 checks at the 2 s cadence (≥ 4-6 s), so "a few seconds" of
-// looking away never registered. 2 checks ≈ 2-4 s, matching the interview's
-// low-tier setting — the gaze cadence stays 2 s here because this page has a
-// history of main-thread hangs (see the file header).
-const FRAMES_GAZE_AWAY = 2;
+// Same as the AI interview: 1 s cadence × 3 consecutive "away" checks ≈ 3 s,
+// and the 10-reading baseline calibrates in ~10 s (at the old 2 s cadence it
+// took ~20 s, so a short test was over before gaze was ever judged). The
+// page's old hangs came from face-api on the CPU, not MediaPipe; the busy flag
+// in tick() still stops passes from overlapping, and the 30 s
+// "[FACE-MONITOR] main-thread cost" line shows the real per-pass cost.
+const FRAMES_GAZE_AWAY = 3;
 // 1 check: the "looking away" warning is HELD on screen for the whole episode
 // (same as the interview), so it must clear promptly once they look back.
 const FRAMES_GAZE_RESTORED = 1;
@@ -165,7 +167,7 @@ export function createAssessmentFaceMonitor(
   options: FaceMonitorOptions = {},
 ): AssessmentFaceMonitor {
   const faceIntervalMs = options.faceIntervalMs ?? 1500;
-  const gazeIntervalMs = options.gazeIntervalMs ?? 2000;
+  const gazeIntervalMs = options.gazeIntervalMs ?? 1000;
   const identityIntervalMs = options.identityIntervalMs ?? 10000;
   const pollMs = options.pollMs ?? 250;
   const enableGaze = options.enableGaze ?? true;
@@ -257,6 +259,19 @@ export function createAssessmentFaceMonitor(
     }
   };
 
+  // The two MediaPipe solutions MUST finish loading one after the other.
+  // Their emscripten loader scripts share ONE global `Module`: FaceMesh's
+  // packed-assets loader reads `Module.dataFileDownloads[url]` back on every
+  // download-progress event, and if FaceDetection's loader runs in between it
+  // swaps `Module` out → "Cannot read properties of undefined (reading
+  // '…face_mesh_solution_packed_assets.data')" → the mesh graph can't read its
+  // model ("Failed to read file face_detection_short_range.tflite") → gaze is
+  // dead for the whole session. That's what happened here: the first detector
+  // pass (which is what used to trigger the download) was capped at 1.5 s by
+  // sendWithTimeout, so the gaze pass started FaceMesh's download while
+  // FaceDetection's was still running. The AI interview never hit it only
+  // because it awaits that first pass with no timeout. initialize() makes the
+  // order explicit: detector fully loaded, THEN the mesh.
   const initMediaPipe = async (): Promise<boolean> => {
     try {
       await loadScript(`${MP_FACE_DETECTION_URL}/face_detection.js`);
@@ -267,6 +282,7 @@ export function createAssessmentFaceMonitor(
       fd.onResults((r: any) => {
         try { handleFaceResults(r); } finally { pendingFaceResolve?.(); pendingFaceResolve = null; }
       });
+      await fd.initialize(); // download + compile fully before anything else loads
       faceDetector = fd;
     } catch (err) {
       console.warn('[FACE-MONITOR] MediaPipe FaceDetection unavailable, falling back to face-api tiny detector:', err);
@@ -283,6 +299,7 @@ export function createAssessmentFaceMonitor(
         fm.onResults((r: any) => {
           try { handleMeshResults(r); } finally { pendingMeshResolve?.(); pendingMeshResolve = null; }
         });
+        await fm.initialize(); // also before the first tick, so no pass can overlap the download
         faceMesh = fm;
       } catch (err) {
         console.warn('[FACE-MONITOR] FaceMesh unavailable — gaze tracking disabled:', err);
@@ -437,7 +454,14 @@ export function createAssessmentFaceMonitor(
       if (running) return;
       running = true;
       const ok = await initMediaPipe();
-      if (!running) return;
+      if (!running) {
+        // stop() ran while the models were still loading — release what loaded.
+        try { faceDetector?.close?.(); } catch { /* ignore */ }
+        try { faceMesh?.close?.(); } catch { /* ignore */ }
+        faceDetector = null;
+        faceMesh = null;
+        return;
+      }
       if (!ok) {
         usingFallbackDetector = true;
         await ensureFaceApi();

@@ -216,6 +216,10 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
   const [browserWarning, setBrowserWarning] = useState<string | null>(null);
   const [cameraInUseError, setCameraInUseError] = useState<string>('');
   const [hasCameraPreview, setHasCameraPreview] = useState(false);
+  // Before the first run every row still reads "Not checked": the Run Checks
+  // button is then the only thing the candidate can usefully do.
+  const checksNotStarted = !isChecking
+    && [browserCheck, internetCheck, cameraCheck, multipleCheck, micCheck].every((c) => c.status === 'pending');
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -223,6 +227,12 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
   const networkCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const micCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  // Bumped whenever the mic check is stopped or restarted, so an earlier run
+  // still awaiting (calibration, AudioContext startup) can't arm its interval
+  // over the new run's and flip a passed check back to "Listening".
+  const micGenRef = useRef(0);
+  // Removes the click/keydown listeners that resume a suspended AudioContext.
+  const micResumeCleanupRef = useRef<(() => void) | null>(null);
   const networkSpeedMbpsRef = useRef<number | null>(null);
   const networkLatencyMsRef = useRef<number | null>(null);
   const browserInfoRef = useRef<ReturnType<typeof detectBrowser> | null>(null);
@@ -278,6 +288,9 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
         clearInterval(networkCheckIntervalRef.current);
         networkCheckIntervalRef.current = null;
       }
+      micGenRef.current += 1;
+      micResumeCleanupRef.current?.();
+      micResumeCleanupRef.current = null;
       if (micCheckIntervalRef.current) {
         clearInterval(micCheckIntervalRef.current);
         micCheckIntervalRef.current = null;
@@ -393,6 +406,9 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
   };
 
   const stopMicMonitoring = () => {
+    micGenRef.current += 1;
+    micResumeCleanupRef.current?.();
+    micResumeCleanupRef.current = null;
     if (micCheckIntervalRef.current) {
       clearInterval(micCheckIntervalRef.current);
       micCheckIntervalRef.current = null;
@@ -952,6 +968,112 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
     faceCheckIntervalRef.current = setTimeout(run, FACE_POLL_MIN_MS);
   };
 
+  // How the mic check decides "voice": a level clearly above the room's quiet
+  // floor. The floor is the quiet end of a short sample window, then keeps
+  // tracking the quietest level heard. It used to be ONE reading taken 1.2 s
+  // in: if the candidate was already talking (or the room was briefly loud)
+  // the threshold landed above normal speech and the row said "Listening"
+  // forever.
+  const MIC_CALIBRATION_SAMPLES = 12; // x 100 ms
+  const MIC_POLL_MS = 150;
+
+  const startMicCheck = async (audioTracks: MediaStreamTrack[]) => {
+    const gen = ++micGenRef.current;
+    const stale = () => gen !== micGenRef.current;
+    const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    try {
+      const AudioContextImpl: typeof AudioContext | undefined =
+        window.AudioContext || (window as BrowserWindow).webkitAudioContext;
+      if (!AudioContextImpl) {
+        setMicCheck({ status: 'error', message: 'This browser cannot verify microphone input.' });
+        return;
+      }
+
+      const audioContext = new AudioContextImpl();
+      audioContextRef.current = audioContext;
+      try {
+        await audioContext.resume();
+      } catch {
+        // ignore; the state check below handles a context that stays suspended
+      }
+      let waitMs = 0;
+      while (audioContext.state !== 'running' && waitMs < 2000 && !stale()) {
+        await sleep(100);
+        waitMs += 100;
+      }
+      if (stale()) {
+        audioContext.close().catch(() => {});
+        return;
+      }
+
+      // Chrome can keep an AudioContext suspended until the page gets a user
+      // gesture; a suspended analyser reads silence forever. Resume on the
+      // candidate's next click or key press (the poll below asks for one).
+      if (audioContext.state !== 'running') {
+        const resume = () => { audioContext.resume().catch(() => {}); };
+        window.addEventListener('pointerdown', resume);
+        window.addEventListener('keydown', resume);
+        micResumeCleanupRef.current = () => {
+          window.removeEventListener('pointerdown', resume);
+          window.removeEventListener('keydown', resume);
+        };
+      }
+
+      const source = audioContext.createMediaStreamSource(new MediaStream(audioTracks));
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+
+      setMicCheck({ status: 'checking', message: 'Listening — say something to confirm your microphone...' });
+
+      const samples: number[] = [];
+      for (let i = 0; i < MIC_CALIBRATION_SAMPLES; i += 1) {
+        await sleep(100);
+        if (stale()) return;
+        samples.push(getAudioRms(analyser));
+      }
+      samples.sort((a, b) => a - b);
+      let noiseFloor = samples[Math.floor(samples.length * 0.2)] ?? 0;
+
+      if (micCheckIntervalRef.current) {
+        clearInterval(micCheckIntervalRef.current);
+      }
+      const intervalId = setInterval(() => {
+        if (stale()) {
+          clearInterval(intervalId);
+          return;
+        }
+        if (audioContext.state !== 'running') {
+          audioContext.resume().catch(() => {});
+          setMicCheck({ status: 'checking', message: 'Click anywhere on this page to start the microphone check.' });
+          return;
+        }
+        const level = getAudioRms(analyser);
+        noiseFloor = Math.min(noiseFloor, level);
+        const voiceThreshold = Math.max(noiseFloor * 1.8, noiseFloor + 6, 8);
+        if (level >= voiceThreshold) {
+          clearInterval(intervalId);
+          if (micCheckIntervalRef.current === intervalId) micCheckIntervalRef.current = null;
+          micResumeCleanupRef.current?.();
+          micResumeCleanupRef.current = null;
+          setMicCheck({ status: 'success', message: 'Voice detected — microphone working correctly' });
+          return;
+        }
+        setMicCheck(
+          level >= 1
+            ? { status: 'checking', message: 'Listening — say something to confirm your microphone...' }
+            : { status: 'checking', message: 'No audio detected — speak clearly or unmute your microphone.' },
+        );
+      }, MIC_POLL_MS);
+      micCheckIntervalRef.current = intervalId;
+    } catch (err) {
+      if (stale()) return;
+      console.error('[SYSTEM CHECK] Microphone check failed:', err);
+      setMicCheck({ status: 'error', message: 'Could not verify the microphone. Please re-run checks.' });
+    }
+  };
+
   const checkCameraAndMicrophone = async () => {
     // Request both camera and microphone together to avoid permission conflicts
     try {
@@ -968,6 +1090,17 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
       // Check if we got both video and audio tracks
       const videoTracks = stream.getVideoTracks();
       const audioTracks = stream.getAudioTracks();
+
+      // The mic check runs ALONGSIDE face detection. It used to start only
+      // after face detection returned, and on Windows Chrome that is the
+      // CPU-bound face-api path (seconds per pass, or a hang while models
+      // load), so the Microphone row sat on "Checking..." though the mic was fine.
+      let micTask: Promise<void> = Promise.resolve();
+      if (audioTracks.length > 0) {
+        micTask = startMicCheck(audioTracks);
+      } else {
+        setMicCheck({ status: 'error', message: 'No audio track available' });
+      }
 
       if (videoTracks.length > 0) {
         setCameraCheck({ status: 'checking', message: 'Detecting face...' });
@@ -994,74 +1127,7 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
         setCameraCheck({ status: 'error', message: 'No video track available' });
       }
 
-      if (audioTracks.length > 0) {
-        const AudioContextImpl: typeof AudioContext | undefined =
-          window.AudioContext || (window as BrowserWindow).webkitAudioContext;
-
-        if (!AudioContextImpl) {
-          setMicCheck({ status: 'error', message: 'This browser cannot verify microphone input.' });
-          return;
-        }
-
-        const audioContext = new AudioContextImpl();
-        audioContextRef.current = audioContext;
-
-        try {
-          await audioContext.resume();
-        } catch {
-          // ignore resume errors; state polling below handles delayed startup
-        }
-
-        let waitMs = 0;
-        while (audioContext.state !== 'running' && waitMs < 2000) {
-          await new Promise((resolve) => setTimeout(resolve, 100));
-          waitMs += 100;
-        }
-
-        const micOnlyStream = new MediaStream(audioTracks);
-        const source = audioContext.createMediaStreamSource(micOnlyStream);
-        const analyser = audioContext.createAnalyser();
-        analyser.fftSize = 256;
-        source.connect(analyser);
-
-        setMicCheck({ status: 'checking', message: 'Listening — say something to confirm your microphone...' });
-        await new Promise((resolve) => setTimeout(resolve, 1200));
-
-        let ambientLevel = getAudioRms(analyser);
-        if (ambientLevel < 1) {
-          await new Promise((resolve) => setTimeout(resolve, 500));
-          ambientLevel = getAudioRms(analyser);
-        }
-
-        const voiceThreshold = Math.max(ambientLevel * 1.8, 8);
-        let voiceDetected = false;
-
-        if (micCheckIntervalRef.current) {
-          clearInterval(micCheckIntervalRef.current);
-        }
-        micCheckIntervalRef.current = setInterval(() => {
-          const level = getAudioRms(analyser);
-          if (level >= voiceThreshold) {
-            voiceDetected = true;
-            if (micCheckIntervalRef.current) {
-              clearInterval(micCheckIntervalRef.current);
-              micCheckIntervalRef.current = null;
-            }
-            setMicCheck({ status: 'success', message: 'Voice detected — microphone working correctly' });
-            return;
-          }
-
-          if (!voiceDetected) {
-            setMicCheck(
-              level >= 1
-                ? { status: 'checking', message: 'Listening — say something to confirm your microphone...' }
-                : { status: 'checking', message: 'No audio detected — speak clearly or unmute your microphone.' },
-            );
-          }
-        }, 150);
-      } else {
-        setMicCheck({ status: 'error', message: 'No audio track available' });
-      }
+      await micTask;
 
     } catch (err: unknown) {
       const error = err instanceof Error ? err : new Error('Unknown media device error');
@@ -1302,8 +1368,13 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
             <div>
               <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
                 <h2 className={T_SECTION}>System Requirements</h2>
+                {/* Nothing runs until this is clicked, so before the first run
+                    it is the filled brand button with a pulsing ring — the
+                    candidate's obvious next step — and settles back to the
+                    outline style once the checks have started. */}
                 <Button
-                  variant="outline"
+                  variant={checksNotStarted ? 'primary' : 'outline'}
+                  className={checksNotStarted ? 'tf-attention-pulse' : ''}
                   onClick={runAllChecks}
                   disabled={isChecking}
                 >
@@ -1311,6 +1382,11 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
                   {isChecking ? 'Checking...' : 'Run Checks'}
                 </Button>
               </div>
+              {checksNotStarted && (
+                <p className="-mt-2 mb-4 text-sm font-medium text-brand-blue">
+                  Click &quot;Run Checks&quot; to test your camera, microphone and connection.
+                </p>
+              )}
 
               <div className="space-y-4">
                 {/* Browser */}

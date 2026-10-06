@@ -829,7 +829,9 @@ export function MultiLanguageCodeEditor({
                     </span>
                     <button
                       onClick={() => copyToClipboard(question.sample_input || '')}
-                      className="text-gray-400 hover:text-gray-600 p-1"
+                      /* 32px tap area for touch; the negative margin keeps the
+                         icon where it was. */
+                      className="text-gray-400 hover:text-gray-600 p-2.5 -m-1.5"
                       aria-label="Copy input" title="Copy input"
                     >
                       {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
@@ -1184,7 +1186,9 @@ export function MultiLanguageCodeEditor({
                     const nextInput = question.sample_input || '';
                     updateProgramInput(nextInput);
                   }}
-                  className="text-xs text-blue-400 hover:text-blue-300"
+                  /* Same text; taller tap area for touch, offset so the row
+                     height does not change. */
+                  className="text-xs text-blue-400 hover:text-blue-300 py-2 -my-2"
                 >
                   Use Example Input
                 </button>
