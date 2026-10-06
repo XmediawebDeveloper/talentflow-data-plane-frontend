@@ -12,7 +12,7 @@
 // numbers stay identical across tabs.
 import type { ReactNode } from 'react';
 import {
-  CheckCircle, XCircle, Play, Clock, Sparkles, Target, Info, Star, Network,
+  CheckCircle, XCircle, Play, Sparkles, Target, Info, Star, Network,
   Layers, ListChecks, ClipboardList, FileText, AlertTriangle, Lightbulb, BarChart3,
 } from 'lucide-react';
 import {
@@ -27,7 +27,6 @@ interface Props {
   data: DashboardData;
   aiConfidence?: number | null;
   candidateImage?: string | null;
-  avgResponseSeconds?: number | null;
   evaluationId?: string | null;
   /** The AI interview session id - only used to log the PDF download for the
    *  Audit Log, since the PDF itself is built entirely client-side below. */
@@ -584,7 +583,6 @@ export function EvalReportCombined({
   data,
   aiConfidence,
   candidateImage,
-  avgResponseSeconds,
   evaluationId,
   sessionId,
 }: Props) {
@@ -592,6 +590,7 @@ export function EvalReportCombined({
     candidate, interview, scores, finalResult, sectionsPresent,
     mustHaveClusters, niceToHaveClusters, interviewResponses, perQuestionDetails,
     aiSummary, strengths, weaknesses, isPartialEvaluation,
+    questionsAnswered, questionsAsked,
   } = data;
 
 
@@ -664,10 +663,8 @@ export function EvalReportCombined({
   const cardTitle = 'text-base font-semibold text-gray-900 dark:text-slate-50';
 
   const statTiles = [
-    { label: 'Questions Answered', value: String(interviewResponses.length), Icon: Play,
+    { label: 'Questions Answered', value: `${questionsAnswered} / ${questionsAsked}`, Icon: Play,
       tile: 'bg-brand-blue/5 border-brand-blue/15', icon: 'bg-brand-blue text-white' },
-    { label: 'Avg Response Time', value: avgResponseSeconds && avgResponseSeconds > 0 ? `${Math.round(avgResponseSeconds)}s` : '—', Icon: Clock,
-      tile: 'bg-brand-cyan/5 border-brand-cyan/20', icon: 'bg-brand-cyan text-white' },
     { label: 'Skills Evaluated', value: `${allSkills.filter(s => s.score > 0).length} / ${allSkills.length}`, Icon: CheckCircle,
       tile: 'bg-success-subtle/50 border-success-line', icon: 'bg-success text-white' },
     { label: isPartialEvaluation ? 'Partial Evaluation' : 'Overall Score', value: isPartialEvaluation ? '—' : `${confidence}%`, Icon: BarChart3,
@@ -739,7 +736,7 @@ export function EvalReportCombined({
       </div>
 
       {/* 2. Key stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4" style={{ pageBreakInside: 'avoid' }}>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4" style={{ pageBreakInside: 'avoid' }}>
         {statTiles.map(({ label, value, Icon, tile, icon, valueClass }) => (
           <div key={label} className={`rounded-2xl border p-4 flex items-center gap-3 min-w-0 ${tile}`}>
             <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${icon}`}><Icon className="w-5 h-5" /></div>

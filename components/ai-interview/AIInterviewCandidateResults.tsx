@@ -81,10 +81,10 @@ const CANDIDATE_COLUMNS = [
   { id: 'jobTitle', label: 'Job Title' },
   { id: 'jobVersion', label: 'Job Version' },
   { id: 'interviewVersion', label: 'Interview Version' },
-  { id: 'inviteSource', label: 'Invite Source' },
-  { id: 'status', label: 'Status' },
   { id: 'score', label: 'Score' },
   { id: 'result', label: 'Result' },
+  { id: 'inviteSource', label: 'Invite Source' },
+  { id: 'status', label: 'Status' },
   { id: 'timeline', label: 'Timeline' },
   { id: 'proctoring', label: 'Proctoring Risk' },
 ] as const;
@@ -885,10 +885,10 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                     {col('jobTitle') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Job Title</th>}
                     {col('jobVersion') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Job Version</th>}
                     {col('interviewVersion') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Interview Version</th>}
-                    {col('inviteSource') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Invite Source</th>}
-                    {col('status') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Status</th>}
                     {col('score') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Score</th>}
                     {col('result') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Result</th>}
+                    {col('inviteSource') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Invite Source</th>}
+                    {col('status') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Status</th>}
                     {col('timeline') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Timeline</th>}
                     {col('proctoring') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Proctoring Risk</th>}
                     <th className="text-right px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide tf-sticky-col">Actions</th>
@@ -973,6 +973,22 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                             <VersionPill kind="interview" version={row._interview_version} />
                           </td>
                         )}
+                        {col('score') && (
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {mhsScore(row) != null ? (
+                              <span className={`${SCORE_CELL_TEXT} ${mhsScore(row)! >= 60 ? 'text-success' : 'text-destructive'}`}>
+                                {mhsScore(row)}%
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
+                          </td>
+                        )}
+                        {col('result') && (
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {sessionResult(row) ? <PassFailBadge result={sessionResult(row)!} /> : <span className="text-gray-400">—</span>}
+                          </td>
+                        )}
                         {col('inviteSource') && (
                           <td className="px-4 py-3 whitespace-nowrap text-gray-700 dark:text-slate-300">
                             {inviteSourceLabel(row)
@@ -991,22 +1007,6 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                                 </span>
                               )}
                             </div>
-                          </td>
-                        )}
-                        {col('score') && (
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            {mhsScore(row) != null ? (
-                              <span className={`${SCORE_CELL_TEXT} ${mhsScore(row)! >= 60 ? 'text-success' : 'text-destructive'}`}>
-                                {mhsScore(row)}%
-                              </span>
-                            ) : (
-                              <span className="text-gray-400">—</span>
-                            )}
-                          </td>
-                        )}
-                        {col('result') && (
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            {sessionResult(row) ? <PassFailBadge result={sessionResult(row)!} /> : <span className="text-gray-400">—</span>}
                           </td>
                         )}
                         {col('timeline') && (
