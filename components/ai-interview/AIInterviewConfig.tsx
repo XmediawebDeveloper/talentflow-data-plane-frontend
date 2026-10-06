@@ -897,8 +897,10 @@ interface HRSectionProps {
   bankQuestions: HRBankQuestion[];
   selectedIds: string[];
   selectedStages: Record<string, HRQuestionStage>;
+  selectedTypeOverrides: Record<string, 'text' | 'yes_no'>;
   onSelectedChange: (ids: string[]) => void;
   onSelectedStagesChange: (stages: Record<string, HRQuestionStage>) => void;
+  onSelectedTypeOverridesChange: (overrides: Record<string, 'text' | 'yes_no'>) => void;
   onBankAdd: (q: HRBankQuestion) => void;
 }
 
@@ -913,8 +915,10 @@ function HRSection({
   bankQuestions,
   selectedIds,
   selectedStages,
+  selectedTypeOverrides,
   onSelectedChange,
   onSelectedStagesChange,
+  onSelectedTypeOverridesChange,
   onBankAdd,
 }: HRSectionProps) {
   const [hrWeightError, setHrWeightError] = useState(false);
@@ -946,6 +950,15 @@ function HRSection({
     });
   };
 
+  // Per-interview answer-type override — does NOT write to the HR Question
+  // Bank. Only changes what gets saved into this interview's own config.
+  const setQuestionTypeOverride = (id: string, type: 'text' | 'yes_no') => {
+    onSelectedTypeOverridesChange({
+      ...selectedTypeOverrides,
+      [id]: type,
+    });
+  };
+
   const toggleQuestion = (id: string) => {
     if (selectedIds.includes(id)) {
       onSelectedChange(selectedIds.filter(x => x !== id));
@@ -967,7 +980,7 @@ function HRSection({
     }
     setSavingQ(true);
     try {
-      const res = await api.post('/hr-question-bank', { question_text: text, answer_type: 'text' });
+      const res = await api.post('/hr-question-bank', { question_text: text, answer_type: newQType });
       const newQ: HRBankQuestion = { id: res.data.id, question_text: res.data.question_text, answer_type: res.data.answer_type, is_default: false };
       onBankAdd(newQ);
       // Auto-select only if within limit
@@ -1105,6 +1118,9 @@ function HRSection({
                   const isSelected = selectedIds.includes(q.id);
                   const isDisabled = atLimit && !isSelected;
                   const selectedStage = selectedStages[q.id] ?? 'closing';
+                  // Effective type for THIS interview: override wins, else the
+                  // bank's own value (today's behavior, unchanged).
+                  const effectiveType = selectedTypeOverrides[q.id] ?? q.answer_type;
                   return (
                   <label
                     key={q.id}
@@ -1167,6 +1183,48 @@ function HRSection({
                             Closing
                           </button>
                         </div>
+                        <span className="text-2xs font-semibold uppercase tracking-wide text-gray-400">Answer Type</span>
+                        <div className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white p-1">
+                          <button
+                            type="button"
+                            aria-pressed={effectiveType === 'text'}
+                            title="Candidate answers in their own words (voice/typed)"
+                            onClick={e => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setQuestionTypeOverride(q.id, 'text');
+                            }}
+                            className={`px-2.5 py-1 rounded-full text-2xs font-medium transition-colors ${
+                              effectiveType === 'text'
+                                ? 'bg-brand-blue text-white shadow-sm ring-1 ring-brand-blue/40'
+                                : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                            }`}
+                          >
+                            Text
+                          </button>
+                          <button
+                            type="button"
+                            aria-pressed={effectiveType === 'yes_no'}
+                            title="Candidate picks Yes / No / Need to Explain More"
+                            onClick={e => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setQuestionTypeOverride(q.id, 'yes_no');
+                            }}
+                            className={`px-2.5 py-1 rounded-full text-2xs font-medium transition-colors ${
+                              effectiveType === 'yes_no'
+                                ? 'bg-brand-blue text-white shadow-sm ring-1 ring-brand-blue/40'
+                                : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                            }`}
+                          >
+                            Yes/No
+                          </button>
+                        </div>
+                        {selectedTypeOverrides[q.id] && selectedTypeOverrides[q.id] !== q.answer_type && (
+                          <span className="text-2xs text-brand-blue" title="Only applies to this interview — the shared HR Question Bank entry is unchanged">
+                            Set for this interview only
+                          </span>
+                        )}
                         {!isSelected && (
                           <span className="text-2xs text-gray-400">Select the question to include it in the interview.</span>
                         )}
@@ -1201,6 +1259,35 @@ function HRSection({
               {questionError && (
                 <p className="text-2xs text-destructive">{questionError}</p>
               )}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-2xs font-semibold uppercase tracking-wide text-gray-400">Answer Type</span>
+                <div className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white p-1">
+                  <button
+                    type="button"
+                    aria-pressed={newQType === 'text'}
+                    onClick={() => setNewQType('text')}
+                    className={`px-2.5 py-1 rounded-full text-2xs font-medium transition-colors ${
+                      newQType === 'text'
+                        ? 'bg-brand-blue text-white shadow-sm ring-1 ring-brand-blue/40'
+                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                    }`}
+                  >
+                    Text
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={newQType === 'yes_no'}
+                    onClick={() => setNewQType('yes_no')}
+                    className={`px-2.5 py-1 rounded-full text-2xs font-medium transition-colors ${
+                      newQType === 'yes_no'
+                        ? 'bg-brand-blue text-white shadow-sm ring-1 ring-brand-blue/40'
+                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                    }`}
+                  >
+                    Yes/No
+                  </button>
+                </div>
+              </div>
               <div className="flex items-center gap-2">
                 <div className="flex-1" />
                 <Button
@@ -1354,6 +1441,15 @@ export default function AIInterviewConfig() {
   const [hrBankQuestions, setHrBankQuestions] = useState<HRBankQuestion[]>([]);
   const [hrSelectedIds, setHrSelectedIds] = useState<string[]>([]);
   const [hrQuestionStages, setHrQuestionStages] = useState<Record<string, HRQuestionStage>>({});
+  // Per-interview answer-type override (AII-20 follow-up): lets the recruiter
+  // pick Text vs Yes/No for a selected HR question JUST for this interview,
+  // without editing the shared HR Question Bank record. Keyed by bank
+  // question id; a question with no entry here falls back to the bank's own
+  // answer_type (today's behavior, unchanged). Only ever written into THIS
+  // interview's own saved config (selectedHrQuestions below) — never POSTed
+  // back to /hr-question-bank, so the bank and every other interview that
+  // selects the same question are unaffected.
+  const [hrQuestionTypeOverrides, setHrQuestionTypeOverrides] = useState<Record<string, 'text' | 'yes_no'>>({});
 
   /* Other settings */
   const [recordingEnabled, setRecordingEnabled] = useState(true);
@@ -1758,14 +1854,24 @@ export default function AIInterviewConfig() {
                   ]),
                 ),
               );
+              // Restore this interview's own saved answer_type as the override —
+              // it may differ from the bank's current value if it was overridden
+              // when this draft was last saved.
+              setHrQuestionTypeOverrides(
+                Object.fromEntries(
+                  hrRound.hr_questions.map(q => [q.id, q.answer_type as 'text' | 'yes_no']),
+                ),
+              );
             } else {
               setHrSelectedIds([]);
               setHrQuestionStages({});
+              setHrQuestionTypeOverrides({});
             }
           } else {
             setHrEnabled(false);
             setHrSelectedIds([]);
             setHrQuestionStages({});
+            setHrQuestionTypeOverrides({});
           }
 
           // Apply remaining special_instructions fields (clusters, comments, types, etc.)
@@ -2042,7 +2148,7 @@ export default function AIInterviewConfig() {
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mth, nth, hrPct, hrEnabled, hrSelectedIds, hrQuestionStages, mode, sttModel, recordingEnabled, environmentVerificationEnabled, availableLanguages, introVideoUrl, selectedJd, loadingJd]);
+  }, [mth, nth, hrPct, hrEnabled, hrSelectedIds, hrQuestionStages, hrQuestionTypeOverrides, mode, sttModel, recordingEnabled, environmentVerificationEnabled, availableLanguages, introVideoUrl, selectedJd, loadingJd]);
 
   /* ── Derived values ── */
   const nthAvailable = nth.skills.length > 0 || nth.enabled;
@@ -2377,7 +2483,10 @@ export default function AIInterviewConfig() {
         .map(q => ({
           id: q!.id,
           question_text: q!.question_text,
-          answer_type: q!.answer_type,
+          // Per-interview override wins when set; otherwise inherit the bank's
+          // type (today's behavior). Written only into this interview's own
+          // config — the bank record itself is never touched here.
+          answer_type: hrQuestionTypeOverrides[q!.id] ?? q!.answer_type,
           stage: hrQuestionStages[q!.id] ?? 'closing',
         }));
 
@@ -3227,8 +3336,10 @@ export default function AIInterviewConfig() {
               bankQuestions={hrBankQuestions}
               selectedIds={hrSelectedIds}
               selectedStages={hrQuestionStages}
+              selectedTypeOverrides={hrQuestionTypeOverrides}
               onSelectedChange={setHrSelectedIds}
               onSelectedStagesChange={setHrQuestionStages}
+              onSelectedTypeOverridesChange={setHrQuestionTypeOverrides}
               onBankAdd={q => setHrBankQuestions(prev => [...prev, q])}
             />
 
