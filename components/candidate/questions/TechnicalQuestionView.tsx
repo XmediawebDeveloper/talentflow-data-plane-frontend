@@ -213,30 +213,43 @@ export function TechnicalQuestionView({ question, answer, onAnswerChange, isLock
         {question.options?.map((option, index) => {
           const optionLetter = String.fromCharCode(65 + index); // A, B, C, D...
           const selected = isSelected(option.id);
+          /* One state per option, in priority order: submitted (green) wins
+             over selected (blue), which wins over the default. Colours are
+             the global tokens - success for submitted, brand-blue for the
+             current pick, the same pair the progress grid uses. Keyboard
+             focus keeps the app-wide 2px outline (globals.css, unlayered, so
+             only `!` can recolour it) but in brand blue rather than the
+             near-black --ring, so focus never reads as a black selection. */
+          const state: 'idle' | 'selected' | 'submitted' =
+            selected ? (isLocked ? 'submitted' : 'selected') : 'idle';
 
           return (
             <button
               key={option.id}
               onClick={() => handleOptionClick(option.id)}
               disabled={isLocked}
-              className={`w-full flex items-start gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl border-2 transition-all text-left ${
-                isLocked
-                  ? selected
-                    ? 'border-green-500 bg-green-50 cursor-not-allowed'
-                    : 'border-gray-200 bg-gray-50 cursor-not-allowed opacity-60'
-                  : selected
-                    ? 'border-gray-800 bg-gray-50'
-                    : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+              className={`w-full flex items-start gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl border-2 transition-all text-left focus-visible:!outline-brand-blue ${
+                state === 'submitted'
+                  ? 'border-success bg-success-subtle cursor-not-allowed'
+                  : isLocked
+                    ? 'border-gray-200 bg-gray-50 cursor-not-allowed opacity-60'
+                    : state === 'selected'
+                      ? 'border-brand-blue bg-brand-blue/5'
+                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
               }`}
             >
               {/* Selection Indicator */}
-              <div className={`flex-shrink-0 mt-0.5 ${selected ? 'text-gray-800' : 'text-gray-400'}`}>
+              <div className={`flex-shrink-0 mt-0.5 ${
+                state === 'submitted' ? 'text-success' : state === 'selected' ? 'text-brand-blue' : 'text-gray-400'
+              }`}>
                 {isMultipleChoice ? (
                   // Checkbox style for multiple choice
                   <div className={`w-6 h-6 rounded border-2 flex items-center justify-center ${
-                    selected
-                      ? 'bg-gray-800 border-gray-800'
-                      : 'border-gray-300'
+                    state === 'submitted'
+                      ? 'bg-success border-success'
+                      : state === 'selected'
+                        ? 'bg-brand-blue border-brand-blue'
+                        : 'border-gray-300'
                   }`}>
                     {selected && (
                       <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -247,12 +260,14 @@ export function TechnicalQuestionView({ question, answer, onAnswerChange, isLock
                 ) : (
                   // Radio style for single choice
                   <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
-                    selected
-                      ? 'border-gray-800'
-                      : 'border-gray-300'
+                    state === 'submitted'
+                      ? 'border-success'
+                      : state === 'selected'
+                        ? 'border-brand-blue'
+                        : 'border-gray-300'
                   }`}>
                     {selected && (
-                      <div className="w-3 h-3 bg-gray-800 rounded-full" />
+                      <div className={`w-3 h-3 rounded-full ${state === 'submitted' ? 'bg-success' : 'bg-brand-blue'}`} />
                     )}
                   </div>
                 )}
@@ -262,9 +277,11 @@ export function TechnicalQuestionView({ question, answer, onAnswerChange, isLock
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
                   <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-sm font-medium ${
-                    selected
-                      ? 'bg-gray-800 text-white'
-                      : 'bg-gray-100 text-gray-600'
+                    state === 'submitted'
+                      ? 'bg-success text-white'
+                      : state === 'selected'
+                        ? 'bg-brand-blue text-white'
+                        : 'bg-gray-100 text-gray-600'
                   }`}>
                     {optionLetter}
                   </span>

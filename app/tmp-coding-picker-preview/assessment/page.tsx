@@ -103,12 +103,21 @@ const rounds = [
 export default function TmpAssessmentPreview() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [startedAt] = useState(() => new Date().toISOString());
-  const isCoding = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('round') === 'coding';
+  const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const isCoding = params?.get('round') === 'coding';
+  // `?locked=1`: the question as the flow returns to it after a submit.
+  const lockedTechnical: CurrentQuestion = {
+    ...technical,
+    previous_answer: {
+      text_response: null, selected_options: ['C'], code_submission: null, language: null, code_input: null,
+      code_execution_status: null, code_execution_output: null, code_execution_error: null, is_locked: true,
+    },
+  };
   return (
     <AssessmentInterface
       token="preview-token"
       assessmentInfo={info}
-      currentQuestion={isCoding ? coding : technical}
+      currentQuestion={isCoding ? coding : params?.get('locked') === '1' ? lockedTechnical : technical}
       progress={{ answered: 0, total: 14, percent: 0 }}
       rounds={rounds}
       startedAt={startedAt}

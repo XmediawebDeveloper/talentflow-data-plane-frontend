@@ -44,17 +44,65 @@ export default function CandidateStepper({ current, steps = ASSESSMENT_STEPS, bo
   return (
     <div className={`w-full bg-white ${bordered ? 'border-b border-gray-200' : ''}`}>
       <div className={`${RECRUITER_BAR_ROW} py-3 sm:py-4`}>
-        {/* Below `sm` the labels are hidden to keep the row on one line, so
-            this states the position in words instead — otherwise the dots say
-            nothing about where the candidate is. */}
-        <p className="sm:hidden text-sm font-medium text-brand-blue mb-3 text-center" aria-live="polite">
+        {/* Phones and tablets: the position in words, so "Step X - Name" reads
+            at a glance whatever the row below has room for. */}
+        <p className="xl:hidden text-sm font-medium text-brand-blue mb-3 text-center" aria-live="polite">
           Step {current} of {steps.length}: {steps[current - 1]}
         </p>
 
-        {/* `flex-wrap` is load-bearing: five 32px dots and four connectors do
-            not fit a 360px phone, and without it the row pushed the whole page
-            sideways. */}
-        <div className="flex flex-wrap items-center justify-center gap-2" aria-label="Assessment progress">
+        {/* Phones and tablets: one equal-width column per step - number (or
+            tick) on top, its name directly under it - joined by a line through
+            the dot centres. The inline row below cannot fit five names under
+            ~1100px (it wrapped even at 1024), and on a phone it showed only the current
+            step's name, inline, pushing the last step onto a line of its own.
+            Columns never wrap, every number keeps its name, and the row is
+            exactly the screen's width. */}
+        <ol
+          className="xl:hidden grid"
+          style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}
+          aria-label="Assessment progress"
+        >
+          {steps.map((label, index) => {
+            const stepNumber = index + 1;
+            const isCompleted = stepNumber < current;
+            const isCurrent = stepNumber === current;
+
+            return (
+              <li key={label} className="relative flex flex-col items-center text-center min-w-0 px-0.5">
+                {/* Connector from the previous step's dot to this one, behind
+                    the dots. Done once the previous step is complete. */}
+                {index > 0 && (
+                  <span
+                    aria-hidden="true"
+                    className={`absolute top-4 right-1/2 w-full h-0.5 -translate-y-1/2 ${stepNumber <= current ? 'bg-success' : 'bg-gray-200'}`}
+                  />
+                )}
+                <div
+                  aria-current={isCurrent ? 'step' : undefined}
+                  className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium shrink-0 ${
+                    isCompleted
+                      ? 'bg-success text-white'
+                      : isCurrent
+                        ? 'bg-brand-blue text-white ring-4 ring-brand-blue/15'
+                        : 'bg-gray-200 text-gray-500'
+                  }`}
+                >
+                  {isCompleted ? <Check className="w-4 h-4" /> : stepNumber}
+                </div>
+                <span
+                  className={`mt-1.5 text-2xs sm:text-xs leading-tight line-clamp-2 break-words ${
+                    isCurrent ? 'font-semibold text-gray-900' : isCompleted ? 'font-medium text-success' : 'font-medium text-gray-500'
+                  }`}
+                >
+                  {label}
+                </span>
+              </li>
+            );
+          })}
+        </ol>
+
+        {/* Desktop (`xl` and up, where it fits on one line): the inline row, unchanged. */}
+        <div className="hidden xl:flex flex-wrap items-center justify-center gap-2" aria-label="Assessment progress">
           {steps.map((label, index) => {
             const stepNumber = index + 1;
             const isCompleted = stepNumber < current;
@@ -80,9 +128,7 @@ export default function CandidateStepper({ current, steps = ASSESSMENT_STEPS, bo
                       isCurrent ? 'text-gray-900' : isCompleted ? 'text-success' : 'text-gray-500'
                     }`}
                   >
-                    {/* Only the current step names itself on a phone. */}
-                    <span className="sm:hidden">{isCurrent ? label : ''}</span>
-                    <span className="hidden sm:inline">{label}</span>
+                    {label}
                   </span>
                 </div>
 

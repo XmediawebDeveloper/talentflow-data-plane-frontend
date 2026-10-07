@@ -246,6 +246,25 @@ export function MultiLanguageCodeEditor({
   const [showInputPanel, setShowInputPanel] = useState(true);
   const [fontSize, setFontSize] = useState(14);
   const editorRef = useRef<any>(null);
+  // True while code is being put into Monaco from outside the keyboard (a
+  // question/language switch or Reset), so that write is not taken as typing.
+  const isApplyingCodeRef = useRef(false);
+
+  // Monaco is uncontrolled (`defaultValue`): it owns what is typed. It used to
+  // get `value={code}`, and @monaco-editor/react replaces the whole model
+  // whenever that prop differs from the model - so a key pressed between a
+  // render and its effect (camera, face detection and auto-save keep a phone's
+  // main thread busy) was overwritten with the render's older text, dropping
+  // or doubling characters. Code that comes from elsewhere goes in through here.
+  const applyCode = (next: string) => {
+    setCode(next);
+    const editor = editorRef.current;
+    if (editor && editor.getValue() !== next) {
+      isApplyingCodeRef.current = true;
+      editor.setValue(next);
+      isApplyingCodeRef.current = false;
+    }
+  };
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Mobile tab state: switch between problem and editor on small screens
@@ -281,7 +300,7 @@ export function MultiLanguageCodeEditor({
   useEffect(() => {
     const nextEditorState = buildInitialEditorState(question, answer, selectedLanguage);
 
-    setCode(nextEditorState.code);
+    applyCode(nextEditorState.code);
     setCustomInput(nextEditorState.input);
     setProgramInputError(getProgramInputValidationError(nextEditorState.input));
     setExecutionOutput(nextEditorState.executionOutput);
@@ -419,7 +438,7 @@ export function MultiLanguageCodeEditor({
   };
 
   const handleCodeChange: OnChange = (value) => {
-    if (isLocked) return; // Cannot change if locked
+    if (isLocked || isApplyingCodeRef.current) return; // Cannot change if locked; not typing
     const newCode = value || '';
     setCode(newCode);
     setExecutionOutput(null);
@@ -494,7 +513,7 @@ export function MultiLanguageCodeEditor({
         confirmText: 'Reset',
       });
       if (confirmed) {
-        setCode(template);
+        applyCode(template);
         setTestResults(null);
         setExecutionOutput(null);
         onAnswerChange({
@@ -1139,12 +1158,21 @@ export function MultiLanguageCodeEditor({
           </div>
         </div>
 
-        {/* Monaco Editor */}
-        <div className="flex-1 min-h-0">
+        {/* Monaco Editor.
+            `height="100%"` needs a parent with a definite height. From `md` up
+            the layout row is a fixed 650px, so it resolves; below `md` the row
+            is `h-auto` and this pane only has a min-height, so 100% resolved to
+            auto and Monaco collapsed to ~5px. The dark pane still looked like
+            an editor, but a tap landed on this empty wrapper, never on
+            Monaco's input layer: no focus, no keyboard, no typing - on any
+            phone narrower than 768px, i.e. portrait. The absolute layer takes
+            its size from the wrapper's laid-out box instead, at every width. */}
+        <div className="relative flex-1 min-h-0">
+          <div className="absolute inset-0">
           <Editor
             height="100%"
             language={getMonacoLanguage(selectedLanguage)}
-            value={code}
+            defaultValue={code}
             onChange={handleCodeChange}
             onMount={handleEditorMount}
             theme="vs-dark"
@@ -1171,6 +1199,7 @@ export function MultiLanguageCodeEditor({
               readOnly: isLocked, // Disable editing if answer is locked (submitted)
             }}
           />
+          </div>
         </div>
 
         {/* Custom Input Panel */}
