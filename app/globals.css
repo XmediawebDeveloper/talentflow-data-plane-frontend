@@ -1041,6 +1041,27 @@ body {
   animation: fadeIn 0.2s ease-out forwards;
 }
 
+/* Horizontal flip entrance, used by components/ui/flip-in.tsx. The start
+   angle comes from a CSS variable the component sets from its hinge, swing and
+   angle props. The 3D perspective comes from the surrounding FlipStage, so
+   every block in it is seen from one shared viewpoint. */
+@keyframes tf-flip-in {
+  from {
+    transform: rotateY(var(--tf-flip-angle, -90deg));
+    opacity: 0;
+  }
+  to {
+    transform: rotateY(0deg);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-flip-in {
+    animation: none !important;
+  }
+}
+
 /* Caret blink for typewriter effect (welcome banner firstName) */
 @keyframes caret-blink {
   0%, 49%   { opacity: 1; }
