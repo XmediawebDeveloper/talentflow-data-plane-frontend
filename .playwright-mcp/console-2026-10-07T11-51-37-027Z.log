@@ -1,0 +1,42 @@
+[     152ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[     181ms] [LOG] [Fast Refresh] done in 135ms @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[     527ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/dashboard?org=scopexapps:6
+[     592ms] [LOG] [HMR] connected @ http://localhost:3000/dashboard?org=scopexapps:6
+[     737ms] [LOG] [DASHBOARD] Layout render - isLoading: true isAuthenticated: false user: undefined @ http://localhost:3000/dashboard?org=scopexapps:6
+[     738ms] [LOG] [DASHBOARD] Still loading... @ http://localhost:3000/dashboard?org=scopexapps:6
+[     788ms] [LOG] [DASHBOARD] Layout render - isLoading: false isAuthenticated: true user: arunrajs@xmediasolutions.in @ http://localhost:3000/dashboard?org=scopexapps:6
+[     788ms] [LOG] [DASHBOARD] Authenticated, rendering dashboard @ http://localhost:3000/dashboard?org=scopexapps:6
+[     791ms] [LOG] [Header] wsToken initialised from localStorage: ✅ present (eyJhbGciOiJIUzI1NiIs...) @ http://localhost:3000/dashboard?org=scopexapps:6
+[     842ms] [LOG] [WebSocket] Effect triggered — token: ✅ present | enabled: true @ http://localhost:3000/dashboard?org=scopexapps:6
+[     844ms] [LOG] [WebSocket] Attempting connection to: wss://talentflowdata.stgapi.mo.vc/api/v1/ws/notifications?token=***TOKEN*** @ http://localhost:3000/dashboard?org=scopexapps:6
+[     846ms] [LOG] [WebSocket] WS_BASE_URL: wss://talentflowdata.stgapi.mo.vc @ http://localhost:3000/dashboard?org=scopexapps:6
+[     851ms] [LOG] [WebSocket] WebSocket object created — initial readyState: 0 (0=CONNECTING) @ http://localhost:3000/dashboard?org=scopexapps:6
+[     854ms] [LOG] [Header] WebSocket status — connected: false @ http://localhost:3000/dashboard?org=scopexapps:6
+[     856ms] [LOG] [Header] Initial notification count fetch @ http://localhost:3000/dashboard?org=scopexapps:6
+[     859ms] [LOG] [Header] WebSocket not connected - using fallback polling @ http://localhost:3000/dashboard?org=scopexapps:6
+[     863ms] [LOG] [SessionTimeout] Skipping settings load - subscription expired @ http://localhost:3000/dashboard?org=scopexapps:6
+[     865ms] [LOG] [QuotaContext] Fetching quota-status... @ http://localhost:3000/dashboard?org=scopexapps:6
+[     867ms] [LOG] [DASHBOARD] Tenant subscription status: active isExpired: false isSuspended: false @ http://localhost:3000/dashboard?org=scopexapps:6
+[     869ms] [LOG] [DASHBOARD] Unlocking menus - subscription active @ http://localhost:3000/dashboard?org=scopexapps:6
+[     871ms] [LOG] [DASHBOARD] Layout render - isLoading: false isAuthenticated: true user: arunrajs@xmediasolutions.in @ http://localhost:3000/dashboard?org=scopexapps:6
+[     873ms] [LOG] [DASHBOARD] Authenticated, rendering dashboard @ http://localhost:3000/dashboard?org=scopexapps:6
+[    1003ms] [LOG] [WebSocket] ✅ Connected successfully — readyState: 1 (1=OPEN) @ http://localhost:3000/dashboard?org=scopexapps:6
+[    1024ms] [LOG] [Header] WebSocket status — connected: true @ http://localhost:3000/dashboard?org=scopexapps:6
+[    1026ms] [LOG] [Header] WebSocket connected - polling disabled @ http://localhost:3000/dashboard?org=scopexapps:6
+[    1067ms] [LOG] [WebSocket] Received: connected @ http://localhost:3000/dashboard?org=scopexapps:6
+[    1067ms] [LOG] [WebSocket] Connection confirmed: WebSocket connected for real-time notifications @ http://localhost:3000/dashboard?org=scopexapps:6
+[    1076ms] [LOG] [DASHBOARD] Layout render - isLoading: false isAuthenticated: true user: arunrajs@xmediasolutions.in @ http://localhost:3000/dashboard?org=scopexapps:6
+[    1077ms] [LOG] [DASHBOARD] Authenticated, rendering dashboard @ http://localhost:3000/dashboard?org=scopexapps:6
+[    1102ms] [LOG] [Header] WebSocket connected - polling disabled @ http://localhost:3000/dashboard?org=scopexapps:6
+[    1105ms] [LOG] [DASHBOARD] Tenant subscription status: active isExpired: false isSuspended: false @ http://localhost:3000/dashboard?org=scopexapps:6
+[    1107ms] [LOG] [DASHBOARD] Unlocking menus - subscription active @ http://localhost:3000/dashboard?org=scopexapps:6
+[    1109ms] [LOG] [DASHBOARD] Layout render - isLoading: false isAuthenticated: true user: arunrajs@xmediasolutions.in @ http://localhost:3000/dashboard?org=scopexapps:6
+[    1110ms] [LOG] [DASHBOARD] Authenticated, rendering dashboard @ http://localhost:3000/dashboard?org=scopexapps:6
+[    1224ms] [LOG] [QuotaContext] Already fetching, skipping duplicate call @ http://localhost:3000/dashboard?org=scopexapps:6
+[    1226ms] [LOG] [DASHBOARD] Layout render - isLoading: false isAuthenticated: true user: arunrajs@xmediasolutions.in @ http://localhost:3000/dashboard?org=scopexapps:6
+[    1227ms] [LOG] [DASHBOARD] Authenticated, rendering dashboard @ http://localhost:3000/dashboard?org=scopexapps:6
+[    1245ms] [LOG] [Header] WebSocket connected - polling disabled @ http://localhost:3000/dashboard?org=scopexapps:6
+[    1246ms] [LOG] [DASHBOARD] Tenant subscription status: active isExpired: false isSuspended: false @ http://localhost:3000/dashboard?org=scopexapps:6
+[    1248ms] [LOG] [DASHBOARD] Unlocking menus - subscription active @ http://localhost:3000/dashboard?org=scopexapps:6
+[    1323ms] [LOG] [QuotaContext] Quota data fetched successfully @ http://localhost:3000/dashboard?org=scopexapps:6
+[    1344ms] [LOG] [PlanFeatures] Enabled features from /quota-status: [ai_talent_match, resume_upload, api_access, sso, resume_scoring, assessment, priority_support, ai_interview, teams] @ http://localhost:3000/dashboard?org=scopexapps:6

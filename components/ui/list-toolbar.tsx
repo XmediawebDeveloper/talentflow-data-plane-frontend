@@ -235,7 +235,10 @@ export default function ListToolbar({
           value={draftSearch}
           onChange={(e) => setDraftSearch(e.target.value)}
           placeholder={searchPlaceholder}
-          className="w-full pl-9 pr-4 py-2 text-sm text-black border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
+          // Shared input chrome — the same h-9 / gray-200 border / rounded-lg /
+          // brand-blue focus + hover that SearchableSelect and DateField use, so
+          // search, dropdowns and date fields read as one filter component.
+          className="w-full h-9 pl-9 pr-4 text-sm text-black dark:text-slate-100 placeholder:text-gray-400 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg transition-colors hover:border-brand-blue/40 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
         />
       </div>
 

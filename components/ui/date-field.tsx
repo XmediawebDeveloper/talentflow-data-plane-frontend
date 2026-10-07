@@ -69,9 +69,9 @@ export function DateField({ id, value, onChange, min, max, placeholder = 'dd-mm-
           id={id}
           aria-label={ariaLabel}
           className={cn(
-            'w-full h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900',
+            'w-full h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 transition-colors',
             'flex items-center justify-between gap-2',
-            'focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue',
+            'hover:border-brand-blue/40 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue',
             className,
           )}
         >
