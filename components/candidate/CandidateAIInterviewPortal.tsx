@@ -1,7 +1,12 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { Loader2, AlertTriangle, RefreshCw, CheckCircle, XCircle, Maximize2, Monitor, Clock, KeyRound, Mail, Ban, X } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react';
+import {
+  Loader2, AlertTriangle, RefreshCw, CheckCircle, XCircle, Maximize2, Monitor, Clock, KeyRound, Mail, Ban, X, Lock, User,
+  ShieldCheck, Shield, Webcam, Mic, Eye, Focus, AppWindow, Minimize2, Keyboard, MousePointerClick, Wifi, Info, Check, ArrowRight, Scan, Video,
+  Headphones, Smartphone, Watch, Crop, Bot, Sparkles, CircleCheck, PanelTopClose,
+  EyeOff, MonitorCheck, Pointer, Search, Folder, CircleAlert,
+} from 'lucide-react';
 import { requestFullscreen, isFullscreen, getFullscreenChangeEvent, exitFullscreen } from '@/lib/utils/browserCompat';
 import { toast } from 'sonner';
 import { candidateAIInterviewService, getAiClientSessionId } from '@/lib/services/candidateAIInterviewService';
@@ -156,6 +161,54 @@ function formatTime(seconds: number): string {
   const s = seconds % 60;
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
+
+/** Icon tile for the "Before we begin" rule cards. */
+const ruleTile = (Icon: typeof Monitor, key?: string) => (
+  <span key={key} className="w-10 h-10 rounded-lg bg-brand-blue/10 text-brand-blue flex items-center justify-center flex-shrink-0">
+    <Icon className="w-5 h-5" />
+  </span>
+);
+
+/** Keyboard-key chip ("Alt", "Tab") for the shortcut-keys card. */
+const keyChip = (label: string) => (
+  <kbd key={label} className="inline-flex items-center justify-center min-w-[2.5rem] h-9 px-2 rounded-lg border-2 border-brand-blue/40 bg-brand-blue/5 text-sm font-semibold text-brand-blue shadow-[inset_0_-2px_0_rgba(15,60,153,0.15)]">
+    {label}
+  </kbd>
+);
+
+/** The "Not allowed during the interview" cards on the final consent gate. */
+const FINAL_CONSENT_RULES: { key: string; title: string; text: ReactNode; icons: ReactNode }[] = [
+  { key: 'tab', title: 'Switching to another browser tab', text: 'Stay only in this tab during the interview.', icons: ruleTile(AppWindow) },
+  { key: 'minimize', title: 'Minimizing the browser window', text: 'Keep the window open and in focus — do not click away from it.', icons: ruleTile(PanelTopClose) },
+  {
+    key: 'shortcuts',
+    title: 'Using shortcut keys',
+    text: <>Do not use <b>Alt + Tab</b> or the <b>Windows / ⌘</b> key.</>,
+    icons: <>{keyChip('Alt')}{keyChip('Tab')}</>,
+  },
+  { key: 'monitors', title: 'Using multiple monitors or external displays', text: 'Use only one screen during the interview.', icons: <>{ruleTile(Monitor, 'm1')}{ruleTile(Monitor, 'm2')}</> },
+  {
+    key: 'audio',
+    title: 'Changing audio devices',
+    text: 'Do not switch between wired/wireless headphones, microphones or speakers during the interview.',
+    icons: <>{ruleTile(Headphones, 'h')}{ruleTile(RefreshCw, 'r')}</>,
+  },
+  { key: 'recording', title: 'Using screen recording software', text: 'Do not use any third-party tools (e.g., OBS, Camtasia, Snagit).', icons: ruleTile(Video) },
+  { key: 'devices', title: 'Using mobile phone or other devices', text: 'Keep your phone and other devices away from your desk.', icons: <>{ruleTile(Smartphone, 'p')}{ruleTile(Watch, 'w')}</> },
+  { key: 'screenshots', title: 'Taking screenshots', text: 'Do not capture or share any part of the interview.', icons: ruleTile(Crop) },
+  {
+    key: 'network',
+    title: 'Changing your internet connection or network',
+    text: 'Use a stable, continuous connection — changing it during the interview is treated as a violation and can terminate the interview.',
+    icons: ruleTile(Wifi),
+  },
+  {
+    key: 'ai',
+    title: 'Using AI tools or external assistance',
+    text: 'Do not use AI tools such as ChatGPT, Claude, Gemini or Copilot, or any other external assistance during the interview.',
+    icons: <>{ruleTile(Bot, 'b')}{ruleTile(Sparkles, 's')}</>,
+  },
+];
 
 function CandidateAIInterviewPortalInner({ token }: Props) {
   const [step, setStep] = useState<Step>('loading');
@@ -2490,14 +2543,43 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   // browser/device. The heartbeat effect keeps running underneath, so if the
   // other side releases (or goes stale) this recovers automatically.
   if (preInterviewBlocked && step !== 'interview' && step !== 'completed' && step !== 'terminated' && step !== 'error') {
+    const laptop = (tone: 'blue' | 'red') => {
+      const c = tone === 'blue'
+        ? { frame: 'border-[#1e3a6e]', screen: 'bg-[#eef4ff]', icon: 'text-[#2f6fe0]', glow: 'bg-[#3b82f6]/25' }
+        : { frame: 'border-[#f07a8c]', screen: 'bg-[#fff1f3]', icon: 'text-[#c2415a]', glow: 'bg-[#f43f5e]/25' };
+      return (
+        <div className="relative shrink-0 flex flex-col items-center">
+          <div className={`absolute -inset-3 sm:-inset-6 rounded-full blur-xl sm:blur-2xl ${c.glow}`} aria-hidden />
+          <div className={`relative w-[60px] h-[40px] sm:w-[92px] sm:h-[60px] md:w-[120px] md:h-[78px] rounded-md border-2 sm:border-[3px] ${c.frame} ${c.screen} flex items-center justify-center`}>
+            <User className={`w-5 h-5 sm:w-7 sm:h-7 md:w-9 md:h-9 ${c.icon}`} strokeWidth={1.75} />
+          </div>
+          <div className="relative w-[74px] sm:w-[114px] md:w-[148px] h-[4px] sm:h-[6px] rounded-b-md bg-gradient-to-b from-slate-300 to-slate-400" />
+        </div>
+      );
+    };
+
     return (
-      <div className="min-h-[100dvh] bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center">
-          <div className="w-16 h-16 bg-warning-subtle rounded-full flex items-center justify-center mx-auto mb-5 text-3xl">🔒</div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Already open on another device</h1>
-          <p className="text-gray-600 text-sm leading-relaxed mb-5">
-            This interview link is already in use in another window or device.
-            Only one device can take the interview at a time — please continue there.
+      <div className="min-h-[100dvh] bg-gradient-to-br from-[#0f2347] via-[#1d3a6b] to-[#0f2347] flex items-center justify-center px-4 py-6 sm:p-6">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[720px] px-4 py-6 sm:px-8 sm:py-8 text-center">
+          {/* Illustration: this device ←→ lock ←→ the other active device */}
+          <div className="relative flex items-center justify-center gap-2 sm:gap-3 mb-4 sm:mb-6 overflow-hidden py-3 sm:py-4" aria-hidden>
+            {laptop('blue')}
+            <div className="hidden min-[400px]:block w-4 sm:w-10 md:w-14 border-t-2 border-dashed border-[#1e3a6e] -mt-2 sm:-mt-4" />
+            <div className="relative shrink-0 w-[72px] h-[72px] sm:w-24 sm:h-24 md:w-32 md:h-32 rounded-full border border-amber-200 flex items-center justify-center">
+              <div className="w-[54px] h-[54px] sm:w-[72px] sm:h-[72px] md:w-24 md:h-24 rounded-full bg-amber-100 flex items-center justify-center">
+                <Lock className="w-7 h-7 sm:w-9 sm:h-9 md:w-11 md:h-11 text-gray-900 fill-amber-400" strokeWidth={2} />
+              </div>
+              <span className="absolute bottom-0 sm:bottom-1 md:bottom-3 left-1/2 -translate-x-1/2 w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-red-500 text-white text-xs sm:text-sm font-bold flex items-center justify-center ring-2 ring-white">!</span>
+            </div>
+            <div className="hidden min-[400px]:block w-4 sm:w-10 md:w-14 border-t-2 border-dashed border-[#f07a8c] -mt-2 sm:-mt-4" />
+            {laptop('red')}
+          </div>
+
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold leading-tight text-[#0f1d40] mb-2 sm:mb-3">Already open on another device</h1>
+          <p className="text-gray-600 text-sm md:text-base leading-relaxed mb-5 sm:mb-6 max-w-xl mx-auto">
+            This interview is currently active in another browser window or device.
+            For security, only one device can access the interview at a time.
+            Please continue on the active session.
           </p>
 
           {/* If they just closed the other window, the lease still looks alive
@@ -2505,28 +2587,32 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
               rather than "wait a few seconds", and make clear this page unblocks
               itself — the 5s heartbeat clears it, so no reload is needed. */}
           {blockedRetrySeconds !== null && (
-            <div className="rounded-xl border border-warning-line bg-warning-subtle px-4 py-3 mb-5 text-left">
-              <p className="text-sm font-semibold text-warning-strong mb-1">
+            <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4 rounded-xl border border-amber-200 bg-amber-50 p-4 sm:px-5 mb-4 sm:mb-5 text-center sm:text-left">
+              <Clock className="hidden md:block w-11 h-11 shrink-0 text-amber-500" strokeWidth={2.25} />
+              <div className="hidden md:block self-stretch w-px bg-amber-300" />
+              <div className="flex-1 min-w-0">
+                <p className="flex items-center justify-center sm:justify-start gap-1.5 text-sm md:text-base font-semibold text-[#0f1d40] mb-1">
+                  <Clock className="md:hidden w-4 h-4 shrink-0 text-amber-500" strokeWidth={2.5} />
+                  Session releases automatically
+                </p>
+                <p className="text-xs md:text-sm text-gray-600 leading-snug">
+                  If you already closed the other session, you don&apos;t need to do anything.
+                  This page will unlock automatically once the previous session is released.
+                </p>
+              </div>
+              <div className="shrink-0 min-w-[88px] flex items-center justify-center rounded-lg border border-amber-200 bg-amber-100 px-4 py-2 sm:px-5 sm:py-3 text-2xl md:text-3xl font-bold text-amber-500 tabular-nums">
                 {blockedRetrySeconds > 0
-                  ? <>Closed it already? This page unlocks in{' '}
-                      <span className="tabular-nums">
-                        {Math.floor(blockedRetrySeconds / 60)}:{String(blockedRetrySeconds % 60).padStart(2, '0')}
-                      </span>
-                    </>
-                  : 'Checking again now…'}
-              </p>
-              <p className="text-xs text-warning-strong/90 leading-snug">
-                You don&apos;t need to do anything — this happens automatically.
-                If the other window is still open, the timer keeps resetting until
-                you close it.
-              </p>
+                  ? <>{Math.floor(blockedRetrySeconds / 60)}:{String(blockedRetrySeconds % 60).padStart(2, '0')}</>
+                  : <Loader2 className="w-7 h-7 animate-spin" />}
+              </div>
             </div>
           )}
 
           <button
             onClick={() => window.location.reload()}
-            className="w-full flex items-center justify-center gap-2 bg-gray-900 hover:bg-gray-800 text-white font-semibold py-3 rounded-xl transition-all"
+            className="w-full flex items-center justify-center gap-2 sm:gap-3 bg-[#0f1d40] hover:bg-[#1a2b57] text-white font-semibold text-sm sm:text-base py-3 sm:py-3.5 rounded-xl transition-all"
           >
+            <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5" />
             Check again now
           </button>
         </div>
@@ -2799,7 +2885,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   if (step === 'fullscreen_prompt') {
     return (
       <div className="min-h-[100dvh] bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4 overflow-y-auto">
-        <div className={`bg-white rounded-2xl shadow-2xl w-full my-auto p-6 md:p-8 ${screenShareDeclined ? 'max-w-2xl' : 'max-w-7xl'}`}>
+        <div className={`bg-white rounded-2xl shadow-2xl w-full my-auto ${screenShareDeclined ? 'max-w-2xl p-6 md:p-8' : 'max-w-7xl overflow-hidden'}`}>
 
           {screenShareDeclined ? (
             /* ── Screen share declined — block the interview ── */
@@ -2838,61 +2924,159 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
               </button>
             </>
           ) : (
-            /* ── Normal fullscreen prompt ── */
+            /* ── Normal fullscreen prompt ── three columns (what this is ·
+               what to do · what's not allowed) over a consent + action bar. */
             <>
-              <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                <Monitor className="w-8 h-8 text-indigo-600" />
-              </div>
-              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2 text-center">
-                Enter Fullscreen Mode
-              </h1>
-              <p className="text-gray-600 mb-4 text-center text-sm">
-                The AI interview runs in fullscreen with Entire Screen sharing and is actively proctored, to ensure a focused and fair environment. Please read the rules below before you begin.
-              </p>
-              {/* Two-column rules: blue "Interview Rules" (left) + orange
-                  "Not allowed during the interview" (right). */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 text-left">
-                {/* LEFT — blue: what to do */}
-                <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-5">
-                  <p className="font-semibold text-indigo-900 mb-3 text-sm">Interview Rules:</p>
-                  <ul className="space-y-2 text-sm text-indigo-800">
-                    <li className="flex items-start gap-2"><span className="text-indigo-500 mt-0.5">✓</span><span>Select Entire Screen only. Window and Current Tab are not allowed</span></li>
-                    <li className="flex items-start gap-2"><span className="text-indigo-500 mt-0.5">✓</span><span>Screen sharing is required to prevent malpractice</span></li>
-                    <li className="flex items-start gap-2"><span className="text-indigo-500 mt-0.5">✓</span><span>Browser navigation will be hidden (fullscreen mode)</span></li>
-                    <li className="flex items-start gap-2"><span className="text-indigo-500 mt-0.5">✓</span><span>Stay in fullscreen and keep this window in focus for the whole interview</span></li>
+              <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.15fr_1.15fr] gap-5 p-5 md:p-6 bg-gradient-to-br from-brand-sky/60 via-white to-white">
+                {/* ── What this is ── */}
+                <div className="flex flex-col min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-gray-900">
+                      <ShieldCheck className="w-5 h-5 text-brand-blue" />
+                      AI Interview
+                    </span>
+                    <span className="text-xs font-medium text-brand-blue bg-brand-blue/10 px-3 py-1 rounded-full">
+                      Secure &amp; Proctored
+                    </span>
+                  </div>
+
+                  {/* Illustration — monitor with the fullscreen mark, flanked
+                      by the camera, microphone and proctoring badges. */}
+                  <div aria-hidden className="relative mx-auto my-6 w-full max-w-[280px] aspect-[4/3]">
+                    <div className="absolute inset-[6%] rounded-full bg-brand-blue/[0.07]" />
+                    <div className="absolute inset-[18%] rounded-full bg-brand-blue/[0.06]" />
+                    <div className="absolute left-[14%] right-[14%] top-[16%] h-[54%] rounded-xl border-[6px] border-brand-blue/75 bg-white shadow-md flex items-center justify-center">
+                      <span className="w-14 h-14 rounded-xl bg-brand-blue text-white flex items-center justify-center shadow-lg shadow-brand-blue/30">
+                        <Scan className="w-7 h-7" />
+                      </span>
+                    </div>
+                    <div className="absolute left-1/2 -translate-x-1/2 top-[70%] w-5 h-[9%] bg-brand-blue/60" />
+                    <div className="absolute left-1/2 -translate-x-1/2 top-[78%] w-24 h-2 rounded-full bg-brand-blue/70" />
+                    <span className="absolute left-0 top-[4%] w-14 h-14 rounded-full bg-white shadow-md flex items-center justify-center text-brand-blue">
+                      <Webcam className="w-6 h-6" />
+                    </span>
+                    <span className="absolute right-0 top-[4%] w-14 h-14 rounded-full bg-white shadow-md flex items-center justify-center text-brand-blue">
+                      <Mic className="w-6 h-6" />
+                    </span>
+                    <span className="absolute right-[4%] top-[52%] w-14 h-14 rounded-full bg-white shadow-md flex items-center justify-center text-brand-orange">
+                      <ShieldCheck className="w-7 h-7" />
+                    </span>
+                  </div>
+
+                  <h1 className="text-2xl md:text-3xl font-bold text-gray-900 text-center">Enter Fullscreen Mode</h1>
+                  <p className="mt-2 text-sm text-gray-600 text-center leading-relaxed">
+                    This AI interview runs in fullscreen with Entire Screen sharing and active proctoring, to ensure a focused, fair and secure interview experience.
+                  </p>
+
+                  <div className="mt-auto pt-5">
+                    <div className="flex items-start gap-3 rounded-xl border border-brand-blue/15 bg-brand-blue/[0.05] p-4">
+                      <span className="w-10 h-10 rounded-lg bg-white border border-brand-blue/15 text-brand-blue flex items-center justify-center flex-shrink-0">
+                        <Lock className="w-5 h-5" />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-brand-blue">Your Privacy is Protected</p>
+                        <p className="text-xs text-gray-600 mt-0.5 leading-relaxed">
+                          Your screen, camera and audio are used only for this interview&apos;s proctoring.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── What you need to do ── */}
+                <div className="rounded-2xl border border-gray-200 bg-white p-5 min-w-0">
+                  <div className="flex items-center gap-3 pb-4 border-b border-gray-100">
+                    <span className="w-11 h-11 rounded-full bg-brand-blue text-white flex items-center justify-center flex-shrink-0">
+                      <Check className="w-6 h-6" strokeWidth={3} />
+                    </span>
+                    <div>
+                      <h2 className="text-lg font-bold text-gray-900 leading-tight">What you need to do</h2>
+                      <p className="text-sm text-gray-500">Please follow the guidelines below to continue.</p>
+                    </div>
+                  </div>
+                  <ul className="divide-y divide-gray-100">
+                    {([
+                      { icon: Monitor, title: 'Select Entire Screen', text: 'Share your entire screen only. Window or Current Tab is not allowed.' },
+                      { icon: Shield, title: 'Keep screen sharing active', text: 'Screen sharing is required to prevent malpractice.' },
+                      { icon: Eye, title: 'Stay in fullscreen mode', text: 'Browser navigation will be hidden while you are in the interview.' },
+                      { icon: Focus, title: 'Keep this window in focus', text: 'Stay in fullscreen and keep this window in focus for the entire interview.' },
+                    ]).map(({ icon: RuleIcon, title, text }) => (
+                      <li key={title} className="flex items-start gap-4 py-4">
+                        <span className="w-12 h-12 rounded-xl bg-brand-blue/10 text-brand-blue flex items-center justify-center flex-shrink-0">
+                          <RuleIcon className="w-6 h-6" />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-gray-900">{title}</p>
+                          <p className="text-sm text-gray-500 mt-0.5 leading-relaxed">{text}</p>
+                        </div>
+                      </li>
+                    ))}
                   </ul>
                 </div>
-                {/* RIGHT — orange: what is monitored / not allowed */}
-                <div className="bg-warning-subtle border border-warning-line rounded-xl p-5">
-                  <p className="font-semibold text-warning-strong mb-3 text-sm flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 shrink-0" />
-                    Not allowed during the interview
-                  </p>
-                  <ul className="space-y-2 text-sm text-warning-strong">
-                    <li className="flex items-start gap-2"><span className="mt-0.5">✕</span><span>Switching to another browser tab</span></li>
-                    <li className="flex items-start gap-2"><span className="mt-0.5">✕</span><span>Minimizing the browser window</span></li>
-                    <li className="flex items-start gap-2"><span className="mt-0.5">✕</span><span>Using shortcut keys such as <b>Alt+Tab</b> or the <b>Windows / ⌘</b> key</span></li>
-                    <li className="flex items-start gap-2"><span className="mt-0.5">✕</span><span>Clicking away or taking the interview window out of focus</span></li>
-                    <li className="flex items-start gap-2"><span className="mt-0.5">✕</span><span>Switching your internet connection or network. Make sure your connection is stable before you begin — changing it during the interview is treated as a violation and can terminate the interview</span></li>
-                    {interview?.block_active_meeting && (
-                      <li className="flex items-start gap-2"><span className="mt-0.5">✕</span><span>Being connected to any video meeting (Teams / Zoom / Meet). Leave and close all meeting apps before you begin — the interview will not start while another app is using your camera or microphone</span></li>
-                    )}
+
+                {/* ── Actions not allowed ── */}
+                <div className="rounded-2xl border border-brand-orange/20 bg-brand-orange/[0.05] p-5 min-w-0 flex flex-col">
+                  <div className="flex items-center gap-3 pb-4 border-b border-brand-orange/15">
+                    <span className="w-11 h-11 rounded-full bg-brand-orange text-white flex items-center justify-center flex-shrink-0">
+                      <Ban className="w-6 h-6" />
+                    </span>
+                    <div>
+                      <h2 className="text-lg font-bold text-gray-900 leading-tight">Actions not allowed</h2>
+                      <p className="text-sm text-gray-500">The following actions are prohibited during the interview.</p>
+                    </div>
+                  </div>
+                  <ul className="divide-y divide-brand-orange/10">
+                    {([
+                      { icon: AppWindow, text: <>Switching to another browser tab</> },
+                      { icon: Minimize2, text: <>Minimizing the browser window</> },
+                      { icon: Keyboard, text: <>Using shortcut keys such as <b>Alt + Tab</b> or the <b>Windows / ⌘</b> key</> },
+                      { icon: MousePointerClick, text: <>Clicking away or taking the interview window out of focus</> },
+                      {
+                        icon: Wifi,
+                        text: <>Switching your internet connection or network</>,
+                        note: 'Make sure your connection is stable before you begin — changing it during the interview is treated as a violation and can terminate the interview.',
+                      },
+                      ...(interview?.block_active_meeting
+                        ? [{
+                            icon: Video,
+                            text: <>Being connected to any video meeting (Teams / Zoom / Meet)</>,
+                            note: 'Leave and close all meeting apps before you begin — the interview will not start while another app is using your camera or microphone.',
+                          }]
+                        : []),
+                    ] as { icon: typeof Monitor; text: ReactNode; note?: string }[]).map(({ icon: BanIcon, text, note }, i) => (
+                      <li key={i} className="flex items-start gap-3 py-3">
+                        <span className="w-10 h-10 rounded-lg bg-white text-brand-orange-deep flex items-center justify-center flex-shrink-0 shadow-sm">
+                          <BanIcon className="w-5 h-5" />
+                        </span>
+                        <div className="min-w-0 pt-2">
+                          <p className="text-sm text-gray-800">{text}</p>
+                          {note && <p className="text-xs text-gray-500 mt-1 leading-relaxed">{note}</p>}
+                        </div>
+                      </li>
+                    ))}
                   </ul>
-                  <p className="text-xs text-warning mt-3 leading-relaxed">
-                    These actions are monitored. Depending on the proctoring policy configured for this interview, they may be flagged and can result in the interview being automatically terminated.
-                  </p>
+                  <div className="mt-auto pt-3">
+                    <div className="flex items-start gap-3 rounded-xl bg-brand-orange/10 p-3.5">
+                      <span className="w-8 h-8 rounded-full bg-brand-orange text-white flex items-center justify-center flex-shrink-0">
+                        <Info className="w-4 h-4" />
+                      </span>
+                      <p className="text-xs text-brand-orange-deep leading-relaxed">
+                        These actions are monitored. Depending on the proctoring policy configured for this interview, they may be flagged and can result in the interview being automatically terminated.
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
 
               {/* Active-meeting block banner — shown after a start attempt found
                   the camera/mic already in use by another app (Teams/Zoom/Meet). */}
               {meetingBlockActive && (
-                <div className="bg-destructive-subtle border-2 border-destructive-line rounded-xl p-4 mb-5 text-left">
-                  <p className="font-semibold text-destructive-strong mb-1 text-sm flex items-center gap-2">
+                <div className="mx-5 md:mx-6 mb-4 bg-brand-orange/10 border-2 border-brand-orange/30 rounded-xl p-4 text-left">
+                  <p className="font-semibold text-brand-orange-deep mb-1 text-sm flex items-center gap-2">
                     <AlertTriangle className="w-4 h-4 shrink-0" />
                     You cannot be in a meeting during the interview
                   </p>
-                  <p className="text-sm text-destructive leading-relaxed">
+                  <p className="text-sm text-gray-700 leading-relaxed">
                     Your camera or microphone is already in use by another app — it looks like
                     you're in a Teams / Zoom / Meet call. Please <b>leave the meeting and close all
                     other video-call apps</b>, then click the button again to start.
@@ -2900,36 +3084,38 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                 </div>
               )}
 
-              {/* Consent checkbox — the Share button stays disabled until ticked. */}
-              <label className="flex items-start gap-3 mb-4 cursor-pointer select-none text-left">
-                <input
-                  type="checkbox"
-                  checked={rulesConsent}
-                  onChange={(e) => setRulesConsent(e.target.checked)}
-                  className="mt-0.5 w-5 h-5 shrink-0 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                />
-                <span className="text-sm text-gray-700 leading-relaxed">
-                  I have read and understood the interview rules and the actions that are not allowed. I consent to Entire Screen sharing and active proctoring for the duration of this interview.
-                </span>
-              </label>
-
-              <button
-                onClick={() => {
-                  // Log the FIRST consent (checkbox acknowledged) to the audit
-                  // trail, then proceed to screen-share + fullscreen.
-                  candidateAIInterviewService.recordConsentAck(token, 'rules_acknowledged', { phase: 'fullscreen_prompt' }).catch(() => {});
-                  handleFullscreenReady();
-                }}
-                disabled={startSubmitting || !rulesConsent}
-                title={!rulesConsent ? 'Please accept the consent above to continue' : undefined}
-                className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-4 rounded-xl transition-all text-base disabled:opacity-70 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
-              >
-                {startSubmitting ? (
-                  <><Loader2 className="w-5 h-5 animate-spin" />Starting Interview...</>
-                ) : (
-                  <><Maximize2 className="w-5 h-5" />Share Entire Screen &amp; Continue</>
-                )}
-              </button>
+              {/* Consent + action. The Share button stays disabled until ticked. */}
+              <div className="border-t border-gray-100 px-5 md:px-6 py-4 flex flex-col md:flex-row md:items-center gap-4">
+                <label className="flex items-start gap-3 cursor-pointer select-none text-left flex-1 min-w-0">
+                  <input
+                    type="checkbox"
+                    checked={rulesConsent}
+                    onChange={(e) => setRulesConsent(e.target.checked)}
+                    className="mt-0.5 w-5 h-5 shrink-0 rounded border-gray-300 accent-brand-blue cursor-pointer"
+                  />
+                  <span className="text-sm text-gray-700 leading-relaxed">
+                    I have read and understood the interview rules and the actions that are not allowed.
+                    I consent to Entire Screen sharing and active proctoring for the duration of this interview.
+                  </span>
+                </label>
+                <button
+                  onClick={() => {
+                    // Log the FIRST consent (checkbox acknowledged) to the audit
+                    // trail, then proceed to screen-share + fullscreen.
+                    candidateAIInterviewService.recordConsentAck(token, 'rules_acknowledged', { phase: 'fullscreen_prompt' }).catch(() => {});
+                    handleFullscreenReady();
+                  }}
+                  disabled={startSubmitting || !rulesConsent}
+                  title={!rulesConsent ? 'Please accept the consent above to continue' : undefined}
+                  className="w-full md:w-auto md:min-w-[320px] flex items-center justify-center gap-2.5 bg-brand-blue hover:bg-brand-blue-2 text-white font-semibold py-4 px-6 rounded-xl transition-all text-base disabled:opacity-60 disabled:cursor-not-allowed shadow-lg shadow-brand-blue/25"
+                >
+                  {startSubmitting ? (
+                    <><Loader2 className="w-5 h-5 animate-spin" />Starting Interview...</>
+                  ) : (
+                    <><Scan className="w-5 h-5" />Share Entire Screen &amp; Continue<ArrowRight className="w-5 h-5" /></>
+                  )}
+                </button>
+              </div>
             </>
           )}
         </div>
@@ -2942,48 +3128,62 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   if (step === 'final_consent') {
     return (
       <div className="min-h-[100dvh] bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4 overflow-y-auto">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full my-auto p-6 md:p-8">
-          <div className="w-16 h-16 bg-warning-subtle rounded-full flex items-center justify-center mx-auto mb-3">
-            <AlertTriangle className="w-8 h-8 text-warning" />
+        <div className="bg-white rounded-2xl shadow-2xl max-w-[1400px] w-full my-auto px-5 py-4 md:px-7 md:py-5">
+          <div className="w-11 h-11 bg-brand-orange/10 rounded-full flex items-center justify-center mx-auto mb-2">
+            <AlertTriangle className="w-6 h-6 text-brand-orange" />
           </div>
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2 text-center">
+          <h1 className="text-2xl md:text-[1.75rem] font-bold text-gray-900 mb-1 text-center">
             Before we begin
           </h1>
-          <p className="text-gray-600 mb-2 text-center text-sm">
-            You are now in fullscreen with screen sharing active. Please confirm that you understand the actions that are not allowed. Your interview begins as soon as you accept.
+          <p className="text-gray-600 mb-3 text-center text-sm max-w-4xl mx-auto">
+            You are now in fullscreen with screen sharing active. Please confirm that you understand the actions that are not allowed. Your interview will start as soon as you accept.
           </p>
-          {/* Do-not-refresh warning, inline: reloading here drops fullscreen +
-              screen sharing and sends the candidate back to re-share. */}
-          <p className="text-xs font-semibold text-destructive mb-4 text-center flex items-center justify-center gap-1.5">
-            <AlertTriangle data-capture-decor className="w-3.5 h-3.5 shrink-0" />
+          {/* Do-not-refresh warning: reloading here drops fullscreen + screen
+              sharing and sends the candidate back to re-share. */}
+          <div className="max-w-4xl mx-auto mb-3 rounded-xl border border-destructive-line bg-destructive-subtle px-4 py-2 text-sm font-semibold text-destructive flex items-center justify-center gap-2 text-center">
+            <AlertTriangle data-capture-decor className="w-4 h-4 shrink-0" />
             Do not refresh this page — it drops screen sharing and restarts setup.
-          </p>
-          <div className="bg-warning-subtle border border-warning-line rounded-xl p-4 mb-4 text-left">
-            <p className="font-semibold text-warning-strong mb-3 text-sm flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 shrink-0" />
-              Not allowed during the interview
-            </p>
-            <ul className="space-y-2 text-sm text-warning-strong">
-              <li className="flex items-start gap-2"><span className="mt-0.5">✕</span><span>Switching to another browser tab</span></li>
-              <li className="flex items-start gap-2"><span className="mt-0.5">✕</span><span>Minimizing the browser window</span></li>
-              <li className="flex items-start gap-2"><span className="mt-0.5">✕</span><span>Using shortcut keys such as <b>Alt+Tab</b> or the <b>Windows / ⌘</b> key</span></li>
-              <li className="flex items-start gap-2"><span className="mt-0.5">✕</span><span>Clicking away or taking the interview window out of focus</span></li>
-              <li className="flex items-start gap-2"><span className="mt-0.5">✕</span><span>Switching your internet connection or network. Make sure your connection is stable before you begin — changing it during the interview is treated as a violation and can terminate the interview</span></li>
+          </div>
+
+          <div className="rounded-2xl border border-brand-orange/20 bg-brand-orange/[0.04] overflow-hidden mb-3">
+            <div className="flex items-center gap-3 px-4 py-2 bg-brand-orange/10 border-b border-brand-orange/15">
+              <span className="w-7 h-7 rounded-full bg-brand-orange text-white flex items-center justify-center flex-shrink-0">
+                <AlertTriangle className="w-4 h-4" />
+              </span>
+              <h2 className="text-base font-bold text-brand-orange-deep">Not allowed during the interview</h2>
+            </div>
+            <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 p-2.5">
+              {FINAL_CONSENT_RULES.map(({ key, title, text, icons }) => (
+                <li key={key} className="rounded-xl bg-white border border-gray-100 shadow-sm px-3.5 py-3 flex flex-col">
+                  <div className="h-10 mb-2 flex items-center gap-1.5">
+                    {icons}
+                  </div>
+                  <p className="text-sm font-semibold text-gray-900 leading-snug">{title}</p>
+                  <p className="text-xs text-gray-500 mt-1 leading-relaxed">{text}</p>
+                </li>
+              ))}
             </ul>
-            <p className="text-xs text-warning mt-3 leading-relaxed">
+          </div>
+
+          <div className="flex items-center gap-3 rounded-xl border border-brand-orange/20 bg-brand-orange/[0.06] px-4 py-2 mb-3">
+            <span className="w-7 h-7 rounded-full border-2 border-brand-orange text-brand-orange flex items-center justify-center flex-shrink-0">
+              <Info className="w-4 h-4" />
+            </span>
+            <p className="text-sm text-brand-orange-deep leading-relaxed">
               These actions are monitored. Depending on the proctoring policy configured for this interview, they may be flagged and can result in the interview being automatically terminated.
             </p>
           </div>
+
           <button
             onClick={() => { handleFinalConsentAccept(); }}
             disabled={startSubmitting || finalConsentFsExited}
             title={finalConsentFsExited ? 'Return to fullscreen to continue' : undefined}
-            className="w-full flex items-center justify-center gap-2 bg-success hover:bg-success text-white font-semibold py-4 rounded-xl transition-all text-base disabled:opacity-70 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
+            className="w-full flex items-center justify-center gap-2.5 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue-2 text-white font-semibold py-3 rounded-xl transition-all text-base disabled:opacity-70 disabled:cursor-not-allowed shadow-lg shadow-brand-blue/25 hover:shadow-xl"
           >
             {startSubmitting ? (
               <><Loader2 className="w-5 h-5 animate-spin" />Starting Interview...</>
             ) : (
-              <><CheckCircle className="w-5 h-5" />Yes, I accept — Start Interview</>
+              <><CircleCheck className="w-5 h-5" />Yes, I understand — Start Interview<ArrowRight className="w-5 h-5" /></>
             )}
           </button>
         </div>
@@ -3021,52 +3221,125 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   if (step === 'hide_share_bar') {
     return (
       <div ref={shareBarPageRef} className="min-h-[100dvh] bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4 overflow-y-auto">
-        <div ref={shareBarCardRef} className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full my-auto p-6 md:p-8">
-          <div data-capture-decor className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
-            <Monitor className="w-8 h-8 text-blue-600" />
+        <div ref={shareBarCardRef} className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full my-auto px-5 py-5 md:px-7 md:py-6">
+          <div data-capture-decor className="w-14 h-14 bg-brand-blue/10 rounded-full flex items-center justify-center mx-auto mb-2">
+            <Monitor className="w-7 h-7 text-brand-blue" />
           </div>
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2 text-center">
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-1 text-center">
             One last step — hide the sharing bar
           </h1>
-          <p className="text-gray-600 mb-2 text-center text-sm leading-relaxed">
-            At the bottom of your screen you&apos;ll see a bar that says
-            <b> &ldquo;…is sharing your screen&rdquo;</b>. Please click its
-            <b> Hide</b> button so it doesn&apos;t cover the interview. Screen
-            sharing stays ON — this only collapses the bar. Then press
-            <b> Continue</b> and we&apos;ll verify it before starting.
-          </p>
-          <p className="text-gray-500 mb-2 text-center text-xs leading-relaxed">
-            Before continuing, close <b>every other app, window and browser tab</b>
-            {' '}so only this interview is open — including any AI assistant
-            (e.g. ChatGPT, Copilot, Gemini) and any screen-recording software
-            (e.g. OBS, ScreenRec, Bandicam, Camtasia, Game Bar). Make sure the
-            screen you shared is the one showing <b>this interview</b>. The
-            interview cannot start while another application is running.
-          </p>
-          {/* Do-not-refresh warning, inline (replaces the old red top bar). */}
-          <p className="text-xs font-semibold text-destructive mb-4 text-center flex items-center justify-center gap-1.5">
-            <AlertTriangle data-capture-decor className="w-3.5 h-3.5 shrink-0" />
-            Do not refresh this page — it drops screen sharing and restarts setup.
+          <p className="text-gray-600 mb-5 text-center text-sm md:text-base leading-relaxed max-w-3xl mx-auto">
+            Click the <b className="text-gray-900">Hide</b> button at the bottom of your screen so it doesn&apos;t cover the interview.
+            Screen sharing stays ON — this only collapses the bar.
           </p>
 
-          {/* Visual guide — a mock of the Chrome sharing bar with Hide highlighted.
-              Hidden during the vision-check frame capture (shareBarMockRef) so it
-              is never mistaken for the real bar. */}
-          <div ref={shareBarMockRef} className="bg-gray-100 border border-gray-200 rounded-xl p-3 mb-4">
-            <p className="text-2xs font-semibold uppercase tracking-wide text-gray-400 mb-2 text-center">Look for this bar and click &ldquo;Hide&rdquo;</p>
-            <div className="mx-auto max-w-md flex items-center gap-3 bg-white rounded-lg shadow-md border border-gray-200 px-3 py-2.5">
-              <span className="w-4 h-4 rounded-sm bg-blue-500 shrink-0" />
-              <span className="text-sm text-gray-700 flex-1 truncate">This site is sharing your screen.</span>
-              <span className="text-xs font-semibold text-white bg-blue-600 rounded-full px-3 py-1 shrink-0">Stop sharing</span>
-              <span className="relative shrink-0">
-                <span className="text-sm font-bold text-blue-700 underline underline-offset-2 px-1.5 py-1 rounded ring-2 ring-warning-line ring-offset-1 bg-warning-subtle">Hide</span>
-                <span className="absolute -top-2 -right-2 text-warning text-lg animate-bounce">👆</span>
-              </span>
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.05fr] gap-5 mb-4">
+            {/* Visual guide — a mock desktop with the Chrome sharing bar and
+                Hide highlighted. Hidden during the vision-check frame capture
+                (shareBarMockRef) so it is never mistaken for the real bar. */}
+            <div ref={shareBarMockRef} className="rounded-2xl border border-brand-blue/15 bg-brand-sky/40 p-4 flex flex-col">
+              <p className="flex items-center gap-2 text-sm md:text-base font-semibold text-brand-blue mb-3">
+                <Monitor className="w-5 h-5 shrink-0" />
+                Example: look for this bar and click &ldquo;Hide&rdquo;
+              </p>
+              <div className="relative flex-1 min-h-[260px] rounded-xl overflow-hidden shadow-md bg-[radial-gradient(120%_90%_at_30%_20%,#7cc3f2_0%,#2f6fd6_45%,#0f3c99_100%)]">
+                <div aria-hidden className="absolute -left-10 top-10 w-72 h-72 rounded-full bg-white/15 blur-2xl" />
+                <div aria-hidden className="absolute right-0 -top-10 w-60 h-60 rounded-full bg-brand-cyan/30 blur-3xl" />
+
+                {/* The sharing bar */}
+                <div className="absolute left-1/2 -translate-x-1/2 bottom-16 w-[92%] max-w-md flex items-center gap-2.5 bg-white rounded-lg shadow-lg px-3 py-2.5">
+                  <span className="w-4 h-4 rounded-sm bg-brand-blue shrink-0" />
+                  <span className="text-xs sm:text-sm text-gray-700 flex-1 truncate">This site is sharing your screen.</span>
+                  <span className="text-xs font-semibold text-white bg-brand-blue rounded-md px-2.5 py-1.5 shrink-0">Stop sharing</span>
+                  <span className="relative shrink-0">
+                    <span className="text-sm font-semibold text-brand-blue underline underline-offset-2 px-2 py-1 rounded-md ring-2 ring-brand-orange bg-brand-orange/10">Hide</span>
+                    <Pointer className="absolute -bottom-5 -right-3 w-6 h-6 text-brand-orange fill-white animate-bounce" />
+                  </span>
+                </div>
+
+                {/* Taskbar */}
+                <div className="absolute inset-x-0 bottom-0 h-11 bg-gray-900/90 flex items-center gap-4 px-4">
+                  <span className="grid grid-cols-2 gap-0.5 w-4 h-4">
+                    <span className="bg-brand-cyan rounded-[1px]" /><span className="bg-brand-cyan rounded-[1px]" />
+                    <span className="bg-brand-cyan rounded-[1px]" /><span className="bg-brand-cyan rounded-[1px]" />
+                  </span>
+                  <Search className="w-4 h-4 text-white/80" />
+                  <Folder className="w-4 h-4 text-brand-orange" />
+                  <span className="w-4 h-4 rounded-full bg-white/80" />
+                  <span className="w-4 h-4 rounded bg-brand-blue" />
+                </div>
+              </div>
+            </div>
+
+            {/* Steps + notes */}
+            <div className="flex flex-col gap-2.5 min-w-0">
+              {([
+                { icon: Eye, title: 'Look at the bottom of your screen', text: <>You&apos;ll see a bar that says <b>&ldquo;…is sharing your screen&rdquo;</b>.</> },
+                { icon: EyeOff, title: 'Click the Hide button', text: <>This hides the bar so it doesn&apos;t cover the interview — click <b>Hide</b>, not Stop sharing.</> },
+                { icon: MonitorCheck, title: 'Keep screen sharing ON', text: <>Hiding the bar only collapses it. Screen sharing will continue.</> },
+                { icon: ShieldCheck, title: 'Click Continue', text: <>We&apos;ll verify it and then start the interview.</> },
+              ]).map(({ icon: StepIcon, title, text }, i) => (
+                <div key={title} className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2.5">
+                  <span className="w-9 h-9 rounded-full border border-brand-blue/20 bg-brand-blue/5 text-brand-blue text-base font-bold flex items-center justify-center shrink-0">
+                    {i + 1}
+                  </span>
+                  <span data-capture-decor className="w-10 h-10 rounded-lg bg-brand-blue/10 text-brand-blue flex items-center justify-center shrink-0">
+                    <StepIcon className="w-5 h-5" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-gray-900">{title}</p>
+                    <p className="text-xs text-gray-500 leading-relaxed">{text}</p>
+                  </div>
+                </div>
+              ))}
+
+              {/* Before continuing — only this interview open. */}
+              <div className="rounded-xl border border-brand-orange/25 bg-brand-orange/[0.07] px-4 py-3">
+                <p className="flex items-center gap-2 text-sm font-bold text-brand-orange-deep">
+                  <CircleAlert data-capture-decor className="w-5 h-5 shrink-0" />
+                  Important
+                </p>
+                <ul className="mt-1.5 space-y-1 text-xs text-gray-700 leading-relaxed">
+                  <li className="flex items-start gap-2">
+                    <Check data-capture-decor className="w-3.5 h-3.5 mt-0.5 text-brand-orange-deep shrink-0" strokeWidth={3} />
+                    <span>Keep only this interview open — close <b>every other app, window and browser tab</b>.</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check data-capture-decor className="w-3.5 h-3.5 mt-0.5 text-brand-orange-deep shrink-0" strokeWidth={3} />
+                    <span>Close any AI assistant (e.g. ChatGPT, Copilot, Gemini) and screen-recording software (e.g. OBS, ScreenRec, Bandicam, Camtasia, Game Bar).</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check data-capture-decor className="w-3.5 h-3.5 mt-0.5 text-brand-orange-deep shrink-0" strokeWidth={3} />
+                    <span>Make sure the screen you shared is the one showing <b>this interview</b>. The interview cannot start while another application is running.</span>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Do-not-refresh warning. */}
+              <div className="rounded-xl border border-destructive-line bg-destructive-subtle px-4 py-2.5 flex items-center gap-2.5 text-sm text-destructive">
+                <AlertTriangle data-capture-decor className="w-5 h-5 shrink-0" />
+                <span><b>Do not refresh this page</b> — it drops screen sharing and restarts setup.</span>
+              </div>
+
+              {/* Wait note — read just BEFORE the click. The capture blanks this
+                  whole page for a few seconds; text can't be shown on the blank
+                  itself (it would land in the screenshot), so the candidate is
+                  told up front. "Don't click again" also prevents the
+                  double-click overlap. */}
+              <div className="rounded-xl border border-brand-blue/15 bg-brand-blue/[0.05] px-4 py-2.5 flex items-start gap-2.5">
+                <Info data-capture-decor className="w-5 h-5 text-brand-blue shrink-0 mt-0.5" />
+                <div className="text-sm">
+                  <p className="font-semibold text-gray-900">After you click Continue, your screen will go blank for a few seconds.</p>
+                  <p className="text-xs text-gray-600 mt-0.5">
+                    This is normal while we verify the screen sharing. Please don&rsquo;t click again or refresh the page &mdash; the interview will continue automatically.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
 
           {shareBarError && (
-            <div className="bg-destructive-subtle border border-destructive-line rounded-xl p-4 mb-5 flex items-start gap-2">
+            <div className="bg-destructive-subtle border border-destructive-line rounded-xl p-4 mb-4 flex items-start gap-2">
               <XCircle data-capture-decor className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-medium text-destructive">{shareBarError}</p>
@@ -3077,30 +3350,17 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
             </div>
           )}
 
-          {/* Wait note — read just BEFORE the click. The capture blanks this whole
-              page for a few seconds; text can't be shown on the blank itself (it
-              would land in the screenshot), so the candidate is told up front.
-              "Don't click again" also prevents the double-click overlap. */}
-          <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 mb-4">
-            <Clock data-capture-decor className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-            <p className="text-sm text-amber-900 leading-snug">
-              <span className="font-semibold">After you click Continue, your screen will go blank for a few seconds</span> while
-              we check it. This is normal. Please <span className="font-semibold">don&rsquo;t click again or refresh the page</span> &mdash;
-              the interview will continue automatically.
-            </p>
-          </div>
-
           <button
             onClick={() => { handleVerifyShareBarAndStart(); }}
             disabled={shareBarChecking || startSubmitting}
-            className="w-full flex items-center justify-center gap-2 bg-success hover:bg-success text-white font-semibold py-4 rounded-xl transition-all text-base disabled:opacity-70 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
+            className="w-full flex items-center justify-center gap-2.5 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue-2 text-white font-semibold py-3.5 rounded-xl transition-all text-base disabled:opacity-70 disabled:cursor-not-allowed shadow-lg shadow-brand-blue/25 hover:shadow-xl"
           >
             {startSubmitting ? (
               <><Loader2 data-capture-decor className="w-5 h-5 animate-spin" />Starting Interview...</>
             ) : shareBarChecking ? (
               <><Loader2 data-capture-decor className="w-5 h-5 animate-spin" />Checking…</>
             ) : (
-              <><CheckCircle data-capture-decor className="w-5 h-5" />I&apos;ve hidden it — Continue</>
+              <><CircleCheck data-capture-decor className="w-5 h-5" />I&apos;ve hidden it — Continue<ArrowRight data-capture-decor className="w-5 h-5" /></>
             )}
           </button>
           <p className="text-2xs text-gray-400 mt-3 text-center">
@@ -3430,12 +3690,8 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
           jdLocation={interview.jd_location}
           jdEmploymentType={interview.jd_employment_type}
           jdRemoteType={interview.jd_remote_type}
-          jdMustHaveSkills={interview.jd_must_have_skills}
-          jdNiceToHaveSkills={interview.jd_nice_to_have_skills}
           jdExperienceMin={interview.jd_experience_min}
           jdExperienceMax={interview.jd_experience_max}
-          jdJobLevel={interview.jd_job_level}
-          jdAdditionalDetails={interview.jd_additional_details}
           duration={interview.duration_minutes}
           interviewType={interview.interview_type}
           interviewMode={interview.interview_mode}

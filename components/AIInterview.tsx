@@ -169,12 +169,6 @@ export default function AIInterview() {
   const { quotaData } = useQuota();
 
   const [activeTab, setActiveTab] = useState<TabKey>('all');
-  /* Active/Draft/Archived list view — 'ungrouped' (default) is a flat table,
-     one row per version, in the same shape as the All Interviews tab;
-     'grouped' is the one-card-per-job view with each job's other versions
-     behind its own View Versions button. Total Jobs and Completed have no
-     toggle and always render grouped. */
-  const [configListViewMode, setConfigListViewMode] = useState<'grouped' | 'ungrouped'>('ungrouped');
   // "AI Interview Published" success modal (was referenced in JSX but never
   // declared — pre-existing build error). Defaults hidden; no behavior change.
   const [showPublishedModal, setShowPublishedModal] = useState(false);
@@ -987,7 +981,7 @@ export default function AIInterview() {
     { activeTab, invitedOnly, modeFilter, searchQuery, sortBy,
       creatorFilter, dateFilter, customDateFrom, customDateTo,
       configListPage, configListItemsPerPage, processingPage, processingItemsPerPage,
-      openVersionsFor, configListViewMode, expandedJobVersionsByJob,
+      openVersionsFor, expandedJobVersionsByJob,
       // Invitation Status tab — its page, page size and filters, so coming
       // back from a candidate or job lands on the same page, not page 1.
       inviteStatusPage, inviteStatusItemsPerPage, inviteStatusFilters, inviteStatusColumnFilters,
@@ -1039,7 +1033,6 @@ export default function AIInterview() {
       if (typeof s.configListItemsPerPage === 'number') setConfigListItemsPerPage(s.configListItemsPerPage);
       if (typeof s.processingPage === 'number') setProcessingPage(s.processingPage);
       if (typeof s.processingItemsPerPage === 'number') setProcessingItemsPerPage(s.processingItemsPerPage);
-      if (s.configListViewMode === 'grouped' || s.configListViewMode === 'ungrouped') setConfigListViewMode(s.configListViewMode);
       if (s.inviteStatusFilters && typeof s.inviteStatusFilters === 'object') setInviteStatusFilters({ ...EMPTY_INVITE_FILTERS, ...s.inviteStatusFilters });
       if (s.inviteStatusColumnFilters && typeof s.inviteStatusColumnFilters === 'object') setInviteStatusColumnFilters({ ...EMPTY_INVITE_COLUMN_FILTERS, ...s.inviteStatusColumnFilters });
       if (typeof s.inviteStatusItemsPerPage === 'number') setInviteStatusItemsPerPage(s.inviteStatusItemsPerPage);
@@ -1669,18 +1662,15 @@ export default function AIInterview() {
   const collapsedConfigs = collapseAIInterviewLineages(filteredConfigs);
 
   /* Which list the details page's Prev / Next walk — the list on screen:
-       Grouped (Total Jobs, and Active / Draft / Archived Grouped): its jobs,
-         one stop per job, so the counter reads the job count shown here;
-       Ungrouped (All Interviews, and Active / Draft / Archived Ungrouped): its
-         interviews, every version a stop, so it reads that table's row count.
+       Grouped (Total Jobs): its jobs, one stop per job, so the counter reads
+         the job count shown here;
+       Ungrouped (All Interviews, Active / Draft / Archived): its interviews,
+         every version a stop, so it reads that table's row count.
      The ungrouped tables hand over their own row order (AllInterviewsTable);
      the grouped list hands over its jobs below. Any other tab keeps the plain
      URL — every interview, as before. */
   const GROUPED_PAGER_LIST: Partial<Record<TabKey, AIInterviewPagerList>> = {
     all: 'total-jobs',
-    published: 'active-jobs',
-    draft: 'draft-jobs',
-    archived: 'archived-jobs',
   };
   const UNGROUPED_PAGER_LIST: Partial<Record<TabKey, AIInterviewPagerList>> = {
     'all-interviews': 'all-interviews',
@@ -1854,25 +1844,17 @@ export default function AIInterview() {
 
   /**
    * Every interview in one job's lineage, numbered per job version.
-   *
-   * `statusFilter`, when given, drops every row NOT in that status — applied
-   * AFTER the ordinal is assigned, so a version's number still reflects its
-   * true position in the full lineage rather than shifting once other
-   * versions are hidden. Used by the Active/Draft/Archived tabs' "View
-   * Versions" panel so it shows only that tab's own status, not every
-   * version whatever its state.
    */
-  const interviewVersionRows = (jdId?: string, statusFilter?: 'published' | 'draft' | 'archived'): AssessmentVersionRow[] => {
+  const interviewVersionRows = (jdId?: string): AssessmentVersionRow[] => {
     if (!jdId) return [];
     const lineage = jdLineage.lineages[jdId];
     if (!lineage) return [];
-    const rows = lineage.flatMap((jobVersion) =>
+    return lineage.flatMap((jobVersion) =>
       (configsByJobVersionId.get(jobVersion.id) ?? [])
         .slice()
         .sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime())
         .map((config, index) => toInterviewVersionRow(config, index + 1)),
     );
-    return statusFilter ? rows.filter((row) => row.status === statusFilter) : rows;
   };
 
   /* A row restored open by list-state persistence was never clicked, so the
@@ -2181,12 +2163,12 @@ export default function AIInterview() {
     await loadAllInviteStatuses();
   };
 
-  /** The three tabs the Grouped/Ungrouped toggle applies to — each a single,
-   *  unambiguous status, unlike Total Jobs (every status) or Completed. */
+  /** Active/Draft/Archived — each a single, unambiguous status, unlike Total
+   *  Jobs (every status) or Completed. */
   const isStatusTab = activeTab === 'published' || activeTab === 'draft' || activeTab === 'archived';
-  /** Ungrouped renders the flat, one-row-per-version table instead of this
-   *  component's own card list below. */
-  const showUngroupedList = isStatusTab && configListViewMode === 'ungrouped';
+  /** Status tabs always render the flat, one-row-per-version table instead
+   *  of this component's own card list below. */
+  const showUngroupedList = isStatusTab;
 
   /* The grouped job list hands its jobs, in the order shown (sort, search and
      filters applied), to the details page's Prev / Next. */
@@ -2196,10 +2178,6 @@ export default function AIInterview() {
     if (!groupedPagerList || loading) return;
     rememberAIInterviewPagerOrder(groupedPagerList, groupedPagerIds ? groupedPagerIds.split(',') : []);
   }, [groupedPagerList, groupedPagerIds, loading]);
-  /** Status a version must match to appear under this tab's "View Versions"
-   *  panel (Grouped mode) — undefined on Total Jobs/Completed, which show
-   *  every version's status as before. */
-  const versionStatusFilterForTab = isStatusTab ? (activeTab as 'published' | 'draft' | 'archived') : undefined;
 
   /* Back to page 1 when the user changes the tab, search, sort or a filter —
      but NOT for the change a list-state restore makes on return from a
@@ -2782,59 +2760,6 @@ export default function AIInterview() {
           </div>
         </div>
 
-        {/* Grouped/Ungrouped — Active/Draft/Archived only. Ungrouped (the
-            default) is a flat table, one row per version; Grouped is the
-            one-card-per-job view below, each job's other versions behind its
-            own View Versions button, same as before this toggle existed. */}
-        {isStatusTab && (() => {
-          /* Each mode names how many it lists for this tab, unfiltered:
-             Ungrouped one row per interview (version), Grouped one card per job. */
-          const tabInterviews = activeTab === 'archived'
-            ? archivedConfigs
-            : configs.filter((c) => activeTab === 'published'
-              ? normalizeConfigStatus(c.status) === 'published'
-              : c.status === 'draft');
-          const modeCounts = {
-            ungrouped: tabInterviews.length,
-            grouped: collapseAIInterviewLineages(tabInterviews).length,
-          };
-          return (
-          <div className="flex items-center gap-2 mb-3">
-            <span className="text-sm text-gray-600 dark:text-slate-400">View:</span>
-            <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-              {([
-                { key: 'ungrouped', label: 'Ungrouped' },
-                { key: 'grouped', label: 'Grouped' },
-              ] as const).map((mode) => {
-                const isActive = configListViewMode === mode.key;
-                return (
-                  <button
-                    key={mode.key}
-                    type="button"
-                    aria-pressed={isActive}
-                    onClick={() => setConfigListViewMode(mode.key)}
-                    className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 min-h-[32px] rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 whitespace-nowrap ${
-                      isActive
-                        ? 'bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/20 text-brand-blue'
-                        : 'text-gray-600 dark:text-slate-400 hover:text-brand-blue'
-                    }`}
-                  >
-                    {mode.label}
-                    <span className={`min-w-[1.25rem] px-1.5 py-0.5 rounded-full text-2xs font-semibold tabular-nums text-center ${
-                      isActive
-                        ? 'bg-brand-blue/10 text-brand-blue'
-                        : 'bg-gray-200/70 dark:bg-slate-700 text-gray-600 dark:text-slate-300'
-                    }`}>
-                      {modeCounts[mode.key]}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          );
-        })()}
-
         {/* Main Content */}
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
           {/* All Interviews — flat, one row per interview config/version,
@@ -2873,20 +2798,14 @@ export default function AIInterview() {
                     </div>
                   </div>
                   <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-1.5 tracking-tight">
-                    {searchQuery
-                      ? 'No matches found'
-                      : activeTab === 'archived'
-                      ? 'No archived configurations'
-                      : 'No AI interviews yet'}
+                    {searchQuery ? 'No matches found' : 'No AI interviews yet'}
                   </h3>
                   <p className="text-sm text-gray-500 dark:text-slate-500 mb-6 max-w-sm mx-auto">
                     {searchQuery
                       ? `We couldn't find anything matching "${searchQuery}". Try a different search.`
-                      : activeTab === 'archived'
-                      ? 'Configurations you archive will show up here.'
                       : 'Set up your first AI interview to start evaluating candidates with multi-round, AI-driven assessments.'}
                   </p>
-                  {!searchQuery && activeTab !== 'archived' && (
+                  {!searchQuery && (
                     <Button
                       variant="primary"
                       size="md"
@@ -3133,7 +3052,7 @@ export default function AIInterview() {
                               hideDraftJobVersions
                               jobVersions={jdLineage.lineages[config.jd_id]}
                               jobVersionDetails={jdLineage.versionDetails}
-                              assessments={interviewVersionRows(config.jd_id, versionStatusFilterForTab)}
+                              assessments={interviewVersionRows(config.jd_id)}
                               loading={jdLineage.isLoading(config.jd_id)}
                               currentAssessmentId={config.id}
                               vocabulary={INTERVIEW_VOCABULARY}

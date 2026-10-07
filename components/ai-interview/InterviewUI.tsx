@@ -9036,7 +9036,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       nodeEnv: process.env.NODE_ENV,
       ts: new Date().toISOString(),
     });
-    hasConnectedRef.current = true;
     isUnmountedRef.current = false;
     // Use connectRef (always points at the latest connect) and DO NOT depend on
     // `connect` here. BUG (stuck "Connecting"): when `connect`'s identity changed
@@ -9044,7 +9043,20 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     // → on re-entry hasConnectedRef was already true → early return → connect()
     // NEVER fired. Removing `connect` from deps means only avatarReady/avatarFailed
     // can re-run this, so the timer can't be cancelled by a connect-identity change.
-    const timer = setTimeout(() => { connectRef.current?.(); }, 300);
+    //
+    // hasConnectedRef is marked INSIDE the timer, not before it. BUG (prod
+    // c9d6627a, 2026-10-06): avatarReady flipped true → timer scheduled →
+    // within 300ms the FPS watchdog fired onFallback → avatarFailed flipped →
+    // this effect re-ran, its cleanup cancelled the timer, and the re-entry
+    // returned early because the flag was already set. connect() never ran and
+    // Bina never spoke (both avatar fallback timers skip once avatarReady is
+    // true). Setting the flag only when connect actually fires lets the re-run
+    // reschedule it.
+    const timer = setTimeout(() => {
+      if (hasConnectedRef.current) return;
+      hasConnectedRef.current = true;
+      connectRef.current?.();
+    }, 300);
     return () => {
       clearTimeout(timer);
     };

@@ -6,9 +6,9 @@ import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import {
   Video, Mic, Eye, Shield, Clock, Trash2, CheckCircle, AlertTriangle,
-  Circle, Briefcase, MapPin, Building2, Award, ExternalLink, X,
-  FileText, Timer, HelpCircle, ChevronRight, ChevronDown, Smartphone, Wifi,
-  Lightbulb, ListChecks, Info, Star, Sparkles, Globe,
+  Circle, MapPin, Building2, Award, ExternalLink, X,
+  FileText, Timer, HelpCircle, ChevronRight, Smartphone, Wifi,
+  Lightbulb, Sparkles, Globe,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { IconComponent } from '@/lib/types/icon';
@@ -30,15 +30,8 @@ interface StepConsentProps {
   jdLocation?: string | null;
   jdEmploymentType?: string | null;
   jdRemoteType?: string | null;
-  jdMustHaveSkills?: string[] | null;
-  jdNiceToHaveSkills?: string[] | null;
   jdExperienceMin?: number | null;
   jdExperienceMax?: number | null;
-  jdJobLevel?: string | null;
-  /** JD22 - recruiter free text about the job (shift timings, WFO/WFH, ...). Shown
-   *  to the candidate verbatim; it is not part of jdDescription and never reaches
-   *  the interview engine. */
-  jdAdditionalDetails?: string | null;
   duration?: number;
   interviewType?: string;
   interviewMode?: string | null;
@@ -90,15 +83,6 @@ const BEFORE_YOU_BEGIN_ITEMS: { icon: IconComponent; text: string }[] = [
   { icon: Eye, text: 'Tab switching and copy/paste are monitored' },
 ];
 
-// Full, static class strings (not interpolated) so Tailwind's build-time
-// scanner can find and generate them — see statTiles below.
-const STAT_ACCENT_CLASSES = {
-  orange: 'bg-brand-orange/10 text-brand-orange',
-  blue: 'bg-brand-blue/10 text-brand-blue',
-  teal: 'bg-brand-teal/10 text-brand-teal',
-  blue2: 'bg-brand-blue-2/10 text-brand-blue-2',
-} as const;
-
 export default function StepConsent({
   onAccept,
   submitting = false,
@@ -110,12 +94,8 @@ export default function StepConsent({
   jdLocation,
   jdEmploymentType,
   jdRemoteType,
-  jdMustHaveSkills,
-  jdNiceToHaveSkills,
   jdExperienceMin,
   jdExperienceMax,
-  jdJobLevel,
-  jdAdditionalDetails,
   duration,
   interviewType,
   interviewMode,
@@ -190,47 +170,37 @@ export default function StepConsent({
     : null;
   const isLongDesc = (jdDescription?.length ?? 0) > 600;
   const descToShow = isLongDesc && !showFullDesc ? jdDescription!.slice(0, 600) + '…' : jdDescription;
-  const seniority = jdExperienceLevel || jdJobLevel;
 
-  // Top stat strip — only includes tiles backed by real data (no "TBD" filler).
-  // `accent` keys into STAT_ACCENT_CLASSES below (Tailwind needs full static
-  // class strings to detect them at build time, so they aren't interpolated).
-  const statTiles: { icon: IconComponent; label: string; value: string; accent: keyof typeof STAT_ACCENT_CLASSES }[] = [
-    { icon: Briefcase, label: 'Target Role', value: title, accent: 'orange' },
+  /** "full_time" → "Full Time", "onsite" → "Onsite" — JD enums read as words. */
+  const humanize = (value: string) =>
+    value.replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
+  const metaItems: { icon: IconComponent; text: string }[] = [
+    ...(jdDepartment ? [{ icon: Building2, text: jdDepartment }] : []),
+    ...(jdLocation ? [{ icon: MapPin, text: jdLocation }] : []),
+    ...(expStr ? [{ icon: Award, text: `${expStr} experience` }] : []),
+  ];
+
+  // Job facts first, then the interview's own (duration, questions/format) —
+  // one continuous row, each badge only when backed by real data.
+  const roleBadges: { key: string; icon: IconComponent; label: string }[] = [
+    ...(jdEmploymentType ? [{ key: 'employment', icon: Clock, label: humanize(jdEmploymentType) }] : []),
+    ...(jdRemoteType ? [{ key: 'remote', icon: Globe, label: humanize(jdRemoteType) }] : []),
+    ...(jdExperienceLevel ? [{ key: 'level', icon: Sparkles, label: humanize(jdExperienceLevel) }] : []),
     ...(interviewMode === 'flexible'
-      ? [{ icon: Timer, label: 'Estimated Duration', value: duration != null && duration > 0 ? `${duration} min` : '~30 min', accent: 'blue' as const }]
+      ? [{ key: 'duration', icon: Timer, label: `${duration != null && duration > 0 ? duration : '~30'} min interview` }]
       : duration != null && duration > 0
-        ? [{ icon: Timer, label: 'Estimated Duration', value: `${duration} min`, accent: 'blue' as const }]
+        ? [{ key: 'duration', icon: Timer, label: `${duration} min interview` }]
         : []),
     ...(interviewMode === 'flexible'
-      ? [{ icon: Sparkles, label: 'Session Format', value: 'Conversational', accent: 'teal' as const }]
+      ? [{ key: 'format', icon: Sparkles, label: 'Conversational' }]
       : totalQuestions != null && totalQuestions > 0
-        ? [{ icon: HelpCircle, label: 'Total Questions', value: `${totalQuestions} questions`, accent: 'teal' as const }]
+        ? [{ key: 'questions', icon: HelpCircle, label: `${totalQuestions} ${totalQuestions === 1 ? 'question' : 'questions'}` }]
         : []),
-    ...(seniority ? [{ icon: Award, label: 'Target Seniority', value: seniority, accent: 'blue2' as const }] : []),
   ];
 
   return (
     <div className="w-full space-y-6" style={{ colorScheme: 'light' }}>
-
-      {/* ── Top stat strip ── */}
-      {statTiles.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
-          <div className="grid grid-cols-2 lg:grid-cols-4 divide-y lg:divide-y-0 divide-x-0 lg:divide-x divide-gray-200">
-            {statTiles.map(tile => (
-              <div key={tile.label} className="flex items-center gap-3 p-4 min-w-0">
-                <span className={`flex h-10 w-10 items-center justify-center rounded-lg flex-shrink-0 ${STAT_ACCENT_CLASSES[tile.accent]}`}>
-                  <tile.icon className="w-5 h-5" />
-                </span>
-                <div className="min-w-0">
-                  <p className="text-2xs text-gray-500 uppercase tracking-wide font-medium truncate">{tile.label}</p>
-                  <p className="text-sm font-bold text-gray-900 truncate" title={tile.value}>{tile.value}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* ── Two-column layout: details (left) + action panel (right) ── */}
       <div className="grid grid-cols-1 lg:grid-cols-[1.7fr_1fr] gap-6 items-start">
@@ -238,72 +208,44 @@ export default function StepConsent({
         {/* ═══════════ LEFT COLUMN ═══════════ */}
         <div className="space-y-6 min-w-0">
 
-          {/* Title card */}
-          <div className="bg-white border border-gray-200 rounded-2xl p-6">
-            <div className="flex flex-wrap gap-2 mb-4">
-              {jdEmploymentType && (
-                <span className="inline-flex items-center gap-1.5 bg-brand-blue/10 text-brand-blue border border-brand-blue/20 text-xs font-medium px-3 py-1 rounded-full">
-                  <Clock className="w-3 h-3" /> {jdEmploymentType}
-                </span>
-              )}
-              {jdRemoteType && (
-                <span className="inline-flex items-center gap-1.5 bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/20 text-xs font-medium px-3 py-1 rounded-full">
-                  <Globe className="w-3 h-3" /> {jdRemoteType}
-                </span>
-              )}
-              {jdExperienceLevel && (
-                <span className="inline-flex items-center gap-1.5 bg-brand-orange/10 text-brand-orange border border-brand-orange/20 text-xs font-medium px-3 py-1 rounded-full">
-                  <Sparkles className="w-3 h-3" /> {jdExperienceLevel}
-                </span>
-              )}
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 leading-tight">{title}</h1>
-            <div className="flex flex-wrap gap-x-5 gap-y-1.5 mt-3 text-sm text-gray-500">
-              {jdDepartment && (
-                <span className="flex items-center gap-1.5">
-                  <Building2 className="w-3.5 h-3.5 text-gray-400" /> {jdDepartment}
-                </span>
-              )}
-              {jdLocation && (
-                <span className="flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-gray-400" /> {jdLocation}
-                </span>
-              )}
-              {expStr && (
-                <span className="flex items-center gap-1.5">
-                  <Award className="w-3.5 h-3.5 text-gray-400" /> {expStr} experience
-                </span>
+          {/* Role card — the job, then every fact about it and about the
+              interview as one continuous run of badges. */}
+          <div className="relative overflow-hidden bg-white border border-gray-200 rounded-2xl shadow-sm">
+            <div className="h-1 bg-gradient-to-r from-brand-blue via-brand-teal to-brand-orange" />
+            <div className="p-5 sm:p-6">
+              <div>
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-brand-blue">You&apos;re interviewing for</p>
+                  <h1 className="mt-1 text-2xl sm:text-3xl font-bold text-gray-900 leading-tight break-words">{title}</h1>
+                  {metaItems.length > 0 && (
+                    <div className="mt-2 flex flex-wrap items-center gap-y-1 text-sm text-gray-500">
+                      {metaItems.map((item, i) => (
+                        <span key={item.text} className="flex items-center">
+                          {i > 0 && <span aria-hidden className="mx-2.5 h-1 w-1 rounded-full bg-gray-300" />}
+                          <item.icon className="w-3.5 h-3.5 text-gray-400 mr-1.5 flex-shrink-0" />
+                          {item.text}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {roleBadges.length > 0 && (
+                <div className="mt-5 pt-4 border-t border-dashed border-gray-200 flex flex-wrap gap-2">
+                  {roleBadges.map(badge => (
+                    <span
+                      key={badge.key}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-brand-blue/20 bg-brand-blue/10 px-3 py-1.5 text-xs font-medium text-brand-blue"
+                    >
+                      <badge.icon className="w-3.5 h-3.5 flex-shrink-0" />
+                      {badge.label}
+                    </span>
+                  ))}
+                </div>
               )}
             </div>
           </div>
-
-          {/* Experience / Work mode mini-cards */}
-          {(expStr || jdRemoteType) && (
-            <div className="flex flex-wrap gap-4">
-              {expStr && (
-                <div className="w-full sm:w-64 bg-white border border-gray-200 rounded-xl p-4 flex items-center gap-3">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-orange/10 text-brand-orange flex-shrink-0">
-                    <Award className="w-5 h-5" />
-                  </span>
-                  <div>
-                    <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Experience Level</p>
-                    <p className="text-base font-bold text-gray-900">{expStr}</p>
-                  </div>
-                </div>
-              )}
-              {jdRemoteType && (
-                <div className="w-full sm:w-64 bg-white border border-gray-200 rounded-xl p-4 flex items-center gap-3">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-cyan/10 text-brand-cyan flex-shrink-0">
-                    <Globe className="w-5 h-5" />
-                  </span>
-                  <div>
-                    <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Work Mode</p>
-                    <p className="text-base font-bold text-gray-900">{jdRemoteType}</p>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
 
           {/* JD Description */}
           {jdDescription && (
@@ -353,70 +295,6 @@ export default function StepConsent({
                 )}
               </div>
             </div>
-          )}
-
-          {/* JD22 Additional Details ──
-              Its own card directly under the role description, NOT appended to that
-              markdown: the recruiter typed this after the JD was generated, and the
-              description is AI-written prose that gets rewritten on every reformat.
-              Keeping it separate is what guarantees the candidate reads the recruiter's
-              exact words. Plain pre-wrapped text for the same reason - no markdown pass
-              to reinterpret what they typed. Hidden entirely when empty. */}
-          {jdAdditionalDetails && jdAdditionalDetails.trim() && (
-            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden" style={{ colorScheme: 'light' }}>
-              <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
-                <span className="flex h-6 w-6 items-center justify-center rounded-md bg-gray-100 text-gray-500 flex-shrink-0">
-                  <Info className="w-3.5 h-3.5" />
-                </span>
-                <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Additional Details</h2>
-              </div>
-              <div className="p-5">
-                <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--raw-374151)' }}>
-                  {jdAdditionalDetails}
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Required Skills */}
-          {jdMustHaveSkills && jdMustHaveSkills.length > 0 && (
-            <div className="bg-white border border-gray-200 rounded-xl p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="flex h-6 w-6 items-center justify-center rounded-md bg-brand-blue/10 text-brand-blue flex-shrink-0">
-                  <ListChecks className="w-3.5 h-3.5" />
-                </span>
-                <h3 className="text-sm font-semibold text-gray-700">Required Skills</h3>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {jdMustHaveSkills.map(skill => (
-                  <span key={skill} className="inline-flex items-center gap-1 bg-brand-blue/10 text-brand-blue border border-brand-blue/20 text-xs px-2.5 py-1 rounded-full">
-                    <CheckCircle className="w-3 h-3 text-brand-blue" /> {skill}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Nice to Have — collapsible, mirrors "Preferred & Secondary Qualifications" */}
-          {jdNiceToHaveSkills && jdNiceToHaveSkills.length > 0 && (
-            <details className="group bg-white border border-gray-200 rounded-xl">
-              <summary className="flex items-center justify-between gap-2 px-4 py-3 cursor-pointer select-none [&::-webkit-details-marker]:hidden">
-                <span className="flex items-center gap-2 text-sm font-semibold text-gray-700">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-md bg-brand-orange/10 text-brand-orange flex-shrink-0">
-                    <Star className="w-3.5 h-3.5" />
-                  </span>
-                  Preferred &amp; Secondary Qualifications (&quot;Nice to Have&quot;)
-                </span>
-                <ChevronDown className="w-4 h-4 text-gray-400 transition-transform group-open:rotate-180 flex-shrink-0" />
-              </summary>
-              <div className="px-4 pb-4 flex flex-wrap gap-1.5">
-                {jdNiceToHaveSkills.map(skill => (
-                  <span key={skill} className="inline-flex items-center gap-1 bg-gray-50 text-gray-600 text-xs px-2.5 py-1 rounded-full border border-gray-200">
-                    <Star className="w-3 h-3 text-gray-400" /> {skill}
-                  </span>
-                ))}
-              </div>
-            </details>
           )}
         </div>
 

@@ -1564,6 +1564,13 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
     if (isInProgress && tabKey !== 'coverage') {
       return 'Interview in progress — data will appear once completed';
     }
+    // Terminated sessions keep their raw artifacts (recording, transcript) even
+    // when no evaluation was persisted (e.g. the post-termination eval failed or
+    // the interview was cut before Q1) — never hide those behind "not started".
+    if (wasTerminated && !isPartial) {
+      if (tabKey === 'recording' || tabKey === 'transcript') return null;
+      return 'Interview was terminated before an evaluation could be produced — see the Recording and Transcript tabs';
+    }
     if (!isInProgress && !isCompleted && !isPartial) return 'Interview not yet started — no data available';
     return null;
   };
@@ -3156,7 +3163,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
             {/* Recording Tab — pass liveSession so hasFile reflects the latest
                 recording_file_path even when it was set after the initial prop fetch */}
             {!evaluationPending && activeTab === 'recording' && (
-              placeholderMsg ? renderPlaceholder(placeholderMsg) : (
+              getPlaceholderMessage('recording') ? renderPlaceholder(getPlaceholderMessage('recording')!) : (
                 <RecordingTabContent
                   interview={liveSession}
                   videoBlobUrl={videoBlobUrl}
@@ -3666,7 +3673,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
             {/* Transcript Tab — use liveSession so evaluation_ready refresh populates
                 the transcript even when the recruiter opened the view mid-interview */}
             {!evaluationPending && activeTab === 'transcript' && (
-              placeholderMsg ? renderPlaceholder(placeholderMsg) : (() => {
+              getPlaceholderMessage('transcript') ? renderPlaceholder(getPlaceholderMessage('transcript')!) : (() => {
                 // Closing thank-yous are meta-messages from Bina that we keep out
                 // of the transcript list. The silence "Are you there?" nudge is
                 // NOT filtered here anymore: it is a real utterance the candidate
