@@ -340,12 +340,17 @@ export default function JDListPage() {
 
   // JD04: Publish draft JD
   const handlePublish = async (jdId: string) => {
+    if (!jdPerms.canUpdate) {
+      toast.error('You do not have permission to publish job descriptions');
+      setActiveDropdown(null);
+      return;
+    }
     try {
       await jdService.publish(jdId);
       toast.success('Job description published');
       fetchJDs();
     } catch (error) {
-      toast.error('Failed to publish');
+      toast.error(error instanceof Error ? error.message : 'Failed to publish');
     }
     setActiveDropdown(null);
   };
@@ -960,11 +965,17 @@ export default function JDListPage() {
                               Score Resumes
                             </button>
                           )}
-                          {/* JD04: Publish action for draft JDs */}
+                          {/* JD04: Publish action for draft JDs — always visible; disabled without update permission */}
                           {jd.status === 'draft' && (
                             <button
                               onClick={() => { handlePublish(jd.id); setActiveDropdown(null); }}
-                              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-success hover:bg-success-subtle"
+                              disabled={!jdPerms.canUpdate}
+                              title={!jdPerms.canUpdate ? 'You do not have permission to publish job descriptions' : ''}
+                              className={`w-full flex items-center gap-2 px-4 py-2 text-sm ${
+                                jdPerms.canUpdate
+                                  ? 'text-success hover:bg-success-subtle'
+                                  : 'text-gray-400 cursor-not-allowed opacity-60'
+                              }`}
                             >
                               <CheckCircle2 className="w-4 h-4" />
                               Publish
