@@ -31,6 +31,10 @@ const ACTIVITY_ICONS: Record<string, React.ReactNode> = {
   candidate_completed: <Award className="w-4 h-4" />,
   candidate_failed: <UserX className="w-4 h-4" />,
   candidate_expired: <TimerOff className="w-4 h-4" />,
+  /* The lifecycle rows arrive keyed by the raw audit action value. */
+  ai_interview_recording_downloaded: <Download className="w-4 h-4" />,
+  ai_interview_report_downloaded: <Download className="w-4 h-4" />,
+  ai_interview_config_exported: <Download className="w-4 h-4" />,
 };
 
 const ACTIVITY_COLORS: Record<string, { bg: string; text: string; icon: string; border: string }> = {
@@ -44,6 +48,9 @@ const ACTIVITY_COLORS: Record<string, { bg: string; text: string; icon: string; 
   candidate_completed: { bg: 'bg-success-subtle', text: 'text-success', icon: 'text-success', border: 'border-success-line' },
   candidate_failed: { bg: 'bg-destructive-subtle', text: 'text-destructive', icon: 'text-destructive', border: 'border-destructive-line' },
   candidate_expired: { bg: 'bg-orange-50', text: 'text-orange-700', icon: 'text-orange-500', border: 'border-orange-200' },
+  ai_interview_recording_downloaded: { bg: 'bg-blue-50', text: 'text-blue-700', icon: 'text-blue-500', border: 'border-blue-200' },
+  ai_interview_report_downloaded: { bg: 'bg-blue-50', text: 'text-blue-700', icon: 'text-blue-500', border: 'border-blue-200' },
+  ai_interview_config_exported: { bg: 'bg-blue-50', text: 'text-blue-700', icon: 'text-blue-500', border: 'border-blue-200' },
 };
 
 export interface AIInterviewAuditTrailProps {

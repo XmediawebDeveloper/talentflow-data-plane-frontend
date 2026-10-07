@@ -209,7 +209,7 @@ export default function InviteToAIInterviewFlow({
             )}
 
             {/* The interview list — the same shared picker as the AI Interview
-                page's Send Invite popup: search, Grouped/Ungrouped, the
+                page's Send Invite popup: search, the
                 one-at-a-time note, paging and the Configure Details preview. */}
             {isLoading ? (
               <div className="flex items-center justify-center py-12 tf-loader-center tf-loader-center--compact">
