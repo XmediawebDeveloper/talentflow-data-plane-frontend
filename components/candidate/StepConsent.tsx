@@ -78,9 +78,9 @@ const GDPR_RIGHTS = [
 // content was changed.
 const BEFORE_YOU_BEGIN_ITEMS: { icon: IconComponent; text: string }[] = [
   { icon: Video, text: 'Camera and microphone access are required' },
-  { icon: Wifi, text: 'If a genuine network or client failure occurs, the assessment can recover from the saved server state' },
+  { icon: Wifi, text: 'Ensure you have a stable internet connection throughout the interview.' },
   { icon: Lightbulb, text: 'Ensure you are in a quiet, well-lit environment' },
-  { icon: Eye, text: 'Tab switching and copy/paste are monitored' },
+  { icon: Eye, text: 'Your responses may be recorded and analyzed as part of the interview.' },
 ];
 
 export default function StepConsent({
@@ -211,7 +211,6 @@ export default function StepConsent({
           {/* Role card — the job, then every fact about it and about the
               interview as one continuous run of badges. */}
           <div className="relative overflow-hidden bg-white border border-gray-200 rounded-2xl shadow-sm">
-            <div className="h-1 bg-gradient-to-r from-brand-blue via-brand-teal to-brand-orange" />
             <div className="p-5 sm:p-6">
               <div>
                 <div className="min-w-0">
@@ -300,7 +299,6 @@ export default function StepConsent({
 
         {/* ═══════════ RIGHT COLUMN — action panel ═══════════ */}
         <div className="lg:sticky lg:top-6 bg-white border border-gray-200 rounded-2xl overflow-hidden min-w-0">
-          <div className="h-1 bg-gradient-to-r from-brand-orange to-brand-orange-deep" />
 
           {/* Before You Begin */}
           <div className="p-5">
@@ -412,15 +410,6 @@ export default function StepConsent({
                 </>
               )}
             </Button>
-          </div>
-
-          {/* Help */}
-          <div className="flex items-center gap-2 text-sm text-gray-400 justify-center pb-5">
-            <HelpCircle className="w-4 h-4" />
-            Questions? Contact{' '}
-            <a href="mailto:support@talentflow.com" className="text-gray-600 hover:underline">
-              support@talentflow.com
-            </a>
           </div>
         </div>
       </div>
