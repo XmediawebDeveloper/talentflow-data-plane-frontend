@@ -57,6 +57,18 @@ export interface ListToolbarProps {
   onClearFilters?: () => void;
 
   /**
+   * Pinned to the row's far RIGHT edge, past everything else, whatever the
+   * other controls' width — e.g. a List / Grid switch. Optional.
+   */
+  trailing?: React.ReactNode;
+
+  /**
+   * Controls placed BEFORE the search box, at the very start of the row —
+   * e.g. a list's Select all. Optional; without it the row is unchanged.
+   */
+  beforeSearch?: React.ReactNode;
+
+  /**
    * Controls placed at the FRONT of the right-hand group, ahead of More
    * Filters. For page-level actions (Create, Send Invite) that belong with
    * the list but shouldn't sit past the filter controls.
@@ -148,6 +160,8 @@ export default function ListToolbar({
   activeFilterCount = 0,
   filtersApplied = false,
   onClearFilters,
+  beforeSearch,
+  trailing,
   leadingActions,
   afterFiltersActions,
   children,
@@ -228,6 +242,7 @@ export default function ListToolbar({
         filterPanel ? undefined : className
       )}
     >
+      {beforeSearch && <div className="flex items-center gap-2 flex-shrink-0">{beforeSearch}</div>}
       <div className={cn(singleLine ? 'relative flex-1 min-w-[12rem]' : fitToContainer ? container.search : 'flex-1 relative', searchClassName)}>
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-brand-blue/60" />
         <input
@@ -302,6 +317,9 @@ export default function ListToolbar({
         {/* Always last — see `countBadge`. */}
         {countBadge}
       </div>
+
+      {/* Pinned right — see `trailing`. ml-auto takes the row's spare width. */}
+      {trailing && <div className="flex items-center flex-shrink-0 self-end sm:self-auto sm:ml-auto">{trailing}</div>}
     </div>
   );
 

@@ -29,15 +29,17 @@ import {
  * column per VERSION can't represent that. It's shown per SCORED RESUME
  * instead, in ScoredResumesTable, where each row has its own real answer.
  */
-const buildBaseColumns = (showScoredBy: boolean): { label: string; minW: string }[] => [
+const buildBaseColumns = (showScoredBy: boolean, hideJdDetails: boolean): { label: string; minW: string }[] => [
   { label: 'Version', minW: 'min-w-[72px]' },
   { label: 'Job Title', minW: 'min-w-[160px]' },
-  { label: 'Status', minW: 'min-w-[110px]' },
-  { label: 'Experience / Industry', minW: 'min-w-[150px]' },
-  { label: 'Location', minW: 'min-w-[120px]' },
-  { label: 'Work Mode / Type', minW: 'min-w-[130px]' },
-  { label: 'Posted On / By', minW: 'min-w-[130px]' },
-  { label: 'Last Updated', minW: 'min-w-[110px]' },
+  ...(hideJdDetails ? [] : [
+    { label: 'Status', minW: 'min-w-[110px]' },
+    { label: 'Experience / Industry', minW: 'min-w-[150px]' },
+    { label: 'Location', minW: 'min-w-[120px]' },
+    { label: 'Work Mode / Type', minW: 'min-w-[130px]' },
+    { label: 'Posted On / By', minW: 'min-w-[130px]' },
+    { label: 'Last Updated', minW: 'min-w-[110px]' },
+  ]),
   ...(showScoredBy ? [{ label: 'Scored By', minW: 'min-w-[160px]' }] : []),
   { label: 'Applicants', minW: 'min-w-[90px]' },
 ];
@@ -47,9 +49,10 @@ const buildColumns = (
   actionable: boolean,
   showScoredBy: boolean,
   extraColumns: ExtraVersionColumn[],
+  hideJdDetails: boolean,
 ) => [
   ...(selectable ? [{ label: 'Select', minW: 'min-w-[64px]' }] : []),
-  ...buildBaseColumns(showScoredBy),
+  ...buildBaseColumns(showScoredBy, hideJdDetails),
   ...extraColumns.map(({ label, minW }) => ({ label, minW })),
   ...(actionable ? [{ label: 'Action', minW: 'min-w-[64px]' }] : []),
 ];
@@ -204,6 +207,13 @@ interface JobVersionHistoryPanelProps {
    * Select column (the two would fight over the left edge).
    */
   stickyVersionColumn?: boolean;
+  /**
+   * Drop the JD's own descriptive columns — Status, Experience / Industry,
+   * Location, Work Mode / Type, Posted On / By and Last Updated. Resume Scoring opts in:
+   * its job rows no longer repeat the JD's details, so the version table under
+   * them doesn't either. Off by default; every other host is unchanged.
+   */
+  hideJdDetails?: boolean;
 }
 
 /**
@@ -243,8 +253,9 @@ export default function JobVersionHistoryPanel({
   plainTitle = false,
   extraColumns = [],
   stickyVersionColumn = false,
+  hideJdDetails = false,
 }: JobVersionHistoryPanelProps) {
-  const columns = buildColumns(!!onSelectVersion, !!renderAction, !!versionScoredBy, extraColumns);
+  const columns = buildColumns(!!onSelectVersion, !!renderAction, !!versionScoredBy, extraColumns, hideJdDetails);
   /* Which versions this table lists: the WHOLE chain — v1, v2 … up to and
      including the latest.
 
@@ -314,7 +325,7 @@ export default function JobVersionHistoryPanel({
             jobVersions.length > 3 ? 'overflow-y-auto max-h-[240px] overscroll-contain' : ''
           }`}
         >
-          <table className="w-full min-w-[960px] text-left">
+          <table className={`w-full ${hideJdDetails ? 'min-w-[640px]' : 'min-w-[960px]'} text-left`}>
             <thead>
               {/* The bottom hairline is an inset shadow, not border-b —
                   collapsed-table borders detach from sticky cells and would
@@ -332,7 +343,7 @@ export default function JobVersionHistoryPanel({
                        header slides under nothing. Select pins left, Action
                        right; both stay reachable while the table scrolls
                        sideways. */
-                    className={`sticky top-0 py-2.5 px-3 text-xs font-bold text-gray-900 whitespace-nowrap bg-brand-sky dark:bg-slate-800 dark:text-slate-100 ${minW} ${
+                    className={`sticky top-0 py-2.5 px-3 text-xs text-gray-900 whitespace-nowrap bg-brand-sky dark:bg-slate-800 dark:text-slate-100 ${hideJdDetails ? 'font-medium uppercase tracking-wide' : 'font-bold'} ${minW} ${
                       label === 'Action'
                         ? 'right-0 z-[8] shadow-[inset_0_-1px_0_var(--raw-e5e7eb),-1px_0_0_0_var(--raw-e5e7eb)] dark:shadow-[inset_0_-1px_0_var(--raw-334155),-1px_0_0_0_var(--raw-334155)]'
                         : label === 'Select' || (label === 'Version' && stickyVersionColumn)
@@ -533,6 +544,8 @@ export default function JobVersionHistoryPanel({
                         </Link>
                       )}
                     </td>
+                    {/* Status is JD detail too — dropped under hideJdDetails. */}
+                    {!hideJdDetails && (
                     <td className="py-2.5 px-3 whitespace-nowrap align-middle">
                       <div className="flex flex-col items-start gap-1">
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs ${versionStatusConfig.bg} ${versionStatusConfig.text} border ${versionStatusConfig.border}`}>
@@ -554,6 +567,8 @@ export default function JobVersionHistoryPanel({
                         })()}
                       </div>
                     </td>
+                    )}
+                    {!hideJdDetails && (<>
                     {/* Experience / Industry — one column, stacked, same
                         space-saving treatment as Posted On / By below.
                         Industry runs through the same formatter as the job rows
@@ -603,6 +618,7 @@ export default function JobVersionHistoryPanel({
                     <td className="py-2.5 px-3 text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap align-middle">
                       {lastUpdated ? formatISTDate(lastUpdated) : '—'}
                     </td>
+                    </>)}
                     {versionScoredBy && (() => {
                       /* Unset key = still loading; explicit null = loaded and
                          genuinely never scored — those read differently, so

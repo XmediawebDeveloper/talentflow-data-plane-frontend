@@ -58,11 +58,10 @@ export default function ResumeScoringSkeleton({
             ))}
           </div>
 
-          {/* List view (?jd_id): "Show:" filter-pills row + results table. */}
+          {/* List view (?jd_id): view-pills row + results table. */}
           {variant === 'list' && (
             <>
               <div className="flex items-center gap-2 flex-wrap mt-5 mb-3">
-                <Skeleton className="h-4 w-10" />
                 {Array.from({ length: 6 }).map((_, i) => (
                   <Skeleton key={i} className="h-8 w-24 rounded-lg" />
                 ))}
