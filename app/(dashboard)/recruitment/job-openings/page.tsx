@@ -597,7 +597,10 @@ export default function JobOpeningsPage() {
     })) return;
     try {
       await jdService.delete(job.id);
-      setJobs(prev => prev.filter(j => j.id !== job.id));
+      // Remove the whole lineage (every version), not just this row — otherwise an
+      // older version collapses back onto the All Jobs list. See bulk delete above.
+      const deletedLineage = job.job_id || job.id;
+      setJobs(prev => prev.filter(j => (j.job_id || j.id) !== deletedLineage));
       toast.success(`"${job.title}" has been deleted`);
     } catch (error: any) {
       toast.error(error?.message || 'Failed to delete job');
@@ -632,7 +635,18 @@ export default function JobOpeningsPage() {
     }
 
     if (deletedIds.length > 0) {
-      setJobs(prev => prev.filter(j => !deletedIds.includes(j.id)));
+      // Drop EVERY version of each deleted job (by its lineage job_id), not just
+      // the single row that was selected. On the All Jobs tab the selected row is
+      // a job's LATEST version; removing only that id left the older versions in
+      // state, and collapseToLatestVersions then promoted one of them back onto
+      // the list — so the job looked like it had never been deleted. Falls back
+      // to id when a record has no job_id.
+      const deletedLineages = new Set(
+        jobsToDelete
+          .filter(job => deletedIds.includes(job.id))
+          .map(job => job.job_id || job.id),
+      );
+      setJobs(prev => prev.filter(job => !deletedLineages.has(job.job_id || job.id)));
     }
 
     if (deletedIds.length > 0 && skipped.length === 0 && failed === 0) {

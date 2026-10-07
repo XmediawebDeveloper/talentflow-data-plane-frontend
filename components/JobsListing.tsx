@@ -1,6 +1,6 @@
 'use client'
 
-import { Plus, Search, MapPin, Eye, MoreVertical, Briefcase, Users, Clock, CheckCircle2, FileText, Sparkles, ChevronDown, Settings, Archive, XCircle, AlertCircle, ArrowUpRight, Edit, Send, Ban, RefreshCw, ArrowUpDown, CheckSquare, Square, Trash2, Download, ChevronLeft, ChevronRight, X, Brain, ClipboardList } from 'lucide-react';
+import { Plus, Search, MapPin, Eye, MoreVertical, Briefcase, Users, Clock, CheckCircle2, FileText, Sparkles, ChevronDown, Settings, Archive, XCircle, AlertCircle, ArrowUpRight, Edit, Ban, RefreshCw, ArrowUpDown, CheckSquare, Square, Trash2, Download, ChevronLeft, ChevronRight, X, Brain, ClipboardList, ClipboardCheck, Video } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
@@ -10,7 +10,8 @@ import { Job } from '@/lib/types/types';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
 import ArchiveJobModal from '@/components/ArchiveJobModal';
-import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
+import DisableJobModal from '@/components/DisableJobModal';
+import DeleteJobModal from '@/components/DeleteJobModal';
 import {
   formatEmploymentType,
   formatIndustryType,
@@ -32,7 +33,10 @@ import SearchableSelect from '@/components/ui/searchable-select';
 import { DateField } from '@/components/ui/date-field';
 import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import ListToolbar from '@/components/ui/list-toolbar';
-import ListCountBadge from '@/components/ui/list-count-badge';
+/* The toolbar pill/segment style helpers now live in a shared module so other
+   job-opening surfaces can reuse the exact status-tab and segmented-toggle
+   chrome rather than re-deriving it. */
+import { tabPill, SEGMENT_TOGGLE, segmentBtn } from '@/components/ui/filter-pills';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import ExportFormatModal from '@/components/ExportFormatModal';
 import { exportRows, ExportFileFormat } from '@/lib/utils/exportUtils';
@@ -50,6 +54,7 @@ const viewVersionsMenuItemClass = 'group text-gray-700 dark:text-slate-200';
 const viewVersionsMenuItemOrangeClass = 'group text-orange-700 dark:text-orange-300 [&_svg]:!text-current';
 const viewVersionsMenuItemGreenClass = 'group text-success [&_svg]:!text-current';
 const viewVersionsMenuItemRedClass = 'group text-destructive [&_svg]:!text-current';
+
 /* Formatting, badge tokens, lineage grouping and the list sort all live in
    lib/utils/jobOpeningDisplay — this page is the reference listing, and the
    Apply to Job dialog renders the same jobs from the same helpers. */
@@ -163,8 +168,7 @@ const StatVersions = ({ count }: { count: number }) => (
   </span>
 );
 
-export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded = true, onCreateNew, onCreateNewDisabled = false, onViewJob, onViewApplicants, onAIMatch, onAIMatchDisabled = false, onAIMatchDisabledReason = 'You do not have permission to run AI Talent Match', onScoreResumes, onScoreResumesDisabled = false, onScoreResumesDisabledReason = 'You do not have permission to run resume scoring', onUpdateJobStatus, onEditJob, versionStatusOverrides, onPublishJob, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, onBulkDelete, quotaInfo, initialStatusFilter, forceListView, configHref }: JobsListingProps) {
-  const dialog = useGlobalDialog();
+export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded = true, onCreateNew, onCreateNewDisabled = false, onViewJob, onViewApplicants, onAIMatch, onAIMatchDisabled = false, onAIMatchDisabledReason = 'You do not have permission to run AI Talent Match', onScoreResumes, onScoreResumesDisabled = false, onScoreResumesDisabledReason = 'You do not have permission to run resume scoring', onUpdateJobStatus, onEditJob, versionStatusOverrides, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, onBulkDelete, quotaInfo, initialStatusFilter, forceListView, configHref }: JobsListingProps) {
   const router = useRouter();
   const { isTenantAdmin, user, hasPermissionCode } = useAuth();
   // NOTE: canUpdateJD/canDeleteJD/canArchiveJD/canDisableJD (capital JD) are the
@@ -258,6 +262,8 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
     onDisableJob?.(job);
   };
   const listSectionRef = useRef<HTMLDivElement | null>(null);
+  // Wraps the Actions dropdown so an outside click can close it.
+  const bulkActionsRef = useRef<HTMLDivElement | null>(null);
   
 
   // Sort and Bulk Actions states
@@ -265,6 +271,8 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [selectedJobs, setSelectedJobs] = useState<Set<string>>(new Set());
   const [showBulkActions, setShowBulkActions] = useState(false);
+  // Dropdown for the single Select All control (current page / all pages / clear).
+  const [showSelectMenu, setShowSelectMenu] = useState(false);
 
   // NEW: Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -535,13 +543,19 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
   })));
 
   // Bulk action handlers
-  const handleSelectAll = () => {
-    if (selectedJobs.size === sortedJobs.length) {
-      setSelectedJobs(new Set());
-    } else {
-      setSelectedJobs(new Set(sortedJobs.map(job => job.id)));
-    }
-  };
+  /* The single Select All control offers both scopes through its dropdown:
+     - current page: add the jobs visible on the active page (count tracks the
+       Show: N per-page value);
+     - all pages: select the whole filtered list across every page;
+     - clear: empty the selection. */
+  const selectCurrentPage = () =>
+    setSelectedJobs(prev => {
+      const next = new Set(prev);
+      currentJobs.forEach(job => next.add(job.id));
+      return next;
+    });
+  const selectAllPages = () => setSelectedJobs(new Set(sortedJobs.map(job => job.id)));
+  const clearSelection = () => setSelectedJobs(new Set());
 
   const handleSelectJob = (jobId: string) => {
     const newSelected = new Set(selectedJobs);
@@ -553,18 +567,33 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
     setSelectedJobs(newSelected);
   };
 
-  const handleBulkPublish = () => {
-    if (!onPublishJob) return;
-    const jobsToPublish = sortedJobs.filter(job => selectedJobs.has(job.id) && job.status === 'Draft');
-    jobsToPublish.forEach(job => onPublishJob(job));
+  /* Bulk disable opens one shared DisableJobModal (showing the selected count),
+     the same way bulk archive opens one ArchiveJobModal — rather than firing the
+     per-row confirm once per job. It drives `onUpdateJobStatus` on confirm, the
+     same mechanism bulk archive uses. */
+  const [bulkDisableOpen, setBulkDisableOpen] = useState(false);
+
+  const handleBulkDisable = () => {
+    if (!onUpdateJobStatus || selectedJobs.size === 0) return;
+    setBulkDisableOpen(true);
+  };
+
+  const confirmBulkDisable = () => {
+    if (!onUpdateJobStatus) return;
+    // Only Published JDs can be disabled — same rule as the per-row Disable action.
+    const jobsToDisable = sortedJobs.filter(job => selectedJobs.has(job.id) && job.status === 'Published');
+    jobsToDisable.forEach(job => onUpdateJobStatus(job.id, 'Disabled'));
+    setBulkDisableOpen(false);
     setSelectedJobs(new Set());
     setShowBulkActions(false);
   };
 
-  const handleBulkDisable = () => {
-    if (!onDisableJob) return;
-    const jobsToDisable = sortedJobs.filter(job => selectedJobs.has(job.id) && job.status === 'Published');
-    jobsToDisable.forEach(job => onDisableJob(job));
+  // Bulk unarchive — mirrors the per-row Unarchive (onUnarchiveJob per selected
+  // Archived job); only the Archived tab surfaces it.
+  const handleBulkUnarchive = () => {
+    if (!onUnarchiveJob) return;
+    const jobsToUnarchive = sortedJobs.filter(job => selectedJobs.has(job.id) && job.status === 'Archived');
+    jobsToUnarchive.forEach(job => onUnarchiveJob(job));
     setSelectedJobs(new Set());
     setShowBulkActions(false);
   };
@@ -596,20 +625,29 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
     setShowBulkActions(false);
   };
 
-  const handleBulkDelete = async () => {
+  /* Bulk delete opens its own DeleteJobModal (the same popup component as the
+     archive / disable confirms) rather than the generic global dialog, so the
+     delete confirm matches that family exactly. */
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  const handleBulkDelete = () => {
+    if (!onBulkDelete || selectedJobs.size === 0) return;
+    setShowBulkActions(false);
+    setBulkDeleteOpen(true);
+  };
+
+  const confirmBulkDelete = async () => {
     if (!onBulkDelete) return;
     const selectedJobsData = sortedJobs.filter(job => selectedJobs.has(job.id));
-    if (selectedJobsData.length === 0) return;
-    if (await dialog.confirm({
-      title: 'Delete Job Openings',
-      message: `Are you sure you want to delete ${selectedJobsData.length} job opening(s)?\nThis action cannot be undone.`,
-      variant: 'delete',
-      confirmText: 'Delete',
-      warningNote: 'Deleting these job openings will permanently remove them from your job openings and cannot be restored.',
-    })) {
+    if (selectedJobsData.length === 0) { setBulkDeleteOpen(false); return; }
+    setBulkDeleting(true);
+    try {
       await onBulkDelete(selectedJobsData);
       setSelectedJobs(new Set());
-      setShowBulkActions(false);
+    } finally {
+      setBulkDeleting(false);
+      setBulkDeleteOpen(false);
     }
   };
 
@@ -656,13 +694,27 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
     return () => document.removeEventListener('click', handleClickOutside);
   }, [activeDropdown]);
 
+  // Close the Actions dropdown on an outside click. Scoped to the dropdown via a
+  // ref and only listens while it is open; it merely closes the menu (no
+  // preventDefault/stopPropagation), so the click still reaches whatever was
+  // clicked — job selection, filters, pagination and other buttons keep working.
+  useEffect(() => {
+    if (!showBulkActions) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (bulkActionsRef.current && !bulkActionsRef.current.contains(e.target as Node)) {
+        setShowBulkActions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showBulkActions]);
+
 
   // Get unique values for filters — drop empty/blank values (so the dropdowns
   // don't show a blank option) and sort alphabetically so the lists are ordered
   // rather than appearing in random job-fetch order.
   const byName = (a: unknown, b: unknown) => String(a).localeCompare(String(b));
   const uniqueLocations = Array.from(new Set(jobs.map(job => job.location).filter(Boolean))).sort(byName);
-  const uniqueDepartments = Array.from(new Set(jobs.map(job => job.department).filter(Boolean))).sort(byName);
   const uniqueEmploymentTypes = Array.from(new Set(jobs.map(job => job.employmentType).filter(Boolean))).sort(byName);
   const uniqueIndustries = Array.from(new Set(jobs.map(job => job.industry_type).filter(Boolean))).sort(byName);
 
@@ -749,6 +801,18 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
   const totalPages = Math.ceil(sortedJobs.length / itemsPerPage);
   const currentJobs = sortedJobs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
+  /* Whether every matching job (across all pages) is selected — drives the
+     Select All button's "fully checked" icon. */
+  const allPagesSelected = sortedJobs.length > 0 && sortedJobs.every(job => selectedJobs.has(job.id));
+
+  /* Which Actions-dropdown options apply to the active tab. Export and Delete
+     show on every tab; Disable only where disabling is meaningful (Published /
+     Disabled); Archive only on Published; Unarchive only on Archived. */
+  const actionsTab = statusFilter.toLowerCase();
+  const showDisableAction = actionsTab === 'published' || actionsTab === 'disabled';
+  const showArchiveAction = actionsTab === 'published';
+  const showUnarchiveAction = actionsTab === 'archived' && !!onUnarchiveJob;
+
   // Reset to page 1 when filters change. Skipped on the mount pass: the
   // restored filters and the restored page arrive together, and resetting here
   // would throw away the page the user was on before opening a job.
@@ -757,6 +821,13 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
     if (skipPageResetRef.current) { skipPageResetRef.current = false; return; }
     setCurrentPage(1);
   }, [searchQuery, statusFilter, creationMethodFilter, locationFilter, departmentFilter, industryFilter, experienceFilter, employmentTypeFilter, applicantsFilter, datePostedFromFilter, datePostedToFilter, sortBy, sortOrder]);
+
+  // Keep the current page in range when the list shrinks (e.g. after deleting the
+  // jobs on the last page), so the view never gets stuck on an empty page past
+  // the new last page.
+  useEffect(() => {
+    if (totalPages > 0 && currentPage > totalPages) setCurrentPage(totalPages);
+  }, [totalPages, currentPage]);
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
@@ -812,14 +883,15 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
               {(configHref || onCreateNew) && (
                 <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
                   {configHref && (
-                    <Link
-                      href={configHref}
-                      className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border px-4 py-2 text-sm font-medium transition-all sm:w-auto bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 border-gray-300 dark:border-slate-700 hover:border-brand-blue/40 hover:text-brand-blue"
-                    >
-                      <Settings className="w-4 h-4" />
-                      Config
-                      <ArrowUpRight className="w-4 h-4" />
-                    </Link>
+                    // Config shares Create New Job's exact size/shape by using the
+                    // same Button (size md). It stays `secondary` — a neutral nav
+                    // action — against Create's `primary` CTA, per the design system.
+                    <Button asChild variant="secondary" size="md" className="w-full sm:w-auto">
+                      <Link href={configHref}>
+                        <Settings className="w-4 h-4" />
+                        Config
+                      </Link>
+                    </Button>
                   )}
                   {onCreateNew && (
                     <Button
@@ -871,107 +943,66 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
             // The hook debounces into `appliedQuery`, so keystrokes pass through.
             searchDebounceMs={0}
             searchPlaceholder="Search jobs..."
+            // Location + Industry sit inline with Search, ahead of More Filters,
+            // so the three primary filters read as one row. They are the same
+            // SearchableSelect controls as before — relocated out of the More
+            // Filters panel, not new ones, so behaviour is unchanged.
+            // `w-full sm:w-48` sets their width; height/border/background/focus
+            // all come from the shared SearchableSelect chrome, so they match the
+            // Search input and the date fields. They stack full-width on mobile.
+            leadingActions={
+              <>
+                {uniqueLocations.length > 1 && (
+                  <SearchableSelect
+                    className="w-full sm:w-48"
+                    value={locationFilter === 'all' ? '' : locationFilter}
+                    onChange={(v) => search.setFilter('location', v || 'all')}
+                    options={uniqueLocations.map((loc) => ({ value: String(loc), label: String(loc) }))}
+                    allLabel="All Locations"
+                    placeholder="All Locations"
+                    searchPlaceholder="Search location..."
+                    ariaLabel="Filter by location"
+                  />
+                )}
+                {uniqueIndustries.length > 0 && (
+                  <SearchableSelect
+                    className="w-full sm:w-48"
+                    value={industryFilter === 'all' ? '' : industryFilter}
+                    onChange={(v) => search.setFilter('industry', v || 'all')}
+                    options={uniqueIndustries.map((industry) => ({ value: String(industry), label: formatIndustryType(industry) }))}
+                    allLabel="All Industries"
+                    placeholder="All Industries"
+                    searchPlaceholder="Search industry..."
+                    ariaLabel="Filter by industry"
+                  />
+                )}
+              </>
+            }
+            // Search flexes to fill the row; `controlsFollowSearch` gives the
+            // search→control gap the same 8px as control→control, so Search,
+            // Location, Industry and More Filters are evenly spaced on one line
+            // and use the full available width.
+            controlsFollowSearch
             onToggleFilters={() => setShowAdvancedFilters(!showAdvancedFilters)}
             filtersOpen={showAdvancedFilters}
             activeFilterCount={activeFiltersCount}
             filtersApplied={filtersActive}
             onClearFilters={clearAllFilters}
-            countBadge={
-              <ListCountBadge
-                filtered={sortedJobs.length}
-                total={distinctJobs.length}
-                noun="job"
-                selected={selectedJobs.size}
-              />
-            }
           />
-
-          {/* Row 2: Status tabs + AI/Manual + Clear */}
-          <div className="flex items-center gap-2 flex-wrap mb-3">
-            <span className="text-sm text-gray-600">Show:</span>
-            {['all', 'Published', 'Draft', 'Disabled', 'Archived'].map((status) => (
-              <button
-                key={status}
-                onClick={() => search.setFilter('status', status.toLowerCase())}
-                className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all ${
-                  statusFilter.toLowerCase() === status.toLowerCase()
-                    ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
-                    : 'bg-brand-blue/5 text-gray-700 hover:bg-brand-blue/10 hover:text-brand-blue'
-                }`}
-              >
-                {status === 'all' ? 'All Jobs' : status}
-              </button>
-            ))}
-            <div className="flex items-center gap-2 sm:ml-2 sm:border-l sm:border-gray-200 sm:pl-3">
-              <div className="flex items-center bg-brand-blue/5 ring-1 ring-brand-blue/10 rounded-lg p-1">
-                <button
-                  onClick={() => search.setFilter('creationMethod', creationMethodFilter === 'ai' ? null : 'ai')}
-                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${
-                    creationMethodFilter === 'ai'
-                      ? 'bg-white text-brand-blue-2 shadow-sm shadow-brand-blue/10'
-                      : 'text-gray-600 hover:text-brand-blue'
-                  }`}
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">AI Generated</span>
-                  <span className="sm:hidden">AI</span>
-                </button>
-                <button
-                  onClick={() => search.setFilter('creationMethod', creationMethodFilter === 'manual' ? null : 'manual')}
-                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${
-                    creationMethodFilter === 'manual'
-                      ? 'bg-white text-brand-blue-2 shadow-sm shadow-brand-blue/10'
-                      : 'text-gray-600 hover:text-brand-blue'
-                  }`}
-                >
-                  <Edit className="w-3.5 h-3.5" />
-                  Manual
-                </button>
-              </div>
-            </div>
-          </div>
 
           {/* More Filters Panel (collapsible) */}
           {showAdvancedFilters && (
             <div className="mb-3 pt-3 border-t border-brand-blue/10">
-              {/* [&>div]:min-w-0 — grid items default to min-width:auto, so a long
+              {/* All four filters on one row on desktop (grid-cols-4), falling
+                  back to a 2×2 grid on small screens and a single column on
+                  phones — so the row stays clean and never overflows.
+                  [&>div]:min-w-0 — grid items default to min-width:auto, so a long
                   <select> option (e.g. a full "City, State, Country" location) would
                   force its cell wider than the screen and overflow. min-w-0 lets the
                   cells (and the w-full selects inside) shrink to the grid track. */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 [&>div]:min-w-0">
-                {uniqueLocations.length > 1 && (
-                  <div>
-                    <label className="block text-sm text-gray-700 mb-1.5 font-medium">Location</label>
-                    {/* SearchableSelect (not native <select>): the browser draws a
-                        native option popup sized to the LONGEST option, which runs
-                        off small screens for full "City, State, Country" values.
-                        This custom control truncates and keeps its menu within the
-                        trigger's width, so it never overlaps the screen. */}
-                    <SearchableSelect
-                      value={locationFilter === 'all' ? '' : locationFilter}
-                      onChange={(v) => search.setFilter('location', v || 'all')}
-                      options={uniqueLocations.map((loc) => ({ value: String(loc), label: String(loc) }))}
-                      allLabel="All Locations"
-                      placeholder="All Locations"
-                      searchPlaceholder="Search location..."
-                      ariaLabel="Filter by location"
-                    />
-                  </div>
-                )}
-                {uniqueDepartments.length > 0 && (
-                  <div>
-                    <label className="block text-sm text-gray-700 mb-1.5 font-medium">Department</label>
-                    <SearchableSelect
-                      value={departmentFilter === 'all' ? '' : departmentFilter}
-                      onChange={(v) => search.setFilter('department', v || 'all')}
-                      options={uniqueDepartments.map((dept) => ({ value: String(dept), label: String(dept) }))}
-                      allLabel="All Departments"
-                      placeholder="All Departments"
-                      searchPlaceholder="Search department..."
-                      ariaLabel="Filter by department"
-                    />
-                  </div>
-                )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 [&>div]:min-w-0">
+                {/* Location and Industry now live inline with Search (see the
+                    toolbar's leadingActions above). Department was removed. */}
                 {uniqueEmploymentTypes.length > 0 && (
                   <div>
                     <label className="block text-sm text-gray-700 mb-1.5 font-medium">Job Type</label>
@@ -983,20 +1014,6 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                       placeholder="All Types"
                       searchPlaceholder="Search type..."
                       ariaLabel="Filter by job type"
-                    />
-                  </div>
-                )}
-                {uniqueIndustries.length > 0 && (
-                  <div>
-                    <label className="block text-sm text-gray-700 mb-1.5 font-medium">Industry</label>
-                    <SearchableSelect
-                      value={industryFilter === 'all' ? '' : industryFilter}
-                      onChange={(v) => search.setFilter('industry', v || 'all')}
-                      options={uniqueIndustries.map((industry) => ({ value: String(industry), label: formatIndustryType(industry) }))}
-                      allLabel="All Industries"
-                      placeholder="All Industries"
-                      searchPlaceholder="Search industry..."
-                      ariaLabel="Filter by industry"
                     />
                   </div>
                 )}
@@ -1021,6 +1038,8 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                 </div>
                 <div>
                   <label className="block text-sm text-gray-700 mb-1.5 font-medium">Posted From</label>
+                  {/* No className override — uses DateField's shared chrome, the
+                      same as Search and the SearchableSelect filters. */}
                   <DateField
                     value={datePostedFromFilter}
                     onChange={(v) => search.setFilter('datePostedFrom', v)}
@@ -1037,61 +1056,82 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                 </div>
               </div>
 
-              {/* Panel footer: "Done" applies the selected filters and reveals
-                  the Clear button next to the More Filters button. */}
-              <div className="mt-4 pt-3 border-t border-brand-blue/10 flex items-center justify-end gap-2">
-                <Button
-                  // The controls above commit as they change, so Done just closes.
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setShowAdvancedFilters(false)}
-                >
-                  Done
-                </Button>
-              </div>
             </div>
           )}
 
-          {/* Row 3: Select all + Bulk Actions + count + Sort */}
-          {sortedJobs.length > 0 && (
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0 pt-3 border-t border-gray-200">
+          {/* Single toolbar row: Select all + Status tabs + Creation method + Sort.
+              The row itself always renders (so the status tabs stay reachable even
+              when a filter yields no rows); Select all and Sort render only when
+              there are jobs to act on. */}
+          <div className="flex items-center gap-2 flex-wrap pt-3 border-t border-gray-200 mb-3">
+            {/* Select all + Bulk Actions — sits at the head of the row, where the
+                "Show:" label used to be. */}
+            {sortedJobs.length > 0 && (
               <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-                <button
-                  onClick={handleSelectAll}
-                  className={`group inline-flex items-center gap-2 h-9 pl-2.5 pr-3.5 rounded-full border text-sm font-medium transition-all ${
-                    selectedJobs.size > 0
-                      ? 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/30 hover:bg-brand-blue-2'
-                      : 'bg-white text-gray-700 border-gray-400 hover:border-brand-blue/40 hover:text-brand-blue'
-                  }`}
-                >
-                  <span className={`flex h-5 w-5 items-center justify-center rounded-full transition-colors ${
-                    selectedJobs.size > 0 ? 'bg-white/20' : 'bg-gray-100 group-hover:bg-brand-blue/10'
-                  }`}>
-                    {selectedJobs.size === sortedJobs.length && sortedJobs.length > 0 ? (
-                      <CheckSquare className={`w-3.5 h-3.5 ${selectedJobs.size > 0 ? 'text-white' : 'text-brand-blue'}`} />
+                {/* One Select All button. Its dropdown carries BOTH scopes:
+                    "this page (N)" — tracks the Show: N per-page value — and
+                    "all jobs (N)" — the total across every page. */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowSelectMenu((open) => !open)}
+                    aria-haspopup="menu"
+                    aria-expanded={showSelectMenu}
+                    className={tabPill(selectedJobs.size > 0)}
+                  >
+                    {allPagesSelected ? (
+                      <CheckSquare className="w-3.5 h-3.5" />
                     ) : selectedJobs.size > 0 ? (
-                      <span className="h-2 w-2 rounded-full bg-white" />
+                      <span className="h-2 w-2 rounded-full bg-current" />
                     ) : (
-                      <Square className="w-3.5 h-3.5 text-gray-400 group-hover:text-brand-blue" />
+                      <Square className="w-3.5 h-3.5" />
                     )}
-                  </span>
-                  <span>
-                    {selectedJobs.size > 0
-                      ? `${selectedJobs.size} selected`
-                      : 'Select all'}
-                  </span>
-                </button>
+                    <span>{selectedJobs.size > 0 ? `${selectedJobs.size} Selected` : 'Select All'}</span>
+                    <ChevronDown className="w-4 h-4" />
+                  </button>
 
-                {/* Bulk Actions Dropdown */}
+                  {showSelectMenu && (
+                    <>
+                      {/* Click-away layer so the menu closes on an outside click. */}
+                      <div className="fixed inset-0 z-40" onClick={() => setShowSelectMenu(false)} />
+                      <div className="absolute top-full left-0 mt-2 w-60 max-w-[calc(100vw-2rem)] bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                        <button
+                          onClick={() => { selectCurrentPage(); setShowSelectMenu(false); }}
+                          className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 text-gray-700 hover:bg-gray-50"
+                        >
+                          <Square className="w-4 h-4 text-gray-500" />
+                          Select all on this page ({currentJobs.length})
+                        </button>
+                        <button
+                          onClick={() => { selectAllPages(); setShowSelectMenu(false); }}
+                          className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 text-gray-700 hover:bg-gray-50"
+                        >
+                          <CheckSquare className="w-4 h-4 text-brand-blue" />
+                          Select all jobs ({sortedJobs.length})
+                        </button>
+                        <div className="border-t border-gray-200 my-1" />
+                        <button
+                          onClick={() => { clearSelection(); setShowSelectMenu(false); }}
+                          disabled={selectedJobs.size === 0}
+                          className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <X className="w-4 h-4 text-gray-500" />
+                          Clear selection
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Actions Dropdown — shown whenever at least one job is selected. */}
                 {selectedJobs.size > 0 && (
-                  <div className="relative">
+                  <div className="relative" ref={bulkActionsRef}>
                     <Button
                       variant="secondary"
                       size="sm"
                       onClick={() => setShowBulkActions(!showBulkActions)}
                       className="rounded-full"
                     >
-                      Bulk Actions
+                      Actions
                       <ChevronDown className="w-4 h-4" />
                     </Button>
 
@@ -1099,58 +1139,66 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                       // Right-aligned + width clamped to the viewport so the menu
                       // never runs off the right edge on narrow/mobile screens.
                       <div className="absolute top-full right-0 mt-2 w-64 max-w-[calc(100vw-2rem)] bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
-                        <button
-                          onClick={() => {
-                            if (!canUpdateJd) {
-                              toast.error('You do not have permission to publish job descriptions');
-                              return;
-                            }
-                            handleBulkPublish();
-                          }}
-                          aria-disabled={!canUpdateJd}
-                          title={!canUpdateJd ? 'You do not have permission to publish job descriptions' : ''}
-                          className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 ${
-                            canUpdateJd ? 'text-gray-700 hover:bg-gray-50' : 'text-gray-400 cursor-not-allowed opacity-60'
-                          }`}
-                        >
-                          <Send className={`w-4 h-4 ${canUpdateJd ? 'text-success' : 'text-gray-400'}`} />
-                          Publish Selected (Drafts)
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (!canDisableJd) {
-                              toast.error('You do not have permission to disable job descriptions');
-                              return;
-                            }
-                            handleBulkDisable();
-                          }}
-                          aria-disabled={!canDisableJd}
-                          title={!canDisableJd ? 'You do not have permission to disable job descriptions' : ''}
-                          className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 ${
-                            canDisableJd ? 'text-gray-700 hover:bg-gray-50' : 'text-gray-400 cursor-not-allowed opacity-60'
-                          }`}
-                        >
-                          <Ban className={`w-4 h-4 ${canDisableJd ? 'text-destructive' : 'text-gray-400'}`} />
-                          Disable Selected (Published)
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (!canArchiveJd) {
-                              toast.error('You do not have permission to archive job descriptions');
-                              return;
-                            }
-                            handleBulkArchive();
-                          }}
-                          aria-disabled={!canArchiveJd}
-                          title={!canArchiveJd ? 'You do not have permission to archive job descriptions' : ''}
-                          className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 ${
-                            canArchiveJd ? 'text-gray-700 hover:bg-gray-50' : 'text-gray-400 cursor-not-allowed opacity-60'
-                          }`}
-                        >
-                          <Archive className="w-4 h-4 text-gray-600" />
-                          Archive Selected
-                        </button>
-                        <div className="border-t border-gray-200 my-2" />
+                        {showDisableAction && (
+                          <button
+                            onClick={() => {
+                              if (!canDisableJd) {
+                                toast.error('You do not have permission to disable job descriptions');
+                                return;
+                              }
+                              handleBulkDisable();
+                            }}
+                            aria-disabled={!canDisableJd}
+                            title={!canDisableJd ? 'You do not have permission to disable job descriptions' : ''}
+                            className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 ${
+                              canDisableJd ? 'text-gray-700 hover:bg-gray-50' : 'text-gray-400 cursor-not-allowed opacity-60'
+                            }`}
+                          >
+                            <Ban className={`w-4 h-4 ${canDisableJd ? 'text-destructive' : 'text-gray-400'}`} />
+                            Disable Selected (Published)
+                          </button>
+                        )}
+                        {showArchiveAction && (
+                          <button
+                            onClick={() => {
+                              if (!canArchiveJd) {
+                                toast.error('You do not have permission to archive job descriptions');
+                                return;
+                              }
+                              handleBulkArchive();
+                            }}
+                            aria-disabled={!canArchiveJd}
+                            title={!canArchiveJd ? 'You do not have permission to archive job descriptions' : ''}
+                            className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 ${
+                              canArchiveJd ? 'text-gray-700 hover:bg-gray-50' : 'text-gray-400 cursor-not-allowed opacity-60'
+                            }`}
+                          >
+                            <Archive className="w-4 h-4 text-gray-600" />
+                            Archive Selected
+                          </button>
+                        )}
+                        {showUnarchiveAction && (
+                          <button
+                            onClick={() => {
+                              if (!canArchiveJd) {
+                                toast.error('You do not have permission to archive job descriptions');
+                                return;
+                              }
+                              handleBulkUnarchive();
+                            }}
+                            aria-disabled={!canArchiveJd}
+                            title={!canArchiveJd ? 'You do not have permission to archive job descriptions' : ''}
+                            className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 ${
+                              canArchiveJd ? 'text-gray-700 hover:bg-gray-50' : 'text-gray-400 cursor-not-allowed opacity-60'
+                            }`}
+                          >
+                            <RefreshCw className={`w-4 h-4 ${canArchiveJd ? 'text-success' : 'text-gray-400'}`} />
+                            Unarchive Selected
+                          </button>
+                        )}
+                        {(showDisableAction || showArchiveAction || showUnarchiveAction) && (
+                          <div className="border-t border-gray-200 my-2" />
+                        )}
                         <button
                           onClick={() => {
                             if (!canExportJd) {
@@ -1192,10 +1240,55 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                   </div>
                 )}
               </div>
+            )}
 
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-gray-500">Sort by</span>
-                <div className="inline-flex items-center bg-gray-50 border border-gray-400 rounded-full p-0.5 hover:border-brand-blue/30 transition-colors">
+            {/* Status tabs */}
+            {['all', 'Published', 'Draft', 'Disabled', 'Archived'].map((status) => (
+              <button
+                key={status}
+                onClick={() => search.setFilter('status', status.toLowerCase())}
+                className={tabPill(statusFilter.toLowerCase() === status.toLowerCase())}
+              >
+                {status === 'all' ? 'All Jobs' : status}
+              </button>
+            ))}
+
+            {/* Creation method: [ All | AI Generated | Manual ] — a single
+                connected segmented toggle (shared tinted track; the active
+                option lifts to a white chip). "All" clears the filter (null). */}
+            <div className="flex items-center gap-2 sm:ml-2 sm:border-l sm:border-gray-200 sm:pl-3">
+              <div className={SEGMENT_TOGGLE}>
+                <button
+                  onClick={() => search.setFilter('creationMethod', null)}
+                  className={segmentBtn(creationMethodFilter === null)}
+                >
+                  All
+                </button>
+                <button
+                  onClick={() => search.setFilter('creationMethod', creationMethodFilter === 'ai' ? null : 'ai')}
+                  className={segmentBtn(creationMethodFilter === 'ai')}
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">AI Generated</span>
+                  <span className="sm:hidden">AI</span>
+                </button>
+                <button
+                  onClick={() => search.setFilter('creationMethod', creationMethodFilter === 'manual' ? null : 'manual')}
+                  className={segmentBtn(creationMethodFilter === 'manual')}
+                >
+                  <Edit className="w-3.5 h-3.5" />
+                  Manual
+                </button>
+              </div>
+            </div>
+
+            {/* Sort by — pushed to the row's end */}
+            {sortedJobs.length > 0 && (
+              <div className="flex items-center gap-2 sm:ml-auto">
+                <span className="text-xs sm:text-sm text-gray-700">Sort by</span>
+                {/* bg-brand-blue/5 + rounded-lg = the tab pills' resting style, so
+                    the sort control belongs to the same pill system. */}
+                <div className="inline-flex items-center bg-brand-blue/5 rounded-lg p-1 transition-all">
                   <div className="relative">
                     <select
                       value={sortBy}
@@ -1203,7 +1296,7 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                         const value = e.target.value as JobSortBy;
                         setSortBy(value);
                       }}
-                      className="appearance-none h-8 pl-3 pr-8 bg-transparent rounded-full focus:outline-none focus:ring-2 focus:ring-brand-blue/40 text-sm font-medium text-gray-800 cursor-pointer"
+                      className="appearance-none h-7 pl-2.5 pr-8 bg-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 text-xs sm:text-sm text-gray-700 cursor-pointer"
                     >
                       <option value="date">Date Posted</option>
                       <option value="applicants">Applicants</option>
@@ -1221,15 +1314,15 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                       e.stopPropagation();
                       setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
                     }}
-                    className="ml-0.5 h-8 w-8 flex items-center justify-center rounded-full bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/10 hover:border-brand-blue/30 hover:text-brand-blue transition-colors cursor-pointer"
+                    className="ml-0.5 h-7 w-7 flex items-center justify-center rounded-md bg-white text-gray-700 hover:bg-brand-blue/10 hover:text-brand-blue transition-colors cursor-pointer"
                     title={sortOrder === 'asc' ? 'Sort Descending' : 'Sort Ascending'}
                   >
                     <ArrowUpDown className={`w-3.5 h-3.5 transition-transform ${sortOrder === 'asc' ? '' : 'rotate-180'}`} />
                   </button>
                 </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Jobs Grid/List */}
@@ -1267,6 +1360,15 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                         .map((sibling) => sibling.versionNumber ?? 1),
                     ).size > 1;
 
+                /* Counts for the colored badge stack beside the row actions.
+                   assessed/interviewed come from the candidate-counts hook (null
+                   until it loads — same visibility rule the meta row used),
+                   applicants from the job itself. */
+                const applicantsCount = job.applicants;
+                const assessedCount = candidateCounts ? candidateCounts[job.id]?.assessed ?? 0 : null;
+                const interviewedCount = candidateCounts ? candidateCounts[job.id]?.interviewed ?? 0 : null;
+                const hasCountBadges = applicantsCount != null || assessedCount != null || interviewedCount != null;
+
                 return (
                   <div
                     key={job.id}
@@ -1274,8 +1376,13 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                     onClick={() => job.status.toLowerCase() === 'draft' && onEditJob && canUpdateJd ? onEditJob(job) : onViewJob(job)}
                   >
                     <div className="flex flex-col md:flex-row md:items-start gap-3 md:gap-4">
-                      {/* Individual Select + Job Icon */}
-                      <div className="flex items-center gap-2 flex-shrink-0">
+                      {/* Individual Select — just the checkbox (the Briefcase
+                          job icon that used to sit beside it was removed).
+                          md:h-6 gives the checkbox the same 24px line-box as the
+                          title row (text-base), so on the desktop row it centers
+                          on the same line as the JD-ID / Role / Versions badges
+                          instead of sitting a few px higher. */}
+                      <div className="flex items-center flex-shrink-0 md:h-6">
                         <button
                           onClick={(e) => { e.stopPropagation(); handleSelectJob(job.id); }}
                           title={selectedJobs.has(job.id) ? 'Deselect' : 'Select'}
@@ -1285,9 +1392,6 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                             : <Square className="w-4 h-4 text-gray-400 hover:text-brand-blue" />
                           }
                         </button>
-                        <div className="h-9 w-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center">
-                          <Briefcase className="h-4 w-4 text-brand-blue" />
-                        </div>
                       </div>
 
                       {/* Job Info — the shared job-opening summary, so the
@@ -1298,6 +1402,13 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                           job={candidateCounts
                             ? { ...job, assessed: candidateCounts[job.id]?.assessed ?? 0, interviewed: candidateCounts[job.id]?.interviewed ?? 0 }
                             : job}
+                          // Job Openings cards: Posted / By / Last Updated as plain
+                          // text (no icons), and Salary / Location only when present.
+                          showMetaIcons={false}
+                          hideEmptyFields
+                          // The Applicants / Assessed / Interviewed counts are drawn
+                          // as a colored stack beside the row actions instead.
+                          showCountBadges={false}
                         />
                       </div>
 
@@ -1309,6 +1420,37 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                           with the right edge, level with the card's last
                           content row. */}
                       <div className="flex flex-col items-end justify-between gap-2 self-stretch flex-shrink-0">
+                      {/* Top of the actions column: the count badges (vertical,
+                          colored stack) sit to the LEFT of the Edit / View / ⋮
+                          button row. */}
+                      <div className="flex items-start gap-3">
+                        {/* Applicants / Assessed / Interviewed — one below another,
+                            equal width (items-stretch), colored with the shared
+                            semantic tokens: info (applicants), success (assessed),
+                            warning (interviewed). text-xs matches the app's other
+                            chips/badges; capitalized labels. */}
+                        {hasCountBadges && (
+                          <div className="flex flex-col items-stretch gap-1.5 flex-shrink-0">
+                            {applicantsCount != null && (
+                              <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs bg-info-subtle text-info-strong">
+                                <Users className="w-4 h-4" />
+                                {applicantsCount} {applicantsCount === 1 ? 'Applicant' : 'Applicants'}
+                              </span>
+                            )}
+                            {assessedCount != null && (
+                              <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs bg-success-subtle text-success-strong">
+                                <ClipboardCheck className="w-4 h-4" />
+                                {assessedCount} Assessed
+                              </span>
+                            )}
+                            {interviewedCount != null && (
+                              <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs bg-warning-subtle text-warning-strong">
+                                <Video className="w-4 h-4" />
+                                {interviewedCount} Interviewed
+                              </span>
+                            )}
+                          </div>
+                        )}
                       <div className="flex flex-wrap gap-2 items-start justify-end">
                         {/* Edit Button - icon only. Shown on every row except
                             Archived/Disabled ones — those are already retired,
@@ -1362,15 +1504,21 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
 
                         {/* Three-dot Menu */}
                         <div className="relative">
-                          <button
+                          {/* Same Button (secondary, h-9 w-9) as Edit and View, so
+                              all three row actions share one border, background,
+                              icon color, hover state and shape. */}
+                          <Button
+                            variant="secondary"
                             onClick={(e) => {
                               e.stopPropagation();
                               setActiveDropdown(activeDropdown === job.id ? null : job.id);
                             }}
-                            className="h-9 w-9 flex items-center justify-center bg-white border border-gray-300 rounded-md hover:bg-gray-50 hover:border-gray-400 transition-all"
+                            className="h-9 w-9 p-0 rounded-md"
+                            aria-label="More actions"
+                            title="More actions"
                           >
-                            <MoreVertical className="w-4 h-4 text-gray-600" />
-                          </button>
+                            <MoreVertical className="w-4 h-4" />
+                          </Button>
                           {activeDropdown === job.id && (
                             <div className="absolute right-0 top-full mt-1 w-52 max-w-[calc(100vw-2rem)] bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-40">
                               {/* View Applicants - Hide for Draft */}
@@ -1530,6 +1678,7 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                             </div>
                           )}
                         </div>
+                      </div>
                       </div>
                         {/* View Versions — pinned at the bottom of the actions
                             column, i.e. the card's bottom-right corner. Shown
@@ -1893,9 +2042,25 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
       <ArchiveJobModal
         isOpen={bulkArchiveOpen}
         count={selectedJobs.size}
-        jobLabel={`${selectedJobs.size} job description${selectedJobs.size === 1 ? '' : 's'} selected`}
+        jobLabel={`${selectedJobs.size} Job Description Selected`}
         onConfirm={confirmBulkArchive}
         onCancel={() => setBulkArchiveOpen(false)}
+      />
+
+      <DisableJobModal
+        isOpen={bulkDisableOpen}
+        jobLabel={`${selectedJobs.size} Job Description Selected`}
+        onConfirm={confirmBulkDisable}
+        onCancel={() => setBulkDisableOpen(false)}
+      />
+
+      <DeleteJobModal
+        isOpen={bulkDeleteOpen}
+        count={selectedJobs.size}
+        jobLabel={`${selectedJobs.size} Job Description Selected`}
+        onConfirm={confirmBulkDelete}
+        onCancel={() => setBulkDeleteOpen(false)}
+        isLoading={bulkDeleting}
       />
 
       {/* AI Match Modal */}
