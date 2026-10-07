@@ -9554,8 +9554,17 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     // the first 2 option also opens the recorder then only after some
     // seconds moved to next question").
     abortRecordingForSkipRef.current();
+    // Tag the click with the HR question it's answering so the backend can
+    // detect a late click that arrives after the silence ladder already
+    // auto-skipped this question — without this, the backend has no way to
+    // tell the answer apart from one meant for whatever question is current
+    // by the time the message arrives, and applies it there instead.
     try {
-      wsRef.current?.send(JSON.stringify({ type: 'text_input', text: trimmed }));
+      wsRef.current?.send(JSON.stringify({
+        type: 'text_input',
+        text: trimmed,
+        hr_question_id: structuredHrPrompt?.hrQuestionId || '',
+      }));
     } catch { /* best-effort, mirrors other wsRef.current?.send call sites */ }
     setStructuredHrPrompt(null);
     setHrExplainMore(false);
