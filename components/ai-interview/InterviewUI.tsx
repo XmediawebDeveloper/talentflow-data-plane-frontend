@@ -10518,6 +10518,20 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                           hrVoiceBlockedForQidRef.current = '';
                           hrVoiceBlockedQuestionNumberRef.current = null;
                           setHrExplainMore(true);
+                          // Tell the backend too — otherwise its _auto_skip
+                          // holding loop (armed for every yes_no HR question)
+                          // keeps suppressing the normal 20s "Are you there?"
+                          // silence ladder for this ENTIRE voice turn (it only
+                          // releases once the answer is fully transcribed or
+                          // real speech is confirmed), so a candidate who
+                          // pauses before speaking gets no nudge until this
+                          // component's own 45s last-resort fallback fires
+                          // instead of the usual ~20s. This message flips
+                          // current_hr_voice_mode server-side so the ladder
+                          // runs on the same schedule as every other question.
+                          try {
+                            wsRef.current?.send(JSON.stringify({ type: 'hr_voice_mode' }));
+                          } catch { /* best-effort, mirrors other wsRef.current?.send call sites */ }
                         }}
                         className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-blue-200 bg-blue-50 text-blue-900 text-sm font-semibold hover:bg-blue-100 hover:border-blue-300 transition-colors text-left"
                       >
