@@ -44,6 +44,7 @@ const ACTIVITY_ICONS: Record<string, React.ReactNode> = {
   invite_email_changed: <Edit className="w-4 h-4" />,
   candidate_exited: <LogOut className="w-4 h-4" />,
   candidate_errored: <AlertTriangle className="w-4 h-4" />,
+  recording_downloaded: <Download className="w-4 h-4" />,
 };
 
 // Color mapping for each activity type
@@ -67,6 +68,7 @@ const ACTIVITY_COLORS: Record<string, { bg: string; text: string; icon: string; 
   invite_email_changed: { bg: 'bg-brand-cyan/5', text: 'text-brand-cyan', icon: 'text-brand-cyan', border: 'border-brand-cyan/20' },
   candidate_exited: { bg: 'bg-brand-orange/10', text: 'text-brand-orange-deep', icon: 'text-brand-orange', border: 'border-brand-orange/20' },
   candidate_errored: { bg: 'bg-destructive-subtle', text: 'text-destructive', icon: 'text-destructive', border: 'border-destructive-line' },
+  recording_downloaded: { bg: 'bg-brand-blue/5', text: 'text-brand-blue', icon: 'text-brand-blue', border: 'border-brand-blue/20' },
 };
 
 export default function AssessmentAuditTrail() {
