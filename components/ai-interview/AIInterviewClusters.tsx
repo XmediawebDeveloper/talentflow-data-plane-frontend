@@ -2580,6 +2580,31 @@ export default function AIInterviewClusters() {
   }, [loading, generating, config, id, isFixed, nthEnabled,
       mthClusters, nthClusters, mthSkills.length, nthSkills.length]);
 
+  /* ─── Generate for a saved config that has skills but NO clusters ─────────
+     autogen only fires on the hand-off from Configure (?autogen=1) and the
+     auto-heal above deliberately skips zero clusters, so reopening a saved
+     config whose clusters were never generated (or whose generation failed)
+     left the page empty — and Continue let it through to publish with no
+     priorities and no question plan (prod config 0d0e78f3). Generate once. */
+  const missingClustersFiredRef = useRef(false);
+  useEffect(() => {
+    if (missingClustersFiredRef.current) return;
+    if (loading || generating || !config || !id) return;
+    if (searchParams.get('autogen') === '1') return;   // autogen effect handles this entry
+    if (isFlexible && isFinalized) return;
+    const mthMissing = mthSkills.length > 0 && mthClusters.length === 0;
+    const nthMissing = nthEnabled && nthSkills.length > 0 && nthClusters.length === 0;
+    if (!mthMissing && !nthMissing) return;
+    missingClustersFiredRef.current = true;
+    console.log('[CLUSTER-DEBUG] Saved config has skills but no clusters — generating', {
+      mthMissing, nthMissing,
+    });
+    toast.info('This configuration has no clusters yet — generating them…');
+    void handleGenerateClusters({ forceExpand: true });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, generating, config, id, isFlexible, isFinalized, nthEnabled,
+      mthClusters.length, nthClusters.length, mthSkills.length, nthSkills.length]);
+
   /* ── Save & Navigate ── */
   /** Build updated rounds_config with topics/topic_weights from clusters */
   const buildUpdatedRoundsConfig = () => {
@@ -2781,6 +2806,17 @@ export default function AIInterviewClusters() {
   };
 
   const handleContinue = () => {
+    // A section with skills but NO clusters at all used to pass every check
+    // below (nothing to find empty / duplicated), so the config was saved with
+    // mth_clusters: [] and published with no priorities and no question plan
+    // (prod config 0d0e78f3, 2026-09-18) — its interviews could never be scored.
+    const mthMissing = mthSkills.length > 0 && mthClusters.length === 0;
+    const nthMissing = nthEnabled && nthSkills.length > 0 && nthClusters.length === 0;
+    if (mthMissing || nthMissing) {
+      const which = [mthMissing && 'Must-To-Have', nthMissing && 'Nice-To-Have'].filter(Boolean).join(' and ');
+      toast.error(`${which} skills have no clusters yet. Click "Regenerate with AI" before continuing.`);
+      return;
+    }
     // Every cluster must contain at least one skill — empty clusters break
     // question distribution regardless of interview mode (timed or flexible)
     // and regardless of section (MTH or NTH-when-enabled).
