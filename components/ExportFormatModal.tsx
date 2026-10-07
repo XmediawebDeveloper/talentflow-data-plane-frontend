@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Download, FileDown, FileSpreadsheet, FileText, Info, Loader2, X } from 'lucide-react';
+import { Download, FileDown, FileSpreadsheet, FileText, Info, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import type { ExportFileFormat } from '@/lib/utils/exportUtils';
@@ -107,7 +107,7 @@ export default function ExportFormatModal({
         onClick={(e) => e.stopPropagation()}
         className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] flex flex-col"
       >
-        <div className="flex items-start justify-between gap-3 p-5 border-b border-gray-200 dark:border-slate-700 shrink-0">
+        <div className="flex items-start gap-3 p-5 border-b border-gray-200 dark:border-slate-700 shrink-0">
           <div className="flex items-start gap-3 min-w-0">
             <div className="w-11 h-11 rounded-full bg-blue-50 dark:bg-blue-500/15 flex items-center justify-center flex-shrink-0">
               <FileDown className="w-5 h-5 text-blue-600 dark:text-blue-300" />
@@ -123,16 +123,6 @@ export default function ExportFormatModal({
               )}
             </div>
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={onClose}
-            disabled={exporting}
-            className="px-2 flex-shrink-0"
-            aria-label="Close"
-          >
-            <X className="w-5 h-5" />
-          </Button>
         </div>
 
         <div className="p-5 overflow-y-auto flex-1">
@@ -179,7 +169,15 @@ export default function ExportFormatModal({
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-3 p-5 border-t border-gray-200 dark:border-slate-700 shrink-0">
+        <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-3 p-5 border-t border-gray-200 dark:border-slate-700 shrink-0">
+          <Button
+            variant="secondary"
+            size="md"
+            onClick={onClose}
+            disabled={exporting}
+          >
+            Cancel
+          </Button>
           <Button
             variant="primary"
             size="md"

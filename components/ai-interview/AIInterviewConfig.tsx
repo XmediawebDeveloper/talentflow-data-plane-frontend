@@ -1188,7 +1188,7 @@ function HRSection({
                           <button
                             type="button"
                             aria-pressed={effectiveType === 'text'}
-                            title="Candidate answers in their own words (voice/typed)"
+                            title="Candidate answers in their own words (spoken)"
                             onClick={e => {
                               e.preventDefault();
                               e.stopPropagation();
@@ -1200,7 +1200,7 @@ function HRSection({
                                 : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                             }`}
                           >
-                            Text
+                            Voice
                           </button>
                           <button
                             type="button"
@@ -1266,13 +1266,14 @@ function HRSection({
                     type="button"
                     aria-pressed={newQType === 'text'}
                     onClick={() => setNewQType('text')}
+                    title="Candidate answers in their own words (spoken)"
                     className={`px-2.5 py-1 rounded-full text-2xs font-medium transition-colors ${
                       newQType === 'text'
                         ? 'bg-brand-blue text-white shadow-sm ring-1 ring-brand-blue/40'
                         : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                     }`}
                   >
-                    Text
+                    Voice
                   </button>
                   <button
                     type="button"

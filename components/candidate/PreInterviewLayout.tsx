@@ -81,7 +81,7 @@ export default function PreInterviewLayout({
 
       {/* Progress Stepper */}
       <nav className="bg-white/90 backdrop-blur-sm border-b border-gray-200 px-4 py-4 sm:px-8 sm:py-5 !bg-white/90 !border-gray-200">
-        <div className="w-full max-w-6xl mx-auto">
+        <div className="w-full max-w-7xl mx-auto">
           <div className="flex items-center justify-between">
             {steps.map((label, index) => {
               const stepNumber = index + 1;
@@ -149,8 +149,8 @@ export default function PreInterviewLayout({
       </nav>
 
       {/* Content */}
-      <main className="flex flex-1 flex-col">
-        <div className="w-full max-w-6xl mx-auto flex-1 px-4 py-6 sm:px-8 sm:py-8">
+      <main className="flex flex-1 flex-col px-4 sm:px-8">
+        <div className="w-full max-w-7xl mx-auto flex-1 py-6 sm:py-8">
           {children}
         </div>
       </main>
@@ -158,7 +158,7 @@ export default function PreInterviewLayout({
       {/* Footer */}
       {showFooter && (
         <footer className="sticky bottom-0 border-t border-gray-200 bg-white px-4 py-3 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] sm:px-6 sm:py-4">
-          <div className="w-full max-w-6xl mx-auto flex items-center justify-between">
+          <div className="w-full max-w-7xl mx-auto flex items-center justify-between">
             <div>
               {shouldShowBack && (
                 <Button

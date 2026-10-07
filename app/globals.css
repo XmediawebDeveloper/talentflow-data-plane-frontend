@@ -1068,6 +1068,27 @@ body {
   animation: fadeIn 0.2s ease-out forwards;
 }
 
+/* Horizontal flip entrance, used by components/ui/flip-in.tsx. The start
+   angle comes from a CSS variable the component sets from its hinge, swing and
+   angle props. The 3D perspective comes from the surrounding FlipStage, so
+   every block in it is seen from one shared viewpoint. */
+@keyframes tf-flip-in {
+  from {
+    transform: rotateY(var(--tf-flip-angle, -90deg));
+    opacity: 0;
+  }
+  to {
+    transform: rotateY(0deg);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-flip-in {
+    animation: none !important;
+  }
+}
+
 /* Caret blink for typewriter effect (welcome banner firstName) */
 @keyframes caret-blink {
   0%, 49%   { opacity: 1; }
@@ -2157,6 +2178,61 @@ button, a, [role="button"], [data-slot="select-trigger"], [data-slot="tabs-trigg
   transition-property: background-color, border-color, color, box-shadow, opacity, transform;
   transition-duration: 150ms;
   transition-timing-function: ease;
+}
+
+/* ── Pointer cursor for interactive elements ────────────────────────────────
+   One global rule so every clickable control shows the hand on hover — buttons,
+   links, pills/chips/tags/tabs, icon buttons, dropdown triggers, select fields,
+   checkboxes, radios, toggle switches, menu/nav items, pagination, accordion and
+   expand/collapse headers, carousel arrows/dots, close/back/next and action
+   buttons, calendar date cells, rating stars, sliders, FABs, breadcrumb/avatar
+   links, stepper controls, and so on. Both native elements AND their ARIA-role
+   equivalents are matched, so role-based widgets (tabs, switches, menu items)
+   are covered even when they aren't literal <button>s. Clickable cards, chips,
+   table rows etc. that are plain <div>/<span> can't be matched by a selector —
+   they carry their own `cursor-pointer` where clickable (e.g. the job-row card).
+   In @layer base so any Tailwind `cursor-*` utility still wins; disabled controls
+   are excluded and fall back to not-allowed. Non-interactive text, decorative
+   icons and unbound <label>s keep the default cursor. */
+@layer base {
+  button:not(:disabled),
+  a[href],
+  area[href],
+  label[for],
+  summary,
+  select:not(:disabled),
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled),
+  input[type="file"]:not(:disabled),
+  input[type="range"]:not(:disabled),
+  input[type="color"]:not(:disabled),
+  input[type="submit"]:not(:disabled),
+  input[type="reset"]:not(:disabled),
+  input[type="button"]:not(:disabled),
+  [role="button"],
+  [role="link"],
+  [role="tab"],
+  [role="menuitem"],
+  [role="menuitemcheckbox"],
+  [role="menuitemradio"],
+  [role="option"],
+  [role="switch"],
+  [role="checkbox"],
+  [role="radio"],
+  [role="treeitem"],
+  [data-slot="select-trigger"],
+  [data-slot="tabs-trigger"] {
+    cursor: pointer;
+  }
+
+  /* Disabled / inert controls keep the not-allowed cursor, never the hand. */
+  button:disabled,
+  select:disabled,
+  input:disabled,
+  [aria-disabled="true"],
+  [data-disabled] {
+    cursor: not-allowed;
+  }
 }
 
 /* ── Sticky page header utility ─────────────────────────────

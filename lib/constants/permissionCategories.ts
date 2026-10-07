@@ -174,9 +174,15 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     // internal_db:delete -> internal_db:read). No 'Create'/'Edit' checkbox
     // exists in this category to mirror internal_db:create/update — those
     // backend codes have no corresponding frontend action at all.
+    //
+    // Rule: AI Talent Match from Internal DB requires the real backend
+    // permission that endpoint checks (app/services/permission_dependencies.py:
+    // internal_db:ai_match -> ai_match:run) — otherwise the button here could
+    // be enabled while every click 403s server-side.
     dependencies: {
       'internal_db:assessment': ['assessments:invite'],
       'internal_db:delete': ['internal_db:read'],
+      'internal_db:ai_match': ['ai_match:run'],
     },
   },
   {
