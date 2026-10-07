@@ -15,6 +15,7 @@ import '@/lib/tfjs-rejection-guard';
 import { AUTH_THEME_CSS } from '@/components/auth/authTheme';
 import SuccessAnimation from '@/components/ui/success-animation';
 import type { IconComponent } from '@/lib/types/icon';
+import SubStepProgress from './SubStepProgress';
 
 interface StepIdentityProps {
   token: string;
@@ -28,6 +29,35 @@ interface StepIdentityProps {
 }
 
 type OtpPhase = 'idle' | 'grid' | 'swap1' | 'swap2' | 'merge' | 'done';
+
+// Flip-in for the two OTP helper cards (resend timer + tips) — each turns
+// over on its horizontal axis, inward toward the other: the resend card
+// from rotateX(90deg), the tips card from rotateX(-90deg). Pure rotation
+// about each card's own centre — no perspective (which reads as a zoom),
+// no translate, no fade.
+const OTP_FLIP_CSS = `
+@keyframes tf-otp-flip-down {
+  from { transform: rotateX(90deg); }
+  to   { transform: rotateX(0deg); }
+}
+@keyframes tf-otp-flip-up {
+  from { transform: rotateX(-90deg); }
+  to   { transform: rotateX(0deg); }
+}
+.tf-otp-flip-down {
+  transform-origin: center;
+  backface-visibility: hidden;
+  animation: tf-otp-flip-down 0.55s ease-out both;
+}
+.tf-otp-flip-up {
+  transform-origin: center;
+  backface-visibility: hidden;
+  animation: tf-otp-flip-up 0.55s ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tf-otp-flip-down, .tf-otp-flip-up { animation: none; }
+}
+`;
 
 // Seconds counted down before the identity photo is auto-captured.
 const CAPTURE_COUNTDOWN_SECONDS = 3;
@@ -85,6 +115,18 @@ export default function StepIdentity({
   const [otpVerifying, setOtpVerifying] = useState(false);
   const [otpError, setOtpError] = useState<string | null>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
+  // Bumped on every successful send — keys the OTP helper cards so their
+  // flip-in replays on Resend, not only on the first Send OTP.
+  const [otpSendCount, setOtpSendCount] = useState(0);
+  const otpHeadingRef = useRef<HTMLLabelElement>(null);
+
+  // Bring the "Enter OTP" heading into view after every send — the cells
+  // only mount once the first send succeeds, so this runs after that render.
+  useEffect(() => {
+    if (otpSendCount === 0) return;
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    otpHeadingRef.current?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
+  }, [otpSendCount]);
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
   // Success choreography for the OTP step — mirrors ForgotPasswordModal's OTP
@@ -160,6 +202,7 @@ export default function StepIdentity({
       setOtpCode(['', '', '', '', '', '']);
       setOtpPhase('idle');
       setOtpVerified(false);
+      setOtpSendCount(count => count + 1);
       startCooldown();
     } catch {
       setOtpError('Failed to send OTP. Please try again.');
@@ -684,37 +727,18 @@ export default function StepIdentity({
     }
   }, [photoBlob, onVerify, name, email]);
 
-  // ── Progress stepper (2 sections) ──
+  // ── Progress stepper (2 sections) ── one compact card, rendered first on
+  // BOTH phases so it stays put while the content below swaps from the
+  // details form to the photo capture.
   const isPhotoPhase = phase !== 'form';
   const isComplete = phase === 'captured';
 
   const progressStepper = (
-    <div className="flex items-center gap-3 sm:gap-4 pb-4 mb-5 border-b border-gray-100">
-      {/* Step 1 */}
-      <div className="flex items-center gap-2">
-        <span className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold flex-shrink-0 bg-brand-blue text-white">
-          {isPhotoPhase ? <CheckCircle className="w-4 h-4" /> : '1'}
-        </span>
-        <span className={`text-sm font-semibold whitespace-nowrap ${isPhotoPhase ? 'text-gray-500' : 'text-gray-900'}`}>
-          Candidate Details
-        </span>
-      </div>
-
-      {/* Connector */}
-      <div className={`h-0.5 flex-1 rounded-full transition-colors ${isPhotoPhase ? 'bg-brand-blue' : 'bg-gray-200'}`} />
-
-      {/* Step 2 */}
-      <div className="flex items-center gap-2">
-        <span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold flex-shrink-0 ${
-          isComplete || isPhotoPhase ? 'bg-brand-blue text-white' : 'bg-white border-2 border-gray-300 text-gray-400'
-        }`}>
-          {isComplete ? <CheckCircle className="w-4 h-4" /> : '2'}
-        </span>
-        <span className={`text-sm font-semibold whitespace-nowrap ${isPhotoPhase ? 'text-gray-900' : 'text-gray-400'}`}>
-          Live Photo Capture
-        </span>
-      </div>
-    </div>
+    <SubStepProgress
+      steps={['Candidate Details', 'Live Photo Capture']}
+      activeIndex={isPhotoPhase ? 1 : 0}
+      allComplete={isComplete}
+    />
   );
 
   // ── Privacy card ──
@@ -768,9 +792,12 @@ export default function StepIdentity({
   if (phase === 'form') {
     return (
       <div className="w-full max-w-6xl mx-auto space-y-6">
-        <div className="flex items-start gap-3">
-          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-success-subtle text-success flex-shrink-0">
-            <Shield className="w-5 h-5" />
+        {progressStepper}
+
+        <div className="flex flex-col items-center text-center">
+          {/* Same badge as the Live Photo Capture phase's header. */}
+          <span className="inline-flex items-center gap-1.5 bg-success-subtle text-success text-xs font-semibold px-3 py-1.5 rounded-full mb-3">
+            <User className="w-3.5 h-3.5" /> Candidate Details
           </span>
           <div>
             <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Identity Verification</h1>
@@ -782,8 +809,6 @@ export default function StepIdentity({
 
         <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm flex flex-col lg:flex-row">
           <div className="p-6 space-y-5 min-w-0 flex-1">
-            {progressStepper}
-
             <div className="flex items-center gap-2 bg-warning-subtle text-warning-strong text-sm font-medium rounded-lg px-4 py-3">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
               Enter your name exactly as it appears on your government ID.
@@ -839,7 +864,7 @@ export default function StepIdentity({
                   identical to the forgot-password OTP step. */}
               {otpSent && !otpVerified && (
                 <div className="space-y-3">
-                  <label className="flex items-center gap-1.5 text-sm font-medium text-gray-900">
+                  <label ref={otpHeadingRef} className="flex items-center gap-1.5 text-sm font-medium text-gray-900 scroll-mt-6">
                     <KeyRound className="w-4 h-4 text-gray-500" /> Enter OTP <span className="text-destructive">*</span>
                   </label>
 
@@ -879,8 +904,13 @@ export default function StepIdentity({
                     </div>
                   </div>
 
+                  <style>{OTP_FLIP_CSS}</style>
+
                   {/* Resend timer */}
-                  <div className="flex items-center gap-3 py-2 px-3 bg-success-subtle/60 rounded-lg border border-success-line">
+                  <div
+                    key={`resend-${otpSendCount}`}
+                    className="tf-otp-flip-down flex items-center gap-3 py-2 px-3 bg-success-subtle/60 rounded-lg border border-success-line"
+                  >
                     {resendCooldown > 0 ? (
                       <>
                         {/* Circular countdown */}
@@ -924,6 +954,21 @@ export default function StepIdentity({
                       </>
                     )}
                   </div>
+
+                  {/* Didn't receive the code — the forgot-password OTP step's
+                      hint, same classes, so the two OTP screens match. */}
+                  <div key={`tips-${otpSendCount}`} className="tf-auth-scope tf-otp-flip-up">
+                    <div className="tf-fp-hint" style={{ marginTop: 0 }}>
+                      <span className="tf-fp-hint-icon" aria-hidden="true">i</span>
+                      <div>
+                        <p className="tf-fp-hint-title">Didn&apos;t receive the code?</p>
+                        <p className="tf-fp-hint-copy">
+                          Check your spam or junk folder. The code will expire in{' '}
+                          <span className="tf-fp-hint-strong">10 minutes</span>.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -966,9 +1011,7 @@ export default function StepIdentity({
   // ── PHASES B-E: Live Photo Capture ──
   return (
     <div className="w-full max-w-6xl mx-auto space-y-6" style={{ colorScheme: 'light' }}>
-      <div className="bg-white border border-gray-200 rounded-2xl px-6 py-5">
-        {progressStepper}
-      </div>
+      {progressStepper}
       <div className="text-center">
         <span className="inline-flex items-center gap-1.5 bg-success-subtle text-success text-xs font-semibold px-3 py-1.5 rounded-full mb-3">
           <Camera className="w-3.5 h-3.5" /> Live Photo Capture
