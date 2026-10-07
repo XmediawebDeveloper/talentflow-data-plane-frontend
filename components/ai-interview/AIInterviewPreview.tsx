@@ -231,6 +231,7 @@ export default function AIInterviewPreview() {
   const router = useRouter();
   const { isTenantAdmin, hasPermissionCode } = useAuth();
   const canPublishAIInterview = isTenantAdmin || hasPermissionCode('ai_interview:publish');
+  const canInviteAIInterview = isTenantAdmin || hasPermissionCode('ai_interview:invite');
   const searchParams = useSearchParams();
   const id = searchParams.get('id') || '';
   // Carried from Clusters when the flow started on a JD's Job Details page, so
@@ -550,8 +551,16 @@ export default function AIInterviewPreview() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setShareOpen(true)}
-                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
+                    onClick={() => {
+                      if (!canInviteAIInterview) {
+                        toast.error('You do not have permission to invite candidates');
+                        return;
+                      }
+                      setShareOpen(true);
+                    }}
+                    aria-disabled={!canInviteAIInterview}
+                    title={!canInviteAIInterview ? 'You do not have permission to invite candidates' : undefined}
+                    className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors ${!canInviteAIInterview ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     <Share2 className="w-4 h-4" />
                     Share Invite Link
