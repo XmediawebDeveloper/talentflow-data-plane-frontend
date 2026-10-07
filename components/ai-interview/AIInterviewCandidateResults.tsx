@@ -33,7 +33,7 @@ import {
   getProctoringRisk,
   formatDuration,
 } from './AIInterviewResults';
-import { InviteSourceValue, inviteSourceLabel, displayInviteScore, inviteResult, matchesInviteResultFilter } from '@/components/AIInterviewInviteTable';
+import { InviteSourceValue, inviteSourceLabel, displayInviteScore, inviteResult, matchesInviteResultFilter, InviteTimelineLines } from '@/components/AIInterviewInviteTable';
 import SearchableSelect from '@/components/ui/searchable-select';
 import {
   FilterSelect,

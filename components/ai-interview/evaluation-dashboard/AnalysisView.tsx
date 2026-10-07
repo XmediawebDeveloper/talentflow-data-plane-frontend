@@ -33,7 +33,7 @@ export function AnalysisView({ data }: { data: DashboardData }) {
       <div className="grid grid-cols-4 gap-6">
         <div className="p-6 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100/50 border border-blue-200">
           <div className="text-xs text-blue-700 uppercase tracking-wider mb-2 font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>Questions Asked</div>
-          <div className="text-4xl text-blue-900 mb-1 font-bold" style={{ fontFamily: 'var(--font-mono)' }}>{data.interviewResponses.length}</div>
+          <div className="text-4xl text-blue-900 mb-1 font-bold" style={{ fontFamily: 'var(--font-mono)' }}>{data.questionsAsked}</div>
           <div className="text-xs text-blue-600">assessment coverage</div>
         </div>
         <div className="p-6 rounded-xl bg-gradient-to-br from-emerald-50 to-emerald-100/50 border border-emerald-200">

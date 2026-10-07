@@ -6,6 +6,7 @@ import Image from 'next/image';
 import '@/lib/tfjs-rejection-guard';
 import { loadFaceApiWithCpuBackend } from '@/lib/face-api-loader';
 import { createVideoFrameCanvas, filterMultipleFaceCandidates, type FaceRegion } from '@/lib/proctoring/faceDetection';
+import { createMediaPipeFaceCounter, type MediaPipeFaceCounter } from '@/lib/proctoring/mediapipeFaceCounter';
 import { MicDisconnectedDuringRecordingError } from '@/lib/utils/pcmEnroll';
 import {
   Monitor,
@@ -510,6 +511,14 @@ export default function StepSystemCheck({
   // Consecutive-bad-tick counters behind FACE_MISS_STREAK.
   const noFaceStreakRef = useRef(0);
   const multiFaceStreakRef = useRef(0);
+  // Second opinion for the Multiple People row: the in-interview MediaPipe
+  // model. The poll's own detector runs small (224 px on a 320 px frame) for
+  // CPU reasons and misses smaller / partly covered second faces.
+  const faceCounterRef = useRef<MediaPipeFaceCounter | null>(null);
+  const countPeopleWithMediaPipe = (video: HTMLVideoElement): Promise<number | null> => {
+    if (!faceCounterRef.current) faceCounterRef.current = createMediaPipeFaceCounter();
+    return faceCounterRef.current.count(video);
+  };
   const micIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Voice enrollment is captured WHILE the candidate speaks during the mic
   // check (reading the prompt below), not at proceed-time when they're silent —
@@ -1413,7 +1422,9 @@ export default function StepSystemCheck({
     // disabled Continue (allSystemPassed) right as the candidate clicked it —
     // the "I had to press Next several times" complaint. During a first miss
     // the row keeps its status and only its detail line changes.
-    const applyFaceCount = (count: number) => {
+    // `peopleCount` (Multiple People row) may come from a second detector — the
+    // larger of the two counts; `count` alone drives the Face Detection row.
+    const applyFaceCount = (count: number, peopleCount: number = count) => {
       // Face Detection: purely about the candidate's face being present.
       if (count >= 1) {
         noFaceStreakRef.current = 0;
@@ -1426,12 +1437,12 @@ export default function StepSystemCheck({
       }
       // Multiple People Check: purely about EXTRA people — independent of whether
       // the face is currently visible. Passes for 0 or 1 person; fails only at 2+.
-      if (count >= 2) {
+      if (peopleCount >= 2) {
         multiFaceStreakRef.current += 1;
         updateSystemCheck('multiple', multiFaceStreakRef.current >= FACE_MISS_STREAK
-          ? { status: 'fail', detail: `${count} people detected — ensure you are alone` }
+          ? { status: 'fail', detail: `${peopleCount} people detected — ensure you are alone` }
           : { detail: 'Confirming you are alone...' });
-      } else if (count === 1) {
+      } else if (peopleCount === 1 || count === 1) {
         multiFaceStreakRef.current = 0;
         updateSystemCheck('multiple', { status: 'pass', detail: 'Single person detected (Good)' });
       } else {
@@ -1482,9 +1493,10 @@ export default function StepSystemCheck({
         // Native detection is off-thread and cheap, so it reads the video
         // element directly — boxes come back in video coordinates.
         const detectNative = async () => {
-          applyFaceCount(countSignificantFaces(
+          const count = countSignificantFaces(
             Array.from(await detector.detect(video)), nativeRegion, video.videoWidth, video.videoHeight,
-          ));
+          );
+          applyFaceCount(count, Math.max(count, (await countPeopleWithMediaPipe(video)) ?? 0));
         };
         await detectNative();
         setHasFaceDetector(true);
@@ -1505,9 +1517,10 @@ export default function StepSystemCheck({
         const detectWithFaceApi = async () => {
           const frame = createVideoFrameCanvas(video, FACE_DETECT_FRAME_WIDTH);
           if (!frame) return;
-          applyFaceCount(countSignificantFaces(
+          const count = countSignificantFaces(
             await faceapi.detectAllFaces(frame, opts), faceApiRegion, frame.width, frame.height,
-          ));
+          );
+          applyFaceCount(count, Math.max(count, (await countPeopleWithMediaPipe(video)) ?? 0));
         };
         await detectWithFaceApi();
         setHasFaceDetector(true);
@@ -1938,6 +1951,8 @@ export default function StepSystemCheck({
     return () => {
       mountedRef.current = false;
       stopActiveChecks();
+      faceCounterRef.current?.close();
+      faceCounterRef.current = null;
       if (micFallbackNoticeTimerRef.current) clearTimeout(micFallbackNoticeTimerRef.current);
     };
   }, [stopActiveChecks]);
@@ -2045,6 +2060,8 @@ export default function StepSystemCheck({
             _faces = _frame ? (await faceapi.detectAllFaces(_frame, _opts)).length : -1;
           } catch { _faces = -1; }
         }
+        // Same second opinion as the live poll.
+        _faces = Math.max(_faces, (await countPeopleWithMediaPipe(_vid)) ?? -1);
         faceApiBusyRef.current = false;
         if (_faces > 1) {
           updateSystemCheck('multiple', { status: 'fail', detail: `${_faces} people detected — ensure you are alone before continuing` });

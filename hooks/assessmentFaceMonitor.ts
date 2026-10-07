@@ -14,8 +14,8 @@
  * components/ai-interview/proctoring/InterviewFaceDetection.ts and
  * InterviewFaceVerification.ts, which candidates run without hanging):
  *   - MediaPipe FaceDetection (short model, WASM/WebGL, CDN) every 1.5 s → face count
- *   - MediaPipe FaceMesh every 2 s → gaze direction via the shared
- *     lib/proctoring/gazeEstimator (same measures as the interview; 2 away /
+ *   - MediaPipe FaceMesh every 1 s → gaze direction via the shared
+ *     lib/proctoring/gazeEstimator (same measures as the interview; 3 away /
  *     2 restored confirmations, ONE event per episode)
  *   - face-api.js identity descriptor every 10 s, ONLY when exactly one face
  *     is present and the page is visible; never per-cycle, never on snapshots
@@ -40,18 +40,25 @@ export type GazeDirection =
   // Head turned so far FaceMesh lost the landmarks while the detector still sees a face.
   | 'profile';
 
+export type GazeEndReason = 'restored' | 'face_missing' | 'camera_obstructed';
+
 export interface FaceMonitorCallbacks {
   /** Called on every detection tick (~1.5 s) with the plausible face count. */
   onFaceCount: (count: number, details: Record<string, unknown>) => void;
   /** Detector threw or produced nothing usable. */
   onDetectionFailure?: (error: unknown) => void;
   /**
-   * Gaze left the screen for ≥ 2 consecutive checks (~2-4 s). Once per episode.
+   * Gaze left the screen for ≥ 3 consecutive 1 s checks (~3 s). Once per episode.
    * `metrics` is what tripped it (cue + yaw/pitch/eye deviations from baseline).
    */
   onGazeAway?: (direction: GazeDirection, metrics: Record<string, string | number | boolean>) => void;
-  /** Gaze came back for ≥ 2 consecutive checks. Carries the episode length. */
-  onGazeRestored?: (episodeMs: number) => void;
+  /**
+   * Looking-away episode ended. Carries the episode length and why: the
+   * candidate looked back ("restored"), or the caller ended it via resetGaze()
+   * because the face is no longer visible ("face_missing" / "camera_obstructed")
+   * — gaze is only judged while a face is visible.
+   */
+  onGazeRestored?: (episodeMs: number, reason: GazeEndReason) => void;
   /** Descriptor distance to the baseline exceeded the threshold twice in a row. */
   onIdentityMismatch?: (distance: number) => void;
   /** No baseline existed; three captures were averaged into one. */
@@ -62,7 +69,7 @@ export interface FaceMonitorCallbacks {
 
 export interface FaceMonitorOptions {
   faceIntervalMs?: number;      // default 1500
-  gazeIntervalMs?: number;      // default 2000
+  gazeIntervalMs?: number;      // default 1000
   identityIntervalMs?: number;  // default 10000
   pollMs?: number;              // default 250
   enableGaze?: boolean;         // default true
@@ -81,16 +88,27 @@ export interface AssessmentFaceMonitor {
   setIdentityBaseline: (descriptor: Float32Array | null) => void;
   /** Last plausible face count seen by the detector. */
   getLastFaceCount: () => number;
+  /**
+   * Face first, gaze second: end any open looking-away episode (and drop a
+   * partial "away" streak) because the face is no longer visible. Call it
+   * BEFORE raising face_missing / camera_obstructed so that warning replaces
+   * "Looking away" instead of sitting under it.
+   */
+  resetGaze: (reason: Exclude<GazeEndReason, 'restored'>) => void;
 }
 
 const MIN_FACE_BOX_AREA = 0.025;   // ≥2.5 % of the frame — filters spurious boxes
 const MIN_DETECTION_CONFIDENCE = 0.6;
-// BUG03: was 3 checks at the 2 s cadence (≥ 4-6 s), so "a few seconds" of
-// looking away never registered. 2 checks ≈ 2-4 s, matching the interview's
-// low-tier setting — the gaze cadence stays 2 s here because this page has a
-// history of main-thread hangs (see the file header).
-const FRAMES_GAZE_AWAY = 2;
-const FRAMES_GAZE_RESTORED = 2;
+// Same as the AI interview: 1 s cadence × 3 consecutive "away" checks ≈ 3 s,
+// and the 10-reading baseline calibrates in ~10 s (at the old 2 s cadence it
+// took ~20 s, so a short test was over before gaze was ever judged). The
+// page's old hangs came from face-api on the CPU, not MediaPipe; the busy flag
+// in tick() still stops passes from overlapping, and the 30 s
+// "[FACE-MONITOR] main-thread cost" line shows the real per-pass cost.
+const FRAMES_GAZE_AWAY = 3;
+// 1 check: the "looking away" warning is HELD on screen for the whole episode
+// (same as the interview), so it must clear promptly once they look back.
+const FRAMES_GAZE_RESTORED = 1;
 const FALLBACK_FACE_INTERVAL_MS = 3000;
 // When the identity worker cannot start, the main-thread descriptor (5–8 s on
 // slow CPUs) runs only this often so the page is never blocked for long.
@@ -149,7 +167,7 @@ export function createAssessmentFaceMonitor(
   options: FaceMonitorOptions = {},
 ): AssessmentFaceMonitor {
   const faceIntervalMs = options.faceIntervalMs ?? 1500;
-  const gazeIntervalMs = options.gazeIntervalMs ?? 2000;
+  const gazeIntervalMs = options.gazeIntervalMs ?? 1000;
   const identityIntervalMs = options.identityIntervalMs ?? 10000;
   const pollMs = options.pollMs ?? 250;
   const enableGaze = options.enableGaze ?? true;
@@ -212,8 +230,13 @@ export function createAssessmentFaceMonitor(
   const handleMeshResults = (results: any) => {
     // lastFaceCount (detector, 1.5 s) tells "head turned so far the mesh lost
     // it" (face still there) from "nobody there" (face-count path owns that).
+    // Gaze is judged only while the detector sees a face (face first, gaze
+    // second): no face → face_missing owns the warning, never "looking away".
     const reading = gazeEstimator.read(results?.multiFaceLandmarks?.[0], lastFaceCount >= 1);
-    if (!reading) return;
+    if (!reading) {
+      gazeAwayCount = 0; // a partial "away" streak must not carry across the no-face gap
+      return;
+    }
     const lookingAway = reading.away;
 
     if (lookingAway) {
@@ -230,12 +253,25 @@ export function createAssessmentFaceMonitor(
       gazeAwayCount = 0;
       if (!gazeOnScreen && gazeRestoredCount >= FRAMES_GAZE_RESTORED) {
         gazeOnScreen = true;
-        callbacks.onGazeRestored?.(Date.now() - gazeEpisodeStartedAt);
+        callbacks.onGazeRestored?.(Date.now() - gazeEpisodeStartedAt, 'restored');
         gazeEpisodeStartedAt = 0;
       }
     }
   };
 
+  // The two MediaPipe solutions MUST finish loading one after the other.
+  // Their emscripten loader scripts share ONE global `Module`: FaceMesh's
+  // packed-assets loader reads `Module.dataFileDownloads[url]` back on every
+  // download-progress event, and if FaceDetection's loader runs in between it
+  // swaps `Module` out → "Cannot read properties of undefined (reading
+  // '…face_mesh_solution_packed_assets.data')" → the mesh graph can't read its
+  // model ("Failed to read file face_detection_short_range.tflite") → gaze is
+  // dead for the whole session. That's what happened here: the first detector
+  // pass (which is what used to trigger the download) was capped at 1.5 s by
+  // sendWithTimeout, so the gaze pass started FaceMesh's download while
+  // FaceDetection's was still running. The AI interview never hit it only
+  // because it awaits that first pass with no timeout. initialize() makes the
+  // order explicit: detector fully loaded, THEN the mesh.
   const initMediaPipe = async (): Promise<boolean> => {
     try {
       await loadScript(`${MP_FACE_DETECTION_URL}/face_detection.js`);
@@ -246,6 +282,7 @@ export function createAssessmentFaceMonitor(
       fd.onResults((r: any) => {
         try { handleFaceResults(r); } finally { pendingFaceResolve?.(); pendingFaceResolve = null; }
       });
+      await fd.initialize(); // download + compile fully before anything else loads
       faceDetector = fd;
     } catch (err) {
       console.warn('[FACE-MONITOR] MediaPipe FaceDetection unavailable, falling back to face-api tiny detector:', err);
@@ -262,6 +299,7 @@ export function createAssessmentFaceMonitor(
         fm.onResults((r: any) => {
           try { handleMeshResults(r); } finally { pendingMeshResolve?.(); pendingMeshResolve = null; }
         });
+        await fm.initialize(); // also before the first tick, so no pass can overlap the download
         faceMesh = fm;
       } catch (err) {
         console.warn('[FACE-MONITOR] FaceMesh unavailable — gaze tracking disabled:', err);
@@ -416,7 +454,14 @@ export function createAssessmentFaceMonitor(
       if (running) return;
       running = true;
       const ok = await initMediaPipe();
-      if (!running) return;
+      if (!running) {
+        // stop() ran while the models were still loading — release what loaded.
+        try { faceDetector?.close?.(); } catch { /* ignore */ }
+        try { faceMesh?.close?.(); } catch { /* ignore */ }
+        faceDetector = null;
+        faceMesh = null;
+        return;
+      }
       if (!ok) {
         usingFallbackDetector = true;
         await ensureFaceApi();
@@ -454,5 +499,13 @@ export function createAssessmentFaceMonitor(
       bootstrap.length = 0;
     },
     getLastFaceCount: () => lastFaceCount,
+    resetGaze(reason) {
+      gazeAwayCount = 0;
+      gazeRestoredCount = 0;
+      if (gazeOnScreen) return;
+      gazeOnScreen = true;
+      callbacks.onGazeRestored?.(Date.now() - gazeEpisodeStartedAt, reason);
+      gazeEpisodeStartedAt = 0;
+    },
   };
 }

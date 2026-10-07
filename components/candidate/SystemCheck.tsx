@@ -15,7 +15,8 @@ import {
   RefreshCw,
   ArrowLeft,
   ArrowRight,
-  Loader2
+  Loader2,
+  Users
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import CandidateHeader from './CandidateHeader';
@@ -48,6 +49,7 @@ import {
   MIN_CONFIDENT_FACE_SCORE,
   pickPrimaryFace,
 } from '@/lib/proctoring/faceDetection';
+import { createMediaPipeFaceCounter, type MediaPipeFaceCounter } from '@/lib/proctoring/mediapipeFaceCounter';
 import { candidateService, SystemCheckResult } from '@/lib/services/candidateService';
 import { getUserMedia, getErrorMessage, detectBrowser, checkBrowserCompatibility, playVideo, shouldUseAdaptiveAssessmentMode } from '@/lib/utils/browserCompat';
 
@@ -199,6 +201,10 @@ function analyzeSystemCheckFaceDetections<T>({
 
 export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: SystemCheckProps) {
   const [cameraCheck, setCameraCheck] = useState<CheckStatus>({ status: 'pending', message: 'Not checked' });
+  // Its own row (AI interview parity): "is the candidate's face there" and
+  // "is anyone ELSE there" are different questions. Folded into the Camera
+  // row, a second person who wasn't counted simply left it green.
+  const [multipleCheck, setMultipleCheck] = useState<CheckStatus>({ status: 'pending', message: 'Not checked' });
   const [micCheck, setMicCheck] = useState<CheckStatus>({ status: 'pending', message: 'Not checked' });
   const [internetCheck, setInternetCheck] = useState<CheckStatus>({ status: 'pending', message: 'Not checked' });
   const [browserCheck, setBrowserCheck] = useState<CheckStatus>({ status: 'pending', message: 'Not checked' });
@@ -210,6 +216,10 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
   const [browserWarning, setBrowserWarning] = useState<string | null>(null);
   const [cameraInUseError, setCameraInUseError] = useState<string>('');
   const [hasCameraPreview, setHasCameraPreview] = useState(false);
+  // Before the first run every row still reads "Not checked": the Run Checks
+  // button is then the only thing the candidate can usefully do.
+  const checksNotStarted = !isChecking
+    && [browserCheck, internetCheck, cameraCheck, multipleCheck, micCheck].every((c) => c.status === 'pending');
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -217,6 +227,12 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
   const networkCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const micCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  // Bumped whenever the mic check is stopped or restarted, so an earlier run
+  // still awaiting (calibration, AudioContext startup) can't arm its interval
+  // over the new run's and flip a passed check back to "Listening".
+  const micGenRef = useRef(0);
+  // Removes the click/keydown listeners that resume a suspended AudioContext.
+  const micResumeCleanupRef = useRef<(() => void) | null>(null);
   const networkSpeedMbpsRef = useRef<number | null>(null);
   const networkLatencyMsRef = useRef<number | null>(null);
   const browserInfoRef = useRef<ReturnType<typeof detectBrowser> | null>(null);
@@ -224,6 +240,10 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
   const faceDetectionFailureCountRef = useRef(0);
   const faceApiModuleRef = useRef<Awaited<ReturnType<typeof loadFaceApiWithCpuBackend>> | null>(null);
   const faceApiLoadPromiseRef = useRef<Promise<Awaited<ReturnType<typeof loadFaceApiWithCpuBackend>>> | null>(null);
+  // Second opinion on "how many people": the in-test MediaPipe model. The
+  // face-api pass below runs small (224 px) for CPU reasons and misses smaller /
+  // partly covered faces — two people passed this screen that way.
+  const faceCounterRef = useRef<MediaPipeFaceCounter | null>(null);
 
   // Face verification must pass before the candidate can proceed.
   // We allow a short grace window for the detector to stabilize, but we no
@@ -257,6 +277,8 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
     window.scrollTo(0, 0);
 
     return () => {
+      faceCounterRef.current?.close();
+      faceCounterRef.current = null;
       // Stop periodic face detection
       if (faceCheckIntervalRef.current) {
         clearInterval(faceCheckIntervalRef.current);
@@ -266,6 +288,9 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
         clearInterval(networkCheckIntervalRef.current);
         networkCheckIntervalRef.current = null;
       }
+      micGenRef.current += 1;
+      micResumeCleanupRef.current?.();
+      micResumeCleanupRef.current = null;
       if (micCheckIntervalRef.current) {
         clearInterval(micCheckIntervalRef.current);
         micCheckIntervalRef.current = null;
@@ -355,11 +380,12 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
     // All other checks must be 'success'.
     const allSuccess =
       cameraCheck.status === 'success' &&
+      multipleCheck.status === 'success' &&
       micCheck.status === 'success' &&
       (internetCheck.status === 'success' || internetCheck.status === 'warning') &&
       browserCheck.status === 'success';
     setAllChecksComplete(allSuccess);
-  }, [cameraCheck, micCheck, internetCheck, browserCheck]);
+  }, [cameraCheck, multipleCheck, micCheck, internetCheck, browserCheck]);
 
   // Cancels the face poll for good: clears the pending timer AND invalidates
   // any tick already running, which clearTimeout alone cannot do (that tick
@@ -380,6 +406,9 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
   };
 
   const stopMicMonitoring = () => {
+    micGenRef.current += 1;
+    micResumeCleanupRef.current?.();
+    micResumeCleanupRef.current = null;
     if (micCheckIntervalRef.current) {
       clearInterval(micCheckIntervalRef.current);
       micCheckIntervalRef.current = null;
@@ -480,6 +509,7 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
 
     // Reset all checks including camera in use error
     setCameraCheck({ status: 'checking', message: 'Checking...' });
+    setMultipleCheck({ status: 'checking', message: 'Checking...' });
     setMicCheck({ status: 'checking', message: 'Checking...' });
     setInternetCheck({ status: 'checking', message: 'Checking...' });
     setBrowserCheck({ status: 'checking', message: 'Checking...' });
@@ -692,36 +722,53 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
     }
   };
 
-  const applyFaceDetectionResult = (result: SystemCheckFaceResult) => {
-    if (result.visibleCount === 1 && result.candidateVisible) {
+  // Multiple People row: purely about EXTRA people (AI interview parity) —
+  // passes at 0 or 1, fails at 2+ once confirmed on MULTI_FACE_HARD_FAIL
+  // consecutive ticks (a lone false box must not block the candidate). During
+  // the grace tick the row keeps its status; handleProceed re-checks anyway.
+  const applyPeopleCount = (count: number) => {
+    if (count >= 2) {
+      multiFaceCountRef.current += 1;
+      if (multiFaceCountRef.current >= MULTI_FACE_HARD_FAIL) {
+        setMultipleCheck({
+          status: 'error',
+          message: `${count} people detected — only you should be in frame.`,
+        });
+      } else {
+        setMultipleCheck((prev) => ({
+          status: prev.status === 'success' ? 'success' : 'checking',
+          message: 'Confirming you are alone in frame…',
+        }));
+      }
+      return;
+    }
+    multiFaceCountRef.current = 0;
+    setMultipleCheck({
+      status: 'success',
+      message: count === 1 ? 'Only you are in frame' : 'No other people detected',
+    });
+  };
+
+  const countPeopleWithMediaPipe = (video: HTMLVideoElement): Promise<number | null> => {
+    if (!faceCounterRef.current) faceCounterRef.current = createMediaPipeFaceCounter();
+    return faceCounterRef.current.count(video);
+  };
+
+  const applyFaceDetectionResult = (result: SystemCheckFaceResult, mediaPipeCount: number | null = null) => {
+    // People count = the larger of the two detectors (either one seeing a
+    // second face is enough to stop the candidate and ask).
+    applyPeopleCount(Math.max(result.visibleCount, mediaPipeCount ?? 0));
+
+    // Camera row: is the candidate's OWN face visible? With 2+ faces it is —
+    // the extra person is the Multiple People row's job.
+    if (result.visibleCount >= 2 || (result.visibleCount === 1 && result.candidateVisible)) {
       noFaceCountRef.current = 0;
-      multiFaceCountRef.current = 0;
       faceDetectionFailureCountRef.current = 0;
       setCameraCheck({ status: 'success', message: 'Camera ready — face detected' });
       return;
     }
 
-    if (result.visibleCount >= 2) {
-      // Multiple faces — strict path.
-      noFaceCountRef.current = 0;
-      multiFaceCountRef.current += 1;
-      if (multiFaceCountRef.current >= MULTI_FACE_HARD_FAIL) {
-        setCameraCheck({
-          status: 'error',
-          message: `Multiple faces detected (${result.visibleCount}). Only you should be in frame.`,
-        });
-      } else {
-        // Grace tick — see the note on the no-face branch below.
-        setCameraCheck((prev) => ({
-          status: prev.status === 'success' ? 'success' : 'checking',
-          message: 'Verifying you are alone in frame…',
-        }));
-      }
-      return;
-    }
-
-    // visibleCount === 0 — the candidate must be visible before system check can pass.
-    multiFaceCountRef.current = 0;
+    // No usable face — the candidate must be visible before system check can pass.
     noFaceCountRef.current += 1;
     const frameAnalysis = analyzeCurrentVideoFrame();
     if (frameAnalysis?.obstructed) {
@@ -841,7 +888,7 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
         }
       }
 
-      applyFaceDetectionResult(effectiveResult);
+      applyFaceDetectionResult(effectiveResult, await countPeopleWithMediaPipe(video));
     } catch {
       // Native API failed — caller will switch to face-api.js path
       throw new Error('native_face_detector_unavailable');
@@ -867,7 +914,7 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
       }
 
       const result = await detectWithFaceApi(video);
-      applyFaceDetectionResult(result);
+      applyFaceDetectionResult(result, await countPeopleWithMediaPipe(video));
     } catch (err) {
       faceDetectionFailureCountRef.current += 1;
       console.warn('[SYSTEM CHECK] face-api.js detection failed:', err);
@@ -921,6 +968,112 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
     faceCheckIntervalRef.current = setTimeout(run, FACE_POLL_MIN_MS);
   };
 
+  // How the mic check decides "voice": a level clearly above the room's quiet
+  // floor. The floor is the quiet end of a short sample window, then keeps
+  // tracking the quietest level heard. It used to be ONE reading taken 1.2 s
+  // in: if the candidate was already talking (or the room was briefly loud)
+  // the threshold landed above normal speech and the row said "Listening"
+  // forever.
+  const MIC_CALIBRATION_SAMPLES = 12; // x 100 ms
+  const MIC_POLL_MS = 150;
+
+  const startMicCheck = async (audioTracks: MediaStreamTrack[]) => {
+    const gen = ++micGenRef.current;
+    const stale = () => gen !== micGenRef.current;
+    const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    try {
+      const AudioContextImpl: typeof AudioContext | undefined =
+        window.AudioContext || (window as BrowserWindow).webkitAudioContext;
+      if (!AudioContextImpl) {
+        setMicCheck({ status: 'error', message: 'This browser cannot verify microphone input.' });
+        return;
+      }
+
+      const audioContext = new AudioContextImpl();
+      audioContextRef.current = audioContext;
+      try {
+        await audioContext.resume();
+      } catch {
+        // ignore; the state check below handles a context that stays suspended
+      }
+      let waitMs = 0;
+      while (audioContext.state !== 'running' && waitMs < 2000 && !stale()) {
+        await sleep(100);
+        waitMs += 100;
+      }
+      if (stale()) {
+        audioContext.close().catch(() => {});
+        return;
+      }
+
+      // Chrome can keep an AudioContext suspended until the page gets a user
+      // gesture; a suspended analyser reads silence forever. Resume on the
+      // candidate's next click or key press (the poll below asks for one).
+      if (audioContext.state !== 'running') {
+        const resume = () => { audioContext.resume().catch(() => {}); };
+        window.addEventListener('pointerdown', resume);
+        window.addEventListener('keydown', resume);
+        micResumeCleanupRef.current = () => {
+          window.removeEventListener('pointerdown', resume);
+          window.removeEventListener('keydown', resume);
+        };
+      }
+
+      const source = audioContext.createMediaStreamSource(new MediaStream(audioTracks));
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+
+      setMicCheck({ status: 'checking', message: 'Listening — say something to confirm your microphone...' });
+
+      const samples: number[] = [];
+      for (let i = 0; i < MIC_CALIBRATION_SAMPLES; i += 1) {
+        await sleep(100);
+        if (stale()) return;
+        samples.push(getAudioRms(analyser));
+      }
+      samples.sort((a, b) => a - b);
+      let noiseFloor = samples[Math.floor(samples.length * 0.2)] ?? 0;
+
+      if (micCheckIntervalRef.current) {
+        clearInterval(micCheckIntervalRef.current);
+      }
+      const intervalId = setInterval(() => {
+        if (stale()) {
+          clearInterval(intervalId);
+          return;
+        }
+        if (audioContext.state !== 'running') {
+          audioContext.resume().catch(() => {});
+          setMicCheck({ status: 'checking', message: 'Click anywhere on this page to start the microphone check.' });
+          return;
+        }
+        const level = getAudioRms(analyser);
+        noiseFloor = Math.min(noiseFloor, level);
+        const voiceThreshold = Math.max(noiseFloor * 1.8, noiseFloor + 6, 8);
+        if (level >= voiceThreshold) {
+          clearInterval(intervalId);
+          if (micCheckIntervalRef.current === intervalId) micCheckIntervalRef.current = null;
+          micResumeCleanupRef.current?.();
+          micResumeCleanupRef.current = null;
+          setMicCheck({ status: 'success', message: 'Voice detected — microphone working correctly' });
+          return;
+        }
+        setMicCheck(
+          level >= 1
+            ? { status: 'checking', message: 'Listening — say something to confirm your microphone...' }
+            : { status: 'checking', message: 'No audio detected — speak clearly or unmute your microphone.' },
+        );
+      }, MIC_POLL_MS);
+      micCheckIntervalRef.current = intervalId;
+    } catch (err) {
+      if (stale()) return;
+      console.error('[SYSTEM CHECK] Microphone check failed:', err);
+      setMicCheck({ status: 'error', message: 'Could not verify the microphone. Please re-run checks.' });
+    }
+  };
+
   const checkCameraAndMicrophone = async () => {
     // Request both camera and microphone together to avoid permission conflicts
     try {
@@ -937,6 +1090,17 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
       // Check if we got both video and audio tracks
       const videoTracks = stream.getVideoTracks();
       const audioTracks = stream.getAudioTracks();
+
+      // The mic check runs ALONGSIDE face detection. It used to start only
+      // after face detection returned, and on Windows Chrome that is the
+      // CPU-bound face-api path (seconds per pass, or a hang while models
+      // load), so the Microphone row sat on "Checking..." though the mic was fine.
+      let micTask: Promise<void> = Promise.resolve();
+      if (audioTracks.length > 0) {
+        micTask = startMicCheck(audioTracks);
+      } else {
+        setMicCheck({ status: 'error', message: 'No audio track available' });
+      }
 
       if (videoTracks.length > 0) {
         setCameraCheck({ status: 'checking', message: 'Detecting face...' });
@@ -963,74 +1127,7 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
         setCameraCheck({ status: 'error', message: 'No video track available' });
       }
 
-      if (audioTracks.length > 0) {
-        const AudioContextImpl: typeof AudioContext | undefined =
-          window.AudioContext || (window as BrowserWindow).webkitAudioContext;
-
-        if (!AudioContextImpl) {
-          setMicCheck({ status: 'error', message: 'This browser cannot verify microphone input.' });
-          return;
-        }
-
-        const audioContext = new AudioContextImpl();
-        audioContextRef.current = audioContext;
-
-        try {
-          await audioContext.resume();
-        } catch {
-          // ignore resume errors; state polling below handles delayed startup
-        }
-
-        let waitMs = 0;
-        while (audioContext.state !== 'running' && waitMs < 2000) {
-          await new Promise((resolve) => setTimeout(resolve, 100));
-          waitMs += 100;
-        }
-
-        const micOnlyStream = new MediaStream(audioTracks);
-        const source = audioContext.createMediaStreamSource(micOnlyStream);
-        const analyser = audioContext.createAnalyser();
-        analyser.fftSize = 256;
-        source.connect(analyser);
-
-        setMicCheck({ status: 'checking', message: 'Listening — say something to confirm your microphone...' });
-        await new Promise((resolve) => setTimeout(resolve, 1200));
-
-        let ambientLevel = getAudioRms(analyser);
-        if (ambientLevel < 1) {
-          await new Promise((resolve) => setTimeout(resolve, 500));
-          ambientLevel = getAudioRms(analyser);
-        }
-
-        const voiceThreshold = Math.max(ambientLevel * 1.8, 8);
-        let voiceDetected = false;
-
-        if (micCheckIntervalRef.current) {
-          clearInterval(micCheckIntervalRef.current);
-        }
-        micCheckIntervalRef.current = setInterval(() => {
-          const level = getAudioRms(analyser);
-          if (level >= voiceThreshold) {
-            voiceDetected = true;
-            if (micCheckIntervalRef.current) {
-              clearInterval(micCheckIntervalRef.current);
-              micCheckIntervalRef.current = null;
-            }
-            setMicCheck({ status: 'success', message: 'Voice detected — microphone working correctly' });
-            return;
-          }
-
-          if (!voiceDetected) {
-            setMicCheck(
-              level >= 1
-                ? { status: 'checking', message: 'Listening — say something to confirm your microphone...' }
-                : { status: 'checking', message: 'No audio detected — speak clearly or unmute your microphone.' },
-            );
-          }
-        }, 150);
-      } else {
-        setMicCheck({ status: 'error', message: 'No audio track available' });
-      }
+      await micTask;
 
     } catch (err: unknown) {
       const error = err instanceof Error ? err : new Error('Unknown media device error');
@@ -1088,6 +1185,31 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
       const faceDetectionWaitDeadline = Date.now() + 3000;
       while (faceDetectionBusyRef.current && Date.now() < faceDetectionWaitDeadline) {
         await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+
+      // Final "alone in frame" check at the moment of Start (AI interview
+      // parity): the poll runs every few seconds and the row passes during its
+      // grace tick, so someone stepping in just before the click got through.
+      const startVideo = videoRef.current;
+      if (startVideo && startVideo.readyState >= 2) {
+        const mediaPipeCount = await countPeopleWithMediaPipe(startVideo);
+        let fallbackCount = 0;
+        try {
+          fallbackCount = (await detectWithFaceApi(startVideo)).visibleCount;
+        } catch {
+          // fallback detector unavailable — the MediaPipe count stands alone
+        }
+        const people = Math.max(mediaPipeCount ?? 0, fallbackCount);
+        if (people >= 2) {
+          multiFaceCountRef.current = MULTI_FACE_HARD_FAIL;
+          setMultipleCheck({
+            status: 'error',
+            message: `${people} people detected — only you should be in frame before starting.`,
+          });
+          // Keep watching so the row turns green once they are alone.
+          startFaceDetectionPolling(!('FaceDetector' in window));
+          return;
+        }
       }
 
       const results: SystemCheckResult = {
@@ -1246,8 +1368,13 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
             <div>
               <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
                 <h2 className={T_SECTION}>System Requirements</h2>
+                {/* Nothing runs until this is clicked, so before the first run
+                    it is the filled brand button with a pulsing ring — the
+                    candidate's obvious next step — and settles back to the
+                    outline style once the checks have started. */}
                 <Button
-                  variant="outline"
+                  variant={checksNotStarted ? 'primary' : 'outline'}
+                  className={checksNotStarted ? 'tf-attention-pulse' : ''}
                   onClick={runAllChecks}
                   disabled={isChecking}
                 >
@@ -1255,6 +1382,11 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
                   {isChecking ? 'Checking...' : 'Run Checks'}
                 </Button>
               </div>
+              {checksNotStarted && (
+                <p className="-mt-2 mb-4 text-sm font-medium text-brand-blue">
+                  Click &quot;Run Checks&quot; to test your camera, microphone and connection.
+                </p>
+              )}
 
               <div className="space-y-4">
                 {/* Browser */}
@@ -1299,6 +1431,20 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
                   <span className="flex shrink-0"><StatusIcon status={cameraCheck.status} /></span>
                 </div>
 
+                {/* Multiple People */}
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 sm:p-4">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`${ICON_TILE} bg-destructive-subtle text-destructive`}>
+                      <Users className={ICON} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className={T_CARD_TITLE}>Multiple People Check</p>
+                      <p className="text-sm text-gray-500 [overflow-wrap:anywhere]">{multipleCheck.message}</p>
+                    </div>
+                  </div>
+                  <span className="flex shrink-0"><StatusIcon status={multipleCheck.status} /></span>
+                </div>
+
                 {/* Microphone */}
                 <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 sm:p-4">
                   <div className="flex items-center gap-3 min-w-0">
@@ -1332,7 +1478,12 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
                 // previous condition fired while Camera/Microphone were still
                 // in 'checking' (e.g., showing "Detecting face..."), making
                 // the warning appear before any check had actually failed.
-                const checks = [cameraCheck, micCheck, internetCheck, browserCheck];
+                // Multiple People only settles once the camera works — a
+                // camera error leaves it 'checking' and must not hide this.
+                const checks = [
+                  cameraCheck, micCheck, internetCheck, browserCheck,
+                  ...(cameraCheck.status === 'success' ? [multipleCheck] : []),
+                ];
                 const inProgress = checks.some(c => c.status === 'pending' || c.status === 'checking');
                 const anyError = checks.some(c => c.status === 'error');
                 if (inProgress || !anyError) return null;

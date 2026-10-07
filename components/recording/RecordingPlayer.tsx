@@ -7,8 +7,9 @@
  * Extracted from components/ai-interview/CandidateResultsView.tsx
  * (VideoWithDuration / RecordingInfoPanel / RecordingTabContent) so the
  * assessment results page shows recordings the same way as the AI interview.
- * The interview page still renders its own inline copy; migrating it here is
- * a follow-up. Playback is stream-first: the caller passes presigned URLs.
+ * The interview page (CandidateResultsView) uses VideoWithDuration from here
+ * too, so all four recordings share one duration probe. Playback is
+ * stream-first: the caller passes presigned URLs.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -65,11 +66,26 @@ export function VideoWithDuration({
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [duration, setDuration] = useState<number | null>(null);
+  // True while the recording's length is being worked out (see
+  // handleLoadedMetadata). The controls stay hidden and a loading cover sits
+  // over the video meanwhile: the probe parks the playhead at 1e9 s, and the
+  // native controls used to show that as "277777:46:40".
+  const [probing, setProbing] = useState(true);
   const readyRef = useRef(false);
+  const probeCleanupRef = useRef<(() => void) | null>(null);
+
+  // A new recording (e.g. Screen ↔ Candidate view) starts a fresh probe.
+  useEffect(() => {
+    readyRef.current = false;
+    setDuration(null);
+    setProbing(true);
+    return () => { probeCleanupRef.current?.(); probeCleanupRef.current = null; };
+  }, [src]);
 
   const applyDuration = (d: number) => {
+    if (!isFinite(d) || d <= 0) return; // unknown length stays "—", never Infinity
     setDuration(d);
-    if (onDuration && isFinite(d) && d > 0) onDuration(d);
+    onDuration?.(d);
   };
   const applySeek = () => {
     const v = videoRef.current;
@@ -80,31 +96,54 @@ export function VideoWithDuration({
       void v.play?.().catch(() => {});
     } catch { /* not yet seekable */ }
   };
-  const markReady = () => { readyRef.current = true; applySeek(); };
+  const markReady = () => { setProbing(false); readyRef.current = true; applySeek(); };
 
   useEffect(() => { applySeek(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [seekKey]);
 
-  // WebM written by MediaRecorder has no duration until the remux runs; the
-  // seek-to-end trick makes the browser compute it.
+  // WebM written by MediaRecorder has no duration in its header (Infinity)
+  // until the remux runs; seeking far past the end makes the browser scan the
+  // file and work it out. Done behind the loading cover, and it always ends:
+  // on the real duration arriving (durationchange / timeupdate) or, at the
+  // latest, after PROBE_TIMEOUT_MS — it used to wait on `timeupdate` alone and
+  // could sit at 1e9 with no Duration for good.
   const handleLoadedMetadata = () => {
     const v = videoRef.current;
     if (!v) return;
+    probeCleanupRef.current?.();
+    probeCleanupRef.current = null;
     if (isFinite(v.duration) && v.duration > 0) { applyDuration(v.duration); markReady(); return; }
-    const onTimeUpdate = () => {
-      v.removeEventListener('timeupdate', onTimeUpdate);
-      v.currentTime = 0;
+
+    const PROBE_TIMEOUT_MS = 15000;
+    let settled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const known = () => isFinite(v.duration) && v.duration > 0;
+    const cleanup = () => {
+      v.removeEventListener('durationchange', onProgress);
+      v.removeEventListener('timeupdate', onProgress);
+      if (timer) clearTimeout(timer);
+    };
+    const settle = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      probeCleanupRef.current = null;
+      try { v.currentTime = 0; } catch { /* not seekable yet — plays from the start anyway */ }
       applyDuration(v.duration);
       markReady();
     };
-    v.addEventListener('timeupdate', onTimeUpdate);
-    v.currentTime = 1e9;
+    function onProgress() { if (known()) settle(); }
+    v.addEventListener('durationchange', onProgress);
+    v.addEventListener('timeupdate', onProgress);
+    timer = setTimeout(settle, PROBE_TIMEOUT_MS);
+    probeCleanupRef.current = cleanup;
+    try { v.currentTime = 1e9; } catch { settle(); }
   };
 
   return (
     <div className="relative">
       <video
         ref={videoRef}
-        controls
+        controls={!probing}
         preload="metadata"
         className="w-full max-h-[500px] rounded-xl bg-slate-900 ring-1 ring-black/[0.04]"
         src={src}
@@ -113,7 +152,12 @@ export function VideoWithDuration({
       >
         Your browser does not support video playback.
       </video>
-      {duration !== null && (
+      {probing && (
+        <div className="absolute inset-0 flex items-center justify-center gap-2 rounded-xl bg-slate-900 text-sm text-slate-300">
+          <Loader2 className="w-4 h-4 animate-spin" /> Loading recording…
+        </div>
+      )}
+      {!probing && duration !== null && (
         <div className="absolute top-2 right-2 flex items-center gap-1 px-2 py-1 rounded-md bg-slate-900/80 backdrop-blur-sm text-white text-xs font-medium ring-1 ring-white/10">
           <Clock className="w-3 h-3" /> {formatDuration(duration)}
         </div>
