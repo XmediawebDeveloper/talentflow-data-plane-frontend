@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
+  Mic,
   MicOff,
   MessageSquare,
   Volume2,
@@ -1447,25 +1448,25 @@ export default function StepSamplePractice({
               Submit to finish the practice (same as the Next button). */}
           {doneConfirm && !practiceDone && (
             <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center justify-center px-4">
-              <div className="pointer-events-auto w-full max-w-sm rounded-2xl bg-black/80 backdrop-blur-md ring-1 ring-amber-400/40 shadow-2xl px-5 py-4 text-center">
-                <div className="flex items-center justify-center gap-2 mb-2">
-                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                  <p className="text-base font-bold text-amber-300">Are you done with your response?</p>
+              <div className="pointer-events-auto w-full max-w-sm rounded-2xl bg-white ring-1 ring-sky-100 shadow-2xl px-5 pt-5 pb-4 text-center">
+                <div className="mx-auto mb-3 w-12 h-12 rounded-full bg-sky-50 flex items-center justify-center">
+                  <Mic className="w-5 h-5 text-brand-blue" />
                 </div>
-                <p className="text-xs sm:text-sm text-white/90 leading-snug mb-4">
+                <p className="text-lg font-bold text-gray-900 mb-2">Are you done with your response?</p>
+                <p className="text-sm text-slate-600 leading-snug mb-4">
                   If you are not done, please speak up to continue your response.
                   If you have completed your answer, click Submit to finish the practice.
                 </p>
-                <div className="flex items-center justify-center gap-2">
+                <div className="flex items-center justify-center gap-3">
                   <button
                     type="button"
                     onClick={handlePracticeNext}
-                    className="inline-flex items-center gap-1.5 px-5 py-2 rounded-full bg-emerald-500 text-white text-sm font-semibold shadow-lg hover:bg-emerald-600 transition-colors"
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold shadow-sm hover:bg-emerald-700 transition-colors"
                   >
                     Submit
                   </button>
                 </div>
-                <p className="mt-3 text-2xs text-white/60">Still recording — just keep speaking to continue.</p>
+                <p className="mt-3 text-2xs text-slate-500">Still recording — just keep speaking to continue.</p>
               </div>
             </div>
           )}
@@ -1531,7 +1532,7 @@ export default function StepSamplePractice({
                       // candidate finishes speaking.
                       <div className="flex items-center gap-2">
                         <span className="w-1.5 h-1.5 bg-red-400 rounded-full animate-ping shrink-0" />
-                        <span className="text-xs italic text-emerald-200/70 leading-relaxed">Recording… your transcript appears after you finish speaking.</span>
+                        <span className="text-xs italic text-emerald-200/70 leading-relaxed">Recording… Your transcript will appear after you finish speaking.</span>
                       </div>
                     ) : isTranscribing ? (
                       // Processing: candidate finished, transcript in flight.
