@@ -37,6 +37,7 @@ import AssessmentInviteTable, {
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { tabPill } from '@/components/ui/filter-pills';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import LanguageLogo, { logoLabelForId } from '@/components/assessments/LanguageLogo';
 import { formatScore } from '@/lib/utils/score';
@@ -2079,10 +2080,13 @@ export default function AssessmentDetailsView({
           (`overflow-x-auto scrollbar-hide`), so with six tabs the last of them
           was off-screen and undiscoverable at anything under a wide desktop.
           Stacked vertically they are all visible at once. */}
-      <div {...draftLockProps} className={`grid grid-cols-1 items-start gap-3 sm:grid-cols-[180px_minmax(0,1fr)] sm:gap-4 md:grid-cols-[220px_minmax(0,1fr)] lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-6 ${draftLockProps.className}`}>
-        <aside className="min-w-0 sm:sticky sm:top-20 sm:self-start bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+      <div {...draftLockProps} className={`space-y-3 sm:space-y-4 ${draftLockProps.className}`}>
+        {/* Horizontal pill tab bar (was a vertical sidebar rail): the same
+            `tabPill` chrome the Job Openings list uses, wrapping onto a second
+            row when needed so every tab stays visible. */}
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
           <nav className="p-2 sm:p-3" aria-label="Assessment details sections">
-            <div className="grid grid-cols-2 gap-1.5 sm:flex sm:flex-col">
+            <div className="flex flex-wrap items-center gap-2">
               {detailTabs.map((tab) => {
                 const isActive = activeTab === tab.id;
                 return (
@@ -2103,48 +2107,41 @@ export default function AssessmentDetailsView({
                       }
                     }}
                     aria-current={isActive ? 'page' : undefined}
-                    className={`w-full min-w-0 rounded-lg px-2.5 sm:px-3 py-2.5 text-left text-xs sm:text-sm transition-colors flex items-center gap-2 ${
-                      isActive
-                        ? 'bg-brand-blue/5 text-brand-blue font-medium ring-1 ring-brand-blue/20'
-                        : 'text-gray-600 dark:text-slate-400 hover:bg-brand-blue/5 hover:text-brand-blue'
-                    }`}
+                    className={`${tabPill(isActive)} whitespace-nowrap`}
                   >
                     <tab.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-                    <span className="min-w-0 break-words leading-snug">{tab.label}</span>
+                    <span className="leading-snug">{tab.label}</span>
                   </button>
                 );
               })}
+              {/* Go to JD — leaves the page rather than switching a section, so
+                  it sits after a divider at the end of the pill row. */}
+              {assessment.jd_id && (
+                <div className="flex items-center border-l border-gray-200 dark:border-slate-700/60 pl-2 ml-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const params = new URLSearchParams({
+                        id: assessment.jd_id,
+                        from: 'assessment-details',
+                        assessment_id: assessment.id,
+                        assessment_title: assessment.title || '',
+                      });
+                      router.push(`/recruitment/job-details?${params.toString()}`);
+                    }}
+                    className={`${tabPill(false)} whitespace-nowrap`}
+                  >
+                    <Briefcase className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                    <span className="leading-snug">Go to JD</span>
+                    {/* The "leaves this page" glyph the View JD tab's own
+                        "Open full JD page" link carries. */}
+                    <ExternalLink className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                  </button>
+                </div>
+              )}
             </div>
-            {/* Go to JD — last in the menu, under a divider because it leaves
-                the page rather than switching a section. Opens the job
-                version this assessment was built on (`jd_id`) on its own Job
-                Details page, which is told it came from here so its breadcrumb
-                reads Assessments › <this assessment> › <job> and leads back. */}
-            {assessment.jd_id && (
-              <div className="mt-1.5 pt-1.5 border-t border-gray-100 dark:border-slate-700/60">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const params = new URLSearchParams({
-                      id: assessment.jd_id,
-                      from: 'assessment-details',
-                      assessment_id: assessment.id,
-                      assessment_title: assessment.title || '',
-                    });
-                    router.push(`/recruitment/job-details?${params.toString()}`);
-                  }}
-                  className="w-full rounded-lg px-3 py-2.5 text-left text-xs sm:text-sm font-medium text-brand-blue underline underline-offset-2 hover:bg-brand-blue/5 hover:text-brand-blue-2 transition-colors flex items-center gap-2"
-                >
-                  <Briefcase className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-                  <span className="min-w-0 leading-snug">Go to JD</span>
-                  {/* The "leaves this page" glyph the View JD tab's own
-                      "Open full JD page" link carries. */}
-                  <ExternalLink className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-                </button>
-              </div>
-            )}
           </nav>
-        </aside>
+        </div>
 
         {/* Content — `min-w-0` so a wide table inside a tab scrolls in its own
             box instead of stretching the grid column and pushing the nav off

@@ -10407,6 +10407,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               {/* REC badge moved to the candidate video's top-right corner; LIVE
                   moved to the front of the header (green) — see above / below. */}
               <div className="hidden @2xl:block w-px h-7 bg-gray-200 dark:bg-slate-700" />
+              <div className="hidden md:block w-px h-7 bg-gray-200 dark:bg-slate-700" />
+              <div className="hidden @2xl:block w-px h-7 bg-gray-200 dark:bg-slate-700" />
               {/* Closing indicator */}
               {isClosing && (
                 <div className="px-3 py-1.5 bg-orange-100 dark:bg-orange-500/15 border border-orange-300 dark:border-orange-500/40 text-orange-700 rounded-lg text-xs font-medium animate-pulse">Ending...</div>
