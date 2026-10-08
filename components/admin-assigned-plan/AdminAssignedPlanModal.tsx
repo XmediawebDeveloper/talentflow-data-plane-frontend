@@ -136,7 +136,14 @@ export default function AdminAssignedPlanModal() {
       // Schedule a refresh to confirm the pending entry has cleared on CP
       setTimeout(() => { refresh().catch(() => {}); }, 1500);
     } catch (err: any) {
-      const rawMessage = err?.response?.data?.detail || err?.message || '';
+      const detail = err?.response?.data?.detail;
+      // An earlier plan payment is still being applied: nothing was charged.
+      if (err?.response?.status === 409 && detail?.error === 'PLAN_CHANGE_IN_PROGRESS') {
+        setError(detail.message);
+        toast.warning('A plan change is already in progress', { description: detail.message, duration: 10000 });
+        return;
+      }
+      const rawMessage = (typeof detail === 'string' ? detail : detail?.message) || err?.message || '';
       const cancelled = typeof rawMessage === 'string' && rawMessage.toLowerCase().includes('cancelled');
       if (cancelled) {
         toast.info('Payment cancelled', { description: 'You can try again anytime.' });
