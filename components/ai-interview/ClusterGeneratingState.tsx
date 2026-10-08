@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Check, FileText, Layers, Loader2, Share2, Sparkles } from 'lucide-react';
+import { Check, Loader2 } from 'lucide-react';
 
 /**
  * The wait while the cluster generator runs.
@@ -22,33 +22,6 @@ const STAGES = [
   { key: 'analyzing', label: 'Analyzing with AI' },
   { key: 'grouping', label: 'Grouping into Clusters' },
   { key: 'finalizing', label: 'Finalizing Results' },
-] as const;
-
-const CARDS = [
-  {
-    icon: FileText,
-    title: 'Analyzing Skills',
-    body: 'Understanding skill context',
-    tile: 'bg-brand-blue/10 ring-brand-blue/15 text-brand-blue',
-  },
-  {
-    icon: Share2,
-    title: 'Finding Patterns',
-    body: 'Grouping similar skills',
-    tile: 'bg-brand-cyan/10 ring-brand-cyan/15 text-brand-cyan',
-  },
-  {
-    icon: Layers,
-    title: 'Creating Clusters',
-    body: 'Optimizing for interview coverage',
-    tile: 'bg-advice-positive-bg ring-advice-positive/20 text-advice-positive',
-  },
-  {
-    icon: Sparkles,
-    title: 'Preparing Results',
-    body: 'Almost there…',
-    tile: 'bg-brand-orange/10 ring-brand-orange/15 text-brand-orange-deep',
-  },
 ] as const;
 
 /** How long each stage is shown before the rail moves on. */
@@ -74,7 +47,7 @@ export default function ClusterGeneratingState() {
       id={CLUSTER_GENERATING_ID}
       /* `pb-20` clears the page's fixed footer bar; `scroll-mt-24` keeps the
          heading clear of the sticky page chrome when scrolled to. */
-      className="pt-8 pb-20 sm:pt-10 tf-loader-center scroll-mt-24"
+      className="pt-12 pb-20 sm:pt-16 tf-loader-center scroll-mt-24"
       role="status"
       aria-live="polite"
     >
@@ -92,7 +65,7 @@ export default function ClusterGeneratingState() {
         </p>
 
         {/* Stage rail */}
-        <div className="mt-6 flex items-start justify-center">
+        <div className="mt-8 flex items-start justify-center">
           {STAGES.map((s, i) => {
             const done = i < stage;
             const current = i === stage;
@@ -133,26 +106,6 @@ export default function ClusterGeneratingState() {
               </div>
             );
           })}
-        </div>
-
-        {/* What each part of the run is doing */}
-        <div className="mt-6 grid grid-cols-2 lg:grid-cols-4 gap-2.5 text-left">
-          {CARDS.map((card, i) => (
-            <div
-              key={card.title}
-              className={`rounded-xl border p-3 transition-colors duration-500 ${
-                i === stage
-                  ? 'border-brand-blue/30 bg-brand-blue/[0.03] ring-1 ring-brand-blue/10'
-                  : 'border-gray-100 bg-white ring-1 ring-black/[0.02]'
-              }`}
-            >
-              <div className={`w-8 h-8 rounded-lg ring-1 flex items-center justify-center ${card.tile}`}>
-                <card.icon className="w-4 h-4" />
-              </div>
-              <p className="mt-2 text-xs font-semibold text-gray-900">{card.title}</p>
-              <p className="text-2xs text-gray-500 leading-snug">{card.body}</p>
-            </div>
-          ))}
         </div>
       </div>
     </div>
