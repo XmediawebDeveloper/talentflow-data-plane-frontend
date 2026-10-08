@@ -1833,6 +1833,19 @@ function CurrentPlanContent() {
         });
         setShowPaymentModal(false);
         window.dispatchEvent(new CustomEvent('notificationTrigger'));
+        fetchPurchaseStatus();
+        return;
+      }
+
+      // 202: payment captured, but the billing system has not applied the
+      // plan yet (it retries automatically). The plan was NOT switched here.
+      if (response.status === 202 && data.status === 'pending_retry') {
+        toast.info('Payment received - plan setup pending', {
+          description: data.data?.message || 'Your new plan will be applied automatically. Your current plan stays active until then.',
+          duration: 10000,
+        });
+        setShowPaymentModal(false);
+        window.dispatchEvent(new CustomEvent('notificationTrigger'));
         return;
       }
 

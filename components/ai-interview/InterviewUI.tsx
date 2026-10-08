@@ -10285,7 +10285,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               {isConnected && !isClosing && (
                 <div className={`absolute top-2 right-2 z-20 flex items-center gap-1 px-2 py-1 rounded-full border backdrop-blur-sm transition-colors duration-300 ${
                   isRecording && !isMuted
-                    ? 'bg-red-600 border-red-400/60 shadow-md dark:border-red-500/40'
+                    ? 'bg-red-600 border-red-400/60 shadow-md'
                     : 'bg-gray-900/80 border-white/15 shadow-md'
                 }`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${isRecording && !isMuted ? 'bg-white animate-pulse' : 'bg-red-500'}`} />
@@ -10406,6 +10406,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                   interview time still runs in the backend; it's just not shown here. */}
               {/* REC badge moved to the candidate video's top-right corner; LIVE
                   moved to the front of the header (green) — see above / below. */}
+              <div className="hidden @2xl:block w-px h-7 bg-gray-200 dark:bg-slate-700" />
               <div className="hidden md:block w-px h-7 bg-gray-200 dark:bg-slate-700" />
               <div className="hidden @2xl:block w-px h-7 bg-gray-200 dark:bg-slate-700" />
               {/* Closing indicator */}
