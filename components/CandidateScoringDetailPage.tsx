@@ -1412,14 +1412,19 @@ Best regards`);
 
       {/* Header */}
       <div>
-        <div className="bg-white rounded-xl shadow-lg border-2 border-gray-200 p-4 sm:p-6">
+        {/* Entity hero card — neutral card chrome + leading icon disc, matching
+            the Job Openings master header and the Job Details hero so the detail
+            pages read as siblings (was a heavier border-2/shadow-lg card). */}
+        <div className="bg-white rounded-xl border border-gray-300 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6">
           {/* Row 1: candidate identity. The record pager that used to sit on
               the right moved into the breadcrumb bar, as on job-details. */}
           <div className="flex items-start justify-between gap-4 mb-3">
-            {/* pl-3 = the contact badges' own inset, so the name, the years
-                and the email / phone icons below start on one vertical line. */}
-            <div className="min-w-0 pl-3">
-              <h1 className="text-xl sm:text-2xl text-gray-900 font-bold mb-2 truncate">{resume.candidateName}</h1>
+            <div className="flex min-w-0 items-start gap-3">
+              <div className="hidden sm:flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
+                <User className="h-4 w-4 text-brand-blue" />
+              </div>
+              <div className="min-w-0">
+              <h1 className="text-lg sm:text-xl text-gray-900 font-semibold mb-2 truncate">{resume.candidateName}</h1>
               <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <p className="text-base sm:text-lg text-gray-700 font-medium">{resume.title || resume.experience || 'Candidate'}</p>
                 {resume.resumeVersion && (resumeVersions.length === 0 ? (
@@ -1492,6 +1497,7 @@ Best regards`);
                     )}
                   </div>
                 ))}
+              </div>
               </div>
             </div>
             {/* Top right of the header: this candidate's other scored jobs.

@@ -24,7 +24,7 @@ import { startClientLogForwarder, stopClientLogForwarder, flushClientLogBeacon }
 import SectionTransitionOverlay from "./SectionTransitionOverlay";
 import { toast } from 'sonner';
 import { requestFullscreen, getFullscreenChangeEvent, exitFullscreen } from "@/lib/utils/browserCompat";
-import { Clock, Timer, LogOut, Mic, MessageSquare, Check, ArrowRight, MicOff, SkipForward, Maximize, RefreshCw, PictureInPicture2, Camera } from "lucide-react";
+import { Clock, Timer, LogOut, Mic, Headset, Check, ArrowRight, MicOff, SkipForward, Maximize, RefreshCw, PictureInPicture2, Camera, Loader2, WifiOff, Wifi } from "lucide-react";
 import { createAvatar3DSender } from "./avatar3d/avatar3d-channel";
 import { DEFAULT_VISEME_WEIGHTS } from "./avatar3d/avatar3d-types";
 import { VisemeTimeline } from "./avatar3d/text-to-viseme";
@@ -1021,6 +1021,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
   // WebSocket keepalive / reconnect refs
   const pingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Network strength for the candidate's camera overlay — the round trip of
+  // the keepalive ping above (sent every 5s) to its pong. Display only:
+  // averaged over the last 3 samples; null until the first pong arrives.
+  const pingSentAtRef = useRef<number | null>(null);
+  const rttSamplesRef = useRef<number[]>([]);
+  const [networkRttMs, setNetworkRttMs] = useState<number | null>(null);
   const reconnectAttemptsRef = useRef(0);
   // Separate fast-retry counter for the "WS connected before /start flipped the
   // interview to in_progress" race (backend rejects 4003 "not in progress").
@@ -4980,7 +4986,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     switch (data.type) {
       case "pong":
         console.log(`[WS ${timestamp}] Keepalive pong received`);
-        break; // Keepalive response — no action needed
+        // Only used to show network strength — no other action.
+        if (pingSentAtRef.current !== null) {
+          const rtt = performance.now() - pingSentAtRef.current;
+          pingSentAtRef.current = null;
+          rttSamplesRef.current = [...rttSamplesRef.current, rtt].slice(-3);
+          setNetworkRttMs(rttSamplesRef.current.reduce((a, b) => a + b, 0) / rttSamplesRef.current.length);
+        }
+        break;
       case "concurrent_session_blocked":
         // The interview link is already open/active in another window/device.
         // Stop everything and show a terminal message — do NOT reconnect (the
@@ -8774,6 +8787,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
       pingIntervalRef.current = setInterval(() => {
         if (wsRef.current?.readyState === WebSocket.OPEN) {
+          pingSentAtRef.current = performance.now();
           wsRef.current.send(JSON.stringify({ type: 'ping' }));
         }
       }, 5000);
@@ -9884,21 +9898,46 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       )}
       {/* ── Connection lost overlay ── */}
       {!isConnected && !isClosing && status.startsWith('Connection lost') && (
-        <div className="fixed inset-0 z-[200] bg-black/90 flex items-center justify-center backdrop-blur-sm">
-          <div className="bg-gray-900 border border-red-500 rounded-2xl p-8 max-w-[95vw] sm:max-w-md text-center shadow-2xl">
-            <div className="text-red-400 text-5xl mb-4">⚠️</div>
-            <h2 className="text-xl font-bold text-white mb-2">Connection Lost</h2>
-            <p className="text-gray-400 mb-6 text-sm leading-relaxed">
-              Your connection to the interview server was interrupted.<br />
-              Please refresh the page to reconnect and continue from where you left off.
-            </p>
-            <button
-              onClick={() => window.location.reload()}
-              className="w-full px-6 py-3 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-xl transition-colors"
-            >
-              Refresh &amp; Reconnect
-            </button>
-          </div>
+        <div className="fixed inset-0 z-[200] bg-slate-950/70 flex items-center justify-center backdrop-blur-sm p-4">
+          {/* Same reconnect logic as before — this only changes what is shown:
+              while the automatic retries are running ("...reconnecting in Ns...")
+              the message is calm and Refresh is optional; once they are used
+              up it asks for a refresh, as it always did. */}
+          {status.includes('reconnecting') ? (
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-7 w-full max-w-[95vw] sm:max-w-md text-center shadow-2xl ring-1 ring-sky-100 dark:ring-slate-700">
+              <div className="mx-auto mb-4 w-14 h-14 rounded-full bg-sky-50 dark:bg-sky-500/15 flex items-center justify-center">
+                <Loader2 className="w-7 h-7 text-brand-blue dark:text-sky-300 animate-spin" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Reconnecting…</h2>
+              <p className="text-slate-600 dark:text-slate-300 mb-1 text-sm leading-relaxed">
+                Your connection dropped for a moment. We&apos;re reconnecting automatically — please stay on this page.
+              </p>
+              <p className="text-slate-400 text-xs mb-6">{status.replace(/^Connection lost — /, '')}</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="w-full px-6 py-2.5 rounded-xl bg-sky-50 dark:bg-sky-500/15 text-brand-blue dark:text-sky-300 text-sm font-semibold ring-1 ring-sky-100 dark:ring-sky-500/30 hover:bg-sky-100 dark:hover:bg-sky-500/25 transition-colors"
+              >
+                Refresh now
+              </button>
+            </div>
+          ) : (
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-7 w-full max-w-[95vw] sm:max-w-md text-center shadow-2xl ring-1 ring-red-100 dark:ring-red-500/30">
+              <div className="mx-auto mb-4 w-14 h-14 rounded-full bg-red-50 dark:bg-red-500/15 flex items-center justify-center">
+                <WifiOff className="w-7 h-7 text-red-600 dark:text-red-400" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Connection Lost</h2>
+              <p className="text-slate-600 dark:text-slate-300 mb-6 text-sm leading-relaxed">
+                Your connection to the interview server was interrupted.<br />
+                Please refresh the page to reconnect and continue from where you left off.
+              </p>
+              <button
+                onClick={() => window.location.reload()}
+                className="w-full px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl transition-colors"
+              >
+                Refresh &amp; Reconnect
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -10124,8 +10163,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               <span className="text-gray-400 text-2xs font-medium tracking-wide uppercase">Bina · AI Interviewer</span>
             </div>
 
-            {/* TalkingHead fills this half */}
-            <div className="absolute inset-0 overflow-hidden">
+            {/* TalkingHead fills this half. Hidden (not unmounted — Bina's
+                voice plays through it) once the static 2D fallback is showing,
+                so the two never draw on top of each other: the 3D can finish
+                loading late, or keep rendering after the FPS watchdog trips. */}
+            <div className={`absolute inset-0 overflow-hidden ${avatarFailed ? 'invisible' : ''}`} aria-hidden={avatarFailed || undefined}>
               <TalkingHeadAvatar
                 ref={talkingHeadRef}
                 avatarUrl="/models/rpm-recruiter.glb"
@@ -10212,17 +10254,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
             {/* Status pill — bottom centre */}
             <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10">
-              <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full backdrop-blur-md border transition-colors duration-300 ${
-                isAiSpeaking ? 'bg-purple-500/20 border-purple-500/30' :
-                isRecording  ? 'bg-red-500/20 border-red-500/30' :
-                               'bg-amber-500/20 border-amber-500/30'
+              {/* Solid, darker fills + white text so the label stays readable
+                  over Bina's white shirt and the navy background alike. */}
+              <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border shadow-md transition-colors duration-300 ${
+                isAiSpeaking ? 'bg-purple-600/90 border-purple-400/50' :
+                isRecording  ? (isMuted ? 'bg-red-600/90 border-red-400/50' : 'bg-emerald-600/90 border-emerald-400/50') :
+                               'bg-amber-700/90 border-amber-400/50'
               }`}>
-                <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${
-                  isAiSpeaking ? 'bg-purple-400' : isRecording ? 'bg-red-400' : 'bg-amber-400'
-                }`} />
-                <span className={`text-2xs font-semibold ${
-                  isAiSpeaking ? 'text-purple-300' : isRecording ? 'text-red-300' : 'text-amber-300'
-                }`}>
+                <div className="w-1.5 h-1.5 rounded-full animate-pulse bg-white" />
+                <span className="text-2xs font-semibold text-white">
                   {isAiSpeaking ? (isClarification ? 'Clarifying...' : 'Speaking...') : isRecording ? (isMuted ? 'Muted' : 'Your turn') : isProcessing ? 'Processing...' : isConnected ? 'Ready' : 'Connecting...'}
                 </span>
               </div>
@@ -10235,7 +10275,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 the webcam frame (top-right corner) so it reads as an overlay on
                 the candidate's own video, not floating in the dark strip above. */}
             <div className="absolute top-0 left-0 right-0 z-10 px-3 pt-1 pb-1 flex items-center">
-              <span className="text-gray-400 text-2xs font-medium uppercase tracking-wide">You</span>
+              {/* "You · <name>" — mirrors Bina's label; just "You" when no name. */}
+              <span className="min-w-0 truncate text-gray-400 text-2xs font-medium uppercase tracking-wide" title={interviewInfo?.candidate_name?.trim() || undefined}>
+                You{interviewInfo?.candidate_name?.trim() ? ` · ${interviewInfo.candidate_name.trim().toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())}` : ''}
+              </span>
             </div>
 
             {/* Webcam feed fills this half */}
@@ -10254,25 +10297,28 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
               {/* REC badge — overlaid inside the camera frame (top-right). REC is
                   persistent while the interview is live; solid red + pulse while
-                  the mic is actively capturing, dimmed between turns. */}
+                  the mic is actively capturing; dark with a red dot between turns.
+                  White text in both so it reads on a bright camera image. */}
               {isConnected && !isClosing && (
                 <div className={`absolute top-2 right-2 z-20 flex items-center gap-1 px-2 py-1 rounded-full border backdrop-blur-sm transition-colors duration-300 ${
                   isRecording && !isMuted
-                    ? 'bg-red-500/60 border-red-300/80 dark:border-red-500/40'
-                    : 'bg-black/45 border-red-400/50'
+                    ? 'bg-red-600 border-red-400/60 shadow-md'
+                    : 'bg-gray-900/80 border-white/15 shadow-md'
                 }`}>
-                  <span className={`w-1.5 h-1.5 rounded-full bg-red-300 ${isRecording && !isMuted ? 'animate-pulse' : 'opacity-70'}`} />
-                  <span className="text-red-50 text-2xs font-bold tracking-wide">REC</span>
+                  <span className={`w-1.5 h-1.5 rounded-full ${isRecording && !isMuted ? 'bg-white animate-pulse' : 'bg-red-500'}`} />
+                  <span className="text-white text-2xs font-bold tracking-wide">REC</span>
                 </div>
               )}
 
               {/* Face detection ellipse */}
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[55%] w-16 h-24 border border-dashed border-purple-500/25 rounded-[50%] animate-pulse pointer-events-none" />
 
-              {/* Candidate mic health — confirms which input browser selected and whether level is usable. */}
-              <div className="absolute bottom-3 left-3 right-3 z-10 pointer-events-none">
-                <div className="rounded-lg border border-black/20 bg-black/55 backdrop-blur-md px-3 py-2">
-                  <div className="flex items-center justify-between gap-3">
+              {/* Candidate mic health (left) — confirms which input the browser
+                  selected and whether the level is usable — and network strength
+                  (right), side by side. */}
+              <div className="absolute bottom-3 left-3 right-3 z-10 pointer-events-none grid grid-cols-2 gap-2 items-end">
+                <div className="min-w-0 rounded-lg border border-black/20 bg-black/55 backdrop-blur-md px-3 py-2">
+                  <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
                       {isMuted ? (
                         <MicOff className="w-3.5 h-3.5 text-red-300 shrink-0" />
@@ -10283,7 +10329,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                         {activeMicLabel || "Microphone"}
                       </span>
                     </div>
-                    <div className="w-20 h-1.5 rounded-full bg-white/15 dark:bg-slate-900/15 overflow-hidden shrink-0">
+                    <div className="w-12 sm:w-16 h-1.5 rounded-full bg-white/15 dark:bg-slate-900/15 overflow-hidden shrink-0">
                       <div
                         className={`h-full rounded-full transition-all duration-150 ${
                           micInputLow && isRecording && !isMuted ? 'bg-amber-300' : 'bg-emerald-300'
@@ -10298,6 +10344,40 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                     </div>
                   )}
                 </div>
+                {(() => {
+                  // Approximate strength from the ping round trip:
+                  // ≤100ms → 100%, falling to 10% at ≥1s.
+                  const rtt = isConnected ? networkRttMs : null;
+                  const pct = rtt === null ? null : Math.round(Math.min(100, Math.max(10, 100 - ((rtt - 100) / 900) * 90)));
+                  const level = !isConnected ? 'offline' : rtt === null ? 'checking' : rtt < 250 ? 'good' : rtt < 600 ? 'moderate' : 'poor';
+                  const tone = {
+                    good: { icon: 'text-emerald-300', bar: 'bg-emerald-300', label: 'Good' },
+                    moderate: { icon: 'text-amber-300', bar: 'bg-amber-300', label: 'Moderate' },
+                    poor: { icon: 'text-red-300', bar: 'bg-red-400', label: 'Poor' },
+                    checking: { icon: 'text-white/60', bar: 'bg-white/40', label: 'Checking…' },
+                    offline: { icon: 'text-red-300', bar: 'bg-red-400', label: 'Offline' },
+                  }[level];
+                  return (
+                    <div className="min-w-0 rounded-lg border border-black/20 bg-black/55 backdrop-blur-md px-3 py-2" title={rtt !== null ? `Approx. ${Math.round(rtt)} ms round trip to the interview server` : undefined}>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {level === 'offline'
+                            ? <WifiOff className={`w-3.5 h-3.5 shrink-0 ${tone.icon}`} />
+                            : <Wifi className={`w-3.5 h-3.5 shrink-0 ${tone.icon}`} />}
+                          <span className="text-white/80 text-2xs truncate">
+                            Network · <span className="font-semibold text-white">{tone.label}</span>{pct !== null ? ` ${pct}%` : ''}
+                          </span>
+                        </div>
+                        <div className="w-12 sm:w-16 h-1.5 rounded-full bg-white/15 overflow-hidden shrink-0">
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${tone.bar}`}
+                            style={{ width: `${level === 'offline' ? 4 : pct ?? 30}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </div>
@@ -10307,31 +10387,43 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
         {/* ════ RIGHT PANEL: Chat (fills remaining width) ════ */}
         {/* Inset card with rounded corners, matching the webcam frame. */}
-        <div className="flex-1 flex flex-col min-w-0 bg-white my-3 mr-3 ml-1.5 rounded-xl overflow-hidden">
+        <div className="flex-1 flex flex-col min-w-0 bg-white my-3 mr-3 ml-0 rounded-xl overflow-hidden">
 
           {/* Header — white status bar: title on the left; LIVE, ID Verified,
               question progress and End on the right, separated by thin
-              dividers. Visual only — same badges, conditions and handlers. */}
-          <div className="flex-shrink-0 flex items-center justify-between gap-3 px-4 py-3 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 shadow-sm">
+              dividers. Visual only — same badges, conditions and handlers.
+              Sized by the chat panel's own width (@container), not the
+              window's: on narrower panels the title text, subtitle, progress
+              bar and ID Verified drop out in turn so End is never clipped. */}
+          <div id="iv-chat-header" className="@container flex-shrink-0 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 shadow-sm">
+          <div className="flex items-center justify-between gap-3 px-4 py-3">
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-10 h-10 rounded-full bg-brand-blue/10 dark:bg-sky-500/15 flex items-center justify-center shrink-0">
-                <MessageSquare className="w-5 h-5 text-brand-blue dark:text-sky-300" />
+                <Headset className="w-5 h-5 text-brand-blue dark:text-sky-300" />
               </div>
-              <div className="min-w-0">
-                <h2 className="text-gray-900 dark:text-white font-bold leading-tight truncate" style={{ fontSize: 16 }}>Chat with BINA</h2>
-                <p className="text-slate-500 dark:text-slate-400 text-xs leading-tight truncate">Live AI-powered interview</p>
+              <div className="min-w-0 hidden @3xl:block">
+                <h2 className="text-gray-900 dark:text-white font-bold leading-tight truncate" style={{ fontSize: 16 }}>Interview with Bina</h2>
+                <p className="hidden @4xl:block text-slate-500 dark:text-slate-400 text-xs leading-tight truncate">Your AI interviewer is listening</p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-              {/* LIVE badge — FIRST in the header, green. */}
-              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-500/15 rounded-full">
-                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="text-emerald-600 dark:text-emerald-300 text-xs font-bold">LIVE</span>
-              </div>
+            <div className="flex items-center gap-2 @2xl:gap-3 shrink-0">
+              {/* LIVE badge — FIRST in the header. Green while connected;
+                  amber "Connecting" while the connection is down (display only). */}
+              {isConnected ? (
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-500/15 rounded-full">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-emerald-600 dark:text-emerald-300 text-xs font-bold">LIVE</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 dark:bg-amber-500/15 rounded-full" title="Connecting to the interview server">
+                  <Loader2 className="w-3 h-3 text-amber-600 dark:text-amber-300 animate-spin" />
+                  <span className="text-amber-700 dark:text-amber-300 text-xs font-bold">Connecting</span>
+                </div>
+              )}
               {/* Identity verified */}
               {(faceVerification || voiceVerification) && (
-                <div className="hidden sm:flex items-center gap-1.5 pl-1.5 pr-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-500/15">
+                <div className="hidden @xl:flex items-center gap-1.5 pl-1.5 pr-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-500/15">
                   <span className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center">
                     <Check className="w-3 h-3 text-white" strokeWidth={3} />
                   </span>
@@ -10341,16 +10433,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               {/* Q counter + progress bar — animates on each change */}
               {questionNumber !== null && totalQuestions !== null && (
                 <>
-                  <div className="hidden md:block w-px h-7 bg-gray-200 dark:bg-slate-700" />
+                  <div className="hidden @2xl:block w-px h-7 bg-gray-200 dark:bg-slate-700" />
                   <div
                     key={questionNumber}
                     className="flex flex-col gap-1.5 min-w-0"
                     style={{ animation: 'qNumPop 0.35s cubic-bezier(0.34,1.56,0.64,1) both' }}
                   >
                     <span className="text-gray-900 dark:text-white text-xs font-semibold tabular-nums whitespace-nowrap">
-                      <span className="hidden sm:inline">Question </span>{questionNumber}<span className="hidden sm:inline"> of </span><span className="sm:hidden"> / </span>{totalQuestions}
+                      <span className="hidden @lg:inline">Question </span>{questionNumber}<span className="hidden @lg:inline"> of </span><span className="@lg:hidden"> / </span>{totalQuestions}
                     </span>
-                    <div className="hidden md:block w-28 lg:w-32 h-1.5 rounded-full bg-gray-200 dark:bg-slate-700 overflow-hidden">
+                    <div className="hidden @3xl:block w-28 @4xl:w-32 h-1.5 rounded-full bg-gray-200 dark:bg-slate-700 overflow-hidden">
                       <div
                         className="h-full rounded-full bg-brand-blue dark:bg-sky-400 transition-all duration-500"
                         style={{ width: `${totalQuestions > 0 ? Math.min(100, Math.max(0, (questionNumber / totalQuestions) * 100)) : 0}%` }}
@@ -10367,7 +10459,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                   interview time still runs in the backend; it's just not shown here. */}
               {/* REC badge moved to the candidate video's top-right corner; LIVE
                   moved to the front of the header (green) — see above / below. */}
+              <div className="hidden @2xl:block w-px h-7 bg-gray-200 dark:bg-slate-700" />
               <div className="hidden md:block w-px h-7 bg-gray-200 dark:bg-slate-700" />
+              <div className="hidden @2xl:block w-px h-7 bg-gray-200 dark:bg-slate-700" />
               {/* Closing indicator */}
               {isClosing && (
                 <div className="px-3 py-1.5 bg-orange-100 dark:bg-orange-500/15 border border-orange-300 dark:border-orange-500/40 text-orange-700 rounded-lg text-xs font-medium animate-pulse">Ending...</div>
@@ -10378,19 +10472,20 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 <button
                   onClick={() => setShowEndConfirm(true)}
                   disabled={!isConnected}
-                  className="flex items-center gap-1.5 px-3 sm:px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg shadow-sm transition-all duration-200 font-semibold text-sm"
+                  className="shrink-0 flex items-center gap-1.5 px-3 @md:px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg shadow-sm transition-all duration-200 font-semibold text-sm"
                 >
                   <LogOut className="w-4 h-4" />
-                  <span className="hidden sm:inline">End</span>
+                  <span className="hidden @md:inline">End</span>
                 </button>
               )}
             </div>
+          </div>
           </div>
 
 
           {/* ── Per-question timer banner — shown above chat when timer is active ── */}
           {questionTimerSeconds !== null && (
-            <div className={`flex-shrink-0 px-4 py-2.5 border-b transition-colors duration-500 ${
+            <div id="iv-answer-timer" className={`flex-shrink-0 px-4 py-2.5 border-b transition-colors duration-500 ${
               questionTimerExpired       ? 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/30' :
               questionTimerSeconds <= 30 ? 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/30' :
               questionTimerSeconds <= 60 ? 'bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30' :
@@ -11091,23 +11186,28 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             onClick={() => setShowEndConfirm(false)}
           />
           {/* Modal */}
-          <div className="relative w-full max-w-[95vw] sm:max-w-md bg-[var(--raw-0f1929)] border border-white/[0.10] rounded-2xl shadow-2xl shadow-black/60 p-6 flex flex-col gap-5">
+          <div className="relative w-full max-w-[95vw] sm:max-w-md bg-white dark:bg-slate-900 ring-1 ring-red-100 dark:ring-slate-700 rounded-2xl shadow-2xl p-6 flex flex-col gap-5">
             {/* Icon */}
-            <div className="flex items-center justify-center w-12 h-12 mx-auto rounded-full bg-[var(--raw-dc2626)]/15 border border-[var(--raw-dc2626)]/30">
-              <LogOut className="w-5 h-5 text-[var(--raw-ef4444)]" />
+            <div className="flex items-center justify-center w-12 h-12 mx-auto rounded-full bg-red-50 dark:bg-red-500/15">
+              <LogOut className="w-5 h-5 text-red-600 dark:text-red-400" />
             </div>
-            {/* Text */}
+            {/* Text — where the candidate is, and what ending does. */}
             <div className="text-center">
-              <h3 className="text-white font-semibold mb-1.5" style={{ fontSize: 16 }}>End the interview?</h3>
-              <p className="text-[var(--raw-64748b)]" style={{ fontSize: 13, lineHeight: 1.6 }}>
-                Are you sure you want to end this interview session? This action cannot be undone.
+              <h3 className="text-gray-900 dark:text-white font-bold mb-1.5" style={{ fontSize: 17 }}>End the interview?</h3>
+              {questionNumber !== null && totalQuestions !== null && (
+                <p className="mb-2 inline-flex items-center rounded-full bg-slate-100 dark:bg-slate-800 px-3 py-1 text-xs font-semibold text-slate-700 dark:text-slate-200 tabular-nums">
+                  You&apos;re on question {questionNumber} of {totalQuestions}
+                </p>
+              )}
+              <p className="text-slate-600 dark:text-slate-300" style={{ fontSize: 13, lineHeight: 1.6 }}>
+                Ending now finishes your interview with the answers you&apos;ve given so far. This action cannot be undone.
               </p>
             </div>
             {/* Actions */}
             <div className="flex gap-3">
               <button
                 onClick={() => setShowEndConfirm(false)}
-                className="flex-1 py-2.5 rounded-xl border border-white/[0.10] text-[var(--raw-94a3b8)] hover:bg-white/[0.05] hover:text-white transition-all duration-200"
+                className="flex-1 py-2.5 rounded-xl bg-sky-50 dark:bg-sky-500/15 text-brand-blue dark:text-sky-300 ring-1 ring-sky-100 dark:ring-sky-500/30 hover:bg-sky-100 dark:hover:bg-sky-500/25 transition-all duration-200"
                 style={{ fontSize: 13, fontWeight: 500 }}
               >
                 Continue Interview
@@ -11131,7 +11231,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                     wsRef.current.send(JSON.stringify({ type: 'end_interview' }));
                   }
                 }}
-                className="flex-1 py-2.5 rounded-xl bg-[var(--raw-dc2626)] hover:bg-[var(--raw-b91c1c)] text-white transition-all duration-200 shadow-lg shadow-red-500/20"
+                className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white transition-all duration-200 shadow-sm"
                 style={{ fontSize: 13, fontWeight: 600 }}
               >
                 End Interview
@@ -11374,7 +11474,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         </div>
       )}
 
-      <InterviewProctoringWarnings />
+      <InterviewProctoringWarnings anchorIds={['iv-answer-timer', 'iv-chat-header']} />
 
       {/* The screen-recording popup is mounted by CandidateAIInterviewPortal,
           not here: it has to cover the pre-interview steps too, and mounting it

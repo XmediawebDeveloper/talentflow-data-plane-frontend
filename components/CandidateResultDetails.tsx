@@ -17,6 +17,7 @@ import { RESUME_EMAIL_MISMATCH_MESSAGE, emailsMatch, normalizeEmail, pickResumeB
 import { Tooltip as HoverTooltip } from '@/components/ui/tooltip';
 import TabEmptyState, { TAB_EMPTY_ACTION_CLASS } from '@/components/ui/tab-empty-state';
 import { Button } from '@/components/ui/button';
+import { SEGMENT_TOGGLE, segmentBtn, tabPill } from '@/components/ui/filter-pills';
 import { Badge } from '@/components/ui/badge';
 import JDIdentityHeader from '@/components/jobs/JDIdentityHeader';
 import JDOverviewSections from '@/components/jobs/JDOverviewSections';
@@ -1572,42 +1573,40 @@ export default function CandidateResultDetails({
           </div>
         </div>
 
-        {/* Unified detail layout: vertical navigation on the left, selected content on the right. */}
-        <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-[180px_minmax(0,1fr)] sm:gap-4 md:grid-cols-[220px_minmax(0,1fr)] lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-6">
-          <aside className="min-w-0 sm:sticky sm:top-20 self-start bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700">
-          {/* No border-b here — the card's own border already draws the
-              baseline the active tab's underline sits on. Adding one gave a
-              doubled 2px rule under the row. */}
+        {/* Detail layout: a horizontal pill tab bar (was a vertical sidebar
+            rail) above the selected content. Shared `tabPill` chrome; danger
+            tabs flip to solid red when active. */}
+        <div className="space-y-3 sm:space-y-4">
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
           <div className="p-2 sm:p-3">
-            <div className="grid grid-cols-2 gap-1.5 sm:flex sm:flex-col">
+            <div className="flex flex-wrap items-center gap-2">
               {detailTabs.map(tab => {
                 const isActive = currentDetailTab === tab.id;
                 return (
                   <button
                     key={tab.id}
                     onClick={() => handleDetailTabClick(tab)}
-                    className={`w-full min-w-0 rounded-lg px-2.5 sm:px-3 py-2.5 text-left text-xs sm:text-sm transition-colors flex items-center justify-between gap-2 ${
-                      isActive
-                        ? tab.danger
-                          ? 'bg-destructive-subtle text-destructive font-medium ring-1 ring-destructive-line'
-                          : 'bg-brand-blue/5 text-brand-blue font-medium ring-1 ring-brand-blue/20'
-                        : tab.danger
-                          ? 'text-gray-600 hover:bg-destructive-subtle hover:text-destructive'
-                          : 'text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'
-                    }`}
+                    aria-current={isActive ? 'page' : undefined}
+                    className={
+                      tab.danger
+                        ? `inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs sm:text-sm whitespace-nowrap transition-all ${
+                            isActive
+                              ? 'bg-destructive text-white shadow-sm shadow-destructive/25'
+                              : 'bg-destructive-subtle/50 text-gray-600 dark:text-slate-300 hover:bg-destructive-subtle hover:text-destructive'
+                          }`
+                        : `${tabPill(isActive)} whitespace-nowrap`
+                    }
                   >
-                    <span className="flex min-w-0 items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5">
                       <tab.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-                      <span className="min-w-0 break-words leading-snug">{tab.label}</span>
+                      <span className="leading-snug">{tab.label}</span>
                     </span>
                     {typeof tab.count === 'number' && (
                       <span className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-medium ${
-                        tab.danger
-                          ? isActive || tab.count > 0
+                        isActive
+                          ? 'bg-white/20 text-white'
+                          : tab.danger && tab.count > 0
                             ? 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line'
-                            : 'bg-slate-100 text-gray-600'
-                          : isActive
-                            ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20'
                             : 'bg-slate-100 text-gray-600'
                       }`}>
                         {tab.count}
@@ -1618,7 +1617,7 @@ export default function CandidateResultDetails({
               })}
             </div>
           </div>
-          </aside>
+          </div>
 
           <div ref={detailContentRef} className="min-w-0 overflow-x-auto scroll-mt-24">
 
@@ -1649,7 +1648,10 @@ export default function CandidateResultDetails({
             <div
               role="tablist"
               aria-label="Job and assessment views"
-              className="flex w-fit max-w-full flex-wrap items-center gap-1.5 rounded-full bg-slate-100 dark:bg-slate-800/60 p-1"
+              /* Shared Job Openings segmented-toggle chrome (tinted track + white
+                 active chip), so this pair reads as the same control family as
+                 the list page's All / AI / Manual toggle. */
+              className={`${SEGMENT_TOGGLE} w-fit max-w-full flex-wrap`}
             >
               {([
                 { id: 'viewjd' as const, label: 'View JD', icon: Briefcase },
@@ -1663,11 +1665,7 @@ export default function CandidateResultDetails({
                     role="tab"
                     aria-selected={isActive}
                     onClick={() => setJdSummaryTab(tab.id)}
-                    className={`rounded-full px-3.5 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm whitespace-nowrap transition-colors flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 ${
-                      isActive
-                        ? 'bg-white dark:bg-slate-900 text-brand-blue font-medium shadow-sm ring-1 ring-brand-blue/20'
-                        : 'text-gray-600 dark:text-slate-400 hover:text-brand-blue hover:bg-white/70 dark:hover:bg-slate-900/50'
-                    }`}
+                    className={`${segmentBtn(isActive)} whitespace-nowrap`}
                   >
                     <tab.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
                     <span className="leading-snug">{tab.label}</span>

@@ -4,12 +4,14 @@ import { Mail, Phone, Calendar, Search, Download, FileDown, CheckSquare, Square,
 import { matchBadgeClass, MATCH_SCORE_TEXT_CLASS, normalizeMatchResult, formatOverallScore, formatOverallScoreValue } from '@/lib/utils/matchStatus';
 import { truncateJobTitle } from '@/lib/utils/jobOpeningDisplay';
 import { useState, useEffect, useMemo, useRef, Fragment } from 'react';
+import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import ScoredResumesExportModal from './ScoredResumesExportModal';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
+import ToolbarSelectAll from '@/components/ui/toolbar-select-all';
 import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import InviteShareModal from './InviteShareModal';
@@ -85,6 +87,9 @@ const FLAT_SORT_OPTIONS: { value: SortKey; label: string }[] = [
 
 const TOOLBAR_BUTTON_CLASS =
   'h-[38px] px-3 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-2 text-sm whitespace-nowrap bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue disabled:opacity-50 disabled:cursor-not-allowed';
+/* 36px (h-9) variant — same chrome, used when this table is embedded in the
+   Job Details tabs so every control matches the AI Talent Match reference. */
+const TOOLBAR_BUTTON_CLASS_COMPACT = TOOLBAR_BUTTON_CLASS.replace('h-[38px]', 'h-9');
 
 
 /* ---- The More Filters panel's field metrics ---------------------------------
@@ -409,6 +414,14 @@ interface ScoredResumesTableProps {
    * ticks drive this table's ticks).
    */
   hideSelectionBar?: boolean;
+  /**
+   * When provided, the search / More Filters toolbar portals into this node
+   * (the JobDetailView tab-navigation card's toolbar slot) instead of
+   * rendering inline above the table, so the controls read as the second row
+   * of the tab card. Keeps all toolbar state local. Optional — every other
+   * host leaves it unset and the toolbar renders inline exactly as before.
+   */
+  toolbarPortal?: HTMLElement | null;
 }
 
 /**
@@ -600,7 +613,14 @@ export default function ScoredResumesTable({
   onCreateInviteTarget,
   compact = false,
   hideSelectionBar = false,
+  toolbarPortal,
 }: ScoredResumesTableProps) {
+  /* Embedded in the Job Details tabs (the toolbar portals into that card's
+     slot). When so, the toolbar controls switch to the 36px / tinted-pill
+     chrome of the AI Talent Match reference; the standalone Resume Scoring
+     page (no portal) keeps its existing 38px look. */
+  const embedded = !!toolbarPortal;
+  const toolbarBtn = embedded ? TOOLBAR_BUTTON_CLASS_COMPACT : TOOLBAR_BUTTON_CLASS;
   // Names and job titles are shown with a capital first letter even when
   // they were typed in lower case ("jack" → "Jack", "python devloper" →
   // "Python devloper"). Done once, here, so the table, grouped view, grid,
@@ -1275,6 +1295,30 @@ Best regards`);
       );
     }
   };
+
+  /* Drive the embedded Select All dropdown (the AI Talent Match reference's
+     pill) in whichever selection mode this table is in — an onSelectAll parent,
+     a per-row onSelectResume parent, or its own local state. `applySelection`
+     reaches an exact target set; the three scopes build on it the same way the
+     reference does: the page ADDS its rows, "all" SETS every filtered row,
+     clear empties. */
+  const applySelection = (ids: string[]) => {
+    if (onSelectAll) {
+      onSelectAll(ids);
+    } else if (onSelectResume) {
+      const target = new Set(ids);
+      filteredResumes.forEach((r) => {
+        const isSelected = selectedResumes.includes(r.id);
+        if (target.has(r.id) !== isSelected) onSelectResume(r.id);
+      });
+    } else {
+      setSelectedResumes(ids);
+    }
+  };
+  const selectCurrentPage = () =>
+    applySelection(Array.from(new Set([...selectedResumes, ...paginatedResumes.map((r) => r.id)])));
+  const selectAllResumes = () => applySelection(filteredResumes.map((r) => r.id));
+  const clearResumeSelection = () => applySelection([]);
 
   /* Select/deselect one candidate group in "View by Candidates" — toggles
      every scoring row that person carries (one per job/version) in one go,
@@ -1968,7 +2012,7 @@ Best regards`);
       type="button"
       onClick={clearSelection}
       title="Clear the selection"
-      className={TOOLBAR_BUTTON_CLASS}
+      className={toolbarBtn}
     >
       <X className="w-4 h-4" />
       Clear
@@ -2009,9 +2053,13 @@ Best regards`);
         </div>
       )}
 
-      {/* Search and Filter Bar */}
-      {!compact && (
-      <div className="mb-4 space-y-3">
+      {/* Search and Filter Bar — when `toolbarPortal` is set (JobDetailView's
+          tab-navigation card slot), the whole block portals there so it reads
+          as the tab card's second row; without it, it renders inline above the
+          table exactly as before. */}
+      {!compact && (() => {
+        const toolbarBlock = (
+        <div className="mb-4 space-y-3">
         {/* Canonical search + filters row (same component as job-openings). The
             previous hand-rolled version used grey focus rings, rounded-md and a
             `palaceholder-gray-500` typo, so it matched no other list in the app. */}
@@ -2284,8 +2332,19 @@ Best regards`);
           </div>
         )}
 
-      </div>
-      )}
+        {/* Row 3 — only while something is ticked: Actions and Clear, on a
+            line of their own under Select All. Standalone only; embedded shows
+            the Actions menu in the toolbar row above (see above). */}
+        {!embedded && selectionActions && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+            {selectionActions}
+          </div>
+        )}
+
+        </div>
+        );
+        return toolbarPortal ? createPortal(toolbarBlock, toolbarPortal) : toolbarBlock;
+      })()}
 
       {displayMode === 'grid' ? (
         <div className="rounded-xl border border-gray-200 overflow-hidden">

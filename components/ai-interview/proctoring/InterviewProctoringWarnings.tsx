@@ -129,10 +129,12 @@ const WarningCard = memo(function WarningCard({
   }, [held]);
 
   return (
-    <div className={`relative overflow-hidden rounded-lg border-l-4 ${colors.bg} ${colors.border} p-4 shadow-lg animate-interview-slide-in`}>
+    // Compact card: icon + title + severity on one line, message under it,
+    // so it covers as little of the chat as possible.
+    <div className={`relative overflow-hidden rounded-lg border-l-4 ${colors.bg} ${colors.border} px-3 py-2.5 shadow-lg animate-interview-slide-in`}>
       {!held && (
         <div
-          className="absolute bottom-0 left-0 h-1 bg-current opacity-30 animate-interview-progress-shrink"
+          className="absolute bottom-0 left-0 h-0.5 bg-current opacity-30 animate-interview-progress-shrink"
           style={{
             animationDuration: `${AUTO_DISMISS_MS}ms`,
             animationTimingFunction: 'linear',
@@ -140,35 +142,35 @@ const WarningCard = memo(function WarningCard({
           }}
         />
       )}
-      <div className="flex items-start gap-3">
-        <div className={`flex-shrink-0 ${colors.icon}`}>
-          {EVENT_ICONS[warning.type] || <AlertTriangle className="w-6 h-6" />}
+      <div className="flex items-start gap-2.5">
+        <div className={`flex-shrink-0 mt-0.5 ${colors.icon} [&_svg]:w-5 [&_svg]:h-5`}>
+          {EVENT_ICONS[warning.type] || <AlertTriangle className="w-5 h-5" />}
         </div>
         <div className="flex-1 min-w-0">
-          <h4 className={`font-semibold ${colors.text}`}>
-            {EVENT_NAMES[warning.type] || 'Warning'}
-          </h4>
-          <p className={`text-sm mt-1 ${colors.text} opacity-90`}>
+          <div className="flex items-center gap-2">
+            <h4 className={`text-sm font-semibold leading-tight truncate ${colors.text}`}>
+              {EVENT_NAMES[warning.type] || 'Warning'}
+            </h4>
+            <span className={`flex-shrink-0 text-2xs px-1.5 py-0.5 rounded-full font-medium ${
+              warning.severity === 'severe'   ? 'bg-red-200 text-red-800' :
+              warning.severity === 'moderate' ? 'bg-orange-200 text-orange-800' :
+              'bg-yellow-200 text-yellow-800'
+            }`}>
+              {warning.severity.charAt(0).toUpperCase() + warning.severity.slice(1)}
+            </span>
+            <span className="ml-auto flex-shrink-0 text-2xs opacity-60">
+              {warning.timestamp.toLocaleTimeString('en-US', { hour12: true })}
+            </span>
+          </div>
+          <p className={`text-xs mt-0.5 leading-snug ${colors.text} opacity-90`}>
             {warning.message}
-          </p>
-          <p className="text-xs mt-1 opacity-60">
-            {warning.timestamp.toLocaleTimeString('en-US', { hour12: true })}
           </p>
         </div>
         {!held && (
-          <button onClick={onDismiss} className={`flex-shrink-0 p-1 rounded hover:bg-black/5 ${colors.text}`} aria-label="Close">
+          <button onClick={onDismiss} className={`flex-shrink-0 p-1 -mr-1 -mt-0.5 rounded hover:bg-black/5 ${colors.text}`} aria-label="Close">
             <X className="w-4 h-4" />
           </button>
         )}
-      </div>
-      <div className="absolute top-2 right-10">
-        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-          warning.severity === 'severe'   ? 'bg-red-200 text-red-800' :
-          warning.severity === 'moderate' ? 'bg-orange-200 text-orange-800' :
-          'bg-yellow-200 text-yellow-800'
-        }`}>
-          {warning.severity.charAt(0).toUpperCase() + warning.severity.slice(1)}
-        </span>
       </div>
     </div>
   );
@@ -184,8 +186,30 @@ const WarningCard = memo(function WarningCard({
  * Subscribes to InterviewEventBus — NO props needed from parent.
  * Positioned at bottom of viewport for interview context.
  */
-export function InterviewProctoringWarnings() {
+export function InterviewProctoringWarnings({ anchorIds }: {
+  /** Element ids to sit just under, top-right — the first one on screen wins
+   *  (e.g. the answer timer, else the chat header). Without one on screen the
+   *  stack falls back to the bottom-right corner. */
+  anchorIds?: string[];
+} = {}) {
   const [warnings, setWarnings] = useState<WarningItem[]>([]);
+  const [anchorPos, setAnchorPos] = useState<{ top: number; right: number; maxWidth: number } | null>(null);
+  const hasWarnings = warnings.length > 0;
+  const anchorKey = anchorIds?.join('|') ?? '';
+  useEffect(() => {
+    if (!hasWarnings || !anchorKey) return;
+    const measure = () => {
+      const el = anchorKey.split('|').map((id) => document.getElementById(id)).find(Boolean);
+      if (!el) { setAnchorPos(null); return; }
+      const r = el.getBoundingClientRect();
+      setAnchorPos({ top: r.bottom + 8, right: Math.max(8, window.innerWidth - r.right + 12), maxWidth: Math.max(240, r.width - 24) });
+    };
+    measure();
+    // The timer comes and goes between questions, so re-check while shown.
+    const iv = setInterval(measure, 500);
+    window.addEventListener('resize', measure);
+    return () => { clearInterval(iv); window.removeEventListener('resize', measure); };
+  }, [hasWarnings, anchorKey]);
 
   // Subscribe to interview event bus on mount
   useEffect(() => {
@@ -252,7 +276,10 @@ export function InterviewProctoringWarnings() {
   }
 
   const overlay = (
-    <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-3 max-w-md w-full pointer-events-none">
+    <div
+      className={`fixed z-50 flex flex-col gap-2 max-w-sm w-[calc(100%-2rem)] pointer-events-none ${anchorPos ? '' : 'bottom-4 right-4'}`}
+      style={anchorPos ? { top: anchorPos.top, right: anchorPos.right, maxWidth: Math.min(384, anchorPos.maxWidth) } : undefined}
+    >
       {warnings.map((warning) => (
         <div key={warning.id} className="pointer-events-auto">
           <WarningCard

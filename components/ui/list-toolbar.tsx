@@ -147,6 +147,14 @@ export interface ListToolbarProps {
    */
   overflowVisible?: boolean;
 
+  /**
+   * Render the built-in More Filters and Reset buttons at a 36px height
+   * (`h-9`) instead of their natural 38px (`py-2`). Opt-in so existing pages
+   * are unchanged; used where a toolbar must match the 36px control band of
+   * the Job Details tabs (the AI Talent Match reference).
+   */
+  compactButtons?: boolean;
+
   className?: string;
 }
 
@@ -173,6 +181,7 @@ export default function ListToolbar({
   controlsFollowSearch = false,
   singleLine = false,
   overflowVisible = false,
+  compactButtons = false,
   className,
 }: ListToolbarProps) {
   const container = containerBreakpoint === '4xl'
@@ -276,7 +285,8 @@ export default function ListToolbar({
             type="button"
             onClick={onToggleFilters}
             className={cn(
-              'px-3 py-2 rounded-lg font-medium transition-all flex items-center gap-2 text-sm',
+              'rounded-lg font-medium transition-all flex items-center gap-2 text-sm',
+              compactButtons ? 'h-9 px-3' : 'px-3 py-2',
               filtersApplied
                 ? 'bg-brand-blue text-white border border-brand-blue shadow-sm shadow-brand-blue/25'
                 : filtersOpen
@@ -308,7 +318,10 @@ export default function ListToolbar({
               onClearFilters!();
             }}
             title="Clear the search and every filter"
-            className="px-3 py-2 rounded-lg font-medium transition-all flex items-center gap-1.5 text-sm text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 hover:border-red-300"
+            className={cn(
+              'rounded-lg font-medium transition-all flex items-center gap-1.5 text-sm text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 hover:border-red-300',
+              compactButtons ? 'h-9 px-3' : 'px-3 py-2',
+            )}
           >
             <XCircle className="w-4 h-4" />
             Reset
