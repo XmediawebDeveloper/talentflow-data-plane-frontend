@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
+  ClipboardCheck,
   Mic,
   MicOff,
   MessageSquare,
@@ -147,6 +148,7 @@ function PracticeTour({
 }) {
   const [ring, setRing] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
   const [panelH, setPanelH] = useState(0);
+  const [cardH, setCardH] = useState(160);
   const cardRef = useRef<HTMLDivElement>(null);
   const step = steps[stepIndex];
 
@@ -159,6 +161,7 @@ function PracticeTour({
       if (!target) { setRing(null); return; }
       const p = panel.getBoundingClientRect();
       setPanelH(p.height);
+      if (cardRef.current) setCardH(cardRef.current.offsetHeight);
       const t = target.getBoundingClientRect();
       setRing({ top: t.top - p.top - 6, left: t.left - p.left - 6, width: t.width + 12, height: t.height + 12 });
     };
@@ -182,7 +185,6 @@ function PracticeTour({
   const isLast = stepIndex >= steps.length - 1;
   // Card sits just below the highlighted target, or just above it when there
   // isn't room below inside the panel.
-  const cardH = cardRef.current?.offsetHeight ?? 160;
   const cardTop = ring
     ? (ring.top + ring.height + 8 + cardH <= panelH - 8
         ? ring.top + ring.height + 8
@@ -1284,11 +1286,12 @@ export default function StepSamplePractice({
       `}</style>
       {/* Header */}
       <div className="text-center space-y-1">
-        <span className="inline-block px-4 py-1.5 rounded-full bg-gray-100 text-gray-700 text-sm font-medium">
+        <span className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 text-sm font-medium">
+          <ClipboardCheck className="w-4 h-4" aria-hidden="true" />
           Practice &amp; Final Check
         </span>
         <h2 className="text-2xl font-bold text-gray-900">Let&apos;s Test Your Setup</h2>
-        <p className="text-gray-500 text-sm">Answer the practice question to verify your mic and camera — this won&apos;t be scored.</p>
+        <p className="text-gray-500 text-sm">Answer the practice question to verify your mic and camera — this won&apos;t be evaluated.</p>
       </div>
 
       {/* ── Main interview-like panel (the embedded "screen") ──
@@ -1362,19 +1365,15 @@ export default function StepSamplePractice({
               {aiSpeaking && <span className="absolute inset-0 rounded-full ring-2 ring-[var(--raw-7c3aed)]/40 animate-ping" />}
             </div>
             <p className="text-white font-semibold text-lg leading-none">Bina</p>
-            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
-              aiSpeaking ? 'bg-[var(--raw-7c3aed)]/20 text-[var(--raw-c4b5fd)]' : isRecording ? 'bg-red-500/15 text-red-300' : 'bg-white/10 dark:bg-slate-900/10 text-[var(--raw-94a3b8)]'
+            {/* Status pill — same states and colours as the live interview's
+                pill under Bina: purple speaking, green your turn, amber otherwise. */}
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border shadow-md text-2xs font-semibold text-white transition-colors duration-300 ${
+              aiSpeaking ? 'bg-purple-600/90 border-purple-400/50'
+                : isRecording ? 'bg-emerald-600/90 border-emerald-400/50'
+                : 'bg-amber-700/90 border-amber-400/50'
             }`}>
-              {aiSpeaking ? (
-                <>
-                  <span className="flex items-end gap-0.5 h-3">
-                    <span className="w-0.5 bg-[var(--raw-a78bfa)] animate-pulse" style={{ height: '40%' }} />
-                    <span className="w-0.5 bg-[var(--raw-a78bfa)] animate-pulse" style={{ height: '90%', animationDelay: '0.15s' }} />
-                    <span className="w-0.5 bg-[var(--raw-a78bfa)] animate-pulse" style={{ height: '60%', animationDelay: '0.3s' }} />
-                  </span>
-                  Speaking…
-                </>
-              ) : isRecording ? '● Listening' : isTranscribing ? 'Processing…' : 'Ready'}
+              <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+              {aiSpeaking ? 'Speaking...' : isRecording ? 'Your turn' : isTranscribing ? 'Processing...' : 'Ready'}
             </span>
           </div>
 
@@ -1416,7 +1415,7 @@ export default function StepSamplePractice({
 
         {/* ── Right: chat thread + controls ── */}
         {/* Inset card with rounded corners, matching the webcam frame (live parity). */}
-        <div ref={chatCardRef} className="relative md:col-span-3 lg:col-span-2 flex flex-col bg-[var(--raw-060d1a)] m-3 rounded-xl overflow-hidden" style={{ minHeight: '360px' }}>
+        <div ref={chatCardRef} className="relative md:col-span-3 lg:col-span-2 flex flex-col bg-white m-3 rounded-xl overflow-hidden" style={{ minHeight: '360px' }}>
           {/* Pre-turn "Get ready to answer" 3-2-1 — same as the live interview
               (H2 shine, no circle, PRE_TURN_TICK_MS per number). Lighter sky
               shades than live because this chat panel is dark. */}
@@ -1471,20 +1470,22 @@ export default function StepSamplePractice({
             </div>
           )}
           {/* Start-practice gate — Bina stays silent until the candidate clicks
-              Start (also gives TTS a user gesture). Sits over the chat panel. */}
-          {!started && (
-            <div className="absolute inset-0 z-20 flex items-center justify-center bg-[var(--raw-060d1a)]/85 backdrop-blur-sm p-6">
+              Start (also gives TTS a user gesture). Sits over the chat panel.
+              Held back while the guided tour is open, so the tour's spotlight
+              shows the real chat, waveform and buttons instead of this cover;
+              it appears as soon as the tour ends or is skipped. */}
+          {!started && tourStep < 0 && (
+            <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/90 backdrop-blur-sm p-6">
               <div className="text-center max-w-sm">
-                <div className="w-14 h-14 rounded-full bg-[var(--raw-7c3aed)]/20 ring-1 ring-[var(--raw-7c3aed)]/40 flex items-center justify-center mx-auto mb-4">
-                  <MessageSquare className="w-7 h-7 text-[var(--raw-a78bfa)]" />
+                <div className="w-14 h-14 rounded-full bg-violet-50 ring-1 ring-violet-200 flex items-center justify-center mx-auto mb-4">
+                  <MessageSquare className="w-7 h-7 text-violet-600" />
                 </div>
-                <h3 className="text-white text-lg font-semibold mb-1.5">Ready for a quick practice?</h3>
-                <p className="text-[var(--raw-94a3b8)] text-sm leading-relaxed mb-5">
+                <h3 className="text-gray-900 text-lg font-semibold mb-1.5">Ready for a quick practice?</h3>
+                <p className="text-slate-600 text-sm leading-relaxed mb-5">
                   When you click Start, Bina will greet you and ask you to introduce yourself. Answer just like the real interview — nothing here is saved.
                 </p>
                 <Button
                   type="button"
-                  tone="onColor"
                   variant="primary"
                   onClick={handleStartPractice}
                   icon={<Play className="w-4 h-4" />}
@@ -1495,45 +1496,59 @@ export default function StepSamplePractice({
               </div>
             </div>
           )}
-          {/* Chat thread — Bina bubbles (left) + your answer bubble (right) */}
-          <div ref={chatScrollRef} data-tour="answer" className="flex-1 overflow-y-auto p-4 pb-28 space-y-3" style={{ maxHeight: '420px' }}>
+          {/* Chat thread — same bubbles as the live interview: Bina (violet,
+              left) and Your Response (mint, right). */}
+          <div ref={chatScrollRef} data-tour="answer" className="flex-1 overflow-y-auto p-4 pb-28 space-y-3 bg-slate-50/60" style={{ maxHeight: '420px' }}>
             {/* Bina greeting */}
-            <div className="flex items-start gap-2">
-              <div className="w-6 h-6 rounded-full bg-[var(--raw-7c3aed)] flex items-center justify-center flex-shrink-0 mt-0.5"><MessageSquare className="w-3.5 h-3.5 text-white" /></div>
-              <div className="max-w-[88%]">
-                <p className="text-2xs font-semibold text-[var(--raw-a78bfa)] mb-1">BINA</p>
-                <div className="bg-[var(--raw-1e293b)]/80 border border-white/[0.08] rounded-2xl rounded-tl-sm px-3.5 py-2.5">
-                  <p className="text-[var(--raw-e2e8f0)] text-sm leading-relaxed">{PRACTICE_GREETING}</p>
+            <div className="flex gap-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/linda-avatar.webp" onError={(e) => { const t = e.currentTarget; if (!t.src.endsWith('/linda-3.png')) t.src = '/linda-3.png'; }} alt="Bina" className="w-6 h-6 rounded-full object-cover shrink-0 shadow-sm mt-0.5" />
+              <div className="max-w-[80%]">
+                <span className="text-2xs font-semibold text-purple-600 mb-0.5 block">BINA</span>
+                <div className="px-3.5 py-2.5 bg-violet-50 text-violet-900 rounded-2xl rounded-tl-sm border border-violet-200 shadow-sm">
+                  <p className="text-sm leading-relaxed">{PRACTICE_GREETING}</p>
                 </div>
               </div>
             </div>
-            {/* Bina practice question + play + reassurance chip */}
-            <div className="flex items-start gap-2">
-              <div className="w-6 h-6 rounded-full bg-[var(--raw-7c3aed)] flex items-center justify-center flex-shrink-0 mt-0.5"><MessageSquare className="w-3.5 h-3.5 text-white" /></div>
-              <div className="max-w-[88%] space-y-2">
-                <div className="bg-[var(--raw-1e293b)]/80 border border-white/[0.08] rounded-2xl rounded-tl-sm px-3.5 py-2.5">
-                  <p className="text-2xs text-[var(--raw-64748b)] font-medium uppercase tracking-wide mb-1">Practice question</p>
-                  <p className="text-[var(--raw-e2e8f0)] text-sm leading-relaxed font-medium">&ldquo;{PRACTICE_QUESTION}&rdquo;</p>
+            {/* Bina practice question */}
+            <div className="flex gap-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/linda-avatar.webp" onError={(e) => { const t = e.currentTarget; if (!t.src.endsWith('/linda-3.png')) t.src = '/linda-3.png'; }} alt="Bina" className="w-6 h-6 rounded-full object-cover shrink-0 shadow-sm mt-0.5" />
+              <div className="max-w-[80%]">
+                <span className="text-2xs font-semibold text-purple-600 mb-0.5 block">BINA</span>
+                <div className="px-3.5 py-2.5 bg-violet-50 text-violet-900 rounded-2xl rounded-tl-sm border border-violet-200 shadow-sm">
+                  <p className="text-2xs text-violet-500 font-medium uppercase tracking-wide mb-1">Practice question</p>
+                  <p className="text-sm leading-relaxed font-medium">&ldquo;{PRACTICE_QUESTION}&rdquo;</p>
                 </div>
-                {/* Play/Replay-question button removed — the Repeat button in the
-                    control bar does the same thing (replays only the question). */}
+                {/* Play/Replay-question button removed — Repeat Question in the
+                    response bubble does the same thing (replays only the question). */}
               </div>
             </div>
-            {/* Your answer bubble (right) — live while recording, final after */}
-            {(isRecording || isTranscribing || (displayAnswer && displayAnswer.trim()) || (typedAnswer && typedAnswer.trim())) && (
-              <div className="flex items-start gap-2 flex-row-reverse">
-                <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0 mt-0.5 text-white text-2xs font-bold">You</div>
-                <div className="max-w-[88%]">
-                  <p className="text-2xs font-semibold text-emerald-400 mb-1 text-right">YOUR RESPONSE {isTranscribing && <span className="text-[var(--raw-60a5fa)]">· enhancing…</span>}</p>
-                  <div className="bg-emerald-500/10 border border-emerald-500/25 rounded-2xl rounded-tr-sm px-3.5 py-2.5">
+            {/* Your Response — like the live interview, the waveform and the
+                Repeat Question / Next buttons live INSIDE this bubble. It stays
+                up from the start (waiting state) so the guided tour can point
+                at it. Without a mic, the typed-answer bar below is used instead. */}
+            {(micReady || isRecording || isTranscribing || (displayAnswer && displayAnswer.trim()) || (typedAnswer && typedAnswer.trim())) && (
+              <div ref={micReady ? controlBarRef : undefined} className="flex gap-2 flex-row-reverse">
+                <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0 mt-0.5 text-white text-[9px] font-bold shadow-sm">You</div>
+                <div className="max-w-[80%] min-w-0">
+                  <span className="text-2xs font-semibold text-emerald-600 mb-0.5 block text-right">
+                    Your Response {isTranscribing && <span className="text-sky-600">· enhancing…</span>}
+                  </span>
+                  <div className="px-3.5 py-2.5 bg-emerald-50 text-emerald-900 rounded-2xl rounded-tr-sm border border-emerald-200 shadow-sm">
                     {isRecording ? (
-                      // Same as the real Live interview: no live transcript — show
-                      // a recording status; the transcript is revealed after the
-                      // candidate finishes speaking.
-                      <div className="flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 bg-red-400 rounded-full animate-ping shrink-0" />
-                        <span className="text-xs italic text-emerald-200/70 leading-relaxed">Recording… Your transcript will appear after you finish speaking.</span>
-                      </div>
+                      // Same as the live interview: no live transcript — a
+                      // recording status + waveform; the transcript shows after.
+                      <>
+                        <div className="flex items-center gap-1 mb-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          <span className="text-emerald-600 text-2xs font-medium">recording…</span>
+                        </div>
+                        <div data-tour="record" className="flex flex-col gap-1.5">
+                          <MicWaveform analyserRef={analyserRef} active={isRecording} color="#059669" quietColor="#6ee7b7" />
+                          <p className="text-xs leading-relaxed italic text-emerald-700/70">Recording… Your transcript will appear after you finish speaking.</p>
+                        </div>
+                      </>
                     ) : isTranscribing ? (
                       // Processing: candidate finished, transcript in flight.
                       <div className="flex items-center gap-1.5">
@@ -1541,153 +1556,144 @@ export default function StepSamplePractice({
                         <span className="w-2 h-2 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: '150ms' }} />
                         <span className="w-2 h-2 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: '300ms' }} />
                       </div>
+                    ) : (displayAnswer || typedAnswer) ? (
+                      <p className="text-sm leading-relaxed">{displayAnswer || typedAnswer}</p>
                     ) : (
-                      <p className="text-[var(--raw-e2e8f0)] text-sm leading-relaxed">{displayAnswer || typedAnswer}</p>
+                      // Waiting for the mic to open (Bina still speaking / not started).
+                      <div data-tour="record" className="flex flex-col gap-1.5">
+                        <MicWaveform analyserRef={analyserRef} active={false} color="#059669" quietColor="#6ee7b7" />
+                        <p className="text-xs leading-relaxed italic text-emerald-700/70">
+                          {!started ? 'Press Start to begin.' : aiSpeaking ? 'The mic opens when Bina finishes the question.' : 'Getting ready…'}
+                        </p>
+                      </div>
+                    )}
+                    {/* Repeat Question / Next — same place and style as live. */}
+                    {micReady && !practiceDone && (
+                      <div className="flex flex-wrap items-center gap-2 mt-2.5 pt-2.5 border-t border-emerald-200/70">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            // Repeat MID-answer: just replay — the timer pauses while Bina
+                            // speaks and resumes from where it left (no reset). Repeat AFTER
+                            // finishing (done/timed-up): a fresh re-practice → reset the budget.
+                            const wasFinished = practiceDoneRef.current;
+                            practiceDoneRef.current = false;
+                            setPracticeDone(false);
+                            setTimedUp(false);
+                            if (wasFinished) setAnswerElapsed(0);
+                            setAutoSpeakBlocked(false);
+                            // Repeat plays ONLY the question — not the full greeting.
+                            speakQuestion(PRACTICE_QUESTION);
+                          }}
+                          disabled={!started || aiSpeaking || practiceDone}
+                          title={practiceDone ? 'Practice complete' : 'Replay the question'}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <Volume2 className="w-3.5 h-3.5" /> Repeat Question
+                        </button>
+                        {/* Next — finish the answer; Bina plays the sign-off. */}
+                        <button
+                          data-tour="next"
+                          type="button"
+                          onClick={handlePracticeNext}
+                          disabled={aiSpeaking || isTranscribing || practiceDone || (!isRecording && !hasAnswer)}
+                          title={practiceDone ? 'Practice complete' : isRecording || hasAnswer ? 'Finish and hear Bina' : 'Answer first'}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors bg-emerald-600 hover:bg-emerald-700 border-emerald-600 text-white disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:border-gray-200 disabled:text-gray-400"
+                        >
+                          Next <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                        {started && !isRecording && !hasAnswer && !aiSpeaking && !isTranscribing && (
+                          <p className="basis-full text-2xs text-emerald-700/70">Answer first — Next unlocks once you speak.</p>
+                        )}
+                      </div>
                     )}
                   </div>
-                  {transcribeError && !isTranscribing && <p className="text-xs text-red-400 mt-1 text-right">{transcribeError}</p>}
+                  {transcribeError && !isTranscribing && <p className="text-xs text-red-600 mt-1 text-right">{transcribeError}</p>}
                 </div>
               </div>
             )}
             {/* Time's-up notice when the 2 minutes elapsed (not a manual Next). */}
             {timedUp && (
               <div className="flex justify-center py-1">
-                <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-200 bg-amber-500/15 border border-amber-500/30 rounded-full px-3 py-1">
+                <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-3 py-1">
                   ⏱ Time&apos;s up — that&apos;s the 2 minutes. Moving on…
                 </span>
               </div>
             )}
             {/* Bina's sign-off after Next / timeout — "you're ready, all the best". */}
             {practiceDone && (
-              <div className="flex items-start gap-2">
-                <div className="w-6 h-6 rounded-full bg-[var(--raw-7c3aed)] flex items-center justify-center flex-shrink-0 mt-0.5"><MessageSquare className="w-3.5 h-3.5 text-white" /></div>
-                <div className="max-w-[88%]">
-                  <p className="text-2xs font-semibold text-[var(--raw-a78bfa)] mb-1">BINA</p>
-                  <div className="bg-[var(--raw-1e293b)]/80 border border-emerald-500/25 rounded-2xl rounded-tl-sm px-3.5 py-2.5">
-                    <p className="text-[var(--raw-e2e8f0)] text-sm leading-relaxed">{PRACTICE_CLOSING_MESSAGE}</p>
+              <div className="flex gap-2">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/linda-avatar.webp" onError={(e) => { const t = e.currentTarget; if (!t.src.endsWith('/linda-3.png')) t.src = '/linda-3.png'; }} alt="Bina" className="w-6 h-6 rounded-full object-cover shrink-0 shadow-sm mt-0.5" />
+                <div className="max-w-[80%]">
+                  <span className="text-2xs font-semibold text-purple-600 mb-0.5 block">BINA</span>
+                  <div className="px-3.5 py-2.5 bg-violet-50 text-violet-900 rounded-2xl rounded-tl-sm border border-violet-200 shadow-sm">
+                    <p className="text-sm leading-relaxed">{PRACTICE_CLOSING_MESSAGE}</p>
                   </div>
-                  <p className="mt-2 text-2xs text-emerald-300">You can now click <span className="font-semibold">Start Interview</span> below.</p>
+                  <p className="mt-2 text-2xs text-emerald-600">You can now click <span className="font-semibold">Start Interview</span> below.</p>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Control bar — like the real interview: the mic auto-listens (no
-              Start/Stop button), a live waveform shows you're heard, and you
-              Repeat the question or move on with Next. */}
-          <div ref={controlBarRef} className="relative border-t border-white/[0.07] p-3">
-            {/* Bottom-centered status banner (matches the real interview): red
-                "Hold on — Bina is speaking" while she talks, green "Your turn"
-                while the mic is open. Floats above the control bar. */}
-            {(() => {
-              const variant: 'hold' | 'turn' | null =
-                aiSpeaking ? 'hold'
-                : (started && isRecording) ? 'turn'
-                : null;
-              if (!variant) return null;
-              const cfg = variant === 'turn'
-                ? { grad: 'from-emerald-400 to-teal-500', ring: 'ring-emerald-200/60 dark:ring-emerald-500/30', glow: 'shadow-emerald-500/30', title: 'Your turn — speak now', subtitle: 'Microphone is active · Bina is listening' }
-                : { grad: 'from-rose-500 to-red-600', ring: 'ring-rose-200/50 dark:ring-rose-500/30', glow: 'shadow-red-600/30', title: 'Hold on — Bina is speaking', subtitle: 'Please wait until she finishes the question' };
-              return (
-                <div className="absolute inset-x-0 bottom-full z-30 flex justify-center px-4 pt-10 pb-3 pointer-events-none bg-gradient-to-t from-[var(--raw-060d1a)] via-[var(--raw-060d1a)] via-70% to-transparent">
-                  <div className={`relative flex items-center gap-3 pl-3 pr-4 py-2.5 rounded-2xl bg-gradient-to-br ${cfg.grad} ring-1 ${cfg.ring} shadow-2xl ${cfg.glow} backdrop-blur-md min-w-0 sm:min-w-[240px] max-w-[94%]`}>
-                    <div className="relative shrink-0">
-                      <div className="w-9 h-9 rounded-full bg-white/25 dark:bg-slate-900/25 ring-1 ring-white/40 flex items-center justify-center">
-                        {variant === 'turn' ? (
-                          <svg className="w-4.5 h-4.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" /><path strokeLinecap="round" strokeLinejoin="round" d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" y1="19" x2="12" y2="23" strokeLinecap="round" /><line x1="8" y1="23" x2="16" y2="23" strokeLinecap="round" /></svg>
-                        ) : (
-                          <svg className="w-4.5 h-4.5 text-white" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>
-                        )}
-                      </div>
-                      <span className="absolute inset-0 rounded-full ring-2 ring-white/50 animate-ping opacity-40" />
+          {/* Bottom-centred turn banner (as in the live interview): red "Hold on
+              — Bina is speaking" while she talks, green "Your turn" while the
+              mic is open. Floats over the bottom of the chat. */}
+          {(() => {
+            const variant: 'hold' | 'turn' | null =
+              aiSpeaking ? 'hold'
+              : (started && isRecording) ? 'turn'
+              : null;
+            if (!variant) return null;
+            const cfg = variant === 'turn'
+              ? { grad: 'from-emerald-400 to-teal-500', ring: 'ring-emerald-200/60', glow: 'shadow-emerald-500/30', title: 'Your turn — speak now', subtitle: 'Microphone is active · Bina is listening' }
+              : { grad: 'from-rose-500 to-red-600', ring: 'ring-rose-200/50', glow: 'shadow-red-600/30', title: 'Hold on — Bina is speaking', subtitle: 'Please wait until she finishes the question' };
+            return (
+              <div className={`absolute inset-x-0 z-20 flex justify-center px-4 pt-10 pb-3 pointer-events-none bg-gradient-to-t from-white via-white/90 via-60% to-transparent ${micReady ? 'bottom-0' : 'bottom-[120px]'}`}>
+                <div className={`relative flex items-center gap-3 pl-3 pr-4 py-2.5 rounded-2xl bg-gradient-to-br ${cfg.grad} ring-1 ${cfg.ring} shadow-2xl ${cfg.glow} backdrop-blur-md min-w-0 sm:min-w-[240px] max-w-[94%]`}>
+                  <div className="relative shrink-0">
+                    <div className="w-9 h-9 rounded-full bg-white/25 ring-1 ring-white/40 flex items-center justify-center">
+                      {variant === 'turn' ? (
+                        <svg className="w-4.5 h-4.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" /><path strokeLinecap="round" strokeLinejoin="round" d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" y1="19" x2="12" y2="23" strokeLinecap="round" /><line x1="8" y1="23" x2="16" y2="23" strokeLinecap="round" /></svg>
+                      ) : (
+                        <svg className="w-4.5 h-4.5 text-white" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>
+                      )}
                     </div>
-                    <div className="relative min-w-0">
-                      <span className="text-white font-bold block leading-tight" style={{ fontSize: 14 }}>{cfg.title}</span>
-                      <span className="text-white/85 text-2xs leading-snug block">{cfg.subtitle}</span>
-                    </div>
+                    <span className="absolute inset-0 rounded-full ring-2 ring-white/50 animate-ping opacity-40" />
+                  </div>
+                  <div className="relative min-w-0">
+                    <span className="text-white font-bold block leading-tight" style={{ fontSize: 14 }}>{cfg.title}</span>
+                    <span className="text-white/85 text-2xs leading-snug block">{cfg.subtitle}</span>
                   </div>
                 </div>
-              );
-            })()}
-            {micReady ? (
-              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                {/* Mic status + live waveform (auto-recording). Full width on
-                    its own row below sm, so Repeat/Next get the row under it. */}
-                <div data-tour="record" className="flex-1 basis-full sm:basis-auto min-w-0 flex items-center gap-3 bg-[var(--raw-0f1a2e)] border border-white/[0.06] rounded-xl px-3 py-2">
-                  <span className={`text-xs font-medium truncate ${
-                    isRecording ? 'text-[var(--raw-ef4444)]' : isTranscribing ? 'text-[var(--raw-60a5fa)]' : practiceDone ? 'text-emerald-400' : aiSpeaking ? 'text-[var(--raw-a78bfa)]' : 'text-[var(--raw-94a3b8)]'
-                  }`}>
-                    {!started ? 'Press Start to begin'
-                      : isRecording ? '● Listening…'
-                      : isTranscribing ? 'Processing…'
-                      : timedUp ? "Time's up ✓"
-                      : practiceDone ? 'All set ✓'
-                      : aiSpeaking ? 'Bina is speaking…'
-                      : 'Getting ready…'}
-                  </span>
-                  <MicWaveform analyserRef={analyserRef} active={isRecording} color="var(--raw-34d399)" width={120} height={26} className="shrink-0 hidden min-[400px]:block" />
-                </div>
-                {/* Repeat the question (replays it and re-opens the mic) */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    // Repeat MID-answer: just replay — the timer pauses while Bina
-                    // speaks and resumes from where it left (no reset). Repeat AFTER
-                    // finishing (done/timed-up): a fresh re-practice → reset the budget.
-                    const wasFinished = practiceDoneRef.current;
-                    practiceDoneRef.current = false;
-                    setPracticeDone(false);
-                    setTimedUp(false);
-                    if (wasFinished) setAnswerElapsed(0);
-                    setAutoSpeakBlocked(false);
-                    // Repeat plays ONLY the question — not the full greeting.
-                    speakQuestion(PRACTICE_QUESTION);
-                  }}
-                  disabled={aiSpeaking || practiceDone}
-                  title={practiceDone ? 'Practice complete' : 'Replay the question'}
-                  className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-medium text-[var(--raw-e2e8f0)] bg-[var(--raw-1e293b)] border border-white/[0.08] hover:bg-[var(--raw-334155)] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-                >
-                  <Volume2 className="w-4 h-4" /> Repeat
-                </button>
-                {/* Next — finish the answer; Bina plays the sign-off. */}
+              </div>
+            );
+          })()}
+
+          {/* No microphone: type the answer instead (only shown then). */}
+          {!micReady && (
+            <div ref={controlBarRef} className="relative border-t border-gray-100 p-3 bg-white">
+              <p className="text-xs text-amber-700 mb-2"><MicOff className="w-3.5 h-3.5 inline mr-1" />No microphone — type your answer instead.</p>
+              <div className="flex items-end gap-2">
+                <textarea
+                  value={typedAnswer}
+                  onChange={e => { if (!isRecording) { setTypedAnswer(e.target.value); setInputMode('typing'); } }}
+                  placeholder="Type your answer here…"
+                  className="flex-1 min-h-[52px] bg-white border border-gray-200 rounded-lg p-2.5 text-sm text-gray-800 placeholder-gray-400 resize-none focus:outline-none focus:border-brand-blue/50"
+                  rows={2}
+                />
                 <button
                   data-tour="next"
                   type="button"
                   onClick={handlePracticeNext}
-                  disabled={aiSpeaking || isTranscribing || practiceDone || (!isRecording && !hasAnswer)}
-                  title={practiceDone ? 'Practice complete' : isRecording || hasAnswer ? 'Finish and hear Bina' : 'Answer first'}
-                  className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-[var(--raw-3b82f6)] hover:bg-[var(--raw-2563eb)] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                  disabled={aiSpeaking || practiceDone || !typedAnswer.trim()}
+                  className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                 >
                   Next <ChevronRight className="w-4 h-4" />
                 </button>
-                {started && !isRecording && !hasAnswer && !practiceDone && !aiSpeaking && !isTranscribing && (
-                  <p className="basis-full text-2xs text-[var(--raw-94a3b8)]">Answer first — Next unlocks once you speak.</p>
-                )}
               </div>
-            ) : (
-              <div>
-                <p className="text-xs text-amber-400 mb-2"><MicOff className="w-3.5 h-3.5 inline mr-1" />No microphone — type your answer instead.</p>
-                <div className="flex items-end gap-2">
-                  <textarea
-                    value={typedAnswer}
-                    onChange={e => { if (!isRecording) { setTypedAnswer(e.target.value); setInputMode('typing'); } }}
-                    placeholder="Type your answer here…"
-                    className="flex-1 min-h-[52px] bg-[var(--raw-0f1a2e)] border border-white/[0.06] rounded-lg p-2.5 text-sm text-[var(--raw-cbd5e1)] placeholder-[var(--raw-475569)] resize-none focus:outline-none focus:border-[var(--raw-3b82f6)]/50"
-                    rows={2}
-                  />
-                  <button
-                    data-tour="next"
-                    type="button"
-                    onClick={handlePracticeNext}
-                    disabled={aiSpeaking || practiceDone || !typedAnswer.trim()}
-                    className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-[var(--raw-3b82f6)] hover:bg-[var(--raw-2563eb)] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-                  >
-                    Next <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
 
