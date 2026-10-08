@@ -1,10 +1,10 @@
 'use client';
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { ArrowLeft,
+import {
   Shield, Camera, Lock, AlertCircle, Mail, User,
   CheckCircle, RefreshCw, Loader2, ArrowRight, KeyRound, Check,
-  Lightbulb, Sun, ScanFace, Ban,
+  Lightbulb, Sun, ScanFace, Ban, Info,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
@@ -721,13 +721,6 @@ export default function StepIdentity({
     setPhase('photo_ready');
   }, [stopStream, photoPreview]);
 
-  const handleGoBackFromPhoto = useCallback(() => {
-    stopStream();
-    if (photoPreview) URL.revokeObjectURL(photoPreview);
-    setPhotoBlob(null); setPhotoPreview(null);
-    setPhase('form');
-  }, [stopStream, photoPreview]);
-
   // The parent's `submitting` only arrives a render later, so submittedRef
   // blocks a second click first. Released when a submit finishes
   // (submitting → false, e.g. a failed upload the candidate retries) and on
@@ -942,78 +935,66 @@ export default function StepIdentity({
 
                   <style>{OTP_FLIP_CSS}</style>
 
-                  {/* Resend timer */}
+                  {/* Resend + "didn't receive the code" hint, merged into one
+                      light-blue card (same blue as the privacy card). The
+                      resend row is the primary content; the hint is smaller. */}
                   <div
                     key={`resend-${otpSendCount}`}
-                    className="tf-otp-flip-down flex items-center gap-3 py-2 px-3 bg-success-subtle/60 rounded-lg border border-success-line"
+                    className="tf-otp-flip-down bg-brand-blue/5 border border-brand-blue/15 rounded-xl px-4 py-3"
                   >
-                    {resendCooldown > 0 ? (
-                      <>
-                        {/* Circular countdown */}
-                        <div className="relative flex-shrink-0 w-9 h-9">
-                          <svg className="w-9 h-9 -rotate-90" viewBox="0 0 36 36">
-                            <circle cx="18" cy="18" r="15" fill="none" stroke="var(--success-line)" strokeWidth="3" />
-                            <circle
-                              cx="18" cy="18" r="15" fill="none"
-                              stroke="var(--success)" strokeWidth="3"
-                              strokeLinecap="round"
-                              strokeDasharray={2 * Math.PI * 15}
-                              strokeDashoffset={2 * Math.PI * 15 * (1 - resendCooldown / 60)}
-                              style={{ transition: 'stroke-dashoffset 0.9s linear' }}
-                            />
-                          </svg>
-                          <span className="absolute inset-0 flex items-center justify-center text-2xs font-bold text-success-strong">
-                            {resendCooldown}
-                          </span>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-success-strong">OTP sent to <span className="font-semibold break-all">{email}</span></p>
-                          <p className="text-xs text-success">Resend available in {resendCooldown}s</p>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div className="w-9 h-9 rounded-full bg-warning-subtle flex items-center justify-center flex-shrink-0">
-                          <RefreshCw className="w-4 h-4 text-warning" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm text-gray-600">Didn't receive the OTP?</p>
-                          <button
-                            type="button"
-                            onClick={handleSendOtp}
-                            disabled={otpSending}
-                            className="inline-flex items-center min-h-10 -my-2 px-1 -mx-1 text-sm font-semibold text-gray-900 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {otpSending ? 'Sending…' : 'Resend OTP'}
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
+                    <div className="flex items-center gap-3">
+                      {resendCooldown > 0 ? (
+                        <>
+                          {/* Circular countdown */}
+                          <div className="relative flex-shrink-0 w-10 h-10">
+                            <svg className="w-10 h-10 -rotate-90" viewBox="0 0 36 36">
+                              <circle cx="18" cy="18" r="15" fill="none" stroke="color-mix(in srgb, var(--color-brand-blue) 15%, transparent)" strokeWidth="3" />
+                              <circle
+                                cx="18" cy="18" r="15" fill="none"
+                                stroke="var(--color-brand-blue)" strokeWidth="3"
+                                strokeLinecap="round"
+                                strokeDasharray={2 * Math.PI * 15}
+                                strokeDashoffset={2 * Math.PI * 15 * (1 - resendCooldown / 60)}
+                                style={{ transition: 'stroke-dashoffset 0.9s linear' }}
+                              />
+                            </svg>
+                            <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-brand-blue">
+                              {resendCooldown}
+                            </span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-base font-medium text-gray-900">OTP sent to <span className="font-semibold break-all">{email}</span></p>
+                            <p className="text-sm text-brand-blue">Resend available in {resendCooldown}s</p>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="w-10 h-10 rounded-full bg-white border border-brand-blue/20 flex items-center justify-center flex-shrink-0">
+                            <RefreshCw className="w-4 h-4 text-brand-blue" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-base text-gray-700">Didn't receive the OTP?</p>
+                            <button
+                              type="button"
+                              onClick={handleSendOtp}
+                              disabled={otpSending}
+                              className="inline-flex items-center min-h-10 -my-2 px-1 -mx-1 text-base font-semibold text-brand-blue hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {otpSending ? 'Sending…' : 'Resend OTP'}
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
 
-                  {/* Didn't receive the code — the forgot-password OTP step's
-                      hint, same classes, so the two OTP screens match. */}
-                  <div key={`tips-${otpSendCount}`} className="tf-auth-scope tf-otp-flip-up">
-                    {/* Same light blue as the neighbouring privacy card
-                        (bg-brand-blue/5, border-brand-blue/15). Inline because
-                        .tf-fp-hint's grey comes from an unlayered style that
-                        Tailwind's layered utilities can't override. */}
-                    <div
-                      className="tf-fp-hint"
-                      style={{
-                        marginTop: 0,
-                        background: 'color-mix(in srgb, var(--color-brand-blue) 5%, transparent)',
-                        border: '1px solid color-mix(in srgb, var(--color-brand-blue) 15%, transparent)',
-                      }}
-                    >
-                      <span className="tf-fp-hint-icon" aria-hidden="true">i</span>
-                      <div>
-                        <p className="tf-fp-hint-title">Didn&apos;t receive the code?</p>
-                        <p className="tf-fp-hint-copy">
-                          Check your spam or junk folder. The code will expire in{' '}
-                          <span className="tf-fp-hint-strong">10 minutes</span>.
-                        </p>
-                      </div>
+                    {/* Didn't receive the code — secondary hint, smaller text. */}
+                    <div className="mt-3 pt-3 border-t border-brand-blue/10 flex items-start gap-2">
+                      <Info className="w-3.5 h-3.5 text-brand-blue flex-shrink-0 mt-0.5" aria-hidden="true" />
+                      <p className="text-xs text-gray-600">
+                        <span className="font-semibold text-gray-700">Didn&apos;t receive the code?</span>{' '}
+                        Check your spam or junk folder. The code will expire in{' '}
+                        <span className="font-semibold text-brand-blue">10 minutes</span>.
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -1033,18 +1014,15 @@ export default function StepIdentity({
 
         <div ref={continueWrapRef} className="w-full max-w-3xl mx-auto flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 sm:gap-4">
           {/* Why Continue is still disabled. */}
-          {!submitting && !isFormValid && (
+          {!submitting && !isFormValid && !name.trim() && (
             <p id="identity-continue-hint" className="text-xs text-gray-500 text-center sm:text-right sm:mr-auto">
-              {!name.trim() ? 'Enter your full name.'
-                : !otpSent ? 'Click "Send OTP" to verify your email.'
-                : !otpVerified ? 'Enter the 6-digit code sent to your email.'
-                : ''}
+              Enter your full name.
             </p>
           )}
           <Button
             type="button" variant="primary" onClick={handleFormSubmit}
             disabled={!isFormValid || submitting}
-            aria-describedby={!isFormValid ? 'identity-continue-hint' : undefined}
+            aria-describedby={!isFormValid && !name.trim() ? 'identity-continue-hint' : undefined}
             className="w-full sm:w-auto px-6"
           >
             {submitting
@@ -1061,7 +1039,7 @@ export default function StepIdentity({
 
   // ── PHASES B-E: Live Photo Capture ──
   return (
-    <div className="w-full max-w-6xl mx-auto space-y-6" style={{ colorScheme: 'light' }}>
+    <div className="w-full max-w-6xl mx-auto space-y-6">
       {progressStepper}
       <div className="text-center">
         <span className="inline-flex items-center gap-1.5 bg-success-subtle text-success text-xs font-semibold px-3 py-1.5 rounded-full mb-3">
@@ -1342,18 +1320,6 @@ export default function StepIdentity({
       </div>
 
       {privacyCard}
-
-      <div className="flex items-center justify-between pt-2">
-        {/* Locked while a capture is in flight: going back mid-capture would
-            be yanked back to the camera when the capture resolves. */}
-        <Button
-          type="button" variant="secondary" onClick={handleGoBackFromPhoto}
-          disabled={phase === 'countdown' || phase === 'verifying' || submitting}
-          className="w-full sm:w-auto"
-        >
-          <ArrowLeft className="w-4 h-4" /> Back
-        </Button>
-      </div>
     </div>
   );
 }

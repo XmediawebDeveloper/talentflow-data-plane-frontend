@@ -259,7 +259,6 @@ export default function InterviewFeedbackModal({
       className="fixed inset-0 z-[400] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
       // Backdrop click dismisses; clicks inside the card must not bubble here.
       onClick={() => { if (!submitting) handleClose(); }}
-      style={{ colorScheme: "light" }}
     >
       <div
         role="dialog"

@@ -1041,24 +1041,24 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
         className={`relative overflow-hidden ${className ?? ""}`}
         style={style}
       >
-        {/* Dark cinematic studio background — soft charcoal with vignette */}
+        {/* Dark cinematic studio background — soft navy with vignette (matches the interview page) */}
         <div
           className="absolute inset-0"
           style={{
-            background: "radial-gradient(ellipse at 50% 40%, var(--raw-3a3a3f) 0%, var(--raw-2a2a2e) 40%, var(--raw-1a1a1e) 75%, var(--raw-0f0f12) 100%)",
+            background: "radial-gradient(ellipse at 50% 40%, #1e2a4a 0%, #111a33 45%, #0a1020 100%)",
           }}
         />
         {/* Subtle studio light spill from top — enhances subject separation */}
         <div
           className="absolute inset-0 pointer-events-none"
           style={{
-            background: "radial-gradient(ellipse at 50% 15%, rgba(200,195,185,0.08) 0%, transparent 50%)",
+            background: "radial-gradient(ellipse at 50% 15%, rgba(180,200,255,0.08) 0%, transparent 50%)",
           }}
         />
         <div ref={containerRef} className="w-full h-full relative z-10" />
 
         {status === "loading" && (
-          <div className="absolute inset-0 flex items-center justify-center bg-gray-900/80 backdrop-blur-sm">
+          <div className="absolute inset-0 flex items-center justify-center bg-[#0a1020]/80 backdrop-blur-sm">
             <div className="text-center">
               <Loader2 className="w-8 h-8 text-violet-500 animate-spin mx-auto mb-3" />
               <p className="text-xs text-gray-400">Loading avatar...</p>
@@ -1067,7 +1067,7 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
         )}
 
         {status === "error" && (
-          <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
+          <div className="absolute inset-0 flex items-center justify-center bg-[#0a1020]">
             <div className="text-center p-6 select-none">
               <div className="text-5xl mb-3">👤</div>
               <p className="text-sm font-medium text-gray-300 mb-1">Avatar Not Loaded</p>
