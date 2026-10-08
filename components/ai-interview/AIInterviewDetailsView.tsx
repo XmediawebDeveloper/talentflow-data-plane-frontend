@@ -20,6 +20,7 @@ import { jdService, type JDLineageVersion, type JDResponse } from '@/lib/service
 import JDIdentityHeader from '@/components/jobs/JDIdentityHeader';
 import JDOverviewSections from '@/components/jobs/JDOverviewSections';
 import { Button } from '@/components/ui/button';
+import { SEGMENT_TOGGLE, segmentBtn, tabPill } from '@/components/ui/filter-pills';
 import ExportFormatModal from '@/components/ExportFormatModal';
 import { exportRows, type ExportFileFormat } from '@/lib/utils/exportUtils';
 import type {
@@ -1502,10 +1503,13 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
           the same buttons — a fixed side column there left a phone's table
           ~150px wide. From md it is the side column again, narrower until xl
           so the Results table keeps its width on laptops. */}
-      <div {...draftLockProps} className={`grid grid-cols-1 items-start gap-3 md:grid-cols-[200px_minmax(0,1fr)] md:gap-4 lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[260px_minmax(0,1fr)] xl:gap-6 ${draftLockProps.className}`}>
-        <aside className="md:sticky md:top-20 self-start bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+      <div {...draftLockProps} className={`space-y-3 sm:space-y-4 ${draftLockProps.className}`}>
+        {/* Horizontal pill tab bar (was a vertical sidebar rail): shared
+            `tabPill` chrome, wrapping onto a second row so every tab stays
+            visible. */}
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
           <nav className="p-2 sm:p-3" aria-label="Interview details sections">
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:flex md:flex-col gap-1.5">
+            <div className="flex flex-wrap items-center gap-2">
               {([
                 { key: 'overview', label: 'Interview Details', icon: FileText },
                 { key: 'invites', label: 'Invitation Status', icon: Mail },
@@ -1521,33 +1525,29 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     type="button"
                     onClick={() => setActiveTab(t.key)}
                     aria-current={isActive ? 'page' : undefined}
-                    className={`w-full rounded-lg px-3 py-2.5 text-left text-xs sm:text-sm transition-colors flex items-center gap-2 ${
-                      isActive
-                        ? 'bg-brand-blue/5 text-brand-blue font-medium ring-1 ring-brand-blue/20'
-                        : 'text-gray-600 dark:text-slate-400 hover:bg-brand-blue/5 hover:text-brand-blue'
-                    }`}
+                    className={`${tabPill(isActive)} whitespace-nowrap`}
                   >
                     <t.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-                    <span className="min-w-0 leading-snug">{t.label}</span>
+                    <span className="leading-snug">{t.label}</span>
                   </button>
                 );
               })}
+              {/* Go to JD — leaves the page; sits after a divider at the row's end. */}
+              {config.jd_id && (
+                <div className="flex items-center border-l border-gray-200 dark:border-slate-700/60 pl-2 ml-1">
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/recruitment/job-details?id=${config.jd_id}`)}
+                    className={`${tabPill(false)} whitespace-nowrap`}
+                  >
+                    Go to JD
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
             </div>
           </nav>
-          {/* Straight through to the job's own page, under the tabs. */}
-          {config.jd_id && (
-            <div className="border-t border-gray-100 dark:border-slate-700/60 px-2 sm:px-3 py-2.5">
-              <button
-                type="button"
-                onClick={() => router.push(`/recruitment/job-details?id=${config.jd_id}`)}
-                className="w-full inline-flex items-center justify-center md:justify-start gap-1.5 rounded-lg px-3 py-2 text-xs sm:text-sm font-medium text-brand-blue hover:text-brand-blue-2 hover:underline underline-offset-2 hover:bg-brand-blue/5 transition-colors"
-              >
-                Go to JD
-                <ExternalLink className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          )}
-        </aside>
+        </div>
 
         {/* Content — `min-w-0` so a wide table inside a tab scrolls in its own
             box instead of stretching the grid column and pushing the nav off
@@ -1620,7 +1620,9 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
               {/* Interview Details' own sub-tabs — Configure Details (this
                   tab's original content) and Interview Info (folded in from
                   the sidebar's former "AI Interview Info" item). */}
-              <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+              {/* Shared Job Openings segmented-toggle chrome, so these sub-tabs
+                  match the list page's All / AI / Manual control. */}
+              <div className={SEGMENT_TOGGLE}>
                 {([
                   { key: 'configure', label: 'Configure Details' },
                   { key: 'info', label: 'Interview Info' },
@@ -1632,11 +1634,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                       type="button"
                       aria-pressed={isActive}
                       onClick={() => setDetailsSubTab(tab.key)}
-                      className={`px-3 py-1.5 min-h-[32px] rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 whitespace-nowrap ${
-                        isActive
-                          ? 'bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/20 text-brand-blue'
-                          : 'text-gray-600 dark:text-slate-400 hover:text-brand-blue'
-                      }`}
+                      className={`${segmentBtn(isActive)} whitespace-nowrap`}
                     >
                       {tab.label}
                     </button>

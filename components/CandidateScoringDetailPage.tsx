@@ -6,6 +6,7 @@ import DetailedScorecardTab from './DetailedScorecardTab';
 import ViewResumeButton from '@/components/ui/view-resume-button';
 import { Button } from '@/components/ui/button';
 import { Tooltip } from '@/components/ui/tooltip';
+import { tabPill } from '@/components/ui/filter-pills';
 import ShareAssessmentModal from './ShareAssessmentModal';
 import InviteToAIInterviewFlow from './InviteToAIInterviewFlow';
 import InviteToAssessmentFlow from './InviteToAssessmentFlow';
@@ -1229,12 +1230,19 @@ Best regards`);
 
       {/* Header */}
       <div>
-        <div className="bg-white rounded-xl shadow-lg border-2 border-gray-200 p-4 sm:p-6">
+        {/* Entity hero card — neutral card chrome + leading icon disc, matching
+            the Job Openings master header and the Job Details hero so the detail
+            pages read as siblings (was a heavier border-2/shadow-lg card). */}
+        <div className="bg-white rounded-xl border border-gray-300 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6">
           {/* Row 1: candidate identity. The record pager that used to sit on
               the right moved into the breadcrumb bar, as on job-details. */}
           <div className="flex items-start justify-between gap-4 mb-3">
-            <div className="min-w-0">
-              <h1 className="text-xl sm:text-2xl text-gray-900 font-bold mb-2 truncate">{resume.candidateName}</h1>
+            <div className="flex min-w-0 items-start gap-3">
+              <div className="hidden sm:flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
+                <User className="h-4 w-4 text-brand-blue" />
+              </div>
+              <div className="min-w-0">
+              <h1 className="text-lg sm:text-xl text-gray-900 font-semibold mb-2 truncate">{resume.candidateName}</h1>
               <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <p className="text-base sm:text-lg text-gray-700 font-medium">{resume.title || resume.experience || 'Candidate'}</p>
                 {resume.resumeVersion && (
@@ -1250,6 +1258,7 @@ Best regards`);
                     aria-label="Scored jobs"
                   />
                 )}
+              </div>
               </div>
             </div>
           </div>
@@ -1460,7 +1469,7 @@ Best regards`);
           style={{ top: tabBarTop }}
           className="sticky z-20 bg-white rounded-t-xl border-x-2 border-t-2 border-gray-200 shadow-sm"
         >
-          <div className="flex gap-1 px-3 sm:px-6 pt-2 overflow-x-auto scrollbar-hide">
+          <div className="flex gap-2 px-3 sm:px-6 py-2 overflow-x-auto scrollbar-hide">
             {[
               { id: 'overview', label: 'Overview' },
               { id: 'scoretable', label: 'Score Table' },
@@ -1470,11 +1479,9 @@ Best regards`);
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as DetailTab)}
-                className={`px-3 sm:px-6 py-2.5 sm:py-3 text-xs sm:text-sm font-medium transition-colors rounded-t-lg whitespace-nowrap ${
-                  activeTab === tab.id
-                    ? 'text-gray-800 bg-gray-50 border-b-2 border-gray-600'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                }`}
+                /* Shared Job Openings tab-pill chrome, so the candidate
+                   drill-down's tabs read as the same system as the list. */
+                className={`${tabPill(activeTab === tab.id)} whitespace-nowrap`}
               >
                 {tab.label}
               </button>

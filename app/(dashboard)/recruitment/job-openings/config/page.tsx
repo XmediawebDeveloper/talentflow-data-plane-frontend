@@ -4,6 +4,7 @@ import { Suspense, useState, useEffect } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { Clock, GraduationCap, Factory, Settings } from 'lucide-react';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import { tabPill } from '@/components/ui/filter-pills';
 import MasterDataManagement from '@/components/masters/MasterDataManagement';
 import { PageSkeleton } from '@/components/ui/skeleton';
 
@@ -90,17 +91,15 @@ function JobOpeningsConfigContent() {
             </div>
           </div>
 
-          {/* Sections on the left, the chosen list on the right. Below `md`
-              the nav folds into a scrolling row above the list, so a phone
-              keeps the full width for the table. Deliberately NOT sticky: the
-              breadcrumb above is already sticky, and a second sticky layer is
-              what let the crumb overlap and swallow clicks on Job Details. */}
-          <div className="flex flex-col md:flex-row gap-4 md:gap-5">
+          {/* Horizontal pill tab bar above the chosen list — the same `tabPill`
+              chrome the Job Openings list and detail pages use, so Config reads
+              as part of the same tab system. Wraps on narrow screens rather than
+              forcing a sideways scroll. */}
+          <div className="space-y-4 md:space-y-5">
             <nav
               role="tablist"
               aria-label="Configuration sections"
-              aria-orientation="vertical"
-              className="md:w-60 md:flex-shrink-0 md:self-start flex md:flex-col gap-1 overflow-x-auto md:overflow-visible rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-1.5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5"
+              className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-1.5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5"
             >
               {TABS.map(({ id, label, icon: TabIcon }) => {
                 const active = activeTab === id;
@@ -112,15 +111,8 @@ function JobOpeningsConfigContent() {
                     aria-selected={active}
                     aria-controls={`config-panel-${id}`}
                     onClick={() => setActiveTab(id)}
-                    className={`relative flex items-center gap-2.5 whitespace-nowrap rounded-lg px-3 py-2.5 text-sm text-left transition-colors md:w-full ${
-                      active
-                        ? 'bg-brand-blue/10 text-brand-blue font-medium'
-                        : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-50 hover:bg-gray-50 dark:hover:bg-slate-800'
-                    }`}
+                    className={`${tabPill(active)} whitespace-nowrap`}
                   >
-                    {active && (
-                      <span className="absolute left-0 top-2 bottom-2 hidden md:block w-0.5 rounded-full bg-brand-blue" />
-                    )}
                     <TabIcon className="h-4 w-4 flex-shrink-0" />
                     {label}
                   </button>
