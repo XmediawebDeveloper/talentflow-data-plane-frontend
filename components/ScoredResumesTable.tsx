@@ -1,14 +1,12 @@
 import { SCORE_CELL_TEXT } from '@/lib/utils/score';
-import { Mail, Phone, Calendar, Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, ClipboardList, Share2, Paperclip, FileText, FileSpreadsheet, MoreVertical, Award, ChevronDown, ChevronRight, Video, BarChart3 } from 'lucide-react';
+import { Mail, Phone, Calendar, Search, Download, FileDown, CheckSquare, Square, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, ClipboardList, Share2, Paperclip, FileText, FileSpreadsheet, MoreVertical, Award, ChevronRight, ChevronDown, Video, BarChart3 } from 'lucide-react';
 import { matchBadgeClass, MATCH_SCORE_TEXT_CLASS, normalizeMatchResult, formatOverallScore, formatOverallScoreValue } from '@/lib/utils/matchStatus';
 import { truncateJobTitle } from '@/lib/utils/jobOpeningDisplay';
 import { useState, useEffect, useMemo, useRef, Fragment } from 'react';
 import { toast } from 'sonner';
-import ColumnCustomizationModal from './ColumnCustomizationModal';
-import ZipDownloadConfirmModal from './ZipDownloadConfirmModal';
+import ScoredResumesExportModal from './ScoredResumesExportModal';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import ListToolbar from '@/components/ui/list-toolbar';
-import ListCountBadge from '@/components/ui/list-count-badge';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
 import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
@@ -26,6 +24,7 @@ import ScoreTableModal from './ScoreTableModal';
 import ListPagination from './ListPagination';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import SearchableSelect from '@/components/ui/searchable-select';
 import { DateField } from '@/components/ui/date-field';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -34,6 +33,7 @@ import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { useAllJobInviteTargets } from '@/lib/hooks/useAllJobInviteTargets';
 import { formatIST, formatISTDate, formatISTTime, parseIST } from '@/lib/utils/dateUtils';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
+import { downloadScorecardsZip as downloadScorecardsZipShared } from '@/lib/utils/scorecardDownload';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -59,14 +59,13 @@ import {
 // `data-[highlighted]` background above is this item's own focus indicator;
 // !important is what it takes to actually beat that global selector.
 const scoredResumesMenuItemClass = 'group !rounded-none !px-4 !py-2.5 text-sm text-gray-700';
-const COLUMN_PREFERENCES_KEY = 'scoredResumesTableColumns';
+/* One look and one height for every control in the toolbar row — the same
+   resting style as the toolbar's own More Filters button, which it cannot be
+   handed a class for. 38px is that button's natural height (py-2 + text-sm +
+   a 1px border each side). */
+const TOOLBAR_BUTTON_CLASS =
+  'h-[38px] px-3 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-2 text-sm whitespace-nowrap bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue disabled:opacity-50 disabled:cursor-not-allowed';
 
-// The global "View All Candidates" host defaults this table's `jobId` prop to
-// a placeholder ('jd-1'), not a real backend id - guard the export-audit call
-// (which sends it as an optional jd_id) so that placeholder never reaches the
-// API as an invalid UUID.
-const isUuid = (value?: string): value is string =>
-  !!value && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 
 /* ---- The More Filters panel's field metrics ---------------------------------
    One width and one control style for every field in that panel, so "all the
@@ -89,28 +88,84 @@ const FILTER_LABEL_CLASS = 'block text-sm text-gray-700 mb-1 truncate';
 const FILTER_CONTROL_CLASS =
   'w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white';
 
-const DEFAULT_COLUMNS = [
-  { id: 'candidateName', label: 'Candidate Name', enabled: true },
-  { id: 'email', label: 'Email', enabled: true },
-  { id: 'scorePercentage', label: 'Score out of 10', enabled: true },
-  { id: 'matchStatus', label: 'Match Status', enabled: true },
-  // The Invite menu — a column like the rest so it sits in this order rather
-  // than trailing after every customizable one. Never exported (EXPORT_EXCLUDED).
-  { id: 'invitation', label: 'Invitation', enabled: true },
-  { id: 'phone', label: 'Phone', enabled: true },
-  { id: 'experience', label: 'Experience', enabled: true },  // Enable by default
-  // The job's identity follows the candidate's details, in this order.
-  { id: 'jdId', label: 'Job ID', enabled: true },
-  { id: 'jobTitle', label: 'Job Title', enabled: true }, // Always show job title
-  { id: 'jobVersion', label: 'Job Version', enabled: true },
-  { id: 'education', label: 'Education', enabled: false },
-  { id: 'certifications', label: 'Certifications', enabled: false },
-  { id: 'scoredDate', label: 'Scored By / Date', enabled: true },
-  { id: 'version', label: 'Resume Version', enabled: true },
+/* The table's columns — FIXED, in this order (Actions follows as its own
+   sticky column). No per-user customization: every recruiter sees the same
+   table. "Candidate" carries the email under the name rather than spending a
+   column on it. */
+/* Short, fixed-width values read better centred under their header. */
+const CENTERED_COLUMNS = new Set(['jobVersion', 'scorePercentage', 'version']);
+
+const TABLE_COLUMNS = [
+  { id: 'candidateName', label: 'Candidate' },
+  { id: 'jdId', label: 'JD ID' },
+  { id: 'jobTitle', label: 'Job Title' },
+  { id: 'jobVersion', label: 'Job Version' },
+  { id: 'matchStatus', label: 'Match Status' },
+  { id: 'scorePercentage', label: 'Score out of 10' },
+  { id: 'version', label: 'Resume Version' },
+  { id: 'scoredDate', label: 'Scored By / Date' },
 ];
 
-/* Columns that are controls, not data — shown in the table, left out of CSV/XLS. */
-const EXPORT_EXCLUDED_COLUMNS = new Set(['invitation']);
+/** Upper-cases only the first letter; the rest is left as typed. */
+const capitalizeFirst = (value: string): string => {
+  if (!value) return value;
+  const i = value.search(/\S/);
+  return i < 0 ? value : value.slice(0, i) + value.charAt(i).toUpperCase() + value.slice(i + 1);
+};
+
+/** The 0.0–10.0 rating a row is filtered on — the same number the Score
+ *  column prints. Older records without `overallRating10` fall back to their
+ *  percentage on the same scale. */
+const rowRating10 = (r: { overallRating10?: number; scorePercentage: number }) =>
+  r.overallRating10 ?? (r.scorePercentage ?? 0) / 10;
+
+/**
+ * One end of the Score Range filter, shown on the 0.0–10.0 scale.
+ *
+ * Holds its own text while the user types so "5." or an emptied box isn't
+ * snapped back mid-keystroke by a controlled number input; the parsed,
+ * clamped value is committed on every change, and the box re-formats to one
+ * decimal on blur (and whenever the value changes from outside, e.g. Reset).
+ */
+function ScoreBoundInput({
+  value,
+  onChange,
+  placeholder,
+  ariaLabel,
+  className,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  placeholder: string;
+  ariaLabel: string;
+  className: string;
+}) {
+  const [text, setText] = useState(value.toFixed(1));
+  useEffect(() => {
+    if (Number(text) !== value) setText(value.toFixed(1));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+  return (
+    <input
+      type="number"
+      inputMode="decimal"
+      value={text}
+      min="0"
+      max="10"
+      step="0.1"
+      placeholder={placeholder}
+      aria-label={ariaLabel}
+      onChange={(e) => {
+        setText(e.target.value);
+        if (e.target.value === '') return;
+        const n = Number(e.target.value);
+        if (!Number.isNaN(n)) onChange(Math.min(10, Math.max(0, n)));
+      }}
+      onBlur={() => setText(value.toFixed(1))}
+      className={className}
+    />
+  );
+}
 
 /** The key "View by Candidates" groups rows by: one candidate per email. */
 export const candidateGroupKey = (r: { email?: string; candidateName?: string; id: string }) =>
@@ -300,11 +355,85 @@ interface ScoredResumesTableProps {
    * row of their own (e.g. a single-job view).
    */
   viewPillsSlot?: React.ReactNode;
+  /**
+   * Embedded use — the rows of ONE job opened inline under its row in
+   * Resume Scoring's "View by Job". Drops the card chrome and the whole
+   * search / More Filters / view-toggle toolbar (the host's own controls
+   * already narrowed these rows); the selection's Download / Invite / Export
+   * appear in a slim bar only once rows are ticked.
+   */
+  compact?: boolean;
+  /**
+   * With `compact`: don't show the slim Export / Actions bar on ticked rows —
+   * the host's own toolbar acts on the selection (View by Job, whose job
+   * ticks drive this table's ticks).
+   */
+  hideSelectionBar?: boolean;
+}
+
+/**
+ * Who may run Resume Scoring's bulk / invite actions — Download Scorecard,
+ * Assessment invite, AI Interview invite — and why not. One source for
+ * ScoredResumesTable and View by Job's Actions menu, so both gate alike.
+ *
+ * @param canCarryAIInterview the host can actually run an AI Interview
+ *   invite (its own handler, or the internal resolve-and-share flow).
+ */
+export function useScoringActionPermissions(canCarryAIInterview: boolean) {
+  const { isTenantAdmin, hasPermissionCode, hasPermission, tenant } = useAuth();
+  const { hasPlanFeature } = usePlanFeatures();
+
+  // Tenant-level feature toggle, independent of the subscription-plan check
+  // — mirrors JobDetailView's own isFeatureEnabled(). Assumes enabled when
+  // the tenant carries no flags at all, same default.
+  const isFeatureEnabled = (feature: string): boolean => {
+    if (!tenant?.features) return true;
+    return (tenant.features as any)[feature] === true;
+  };
+
+  // Gates "Invite [to Assessment]" from a scored resume — the Resume Scoring
+  // module's own `scoring:invite` toggle, not the Assessments module's
+  // canCreateAssessments (creating a brand-new assessment is a different
+  // action).
+  const assessmentInvitePermitted =
+    (isTenantAdmin || hasPermissionCode('scoring:invite')) &&
+    isFeatureEnabled('assessment');
+  const canCreateAssessments = assessmentInvitePermitted && hasPlanFeature('assessment');
+  // A permitted user whose plan lacks Assessments is told so, not that they
+  // lack permission.
+  const assessmentDeniedReason = assessmentInvitePermitted
+    ? PLAN_LOCKED_MESSAGE
+    : 'You do not have permission to invite candidates to an assessment';
+  // AI Interview: permission + plan + tenant feature, AND a way to carry it
+  // out. Also requires `scoring:invite` (this button lives on the Resume
+  // Scoring surface); canInviteAIInterviews is what the endpoints enforce.
+  const aiInterviewInvitePermitted =
+    canCarryAIInterview &&
+    (isTenantAdmin || hasPermissionCode('scoring:invite')) &&
+    hasPermission('canInviteAIInterviews') &&
+    isFeatureEnabled('ai_interview');
+  const mayInviteAIInterview = aiInterviewInvitePermitted && hasPlanFeature('ai_interview');
+  const aiInterviewDeniedReason = aiInterviewInvitePermitted
+    ? PLAN_LOCKED_MESSAGE
+    : 'You do not have permission to invite candidates to an AI interview';
+  // Permitted to invite somewhere, but the plan covers neither target.
+  const invitePlanLocked =
+    (assessmentInvitePermitted || aiInterviewInvitePermitted) && !canCreateAssessments && !mayInviteAIInterview;
+  const canDownloadScorecard = isTenantAdmin || hasPermissionCode('scoring:download');
+
+  return {
+    canCreateAssessments,
+    assessmentDeniedReason,
+    mayInviteAIInterview,
+    aiInterviewDeniedReason,
+    invitePlanLocked,
+    canDownloadScorecard,
+  };
 }
 
 export default function ScoredResumesTable({
-  resumes,
-  jobTitle,
+  resumes: rawResumes,
+  jobTitle: rawJobTitle,
   jobId = 'jd-1',
   jobCode,
   availableUnits = 10,
@@ -326,62 +455,36 @@ export default function ScoredResumesTable({
   enableInternalAIInterviewInvite = false,
   assessmentConfigured,
   aiInterviewConfigured,
-  viewPillsSlot
+  viewPillsSlot,
+  compact = false,
+  hideSelectionBar = false,
 }: ScoredResumesTableProps) {
-  const { isTenantAdmin, user, hasPermissionCode, hasPermission, tenant } = useAuth();  // Get tenant info from auth context
-  const { hasPlanFeature } = usePlanFeatures();
+  // Names and job titles are shown with a capital first letter even when
+  // they were typed in lower case ("jack" → "Jack", "python devloper" →
+  // "Python devloper"). Done once, here, so the table, grouped view, grid,
+  // mobile cards, filter options and exports all read the same.
+  const resumes = useMemo(
+    () => rawResumes.map(r => ({
+      ...r,
+      candidateName: capitalizeFirst(r.candidateName),
+      jobTitle: r.jobTitle != null ? capitalizeFirst(r.jobTitle) : r.jobTitle,
+    })),
+    [rawResumes],
+  );
+  const jobTitle = capitalizeFirst(rawJobTitle);
 
-  // Tenant-level feature toggle, independent of the subscription-plan check
-  // above — mirrors JobDetailView's own isFeatureEnabled(), the same gate
-  // every other Assessment/AI Interview entry point in the app already reads.
-  // Assumes enabled when the tenant carries no flags at all, same default.
-  const isFeatureEnabled = (feature: string): boolean => {
-    if (!tenant?.features) return true;
-    return (tenant.features as any)[feature] === true;
-  };
+  const { isTenantAdmin, hasPermissionCode } = useAuth();
 
-  // Gates "Invite [to Assessment]" from a scored resume — the Resume Scoring
-  // module's own `scoring:invite` toggle, not the Assessments module's
-  // canCreateAssessments (creating a brand-new assessment is a different
-  // action). Previously this checked canCreateAssessments, so disabling
-  // Resume Scoring's "Invite" permission had no effect on this button.
-  const assessmentInvitePermitted =
-    (isTenantAdmin || hasPermissionCode('scoring:invite')) &&
-    isFeatureEnabled('assessment');
-  const canCreateAssessments = assessmentInvitePermitted && hasPlanFeature('assessment');
-  // Why an Assessment invite control is off: a permitted user whose plan
-  // lacks Assessments is told so, not that they lack permission.
-  const assessmentDeniedReason = assessmentInvitePermitted
-    ? PLAN_LOCKED_MESSAGE
-    : 'You do not have permission to invite candidates to an assessment';
-  // Whether the viewer may invite to AI Interview AT ALL (permission + plan +
-  // tenant feature), AND there is some way to actually carry it out — either
-  // the host's own handler, or its explicit opt-in into this component's
-  // internal resolve-and-share flow. Without either, the host simply doesn't
-  // support AI Interview invites from this table (or is deliberately hiding
-  // it for a reason of its own, e.g. a disabled job) — never assumed as a
-  // fallback, since that could silently bypass a host-specific gate.
-  //
-  // Also requires the same Resume Scoring `scoring:invite` toggle as the
-  // Assessment path above: this button lives on the Resume Scoring surface,
-  // so disabling that module's "Invite" permission should turn off BOTH
-  // invite targets reachable from it, not just the Assessment one — a
-  // recruiter without scoring:invite has no invite action here at all.
-  // canInviteAIInterviews (ai_interview:invite) stays required alongside it,
-  // since that is the permission the AI Interview invite endpoints actually
-  // enforce server-side.
-  const aiInterviewInvitePermitted =
-    (!!onInviteAIInterview || enableInternalAIInterviewInvite) &&
-    (isTenantAdmin || hasPermissionCode('scoring:invite')) &&
-    hasPermission('canInviteAIInterviews') &&
-    isFeatureEnabled('ai_interview');
-  const mayInviteAIInterview = aiInterviewInvitePermitted && hasPlanFeature('ai_interview');
-  const aiInterviewDeniedReason = aiInterviewInvitePermitted
-    ? PLAN_LOCKED_MESSAGE
-    : 'You do not have permission to invite candidates to an AI interview';
-  // Permitted to invite somewhere, but the plan covers neither target.
-  const invitePlanLocked =
-    (assessmentInvitePermitted || aiInterviewInvitePermitted) && !canCreateAssessments && !mayInviteAIInterview;
+  // Download / Assessment / AI Interview gates — shared with View by Job's
+  // Actions menu (useScoringActionPermissions above).
+  const {
+    canCreateAssessments,
+    assessmentDeniedReason,
+    mayInviteAIInterview,
+    aiInterviewDeniedReason,
+    invitePlanLocked,
+    canDownloadScorecard,
+  } = useScoringActionPermissions(!!onInviteAIInterview || enableInternalAIInterviewInvite);
 
   // Only the cross-job global list needs this — a single-job host (JobDetailView,
   // or this page's own per-job "Scoring History" list) already knows its one
@@ -423,7 +526,7 @@ export default function ScoredResumesTable({
      `canInviteAssessment`/`canInviteAIInterview`/`inviteDisabled` below stay
      table-wide — used only by the bulk-selection invite flow further down,
      which acts on the table's own job, not a specific row. The per-row
-     dropdown in renderInviteCell computes its own row-scoped versions from
+     dropdown in renderInviteSubmenu computes its own row-scoped versions from
      resolveAssessmentConfigured/resolveAIInterviewConfigured above instead. */
   const canInviteAssessment = canCreateAssessments && assessmentConfigured !== false;
   const canInviteAIInterview = mayInviteAIInterview && aiInterviewConfigured !== false;
@@ -438,7 +541,6 @@ export default function ScoredResumesTable({
   // checked the generic, module-agnostic canExport flag (which defaults true
   // for most roles), so disabling either one here had no effect.
   const canExport = isTenantAdmin || hasPermissionCode('scoring:export');
-  const canDownloadScorecard = isTenantAdmin || hasPermissionCode('scoring:download');
   const canShareResume = isTenantAdmin || hasPermissionCode('my_resumes:share');
 
   /* Share Resume — the dialog the resume table and the resume page open, so a
@@ -575,7 +677,6 @@ Best regards`);
       setIsSendingEmail(false);
     }
   };
-  const [showColumnModal, setShowColumnModal] = useState(false);
   const [internalSelectedResumes, setInternalSelectedResumes] = useState<string[]>([]);
 
   // Use external selection if provided, otherwise use internal
@@ -596,6 +697,13 @@ Best regards`);
   // runs when a host DOES supply `onInviteAIInterview` — that path is untouched.
   const [aiInterviewInviteCandidate, setAiInterviewInviteCandidate] = useState<ScoredResume | null>(null);
   const [showBulkInviteModal, setShowBulkInviteModal] = useState(false);
+  // Actions ▸ AI Interview Invite — the ticked candidates, all at once.
+  const [showBulkAIInterviewInvite, setShowBulkAIInterviewInvite] = useState(false);
+  /* Actions menu: the action whose "what this does" popup is open, and the
+     rows that popup confirmed (the ticked rows narrowed by the statuses kept
+     on). The invite dialogs act on exactly those rows. */
+  const [bulkAction, setBulkAction] = useState<BulkActionKind | null>(null);
+  const [bulkActionRows, setBulkActionRows] = useState<ScoredResume[] | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
@@ -604,8 +712,9 @@ Best regards`);
   const search = useListSearch({
     initialFilters: {
       matchStatus: initialMatchStatus,
+      // On the 0.0-10.0 scale the Score column prints (see rowRating10).
       scoreMin: 0,
-      scoreMax: 100,
+      scoreMax: 10,
       dateFrom: initialScoredDate,
       dateTo: initialScoredDate,
       recruiter: 'all',
@@ -625,7 +734,7 @@ Best regards`);
         // Not counted while hidden, or the Filters badge advertises a filter
         // that has no control on screen and is not being applied.
         !hideMatchStatusFilter && f.matchStatus !== 'all',
-        f.scoreMin > 0 || f.scoreMax < 100,
+        f.scoreMin > 0 || f.scoreMax < 10,
         Boolean(f.dateFrom),
         Boolean(f.dateTo),
         f.recruiter !== 'all',
@@ -661,58 +770,9 @@ Best regards`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialScoredDate]);
 
-  // Column configuration - initialize with defaults, then load from localStorage
-  const [availableColumns, setAvailableColumns] = useState(DEFAULT_COLUMNS);
-  const [columnsLoaded, setColumnsLoaded] = useState(false);
-
-  // Load column preferences from localStorage on mount
-  // Auto-enable jobTitle column in global view
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(COLUMN_PREFERENCES_KEY);
-      if (saved) {
-        const savedPrefs = JSON.parse(saved) as Record<string, boolean>;
-        setAvailableColumns(prev =>
-          prev.map(col => ({
-            ...col,
-            // In global view, always enable jobTitle; otherwise use saved preference
-            enabled: col.id === 'jobTitle' && isGlobalView
-              ? true
-              : (savedPrefs[col.id] !== undefined ? savedPrefs[col.id] : col.enabled)
-          }))
-        );
-      } else if (isGlobalView) {
-        // No saved preferences, but in global view - enable jobTitle
-        setAvailableColumns(prev =>
-          prev.map(col => ({
-            ...col,
-            enabled: col.id === 'jobTitle' ? true : col.enabled
-          }))
-        );
-      }
-    } catch (error) {
-      console.error('Failed to load column preferences:', error);
-    }
-    setColumnsLoaded(true);
-  }, [isGlobalView]);
-
-  // Save column preferences to localStorage when they change
-  useEffect(() => {
-    if (!columnsLoaded) return; // Don't save on initial load
-    try {
-      const prefs: Record<string, boolean> = {};
-      availableColumns.forEach(col => {
-        prefs[col.id] = col.enabled;
-      });
-      localStorage.setItem(COLUMN_PREFERENCES_KEY, JSON.stringify(prefs));
-    } catch (error) {
-      console.error('Failed to save column preferences:', error);
-    }
-  }, [availableColumns, columnsLoaded]);
-
-  const enabledColumns = availableColumns.filter(col => col.enabled);
-  const exportColumns = enabledColumns.filter(col => !EXPORT_EXCLUDED_COLUMNS.has(col.id));
-
+  // The table's columns are fixed; only the EXPORT's are chosen, in the
+  // shared Export dialog (ScoredResumesExportModal).
+  const enabledColumns = TABLE_COLUMNS;
   // The JD ID column's value: the row's own code in cross-job lists, the host
   // job's in a single-job table. One helper so cell, export, search and the
   // JD ID filter can never disagree.
@@ -734,7 +794,10 @@ Best regards`);
       hideMatchStatusFilter || filterMatchStatus === 'all' || resume.matchStatus === filterMatchStatus;
 
     // Score range filter
-    const matchesScore = resume.scorePercentage >= filterScoreMin && resume.scorePercentage <= filterScoreMax;
+    // Rounded to the one decimal shown, so a row printed "7.0" passes a
+    // 7.0 bound even if its stored rating is 6.96.
+    const rating = Math.round(rowRating10(resume) * 10) / 10;
+    const matchesScore = rating >= filterScoreMin && rating <= filterScoreMax;
 
     // Date range filter - compare date portions in IST (UTC+5:30)
     let matchesDate = true;
@@ -791,20 +854,109 @@ Best regards`);
 
   /* A candidate scored against many jobs would otherwise stretch the grouped
      row to the height of their whole job list, so the "Job Titles" cell shows
-     the first two and folds the rest behind a "+N more" badge. Clicking the
-     badge expands that one candidate's list (and collapses it again). */
+     the first two and folds the rest behind a "+N more" badge, which opens
+     a popup with the full list (see renderJobTitles). */
   const JOB_TITLE_PREVIEW_COUNT = 2;
-  const [expandedTitleKeys, setExpandedTitleKeys] = useState<Set<string>>(new Set());
-  const toggleTitlesExpanded = (key: string) => {
-    setExpandedTitleKeys((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
+  /**
+   * The "Job Titles" cell of View by Candidates — shared by the list row and
+   * the grid card so both read the same. The first JOB_TITLE_PREVIEW_COUNT
+   * titles show; "+N more" sits on the LAST visible title's own line (no extra
+   * line of its own) and opens a popup listing every title, so the row / card
+   * never grows when you look.
+   */
+  /** A candidate's scores counted per verdict — the Exact / Partial / No
+   *  Match columns of View by Candidates. Same reading as everywhere else:
+   *  either spelling, and no verdict counts as No Match. */
+  const tallyVerdicts = (rows: ScoredResume[]) =>
+    rows.reduce(
+      (acc, r) => {
+        const v = normalizeMatchResult(r.matchStatus) ?? 'No Match';
+        if (v === 'Exact Match') acc.exact += 1;
+        else if (v === 'Partial Match') acc.partial += 1;
+        else acc.none += 1;
+        return acc;
+      },
+      { exact: 0, partial: 0, none: 0 },
+    );
+  /* One count, in its verdict's colours (the same chips View by Job's rows
+     use). A zero is shown muted rather than hidden, so the columns line up. */
+  const VERDICT_COUNT_CLASS = {
+    exact: 'bg-success-subtle text-success border-success/20',
+    partial: 'bg-warning-subtle text-warning border-warning/20',
+    none: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-300 dark:border-red-900/50',
+  } as const;
+  const renderVerdictCount = (kind: keyof typeof VERDICT_COUNT_CLASS, count: number, label?: string) => (
+    <span
+      className={`inline-flex items-center justify-center gap-1 min-w-[2rem] px-2 py-0.5 rounded-full text-xs font-semibold tabular-nums border ${
+        count > 0 ? VERDICT_COUNT_CLASS[kind] : 'bg-gray-50 text-gray-400 border-gray-200'
+      }`}
+    >
+      {label && <span className="font-medium">{label}</span>}
+      {count}
+    </span>
+  );
+
+  const renderJobTitles = (titles: string[]) => {
+    const visible = titles.slice(0, JOB_TITLE_PREVIEW_COUNT);
+    const hidden = titles.length - visible.length;
+    if (visible.length === 0) return <span className="text-sm text-gray-400">—</span>;
+    return (
+      <div className="min-w-0 space-y-0.5">
+        {visible.map((title, i) => {
+          const isLast = i === visible.length - 1;
+          return (
+            <div key={i} className="flex items-center gap-2 min-w-0">
+              <span className="text-sm text-gray-700 truncate" title={title}>{title}</span>
+              {isLast && hidden > 0 && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label={`Show all ${titles.length} job titles`}
+                      className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200 hover:text-gray-800 transition-colors whitespace-nowrap shrink-0"
+                    >
+                      +{hidden} more
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    align="start"
+                    className="w-72 max-w-[calc(100vw-2rem)] p-0"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="px-3 py-2 border-b border-gray-100 text-xs font-medium uppercase tracking-wide text-gray-500">
+                      Job Titles ({titles.length})
+                    </div>
+                    <ul className="max-h-64 overflow-y-auto py-1">
+                      {titles.map((t, j) => (
+                        <li key={j} className="px-3 py-1.5 text-sm text-gray-700 break-words">{t}</li>
+                      ))}
+                    </ul>
+                  </PopoverContent>
+                </Popover>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
   };
 
   const dateOf = (r: ScoredResume) => new Date(r.scoredDate).getTime() || 0;
+  /* What the selection actually covers, on screen. Flat: the ticked visible
+     rows. Grouped ("View by Candidates"): a candidate is ticked as a whole —
+     ticked if ANY of their visible rows is — and covers ALL their visible
+     rows. So switching the verdict filter never makes a ticked candidate
+     look unticked just because new rows of theirs came into view. Ticks on
+     rows the filter hides stay remembered but aren't acted on. */
+  const effectiveSelectedRows = useMemo(() => {
+    const sel = new Set(selectedResumes);
+    if (!isGrouped) return filteredResumes.filter((r) => sel.has(r.id));
+    const tickedKeys = new Set(filteredResumes.filter((r) => sel.has(r.id)).map(candidateGroupKey));
+    return filteredResumes.filter((r) => tickedKeys.has(candidateGroupKey(r)));
+  }, [selectedResumes, filteredResumes, isGrouped]);
+  const allVisibleSelected = filteredResumes.length > 0 && effectiveSelectedRows.length === filteredResumes.length;
+
   const candidateGroups = useMemo(() => {
     const groups = new Map<string, ScoredResume[]>();
     filteredResumes.forEach((r) => {
@@ -825,14 +977,6 @@ Best regards`);
   useEffect(() => {
     if (isGrouped) onCandidateOrderChangeRef.current?.(candidateGroups.map((g) => g.rows[0]));
   }, [isGrouped, candidateGroups]);
-  // The unfiltered candidate-group count — the "total" half of the count
-  // badge in grouped mode, same role `resumes.length` plays in ungrouped
-  // mode.
-  const totalDistinctCandidates = useMemo(
-    () => new Set(resumes.map(candidateGroupKey)).size,
-    [resumes],
-  );
-
   // Back to page 1 whenever a filter/search narrows the list, grouping is
   // toggled, or the host switches to a genuinely different job (`jobId` —
   // never the `resumes` array itself: hosts that build it inline, e.g. with
@@ -865,8 +1009,11 @@ Best regards`);
   /* Grid view's row source — one card per candidate either way. Grouped mode
      collapses each cluster to its primary (highest) version, same as the
      grouped table's own row, plus how many versions it's standing in for. */
-  const gridRows: { resume: ScoredResume; versionCount?: number }[] = isGrouped
-    ? paginatedGroups.map(({ rows }) => ({ resume: rows[0], versionCount: rows.length }))
+  /* Grid cards. Grouped ("View by Candidates"): one card per candidate,
+     carrying all their rows so the card can open its job history in place,
+     the same as the list view's row. Flat: one card per row. */
+  const gridRows: { resume: ScoredResume; groupKey?: string; groupRows?: ScoredResume[] }[] = isGrouped
+    ? paginatedGroups.map(({ key, rows }) => ({ resume: rows[0], groupKey: key, groupRows: rows }))
     : paginatedResumes.map((resume) => ({ resume }));
 
   const uniqueRecruiters = Array.from(new Set(resumes.map(r => r.scoredBy)));
@@ -898,33 +1045,21 @@ Best regards`);
     ),
   ).sort((a, b) => Number(a) - Number(b));
 
+  /* Select all / Deselect all over what's ON SCREEN (filters applied).
+     Deselect drops only the visible rows' ticks… and since a hidden tick is
+     never acted on anyway, a full clear is the simpler, expected result. */
   const handleSelectAll = () => {
+    const visibleIds = filteredResumes.map(r => r.id);
     if (onSelectAll) {
-      // External control with onSelectAll prop
-      if (selectedResumes.length === filteredResumes.length) {
-        onSelectAll([]);  // Deselect all
-      } else {
-        onSelectAll(filteredResumes.map(r => r.id));  // Select all
-      }
+      onSelectAll(allVisibleSelected ? [] : visibleIds);
     } else if (onSelectResume) {
       // External control without onSelectAll - toggle each item
-      const allSelected = selectedResumes.length === filteredResumes.length;
       filteredResumes.forEach(resume => {
         const isSelected = selectedResumes.includes(resume.id);
-        // Toggle: if all selected, deselect; if not all selected, select unselected ones
-        if (allSelected && isSelected) {
-          onSelectResume(resume.id);  // Deselect
-        } else if (!allSelected && !isSelected) {
-          onSelectResume(resume.id);  // Select
-        }
+        if (allVisibleSelected ? isSelected : !isSelected) onSelectResume(resume.id);
       });
     } else {
-      // Internal control
-      if (selectedResumes.length === filteredResumes.length) {
-        setSelectedResumes([]);
-      } else {
-        setSelectedResumes(filteredResumes.map(r => r.id));
-      }
+      setSelectedResumes(allVisibleSelected ? [] : visibleIds);
     }
   };
 
@@ -943,168 +1078,18 @@ Best regards`);
      since a group has no single id of its own to select. Mirrors
      handleSelectAll's own toggle-each-row approach so it works the same way
      whether selection is externally or internally controlled. */
+  const isGroupSelected = (rows: ScoredResume[]) => rows.some((r) => selectedResumes.includes(r.id));
   const handleSelectGroup = (rows: ScoredResume[]) => {
-    const allSelected = rows.every((r) => selectedResumes.includes(r.id));
+    // Ticked (any row ticked) → untick all its rows; else tick them all.
+    const ticked = isGroupSelected(rows);
     rows.forEach((r) => {
       const isSelected = selectedResumes.includes(r.id);
-      if (allSelected && isSelected) {
-        handleSelectResume(r.id);
-      } else if (!allSelected && !isSelected) {
-        handleSelectResume(r.id);
-      }
+      if (ticked ? isSelected : !isSelected) handleSelectResume(r.id);
     });
   };
 
-  const handleColumnApply = (selectedColumnIds: string[]) => {
-    setAvailableColumns(prev =>
-      prev.map(col => ({
-        ...col,
-        enabled: selectedColumnIds.includes(col.id)
-      }))
-    );
-  };
-
-  // Export format modal state
+  // Export dialog — the shared ScoredResumesExportModal, opened on the selection.
   const [showExportModal, setShowExportModal] = useState(false);
-  const [exportFormat, setExportFormat] = useState<'csv' | 'xls'>('csv');
-
-  // Get cell value for export based on column ID
-  const getCellValue = (resume: ScoredResume, columnId: string): string => {
-    switch (columnId) {
-      case 'candidateName':
-        return resume.candidateName || '';
-      case 'jdId':
-        return rowJobCode(resume);
-      case 'jobTitle':
-        return resume.jobTitle || '';
-      case 'jobVersion':
-        return resume.jobVersion ? `v${resume.jobVersion}` : '';
-      case 'version':
-        return `v${resume.version || resume.resumeVersion || 1}`;
-      case 'email':
-        return resume.email || '';
-      case 'phone':
-        return resume.phone || '';
-      case 'matchStatus':
-        return resume.matchStatus || '';
-      case 'scorePercentage':
-        return formatOverallScoreValue(resume.overallRating10, resume.scorePercentage);
-      case 'experience':
-        return resume.experience || '';
-      case 'education':
-        return typeof resume.education === 'string'
-          ? resume.education
-          : Array.isArray(resume.education) && resume.education.length > 0
-            ? (resume.education[0]?.degree || resume.education[0]?.institution || '')
-            : '';
-      case 'certifications':
-        return resume.certifications?.map(cert =>
-          typeof cert === 'string' ? cert : (cert?.name || '')
-        ).join(', ') || '';
-      case 'scoredDate':
-        return `${resume.scoredBy || ''} — ${formatIST(resume.scoredDate)}`;
-      default:
-        return '';
-    }
-  };
-
-  // Export to CSV
-  const exportToCSV = () => {
-    const selectedData = filteredResumes.filter(r => selectedResumes.includes(r.id));
-    const dataToExport = selectedResumes.length > 0 ? selectedData : filteredResumes;
-
-    // Build CSV content with only enabled columns
-    const headers = exportColumns.map(col => `"${col.label}"`).join(',');
-    const rows = dataToExport.map(resume =>
-      exportColumns.map(col => {
-        const value = getCellValue(resume, col.id);
-        // Escape quotes and wrap in quotes
-        return `"${value.replace(/"/g, '""')}"`;
-      }).join(',')
-    );
-
-    const csvContent = [headers, ...rows].join('\n');
-    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${jobCodePrefix(dataToExport)}${jobTitle.replace(/\s+/g, '_')}${versionTag(dataToExport)}_Scorecards_${formatFileDate(new Date())}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
-
-    toast.success(`Exported ${dataToExport.length} records to CSV`);
-    setShowExportModal(false);
-    scoringService.logClientExport('csv', dataToExport.length, isUuid(jobId) ? jobId : undefined);
-  };
-
-  /* Export to Excel — a real .xlsx workbook (ExcelJS, loaded on demand).
-     This used to be an HTML table saved as ".xls", which Excel opens only
-     after warning that the file's format and extension don't match. */
-  const exportToXLS = async () => {
-    const selectedData = filteredResumes.filter(r => selectedResumes.includes(r.id));
-    const dataToExport = selectedResumes.length > 0 ? selectedData : filteredResumes;
-
-    let buffer: ArrayBuffer;
-    try {
-      const ExcelJS = (await import('exceljs')).default;
-      const workbook = new ExcelJS.Workbook();
-      const sheet = workbook.addWorksheet('Scored Resumes');
-
-      // Title block, as the old export had it: job, export time, record count.
-      sheet.addRow([`${jobTitle} - Scored Resumes`]).font = { bold: true, size: 14 };
-      sheet.addRow([`Exported: ${formatIST(new Date().toISOString())}`]);
-      sheet.addRow([`Total Records: ${dataToExport.length}`]);
-      sheet.addRow([]);
-
-      const headerRow = sheet.addRow(exportColumns.map(col => col.label));
-      headerRow.eachCell(cell => {
-        cell.font = { bold: true };
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F0F0' } };
-      });
-      dataToExport.forEach(resume => {
-        sheet.addRow(exportColumns.map(col => getCellValue(resume, col.id)));
-      });
-
-      // Hairline borders on the table; widths fitted to the longest value (capped).
-      const thin = { style: 'thin' as const, color: { argb: 'FFD0D0D0' } };
-      for (let r = headerRow.number; r <= sheet.rowCount; r++) {
-        sheet.getRow(r).eachCell({ includeEmpty: true }, cell => {
-          cell.border = { top: thin, left: thin, bottom: thin, right: thin };
-          cell.alignment = { vertical: 'top', wrapText: true };
-        });
-      }
-      exportColumns.forEach((col, i) => {
-        const longest = Math.max(
-          col.label.length,
-          ...dataToExport.map(resume => String(getCellValue(resume, col.id) ?? '').length),
-        );
-        sheet.getColumn(i + 1).width = Math.min(60, Math.max(10, longest + 2));
-      });
-      sheet.views = [{ state: 'frozen', ySplit: headerRow.number }];
-
-      buffer = await workbook.xlsx.writeBuffer() as ArrayBuffer;
-    } catch (error) {
-      console.error('Excel export failed:', error);
-      toast.error('Failed to export to Excel');
-      return;
-    }
-
-    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${jobCodePrefix(dataToExport)}${jobTitle.replace(/\s+/g, '_')}${versionTag(dataToExport)}_Scorecards_${formatFileDate(new Date())}.xlsx`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
-
-    toast.success(`Exported ${dataToExport.length} records to Excel`);
-    setShowExportModal(false);
-    scoringService.logClientExport('excel', dataToExport.length, isUuid(jobId) ? jobId : undefined);
-  };
 
   const handleExportExcel = () => {
     // Validation 1: Check if any resumes are available
@@ -1114,7 +1099,7 @@ Best regards`);
     }
 
     // Validation 2: Must select at least one candidate
-    if (selectedResumes.length === 0) {
+    if (effectiveSelectedRows.length === 0) {
       toast.warning('Please select at least one candidate to export');
       return;  // ✅ BLOCK export
     }
@@ -1202,24 +1187,22 @@ Best regards`);
   };
 
   // "Download as ZIP" confirmation — asked before a multi-candidate download.
-  const [showZipConfirm, setShowZipConfirm] = useState(false);
 
-  const handleDownloadBulkScorecards = async () => {
-    if (selectedResumes.length === 0) return;
+  const handleDownloadBulkScorecards = async (rows: ScoredResume[]) => {
+    if (rows.length === 0) return;
 
     // One candidate needs no ZIP wrapper — download that single PDF
     // directly, via the exact same path the per-row action uses.
-    if (selectedResumes.length === 1) {
-      await handleDownloadScorecard(selectedResumes[0]);
+    if (rows.length === 1) {
+      await handleDownloadScorecard(rows[0].id);
       return;
     }
 
     setBulkDownloading(true);
     try {
-      const selectedRows = resumes.filter(r => selectedResumes.includes(r.id));
       const safeName = jobTitle.replace(/[^a-zA-Z0-9_\- ]/g, '').trim().replace(/\s+/g, '_') || 'Scorecards';
-      await downloadScorecardsZip(selectedRows, `${safeName}_Combined_Scorecards_${formatFileDate(new Date())}.zip`);
-      toast.success(`${selectedResumes.length} scorecards downloaded`);
+      await downloadScorecardsZip(rows, `${safeName}_Combined_Scorecards_${formatFileDate(new Date())}.zip`);
+      toast.success(`${rows.length} scorecards downloaded`);
     } catch (error) {
       console.error('Error downloading bulk scorecards:', error);
       toast.error('Failed to download scorecards');
@@ -1251,61 +1234,9 @@ Best regards`);
   };
 
   /** Every row's scorecard PDF in one client-built ZIP, per-job folders. */
-  const downloadScorecardsZip = async (selectedRows: ScoredResume[], archiveName: string) => {
-    // Built client-side (rather than the single-file zip the backend's
-    // bulk-download endpoint returns) so each candidate lands inside a
-    // per-job folder — the server's own zip has no notion of "job" and
-    // drops every PDF flat, which is fine for a single-job table but
-    // unreadable from the "All Candidates" view, where one download can
-    // span dozens of jobs.
-    const { default: JSZip } = await import('jszip');
-    const zip = new JSZip();
-    // Disambiguates two same-named candidates landing in the same job
-    // folder (e.g. two "Surya Mishra" scores against one JD) so the
-    // second file doesn't silently overwrite the first in the archive.
-    const namesUsedInFolder = new Map<string, number>();
-    // Small batches rather than one Promise.all across the whole
-    // selection — this now costs one request PER candidate (the server's
-    // own zip was a single request), so an unbounded burst against a
-    // large selection would hammer the API.
-    const BATCH_SIZE = 5;
-    for (let i = 0; i < selectedRows.length; i += BATCH_SIZE) {
-      const batch = selectedRows.slice(i, i + BATCH_SIZE);
-      await Promise.all(batch.map(async (resume) => {
-        const pdfBlob = await scoringService.downloadScorecard(resume.id);
-        const sanitize = (s: string) => s.replace(/[^a-zA-Z0-9_\- ]/g, '').trim().replace(/\s+/g, '_');
-        // Job title alone can't tell two folders apart once a lineage has
-        // several scored versions (or the JD was recreated under the same
-        // title), so the JD code and version ride along in the folder
-        // name itself rather than only in each file inside it.
-        const folderName = [
-          resume.jobCode ? sanitize(resume.jobCode) : null,
-          sanitize(resume.jobTitle || jobTitle) || 'Job',
-          resume.jobVersion ? `V${resume.jobVersion}` : null,
-        ].filter(Boolean).join('-');
-        const safeCandidateName = (resume.candidateName || 'Candidate').replace(/[^\w\s\-]/g, '').trim().replace(/\s+/g, '_') || 'Candidate';
-        const dedupeKey = `${folderName}/${safeCandidateName}`;
-        const priorCount = namesUsedInFolder.get(dedupeKey) ?? 0;
-        namesUsedInFolder.set(dedupeKey, priorCount + 1);
-        const fileName = `${safeCandidateName}${priorCount ? `_${priorCount + 1}` : ''}${versionTag([resume])}_Scorecard.pdf`;
-        zip.folder(folderName)!.file(fileName, pdfBlob);
-      }));
-    }
-
-    const zipBlob = await zip.generateAsync({ type: 'blob' });
-    const url = window.URL.createObjectURL(zipBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    // No JD-code/version decoration here — unlike the single-job CSV/XLS
-    // export and the per-candidate PDF names, this zip can span many jobs
-    // and versions at once (each already broken out into its own folder
-    // above), so the outer archive name stays generic.
-    link.download = archiveName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
-  };
+  // Shared with View by Job's Actions menu (lib/utils/scorecardDownload).
+  const downloadScorecardsZip = (selectedRows: ScoredResume[], archiveName: string) =>
+    downloadScorecardsZipShared(selectedRows, archiveName, jobTitle);
 
 
   // Function to handle row click and open detail view
@@ -1342,6 +1273,14 @@ Best regards`);
           ) : (
             <div className="text-sm text-gray-900">{resume.candidateName}</div>
           )}
+          {/* "Candidate" is name WITH mail — the email rides under the name
+              instead of taking a column of its own. */}
+          {resume.email && (
+            <div className="flex items-center gap-1 text-xs text-gray-500 mt-0.5">
+              <Mail className="w-3 h-3 shrink-0" />
+              <span className="truncate max-w-[240px]" title={resume.email}>{resume.email}</span>
+            </div>
+          )}
         </td>
       );
     }
@@ -1355,9 +1294,6 @@ Best regards`);
           </div>
         </td>
       );
-    }
-    if (col.id === 'invitation') {
-      return <Fragment key={col.id}>{renderInviteCell(resume)}</Fragment>;
     }
     if (col.id === 'jdId') {
       // The row's own code in cross-job lists; the host job's in a single-job table.
@@ -1375,15 +1311,23 @@ Best regards`);
       // blank) in a single-job table, which is already scoped
       // to one version.
       return (
-        <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
-          <span className="text-sm text-gray-700">{resume.jobVersion ? `v${resume.jobVersion}` : '-'}</span>
+        <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap text-center">
+          {/* Same pill as the Resume Version column, so the two version
+              columns read alike. */}
+          {resume.jobVersion ? (
+            <span className="inline-flex px-2 py-1 rounded-full text-xs border bg-blue-50 text-blue-700 border-blue-200">
+              v{resume.jobVersion}
+            </span>
+          ) : (
+            <span className="text-sm text-gray-700">-</span>
+          )}
         </td>
       );
     }
     if (col.id === 'version') {
       const ver = resume.version || resume.resumeVersion || 1;
       return (
-        <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
+        <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap text-center">
           <span className="inline-flex px-2 py-1 rounded-full text-xs border bg-blue-50 text-blue-700 border-blue-200">
             v{ver}
           </span>
@@ -1431,7 +1375,7 @@ Best regards`);
       // score reads as that status at a glance instead of its
       // own separate (and previously inconsistent) scale.
       return (
-        <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
+        <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap text-center">
           <div className={`${SCORE_CELL_TEXT} ${
             MATCH_SCORE_TEXT_CLASS[normalizeMatchResult(resume.matchStatus) ?? 'No Match']
           }`}>
@@ -1591,39 +1535,27 @@ Best regards`);
     );
   };
 
-  const renderInviteButton = (resume: ScoredResume) => {
+  /** Invite as the FIRST entry of a row's Actions menu — a submenu with
+   *  Assessment / AI Interview. Shared by the table rows and the grid cards;
+   *  rows no longer carry a separate Invite button. */
+  const renderInviteSubmenu = (resume: ScoredResume) => {
     const { rowInviteDisabled, rowInviteDisabledTitle } = getRowInviteGate(resume);
-
     return (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="primary"
-            size="sm"
-            aria-label="Invite"
-            disabled={rowInviteDisabled}
-            title={rowInviteDisabled ? rowInviteDisabledTitle : 'Invite'}
-          >
-            <UserPlus className="w-3.5 h-3.5" />
-            Invite
-            <ChevronDown className="w-3 h-3" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          align="start"
-          className="w-48 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl"
+      <DropdownMenuSub>
+        <DropdownMenuSubTrigger
+          className={`${scoredResumesMenuItemClass} ${rowInviteDisabled ? 'text-gray-400 opacity-60' : ''}`}
+          disabled={rowInviteDisabled}
+          title={rowInviteDisabled ? rowInviteDisabledTitle : undefined}
         >
+          <UserPlus className="w-4 h-4 text-menu-icon-share" />
+          <span className={MENU_ITEM_SCALE_CLASS}>Invite</span>
+        </DropdownMenuSubTrigger>
+        <DropdownMenuSubContent className="w-44 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
           {renderInviteMenuItems(resume)}
-        </DropdownMenuContent>
-      </DropdownMenu>
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
     );
   };
-
-  const renderInviteCell = (resume: ScoredResume) => (
-    <td className="py-3 px-4 align-middle whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-      {renderInviteButton(resume)}
-    </td>
-  );
 
   /**
    * The Actions dropdown's items for one resume — factored out so the
@@ -1698,85 +1630,113 @@ Best regards`);
     </>
   );
 
-  // A stable color per candidate for the grouped view's avatar initials —
-  // hashed from their own key so the same person always lands on the same
-  // color across renders/pages, without needing to track an assignment.
-  const AVATAR_PALETTE = [
-    { bg: 'bg-blue-100', text: 'text-blue-700' },
-    { bg: 'bg-rose-100', text: 'text-rose-700' },
-    { bg: 'bg-success-subtle', text: 'text-success' },
-    { bg: 'bg-violet-100', text: 'text-violet-700' },
-    { bg: 'bg-warning-subtle', text: 'text-warning' },
-    { bg: 'bg-cyan-100', text: 'text-cyan-700' },
-  ];
-  const avatarColorFor = (key: string) => {
-    const hash = key.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
-    return AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
-  };
-  const initialsFor = (name: string) => {
-    const parts = name.trim().split(/\s+/).filter(Boolean);
-    if (parts.length === 0) return '?';
-    return (parts[0][0] + (parts[1]?.[0] || '')).toUpperCase();
-  };
-
   /* The selection's actions — Download and Invite. Shown once rows are
      picked: after the view pills when the host has them, else inside the
      search/filter row itself, so either way they share one line. */
-  const selectionActions = selectedResumes.length > 0 ? (
+  /** Untick everything — the Clear button beside Actions. */
+  const clearSelection = () => {
+    if (onSelectAll) onSelectAll([]);
+    else setInternalSelectedResumes([]);
+  };
+
+  const selectionActions = effectiveSelectedRows.length > 0 ? (
     <>
-      <Button
-        variant="secondary"
-        size="sm"
-        onClick={() => {
-          if (!canDownloadScorecard) {
-            toast.error('You do not have permission to download the scorecard');
-            return;
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        {/* Fades in when the first row is ticked, with a dot that blinks a
+            few times — so the new control is noticed — then stays still. */}
+        <button
+          type="button"
+          className="relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-[var(--brand-blue)] text-white hover:bg-[var(--brand-blue-2)] shadow-sm hover:shadow-md animate-in fade-in zoom-in-95 duration-300"
+          aria-label={`Actions for ${effectiveSelectedRows.length} selected`}
+        >
+          <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
+            <span className="absolute inline-flex h-full w-full rounded-full bg-brand-orange opacity-75 animate-ping [animation-iteration-count:4]" />
+            <span className="relative inline-flex h-3 w-3 rounded-full bg-brand-orange ring-2 ring-white" />
+          </span>
+          {bulkDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+          Actions ({effectiveSelectedRows.length})
+          <ChevronDown className="w-4 h-4" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-60 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
+        <DropdownMenuItem
+          className={`${scoredResumesMenuItemClass} ${!canDownloadScorecard ? 'text-gray-400 opacity-60' : ''}`}
+          disabled={bulkDownloading}
+          title={!canDownloadScorecard ? 'You do not have permission to download the scorecard' : undefined}
+          onSelect={(e) => {
+            if (!canDownloadScorecard) {
+              e.preventDefault();
+              toast.error('You do not have permission to download the scorecard');
+              return;
+            }
+            setBulkAction('download');
+          }}
+        >
+          <Download className="w-4 h-4 text-menu-icon-download" />
+          <span className={MENU_ITEM_SCALE_CLASS}>
+            {bulkDownloading ? 'Downloading...' : 'Download All Scorecards'}
+          </span>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          className={`${scoredResumesMenuItemClass} ${!canCreateAssessments ? 'text-gray-400 opacity-60' : ''}`}
+          /* Assessment invites go to this job's published assessment and
+             spend units — the same gate the old Invite button had. */
+          disabled={assessmentConfigured === false || availableUnits === 0}
+          title={
+            !canCreateAssessments
+              ? assessmentDeniedReason
+              : !canInviteAssessment
+                ? 'No published assessment for this job yet'
+                : availableUnits === 0
+                  ? 'No assessment units available'
+                  : undefined
           }
-          // Several → a ZIP, so confirm first; one → its PDF directly.
-          if (selectedResumes.length > 1) setShowZipConfirm(true);
-          else void handleDownloadBulkScorecards();
-        }}
-        disabled={bulkDownloading}
-        aria-disabled={!canDownloadScorecard}
-        title={!canDownloadScorecard ? 'You do not have permission to download the scorecard' : undefined}
-        className={`rounded-full ${!canDownloadScorecard ? 'opacity-50 cursor-not-allowed' : ''}`}
-        icon={bulkDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-      >
-        {bulkDownloading ? 'Downloading...' : `Download (${selectedResumes.length})`}
-      </Button>
-      <Button
-        variant="primary"
-        size="sm"
-        onClick={() => {
-          if (!canCreateAssessments) {
-            toast.error(assessmentDeniedReason);
-            return;
-          }
-          setShowBulkInviteModal(true);
-        }}
-        /* Invite goes to assessments too, so it takes the same
-           "is there one on this JD" gate as the per-row entry. */
-        disabled={assessmentConfigured === false || availableUnits === 0}
-        aria-disabled={!canCreateAssessments}
-        className={`rounded-full ${!canCreateAssessments ? 'opacity-50 cursor-not-allowed' : ''}`}
-        icon={<Send className="w-4 h-4" />}
-        title={
-          !canCreateAssessments
-            ? assessmentDeniedReason
-            : !canInviteAssessment
-              ? 'No published assessment for this job yet'
-              : availableUnits === 0
-                ? 'No assessment units available'
-                : `Invite ${selectedResumes.length} candidates`
-        }
-      >
-        Invite ({selectedResumes.length})
-      </Button>
+          onSelect={(e) => {
+            if (!canCreateAssessments) {
+              e.preventDefault();
+              toast.error(assessmentDeniedReason);
+              return;
+            }
+            setBulkAction('assessment');
+          }}
+        >
+          <FileText className="w-4 h-4 text-menu-icon-view" />
+          <span className={MENU_ITEM_SCALE_CLASS}>AI Assessment Invite</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          className={`${scoredResumesMenuItemClass} ${!mayInviteAIInterview ? 'text-gray-400 opacity-60' : ''}`}
+          title={!mayInviteAIInterview ? aiInterviewDeniedReason : undefined}
+          onSelect={(e) => {
+            if (!mayInviteAIInterview) {
+              e.preventDefault();
+              toast.error(aiInterviewDeniedReason);
+              return;
+            }
+            setBulkAction('interview');
+          }}
+        >
+          <Video className="w-4 h-4 text-menu-icon-share" />
+          <span className={MENU_ITEM_SCALE_CLASS}>AI Interview Invite</span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+    {/* Clear — untick every row in one click (Select all only clears once
+        EVERYTHING is ticked). */}
+    <button
+      type="button"
+      onClick={clearSelection}
+      title="Clear the selection"
+      className={TOOLBAR_BUTTON_CLASS}
+    >
+      <X className="w-4 h-4" />
+      Clear
+    </button>
     </>
   ) : null;
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
+    <div className={compact ? '' : 'bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6'}>
       {/* Header — title and the one page-level action. Everything that acts on
           the list lives in the toolbar below, and everything that acts on a
           selection lives in its own row under that, same as job-openings. */}
@@ -1800,7 +1760,32 @@ Best regards`);
       </div>
       )}
 
+      {/* Compact: no toolbar — just the selection's actions once rows are
+          ticked (Export included, since it exports the selection). */}
+      {compact && !hideSelectionBar && selectionActions && (
+        <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              if (!canExport) {
+                toast.error('You do not have permission to export');
+                return;
+              }
+              handleExportExcel();
+            }}
+            aria-disabled={!canExport}
+            title={!canExport ? 'You do not have permission to export' : undefined}
+            className={`${TOOLBAR_BUTTON_CLASS} ${!canExport ? 'opacity-50 cursor-not-allowed' : ''}`}
+          >
+            <FileDown className="w-4 h-4" />
+            Export
+          </button>
+          {selectionActions}
+        </div>
+      )}
+
       {/* Search and Filter Bar */}
+      {!compact && (
       <div className="mb-4 space-y-3">
         {/* Canonical search + filters row (same component as job-openings). The
             previous hand-rolled version used grey focus rings, rounded-md and a
@@ -1811,51 +1796,50 @@ Best regards`);
           // The hook debounces into `appliedQuery`, so keystrokes pass through.
           searchDebounceMs={0}
           searchPlaceholder="Search by name, email, phone, or Job ID..."
+          /* A capped search box rather than one that fills the row; the
+             controls follow it on desktop instead of leaving a hole. Full
+             width on phones, where it takes its own line. */
+          searchClassName="sm:flex-none sm:w-64 lg:w-80"
+          controlsFollowSearch
           onToggleFilters={() => setShowFilters(!showFilters)}
           filtersOpen={showFilters}
           activeFilterCount={search.activeFilterCount}
           filtersApplied={search.filtersApplied}
           onClearFilters={search.reset}
-          className="mb-0"
-          countBadge={
-            <ListCountBadge
-              filtered={isGrouped ? candidateGroups.length : filteredResumes.length}
-              total={isGrouped ? totalDistinctCandidates : resumes.length}
-              noun="candidate"
-              selected={selectedResumes.length}
-            />
+          beforeSearch={
+            <>
+              {/* Select all — in the toolbar row, the same place and look as View
+                  by Job's, for list and grid alike (grid cards have no header
+                  checkbox to do it). */}
+              {filteredResumes.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleSelectAll}
+                  aria-pressed={allVisibleSelected}
+                  className={TOOLBAR_BUTTON_CLASS}
+                >
+                  {allVisibleSelected ? (
+                    <CheckSquare className="w-4 h-4 text-brand-blue" />
+                  ) : (
+                    <Square className="w-4 h-4" />
+                  )}
+                  {allVisibleSelected ? 'Deselect all' : 'Select all'}
+                </button>
+              )}
+            </>
           }
-          /* Customize Columns sits right after More Filters — hidden on the
-             narrowest screens, where the row has no space for it and the
-             table scrolls horizontally anyway. */
-          afterFiltersActions={
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setShowColumnModal(true)}
-              icon={<SlidersHorizontal className="w-4 h-4" />}
-              className="hidden sm:flex whitespace-nowrap"
-            >
-              <span className="hidden md:inline">Customize Columns</span>
-              <span className="md:hidden">Columns</span>
-            </Button>
-          }
+          // sm:flex-wrap: on tablets the row wraps instead of squeezing its buttons.
+          className="mb-0 sm:flex-wrap"
+          trailing={<ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-[38px] !border-brand-blue/10" />}
         >
           {/* No view pills to sit after — the selection's actions join this
               row instead, so search, filters and actions stay on one line. */}
-          {!viewPillsSlot && selectionActions && (
-            <>
-              <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
-              {selectionActions}
-            </>
-          )}
 
           {/* One Export for both states — handleExportExcel already exports the
-              selection, and asks for one when there isn't any. It just leads
-              more strongly once rows are picked. */}
-          <Button
-            variant="secondary"
-            size="sm"
+              selection, and asks for one when there isn't any. Which columns
+              go in is chosen in its dialog ("Columns included"). */}
+          <button
+            type="button"
             onClick={() => {
               if (!canExport) {
                 toast.error('You do not have permission to export');
@@ -1865,17 +1849,22 @@ Best regards`);
             }}
             aria-disabled={!canExport}
             title={!canExport ? 'You do not have permission to export' : undefined}
-            icon={<FileDown className="w-4 h-4" />}
-            className={`whitespace-nowrap ${!canExport ? 'opacity-50 cursor-not-allowed' : ''}`}
+            className={`${TOOLBAR_BUTTON_CLASS} ${!canExport ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
+            <FileDown className="w-4 h-4" />
             Export
-          </Button>
-          <ListViewToggle value={displayMode} onChange={setDisplayMode} />
+          </button>
+          {/* The selection's Actions menu — after Export, only while rows are
+              ticked. The List / Grid switch is pinned right (trailing). */}
+          {!viewPillsSlot && selectionActions}
         </ListToolbar>
 
         {/* Advanced Filters */}
         {showFilters && (
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+          /* mt-3 is the gap under the toolbar. The wrapper's space-y-3 can't
+             give it: in Tailwind v4 space-y is a margin-BOTTOM on the toolbar
+             row, which that row's own mb-0 overrides. */
+          <div className="mt-3 bg-gray-50 border border-gray-200 rounded-lg p-4">
             {/* Flex-wrap, not the stretching 2/3-column grid this used to be:
                 a grid cell is a third of the panel wide and every control in it
                 stretched to fill that, so a "v2" dropdown was as wide as a job
@@ -1953,27 +1942,25 @@ Best regards`);
                   reads as a single filter rather than two. Widened to take up
                   the first row's leftover space; see FILTER_FIELD_WIDE_CLASS. */}
               <div className={FILTER_FIELD_WIDE_CLASS}>
-                <label className={FILTER_LABEL_CLASS}>Score Range</label>
+                <label className={FILTER_LABEL_CLASS}>Score Range (0.0 – 10.0)</label>
+                {/* The 0.0–10.0 scale the Score column prints, not the 0–100
+                    percentage underneath it. */}
                 <div className="flex gap-2">
-                  <input
-                    type="number"
+                  <ScoreBoundInput
                     value={filterScoreMin}
-                    onChange={(e) => search.setFilter('scoreMin', Number(e.target.value))}
-                    min="0"
-                    max="100"
-                    placeholder="Min"
+                    onChange={(v) => search.setFilter('scoreMin', v)}
+                    placeholder="0.0"
+                    ariaLabel="Minimum score"
                     /* min-w-0 so a flex child can shrink below its intrinsic
                        width — a number input's default is wider than half of
                        this field, and without it the pair overflows. */
                     className={`${FILTER_CONTROL_CLASS} min-w-0`}
                   />
-                  <input
-                    type="number"
+                  <ScoreBoundInput
                     value={filterScoreMax}
-                    onChange={(e) => search.setFilter('scoreMax', Number(e.target.value))}
-                    min="0"
-                    max="100"
-                    placeholder="Max"
+                    onChange={(v) => search.setFilter('scoreMax', v)}
+                    placeholder="10.0"
+                    ariaLabel="Maximum score"
                     className={`${FILTER_CONTROL_CLASS} min-w-0`}
                   />
                 </div>
@@ -2042,19 +2029,22 @@ Best regards`);
                   ))}
                 </select>
               </div>
-            </div>
 
-            {/* Panel footer: "Done" applies the selection and reveals the
-                toolbar Clear — same flow as job-openings. */}
-            <div className="mt-4 pt-3 border-t border-gray-200 flex items-center justify-end gap-2">
-              <Button
-                // The controls above commit as they change, so Done just closes.
-                variant="secondary"
-                size="sm"
-                onClick={() => setShowFilters(false)}
-              >
-                Done
-              </Button>
+              {/* Done rides the last row of fields, bottom-right, instead of
+                  spending a footer row of its own. The controls commit as
+                  they change, so it just closes the panel. */}
+              <div className="w-full sm:w-auto sm:ml-auto flex items-end justify-end">
+                {/* Primary, same size as View by Job's Done — one look for the
+                    panel's one action in both views. */}
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => setShowFilters(false)}
+                  className="!h-[38px] !px-4 !text-sm"
+                >
+                  Done
+                </Button>
+              </div>
             </div>
           </div>
         )}
@@ -2066,7 +2056,7 @@ Best regards`);
         {viewPillsSlot && (
           <div className="pt-3 flex flex-wrap items-center gap-2 [&>*:first-child]:mb-0">
             {viewPillsSlot}
-            {selectedResumes.length > 0 && (
+            {effectiveSelectedRows.length > 0 && (
               <>
                 <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
                 {selectionActions}
@@ -2075,27 +2065,8 @@ Best regards`);
           </div>
         )}
 
-        {/* Grid only: cards have no header checkbox, so Select all stays
-            here. List view selects through the table header's checkbox, and
-            the toolbar's count badge already shows how many are picked. */}
-        {displayMode === 'grid' && filteredResumes.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3 pt-3 border-t border-gray-200">
-            <button
-              onClick={handleSelectAll}
-              className="group inline-flex items-center gap-2 h-9 pl-2.5 pr-3.5 rounded-full border text-sm font-medium transition-all bg-white text-gray-700 border-gray-400 hover:border-brand-blue/40 hover:text-brand-blue"
-            >
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gray-100 group-hover:bg-brand-blue/10">
-                {selectedResumes.length === filteredResumes.length ? (
-                  <CheckSquare className="w-3.5 h-3.5 text-brand-blue" />
-                ) : (
-                  <Square className="w-3.5 h-3.5 text-gray-400 group-hover:text-brand-blue" />
-                )}
-              </span>
-              <span>{selectedResumes.length === filteredResumes.length ? 'Deselect all' : 'Select all'}</span>
-            </button>
-          </div>
-        )}
       </div>
+      )}
 
       {displayMode === 'grid' ? (
         <div className="rounded-xl border border-gray-200 overflow-hidden">
@@ -2125,31 +2096,80 @@ Best regards`);
             />
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4">
-              {gridRows.map(({ resume, versionCount }) => (
+              {gridRows.map(({ resume, groupKey, groupRows }) => {
+                // Grouped cards open in place and tick the whole candidate;
+                // flat cards keep their per-row click / tick.
+                const cardExpanded = !!groupKey && expandedGroupKeys.has(groupKey);
+                const cardSelected = groupRows
+                  ? isGroupSelected(groupRows)
+                  : selectedResumes.includes(resume.id);
+                return (
                 <div
-                  key={resume.id}
-                  onClick={(e) => handleRowClick(resume.id, e)}
-                  className={`group relative text-left bg-white rounded-xl border border-gray-200 hover:shadow-md hover:border-[var(--border-dark)] hover:-translate-y-0.5 transition-all p-4 flex flex-col gap-3 cursor-pointer ${gridCardSelectedClass(selectedResumes.includes(resume.id))}`}
+                  key={groupKey || resume.id}
+                  onClick={(e) => (groupKey ? toggleGroupExpanded(groupKey) : handleRowClick(resume.id, e))}
+                  aria-expanded={groupKey ? cardExpanded : undefined}
+                  className={`group relative text-left bg-white rounded-xl border border-gray-200 hover:shadow-md hover:border-[var(--border-dark)] transition-all p-4 flex flex-col gap-3 cursor-pointer ${
+                    cardExpanded ? 'sm:col-span-2 lg:col-span-3 xl:col-span-4 !border-brand-blue/40' : 'hover:-translate-y-0.5'
+                  } ${gridCardSelectedClass(cardSelected)}`}
                 >
                   <GridCardSelect
-                    selected={selectedResumes.includes(resume.id)}
-                    onToggle={() => handleSelectResume(resume.id)}
+                    selected={cardSelected}
+                    onToggle={() => (groupRows ? handleSelectGroup(groupRows) : handleSelectResume(resume.id))}
                     label={resume.candidateName || 'candidate'}
-                    selectionActive={selectedResumes.length > 0}
+                    selectionActive={effectiveSelectedRows.length > 0}
                   />
+                  {groupRows ? (() => {
+                    /* View by Candidates: exactly what the list row shows —
+                       Candidate (name + email), Job Versions, Job Titles and
+                       Latest Updated (in the footer) — nothing more. */
+                    const titles = Array.from(new Set(groupRows.map((r) => r.jobTitle).filter(Boolean))) as string[];
+                    return (
+                      <>
+                        {/* pr-7 leaves room for the corner checkbox. */}
+                        <div className="min-w-0 pr-7">
+                          {onViewCandidate ? (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); onViewCandidate(resume); }}
+                              className="block max-w-full truncate text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors"
+                            >
+                              {resume.candidateName || 'Candidate'}
+                            </button>
+                          ) : (
+                            <p className="text-sm font-medium text-gray-900 truncate">{resume.candidateName || 'Candidate'}</p>
+                          )}
+                          <p className="text-xs text-gray-500 truncate" title={resume.email || undefined}>{resume.email || '—'}</p>
+                        </div>
+
+                        <div>
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 whitespace-nowrap">
+                            {groupRows.length} Job {groupRows.length === 1 ? 'Version' : 'Versions'}
+                          </span>
+                        </div>
+
+                        <div className="min-w-0">
+                          {renderJobTitles(titles)}
+                        </div>
+
+                        {(() => {
+                          const t = tallyVerdicts(groupRows);
+                          return (
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {renderVerdictCount('exact', t.exact, 'Exact Match')}
+                              {renderVerdictCount('partial', t.partial, 'Partial Match')}
+                              {renderVerdictCount('none', t.none, 'No Match')}
+                            </div>
+                          );
+                        })()}
+                      </>
+                    );
+                  })() : (
+                  <>
+                  {/* No initials avatar — there is no profile photo behind it. */}
                   <div className="flex items-start gap-2.5">
-                    <div className="w-9 h-9 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-semibold text-sm flex-shrink-0">
-                      {(resume.candidateName || 'C')[0].toUpperCase()}
-                    </div>
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-gray-900 truncate">{resume.candidateName || 'Candidate'}</p>
                       <p className="text-xs text-gray-500 truncate">{resume.email || '—'}</p>
                     </div>
-                    {versionCount != null && versionCount > 1 && (
-                      <span className="text-2xs font-medium text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded-full shrink-0 whitespace-nowrap">
-                        {versionCount} versions
-                      </span>
-                    )}
                   </div>
 
                   {isGlobalView && resume.jobTitle && (
@@ -2172,22 +2192,28 @@ Best regards`);
                       {formatOverallScore(resume.overallRating10, resume.scorePercentage)}
                     </span>
                   </div>
+                  </>
+                  )}
 
+                  {/* Footer, pinned to the card's bottom (mt-auto) so every
+                      card in a row lines up: Latest Updated on the left (the
+                      list's column of that name), ⋮ on the right. No View
+                      button — ⋮ › View Results does the same. */}
                   <div
-                    className="flex items-center gap-1.5 mt-1"
+                    className="mt-auto pt-1 flex items-center gap-1.5"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => onViewCandidate && onViewCandidate(resume)}
-                      icon={<Eye className="w-3.5 h-3.5" />}
-                      className="flex-1"
-                    >
-                      View
-                    </Button>
-                    {/* Invite lives in the ⋮ menu on cards (Invite ▸ Assessment /
-                        AI Interview) rather than as its own button. */}
+                    {groupRows ? (
+                      <div className="flex-1 min-w-0 text-xs text-gray-500">
+                        <div className="text-gray-400 uppercase tracking-wide text-2xs">Latest Updated</div>
+                        <div className="truncate">
+                          <span className="text-gray-700">{formatISTDate(resume.scoredDate)}</span>{' '}
+                          <span className="text-gray-400">{formatISTTime(resume.scoredDate)}</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="flex-1" aria-hidden />
+                    )}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <button
@@ -2202,56 +2228,121 @@ Best regards`);
                         align="end"
                         className="w-52 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl"
                       >
-                        {(() => {
-                          const { rowInviteDisabled, rowInviteDisabledTitle } = getRowInviteGate(resume);
-                          return (
-                            <DropdownMenuSub>
-                              <DropdownMenuSubTrigger
-                                className={`${scoredResumesMenuItemClass} ${rowInviteDisabled ? 'text-gray-400 opacity-60' : ''}`}
-                                disabled={rowInviteDisabled}
-                                title={rowInviteDisabled ? rowInviteDisabledTitle : undefined}
-                              >
-                                <UserPlus className="w-4 h-4 text-menu-icon-share" />
-                                <span className={MENU_ITEM_SCALE_CLASS}>Invite</span>
-                              </DropdownMenuSubTrigger>
-                              <DropdownMenuSubContent className="w-44 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
-                                {renderInviteMenuItems(resume)}
-                              </DropdownMenuSubContent>
-                            </DropdownMenuSub>
-                          );
-                        })()}
+                        {renderInviteSubmenu(resume)}
                         <DropdownMenuSeparator className="my-1 bg-gray-100" />
-                        {renderActionsMenuItems(resume)}
+                        {renderActionsMenuItems(resume, groupRows)}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
+
+                  {/* The candidate's job history, opened in place — the grid
+                      counterpart of the list view's expanded rows. */}
+                  {cardExpanded && groupRows && (
+                    <div
+                      className="mt-1 pt-3 border-t border-gray-100 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 cursor-default"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {groupRows.map((row) => (
+                        <div
+                          key={row.id}
+                          // Opens this job's results, like the list's expanded row.
+                          onClick={(e) => handleRowClick(row.id, e)}
+                          className={`rounded-lg border p-3 cursor-pointer transition-colors ${
+                            selectedResumes.includes(row.id) ? 'border-brand-blue/40 bg-brand-blue/[0.06]' : 'border-gray-200 bg-gray-50/60 hover:border-brand-blue/30 hover:bg-white'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                {rowJobCode(row) && <JobIdBadge>{rowJobCode(row)}</JobIdBadge>}
+                                <span className="text-sm font-medium text-gray-800 truncate" title={row.jobTitle || undefined}>
+                                  {truncateJobTitle(row.jobTitle) || 'Untitled role'}
+                                </span>
+                                {row.jobVersion ? (
+                                  <span className="inline-flex px-1.5 py-0.5 rounded-full text-2xs border bg-blue-50 text-blue-700 border-blue-200 shrink-0">
+                                    v{row.jobVersion}
+                                  </span>
+                                ) : null}
+                              </div>
+                              <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                                <span className={`inline-flex px-2 py-0.5 rounded-full text-xs border ${matchBadgeClass(row.matchStatus)}`}>
+                                  {row.matchStatus}
+                                </span>
+                                <span className={`text-sm font-semibold ${MATCH_SCORE_TEXT_CLASS[normalizeMatchResult(row.matchStatus) ?? 'No Match']}`}>
+                                  {formatOverallScore(row.overallRating10, row.scorePercentage)}
+                                </span>
+                              </div>
+                              <div className="mt-1 flex items-center gap-1 text-xs text-gray-500">
+                                <Calendar className="w-3 h-3" />
+                                <span>{formatISTDate(row.scoredDate)} <span className="text-gray-400">{formatISTTime(row.scoredDate)}</span></span>
+                              </div>
+                            </div>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button
+                                  aria-label="Actions"
+                                  title="Actions"
+                                  className="p-2 bg-white rounded-lg hover:bg-gray-50 transition-all border border-gray-200 shrink-0"
+                                >
+                                  <MoreVertical className="w-4 h-4 text-gray-600" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-52 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
+                                {renderInviteSubmenu(row)}
+                                <DropdownMenuSeparator className="my-1 bg-gray-100" />
+                                {renderActionsMenuItems(row)}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
       ) : isGrouped ? (
         <div className="rounded-xl border border-gray-200 overflow-hidden">
-          {/* Desktop Table View — grouped */}
-          <div className="hidden md:block overflow-x-auto tf-table-shell">
-            <table className="w-full min-w-[900px]">
+          {/* Desktop Table View — grouped. From lg: nine columns don't fit a
+              tablet without scrolling, so below lg the cards take over. */}
+          <div className="hidden lg:block overflow-x-auto tf-table-shell">
+            {/* Fixed layout: every column has a set width (Candidate takes
+                what's left), so headers and cells line up and the table fits
+                its box — no forced min width, no sideways scroll. Below lg
+                this view uses the card layout instead. */}
+            <table className="w-full table-fixed">
+              {/* Candidate is a fixed 16rem — enough for a name and an email
+                  (longer ones truncate) — and Job Titles takes what's left, so
+                  Job Versions sits right beside the candidate instead of past
+                  a wide gap. */}
+              {/* Candidate and Job Versions fixed; the rest take a SHARE of the
+                  width (not one column swallowing it all), so the spare space
+                  is spread evenly instead of opening one big gap. */}
+              <colgroup>
+                <col className="w-[16rem]" />
+                <col className="w-[7.5rem]" />
+                <col className="w-[24%]" />
+                <col className="w-[11%]" />
+                <col className="w-[11%]" />
+                <col className="w-[10%]" />
+                <col className="w-[12%]" />
+                <col className="w-[6.5rem]" />
+              </colgroup>
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="text-left py-3 px-4 w-12 align-middle tf-sticky-col-left">
-                    <button onClick={handleSelectAll} className="p-1 hover:bg-gray-100 rounded">
-                      {selectedResumes.length === filteredResumes.length && filteredResumes.length > 0 ? (
-                        <CheckSquare className="w-4 h-4 text-gray-800" />
-                      ) : (
-                        <Square className="w-4 h-4 text-gray-400" />
-                      )}
-                    </button>
-                  </th>
-                  <th className="w-10 px-3 py-3" />
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wide">Candidate</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wide">Job Versions</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wide">Job Titles</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wide">Latest Updated</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wide tf-sticky-col">Actions</th>
+                  {/* pl-[46px]: the cell's padding plus the checkbox in front of the
+                      name, so the heading lines up with the names. */}
+                  <th className="text-left py-3 pr-4 pl-[46px] align-middle text-xs font-medium text-gray-700 uppercase tracking-wide">Candidate</th>
+                  <th className="text-center py-3 px-4 align-middle text-xs font-medium text-gray-700 uppercase tracking-wide whitespace-nowrap">Job Versions</th>
+                  <th className="text-left py-3 px-4 align-middle text-xs font-medium text-gray-700 uppercase tracking-wide">Job Titles</th>
+                  <th className="text-center py-3 px-4 align-middle text-xs font-medium text-gray-700 uppercase tracking-wide whitespace-nowrap">Exact Match</th>
+                  <th className="text-center py-3 px-4 align-middle text-xs font-medium text-gray-700 uppercase tracking-wide whitespace-nowrap">Partial Match</th>
+                  <th className="text-center py-3 px-4 align-middle text-xs font-medium text-gray-700 uppercase tracking-wide whitespace-nowrap">No Match</th>
+                  <th className="text-left py-3 px-4 align-middle text-xs font-medium text-gray-700 uppercase tracking-wide whitespace-nowrap">Latest Updated</th>
+                  <th className="text-left py-3 px-4 align-middle text-xs font-medium text-gray-700 uppercase tracking-wide tf-sticky-col">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -2259,87 +2350,86 @@ Best regards`);
                   const primary = rows[0];
                   const isExpanded = expandedGroupKeys.has(key);
                   const distinctTitles = Array.from(new Set(rows.map((r) => r.jobTitle).filter(Boolean))) as string[];
-                  const titlesExpanded = expandedTitleKeys.has(key);
-                  const hiddenTitleCount = Math.max(0, distinctTitles.length - JOB_TITLE_PREVIEW_COUNT);
-                  const avatar = avatarColorFor(key);
-                  const groupSelected = rows.every((r) => selectedResumes.includes(r.id));
+                  const groupSelected = isGroupSelected(rows);
                   return (
                     <Fragment key={key}>
-                      <tr className="hover:bg-[var(--raw-fafbfc)] transition-colors">
-                        <td className="py-4 px-4 align-top tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
-                          <button
-                            onClick={() => handleSelectGroup(rows)}
-                            className="p-1 hover:bg-gray-200 rounded"
-                          >
-                            {groupSelected ? (
-                              <CheckSquare className="w-4 h-4 text-gray-800" />
-                            ) : (
-                              <Square className="w-4 h-4 text-gray-400" />
-                            )}
-                          </button>
-                        </td>
-                        <td className="px-3 py-4 align-top">
-                          <button
-                            onClick={() => toggleGroupExpanded(key)}
-                            aria-label={isExpanded ? 'Collapse' : 'Expand'}
-                            title={isExpanded ? 'Collapse' : 'Expand'}
-                            className={`inline-flex items-center justify-center w-7 h-7 rounded-lg border transition-colors ${
-                              isExpanded
-                                ? 'border-brand-blue/40 bg-brand-blue/5 text-brand-blue'
-                                : 'border-gray-200 text-gray-400 hover:border-brand-blue/30 hover:text-brand-blue'
-                            }`}
-                          >
-                            <ChevronRight className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
-                          </button>
-                        </td>
-                        <td className="px-4 py-4 align-top">
-                          <div className="flex items-start gap-3">
-                            <div className={`flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold ${avatar.bg} ${avatar.text}`}>
-                              {initialsFor(primary.candidateName || 'Candidate')}
-                            </div>
-                            <div className="min-w-0">
+                      <tr
+                        /* Click anywhere on the row to open / close the
+                           candidate's job history — no separate chevron. The
+                           checkbox, name link, "+N more" and Actions stop the
+                           click so they keep doing their own thing. */
+                        onClick={() => toggleGroupExpanded(key)}
+                        aria-expanded={isExpanded}
+                        data-row-selected={groupSelected ? 'true' : undefined}
+                        aria-selected={groupSelected}
+                        className={`cursor-pointer transition-colors ${
+                          groupSelected
+                            ? 'bg-brand-blue/[0.08] hover:bg-brand-blue/[0.12] dark:bg-brand-blue/15'
+                            : 'hover:bg-[var(--raw-fafbfc)]'
+                        }`}
+                      >
+                        <td className="px-4 py-3 align-middle min-w-0">
+                          {/* Checkbox before the name — no column of its own,
+                              the same as View by Job's rows. Then name and
+                              email only (no initials avatar, no phone). */}
+                          <div className="flex items-start gap-2 min-w-0">
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); handleSelectGroup(rows); }}
+                              aria-pressed={groupSelected}
+                              aria-label={groupSelected ? 'Deselect candidate' : 'Select candidate'}
+                              className="inline-flex p-1.5 -ml-1.5 hover:bg-gray-200 rounded flex-shrink-0"
+                            >
+                              {groupSelected ? (
+                                <CheckSquare className="w-4 h-4 text-brand-blue" />
+                              ) : (
+                                <Square className="w-4 h-4 text-gray-400" />
+                              )}
+                            </button>
+                            <div className="min-w-0 w-full">
                               {onViewCandidate ? (
                                 <button
                                   onClick={(e) => { e.stopPropagation(); onViewCandidate(primary); }}
-                                  className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block"
+                                  className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block max-w-full truncate"
+                                  title={primary.candidateName || undefined}
                                 >
                                   {primary.candidateName || 'Candidate'}
                                 </button>
                               ) : (
                                 <div className="text-sm font-medium text-gray-900">{primary.candidateName || 'Candidate'}</div>
                               )}
-                              {primary.email && <div className="text-xs text-gray-500 truncate">{primary.email}</div>}
-                              {primary.phone && <div className="text-xs text-gray-500">{primary.phone}</div>}
+                              {primary.email && <div className="text-xs text-gray-500 truncate" title={primary.email}>{primary.email}</div>}
                             </div>
                           </div>
                         </td>
-                        <td className="px-4 py-4 align-top">
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 whitespace-nowrap">
-                            {rows.length} Job {rows.length === 1 ? 'Version' : 'Versions'}
+                        {/* Just the count — the column header already says
+                            "Job Versions". Centred under it, like the other counts. */}
+                        <td className="px-4 py-3 align-middle text-center">
+                          <span
+                            className="inline-flex items-center justify-center min-w-[2rem] px-2 py-0.5 rounded-full text-xs font-semibold tabular-nums bg-blue-50 text-blue-700 border border-blue-200"
+                            title={`${rows.length} job ${rows.length === 1 ? 'version' : 'versions'}`}
+                          >
+                            {rows.length}
                           </span>
                         </td>
-                        <td className="px-4 py-4 align-top">
-                          <div className="space-y-0.5">
-                            {(titlesExpanded ? distinctTitles : distinctTitles.slice(0, JOB_TITLE_PREVIEW_COUNT)).map((title, i) => (
-                              <div key={i} className="text-sm text-gray-700">{title}</div>
-                            ))}
-                            {hiddenTitleCount > 0 && (
-                              <button
-                                type="button"
-                                onClick={(e) => { e.stopPropagation(); toggleTitlesExpanded(key); }}
-                                title={distinctTitles.slice(JOB_TITLE_PREVIEW_COUNT).join(', ')}
-                                className="inline-flex items-center px-2 py-0.5 mt-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200 hover:text-gray-800 transition-colors whitespace-nowrap"
-                              >
-                                {titlesExpanded ? 'Show less' : `+${hiddenTitleCount} more`}
-                              </button>
-                            )}
-                          </div>
+                        <td className="px-4 py-3 align-middle min-w-0">
+                          {renderJobTitles(distinctTitles)}
                         </td>
-                        <td className="px-4 py-4 align-top whitespace-nowrap">
+                        {(() => {
+                          const t = tallyVerdicts(rows);
+                          return (
+                            <>
+                              <td className="px-4 py-3 align-middle text-center">{renderVerdictCount('exact', t.exact)}</td>
+                              <td className="px-4 py-3 align-middle text-center">{renderVerdictCount('partial', t.partial)}</td>
+                              <td className="px-4 py-3 align-middle text-center">{renderVerdictCount('none', t.none)}</td>
+                            </>
+                          );
+                        })()}
+                        <td className="px-4 py-3 align-middle whitespace-nowrap">
                           <div className="text-sm text-gray-900">{formatISTDate(primary.scoredDate)}</div>
                           <div className="text-xs text-gray-500">{formatISTTime(primary.scoredDate)}</div>
                         </td>
-                        <td className="px-4 py-4 align-top tf-sticky-col" onClick={(e) => e.stopPropagation()}>
+                        <td className="px-4 py-3 align-middle text-left tf-sticky-col" onClick={(e) => e.stopPropagation()}>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <button
@@ -2358,29 +2448,42 @@ Best regards`);
                       </tr>
                       {isExpanded && (
                         <tr key={`${key}-detail`}>
-                          <td colSpan={7} className="p-0 bg-gray-50/60">
+                          <td colSpan={8} className="p-0 bg-gray-50/60">
                             {/* Same columns as the flat "Total Scored
-                                Resumes" table — including whatever the user
-                                turned on in Customize Columns — so expanding a
+                                Resumes" table (the fixed TABLE_COLUMNS) — so expanding a
                                 candidate shows their scores at full detail
                                 rather than a reduced set. */}
                             <div className="px-4 sm:px-6 py-3 overflow-x-auto">
-                              <table className="w-full min-w-[1100px] table-auto">
+                              {/* No Candidate column — every row here is the same
+                                  person — and no forced min width, so it fits. */}
+                              <table className="w-full table-auto">
                                 <thead>
                                   <tr className="border-b border-gray-200">
-                                    {enabledColumns.map((col) => (
-                                      <th key={col.id} className="text-left py-2 px-4 text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
+                                    {enabledColumns.filter((col) => col.id !== 'candidateName').map((col) => (
+                                      <th key={col.id} className={`${CENTERED_COLUMNS.has(col.id) ? 'text-center' : 'text-left'} py-2 px-4 text-xs font-medium text-gray-600 uppercase tracking-wide whitespace-nowrap`}>
                                         {col.label}
                                       </th>
                                     ))}
-                                    <th className="text-left py-2 px-4 text-xs font-semibold text-gray-600 uppercase tracking-wide">Actions</th>
+                                    <th className="text-left py-2 px-4 text-xs font-medium text-gray-600 uppercase tracking-wide">Actions</th>
                                   </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
                                   {rows.map((row) => (
-                                    <tr key={row.id} className="bg-white">
-                                      {enabledColumns.map((col) => renderResumeCell(col, row))}
-                                      <td className="py-2.5 px-4 align-middle" onClick={(e) => e.stopPropagation()}>
+                                    <tr
+                                      key={row.id}
+                                      /* A click anywhere on this job's row opens its
+                                         results — the same page the candidate's name
+                                         opens. Buttons / menus keep their own click
+                                         (handleRowClick skips them). */
+                                      onClick={(e) => handleRowClick(row.id, e)}
+                                      className={`cursor-pointer transition-colors ${
+                                        selectedResumes.includes(row.id)
+                                          ? 'bg-brand-blue/[0.08] hover:bg-brand-blue/[0.12] dark:bg-brand-blue/15'
+                                          : 'bg-white hover:bg-[var(--raw-fafbfc)]'
+                                      }`}
+                                    >
+                                      {enabledColumns.filter((col) => col.id !== 'candidateName').map((col) => renderResumeCell(col, row))}
+                                      <td className="py-2.5 px-4 align-middle whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                         <DropdownMenu>
                                           <DropdownMenuTrigger asChild>
                                             <button
@@ -2392,6 +2495,8 @@ Best regards`);
                                             </button>
                                           </DropdownMenuTrigger>
                                           <DropdownMenuContent align="end" className="w-52 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
+                                            {renderInviteSubmenu(row)}
+                                            <DropdownMenuSeparator className="my-1 bg-gray-100" />
                                             {renderActionsMenuItems(row)}
                                           </DropdownMenuContent>
                                         </DropdownMenu>
@@ -2424,17 +2529,16 @@ Best regards`);
           </div>
 
           {/* Mobile Card View — grouped. Same data/state as the desktop table
-              above (paginatedGroups, expandedGroupKeys, avatarColorFor,
+              above (paginatedGroups, expandedGroupKeys,
               renderActionsMenuItems, formatters) — just laid out as cards
               with the per-candidate job history as a stacked list instead of
               a nested <table>, since a second horizontal-scrolling table
               inside a card is no more usable on a phone than the outer one. */}
-          <div className="md:hidden space-y-3">
+          <div className="lg:hidden space-y-3">
             {paginatedGroups.map(({ key, rows }) => {
               const primary = rows[0];
               const isExpanded = expandedGroupKeys.has(key);
-              const avatar = avatarColorFor(key);
-              const groupSelected = rows.every((r) => selectedResumes.includes(r.id));
+              const groupSelected = isGroupSelected(rows);
               return (
                 <div key={key} className="bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
                   <div className="flex items-start justify-between gap-2">
@@ -2449,9 +2553,6 @@ Best regards`);
                           <Square className="w-5 h-5 text-gray-400" />
                         )}
                       </button>
-                      <div className={`flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold ${avatar.bg} ${avatar.text}`}>
-                        {initialsFor(primary.candidateName || 'Candidate')}
-                      </div>
                       <div className="min-w-0 flex-1">
                         {onViewCandidate ? (
                           <button
@@ -2464,7 +2565,6 @@ Best regards`);
                           <div className="text-sm font-medium text-gray-900 truncate">{primary.candidateName || 'Candidate'}</div>
                         )}
                         {primary.email && <div className="text-xs text-gray-500 truncate">{primary.email}</div>}
-                        {primary.phone && <div className="text-xs text-gray-500">{primary.phone}</div>}
                       </div>
                     </div>
                     <div className="flex-shrink-0" onClick={(e) => e.stopPropagation()}>
@@ -2484,6 +2584,17 @@ Best regards`);
                       </DropdownMenu>
                     </div>
                   </div>
+
+                  {(() => {
+                    const t = tallyVerdicts(rows);
+                    return (
+                      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                        {renderVerdictCount('exact', t.exact, 'Exact Match')}
+                        {renderVerdictCount('partial', t.partial, 'Partial Match')}
+                        {renderVerdictCount('none', t.none, 'No Match')}
+                      </div>
+                    );
+                  })()}
 
                   <div className="mt-3 flex items-center justify-between gap-2 flex-wrap">
                     <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 whitespace-nowrap">
@@ -2512,7 +2623,12 @@ Best regards`);
                   {isExpanded && (
                     <div className="mt-2 space-y-2">
                       {rows.map((row) => (
-                        <div key={row.id} className="rounded-lg border border-gray-200 bg-gray-50/60 p-3">
+                        <div
+                          key={row.id}
+                          // Opens this job's results, like the list's expanded row.
+                          onClick={(e) => handleRowClick(row.id, e)}
+                          className="rounded-lg border border-gray-200 bg-gray-50/60 p-3 cursor-pointer"
+                        >
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
                               <div className="text-sm font-medium text-gray-800 truncate" title={row.jobTitle || undefined}>
@@ -2584,24 +2700,29 @@ Best regards`);
         <>
       {/* Desktop Table View */}
       <div className="hidden md:block overflow-x-auto tf-table-shell">
-        <table className="w-full min-w-[1100px] table-auto">
+        <table className="w-full table-auto">
           <thead>
             <tr className="border-b border-gray-200">
-              <th className="text-left py-3 px-4 w-12 align-middle tf-sticky-col-left">
-                <button onClick={handleSelectAll} className="p-1 hover:bg-gray-100 rounded">
-                  {selectedResumes.length === filteredResumes.length && filteredResumes.length > 0 ? (
-                    <CheckSquare className="w-4 h-4 text-gray-800" />
-                  ) : (
-                    <Square className="w-4 h-4 text-gray-400" />
-                  )}
-                </button>
+              <th className="text-left py-3 px-4 w-12 align-middle tf-sticky-col-left" aria-label="Select">
+                {/* Only when there's no toolbar (compact: a job opened inline
+                    in View by Job) — otherwise Select all is in the toolbar,
+                    before the search box, and a second one here repeats it. */}
+                {compact && (
+                  <button onClick={handleSelectAll} className="inline-flex p-1.5 hover:bg-gray-100 rounded">
+                    {allVisibleSelected ? (
+                      <CheckSquare className="w-4 h-4 text-brand-blue" />
+                    ) : (
+                      <Square className="w-4 h-4 text-gray-400" />
+                    )}
+                  </button>
+                )}
               </th>
               {enabledColumns.map((col) => (
-                <th key={col.id} className="text-left py-3 px-4 text-sm text-gray-600 whitespace-nowrap align-middle">
+                <th key={col.id} className={`${CENTERED_COLUMNS.has(col.id) ? 'text-center' : 'text-left'} py-3 px-4 text-sm font-medium text-gray-600 uppercase whitespace-nowrap align-middle`}>
                   {col.label}
                 </th>
               ))}
-              <th className="text-left py-3 px-4 text-sm text-gray-600 whitespace-nowrap align-middle tf-sticky-col">Actions</th>
+              <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 uppercase whitespace-nowrap align-middle tf-sticky-col">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -2610,17 +2731,23 @@ Best regards`);
               <tr
                 key={resume.id}
                 onClick={(e) => handleRowClick(resume.id, e)}
-                className={`border-b border-gray-100 hover:bg-[var(--raw-fafbfc)] transition-colors cursor-pointer ${
-                  index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'
+                /* data-row-selected also tints the sticky checkbox / Actions
+                   cells (globals.css), which carry their own background. */
+                data-row-selected={selectedResumes.includes(resume.id) ? 'true' : undefined}
+                aria-selected={selectedResumes.includes(resume.id)}
+                className={`border-b border-gray-100 transition-colors cursor-pointer ${
+                  selectedResumes.includes(resume.id)
+                    ? 'bg-brand-blue/[0.08] hover:bg-brand-blue/[0.12] dark:bg-brand-blue/15'
+                    : `hover:bg-[var(--raw-fafbfc)] ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`
                 }`}
               >
                 <td className="py-3 px-4 align-middle tf-sticky-col-left">
                   <button
                     onClick={() => handleSelectResume(resume.id)}
-                    className="p-2.5 hover:bg-gray-200 rounded"
+                    className="inline-flex p-1.5 hover:bg-gray-200 rounded"
                   >
                     {selectedResumes.includes(resume.id) ? (
-                      <CheckSquare className="w-4 h-4 text-gray-800" />
+                      <CheckSquare className="w-4 h-4 text-brand-blue" />
                     ) : (
                       <Square className="w-4 h-4 text-gray-400" />
                     )}
@@ -2629,7 +2756,7 @@ Best regards`);
 
                 {enabledColumns.map((col) => renderResumeCell(col, resume))}
 
-                {/* Actions Column */}
+                {/* Actions Column — Invite is the menu's first entry. */}
                 <td className="py-3 px-4 align-middle whitespace-nowrap tf-sticky-col" onClick={(e) => e.stopPropagation()}>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -2645,6 +2772,8 @@ Best regards`);
                       align="end"
                       className="w-52 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl"
                     >
+                      {renderInviteSubmenu(resume)}
+                      <DropdownMenuSeparator className="my-1 bg-gray-100" />
                       {renderActionsMenuItems(resume)}
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -2732,50 +2861,21 @@ Best regards`);
 
             {/* Card Content */}
             <div className="space-y-2 text-sm mb-3">
-              {enabledColumns.find(c => c.id === 'email') && (
+              {resume.email && (
                 <div className="flex items-start gap-2 text-gray-600 min-w-0">
                   <Mail className="w-4 h-4 mt-0.5 shrink-0" />
                   <span className="min-w-0 break-all">{resume.email}</span>
                 </div>
               )}
-              {enabledColumns.find(c => c.id === 'phone') && (
-                <div className="flex items-start gap-2 text-gray-600">
-                  <Phone className="w-4 h-4 mt-0.5 shrink-0" />
-                  <div className="flex flex-col gap-0.5">
-                    {(() => {
-                      const numbers = splitPhoneNumbers(resume.phone, 2);
-                      return numbers.length > 0
-                        ? numbers.map((num, i) => <span key={i} className="whitespace-nowrap">{num}</span>)
-                        : <span className="whitespace-nowrap">-</span>;
-                    })()}
-                  </div>
+              {/* Same fields as the fixed table columns — phone, experience and
+                  education are export-only now (see ScoredResumesExportModal). */}
+              <div className="text-gray-600">
+                <span className="text-gray-500">Scored by:</span> {resume.scoredBy}
+                <div className="flex items-center gap-1 mt-0.5">
+                  <Calendar className="w-3.5 h-3.5" />
+                  <span>{formatISTDate(resume.scoredDate)}{' '}<span className="text-gray-400">{formatISTTime(resume.scoredDate)}</span></span>
                 </div>
-              )}
-              {enabledColumns.find(c => c.id === 'experience') && resume.experience && (
-                <div className="text-gray-600">
-                  <span className="text-gray-500">Experience:</span> {resume.experience}
-                </div>
-              )}
-              {enabledColumns.find(c => c.id === 'education') && resume.education && (
-                <div className="text-gray-600">
-                  <span className="text-gray-500">Education:</span> {
-                    typeof resume.education === 'string'
-                      ? resume.education
-                      : Array.isArray(resume.education) && resume.education.length > 0
-                        ? (resume.education[0]?.degree || resume.education[0]?.institution || 'Education available')
-                        : ''
-                  }
-                </div>
-              )}
-              {enabledColumns.find(c => c.id === 'scoredDate') && (
-                <div className="text-gray-600">
-                  <span className="text-gray-500">Scored by:</span> {resume.scoredBy}
-                  <div className="flex items-center gap-1 mt-0.5">
-                    <Calendar className="w-3.5 h-3.5" />
-                    <span>{formatISTDate(resume.scoredDate)}{' '}<span className="text-gray-400">{formatISTTime(resume.scoredDate)}</span></span>
-                  </div>
-                </div>
-              )}
+              </div>
             </div>
 
             {/* Card Actions */}
@@ -2926,24 +3026,29 @@ Best regards`);
         itemLabel={isGrouped ? 'candidates' : 'scored resumes'}
       />
 
-      <ZipDownloadConfirmModal
-        open={showZipConfirm}
-        count={selectedResumes.length}
-        itemLabel="scorecards"
-        busy={bulkDownloading}
-        onClose={() => setShowZipConfirm(false)}
-        onConfirm={async () => {
-          await handleDownloadBulkScorecards();
-          setShowZipConfirm(false);
-        }}
-      />
 
-      {/* Column Customization Modal */}
-      {showColumnModal && (
-        <ColumnCustomizationModal
-          columns={availableColumns}
-          onClose={() => setShowColumnModal(false)}
-          onApply={handleColumnApply}
+      {/* Actions ▸ … — the "what this does" popup every bulk action goes
+          through: explains the action and lets the user keep / drop each
+          match status before anything happens. */}
+      {bulkAction && (
+        <BulkActionConfirmModal
+          action={bulkAction}
+          rows={effectiveSelectedRows}
+          busy={bulkDownloading}
+          onCancel={() => setBulkAction(null)}
+          onConfirm={async (rows) => {
+            const action = bulkAction;
+            setBulkAction(null);
+            if (action === 'download') {
+              await handleDownloadBulkScorecards(rows);
+            } else if (action === 'assessment') {
+              setBulkActionRows(rows);
+              setShowBulkInviteModal(true);
+            } else {
+              setBulkActionRows(rows);
+              setShowBulkAIInterviewInvite(true);
+            }
+          }}
         />
       )}
 
@@ -2984,6 +3089,48 @@ Best regards`);
         } as unknown as Resume] : undefined}
         onInvited={() => setAiInterviewInviteCandidate(null)}
       />
+
+      {/* Actions ▸ AI Interview Invite — every ticked candidate at once. One
+          invite per person (a candidate ticked on several jobs is listed
+          once). Scoped to a job's interviews when the ticked rows share one
+          job; otherwise the picker lists every interview. */}
+      {showBulkAIInterviewInvite && (() => {
+        const picked = bulkActionRows ?? effectiveSelectedRows;
+        const seen = new Set<string>();
+        const people = picked.filter((r) => {
+          const k = (r.email || r.resumeId || r.id).toLowerCase();
+          if (seen.has(k)) return false;
+          seen.add(k);
+          return true;
+        });
+        const jdIds = Array.from(new Set(picked.map((r) => r.jdId).filter(Boolean)));
+        const scopedJobId = jdIds.length === 1
+          ? jdIds[0]
+          : jdIds.length === 0 && jobId && jobId !== 'global' && jobId !== 'jd-1' ? jobId : undefined;
+        return (
+          <InviteToAIInterviewFlow
+            open
+            onClose={() => { setShowBulkAIInterviewInvite(false); setBulkActionRows(null); }}
+            jobId={scopedJobId}
+            candidates={people.map((r) => ({
+              id: r.resumeId || r.id,
+              name: r.candidateName || 'Unknown',
+              email: r.email || undefined,
+            }))}
+            resumes={people.map((r) => ({
+              id: r.resumeId || r.id,
+              name: r.candidateName || 'Unknown',
+              email: r.email,
+              phone: r.phone,
+            }) as unknown as Resume)}
+            onInvited={() => {
+              setShowBulkAIInterviewInvite(false);
+              setBulkActionRows(null);
+              setSelectedResumes([]);
+            }}
+          />
+        );
+      })()}
 
       {/* Share Resume — the same dialog the resume table and the resume page
           open: the attachment with an eye to read it, then recipient, subject
@@ -3238,15 +3385,16 @@ Best regards`);
       {/* Bulk Invite Modal */}
       {showBulkInviteModal && (
         <BulkInviteModal
-          selectedResumes={selectedResumes.map(id => {
+          selectedResumes={bulkActionRows ?? selectedResumes.map(id => {
             const resume = resumes.find(r => r.id === id);
             return resume!;
           }).filter(Boolean)}
           jobId={jobId}
           jobTitle={jobTitle}
-          onClose={() => setShowBulkInviteModal(false)}
+          onClose={() => { setShowBulkInviteModal(false); setBulkActionRows(null); }}
           onSuccess={() => {
             setShowBulkInviteModal(false);
+            setBulkActionRows(null);
             // Clear selection after successful bulk invite
             if (onSelectAll) {
               onSelectAll([]);
@@ -3257,108 +3405,176 @@ Best regards`);
         />
       )}
 
-      {/* Export Format Selection Modal */}
+      {/* Export dialog — shared with View by Job (ScoredResumesExportModal).
+          Exports the ticked rows; Export asks for a selection first. */}
       {showExportModal && (
-        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-          <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] flex flex-col">
-            <div className="flex items-start justify-between gap-3 p-5 border-b border-gray-200 shrink-0">
-              <div className="flex items-start gap-3">
-                <div className="w-11 h-11 rounded-full bg-blue-50 flex items-center justify-center flex-shrink-0">
-                  <FileDown className="w-5 h-5 text-blue-600" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-gray-900">Export Scored Resumes</h3>
-                  <p className="text-sm text-gray-500 mt-1 flex items-center gap-1.5">
-                    {selectedResumes.length > 0
-                      ? `${selectedResumes.length} selected records`
-                      : `${filteredResumes.length} records`
-                    }
-                    <span className="w-1 h-1 rounded-full bg-blue-500" />
-                    {exportColumns.length} columns
-                  </p>
-                </div>
-              </div>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setShowExportModal(false)}
-                className="px-2 flex-shrink-0"
-               aria-label="Close">
-                <X className="w-5 h-5" />
-              </Button>
+        <ScoredResumesExportModal
+          rows={effectiveSelectedRows}
+          title={jobTitle}
+          fileName={(ext) => {
+            const data = effectiveSelectedRows;
+            return `${jobCodePrefix(data)}${jobTitle.replace(/\s+/g, '_')}${versionTag(data)}_Scorecards_${formatFileDate(new Date())}.${ext}`;
+          }}
+          rowJobCode={rowJobCode}
+          auditJdId={jobId}
+          onClose={() => setShowExportModal(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+export type BulkActionKind = 'download' | 'assessment' | 'interview';
+type MatchBucket = 'Exact Match' | 'Partial Match' | 'No Match';
+
+const BULK_ACTION_INFO: Record<BulkActionKind, {
+  title: string;
+  icon: typeof Download;
+  what: string;
+  continueLabel: string;
+  /** Statuses that can't take part, with the reason shown beside them. */
+  locked?: Partial<Record<MatchBucket, string>>;
+}> = {
+  download: {
+    title: 'Download All Scorecards',
+    icon: Download,
+    what: 'Downloads the scorecard PDF of every included candidate. One candidate downloads a single PDF; several are bundled into one ZIP file.',
+    continueLabel: 'Download',
+  },
+  assessment: {
+    title: 'AI Assessment Invite',
+    icon: FileText,
+    what: "Invites the included candidates to this job's published assessment. You pick the assessment and the link expiry next. Each invitation uses one assessment unit.",
+    continueLabel: 'Continue',
+    locked: { 'No Match': 'Not eligible — only Exact Match and Partial Match candidates can be invited to an assessment.' },
+  },
+  interview: {
+    title: 'AI Interview Invite',
+    icon: Video,
+    what: 'Invites the included candidates to an AI interview. You pick the interview next. A candidate ticked on several jobs gets one invitation, and candidates without an email address are skipped.',
+    continueLabel: 'Continue',
+  },
+};
+
+/**
+ * The popup every Actions-menu item opens first: says plainly what the action
+ * will do, shows how many of the ticked candidates are in each match status,
+ * and lets the user keep or drop each status. Nothing runs until Continue —
+ * with the rows of the statuses left on.
+ */
+export function BulkActionConfirmModal({
+  action,
+  rows,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  action: BulkActionKind;
+  rows: ScoredResume[];
+  busy?: boolean;
+  onCancel: () => void;
+  onConfirm: (rows: ScoredResume[]) => void | Promise<void>;
+}) {
+  const info = BULK_ACTION_INFO[action];
+  const Icon = info.icon;
+  const bucketOf = (r: ScoredResume): MatchBucket => (normalizeMatchResult(r.matchStatus) ?? 'No Match') as MatchBucket;
+  const buckets: MatchBucket[] = ['Exact Match', 'Partial Match', 'No Match'];
+  const counts = buckets.reduce((acc, b) => ({ ...acc, [b]: rows.filter((r) => bucketOf(r) === b).length }), {} as Record<MatchBucket, number>);
+  // Every status that has rows and isn't locked starts ON.
+  const [included, setIncluded] = useState<Record<MatchBucket, boolean>>(() => ({
+    'Exact Match': !info.locked?.['Exact Match'],
+    'Partial Match': !info.locked?.['Partial Match'],
+    'No Match': !info.locked?.['No Match'],
+  }));
+  const chosen = rows.filter((r) => included[bucketOf(r)] && !info.locked?.[bucketOf(r)]);
+
+  return (
+    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6" onClick={onCancel}>
+      <div
+        className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="bulk-action-title"
+      >
+        <div className="flex items-start justify-between gap-3 p-5 border-b border-gray-200 shrink-0">
+          <div className="flex items-start gap-3">
+            <div className="w-11 h-11 rounded-full bg-blue-50 flex items-center justify-center flex-shrink-0">
+              <Icon className="w-5 h-5 text-blue-600" />
             </div>
-
-            <div className="p-5 overflow-y-auto flex-1">
-              <p className="text-sm font-bold text-gray-900 mb-3">Choose export format</p>
-
-              <div className="space-y-3">
-                <button
-                  onClick={() => setExportFormat('csv')}
-                  className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left ${
-                    exportFormat === 'csv'
-                      ? 'border-blue-500 bg-blue-50/60'
-                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                  }`}
-                >
-                  <div className="w-12 h-12 bg-success-subtle rounded-lg flex items-center justify-center flex-shrink-0">
-                    <FileText className="w-6 h-6 text-success" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-bold text-gray-900">CSV Format</div>
-                    <div className="text-sm text-gray-500">Compatible with Excel, Google Sheets, and most spreadsheet apps.</div>
-                  </div>
-                  <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-                    exportFormat === 'csv' ? 'border-blue-600' : 'border-gray-300'
-                  }`}>
-                    {exportFormat === 'csv' && <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />}
-                  </span>
-                </button>
-
-                <button
-                  onClick={() => setExportFormat('xls')}
-                  className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left ${
-                    exportFormat === 'xls'
-                      ? 'border-blue-500 bg-blue-50/60'
-                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                  }`}
-                >
-                  <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <FileSpreadsheet className="w-6 h-6 text-blue-700" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-bold text-gray-900">Excel Format (.xlsx)</div>
-                    <div className="text-sm text-gray-500">Native Excel format with formatting and styling.</div>
-                  </div>
-                  <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-                    exportFormat === 'xls' ? 'border-blue-600' : 'border-gray-300'
-                  }`}>
-                    {exportFormat === 'xls' && <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />}
-                  </span>
-                </button>
-              </div>
-
-              <div className="mt-4 p-4 bg-blue-50/60 rounded-xl flex items-start gap-3">
-                <Info className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
-                <p className="text-sm text-gray-600">
-                  <span className="block font-bold text-blue-700 mb-0.5">Columns included</span>
-                  {exportColumns.map(c => c.label).join(', ')}
-                </p>
-              </div>
+            <div>
+              <h3 id="bulk-action-title" className="text-lg font-bold text-gray-900">{info.title}</h3>
+              <p className="text-sm text-gray-500 mt-1">{rows.length} selected</p>
             </div>
+          </div>
+          <Button variant="secondary" size="sm" onClick={onCancel} className="px-2 flex-shrink-0" aria-label="Close">
+            <X className="w-5 h-5" />
+          </Button>
+        </div>
 
-            <div className="flex items-center justify-end gap-3 p-5 border-t border-gray-200 shrink-0">
-              <Button
-                variant="primary"
-                size="md"
-                onClick={() => (exportFormat === 'csv' ? exportToCSV() : void exportToXLS())}
-                icon={<Download className="w-4 h-4" />}
-              >
-                Export
-              </Button>
+        <div className="p-5 overflow-y-auto flex-1 space-y-4">
+          <div className="p-4 bg-blue-50/60 rounded-xl flex items-start gap-3">
+            <Info className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-gray-700">
+              <span className="block font-bold text-blue-700 mb-0.5">What this does</span>
+              {info.what}
+            </p>
+          </div>
+
+          <div>
+            <p className="text-sm font-bold text-gray-900 mb-2">Include candidates with match status</p>
+            <div className="space-y-2">
+              {buckets.map((b) => {
+                const lockedReason = info.locked?.[b];
+                const disabled = !!lockedReason || counts[b] === 0;
+                return (
+                  <label
+                    key={b}
+                    className={`flex items-start gap-3 p-3 rounded-lg border ${
+                      disabled ? 'border-gray-200 bg-gray-50 cursor-not-allowed' : 'border-gray-200 hover:border-blue-300 cursor-pointer'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={!lockedReason && included[b] && counts[b] > 0}
+                      disabled={disabled}
+                      onChange={() => setIncluded((prev) => ({ ...prev, [b]: !prev[b] }))}
+                      className="mt-0.5 w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 shrink-0"
+                    />
+                    <span className="flex-1 min-w-0">
+                      <span className="flex items-center justify-between gap-2">
+                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs border ${matchBadgeClass(b)}`}>{b}</span>
+                        <span className="text-sm font-semibold tabular-nums text-gray-700">{counts[b]}</span>
+                      </span>
+                      {lockedReason && counts[b] > 0 && (
+                        <span className="block mt-1 text-xs text-gray-500">{lockedReason}</span>
+                      )}
+                    </span>
+                  </label>
+                );
+              })}
             </div>
           </div>
         </div>
-      )}
+
+        <div className="flex items-center justify-between gap-3 p-5 border-t border-gray-200 shrink-0">
+          <p className="text-sm text-gray-600">
+            <span className="font-semibold text-gray-900">{chosen.length}</span> of {rows.length} will be included
+          </p>
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" size="md" onClick={onCancel}>Cancel</Button>
+            <Button
+              variant="primary"
+              size="md"
+              disabled={chosen.length === 0 || busy}
+              onClick={() => void onConfirm(chosen)}
+              icon={busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Icon className="w-4 h-4" />}
+            >
+              {info.continueLabel}
+            </Button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -3372,7 +3588,7 @@ interface BulkInviteModalProps {
   onSuccess: () => void;
 }
 
-function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onSuccess }: BulkInviteModalProps) {
+export function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onSuccess }: BulkInviteModalProps) {
   const [assessments, setAssessments] = useState<any[]>([]);
   const [selectedAssessment, setSelectedAssessment] = useState<string>('');
   const [isLoadingAssessments, setIsLoadingAssessments] = useState(true);

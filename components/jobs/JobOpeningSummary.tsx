@@ -52,43 +52,76 @@ type JobWithListingExtras = Job & {
  */
 /** The row's items on their own, so a host can put them in a row of its own
  *  making — see `mergeInfoRows` on <JobOpeningSummary>. */
-function JobOpeningMetaItems({ job }: { job: Job }) {
+
+/** A "Label: value" meta field for the icon-less Job Openings layout — the label
+ *  carries the form-label weight/colour the design system uses elsewhere
+ *  (`font-medium text-gray-700`), the value sits a shade lighter at normal
+ *  weight, giving a clear hierarchy with no custom styling. */
+function MetaLabelValue({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <span className="flex items-center gap-1">
+      <span className="font-medium text-gray-700 dark:text-slate-300">{label}:</span>
+      <span className="font-normal text-gray-500 dark:text-slate-400">{value}</span>
+    </span>
+  );
+}
+
+function JobOpeningMetaItems({ job, showIcons = true, showCounts = true }: { job: Job; showIcons?: boolean; showCounts?: boolean }) {
   return (
     <>
-      {job.postedDate && (
-        <span className="flex items-center gap-1.5">
-          <Calendar className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-          Posted {formatISTDate(job.postedDate)}
-        </span>
-      )}
+      {/* By / Posted / Last Updated. With icons (the default, every other
+          surface) they read "By {name}" behind a muted icon. On the Job
+          Openings cards (showIcons=false) they switch to an icon-less
+          "Label: value" pair — bolder label, lighter value — via
+          <MetaLabelValue>. */}
       {job.postedBy && (
-        <span className="flex items-center gap-1.5">
-          <User className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-          By {job.postedBy}
-        </span>
+        showIcons ? (
+          <span className="flex items-center gap-1.5">
+            <User className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+            By {job.postedBy}
+          </span>
+        ) : (
+          <MetaLabelValue label="By" value={job.postedBy} />
+        )
+      )}
+      {job.postedDate && (
+        showIcons ? (
+          <span className="flex items-center gap-1.5">
+            <Calendar className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+            Posted {formatISTDate(job.postedDate)}
+          </span>
+        ) : (
+          <MetaLabelValue label="Posted" value={formatISTDate(job.postedDate)} />
+        )
       )}
       {job.updated_at && (
-        <span className="flex items-center gap-1.5">
-          <Clock className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-          Last Updated: {formatLastUpdated(job.updated_at)}
-        </span>
+        showIcons ? (
+          <span className="flex items-center gap-1.5">
+            <Clock className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+            Last Updated: {formatLastUpdated(job.updated_at)}
+          </span>
+        ) : (
+          <MetaLabelValue label="Last Updated" value={formatLastUpdated(job.updated_at)} />
+        )
       )}
       {/* A record with no applicant count at all (the AI Interview flow's JD
-          list carries none) said " applicants" with nothing in front of it. */}
-      {job.applicants != null && (
+          list carries none) said " applicants" with nothing in front of it.
+          `showCounts` lets a host (the Job Openings cards) suppress these three
+          chips here and render them elsewhere instead. */}
+      {showCounts && job.applicants != null && (
         <span className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-50 dark:bg-slate-800 rounded-lg">
           <Users className="w-4 h-4 text-gray-400 dark:text-slate-500" />
           {job.applicants} {job.applicants === 1 ? 'applicant' : 'applicants'}
         </span>
       )}
       {/* Only the Job Openings list sets these; other hosts render as before. */}
-      {job.assessed != null && (
+      {showCounts && job.assessed != null && (
         <span className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-50 dark:bg-slate-800 rounded-lg">
           <ClipboardCheck className="w-4 h-4 text-gray-400 dark:text-slate-500" />
           {job.assessed} assessed
         </span>
       )}
-      {job.interviewed != null && (
+      {showCounts && job.interviewed != null && (
         <span className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-50 dark:bg-slate-800 rounded-lg">
           <Video className="w-4 h-4 text-gray-400 dark:text-slate-500" />
           {job.interviewed} interviewed
@@ -101,7 +134,10 @@ function JobOpeningMetaItems({ job }: { job: Job }) {
 /** Experience / industry / location / employment type / work mode, as items.
  *  Exported so a list that is not a Job Openings row (AI Talent Match's
  *  Matched Jobs) can print the same JD details line. */
-export function JobOpeningPrimaryItems({ job }: { job: Job }) {
+export function JobOpeningPrimaryItems({ job, hideEmpty = false }: { job: Job; hideEmpty?: boolean }) {
+  const hasLocation = !!(job.location && job.location.trim());
+  const salaryText = formatSalaryRange({ min: job.salary_min, max: job.salary_max, currency: job.salary_currency });
+  const hasSalary = !!salaryText;
   return (
     <>
       {job.experience && (
@@ -114,16 +150,23 @@ export function JobOpeningPrimaryItems({ job }: { job: Job }) {
         <Building2 className="w-4 h-4 text-gray-400 dark:text-slate-500" />
         {formatIndustryType(job.industry_type)}
       </span>
-      <span className="flex items-center gap-1.5">
-        <MapPin className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-        {job.location && job.location.trim() ? job.location : '-'}
-      </span>
-      <span className="flex items-center gap-1.5">
-        Salary {formatSalaryRange({ min: job.salary_min, max: job.salary_max, currency: job.salary_currency }) || '-'}
-        {(job.salary_min || job.salary_max) && job.compensation_type
-          ? ` / ${formatCompensationPeriod(job.compensation_type)}`
-          : ''}
-      </span>
+      {/* Location — under `hideEmpty` (Job Openings cards) it is omitted entirely
+          when absent, rather than rendering a '-' placeholder. */}
+      {(!hideEmpty || hasLocation) && (
+        <span className="flex items-center gap-1.5">
+          <MapPin className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+          {hasLocation ? job.location : '-'}
+        </span>
+      )}
+      {/* Salary — same conditional treatment: shown only when there is a value. */}
+      {(!hideEmpty || hasSalary) && (
+        <span className="flex items-center gap-1.5">
+          Salary {salaryText || '-'}
+          {(job.salary_min || job.salary_max) && job.compensation_type
+            ? ` / ${formatCompensationPeriod(job.compensation_type)}`
+            : ''}
+        </span>
+      )}
       <span className="flex items-center gap-1.5">
         <Briefcase className="w-4 h-4 text-gray-400 dark:text-slate-500" />
         {formatEmploymentType(job.employmentType)}
@@ -148,14 +191,14 @@ export function JobOpeningPrimaryItems({ job }: { job: Job }) {
 const SINGLE_LINE_ROW =
   'flex-wrap gap-x-3 gap-y-1.5 sm:flex-nowrap sm:gap-y-0 sm:whitespace-nowrap sm:overflow-x-auto sm:scrollbar-hide sm:[&>span]:flex-shrink-0';
 
-export function JobOpeningMeta({ job, singleLine = false }: { job: Job; singleLine?: boolean }) {
+export function JobOpeningMeta({ job, singleLine = false, showIcons = true, showCounts = true }: { job: Job; singleLine?: boolean; showIcons?: boolean; showCounts?: boolean }) {
   return (
     <div
       className={`flex items-center text-sm text-gray-600 dark:text-slate-400 ${
         singleLine ? SINGLE_LINE_ROW : 'flex-wrap gap-x-3 gap-y-1.5'
       }`}
     >
-      <JobOpeningMetaItems job={job} />
+      <JobOpeningMetaItems job={job} showIcons={showIcons} showCounts={showCounts} />
     </div>
   );
 }
@@ -184,6 +227,25 @@ interface JobOpeningSummaryProps {
   mergeInfoRows?: boolean;
   /** Extra badges after the vN chip — a per-surface addition, e.g. a tick. */
   trailingBadges?: React.ReactNode;
+  /**
+   * Job Openings list cards opt into a cleaner presentation:
+   *   - `showMetaIcons={false}` drops the Posted / By / Last Updated icons,
+   *     leaving plain text.
+   *   - `hideEmptyFields` shows Salary / Location only when they have a value,
+   *     with no '-' placeholder when missing.
+   * Both default to the icon + full-field layout every other surface (the Apply
+   * to Job dialog, AI Talent Match, AI Interview) already renders, so the shared
+   * component only changes where a caller opts in.
+   */
+  showMetaIcons?: boolean;
+  hideEmptyFields?: boolean;
+  /**
+   * Suppress the Applicants / Assessed / Interviewed count chips in the meta
+   * row. The Job Openings cards render those separately (a colored vertical
+   * stack beside the row actions), so the shared row must not also print them.
+   * Defaults true, so every other surface is unchanged.
+   */
+  showCountBadges?: boolean;
 }
 
 /**
@@ -203,6 +265,9 @@ export default function JobOpeningSummary({
   infoSingleLine = false,
   mergeInfoRows = false,
   trailingBadges,
+  showMetaIcons = true,
+  hideEmptyFields = false,
+  showCountBadges = true,
 }: JobOpeningSummaryProps) {
   const displayStatus = getDisplayStatus(job.status, job.currentVersion);
   const statusConfig = getStatusConfig(displayStatus);
@@ -254,8 +319,8 @@ export default function JobOpeningSummary({
       {mergeInfoRows ? (
         /* Both rows as one line */
         <div className={`flex items-center text-sm text-gray-600 dark:text-slate-400 mb-2 ${SINGLE_LINE_ROW}`}>
-          <JobOpeningPrimaryItems job={job} />
-          {showMetaRow && <JobOpeningMetaItems job={job} />}
+          <JobOpeningPrimaryItems job={job} hideEmpty={hideEmptyFields} />
+          {showMetaRow && <JobOpeningMetaItems job={job} showIcons={showMetaIcons} showCounts={showCountBadges} />}
         </div>
       ) : (
         <>
@@ -265,13 +330,13 @@ export default function JobOpeningSummary({
               infoSingleLine ? SINGLE_LINE_ROW : 'flex-wrap gap-x-3 gap-y-1.5'
             }`}
           >
-            <JobOpeningPrimaryItems job={job} />
+            <JobOpeningPrimaryItems job={job} hideEmpty={hideEmptyFields} />
           </div>
 
           {/* Primary Info Row 2 - Dates / Posted By / Applicants */}
           {showMetaRow && (
             <div className="mb-2">
-              <JobOpeningMeta job={job} singleLine={metaSingleLine} />
+              <JobOpeningMeta job={job} singleLine={metaSingleLine} showIcons={showMetaIcons} showCounts={showCountBadges} />
             </div>
           )}
         </>

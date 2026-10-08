@@ -182,19 +182,46 @@ const getCategoryViewCodeFor = (code: string): string | null => {
   return null;
 };
 
-// Helper to get which currently-enabled permissions block disabling the given code
-const getBlockingPermissions = (code: string, currentCodes: Set<string>): string[] => {
+// Helper to get which currently-enabled permission CODES block disabling the
+// given code (same traversal as getBlockingPermissions below, but returns the
+// raw codes so a cascade-disable can actually remove them from the set).
+const getBlockingPermissionCodes = (code: string, currentCodes: Set<string>): string[] => {
   const blockers: string[] = [];
   for (const cat of CUSTOM_PERMISSION_CATEGORIES) {
     if (cat.dependencies) {
       for (const [depender, deps] of Object.entries(cat.dependencies)) {
         if (deps.includes(code) && currentCodes.has(depender)) {
-          blockers.push(getPermissionDisplayName(depender));
+          blockers.push(depender);
         }
       }
     }
   }
   return blockers;
+};
+
+// Helper to get which currently-enabled permissions block disabling the given code
+const getBlockingPermissions = (code: string, currentCodes: Set<string>): string[] =>
+  getBlockingPermissionCodes(code, currentCodes).map(getPermissionDisplayName);
+
+// Transitive closure: starting from `codes`, keep pulling in whatever else
+// currently depends on something already queued for removal, so cascading a
+// disable never leaves an enabled permission depending on a code that just
+// got turned off.
+const computeCascadeRemovals = (codes: string[], currentCodes: Set<string>): Set<string> => {
+  const removal = new Set(codes);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const code of Array.from(removal)) {
+      for (const blocker of getBlockingPermissionCodes(code, currentCodes)) {
+        if (!removal.has(blocker)) {
+          removal.add(blocker);
+          changed = true;
+        }
+      }
+    }
+  }
+  return removal;
 };
 
 // Group permissions by module (original function - kept for backwards compatibility)
@@ -483,6 +510,33 @@ export default function UserManagement() {
   const router = useRouter();
   const { user: currentUser, refreshUser } = useAuth();
   const dialog = useGlobalDialog();
+
+  // Shared by every permission toggle below: instead of silently blocking a
+  // disable when other enabled permissions depend on it, ask the admin to
+  // confirm cascading the disable to those dependents too. Returns the full
+  // set of codes to remove (the requested ones plus every dependent pulled
+  // in transitively) on "Yes", or null if the admin chose "No" (no changes).
+  const confirmCascadeDisable = async (
+    label: string,
+    codesBeingDisabled: string[],
+    currentCodes: Set<string>
+  ): Promise<Set<string> | null> => {
+    const blockerCodes = [
+      ...new Set(codesBeingDisabled.flatMap(c => getBlockingPermissionCodes(c, currentCodes))),
+    ];
+    if (blockerCodes.length === 0) return new Set(codesBeingDisabled);
+
+    const blockerNames = [...new Set(blockerCodes.map(getPermissionDisplayName))];
+    const confirmed = await dialog.confirm({
+      title: `Disable "${label}"?`,
+      message: `"${label}" is required by ${blockerNames.join(', ')}. Disabling it will also turn off: ${blockerNames.join(', ')}.`,
+      variant: 'warning',
+      confirmText: 'Yes, Disable All',
+      cancelText: 'No',
+    });
+    if (!confirmed) return null;
+    return computeCascadeRemovals(codesBeingDisabled, currentCodes);
+  };
 
   // Granular action gates. Tenant admins always pass; delegated admins pass when
   // they hold the matching users:* permission. Accept both snake_case (API) and
@@ -3033,26 +3087,25 @@ export default function UserManagement() {
                         if (!isCategoryVisible(category.id)) return renderPlanLockedCategory(category.id, category.name);
 
                         // Pure codes-only toggle — no dual-state sync needed
-                        const toggleCode = (code: string) => {
+                        const toggleCode = async (code: string) => {
                           if (editSelectedPermissionCodes.has(code)) {
-                            // Disabling — block if another enabled permission depends on this one
-                            const blockers = getBlockingPermissions(code, editSelectedPermissionCodes);
-                            if (blockers.length > 0) {
-                              toast.warning(
-                                `Cannot disable "${getPermissionDisplayName(code)}" — it's required by ${blockers.join(', ')}. Disable that permission first.`
-                              );
-                              return;
-                            }
+                            // Disabling — confirm cascading to any dependents instead of blocking
+                            const removal = await confirmCascadeDisable(
+                              getPermissionDisplayName(code),
+                              [code],
+                              editSelectedPermissionCodes
+                            );
+                            if (!removal) return;
                             setEditSelectedPermissionCodes(prev => {
                               const next = new Set(prev);
-                              next.delete(code);
+                              removal.forEach(c => next.delete(c));
                               // Auto-remove viewCode if no actions remain in category
                               if (category.viewCode) {
                                 const allActions = [
                                   ...(category.actions || []),
                                   ...(category.subCategories?.flatMap(s => s.actions) || []),
                                 ];
-                                if (!allActions.some(a => a.code !== code && next.has(a.code))) {
+                                if (!allActions.some(a => !removal.has(a.code) && next.has(a.code))) {
                                   next.delete(category.viewCode);
                                   // Also remove sub-category viewCodes
                                   category.subCategories?.forEach(s => {
@@ -3093,7 +3146,7 @@ export default function UserManagement() {
                             (category.subCategories?.some(s => s.actions.some(a => editSelectedPermissionCodes.has(a.code))) ?? false)
                           : true;
 
-                        const toggleCategory = (e?: React.MouseEvent) => {
+                        const toggleCategory = async (e?: React.MouseEvent) => {
                           const allCategoryCodes = [
                             ...(category.viewCode ? [category.viewCode] : []),
                             ...(category.actions?.map(a => a.code) || []),
@@ -3102,21 +3155,15 @@ export default function UserManagement() {
                               ...s.actions.map(a => a.code),
                             ]) || []),
                           ];
+                          let cascadeRemoval: Set<string> | null = null;
                           if (isCategoryActive) {
-                            // Block if any code in this category is required by another active permission
-                            const blockerNames = [
-                              ...new Set(
-                                allCategoryCodes.flatMap(c =>
-                                  getBlockingPermissions(c, editSelectedPermissionCodes)
-                                )
-                              ),
-                            ];
-                            if (blockerNames.length > 0) {
-                              toast.warning(
-                                `Cannot disable "${category.name}" — it's required by ${blockerNames.join(', ')}. Disable that permission first.`
-                              );
-                              return;
-                            }
+                            // Confirm cascading to any dependents instead of blocking
+                            cascadeRemoval = await confirmCascadeDisable(
+                              category.name,
+                              allCategoryCodes,
+                              editSelectedPermissionCodes
+                            );
+                            if (!cascadeRemoval) return;
                           }
                           setEditSelectedPermissionCodes(prev => {
                             const next = new Set(prev);
@@ -3128,6 +3175,8 @@ export default function UserManagement() {
                                 if (s.viewCode) next.delete(s.viewCode);
                                 s.actions.forEach(a => next.delete(a.code));
                               });
+                              // Cascade-remove whatever else depended on this category
+                              cascadeRemoval!.forEach(c => next.delete(c));
                             } else {
                               // Enable all codes in this category
                               if (category.viewCode) next.add(category.viewCode);
@@ -3258,32 +3307,27 @@ export default function UserManagement() {
                                 ? editSelectedPermissionCodes.has(sub.viewCode) || sub.actions.some(a => editSelectedPermissionCodes.has(a.code))
                                 : sub.actions.some(a => editSelectedPermissionCodes.has(a.code));
 
-                              const toggleSub = () => {
+                              const toggleSub = async () => {
                                 const subAllCodesForToggle = [
                                   ...(sub.viewCode ? [sub.viewCode] : []),
                                   ...sub.actions.map(a => a.code),
                                 ];
+                                let cascadeRemoval: Set<string> | null = null;
                                 if (isSubActive) {
-                                  // Block if any code in this sub-category is required by another active permission
-                                  const blockerNames = [
-                                    ...new Set(
-                                      subAllCodesForToggle.flatMap(c =>
-                                        getBlockingPermissions(c, editSelectedPermissionCodes)
-                                      )
-                                    ),
-                                  ];
-                                  if (blockerNames.length > 0) {
-                                    toast.warning(
-                                      `Cannot disable "${sub.name}" — it's required by ${blockerNames.join(', ')}. Disable that permission first.`
-                                    );
-                                    return;
-                                  }
+                                  // Confirm cascading to any dependents instead of blocking
+                                  cascadeRemoval = await confirmCascadeDisable(
+                                    sub.name,
+                                    subAllCodesForToggle,
+                                    editSelectedPermissionCodes
+                                  );
+                                  if (!cascadeRemoval) return;
                                 }
                                 setEditSelectedPermissionCodes(prev => {
                                   const next = new Set(prev);
                                   if (isSubActive) {
                                     if (sub.viewCode) next.delete(sub.viewCode);
                                     sub.actions.forEach(a => next.delete(a.code));
+                                    cascadeRemoval!.forEach(c => next.delete(c));
                                     if (category.viewCode) {
                                       const anyOtherSub = category.subCategories?.some(s =>
                                         s !== sub && (
@@ -3347,14 +3391,15 @@ export default function UserManagement() {
                                       return (
                                         <div
                                           key={sub.viewCode}
-                                          onClick={() => {
+                                          onClick={async () => {
                                             if (editSelectedPermissionCodes.has(sub.viewCode!)) {
-                                              const blockers = getBlockingPermissions(sub.viewCode!, editSelectedPermissionCodes);
-                                              if (blockers.length > 0) {
-                                                toast.warning(`Cannot disable "${getPermissionDisplayName(sub.viewCode!)}" — it's required by ${blockers.join(', ')}. Disable that permission first.`);
-                                                return;
-                                              }
-                                              setEditSelectedPermissionCodes(prev => { const next = new Set(prev); next.delete(sub.viewCode!); return next; });
+                                              const removal = await confirmCascadeDisable(
+                                                getPermissionDisplayName(sub.viewCode!),
+                                                [sub.viewCode!],
+                                                editSelectedPermissionCodes
+                                              );
+                                              if (!removal) return;
+                                              setEditSelectedPermissionCodes(prev => { const next = new Set(prev); removal.forEach(c => next.delete(c)); return next; });
                                             } else {
                                               setEditSelectedPermissionCodes(prev => { const next = new Set(prev); next.add(sub.viewCode!); if (category.viewCode) next.add(category.viewCode); return next; });
                                             }
@@ -3376,24 +3421,25 @@ export default function UserManagement() {
                                       return (
                                         <div
                                           key={action.code}
-                                          onClick={() => {
+                                          onClick={async () => {
                                             if (editSelectedPermissionCodes.has(action.code)) {
-                                              const blockers = getBlockingPermissions(action.code, editSelectedPermissionCodes);
-                                              if (blockers.length > 0) {
-                                                toast.warning(`Cannot disable "${getPermissionDisplayName(action.code)}" — it's required by ${blockers.join(', ')}. Disable that permission first.`);
-                                                return;
-                                              }
+                                              const removal = await confirmCascadeDisable(
+                                                getPermissionDisplayName(action.code),
+                                                [action.code],
+                                                editSelectedPermissionCodes
+                                              );
+                                              if (!removal) return;
                                               setEditSelectedPermissionCodes(prev => {
                                                 const next = new Set(prev);
-                                                next.delete(action.code);
-                                                if (sub.viewCode && !sub.actions.some(a => a.code !== action.code && next.has(a.code))) {
+                                                removal.forEach(c => next.delete(c));
+                                                if (sub.viewCode && !sub.actions.some(a => !removal.has(a.code) && next.has(a.code))) {
                                                   next.delete(sub.viewCode);
                                                 }
                                                 if (category.viewCode) {
                                                   const anyLeft = [
                                                     ...(category.actions || []),
                                                     ...(category.subCategories?.flatMap(s => s.actions) || []),
-                                                  ].some(a => a.code !== action.code && next.has(a.code));
+                                                  ].some(a => !removal.has(a.code) && next.has(a.code));
                                                   if (!anyLeft) next.delete(category.viewCode);
                                                 }
                                                 return next;
