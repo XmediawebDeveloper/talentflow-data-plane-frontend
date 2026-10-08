@@ -1242,6 +1242,22 @@ function CurrentPlanContent() {
 
       const data = await response.json();
 
+      // 202: the billing system has not applied the change yet (e.g. a
+      // database migration failed and will be retried). The plan was NOT
+      // switched, so stay on the current plan - no logout, no success toast.
+      if (response.status === 202 && data.status === 'pending_retry') {
+        toast.info('Plan change pending', {
+          description: data.data?.message || 'Your plan change will be retried automatically. Your current plan stays active until it completes.',
+          duration: 8000,
+        });
+        setShowTCModal(false);
+        setSelectedQueuedUpgrade(null);
+        setTcAccepted(false);
+        window.dispatchEvent(new CustomEvent('notificationTrigger'));
+        await fetchQueuedUpgrades();
+        return;
+      }
+
       if (response.ok && (data.status === 'success' || data.status === 'partial')) {
         const appliedPlan = plans.find(p => p.name === selectedQueuedUpgrade.new_plan_name);
         const isApplyDowngrade = comparePlanTiers(
@@ -1284,6 +1300,11 @@ function CurrentPlanContent() {
         let errorMsg = typeof errorDetail === 'string'
           ? errorDetail
           : errorDetail?.message || data.data?.message || 'Failed to apply upgrade';
+        // A final failure from the billing system carries the invoice number
+        // so the user can quote it to support.
+        if (errorDetail && typeof errorDetail === 'object' && errorDetail.invoice_number) {
+          errorMsg = `${errorMsg} Reference: invoice ${errorDetail.invoice_number}.`;
+        }
 
         // Check for migration/database errors and show user-friendly message
         if (errorMsg.toLowerCase().includes('migration failed') ||
@@ -1723,6 +1744,18 @@ function CurrentPlanContent() {
           throw new Error('Request timed out. Please try again or contact support.');
         }
         throw fetchErr;
+      }
+
+      // 202: payment captured, but the billing system has not applied the
+      // plan yet (it retries automatically). The plan was NOT switched here.
+      if (response.status === 202 && data.status === 'pending_retry') {
+        toast.info('Payment received - plan setup pending', {
+          description: data.data?.message || 'Your new plan will be applied automatically. Your current plan stays active until then.',
+          duration: 10000,
+        });
+        setShowPaymentModal(false);
+        window.dispatchEvent(new CustomEvent('notificationTrigger'));
+        return;
       }
 
       if (response.ok && (data.status === 'success' || response.status === 200)) {
