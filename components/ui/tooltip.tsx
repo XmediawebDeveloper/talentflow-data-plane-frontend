@@ -140,12 +140,18 @@ export function Tooltip({ content, children, position = 'top', delay = 200 }: To
       {isVisible && typeof document !== 'undefined' && createPortal(
         <div
           ref={bubbleRef}
-          className="fixed z-[9999] w-max max-w-xs pointer-events-none animate-in fade-in duration-150"
+          // No entrance animation at all: the bubble appears in place. Any
+          // animation here read as the tooltip sliding in from the top of the
+          // page, because it is first mounted hidden at the viewport's
+          // top-left to be measured, then moved beside the trigger.
+          className="fixed z-[9999] w-max max-w-xs pointer-events-none"
           role="tooltip"
           style={{
             top: placement?.top ?? 0,
             left: placement?.left ?? 0,
             visibility: placement ? 'visible' : 'hidden',
+            transition: 'none',
+            animation: 'none',
           }}
         >
           <div className="relative bg-gray-700 text-white text-xs px-3 py-2 rounded-lg shadow-lg whitespace-normal">

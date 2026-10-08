@@ -1,13 +1,10 @@
 'use client';
 
 import { RESUME_EMAIL_SHARE_ENABLED } from '@/lib/constants/featureFlags';
-import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, Briefcase, GraduationCap, Star, Calendar, Zap, FileText, AlertCircle, Download, Clock, Building2, ChevronLeft, ChevronRight, ChevronDown, Code, Languages, BarChart3, CheckSquare, MessageSquare, Minus, BookOpen, ThumbsUp, ThumbsDown, Loader2, Sparkles, UserPlus, History, File, HardDrive, User, X, Eye, Share2, Paperclip, Send } from 'lucide-react';
-import { MiniPagination } from '@/components/ui/mini-pagination';
+import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, Briefcase, GraduationCap, Star, Calendar, Zap, FileText, AlertCircle, Download, Clock, Building2, ChevronLeft, ChevronRight, ChevronDown, Code, Languages, BarChart3, CheckSquare, MessageSquare, Minus, BookOpen, ThumbsUp, ThumbsDown, Loader2, Sparkles, UserPlus, History, File, HardDrive, User, X, Eye, Share2, Paperclip, Send, Plus } from 'lucide-react';
 import DetailedScorecardTab from './DetailedScorecardTab';
-import ViewResumeButton from '@/components/ui/view-resume-button';
 import { Button } from '@/components/ui/button';
 import { Tooltip } from '@/components/ui/tooltip';
-import { tabPill } from '@/components/ui/filter-pills';
 import ShareAssessmentModal from './ShareAssessmentModal';
 import InviteToAIInterviewFlow from './InviteToAIInterviewFlow';
 import InviteToAssessmentFlow from './InviteToAssessmentFlow';
@@ -16,7 +13,9 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePlanLock } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
-import { useJobInviteTargets } from '@/lib/hooks/useJobInviteTargets';
+import { useJobInviteTargets, isInvitableAssessment } from '@/lib/hooks/useJobInviteTargets';
+import CreateInviteTargetModal from './resume-scoring/CreateInviteTargetModal';
+import { buildCreateUrl, clearInviteHandoff, readInviteHandoff, saveInviteHandoff, withResumeInviteMarker, RESUME_INVITE_PARAM, type InviteHandoffKind } from '@/lib/utils/resumeScoringInviteHandoff';
 import ConfirmationDialog from '@/components/ConfirmationDialog';
 import { toast } from 'sonner';
 import RecordPager from '@/components/RecordPager';
@@ -124,6 +123,12 @@ interface ScoredResume {
   jobVersion?: number;  // The job's lineage version (v1, v2, ...)
 }
 
+/** One look for every header action (Share, Invite, View Resume, Download
+ *  Scorecard), copied from the Previous / Next pager in the breadcrumb bar:
+ *  white, brand-blue outline + text, filling solid brand-blue on hover. */
+const HEADER_ACTION_BTN =
+  'inline-flex items-center justify-center gap-2 h-10 px-4 text-sm font-semibold whitespace-nowrap rounded-lg border-2 border-brand-blue/60 bg-white text-brand-blue shadow-sm cursor-pointer transition-colors hover:bg-brand-blue hover:text-white hover:border-brand-blue focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-brand-blue disabled:hover:border-brand-blue/60';
+
 const DETAIL_TABS = ['overview', 'scoretable', 'personalinfo', 'viewjd'] as const;
 type DetailTab = typeof DETAIL_TABS[number];
 const DETAIL_TAB_STORAGE_KEY = 'resumeScoring.candidateDetail.activeTab';
@@ -139,7 +144,7 @@ interface CandidateScoringDetailPageProps {
   totalCount?: number;
   onPrev?: () => void;
   onNext?: () => void;
-  /** Steps through this candidate's other scored jobs (MiniPagination),
+  /** Steps through this candidate's other scored jobs (a RecordPager),
    *  shown beside the Version badge. */
   jobPager?: { page: number; total: number; onPageChange: (page: number) => void };
   /**
@@ -158,6 +163,19 @@ interface CandidateScoringDetailPageProps {
    */
   assessmentConfigured?: boolean;
   aiInterviewConfigured?: boolean;
+  /**
+   * Resume Scoring only: when the job has no AI Assessment / AI Interview
+   * yet, the Invite menu offers "+ Create ..." - the landing page's
+   * create -> come back -> invite round trip, for this one candidate.
+   */
+  allowCreateInviteTarget?: boolean;
+  /**
+   * Open another score of this candidate for this job — the Version
+   * dropdown's pick of a resume version that was scored here. Hosts move
+   * their own view to that score row (as Prev / Next do); without it the
+   * dropdown only previews versions.
+   */
+  onSelectScore?: (scoreId: string, resumeVersion: number) => void;
 }
 
 /**
@@ -178,7 +196,7 @@ function byNewestVersion(a: any, b: any): number {
   return bTime - aTime;
 }
 
-export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, onMinimize, currentIndex, totalCount, onPrev, onNext, jobPager, breadcrumbItems, assessmentConfigured, aiInterviewConfigured }: CandidateScoringDetailPageProps) {
+export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, onMinimize, currentIndex, totalCount, onPrev, onNext, jobPager, breadcrumbItems, assessmentConfigured, aiInterviewConfigured, allowCreateInviteTarget, onSelectScore }: CandidateScoringDetailPageProps) {
   const { isTenantAdmin, user, hasPermissionCode } = useAuth();
   const { hasPlanFeature, isPlanLocked } = usePlanLock();
   const canExport = isTenantAdmin || (user?.permissions?.canExport ?? false);
@@ -262,16 +280,27 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   // With no JD to check (the global scoring view's cross-job rows) there is
   // nothing to gate on, so the entries keep their permission-only behaviour and
   // the existing handlers report what's missing after the click.
+  /* Back from creating one: what this page itself just confirmed is live -
+     a host-supplied flag can still say "none" until the host reloads. */
+  const [publishedOnReturn, setPublishedOnReturn] = useState<{ assessment?: boolean; interview?: boolean }>({});
+  const assessmentLive = inviteTargets.assessmentConfigured || !!publishedOnReturn.assessment;
+  const aiInterviewLive = inviteTargets.aiInterviewConfigured || !!publishedOnReturn.interview;
   const canInviteAssessment =
-    mayInviteAssessment && !assessmentPlanLocked && (!inviteTargets.known || inviteTargets.assessmentConfigured);
+    mayInviteAssessment && !assessmentPlanLocked && (!inviteTargets.known || assessmentLive);
   const canInviteAIInterview =
-    mayInviteAIInterview && !aiInterviewPlanLocked && (!inviteTargets.known || inviteTargets.aiInterviewConfigured);
+    mayInviteAIInterview && !aiInterviewPlanLocked && (!inviteTargets.known || aiInterviewLive);
+  /* Permitted, in the plan, and the job settled as having none yet -> the
+     entry greys out with "+ Create ..." under it (Resume Scoring hosts only). */
+  const inviteTargetsSettled = inviteTargets.known && !inviteTargets.loading;
+  const assessmentMissing = !!allowCreateInviteTarget && mayInviteAssessment && !assessmentPlanLocked && inviteTargetsSettled && !assessmentLive;
+  const aiInterviewMissing = !!allowCreateInviteTarget && mayInviteAIInterview && !aiInterviewPlanLocked && inviteTargetsSettled && !aiInterviewLive;
   // Every option the user is permitted to pick is outside the plan.
   const invitePlanLocked = canInvite &&
     (!mayInviteAssessment || assessmentPlanLocked) && (!mayInviteAIInterview || aiInterviewPlanLocked);
   // Neither target exists → the Invite button itself is disabled rather than
   // opening a menu whose every entry dead-ends in "create one first".
-  const inviteDisabled = !canInviteAssessment && !canInviteAIInterview;
+  // A missing target still opens the menu - to offer creating it.
+  const inviteDisabled = !canInviteAssessment && !canInviteAIInterview && !assessmentMissing && !aiInterviewMissing;
 
   const [showInviteMenu, setShowInviteMenu] = useState(false);
   const inviteMenuRef = useRef<HTMLDivElement>(null);
@@ -333,6 +362,14 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   // `fullResumeData` because it comes from its own endpoint — the resume record
   // carries only a count, not the per-version rows.
   const [resumeVersions, setResumeVersions] = useState<any[]>([]);
+  /* Version dropdown (header badge), modelled on Job Details' JD version
+     picker: each upload of this resume, with its score for THIS job when it
+     has one. Keyed by the version's own resume id — every upload is its own
+     resume record, and a score points at the one it read. */
+  const [scoreByResumeId, setScoreByResumeId] = useState<Record<string, { scoreId: string; rating?: number | null; scoredAt?: string }>>({});
+  const [scoredResumeId, setScoredResumeId] = useState<string | null>(null);
+  const [showVersionMenu, setShowVersionMenu] = useState(false);
+  const versionMenuRef = useRef<HTMLDivElement>(null);
   // Version comparison, mirroring resume-view: tick two versions, diff them
   // old-vs-new. Holds ids in click order; a third tick evicts the oldest so the
   // pair keeps moving rather than making the user untick something first.
@@ -453,6 +490,17 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
 
           // IMPORTANT: API returns 'id' as score ID and 'resume_id' as the actual resume ID
           const actualResumeId = completeResumeData?.resume_id || resume.resumeId || resume.id;
+          // Version dropdown: this job's newest score per resume version.
+          const byResume: Record<string, { scoreId: string; rating?: number | null; scoredAt?: string }> = {};
+          for (const item of (scoredResumes.items || []) as any[]) {
+            if (!item?.resume_id) continue;
+            const prev = byResume[item.resume_id];
+            if (!prev || new Date(item.created_at || 0).getTime() > new Date(prev.scoredAt || 0).getTime()) {
+              byResume[item.resume_id] = { scoreId: item.id, rating: item.overall_rating_10, scoredAt: item.created_at };
+            }
+          }
+          setScoreByResumeId(byResume);
+          setScoredResumeId(actualResumeId);
           console.log('[CandidateScoringDetailPage] Score ID:', resume.id, 'Actual Resume ID:', actualResumeId);
 
           // Now fetch the full resume using the correct resume ID, plus its
@@ -829,6 +877,23 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
     .replace(/\*\*Certifications\*\*[:\s]*(?:None|None required|N\/A|Not required)\.?\s*/gi, '')
     .replace(/Certifications[:\s]*(?:None|None required|N\/A|Not required)\.?\s*/gi, '');
 
+  // Close the Version menu on outside click / Escape.
+  useEffect(() => {
+    if (!showVersionMenu) return;
+    const onDown = (e: MouseEvent) => {
+      if (versionMenuRef.current && !versionMenuRef.current.contains(e.target as Node)) setShowVersionMenu(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowVersionMenu(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [showVersionMenu]);
+
   // Close the Invite menu on outside click / Escape.
   useEffect(() => {
     if (!showInviteMenu) return;
@@ -1017,6 +1082,110 @@ Best regards`);
   const handleInviteForAIInterview = () => {
     setShowInviteMenu(false);
     setShowAIInviteFlow(true);
+  };
+
+  /* "+ Create AI Assessment / AI Interview" - the landing page's round trip
+     for this one candidate: CreateInviteTargetModal explains it, the create
+     flow opens with this page as its way back (`?resume_invite=1`), and on
+     return the job is re-checked and the invite opens for this candidate. */
+  const [createInviteKind, setCreateInviteKind] = useState<InviteHandoffKind | null>(null);
+  const inviteJobName = resume.jobCode || jdDetails?.job_id || 'This job';
+  const startCreateInviteTarget = () => {
+    const kind = createInviteKind;
+    if (!kind) return;
+    const returnUrl = withResumeInviteMarker(`${window.location.pathname}${window.location.search}`);
+    saveInviteHandoff({
+      kind,
+      jdId: jobId,
+      jdCode: resume.jobCode || jdDetails?.job_id,
+      jdTitle: jobTitle,
+      scoreIds: [resume.id],
+      candidateCount: 1,
+      view: 'job',
+      origin: 'detail',
+      candidateName: resume.candidateName,
+      returnUrl,
+    });
+    setCreateInviteKind(null);
+    router.push(buildCreateUrl(kind, { id: jobId, title: jobTitle }, returnUrl));
+  };
+
+  const handoffCheckedRef = useRef(false);
+  useEffect(() => {
+    if (handoffCheckedRef.current) return;
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has(RESUME_INVITE_PARAM)) return;
+    const h = readInviteHandoff();
+    if (!h || h.origin !== 'detail' || h.jdId !== jobId || !h.scoreIds.includes(resume.id)) return;
+    handoffCheckedRef.current = true;
+    // Drop the marker so a reload doesn't run this again.
+    params.delete(RESUME_INVITE_PARAM);
+    const q = params.toString();
+    window.history.replaceState(window.history.state, '', `${window.location.pathname}${q ? `?${q}` : ''}`);
+    clearInviteHandoff();
+    const what = h.kind === 'assessment' ? 'AI Assessment' : 'AI Interview';
+    const jobName = h.jdCode || h.jdTitle;
+    (async () => {
+      let live = false;
+      try {
+        if (h.kind === 'assessment') {
+          const { assessmentService } = await import('@/lib/services/assessmentService');
+          live = ((await assessmentService.list({ jd_id: h.jdId, page_size: 100 }))?.items || []).some(isInvitableAssessment);
+        } else {
+          const { aiInterviewService } = await import('@/lib/services/aiInterviewService');
+          live = !!(await aiInterviewService.findLiveConfigForJd(h.jdId));
+        }
+      } catch {
+        live = false;
+      }
+      if (!live) {
+        toast.info(`No ${what} was published for ${jobName} yet - create it from Invite when you are ready.`);
+        return;
+      }
+      setPublishedOnReturn((p) => ({ ...p, [h.kind]: true }));
+      inviteTargets.refresh();
+      toast.success(`${what} is live for ${jobName} - now invite ${resume.candidateName || 'this candidate'}.`);
+      if (h.kind === 'assessment') handleInviteForAssessment();
+      else setShowAIInviteFlow(true);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobId, resume.id]);
+
+  /* A job with none yet: the entry greyed with the reason under it, and
+     "+ Create ..." below - the same pair as the landing page's Actions menu. */
+  const renderCreateInviteItems = (kind: InviteHandoffKind) => {
+    const what = kind === 'assessment' ? 'AI Assessment' : 'AI Interview';
+    const Icon = kind === 'assessment' ? Mail : Sparkles;
+    return (
+      <>
+        <button
+          type="button"
+          role="menuitem"
+          disabled
+          className="w-full flex items-start gap-3 px-3 py-2.5 text-left cursor-not-allowed"
+        >
+          <span className="mt-0.5 w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+            <Icon className="w-4 h-4 text-gray-400" />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-sm font-medium text-gray-400">{kind === 'assessment' ? 'Assessment' : 'AI Interview'}</span>
+            <span className="block text-xs text-gray-400">{inviteJobName} has no {what} yet</span>
+          </span>
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          onClick={() => {
+            setShowInviteMenu(false);
+            setCreateInviteKind(kind);
+          }}
+          className="w-full flex items-center gap-2 pl-14 pr-3 py-2 text-left text-sm font-medium text-brand-blue hover:bg-brand-blue/5 transition-colors cursor-pointer"
+        >
+          <Plus className="w-4 h-4 flex-shrink-0" />
+          Create {what}
+        </button>
+      </>
+    );
   };
 
   /* The scorecard PDF, fetched once and used by both the download and the
@@ -1229,6 +1398,17 @@ Best regards`);
 
           <>
 
+      {createInviteKind && (
+        <CreateInviteTargetModal
+          kind={createInviteKind}
+          jdCode={resume.jobCode || jdDetails?.job_id}
+          jdTitle={jobTitle}
+          candidateCount={1}
+          onCancel={() => setCreateInviteKind(null)}
+          onStart={startCreateInviteTarget}
+        />
+      )}
+
       {/* Header */}
       <div>
         {/* Entity hero card — neutral card chrome + leading icon disc, matching
@@ -1238,38 +1418,97 @@ Best regards`);
           {/* Row 1: candidate identity. The record pager that used to sit on
               the right moved into the breadcrumb bar, as on job-details. */}
           <div className="flex items-start justify-between gap-4 mb-3">
-            <div className="flex min-w-0 items-start gap-3">
-              <div className="hidden sm:flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
-                <User className="h-4 w-4 text-brand-blue" />
-              </div>
-              <div className="min-w-0">
+            {/* pl-3 = the contact badges' own inset, so the name, the years
+                and the email / phone icons below start on one vertical line. */}
+            <div className="min-w-0 pl-3">
               <h1 className="text-lg sm:text-xl text-gray-900 font-semibold mb-2 truncate">{resume.candidateName}</h1>
               <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <p className="text-base sm:text-lg text-gray-700 font-medium">{resume.title || resume.experience || 'Candidate'}</p>
-                {resume.resumeVersion && (
+                {resume.resumeVersion && (resumeVersions.length === 0 ? (
                   <span className="inline-flex items-center px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md text-xs sm:text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200">
                     Version {resume.resumeVersion}
                   </span>
-                )}
+                ) : (
+                  /* Version dropdown — Job Details' JD version picker, for the
+                     resume: a version scored for this job opens that score; one
+                     never scored here opens its preview. */
+                  <div className="relative" ref={versionMenuRef}>
+                    <button
+                      type="button"
+                      onClick={() => setShowVersionMenu((v) => !v)}
+                      className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md text-xs sm:text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors cursor-pointer"
+                      aria-label={`Select resume version, currently Version ${resume.resumeVersion}`}
+                      aria-haspopup="menu"
+                      aria-expanded={showVersionMenu}
+                    >
+                      Version {resume.resumeVersion}
+                      <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showVersionMenu ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {showVersionMenu && (
+                      <div
+                        role="menu"
+                        aria-label="Resume versions"
+                        className="absolute left-0 top-full mt-2 w-64 max-w-[calc(100vw-1.5rem)] max-h-72 overflow-y-auto bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50"
+                      >
+                        {[...resumeVersions].sort(byNewestVersion).map((version, index) => {
+                          const versionNumber = version.version || 1;
+                          const isSelected = scoredResumeId ? version.id === scoredResumeId : versionNumber === resume.resumeVersion;
+                          const score = scoreByResumeId[version.id];
+                          const canOpenScore = !!score && !!onSelectScore;
+                          return (
+                            <button
+                              key={version.id}
+                              type="button"
+                              role="menuitem"
+                              disabled={isSelected}
+                              onClick={() => {
+                                setShowVersionMenu(false);
+                                if (canOpenScore) onSelectScore!(score.scoreId, versionNumber);
+                                else handleVersionPreview(version, versionNumber);
+                              }}
+                              title={canOpenScore ? `Open the score for Version ${versionNumber}` : `Preview Version ${versionNumber}`}
+                              className={`w-full px-3 py-2 text-left transition-colors ${isSelected ? 'bg-brand-blue/5 cursor-default' : 'hover:bg-brand-blue/5 cursor-pointer'}`}
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-xs font-semibold text-gray-900">Version {versionNumber}</span>
+                                <div className="flex items-center gap-1">
+                                  {isSelected ? (
+                                    <span className="text-2xs px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">Selected</span>
+                                  ) : null}
+                                  {index === 0 ? (
+                                    <span className="text-2xs px-1.5 py-0.5 rounded-full bg-success-subtle text-success">Latest</span>
+                                  ) : null}
+                                  {versionPreviewLoadingId === version.id && <Loader2 className="w-3 h-3 animate-spin text-gray-400" />}
+                                </div>
+                              </div>
+                              <div className="text-2xs text-gray-500 truncate">
+                                {score
+                                  ? `Scored${score.rating != null ? ` ${Number(score.rating).toFixed(1)}/10` : ''}${score.scoredAt ? ` • ${formatIST(score.scoredAt)}` : ''}`
+                                  : 'Not scored for this job • Preview'}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
-            {/* Top right of the header: this candidate's other scored jobs.
-                First and last are always shown (‹ 1 … 4 5 6 … 12 ›), with
-                "Job N of M" so the position is read, not guessed. */}
+            {/* Top right of the header: this candidate's other scored jobs, in
+                the breadcrumb's "‹ 6 / 87 ›" pager style (arrows only, so it
+                doesn't read as a second candidate Previous / Next). */}
             {jobPager && jobPager.total > 1 && (
-              <div className="flex flex-col items-center gap-1 flex-shrink-0">
-                <span className="text-xs text-gray-500 whitespace-nowrap text-center">
-                  Scored job <span className="font-semibold text-gray-700 tabular-nums">{jobPager.page}</span> of{' '}
-                  <span className="font-semibold text-gray-700 tabular-nums">{jobPager.total}</span>
-                </span>
-                <MiniPagination
-                  page={jobPager.page}
-                  totalPages={jobPager.total}
-                  onPageChange={jobPager.onPageChange}
-                  aria-label="Scored jobs"
-                  showEnds
-                />
-              </div>
+              <RecordPager
+                iconOnly
+                prevLabel="Previous scored job"
+                nextLabel="Next scored job"
+                currentIndex={jobPager.page - 1}
+                totalCount={jobPager.total}
+                onPrev={jobPager.page > 1 ? () => jobPager.onPageChange(jobPager.page - 1) : undefined}
+                onNext={jobPager.page < jobPager.total ? () => jobPager.onPageChange(jobPager.page + 1) : undefined}
+              />
             )}
           </div>
 
@@ -1297,16 +1536,15 @@ Best regards`);
               {/* Share leads the group: sending the resume on is a step that
                   usually comes before inviting anyone to anything. */}
               {RESUME_EMAIL_SHARE_ENABLED && canShareResume && viewResumeId && (
-                <Button
-                  variant="secondary"
-                  size="sm"
+                <button
+                  type="button"
                   onClick={openShareModal}
                   title="Share resume"
-                  icon={<Share2 className="w-4 h-4" />}
-                  className="whitespace-nowrap"
+                  className={HEADER_ACTION_BTN}
                 >
+                  <Share2 className="w-4 h-4 flex-shrink-0" />
                   Share
-                </Button>
+                </button>
               )}
 
               {/* Always rendered rather than hidden when canInvite is false —
@@ -1315,9 +1553,8 @@ Best regards`);
                   this page (Export, Download Scorecard, etc.) instead of the
                   button disappearing outright when nobody can use it. */}
               <div className="relative" ref={inviteMenuRef}>
-                <Button
-                  variant="primary"
-                  size="sm"
+                <button
+                  type="button"
                   onClick={() => canInvite && setShowInviteMenu(!showInviteMenu)}
                   disabled={inviteDisabled}
                   title={
@@ -1331,12 +1568,12 @@ Best regards`);
                   }
                   aria-haspopup="menu"
                   aria-expanded={showInviteMenu}
-                  className="whitespace-nowrap"
+                  className={HEADER_ACTION_BTN}
                 >
-                  <UserPlus className="w-4 h-4" />
+                  <UserPlus className="w-4 h-4 flex-shrink-0" />
                   Invite
-                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showInviteMenu ? 'rotate-180' : ''}`} />
-                </Button>
+                  <ChevronDown className={`w-3.5 h-3.5 flex-shrink-0 transition-transform ${showInviteMenu ? 'rotate-180' : ''}`} />
+                </button>
 
                 {showInviteMenu && canInvite && (
                   <div
@@ -1347,7 +1584,8 @@ Best regards`);
                         it and goes disabled when this JD has nothing to
                         invite to, so the next step is discoverable and the
                         tooltip can name what's blocking it. */}
-                    {mayInviteAssessment && (
+                    {mayInviteAssessment && assessmentMissing && renderCreateInviteItems('assessment')}
+                    {mayInviteAssessment && !assessmentMissing && (
                       <button
                         role="menuitem"
                         onClick={handleInviteForAssessment}
@@ -1363,7 +1601,8 @@ Best regards`);
                         </span>
                       </button>
                     )}
-                    {mayInviteAIInterview && (
+                    {mayInviteAIInterview && aiInterviewMissing && renderCreateInviteItems('interview')}
+                    {mayInviteAIInterview && !aiInterviewMissing && (
                       <button
                         role="menuitem"
                         onClick={handleInviteForAIInterview}
@@ -1383,20 +1622,29 @@ Best regards`);
                 )}
               </div>
 
-              <ViewResumeButton onClick={handleViewResume} loading={loadingResumeDetail} />
+              <button
+                type="button"
+                onClick={handleViewResume}
+                disabled={loadingResumeDetail}
+                className={HEADER_ACTION_BTN}
+              >
+                {loadingResumeDetail
+                  ? <Loader2 className="w-4 h-4 flex-shrink-0 animate-spin" />
+                  : <Eye className="w-4 h-4 flex-shrink-0" />}
+                View Resume
+              </button>
 
               {canExport && (
-                <Button
-                  variant="secondary"
-                  size="sm"
+                <button
+                  type="button"
                   onClick={handleDownloadScorecard}
                   title="Download scorecard PDF"
-                  icon={<Download className="w-4 h-4" />}
-                  className="whitespace-nowrap"
+                  className={HEADER_ACTION_BTN}
                 >
+                  <Download className="w-4 h-4 flex-shrink-0" />
                   <span className="hidden lg:inline">Download Scorecard</span>
                   <span className="lg:hidden">Scorecard</span>
-                </Button>
+                </button>
               )}
             </div>
           </div>
@@ -1477,9 +1725,17 @@ Best regards`);
             crumb link behind it and navigate away. Same fix as job-details. */}
         <div
           style={{ top: tabBarTop }}
-          className="sticky z-20 bg-white rounded-t-xl border-x-2 border-t-2 border-gray-200 shadow-sm"
+          className="sticky z-20 bg-gray-50 rounded-t-xl border-x-2 border-t-2 border-gray-200"
         >
-          <div className="flex gap-2 px-3 sm:px-6 py-2 overflow-x-auto scrollbar-hide">
+          {/* Folder tabs: the strip's bottom rule is an INSET shadow, which
+              paints beneath the tabs, so the active tab's white face covers it
+              and runs straight into the white panel below — the tab reads as
+              part of the page it opens. A real border-bottom + -mb-px would be
+              clipped here, since overflow-x-auto also clips the y axis. */}
+          <div
+            role="tablist"
+            className="flex items-end gap-1 px-3 sm:px-6 pt-2 overflow-x-auto scrollbar-hide shadow-[inset_0_-1px_0_var(--color-gray-200)]"
+          >
             {[
               { id: 'overview', label: 'Overview' },
               { id: 'scoretable', label: 'Score Table' },
@@ -1488,10 +1744,16 @@ Best regards`);
             ].map((tab) => (
               <button
                 key={tab.id}
+                role="tab"
+                aria-selected={activeTab === tab.id}
                 onClick={() => setActiveTab(tab.id as DetailTab)}
-                /* Shared Job Openings tab-pill chrome, so the candidate
-                   drill-down's tabs read as the same system as the list. */
-                className={`${tabPill(activeTab === tab.id)} whitespace-nowrap`}
+                // Both states carry the same borders (transparent when idle)
+                // so switching tabs never shifts the row by a pixel.
+                className={`px-3 sm:px-6 py-2.5 sm:py-3 text-xs sm:text-sm transition-colors rounded-t-lg whitespace-nowrap cursor-pointer border-x border-t-2 ${
+                  activeTab === tab.id
+                    ? 'font-semibold text-brand-blue bg-white border-x-gray-200 border-t-brand-blue'
+                    : 'font-medium text-gray-600 border-transparent hover:text-gray-900 hover:bg-white/70'
+                }`}
               >
                 {tab.label}
               </button>

@@ -2485,6 +2485,11 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         resume={viewingScoredResume}
         jobTitle={job.title}
         jobId={job.id}
+        // Version dropdown: that version's score for this job, in place.
+        onSelectScore={(scoreId) => {
+          const r = scoredResumes.find((row: any) => row.id === scoreId);
+          if (r) setViewingScoredResume(toCandidateDetail(r));
+        }}
         onBack={() => setViewingScoredResume(null)}
         breadcrumbItems={[
           { label: 'Dashboard', href: '/dashboard' },

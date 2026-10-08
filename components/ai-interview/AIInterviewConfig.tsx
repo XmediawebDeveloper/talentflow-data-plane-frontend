@@ -1,6 +1,6 @@
 'use client';
 
-import { handoffContinueLabel, safeResumeScoringReturnUrl } from '@/lib/utils/resumeScoringInviteHandoff';
+import { handoffContinueLabel, safeResumeScoringReturnUrl, useHandoffCandidateCrumb } from '@/lib/utils/resumeScoringInviteHandoff';
 import {
   Clock, Plus, X, Sparkles, CheckCircle2, Loader2,
   Users, Brain, Shield, Globe, Save, ChevronDown, ChevronUp,
@@ -1357,6 +1357,8 @@ export default function AIInterviewConfig() {
   // rides every step, and publishing leads straight back there to invite.
   const fromResumeScoring = searchParams.get('from') === 'resume-scoring';
   const resumeScoringReturn = safeResumeScoringReturnUrl(searchParams.get('returnUrl'));
+  // Started from one candidate's page: the trail names that candidate.
+  const candidateCrumb = useHandoffCandidateCrumb();
   const resumeScoringOrigin = fromResumeScoring
     ? `&from=resume-scoring&returnUrl=${encodeURIComponent(resumeScoringReturn)}`
     : '';
@@ -2997,7 +2999,8 @@ export default function AIInterviewConfig() {
               fromResumeScoring
                 ? [
                     { label: 'Dashboard', href: '/dashboard' },
-                    { label: 'Resume Scoring', href: resumeScoringReturn },
+                    { label: 'Resume Scoring', href: candidateCrumb ? '/recruitment/resume-scoring' : resumeScoringReturn },
+                    ...(candidateCrumb ? [candidateCrumb] : []),
                     { label: 'Create AI Interview' },
                     { label: 'Configure' },
                   ]

@@ -1,7 +1,7 @@
 'use client';
 
 import ChipsReveal from '@/components/ui/chips-reveal';
-import { handoffContinueLabel, safeResumeScoringReturnUrl } from '@/lib/utils/resumeScoringInviteHandoff';
+import { handoffContinueLabel, safeResumeScoringReturnUrl, useHandoffCandidateCrumb } from '@/lib/utils/resumeScoringInviteHandoff';
 import { ArrowRight, Building2, Clock, Briefcase, Sliders, Plus, X, Share2, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Star, Video, Info, Eye, Edit3, MoreVertical, Loader2, Lock, Search, ChevronDown, RefreshCw } from 'lucide-react';
 import type { AssessmentResponse, HRTopic } from '@/lib/services/assessmentService';
 import { Button } from '@/components/ui/button';
@@ -659,6 +659,8 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
   // published screen leads straight back there to send the invites.
   const fromResumeScoring = !embedded && searchParams.get('from') === 'resume-scoring';
   const returnUrl = searchParams.get('returnUrl');
+  // Started from one candidate's page: the trail names that candidate.
+  const candidateCrumb = useHandoffCandidateCrumb();
   // JD title carried in the URL. The JD list is fetched async, so without this
   // the JD crumb would render a placeholder on first paint and visibly swap to
   // the real title a moment later.
@@ -957,7 +959,10 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
       const back = safeResumeScoringReturnUrl(returnUrl);
       return [
         { label: 'Dashboard', onClick: () => attemptStepChange(() => router.push('/dashboard')) },
-        { label: 'Resume Scoring', onClick: () => attemptStepChange(() => router.push(back)) },
+        { label: 'Resume Scoring', onClick: () => attemptStepChange(() => router.push(candidateCrumb ? '/recruitment/resume-scoring' : back)) },
+        ...(candidateCrumb
+          ? [{ label: candidateCrumb.label, onClick: () => attemptStepChange(() => router.push(back)) }]
+          : []),
         ...(step === 'publish' || step === 'preview'
           ? buildStepCrumbs()
           : [{ label: 'Create AI Assessment' }]),

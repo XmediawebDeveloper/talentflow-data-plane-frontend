@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { ArrowDown, ArrowUp, CheckSquare, ChevronDown, Square, X } from 'lucide-react';
+import { ArrowUpDown, CheckSquare, ChevronDown, Square, X } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -129,12 +129,13 @@ export function SortByControl<T extends string>({
         <button
           type="button"
           onClick={onToggleOrder}
-          className="ml-0.5 h-7 w-7 flex items-center justify-center rounded-md bg-white text-gray-700 hover:bg-brand-blue/10 hover:text-brand-blue transition-colors"
-          title={order === 'asc' ? 'Ascending — click for descending' : 'Descending — click for ascending'}
+          className="ml-0.5 h-7 w-7 flex items-center justify-center rounded-md bg-white text-gray-700 hover:bg-brand-blue/10 hover:text-brand-blue transition-colors cursor-pointer"
+          title={order === 'asc' ? 'Sort Descending' : 'Sort Ascending'}
           aria-label={order === 'asc' ? 'Sort descending' : 'Sort ascending'}
         >
-          {/* One arrow: up = ascending, down = descending. */}
-          {order === 'asc' ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />}
+          {/* The Job Descriptions list's icon: the up/down pair, flipped for
+              descending (JobsListing.tsx). */}
+          <ArrowUpDown className={`w-3.5 h-3.5 transition-transform ${order === 'asc' ? '' : 'rotate-180'}`} />
         </button>
       </div>
     </div>

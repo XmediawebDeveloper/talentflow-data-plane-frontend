@@ -64,7 +64,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(({
   // `[&>svg]:shrink-0` keeps an icon at its intended size even when a caller
   // pins a narrow width (e.g. icon-only `h-9 w-9`) — otherwise the flex child
   // collapses and the icon disappears.
-  const baseClasses = 'inline-flex items-center justify-center gap-2 rounded-lg transition-all duration-150 font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--ring)] disabled:opacity-50 disabled:cursor-not-allowed select-none whitespace-nowrap [&>svg]:shrink-0';
+  const baseClasses = 'cursor-pointer inline-flex items-center justify-center gap-2 rounded-lg transition-all duration-150 font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--ring)] disabled:opacity-50 disabled:cursor-not-allowed select-none whitespace-nowrap [&>svg]:shrink-0';
 
   const variantClasses: Record<ButtonTone, Record<CanonicalVariant, string>> = {
     default: {
