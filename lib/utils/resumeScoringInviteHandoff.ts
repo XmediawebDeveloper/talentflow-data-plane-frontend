@@ -1,3 +1,5 @@
+import { useMemo, useSyncExternalStore } from 'react';
+
 /**
  * Resume Scoring → "create the assessment / AI interview first" → back to
  * Resume Scoring → invite.
@@ -31,6 +33,16 @@ export interface InviteHandoff {
   selectedJobKeys?: string[];
   partialJobRows?: Record<string, string[]>;
   selectedScoredResumes?: string[];
+  /**
+   * Where the flow started: the landing page's bulk Actions ('list', the
+   * default) or one candidate's scoring page ('detail'). A 'detail' hand-off
+   * is finished by CandidateScoringDetailPage itself — the landing page
+   * leaves it alone — and the create pages' breadcrumb names the candidate.
+   */
+  origin?: 'list' | 'detail';
+  /** 'detail' only: the candidate's name and the page to come back to. */
+  candidateName?: string;
+  returnUrl?: string;
   createdAt: number;
 }
 
@@ -72,9 +84,10 @@ export function clearInviteHandoff(): void {
   }
 }
 
-/** The create page for `kind`, opened for this JD, returning to Resume Scoring. */
-export function buildCreateUrl(kind: InviteHandoffKind, jd: { id: string; title?: string }): string {
-  const p = new URLSearchParams({ jd_id: jd.id, from: 'resume-scoring', returnUrl: RESUME_SCORING_RETURN_URL });
+/** The create page for `kind`, opened for this JD, returning to Resume Scoring
+ *  (or to `returnUrl`, a Resume Scoring URL such as one candidate's page). */
+export function buildCreateUrl(kind: InviteHandoffKind, jd: { id: string; title?: string }, returnUrl: string = RESUME_SCORING_RETURN_URL): string {
+  const p = new URLSearchParams({ jd_id: jd.id, from: 'resume-scoring', returnUrl: safeResumeScoringReturnUrl(returnUrl) });
   if (kind === 'assessment') {
     p.set('step', 'configure');
     if (jd.title) p.set('jd_title', jd.title);
@@ -86,6 +99,43 @@ export function buildCreateUrl(kind: InviteHandoffKind, jd: { id: string; title?
 /** A `returnUrl` is followed only when it is this app's Resume Scoring page. */
 export function safeResumeScoringReturnUrl(url: string | null | undefined): string {
   return url && url.startsWith('/recruitment/resume-scoring') ? url : RESUME_SCORING_RETURN_URL;
+}
+
+/** The current page's URL with the "came back from a create" marker added. */
+export function withResumeInviteMarker(pathAndQuery: string): string {
+  const [path, query = ''] = pathAndQuery.split('?');
+  const p = new URLSearchParams(query);
+  p.set(RESUME_INVITE_PARAM, '1');
+  return `${path}?${p.toString()}`;
+}
+
+/**
+ * The candidate crumb for the create pages' trail when the flow was started
+ * from one candidate's page — `Dashboard › Resume Scoring › <candidate> ›
+ * Create …` — or null. Read after mount (sessionStorage is client-only), so
+ * the server render and the first client render agree.
+ */
+export function useHandoffCandidateCrumb(): { label: string; href: string } | null {
+  // Snapshot = the raw stored string (stable between reads); the server
+  // snapshot is null, so the server and the first client render agree.
+  const raw = useSyncExternalStore(
+    () => () => {},
+    () => {
+      try {
+        return sessionStorage.getItem(KEY);
+      } catch {
+        return null;
+      }
+    },
+    () => null,
+  );
+  return useMemo(() => {
+    if (!raw) return null;
+    const h = readInviteHandoff();
+    return h?.origin === 'detail' && h.returnUrl
+      ? { label: h.candidateName || 'Candidate', href: safeResumeScoringReturnUrl(h.returnUrl) }
+      : null;
+  }, [raw]);
 }
 
 /** "Continue — invite 3 candidates" for the creation flow's last screen. */

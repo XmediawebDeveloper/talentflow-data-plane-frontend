@@ -1187,6 +1187,9 @@ export default function ResumeScoringPage({
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (!params.has(RESUME_INVITE_PARAM)) return;
+    // Started from one candidate's page: that page finishes it (and drops
+    // the marker) once it has re-opened — nothing to restore here.
+    if (readInviteHandoff()?.origin === 'detail') return;
     // Drop the marker so a reload doesn't run this again.
     params.delete(RESUME_INVITE_PARAM);
     const q = params.toString();
@@ -2266,6 +2269,12 @@ export default function ResumeScoringPage({
 
     return (
       <CandidateScoringDetailPage
+        allowCreateInviteTarget
+        // Version dropdown: that version's score for this job, in place.
+        onSelectScore={(scoreId, resumeVersion) => {
+          const row = _scoredList.find((r: any) => r.id === scoreId);
+          _goToCandidate(row ?? { ...selectedCandidateForView, id: scoreId, resumeVersion, version: resumeVersion });
+        }}
         resume={selectedCandidateForView}
         jobTitle={selectedHistoryItem.jobTitle}
         jobId={selectedHistoryItem.jobId}
@@ -2373,6 +2382,12 @@ export default function ResumeScoringPage({
     };
     return (
       <CandidateScoringDetailPage
+        allowCreateInviteTarget
+        // Version dropdown: that version's score for this job, in place.
+        onSelectScore={(scoreId, resumeVersion) => {
+          const row = globalScoredResumesVersioned.find((r: any) => r.id === scoreId);
+          _goToGlobalCandidate(row ?? { ...selectedCandidateForView, id: scoreId, resumeVersion, version: resumeVersion });
+        }}
         resume={selectedCandidateForView}
         jobTitle={candidateJobTitle}
         jobId={candidateJdId}
