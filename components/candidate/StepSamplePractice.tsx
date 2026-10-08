@@ -19,6 +19,7 @@ import { recordPcm16 } from '@/lib/utils/pcmEnroll';
 // reading the mic AnalyserNode), so practice looks identical.
 import { MicWaveform } from '@/components/ai-interview/MicWaveform';
 import { canOpenDevice } from '@/lib/utils/mediaDeviceProbe';
+import { revealAfterPaint } from '@/lib/utils/candidateScroll';
 
 // ── Component props ──────────────────────────────────────────────────────────
 
@@ -164,11 +165,24 @@ function PracticeTour({
     return () => { clearInterval(iv); window.removeEventListener('resize', compute); };
   }, [step, stepIndex, panelRef]);
 
+  // Bring each step's target into view (the panel is taller than a phone or a
+  // short laptop screen, so later targets start below the fold). Only scrolls
+  // when the target is hidden; the pinned header is cleared by the layout's
+  // scroll-padding.
+  const stepId = step?.id;
+  useEffect(() => {
+    if (!stepId) return;
+    revealAfterPaint(() => panelRef.current?.querySelector(`[data-tour="${stepId}"]`), 'center');
+  }, [stepId, panelRef]);
+
   if (!step) return null;
   const isLast = stepIndex >= steps.length - 1;
 
   return (
-    <div className="absolute inset-0 z-30">
+    // pointer-events-none on the wrapper: the dim + ring are visual only, so
+    // Start Practice / Repeat / Next stay clickable while the tour is open.
+    // Only the tooltip card takes clicks (pointer-events-auto).
+    <div className="absolute inset-0 z-30 pointer-events-none">
       {/* Spotlight ring — its huge box-shadow dims everything except the target.
           pointer-events-none so the candidate can still click through. */}
       {ring ? (
@@ -180,18 +194,21 @@ function PracticeTour({
         <div className="absolute inset-0 bg-[var(--raw-020614)]/70 pointer-events-none" />
       )}
 
-      {/* Tooltip card — fixed at the bottom of the panel (reliable placement). */}
-      <div className="absolute left-1/2 bottom-4 -translate-x-1/2 w-[min(92%,420px)] bg-white rounded-xl shadow-2xl ring-1 ring-black/5 p-4 z-40">
+      {/* Tooltip card — fixed to the bottom of the VIEWPORT (not the panel),
+          so Next/Skip stay on screen however tall the panel is and wherever
+          the current target has scrolled to. z-50 sits above the pinned
+          header + stepper (z-40). */}
+      <div className="fixed left-1/2 bottom-4 -translate-x-1/2 w-[min(92vw,420px)] bg-white rounded-xl shadow-2xl ring-1 ring-black/5 p-4 z-50 pointer-events-auto">
         <div className="flex items-center justify-between mb-1">
           <p className="text-sm font-bold text-gray-900">{step.title}</p>
           <span className="text-2xs font-medium text-gray-400">{stepIndex + 1} / {steps.length}</span>
         </div>
         <p className="text-sm text-gray-600 leading-relaxed">{step.body}</p>
         <div className="flex items-center justify-end gap-2 mt-3">
-          <button type="button" onClick={onClose} className="px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors">
+          <button type="button" onClick={onClose} className="min-h-10 px-3 py-2 rounded-lg text-xs font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors">
             Skip tour
           </button>
-          <button type="button" onClick={onNext} className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white bg-[var(--raw-3b82f6)] hover:bg-[var(--raw-2563eb)] transition-colors">
+          <button type="button" onClick={onNext} className="min-h-10 px-4 py-2 rounded-lg text-xs font-semibold text-white bg-[var(--raw-3b82f6)] hover:bg-[var(--raw-2563eb)] transition-colors">
             {isLast ? 'Got it' : 'Next'}
           </button>
         </div>
@@ -270,6 +287,12 @@ export default function StepSamplePractice({
   const replayVideoRef = useRef<HTMLVideoElement>(null);
   // Scopes the coach-mark tour spotlight to the mock panel (not the browser).
   const panelRef = useRef<HTMLDivElement>(null);
+  // Auto-scroll targets: the chat card (on Start), the control bar (while
+  // answering / "Are you done?"), and the footer's Start Interview button
+  // (after "Review my practice first").
+  const chatCardRef = useRef<HTMLDivElement>(null);
+  const controlBarRef = useRef<HTMLDivElement>(null);
+  const startInterviewRef = useRef<HTMLButtonElement>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -1196,7 +1219,29 @@ export default function StepSamplePractice({
     if (!el) return;
     const id = requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
     return () => cancelAnimationFrame(id);
-  }, [started, isRecording, isTranscribing, aiSpeaking, transcript, typedAnswer, timedUp, practiceDone]);
+  }, [started, isRecording, isTranscribing, aiSpeaking, transcript, typedAnswer, timedUp, practiceDone, transcribeError]);
+
+  // Page-level auto-scrolls (each only moves the page if the target is
+  // hidden — on phones/tablets the panel stacks taller than the screen, and
+  // on short laptops its lower half sits below the fold):
+  //  - Start Practice → the chat card, so the question and controls are in view.
+  useEffect(() => {
+    if (started) revealAfterPaint(() => chatCardRef.current, 'nearest');
+  }, [started]);
+  //  - the mic opens, or "Are you done with your response?" appears → the
+  //    control bar (Next / Submit live there).
+  useEffect(() => {
+    if (isRecording || doneConfirm) revealAfterPaint(() => controlBarRef.current, 'nearest');
+  }, [isRecording, doneConfirm]);
+  //  - "Review my practice first" closes the popup → the footer's Start
+  //    Interview button, so the way forward is visible.
+  const startPopupWasOpen = useRef(false);
+  useEffect(() => {
+    if (startPopupWasOpen.current && !showStartPopup) {
+      revealAfterPaint(() => startInterviewRef.current, 'nearest');
+    }
+    startPopupWasOpen.current = showStartPopup;
+  }, [showStartPopup]);
   // NOTE: the "start the interview" popup is NOT triggered here on practiceDone
   // (that showed it too early). It's revealed from speakClosing()'s onend so it
   // appears only after Bina finishes the sign-off. See speakClosing().
@@ -1251,12 +1296,12 @@ export default function StepSamplePractice({
               <p className="text-2xs text-white/70">Guided warm-up · nothing is saved</p>
             </div>
           </div>
-          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+          <div className="flex flex-wrap items-center justify-end gap-1.5 sm:gap-2 flex-shrink-0">
             <span className="hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white/15 text-white text-2xs font-medium ring-1 ring-white/20">
               <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2l7 4v6c0 5-3.5 8-7 10-3.5-2-7-5-7-10V6l7-4z" /></svg>
               ID Verified
             </span>
-            <span className="inline-flex items-center px-2 py-1 rounded-md bg-white/15 text-white text-2xs font-semibold ring-1 ring-white/20">
+            <span className="hidden sm:inline-flex items-center px-2 py-1 rounded-md bg-white/15 text-white text-2xs font-semibold ring-1 ring-white/20">
               Practice · Q 1/1
             </span>
             <span data-tour="timer" className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-2xs font-bold tabular-nums ring-1 ${
@@ -1271,7 +1316,7 @@ export default function StepSamplePractice({
             <button
               type="button"
               onClick={() => setTourStep(0)}
-              className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white/10 hover:bg-white/20 text-white text-2xs font-medium ring-1 ring-white/20 transition-colors"
+              className="inline-flex min-h-8 items-center gap-1 px-2.5 py-1.5 rounded-md bg-white/10 hover:bg-white/20 text-white text-2xs font-medium ring-1 ring-white/20 transition-colors"
               title="Show the guided tour"
             >
               ? Tips
@@ -1281,9 +1326,9 @@ export default function StepSamplePractice({
 
         {/* 2-Column Grid — LEFT: Bina avatar + your webcam · RIGHT: chat.
             Mirrors the real interview screen (kept inside this panel, not fullscreen). */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-0">
+        <div className="grid grid-cols-1 md:grid-cols-5 lg:grid-cols-3 gap-0">
         {/* ── Left: Bina avatar (top) + your webcam (bottom) ── */}
-        <div className="lg:col-span-1 flex flex-col bg-[var(--raw-0a1020)]">
+        <div className="md:col-span-2 lg:col-span-1 flex flex-col bg-[var(--raw-0a1020)]">
           {/* Bina avatar */}
           {/* Inset card with rounded corners, matching the webcam frame (live parity). */}
           <div data-tour="linda" className="relative flex-1 flex flex-col items-center justify-center p-5 gap-2.5 mx-3 mt-3 rounded-xl bg-white/[0.04] overflow-hidden" style={{ minHeight: '220px' }}>
@@ -1349,8 +1394,8 @@ export default function StepSamplePractice({
               )}
               {recordedVideoUrl && !isRecording && !isTranscribing && (
                 <div className="absolute top-2 right-2 flex items-center bg-black/70 backdrop-blur-sm rounded-full p-0.5 gap-0.5">
-                  <button type="button" onClick={() => setShowReplay(false)} className={`px-2.5 py-1 rounded-full text-2xs font-semibold transition-colors ${!showReplay ? 'bg-white text-gray-900' : 'text-gray-400 hover:text-white'}`}>Live</button>
-                  <button type="button" onClick={() => setShowReplay(true)} className={`px-2.5 py-1 rounded-full text-2xs font-semibold transition-colors ${showReplay ? 'bg-white text-gray-900' : 'text-gray-400 hover:text-white'}`}>Replay</button>
+                  <button type="button" onClick={() => setShowReplay(false)} className={`min-h-8 px-3 py-1.5 rounded-full text-2xs font-semibold transition-colors ${!showReplay ? 'bg-white text-gray-900' : 'text-gray-400 hover:text-white'}`}>Live</button>
+                  <button type="button" onClick={() => setShowReplay(true)} className={`min-h-8 px-3 py-1.5 rounded-full text-2xs font-semibold transition-colors ${showReplay ? 'bg-white text-gray-900' : 'text-gray-400 hover:text-white'}`}>Replay</button>
                 </div>
               )}
             </div>
@@ -1359,41 +1404,7 @@ export default function StepSamplePractice({
 
         {/* ── Right: chat thread + controls ── */}
         {/* Inset card with rounded corners, matching the webcam frame (live parity). */}
-        <div className="relative lg:col-span-2 flex flex-col bg-[var(--raw-060d1a)] m-3 rounded-xl overflow-hidden" style={{ minHeight: '360px' }}>
-          {/* Bottom-centered status banner (matches the real interview): red
-              "Hold on — Bina is speaking" while she talks, green "Your turn"
-              while the mic is open. Floats above the control bar. */}
-          {(() => {
-            const variant: 'hold' | 'turn' | null =
-              aiSpeaking ? 'hold'
-              : (started && isRecording) ? 'turn'
-              : null;
-            if (!variant) return null;
-            const cfg = variant === 'turn'
-              ? { grad: 'from-emerald-400 to-teal-500', ring: 'ring-emerald-200/60', glow: 'shadow-emerald-500/30', title: 'Your turn — speak now', subtitle: 'Microphone is active · Bina is listening' }
-              : { grad: 'from-rose-500 to-red-600', ring: 'ring-rose-200/50', glow: 'shadow-red-600/30', title: 'Hold on — Bina is speaking', subtitle: 'Please wait until she finishes the question' };
-            return (
-              <div className="absolute inset-x-0 bottom-[64px] z-30 flex justify-center px-4 pt-10 pb-3 pointer-events-none bg-gradient-to-t from-[var(--raw-060d1a)] via-[var(--raw-060d1a)] via-70% to-transparent">
-                <div className={`relative flex items-center gap-3 pl-3 pr-4 py-2.5 rounded-2xl bg-gradient-to-br ${cfg.grad} ring-1 ${cfg.ring} shadow-2xl ${cfg.glow} backdrop-blur-md min-w-[240px] max-w-[94%]`}>
-                  <div className="relative shrink-0">
-                    <div className="w-9 h-9 rounded-full bg-white/25 ring-1 ring-white/40 flex items-center justify-center">
-                      {variant === 'turn' ? (
-                        <svg className="w-4.5 h-4.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" /><path strokeLinecap="round" strokeLinejoin="round" d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" y1="19" x2="12" y2="23" strokeLinecap="round" /><line x1="8" y1="23" x2="16" y2="23" strokeLinecap="round" /></svg>
-                      ) : (
-                        <svg className="w-4.5 h-4.5 text-white" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>
-                      )}
-                    </div>
-                    <span className="absolute inset-0 rounded-full ring-2 ring-white/50 animate-ping opacity-40" />
-                  </div>
-                  <div className="relative min-w-0">
-                    <span className="text-white font-bold block leading-tight" style={{ fontSize: 14 }}>{cfg.title}</span>
-                    <span className="text-white/85 text-2xs leading-snug block">{cfg.subtitle}</span>
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
-
+        <div ref={chatCardRef} className="relative md:col-span-3 lg:col-span-2 flex flex-col bg-[var(--raw-060d1a)] m-3 rounded-xl overflow-hidden" style={{ minHeight: '360px' }}>
           {/* Pre-turn "Get ready to answer" 3-2-1 — same as the live interview
               (H2 shine, no circle, PRE_TURN_TICK_MS per number). Lighter sky
               shades than live because this chat panel is dark. */}
@@ -1473,7 +1484,7 @@ export default function StepSamplePractice({
             </div>
           )}
           {/* Chat thread — Bina bubbles (left) + your answer bubble (right) */}
-          <div ref={chatScrollRef} data-tour="answer" className="flex-1 overflow-y-auto p-4 pb-20 space-y-3" style={{ maxHeight: '420px' }}>
+          <div ref={chatScrollRef} data-tour="answer" className="flex-1 overflow-y-auto p-4 pb-28 space-y-3" style={{ maxHeight: '420px' }}>
             {/* Bina greeting */}
             <div className="flex items-start gap-2">
               <div className="w-6 h-6 rounded-full bg-[var(--raw-7c3aed)] flex items-center justify-center flex-shrink-0 mt-0.5"><MessageSquare className="w-3.5 h-3.5 text-white" /></div>
@@ -1552,12 +1563,46 @@ export default function StepSamplePractice({
           {/* Control bar — like the real interview: the mic auto-listens (no
               Start/Stop button), a live waveform shows you're heard, and you
               Repeat the question or move on with Next. */}
-          <div className="border-t border-white/[0.07] p-3">
+          <div ref={controlBarRef} className="relative border-t border-white/[0.07] p-3">
+            {/* Bottom-centered status banner (matches the real interview): red
+                "Hold on — Bina is speaking" while she talks, green "Your turn"
+                while the mic is open. Floats above the control bar. */}
+            {(() => {
+              const variant: 'hold' | 'turn' | null =
+                aiSpeaking ? 'hold'
+                : (started && isRecording) ? 'turn'
+                : null;
+              if (!variant) return null;
+              const cfg = variant === 'turn'
+                ? { grad: 'from-emerald-400 to-teal-500', ring: 'ring-emerald-200/60', glow: 'shadow-emerald-500/30', title: 'Your turn — speak now', subtitle: 'Microphone is active · Bina is listening' }
+                : { grad: 'from-rose-500 to-red-600', ring: 'ring-rose-200/50', glow: 'shadow-red-600/30', title: 'Hold on — Bina is speaking', subtitle: 'Please wait until she finishes the question' };
+              return (
+                <div className="absolute inset-x-0 bottom-full z-30 flex justify-center px-4 pt-10 pb-3 pointer-events-none bg-gradient-to-t from-[var(--raw-060d1a)] via-[var(--raw-060d1a)] via-70% to-transparent">
+                  <div className={`relative flex items-center gap-3 pl-3 pr-4 py-2.5 rounded-2xl bg-gradient-to-br ${cfg.grad} ring-1 ${cfg.ring} shadow-2xl ${cfg.glow} backdrop-blur-md min-w-0 sm:min-w-[240px] max-w-[94%]`}>
+                    <div className="relative shrink-0">
+                      <div className="w-9 h-9 rounded-full bg-white/25 ring-1 ring-white/40 flex items-center justify-center">
+                        {variant === 'turn' ? (
+                          <svg className="w-4.5 h-4.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" /><path strokeLinecap="round" strokeLinejoin="round" d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" y1="19" x2="12" y2="23" strokeLinecap="round" /><line x1="8" y1="23" x2="16" y2="23" strokeLinecap="round" /></svg>
+                        ) : (
+                          <svg className="w-4.5 h-4.5 text-white" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>
+                        )}
+                      </div>
+                      <span className="absolute inset-0 rounded-full ring-2 ring-white/50 animate-ping opacity-40" />
+                    </div>
+                    <div className="relative min-w-0">
+                      <span className="text-white font-bold block leading-tight" style={{ fontSize: 14 }}>{cfg.title}</span>
+                      <span className="text-white/85 text-2xs leading-snug block">{cfg.subtitle}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
             {micReady ? (
-              <div className="flex items-center gap-3">
-                {/* Mic status + live waveform (auto-recording) */}
-                <div data-tour="record" className="flex-1 min-w-0 flex items-center gap-3 bg-[var(--raw-0f1a2e)] border border-white/[0.06] rounded-xl px-3 py-2">
-                  <span className={`text-xs font-medium whitespace-nowrap ${
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                {/* Mic status + live waveform (auto-recording). Full width on
+                    its own row below sm, so Repeat/Next get the row under it. */}
+                <div data-tour="record" className="flex-1 basis-full sm:basis-auto min-w-0 flex items-center gap-3 bg-[var(--raw-0f1a2e)] border border-white/[0.06] rounded-xl px-3 py-2">
+                  <span className={`text-xs font-medium truncate ${
                     isRecording ? 'text-[var(--raw-ef4444)]' : isTranscribing ? 'text-[var(--raw-60a5fa)]' : practiceDone ? 'text-emerald-400' : aiSpeaking ? 'text-[var(--raw-a78bfa)]' : 'text-[var(--raw-94a3b8)]'
                   }`}>
                     {!started ? 'Press Start to begin'
@@ -1568,7 +1613,7 @@ export default function StepSamplePractice({
                       : aiSpeaking ? 'Bina is speaking…'
                       : 'Getting ready…'}
                   </span>
-                  <MicWaveform analyserRef={analyserRef} active={isRecording} color="var(--raw-34d399)" width={120} height={26} />
+                  <MicWaveform analyserRef={analyserRef} active={isRecording} color="var(--raw-34d399)" width={120} height={26} className="shrink-0 hidden min-[400px]:block" />
                 </div>
                 {/* Repeat the question (replays it and re-opens the mic) */}
                 <button
@@ -1588,7 +1633,7 @@ export default function StepSamplePractice({
                   }}
                   disabled={aiSpeaking || practiceDone}
                   title={practiceDone ? 'Practice complete' : 'Replay the question'}
-                  className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-medium text-[var(--raw-e2e8f0)] bg-[var(--raw-1e293b)] border border-white/[0.08] hover:bg-[var(--raw-334155)] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-medium text-[var(--raw-e2e8f0)] bg-[var(--raw-1e293b)] border border-white/[0.08] hover:bg-[var(--raw-334155)] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                 >
                   <Volume2 className="w-4 h-4" /> Repeat
                 </button>
@@ -1599,10 +1644,13 @@ export default function StepSamplePractice({
                   onClick={handlePracticeNext}
                   disabled={aiSpeaking || isTranscribing || practiceDone || (!isRecording && !hasAnswer)}
                   title={practiceDone ? 'Practice complete' : isRecording || hasAnswer ? 'Finish and hear Bina' : 'Answer first'}
-                  className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-[var(--raw-3b82f6)] hover:bg-[var(--raw-2563eb)] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-[var(--raw-3b82f6)] hover:bg-[var(--raw-2563eb)] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                 >
                   Next <ChevronRight className="w-4 h-4" />
                 </button>
+                {started && !isRecording && !hasAnswer && !practiceDone && !aiSpeaking && !isTranscribing && (
+                  <p className="basis-full text-2xs text-[var(--raw-94a3b8)]">Answer first — Next unlocks once you speak.</p>
+                )}
               </div>
             ) : (
               <div>
@@ -1644,16 +1692,17 @@ export default function StepSamplePractice({
       </div>{/* end outer dark panel */}
 
       {/* Footer Navigation */}
-      <div className="flex items-center justify-between pt-2">
+      {/* Stacks below sm (Start Interview on top, Go Back under it). */}
+      <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between pt-2">
         <button
           type="button"
           onClick={onGoBack}
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
+          className="self-start inline-flex items-center gap-1.5 px-2 py-2.5 -ml-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors"
         >
           <ChevronLeft className="w-4 h-4" />
           Go Back
         </button>
-        <div className="flex flex-col items-end gap-1.5">
+        <div className="flex flex-col w-full sm:w-auto items-stretch sm:items-end gap-1.5">
           {/* Optional — show how long the practice answer was (not a gate) */}
           {!isRecording && recordedDurationSeconds !== null && (
             <p className="text-xs font-medium text-green-600">
@@ -1665,22 +1714,23 @@ export default function StepSamplePractice({
               Recording · {recordingElapsed}s
             </p>
           )}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 w-full sm:w-auto">
             {/* Skip the optional practice and continue straight to the interview */}
             <button
               type="button"
               onClick={onStartInterview}
               disabled={submitting}
-              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-600 hover:text-gray-900 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              className="flex-1 sm:flex-none justify-center inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-600 hover:text-gray-900 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
             >
               Skip
               <ChevronRight className="w-4 h-4" />
             </button>
             <button
+              ref={startInterviewRef}
               type="button"
               onClick={onStartInterview}
               disabled={submitting}
-              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold text-white bg-gray-900 hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm"
+              className="flex-1 sm:flex-none justify-center inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold text-white bg-gray-900 hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm"
             >
               {submitting ? (
                 <>
@@ -1728,7 +1778,7 @@ export default function StepSamplePractice({
                 type="button"
                 onClick={() => setShowStartPopup(false)}
                 disabled={submitting}
-                className="text-xs font-medium text-gray-500 hover:text-gray-800 py-1 transition-colors disabled:opacity-50"
+                className="min-h-10 py-2.5 text-xs font-medium text-gray-500 hover:text-gray-800 transition-colors disabled:opacity-50"
               >
                 Review my practice first
               </button>

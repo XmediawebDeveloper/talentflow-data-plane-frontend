@@ -1409,6 +1409,19 @@ export const AUTH_THEME_CSS = `
   to   { opacity: 1; }
 }
 
+/* The six 56px cells need ~386px; below ~480px a card's padding leaves less
+   than that, so the smaller cells start here rather than at 420px. */
+@media (max-width: 480px) {
+  .tf-otp-stage {
+    --otp-w: 44px;
+    --otp-h: 56px;
+    --otp-gap: 8px;
+  }
+  .tf-otp-lottie {
+    width: 42px;
+    height: 42px;
+  }
+}
 @media (max-width: 420px) {
   .tf-otp-stage {
     --otp-w: 44px;
@@ -1429,6 +1442,22 @@ export const AUTH_THEME_CSS = `
   .tf-fp-badge {
     width: 48px;
     height: 48px;
+  }
+}
+
+/* 320–380px: 6×44 + 5×8 = 304px no longer fits a padded card (~240–270px). */
+@media (max-width: 380px) {
+  .tf-otp-stage {
+    --otp-w: 36px;
+    --otp-h: 48px;
+    --otp-gap: 6px;
+  }
+  .tf-otp-stage .tf-auth-otp {
+    font-size: 20px;
+  }
+  .tf-otp-lottie {
+    width: 36px;
+    height: 36px;
   }
 }
 
