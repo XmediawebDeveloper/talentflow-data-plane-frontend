@@ -4890,7 +4890,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             type: 'AI-Generated',
             short_id: shareAssessments[0].short_id,
             version: shareAssessments[0].version,
-            jd_short_id: job.id,
+            // Display ID (JD-133), not `job.id` — the UUID the header printed.
+            jd_short_id: shareAssessments[0].jd_short_id || job.job_id,
             jd_title: job.title,
             jd_version: shareAssessments[0].jd_version,
           }}
@@ -4904,7 +4905,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             type: 'AI-Generated',
             short_id: a.short_id,
             version: a.version,
-            jd_short_id: job.id,
+            jd_short_id: a.jd_short_id || job.job_id,
             jd_title: job.title,
             jd_version: a.jd_version,
           }))}

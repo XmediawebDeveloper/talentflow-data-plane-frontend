@@ -1035,6 +1035,9 @@ Best regards`);
   // selection rule as before: only published, non-revoked assessments are
   // invitable — loaded across every job, like the other Invite → Assessment
   // entry points, so "Browse all" really is all of them.
+  /* Opens with this job's latest assessment version already ticked (the
+     one tagged "Latest" — the only one when there is just one; after a
+     create round trip, the one just published), so it is ready to send. */
   const handleInviteForAssessment = async () => {
     setShowInviteMenu(false);
 
@@ -1054,6 +1057,11 @@ Best regards`);
         return !isAssessmentRevoked(a, revokedIds);
       });
       setPickerAssessments(items);
+      if (jobId) {
+        const { latestJobAssessment } = await import('@/components/assessments/JobAssessmentVersionPicker');
+        const newest = latestJobAssessment(items, jobId);
+        if (newest) setPickedAssessments([newest]);
+      }
     } catch (err) {
       console.error('[CandidateScoringDetailPage] Failed to load assessments:', err);
       toast.error('Could not load assessments. Please try again.');
@@ -1588,7 +1596,7 @@ Best regards`);
                     {mayInviteAssessment && !assessmentMissing && (
                       <button
                         role="menuitem"
-                        onClick={handleInviteForAssessment}
+                        onClick={() => handleInviteForAssessment()}
                         disabled={!canInviteAssessment}
                         title={assessmentPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAssessment ? 'No published assessment for this job yet' : undefined}
                         className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-brand-blue/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
@@ -3376,8 +3384,11 @@ Best regards`);
                 type: 'AI-Generated',
                 short_id: shareAssessments[0].short_id,
                 version: shareAssessments[0].version,
-                jd_short_id: jobId,
-                jd_title: jobTitle,
+                // The job's display ID (JD-133), never `jobId` — that is the
+                // JD row's UUID, and the modal header printed it verbatim. The
+                // assessment's own job first: "Browse all" can pick another job's.
+                jd_short_id: shareAssessments[0].jd_short_id || resume.jobCode || jdDetails?.job_id,
+                jd_title: shareAssessments[0].jd_title || jobTitle,
                 jd_version: shareAssessments[0].jd_version,
               }}
               additionalAssessments={shareAssessments.slice(1).map((a: any) => ({
@@ -3388,8 +3399,8 @@ Best regards`);
                 type: 'AI-Generated',
                 short_id: a.short_id,
                 version: a.version,
-                jd_short_id: jobId,
-                jd_title: jobTitle,
+                jd_short_id: a.jd_short_id || resume.jobCode || jdDetails?.job_id,
+                jd_title: a.jd_title || jobTitle,
                 jd_version: a.jd_version,
               }))}
               // This page is the Resume Scoring candidate detail view (opened
@@ -3407,6 +3418,8 @@ Best regards`);
             open={showAIInviteFlow}
             onClose={() => setShowAIInviteFlow(false)}
             jobId={jobId || undefined}
+            // The job's latest Active interview version, picked on open.
+            preselectLatest
             candidates={[{
               id: fullResumeData.resumeId || resume.resumeId || resume.id,
               name: fullResumeData.candidateName || resume.candidateName || 'Unknown',
