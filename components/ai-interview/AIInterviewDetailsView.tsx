@@ -16,6 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { useUrlTab } from '@/lib/hooks/useUrlTab';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { aiInterviewDraftResumeHref } from '@/lib/utils/aiInterviewDraftResume';
 import { jdService, type JDLineageVersion, type JDResponse } from '@/lib/services/jdService';
 import JDIdentityHeader from '@/components/jobs/JDIdentityHeader';
 import JDOverviewSections from '@/components/jobs/JDOverviewSections';
@@ -1445,8 +1446,8 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                       toast.error('You do not have permission to edit AI interviews');
                       return;
                     }
-                    const url = `/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${config.jd_id}&config_id=${config.id}`;
-                    router.push(url);
+                    // Resumes at the step the draft was left on.
+                    router.push(aiInterviewDraftResumeHref(config));
                   }}
                   aria-disabled={!canUpdateAIInterviews}
                   title={!canUpdateAIInterviews ? 'You do not have permission to edit AI interviews' : ''}

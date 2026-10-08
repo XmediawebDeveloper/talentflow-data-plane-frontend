@@ -186,8 +186,30 @@ const WarningCard = memo(function WarningCard({
  * Subscribes to InterviewEventBus — NO props needed from parent.
  * Positioned at bottom of viewport for interview context.
  */
-export function InterviewProctoringWarnings() {
+export function InterviewProctoringWarnings({ anchorIds }: {
+  /** Element ids to sit just under, top-right — the first one on screen wins
+   *  (e.g. the answer timer, else the chat header). Without one on screen the
+   *  stack falls back to the bottom-right corner. */
+  anchorIds?: string[];
+} = {}) {
   const [warnings, setWarnings] = useState<WarningItem[]>([]);
+  const [anchorPos, setAnchorPos] = useState<{ top: number; right: number; maxWidth: number } | null>(null);
+  const hasWarnings = warnings.length > 0;
+  const anchorKey = anchorIds?.join('|') ?? '';
+  useEffect(() => {
+    if (!hasWarnings || !anchorKey) return;
+    const measure = () => {
+      const el = anchorKey.split('|').map((id) => document.getElementById(id)).find(Boolean);
+      if (!el) { setAnchorPos(null); return; }
+      const r = el.getBoundingClientRect();
+      setAnchorPos({ top: r.bottom + 8, right: Math.max(8, window.innerWidth - r.right + 12), maxWidth: Math.max(240, r.width - 24) });
+    };
+    measure();
+    // The timer comes and goes between questions, so re-check while shown.
+    const iv = setInterval(measure, 500);
+    window.addEventListener('resize', measure);
+    return () => { clearInterval(iv); window.removeEventListener('resize', measure); };
+  }, [hasWarnings, anchorKey]);
 
   // Subscribe to interview event bus on mount
   useEffect(() => {
@@ -254,7 +276,10 @@ export function InterviewProctoringWarnings() {
   }
 
   const overlay = (
-    <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-[calc(100%-2rem)] pointer-events-none">
+    <div
+      className={`fixed z-50 flex flex-col gap-2 max-w-sm w-[calc(100%-2rem)] pointer-events-none ${anchorPos ? '' : 'bottom-4 right-4'}`}
+      style={anchorPos ? { top: anchorPos.top, right: anchorPos.right, maxWidth: Math.min(384, anchorPos.maxWidth) } : undefined}
+    >
       {warnings.map((warning) => (
         <div key={warning.id} className="pointer-events-auto">
           <WarningCard
