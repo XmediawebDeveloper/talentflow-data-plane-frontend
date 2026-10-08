@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { toast } from 'sonner';
 import { formatISTDate } from '@/lib/utils/dateUtils';
+import { formatEmploymentType } from '@/lib/utils/jobOpeningDisplay';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import JDVersionHistory from '@/components/JDVersionHistory';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -109,7 +110,9 @@ export default function ResumeScoringJDSelection() {
             placeholder="Search job descriptions..."
             value={jdSearch}
             onChange={e => setJdSearch(e.target.value)}
-            className="w-full px-4 py-2.5 border border-gray-200 bg-white rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+            // Shared filter-input chrome — matches the Job Openings search box
+            // (h-9, gray-200 border, brand-blue focus + hover, placeholder tone).
+            className="w-full h-9 px-4 text-sm text-black dark:text-slate-100 placeholder:text-gray-400 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg transition-colors hover:border-brand-blue/40 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
           />
         </div>
 
@@ -228,7 +231,7 @@ export default function ResumeScoringJDSelection() {
                         {jd.employment_type && (
                           <span className="flex items-center gap-1">
                             <Clock className="w-3 h-3" />
-                            {jd.employment_type}
+                            {formatEmploymentType(jd.employment_type)}
                           </span>
                         )}
                         {jd.experience_min != null && (

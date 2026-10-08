@@ -57,6 +57,18 @@ export interface ListToolbarProps {
   onClearFilters?: () => void;
 
   /**
+   * Pinned to the row's far RIGHT edge, past everything else, whatever the
+   * other controls' width — e.g. a List / Grid switch. Optional.
+   */
+  trailing?: React.ReactNode;
+
+  /**
+   * Controls placed BEFORE the search box, at the very start of the row —
+   * e.g. a list's Select all. Optional; without it the row is unchanged.
+   */
+  beforeSearch?: React.ReactNode;
+
+  /**
    * Controls placed at the FRONT of the right-hand group, ahead of More
    * Filters. For page-level actions (Create, Send Invite) that belong with
    * the list but shouldn't sit past the filter controls.
@@ -148,6 +160,8 @@ export default function ListToolbar({
   activeFilterCount = 0,
   filtersApplied = false,
   onClearFilters,
+  beforeSearch,
+  trailing,
   leadingActions,
   afterFiltersActions,
   children,
@@ -228,6 +242,7 @@ export default function ListToolbar({
         filterPanel ? undefined : className
       )}
     >
+      {beforeSearch && <div className="flex items-center gap-2 flex-shrink-0">{beforeSearch}</div>}
       <div className={cn(singleLine ? 'relative flex-1 min-w-[12rem]' : fitToContainer ? container.search : 'flex-1 relative', searchClassName)}>
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-brand-blue/60" />
         <input
@@ -235,7 +250,10 @@ export default function ListToolbar({
           value={draftSearch}
           onChange={(e) => setDraftSearch(e.target.value)}
           placeholder={searchPlaceholder}
-          className="w-full pl-9 pr-4 py-2 text-sm text-black border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
+          // Shared input chrome — the same h-9 / gray-200 border / rounded-lg /
+          // brand-blue focus + hover that SearchableSelect and DateField use, so
+          // search, dropdowns and date fields read as one filter component.
+          className="w-full h-9 pl-9 pr-4 text-sm text-black dark:text-slate-100 placeholder:text-gray-400 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg transition-colors hover:border-brand-blue/40 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
         />
       </div>
 
@@ -302,6 +320,9 @@ export default function ListToolbar({
         {/* Always last — see `countBadge`. */}
         {countBadge}
       </div>
+
+      {/* Pinned right — see `trailing`. ml-auto takes the row's spare width. */}
+      {trailing && <div className="flex items-center flex-shrink-0 self-end sm:self-auto sm:ml-auto">{trailing}</div>}
     </div>
   );
 

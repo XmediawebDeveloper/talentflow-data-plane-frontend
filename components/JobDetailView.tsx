@@ -10,7 +10,7 @@ import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { jdService, JDLineageVersion, JDStatusEvent, JDUsageStatus, JDVersion } from '@/lib/services/jdService';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
-import { formatJobVersionLabel } from '@/lib/utils/jobOpeningDisplay';
+import { formatJobVersionLabel, formatLastUpdated } from '@/lib/utils/jobOpeningDisplay';
 import SkillsList from '@/components/ui/SkillsList';
 import { Tooltip } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
@@ -2746,14 +2746,25 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   <span className="text-gray-300">•</span>
                 )}
 
-                {/* Posted Date with Time */}
-                <span>
-                  Posted {job.postedDate ? formatISTDateTime(job.postedDate) : 'N/A'}
+                {/* Posted / By / Last Updated — bold label + lighter value, no
+                    icons, matching the Job Openings card meta hierarchy
+                    (JobOpeningSummary's MetaLabelValue). The bullets between the
+                    three were dropped: the label weight is what now separates
+                    them, exactly as on the master card. */}
+                <span className="inline-flex items-center gap-1">
+                  <span className="font-medium text-gray-700 dark:text-slate-300">Posted:</span>
+                  <span className="font-normal text-gray-500 dark:text-slate-400">{job.postedDate ? formatISTDateTime(job.postedDate) : 'N/A'}</span>
                 </span>
-                <span className="text-gray-300">•</span>
-
-                {/* Posted By */}
-                <span>By {job.postedBy || 'Unknown'}</span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="font-medium text-gray-700 dark:text-slate-300">By:</span>
+                  <span className="font-normal text-gray-500 dark:text-slate-400">{job.postedBy || 'Unknown'}</span>
+                </span>
+                {job.updated_at && (
+                  <span className="inline-flex items-center gap-1">
+                    <span className="font-medium text-gray-700 dark:text-slate-300">Last Updated:</span>
+                    <span className="font-normal text-gray-500 dark:text-slate-400">{formatLastUpdated(job.updated_at)}</span>
+                  </span>
+                )}
                 <span className="text-gray-300">•</span>
 
                 {/* Version Badge */}

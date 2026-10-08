@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -10,6 +10,7 @@ import {
   FileText, Timer, HelpCircle, ChevronRight, Smartphone, Wifi,
   Lightbulb, Sparkles, Globe,
 } from 'lucide-react';
+import { revealAfterPaint } from '@/lib/utils/candidateScroll';
 import { Button } from '@/components/ui/button';
 import type { IconComponent } from '@/lib/types/icon';
 
@@ -78,9 +79,9 @@ const GDPR_RIGHTS = [
 // content was changed.
 const BEFORE_YOU_BEGIN_ITEMS: { icon: IconComponent; text: string }[] = [
   { icon: Video, text: 'Camera and microphone access are required' },
-  { icon: Wifi, text: 'If a genuine network or client failure occurs, the assessment can recover from the saved server state' },
+  { icon: Wifi, text: 'Ensure you have a stable internet connection throughout the interview.' },
   { icon: Lightbulb, text: 'Ensure you are in a quiet, well-lit environment' },
-  { icon: Eye, text: 'Tab switching and copy/paste are monitored' },
+  { icon: Eye, text: 'Your responses may be recorded and analyzed as part of the interview.' },
 ];
 
 export default function StepConsent({
@@ -121,6 +122,30 @@ export default function StepConsent({
 
   const allChecked = Object.values(consents).every(Boolean);
 
+  // Auto-scroll targets: the JD card (after "Show less"), the mobile
+  // acknowledgement (when it's what still blocks Proceed) and Proceed itself.
+  const jdRef = useRef<HTMLDivElement>(null);
+  const mobileAckRef = useRef<HTMLLabelElement>(null);
+  const proceedRef = useRef<HTMLDivElement>(null);
+  const mobileAckPending = !!environmentVerificationEnabled && !mobileVerificationAcknowledged;
+
+  /** After consent is given: bring the next thing to do into view — the
+   *  mobile acknowledgement if it is still unticked, otherwise Proceed. Only
+   *  scrolls when that target is off screen (phones, short laptops). */
+  const revealNextAction = useCallback(() => {
+    revealAfterPaint(() => (mobileAckPending ? mobileAckRef.current : proceedRef.current),
+      mobileAckPending ? 'center' : 'nearest');
+  }, [mobileAckPending]);
+
+  // The consent modal: stop the page behind it from scrolling (iOS scrolls
+  // the page when the modal body overscrolls).
+  useEffect(() => {
+    if (!showConsentModal) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [showConsentModal]);
+
   const toggleConsent = useCallback((key: ConsentKey) => {
     setConsents(prev => ({ ...prev, [key]: !prev[key] }));
   }, []);
@@ -147,14 +172,16 @@ export default function StepConsent({
       // check — select all, no modal
       setConsentAccepted(true);
       setConsents(ALL_CONSENTS);
+      revealNextAction();
     }
-  }, [consentAccepted]);
+  }, [consentAccepted, revealNextAction]);
 
   const handleModalAccept = useCallback(() => {
     if (!allChecked) return;
     setConsentAccepted(true);
     setShowConsentModal(false);
-  }, [allChecked]);
+    revealNextAction();
+  }, [allChecked, revealNextAction]);
 
   const handleProceed = useCallback(() => {
     if (!consentAccepted || submitting) return;
@@ -211,7 +238,6 @@ export default function StepConsent({
           {/* Role card — the job, then every fact about it and about the
               interview as one continuous run of badges. */}
           <div className="relative overflow-hidden bg-white border border-gray-200 rounded-2xl shadow-sm">
-            <div className="h-1 bg-gradient-to-r from-brand-blue via-brand-teal to-brand-orange" />
             <div className="p-5 sm:p-6">
               <div>
                 <div className="min-w-0">
@@ -249,7 +275,7 @@ export default function StepConsent({
 
           {/* JD Description */}
           {jdDescription && (
-            <div className="bg-brand-sky/40 border border-brand-blue/15 rounded-xl overflow-hidden" style={{ colorScheme: 'light' }}>
+            <div ref={jdRef} className="bg-brand-sky/40 border border-brand-blue/15 rounded-xl overflow-hidden" style={{ colorScheme: 'light' }}>
               <div className="px-5 py-3 border-b border-brand-blue/10 flex items-center gap-2">
                 <span className="flex h-6 w-6 items-center justify-center rounded-md bg-white text-brand-blue border border-brand-blue/20 flex-shrink-0">
                   <FileText className="w-3.5 h-3.5" />
@@ -267,7 +293,8 @@ export default function StepConsent({
                     prose-li:my-0.5
                     prose-a:no-underline
                     prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-code:font-normal prose-code:before:content-none prose-code:after:content-none
-                    prose-pre:rounded-lg prose-pre:text-sm prose-pre:font-normal"
+                    prose-pre:rounded-lg prose-pre:text-sm prose-pre:font-normal
+                    [overflow-wrap:anywhere] prose-table:block prose-table:overflow-x-auto prose-pre:overflow-x-auto prose-img:max-w-full"
                   style={{
                     color: 'var(--raw-374151)',
                     colorScheme: 'light',
@@ -287,8 +314,14 @@ export default function StepConsent({
                 {isLongDesc && (
                   <button
                     type="button"
-                    onClick={() => setShowFullDesc(!showFullDesc)}
-                    className="text-sm text-brand-blue hover:text-brand-blue-2 mt-2 underline underline-offset-2"
+                    onClick={() => {
+                      const collapsing = showFullDesc;
+                      setShowFullDesc(!showFullDesc);
+                      // Collapsing a long JD leaves a phone scrolled far past
+                      // it — bring the card's top back into view.
+                      if (collapsing) revealAfterPaint(() => jdRef.current, 'start');
+                    }}
+                    className="inline-flex min-h-10 items-center -mb-2 text-sm text-brand-blue hover:text-brand-blue-2 mt-1 underline underline-offset-2"
                   >
                     {showFullDesc ? 'Show less' : 'Read more'}
                   </button>
@@ -299,8 +332,10 @@ export default function StepConsent({
         </div>
 
         {/* ═══════════ RIGHT COLUMN — action panel ═══════════ */}
-        <div className="lg:sticky lg:top-6 bg-white border border-gray-200 rounded-2xl overflow-hidden min-w-0">
-          <div className="h-1 bg-gradient-to-r from-brand-orange to-brand-orange-deep" />
+        {/* Sticky below the pinned header + stepper (not under it). On short
+            laptops the panel scrolls inside itself, so Proceed is always
+            reachable without scrolling the whole JD first. */}
+        <div className="lg:sticky lg:top-[calc(var(--tf-sticky-h,0px)+24px)] lg:max-h-[calc(100dvh-var(--tf-sticky-h,0px)-48px)] lg:overflow-y-auto bg-white border border-gray-200 rounded-2xl overflow-hidden min-w-0">
 
           {/* Before You Begin */}
           <div className="p-5">
@@ -340,12 +375,16 @@ export default function StepConsent({
                     phone within reach. No app installation is required; it opens directly in your phone&apos;s
                     browser, which may ask for camera and microphone permission.
                   </p>
-                  <label className="mt-3 flex items-start gap-2 cursor-pointer select-none">
+                  <label ref={mobileAckRef} className="mt-3 -my-1 py-1 flex items-start gap-2.5 cursor-pointer select-none">
                     <input
                       type="checkbox"
                       checked={mobileVerificationAcknowledged}
-                      onChange={() => setMobileVerificationAcknowledged(prev => !prev)}
-                      className="mt-0.5 w-4 h-4 rounded border-gray-300 text-brand-blue focus:ring-brand-blue flex-shrink-0"
+                      onChange={() => {
+                        const next = !mobileVerificationAcknowledged;
+                        setMobileVerificationAcknowledged(next);
+                        if (next && consentAccepted) revealAfterPaint(() => proceedRef.current);
+                      }}
+                      className="mt-0.5 w-5 h-5 rounded border-gray-300 text-brand-blue focus:ring-brand-blue flex-shrink-0"
                     />
                     <span className="text-sm text-gray-700">
                       I have read and understood the mobile verification requirement above.
@@ -359,23 +398,36 @@ export default function StepConsent({
           {/* Consent acceptance */}
           <div className="px-5 pb-5 pt-5 border-t border-gray-100">
             <div className={`rounded-xl p-4 transition-colors ${consentAccepted ? 'bg-success-subtle/40 border border-success-line' : 'bg-brand-blue/5 border border-brand-blue/15'}`}>
-              <div className="flex items-start gap-3">
-                <span className={`flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0 transition-colors ${consentAccepted ? 'bg-success-subtle text-success' : 'bg-white text-brand-blue border border-brand-blue/20'}`}>
+              {/* The whole row toggles consent (not just the 20px box), by
+                  click, tap, Space or Enter. The "consent and terms" link
+                  inside stops propagation so it only opens the modal. */}
+              <div
+                role="checkbox"
+                aria-checked={consentAccepted}
+                tabIndex={0}
+                onClick={handleCheckboxClick}
+                onKeyDown={(e) => {
+                  if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); handleCheckboxClick(); }
+                }}
+                className="group flex items-start gap-3 cursor-pointer select-none rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40"
+              >
+                <span className={`hidden sm:flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0 transition-colors ${consentAccepted ? 'bg-success-subtle text-success' : 'bg-white text-brand-blue border border-brand-blue/20'}`}>
                   <Shield className="w-4 h-4" />
                 </span>
                 <div
-                  className={`mt-1 w-5 h-5 rounded flex items-center justify-center flex-shrink-0 border-2 cursor-pointer transition-all ${
-                    consentAccepted ? 'bg-gray-900 border-gray-900' : 'border-gray-300 hover:border-gray-500'
+                  aria-hidden
+                  className={`mt-1 w-5 h-5 rounded flex items-center justify-center flex-shrink-0 border-2 transition-all ${
+                    consentAccepted ? 'bg-gray-900 border-gray-900' : 'border-gray-300 group-hover:border-gray-500'
                   }`}
-                  onClick={handleCheckboxClick}
                 >
                   {consentAccepted && <CheckCircle className="w-3.5 h-3.5 text-white" />}
                 </div>
-                <div className="text-sm text-gray-700 leading-relaxed">
+                <div className="text-sm text-gray-700 leading-relaxed min-w-0">
                   I accept the{' '}
                   <button
                     type="button"
-                    onClick={() => setShowConsentModal(true)}
+                    onClick={(e) => { e.stopPropagation(); setShowConsentModal(true); }}
+                    onKeyDown={(e) => e.stopPropagation()}
                     className="text-gray-900 font-semibold underline underline-offset-2 hover:text-gray-600 transition-colors"
                   >
                     consent and terms
@@ -388,7 +440,7 @@ export default function StepConsent({
               </div>
 
               {consentAccepted && (
-                <div className="mt-3 ml-11 flex items-center gap-2 text-success text-sm font-medium">
+                <div className="mt-3 ml-8 sm:ml-[4.75rem] flex items-center gap-2 text-success text-sm font-medium">
                   <CheckCircle className="w-4 h-4" />
                   All consents accepted
                 </div>
@@ -397,10 +449,11 @@ export default function StepConsent({
           </div>
 
           {/* Proceed button */}
-          <div className="px-5 pb-5">
+          <div ref={proceedRef} className="px-5 pb-5">
             <Button
               type="button"
               variant="primary"
+              size="lg"
               onClick={handleProceed}
               disabled={!consentAccepted || submitting || (environmentVerificationEnabled && !mobileVerificationAcknowledged)}
               className="w-full"
@@ -412,15 +465,15 @@ export default function StepConsent({
                 </>
               )}
             </Button>
-          </div>
-
-          {/* Help */}
-          <div className="flex items-center gap-2 text-sm text-gray-400 justify-center pb-5">
-            <HelpCircle className="w-4 h-4" />
-            Questions? Contact{' '}
-            <a href="mailto:support@talentflow.com" className="text-gray-600 hover:underline">
-              support@talentflow.com
-            </a>
+            {/* Why Proceed is still disabled — a disabled button alone
+                doesn't say what's missing. */}
+            {!submitting && (!consentAccepted || mobileAckPending) && (
+              <p className="mt-2 text-center text-xs text-gray-500">
+                {!consentAccepted
+                  ? 'Accept the consent and terms above to continue.'
+                  : 'Confirm the mobile verification notice above to continue.'}
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -441,14 +494,14 @@ export default function StepConsent({
               <button
                 type="button"
                 onClick={() => setShowConsentModal(false)}
-                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                className="p-2.5 -mr-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
                aria-label="Close">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Modal body (scrollable) */}
-            <div className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
+            <div className="overflow-y-auto overscroll-contain flex-1 px-4 sm:px-6 py-5 space-y-5">
 
               {/* GDPR notice */}
               <div className="bg-warning-subtle border border-warning-line rounded-xl p-4 flex items-start gap-3">
@@ -479,7 +532,7 @@ export default function StepConsent({
                   <button
                     type="button"
                     onClick={toggleAll}
-                    className="text-xs font-medium text-gray-500 hover:text-gray-800 underline underline-offset-2 transition-colors"
+                    className="px-2 py-2 -my-2 -mr-2 text-xs font-medium text-gray-500 hover:text-gray-800 underline underline-offset-2 transition-colors"
                   >
                     {allChecked ? 'Deselect All' : 'Select All'}
                   </button>

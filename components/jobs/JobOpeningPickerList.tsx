@@ -361,7 +361,11 @@ export default function JobOpeningPickerList({
             placeholder="Search by JD number, role, department or location..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+            // Shared filter-input chrome — the same h-9 / gray-200 border /
+            // rounded-lg / brand-blue focus + hover that ListToolbar's search,
+            // SearchableSelect and DateField use on the Job Openings page, so
+            // this picker's search reads as the same control family.
+            className="w-full h-9 pl-10 pr-4 text-sm text-black dark:text-slate-100 placeholder:text-gray-400 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg transition-colors hover:border-brand-blue/40 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
           />
         </div>
       </div>
@@ -565,6 +569,11 @@ export default function JobOpeningPickerList({
                             ? { ...job, assessed: candidateCounts[job.id]?.assessed ?? 0, interviewed: candidateCounts[job.id]?.interviewed ?? 0 }
                             : job}
                           metaSingleLine
+                          // No '-' placeholders for a job with no salary/location —
+                          // the fields are simply omitted (same rule as the Job
+                          // Openings cards). Icons and the count chips stay at
+                          // their defaults so the picker keeps its own identity.
+                          hideEmptyFields
                           trailingBadges={
                             /* No ml-auto: that was reaching across the row to line
                                up with the eye icon back when it sat beside this

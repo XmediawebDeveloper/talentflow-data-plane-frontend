@@ -47,32 +47,35 @@ export default function QuotaBadge({
     : `${label}: ${availableUnits.toLocaleString()} ${unitLabel} remaining`;
 
   return (
-    // py-1.5 around a 24px icon tile lands at 38px total — the same height as the
-    // header action buttons beside it (px-3 py-2 + text-sm + border), so the row
-    // still aligns while the content gets real vertical breathing room.
-    // The usage progress bar was removed earlier: it was the extra ~8px that made
-    // this badge taller than every button in the same row.
+    // h-10 — the same height as the page's primary action beside it (Button
+    // size md), so the pair lines up. It is the same SIZE as that button but
+    // deliberately not the same KIND of thing: this is a read-out, so it is
+    // flat (no shadow), tinted rather than solid, has no hover state, keeps the
+    // default cursor, and its icon is an outline glyph rather than a filled
+    // tile. The button keeps the solid fill, shadow and hover — the cues that
+    // say "press me".
     <div
+      role="status"
       title={tooltip}
       aria-label={tooltip}
       className={cn(
-      'flex items-center gap-2 px-2.5 py-1.5 rounded-lg border bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all',
+      'flex items-center gap-2 h-10 px-3 rounded-lg border cursor-default select-none',
       tone === 'danger'
-        ? 'border-red-200 ring-red-100'
+        ? 'bg-red-50/60 border-red-200 dark:bg-red-950/20'
         : tone === 'warning'
-        ? 'border-brand-orange/30 ring-brand-orange/10'
-        : 'border-gray-100 dark:border-slate-700/60',
+        ? 'bg-brand-orange/5 border-brand-orange/30'
+        : 'bg-brand-blue/[0.04] border-brand-blue/15 dark:bg-slate-900 dark:border-slate-700/60',
       className,
     )}>
       <div className={cn(
-        'w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 ring-1',
+        'flex items-center justify-center flex-shrink-0',
         tone === 'danger'
-          ? 'bg-red-50 text-red-600 ring-red-200'
+          ? 'text-red-600'
           : tone === 'warning'
-          ? 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20'
-          : 'bg-brand-blue text-white ring-white/10 shadow-sm shadow-brand-blue/25',
+          ? 'text-brand-orange-deep'
+          : 'text-brand-blue/80',
       )}>
-        <Icon className="w-3.5 h-3.5" />
+        <Icon className="w-4 h-4" />
       </div>
       {/* Single line: "324 quota left". The label is no longer rendered — only one of
           these appears per page, so the page itself already says which quota it
@@ -93,7 +96,7 @@ export default function QuotaBadge({
             )}>
               {availableUnits.toLocaleString()}
             </span>
-            <span className="text-2xs text-gray-500 dark:text-slate-400 leading-none">Units Left</span>
+            <span className="text-xs text-gray-500 dark:text-slate-400 leading-none">Units Left</span>
           </>
         ) : (
           <span className="text-xs text-gray-400 dark:text-slate-500 leading-none">Loading...</span>

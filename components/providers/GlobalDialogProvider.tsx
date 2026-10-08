@@ -9,7 +9,7 @@ import {
   useEffect,
   ReactNode,
 } from 'react';
-import { AlertTriangle, CheckCircle, Info, XCircle, HelpCircle, Trash2, X, AlertCircle, FileText, LucideIcon } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Info, XCircle, HelpCircle, Trash2, AlertCircle, FileText, LucideIcon } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -290,18 +290,8 @@ export function GlobalDialogProvider({ children }: { children: ReactNode }) {
               className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full pointer-events-auto animate-in zoom-in-95 fade-in duration-200"
               onClick={(e) => e.stopPropagation()}
             >
-              {/* X close — every variant gets it now, not just delete, so the
-                  dialog can always be dismissed the same way regardless of
-                  what triggered it. */}
-              <button
-                type="button"
-                onClick={() => handleClose(false)}
-                aria-label="Close"
-                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-
+              {/* No top-right X — the dialog is dismissed via the Cancel button
+                  (confirm-style), the OK button (alerts), the backdrop, or Esc. */}
               <div className="p-6 pt-8">
                 {/* Icon */}
                 <div
@@ -313,7 +303,7 @@ export function GlobalDialogProvider({ children }: { children: ReactNode }) {
                 {/* Title */}
                 <h3
                   id="global-dialog-title"
-                  className="text-xl font-bold text-gray-900 dark:text-gray-100 text-center mb-2"
+                  className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 text-center mb-2 leading-snug"
                 >
                   {dialog.title}
                 </h3>
@@ -365,6 +355,15 @@ export function GlobalDialogProvider({ children }: { children: ReactNode }) {
                 {/* Buttons — right-aligned, sized like ArchiveJobModal /
                     DisableJobModal's footer rather than stretched flex-1s. */}
                 <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
+                  {!dialog.hideCancelButton && (
+                    <button
+                      type="button"
+                      onClick={() => handleClose(false)}
+                      className="px-6 py-2.5 rounded-lg transition-colors text-sm font-semibold border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-400"
+                    >
+                      {dialog.cancelText}
+                    </button>
+                  )}
                   <button
                     ref={confirmBtnRef}
                     type="button"
