@@ -2615,11 +2615,11 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
           <div className="relative flex items-center justify-center gap-2 sm:gap-3 mb-4 sm:mb-6 overflow-hidden py-3 sm:py-4" aria-hidden>
             {laptop('blue')}
             <div className="hidden min-[400px]:block w-4 sm:w-10 md:w-14 border-t-2 border-dashed border-[#1e3a6e] -mt-2 sm:-mt-4" />
-            <div className="relative shrink-0 w-[72px] h-[72px] sm:w-24 sm:h-24 md:w-32 md:h-32 rounded-full border border-amber-200 flex items-center justify-center">
-              <div className="w-[54px] h-[54px] sm:w-[72px] sm:h-[72px] md:w-24 md:h-24 rounded-full bg-amber-100 flex items-center justify-center">
+            <div className="relative shrink-0 w-[72px] h-[72px] sm:w-24 sm:h-24 md:w-32 md:h-32 rounded-full border border-amber-200 dark:border-amber-500/30 flex items-center justify-center">
+              <div className="w-[54px] h-[54px] sm:w-[72px] sm:h-[72px] md:w-24 md:h-24 rounded-full bg-amber-100 dark:bg-amber-500/15 flex items-center justify-center">
                 <Lock className="w-7 h-7 sm:w-9 sm:h-9 md:w-11 md:h-11 text-gray-900 fill-amber-400" strokeWidth={2} />
               </div>
-              <span className="absolute bottom-0 sm:bottom-1 md:bottom-3 left-1/2 -translate-x-1/2 w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-red-500 text-white text-xs sm:text-sm font-bold flex items-center justify-center ring-2 ring-white">!</span>
+              <span className="absolute bottom-0 sm:bottom-1 md:bottom-3 left-1/2 -translate-x-1/2 w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-red-500 text-white text-xs sm:text-sm font-bold flex items-center justify-center ring-2 ring-white dark:ring-slate-700">!</span>
             </div>
             <div className="hidden min-[400px]:block w-4 sm:w-10 md:w-14 border-t-2 border-dashed border-[#f07a8c] -mt-2 sm:-mt-4" />
             {laptop('red')}
@@ -2637,7 +2637,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
               rather than "wait a few seconds", and make clear this page unblocks
               itself — the 5s heartbeat clears it, so no reload is needed. */}
           {blockedRetrySeconds !== null && (
-            <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4 rounded-xl border border-amber-200 bg-amber-50 p-4 sm:px-5 mb-4 sm:mb-5 text-center sm:text-left">
+            <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4 rounded-xl border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 p-4 sm:px-5 mb-4 sm:mb-5 text-center sm:text-left">
               <Clock className="hidden md:block w-11 h-11 shrink-0 text-amber-500" strokeWidth={2.25} />
               <div className="hidden md:block self-stretch w-px bg-amber-300" />
               <div className="flex-1 min-w-0">
@@ -2650,7 +2650,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                   This page will unlock automatically once the previous session is released.
                 </p>
               </div>
-              <div className="shrink-0 min-w-[88px] flex items-center justify-center rounded-lg border border-amber-200 bg-amber-100 px-4 py-2 sm:px-5 sm:py-3 text-2xl md:text-3xl font-bold text-amber-500 tabular-nums">
+              <div className="shrink-0 min-w-[88px] flex items-center justify-center rounded-lg border border-amber-200 dark:border-amber-500/30 bg-amber-100 dark:bg-amber-500/15 px-4 py-2 sm:px-5 sm:py-3 text-2xl md:text-3xl font-bold text-amber-500 tabular-nums">
                 {blockedRetrySeconds > 0
                   ? <>{Math.floor(blockedRetrySeconds / 60)}:{String(blockedRetrySeconds % 60).padStart(2, '0')}</>
                   : <Loader2 className="w-7 h-7 animate-spin" />}
@@ -2685,7 +2685,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   // ========== COMPLETED ==========
   if (step === 'completed') {
     return (
-      <div className="min-h-[100dvh] flex items-center justify-center bg-gray-50 px-4" style={{ colorScheme: 'light' }}>
+      <div className="min-h-[100dvh] flex items-center justify-center bg-gray-50 px-4">
         <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-8 text-center">
           <div className="w-16 h-16 rounded-full bg-success-subtle flex items-center justify-center mx-auto mb-6">
             <CheckCircle className="w-8 h-8 text-success" />
@@ -2710,7 +2710,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   // ========== ERROR ==========
   if (step === 'error') {
     return (
-      <div className="min-h-[100dvh] flex items-center justify-center bg-gray-50 px-4" style={{ colorScheme: 'light' }}>
+      <div className="min-h-[100dvh] flex items-center justify-center bg-gray-50 px-4">
         <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-8 text-center">
           <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 ${(isExpiredError || isRevokedError) ? 'bg-warning-subtle' : 'bg-destructive-subtle'}`}>
             {isExpiredError
@@ -2851,7 +2851,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       : null;
 
     return (
-      <div className="min-h-[100dvh] bg-gray-50 flex items-center justify-center p-4" style={{ colorScheme: 'light' }}>
+      <div className="min-h-[100dvh] bg-gray-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 sm:p-8">
           <div className="w-16 h-16 bg-brand-blue/10 rounded-full flex items-center justify-center mx-auto mb-6">
             <KeyRound className="w-8 h-8 text-brand-blue" />
@@ -2985,13 +2985,13 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
             <>
               <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,2fr)] gap-4 p-4 md:p-5">
                 {/* ═══ LEFT: what this is ═══ */}
-                <div className="rounded-2xl bg-gradient-to-b from-brand-sky/70 to-brand-sky/20 p-4 flex flex-col min-w-0">
+                <div className="rounded-2xl bg-gradient-to-b from-brand-sky/70 dark:from-brand-blue/10 to-brand-sky/20 dark:to-brand-blue/10 p-4 flex flex-col min-w-0">
                   <div className="flex items-center justify-center lg:justify-start gap-2 flex-wrap">
                     <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-gray-900">
                       <ShieldCheck className="w-5 h-5 text-brand-blue" />
                       AI Interview
                     </span>
-                    <span className="text-xs font-medium text-brand-blue bg-white/80 px-2.5 py-1 rounded-full">
+                    <span className="text-xs font-medium text-brand-blue bg-white/80 dark:bg-slate-900/80 px-2.5 py-1 rounded-full">
                       Secure &amp; Proctored
                     </span>
                   </div>
@@ -3025,7 +3025,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                   </p>
 
                   <div className="mt-4 lg:mt-auto lg:pt-4">
-                    <div className="flex items-start gap-3 rounded-xl border border-brand-blue/10 bg-white/70 p-3">
+                    <div className="flex items-start gap-3 rounded-xl border border-brand-blue/10 bg-white/70 dark:bg-slate-900/70 p-3">
                       <span className="w-8 h-8 rounded-lg bg-brand-blue/10 text-brand-blue flex items-center justify-center flex-shrink-0">
                         <Lock className="w-4 h-4" />
                       </span>
@@ -3161,7 +3161,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                   Sticks to the bottom of the window while the card is taller
                   than the screen, so the checkbox and button are always in
                   reach; at its natural place when the card fits. */}
-              <div className="sticky bottom-0 z-10 rounded-b-2xl border-t border-gray-100 bg-gray-50/95 backdrop-blur px-5 md:px-6 py-3.5 flex flex-col md:flex-row md:items-center gap-3 md:gap-5">
+              <div className="sticky bottom-0 z-10 rounded-b-2xl border-t border-gray-100 bg-gray-50/95 dark:bg-slate-800/95 backdrop-blur px-5 md:px-6 py-3.5 flex flex-col md:flex-row md:items-center gap-3 md:gap-5">
                 <label className="flex items-start gap-3 cursor-pointer select-none text-left flex-1 min-w-0">
                   <input
                     type="checkbox"
@@ -3261,7 +3261,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
               the screen (1280×720 fullscreen, tablets), so Start is always
               in reach. -mx/-mb cancel the card's padding so the bar spans the
               card edge to edge; the tagline's 17px inset is unchanged. */}
-          <div className="sticky bottom-0 z-10 -mx-5 md:-mx-7 -mb-4 md:-mb-5 px-5 md:px-7 py-3 rounded-b-2xl border-t border-gray-100 bg-white/95 backdrop-blur flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-5">
+          <div className="sticky bottom-0 z-10 -mx-5 md:-mx-7 -mb-4 md:-mb-5 px-5 md:px-7 py-3 rounded-b-2xl border-t border-gray-100 bg-white/95 dark:bg-slate-900/95 backdrop-blur flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-5">
             {/* Two lines: the headline, then the consequence. */}
             <p className="flex items-start gap-3 sm:pl-[17px] text-2xs sm:text-xs text-gray-500 leading-relaxed">
               <span className="w-7 flex justify-center flex-shrink-0 pt-px">
@@ -3342,13 +3342,13 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
             {/* Visual guide — a mock desktop with the Chrome sharing bar and
                 Hide highlighted. Hidden during the vision-check frame capture
                 (shareBarMockRef) so it is never mistaken for the real bar. */}
-            <div ref={shareBarMockRef} className="rounded-xl border border-brand-blue/15 bg-brand-sky/40 p-3 flex flex-col">
+            <div ref={shareBarMockRef} className="rounded-xl border border-brand-blue/15 bg-brand-sky/40 dark:bg-brand-blue/10 p-3 flex flex-col">
               <p className="flex items-center gap-1.5 text-xs md:text-sm font-semibold text-brand-blue mb-2">
                 <Monitor className="w-4 h-4 shrink-0" />
                 Example: look for this bar and click &ldquo;Hide&rdquo;
               </p>
               <div className="relative flex-1 min-h-[190px] rounded-lg overflow-hidden shadow-md bg-[radial-gradient(120%_90%_at_30%_20%,#7cc3f2_0%,#2f6fd6_45%,#0f3c99_100%)]">
-                <div aria-hidden className="absolute -left-10 top-10 w-72 h-72 rounded-full bg-white/15 blur-2xl" />
+                <div aria-hidden className="absolute -left-10 top-10 w-72 h-72 rounded-full bg-white/15 dark:bg-slate-900/15 blur-2xl" />
                 <div aria-hidden className="absolute right-0 -top-10 w-60 h-60 rounded-full bg-brand-cyan/30 blur-3xl" />
 
                 {/* The sharing bar */}
@@ -3370,7 +3370,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                   </span>
                   <Search className="w-4 h-4 text-white/80" />
                   <Folder className="w-4 h-4 text-brand-orange" />
-                  <span className="w-4 h-4 rounded-full bg-white/80" />
+                  <span className="w-4 h-4 rounded-full bg-white/80 dark:bg-slate-900/80" />
                   <span className="w-4 h-4 rounded bg-brand-blue" />
                 </div>
               </div>
@@ -3458,7 +3458,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
               the screen. Stays INSIDE shareBarCardRef so the capture hides it
               with the rest of the card. -mx/-mb cancel the card's padding; the
               13px tagline inset is unchanged. */}
-          <div className="sticky bottom-0 z-10 -mx-4 md:-mx-6 -mb-4 md:-mb-5 px-4 md:px-6 py-3 rounded-b-2xl border-t border-gray-100 bg-white/95 backdrop-blur flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
+          <div className="sticky bottom-0 z-10 -mx-4 md:-mx-6 -mb-4 md:-mb-5 px-4 md:px-6 py-3 rounded-b-2xl border-t border-gray-100 bg-white/95 dark:bg-slate-900/95 backdrop-blur flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
             <p className="flex items-center justify-center sm:justify-start gap-1.5 sm:pl-[13px] text-2xs text-gray-400 text-center sm:text-left">
               <span data-capture-decor className="w-4 h-4 flex items-center justify-center shrink-0">
                 <span className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
@@ -3560,8 +3560,8 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       return (
         <div className="fixed inset-0 z-[9999] bg-black flex items-center justify-center backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full text-center shadow-2xl">
-            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-5">
-              <Monitor className="w-8 h-8 text-blue-600" />
+            <div className="w-16 h-16 bg-blue-100 dark:bg-blue-500/15 rounded-full flex items-center justify-center mx-auto mb-5">
+              <Monitor className="w-8 h-8 text-blue-600 dark:text-blue-400" />
             </div>
             <h2 className="text-xl font-bold text-gray-900 mb-2">Re-share your screen to continue</h2>
             <p className="text-gray-600 mb-2 text-sm">
@@ -3711,7 +3711,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   // reopening the link keeps showing this — the candidate cannot restart.
   if (step === 'terminated') {
     return (
-      <div className="min-h-[100dvh] flex items-center justify-center bg-destructive-subtle px-4" style={{ colorScheme: 'light' }}>
+      <div className="min-h-[100dvh] flex items-center justify-center bg-destructive-subtle px-4">
         <div className="bg-white rounded-2xl shadow-2xl border-2 border-destructive-line max-w-md w-full p-8 text-center">
           <div className="w-20 h-20 rounded-full bg-destructive-subtle flex items-center justify-center mx-auto mb-6">
             <AlertTriangle className="w-10 h-10 text-destructive" />
