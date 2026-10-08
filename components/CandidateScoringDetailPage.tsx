@@ -1252,6 +1252,7 @@ Best regards`);
                   </span>
                 )}
               </div>
+              </div>
             </div>
             {/* Top right of the header: this candidate's other scored jobs.
                 First and last are always shown (‹ 1 … 4 5 6 … 12 ›), with
