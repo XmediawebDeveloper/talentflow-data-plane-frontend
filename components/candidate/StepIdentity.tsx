@@ -3,7 +3,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { ArrowLeft,
   Shield, Camera, Lock, AlertCircle, Mail, User,
-  CheckCircle, RefreshCw, Loader2, ArrowRight, KeyRound, IdCard, Check,
+  CheckCircle, RefreshCw, Loader2, ArrowRight, KeyRound, Check,
   Lightbulb, Sun, ScanFace, Ban,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,7 @@ import { AUTH_THEME_CSS } from '@/components/auth/authTheme';
 import SuccessAnimation from '@/components/ui/success-animation';
 import type { IconComponent } from '@/lib/types/icon';
 import SubStepProgress from './SubStepProgress';
+import { candidateScrollBehavior, revealAfterPaint } from '@/lib/utils/candidateScroll';
 
 interface StepIdentityProps {
   token: string;
@@ -28,7 +29,7 @@ interface StepIdentityProps {
   onBack?: () => void;
 }
 
-type OtpPhase = 'idle' | 'grid' | 'swap1' | 'swap2' | 'merge' | 'done';
+type OtpPhase = 'idle' | 'merge' | 'done';
 
 // Flip-in for the two OTP helper cards (resend timer + tips) — each turns
 // over on its horizontal axis, inward toward the other: the resend card
@@ -91,7 +92,6 @@ export default function StepIdentity({
   position = 'this position',
   onVerify,
   submitting = false,
-  onBack,
 }: StepIdentityProps) {
   const [phase, setPhase] = useState<'form' | 'photo_ready' | 'countdown' | 'verifying' | 'captured'>('form');
   const [name, setName] = useState(candidateName);
@@ -124,15 +124,16 @@ export default function StepIdentity({
   // only mount once the first send succeeds, so this runs after that render.
   useEffect(() => {
     if (otpSendCount === 0) return;
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    otpHeadingRef.current?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
+    otpHeadingRef.current?.scrollIntoView({ behavior: candidateScrollBehavior(), block: 'start' });
+    otpRefs.current[0]?.focus({ preventScroll: true });
   }, [otpSendCount]);
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
-  // Success choreography for the OTP step — mirrors ForgotPasswordModal's OTP
-  // animation exactly (same phases/timings) so the two flows feel like one
-  // product. `otpPhase` drives .tf-otp-stage--*; every visual is CSS, this
-  // only decides when each phase begins.
+  // Success animation for the OTP step: the six cells collapse into a green
+  // field and the shared success tick (SuccessAnimation) plays in it — the
+  // same tick and field as ForgotPasswordModal, without its grid → swap
+  // shuffle first. `otpPhase` drives .tf-otp-stage--*; every visual is CSS,
+  // this only decides when each phase begins.
   const [otpPhase, setOtpPhase] = useState<OtpPhase>('idle');
   const otpTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
@@ -148,23 +149,18 @@ export default function StepIdentity({
 
     const SUCCESS_LOTTIE_MS = 1502;
     const SETTLE_MS = 400;
-    const DONE_AT = 3300;
+    // Straight to the tick: the digits collapse into the green field (the
+    // merged bar's 0.45s fade) and the success tick plays in it. The
+    // forgot-password grid → swap shuffle before that is left out here.
+    const DONE_AT = 350;
 
     const at = reduced
-      ? { swap1: 0, swap2: 0, merge: 0, done: 0, handover: 700 }
-      : {
-          swap1: 700,
-          swap2: 1700,
-          merge: 2700,
-          done: DONE_AT,
-          handover: DONE_AT + SUCCESS_LOTTIE_MS + SETTLE_MS,
-        };
+      ? { done: 0, handover: 700 }
+      : { done: DONE_AT, handover: DONE_AT + SUCCESS_LOTTIE_MS + SETTLE_MS };
 
     clearOtpTimers();
-    setOtpPhase('grid');
-    (['swap1', 'swap2', 'merge', 'done'] as const).forEach((phase) => {
-      otpTimers.current.push(setTimeout(() => setOtpPhase(phase), at[phase]));
-    });
+    setOtpPhase('merge');
+    otpTimers.current.push(setTimeout(() => setOtpPhase('done'), at.done));
     otpTimers.current.push(setTimeout(onDone, at.handover));
   }, [clearOtpTimers]);
 
@@ -211,45 +207,52 @@ export default function StepIdentity({
     }
   }, [isEmailValid, otpSending, token, email, startCooldown]);
 
+  // Synchronous in-flight guard: `otpVerifying` state is a stale closure for
+  // a second call in the same tick, so a fast paste/typing burst (or a
+  // StrictMode double call) could otherwise send the same single-use code
+  // twice and have the second response clear the cells mid-tick.
+  const verifyingRef = useRef(false);
   const handleVerifyOtp = useCallback(async (codeOverride?: string) => {
     const code = (codeOverride ?? otpCode.join('')).trim();
-    if (code.length !== 6 || otpVerifying) return;
+    if (code.length !== 6 || otpVerifying || verifyingRef.current) return;
+    verifyingRef.current = true;
     setOtpVerifying(true);
     setOtpError(null);
     try {
       const res = await candidateAIInterviewService.verifyOtp(token, email.trim(), code);
       if (res.verified) {
         setOtpError(null);
-        // Play the same grid → swap → merge → tick choreography as the
-        // forgot-password OTP step before actually marking this verified.
+        // Collapse into the green field and play the success tick before
+        // actually marking this verified.
         runOtpSuccess(() => setOtpVerified(true));
       } else {
         setOtpError(res.message || 'Invalid OTP. Please try again.');
         setOtpCode(['', '', '', '', '', '']);
-        otpRefs.current[0]?.focus();
+        otpRefs.current[0]?.focus({ preventScroll: true });
       }
     } catch {
       setOtpError('Invalid or expired OTP. Please try again.');
       setOtpCode(['', '', '', '', '', '']);
-      otpRefs.current[0]?.focus();
+      otpRefs.current[0]?.focus({ preventScroll: true });
     } finally {
+      verifyingRef.current = false;
       setOtpVerifying(false);
     }
   }, [otpCode, otpVerifying, token, email, runOtpSuccess]);
 
   const handleOtpChange = useCallback((index: number, value: string) => {
     if (!/^\d*$/.test(value)) return;
-    setOtpCode(prev => {
-      const next = [...prev];
-      next[index] = value;
-      if (next.every(d => d) && next.join('').length === 6) {
-        handleVerifyOtp(next.join(''));
-      }
-      return next;
-    });
+    // Next code computed here, not inside a setOtpCode updater: updaters must
+    // be pure (StrictMode runs them twice), and verifying is a side effect.
+    const next = [...otpCode];
+    next[index] = value;
+    setOtpCode(next);
     setOtpError(null);
     if (value && index < 5) otpRefs.current[index + 1]?.focus();
-  }, [handleVerifyOtp]);
+    if (next.every(d => d) && next.join('').length === 6) {
+      handleVerifyOtp(next.join(''));
+    }
+  }, [otpCode, handleVerifyOtp]);
 
   const handleOtpPaste = useCallback((e: React.ClipboardEvent) => {
     e.preventDefault();
@@ -707,7 +710,11 @@ export default function StepIdentity({
     }, 1000);
   }, [cameraError, capturePhoto]);
 
+  // Double-click guard for photo Continue (see handleConfirmAndSubmit).
+  const submittedRef = useRef(false);
+
   const handleRetake = useCallback(() => {
+    submittedRef.current = false;
     stopStream();
     if (photoPreview) URL.revokeObjectURL(photoPreview);
     setPhotoBlob(null); setPhotoPreview(null);
@@ -721,11 +728,64 @@ export default function StepIdentity({
     setPhase('form');
   }, [stopStream, photoPreview]);
 
+  // The parent's `submitting` only arrives a render later, so submittedRef
+  // blocks a second click first. Released when a submit finishes
+  // (submitting → false, e.g. a failed upload the candidate retries) and on
+  // Retake.
+  useEffect(() => {
+    if (!submitting) submittedRef.current = false;
+  }, [submitting]);
   const handleConfirmAndSubmit = useCallback(() => {
-    if (photoBlob) {
-      onVerify({ name: name.trim(), email: email.trim(), photo: photoBlob });
-    }
+    if (!photoBlob || submittedRef.current) return;
+    submittedRef.current = true;
+    onVerify({ name: name.trim(), email: email.trim(), photo: photoBlob });
   }, [photoBlob, onVerify, name, email]);
+
+  // ── Auto-scroll for each state change (only when the target is hidden) ──
+  const formCardRef = useRef<HTMLDivElement>(null);
+  const continueWrapRef = useRef<HTMLDivElement>(null);
+  const otpErrorRef = useRef<HTMLDivElement>(null);
+  const photoCardRef = useRef<HTMLDivElement>(null);
+  const faceErrorRef = useRef<HTMLDivElement>(null);
+  const capturedRef = useRef<HTMLDivElement>(null);
+  const confirmBtnRef = useRef<HTMLButtonElement>(null);
+  const prevPhaseRef = useRef(phase);
+
+  useEffect(() => {
+    const prev = prevPhaseRef.current;
+    prevPhaseRef.current = phase;
+    if (prev === phase) return;
+    if (phase === 'photo_ready' && (prev === 'form' || prev === 'captured')) {
+      // Details → camera (or Retake): the whole view swapped; land on the camera.
+      revealAfterPaint(() => photoCardRef.current, 'start');
+    } else if (phase === 'countdown') {
+      // Capture tapped below the fold on phones: keep the countdown in view.
+      revealAfterPaint(() => photoCardRef.current, 'nearest');
+    } else if (phase === 'captured') {
+      revealAfterPaint(() => capturedRef.current, 'nearest');
+      requestAnimationFrame(() => confirmBtnRef.current?.focus({ preventScroll: true }));
+    } else if (phase === 'form') {
+      // Back from the camera: the page got much shorter.
+      revealAfterPaint(() => formCardRef.current, 'start');
+    }
+  }, [phase]);
+
+  // Code accepted: the OTP block unmounts and Continue moves up — bring it in.
+  useEffect(() => {
+    if (otpVerified) revealAfterPaint(() => continueWrapRef.current, 'center');
+  }, [otpVerified]);
+
+  useEffect(() => {
+    if (otpError) revealAfterPaint(() => otpErrorRef.current, 'nearest');
+  }, [otpError]);
+
+  useEffect(() => {
+    if (faceError) revealAfterPaint(() => faceErrorRef.current, 'center');
+  }, [faceError]);
+
+  useEffect(() => {
+    if (cameraError) revealAfterPaint(() => photoCardRef.current, 'nearest');
+  }, [cameraError]);
 
   // ── Progress stepper (2 sections) ── one compact card, rendered first on
   // BOTH phases so it stays put while the content below swaps from the
@@ -751,40 +811,9 @@ export default function StepIdentity({
         <h4 className="text-sm font-semibold text-gray-900 mb-1">Your privacy is protected</h4>
         <p className="text-xs text-gray-600 leading-relaxed">
           Your information is encrypted and stored securely under GDPR and DPDP regulations.
-          Used only for interview verification purposes.{' '}
-          <a
-            href="/privacy"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-medium text-brand-blue hover:text-brand-blue-2 underline underline-offset-2 whitespace-nowrap"
-          >
-            Privacy Policy
-          </a>
+          Used only for interview verification purposes.
         </p>
       </div>
-    </div>
-  );
-
-  // ── Identity verification benefits sidebar (desktop only) ──
-  const benefitsSidebar = (
-    <div className="hidden lg:flex flex-col items-center text-center gap-4 bg-brand-blue/5 border-l border-gray-100 p-6 w-[280px] flex-shrink-0">
-      <span className="flex h-16 w-16 items-center justify-center rounded-full bg-white border border-brand-blue/20 shadow-sm">
-        <IdCard className="w-7 h-7 text-brand-blue" />
-      </span>
-      <h3 className="text-base font-bold text-gray-900">Identity Verification</h3>
-      <ul className="space-y-2.5 text-left w-full">
-        {[
-          'Confirms your identity',
-          'Prevents impersonation',
-          'Ensures a fair interview process',
-          'Your data is safe and secure',
-        ].map(item => (
-          <li key={item} className="flex items-center gap-2 text-sm text-gray-700">
-            <CheckCircle className="w-4 h-4 text-brand-blue flex-shrink-0" />
-            {item}
-          </li>
-        ))}
-      </ul>
     </div>
   );
 
@@ -807,8 +836,8 @@ export default function StepIdentity({
           </div>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm flex flex-col lg:flex-row">
-          <div className="p-6 space-y-5 min-w-0 flex-1">
+        <div ref={formCardRef} className="w-full max-w-3xl mx-auto bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm flex flex-col lg:flex-row">
+          <div className="p-4 sm:p-6 space-y-5 min-w-0 flex-1">
             <div className="flex items-center gap-2 bg-warning-subtle text-warning-strong text-sm font-medium rounded-lg px-4 py-3">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
               Enter your name exactly as it appears on your government ID.
@@ -830,11 +859,11 @@ export default function StepIdentity({
               <label htmlFor="identity-email" className="flex items-center gap-1.5 text-sm font-medium text-gray-900">
                 <Mail className="w-4 h-4 text-gray-500" /> Email Address <span className="text-destructive">*</span>
               </label>
-              <div className="flex gap-2">
+              <div className="flex flex-col min-[380px]:flex-row gap-2">
                 <input
                   id="identity-email" type="email" value={email}
                   readOnly
-                  className={`flex-1 px-4 py-2.5 border rounded-lg text-sm bg-gray-50 cursor-not-allowed transition-colors ${
+                  className={`flex-1 min-w-0 px-4 py-2.5 border rounded-lg text-sm bg-gray-50 cursor-not-allowed transition-colors ${
                     otpVerified ? 'border-success-line bg-success-subtle' : 'border-gray-200'
                   }`}
                 />
@@ -844,7 +873,7 @@ export default function StepIdentity({
                     variant="primary"
                     onClick={handleSendOtp}
                     disabled={!isEmailValid || otpSending}
-                    className="flex-shrink-0 whitespace-nowrap"
+                    className="flex-shrink-0 whitespace-nowrap w-full min-[380px]:w-auto"
                   >
                     {otpSending
                       ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Sending…</>
@@ -860,11 +889,11 @@ export default function StepIdentity({
               </div>
 
               {/* OTP input — shown after OTP sent, hidden once verified. Six
-                  individual cells + the grid/swap/merge/tick choreography,
-                  identical to the forgot-password OTP step. */}
+                  individual cells that collapse into a green field with the
+                  success tick once the code is accepted. */}
               {otpSent && !otpVerified && (
                 <div className="space-y-3">
-                  <label ref={otpHeadingRef} className="flex items-center gap-1.5 text-sm font-medium text-gray-900 scroll-mt-6">
+                  <label ref={otpHeadingRef} className="flex items-center gap-1.5 text-sm font-medium text-gray-900 scroll-mt-2">
                     <KeyRound className="w-4 h-4 text-gray-500" /> Enter OTP <span className="text-destructive">*</span>
                   </label>
 
@@ -904,6 +933,13 @@ export default function StepIdentity({
                     </div>
                   </div>
 
+                  {/* Wrong / expired code — right under the cells it's about. */}
+                  {otpError && (
+                    <div ref={otpErrorRef} role="alert" className="flex items-center gap-2 text-destructive text-sm">
+                      <AlertCircle className="w-4 h-4 flex-shrink-0" /> {otpError}
+                    </div>
+                  )}
+
                   <style>{OTP_FLIP_CSS}</style>
 
                   {/* Resend timer */}
@@ -931,7 +967,7 @@ export default function StepIdentity({
                           </span>
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-success-strong">OTP sent to <span className="font-semibold">{email}</span></p>
+                          <p className="text-sm font-medium text-success-strong">OTP sent to <span className="font-semibold break-all">{email}</span></p>
                           <p className="text-xs text-success">Resend available in {resendCooldown}s</p>
                         </div>
                       </>
@@ -946,7 +982,7 @@ export default function StepIdentity({
                             type="button"
                             onClick={handleSendOtp}
                             disabled={otpSending}
-                            className="text-sm font-semibold text-gray-900 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="inline-flex items-center min-h-10 -my-2 px-1 -mx-1 text-sm font-semibold text-gray-900 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             {otpSending ? 'Sending…' : 'Resend OTP'}
                           </button>
@@ -958,7 +994,18 @@ export default function StepIdentity({
                   {/* Didn't receive the code — the forgot-password OTP step's
                       hint, same classes, so the two OTP screens match. */}
                   <div key={`tips-${otpSendCount}`} className="tf-auth-scope tf-otp-flip-up">
-                    <div className="tf-fp-hint" style={{ marginTop: 0 }}>
+                    {/* Same light blue as the neighbouring privacy card
+                        (bg-brand-blue/5, border-brand-blue/15). Inline because
+                        .tf-fp-hint's grey comes from an unlayered style that
+                        Tailwind's layered utilities can't override. */}
+                    <div
+                      className="tf-fp-hint"
+                      style={{
+                        marginTop: 0,
+                        background: 'color-mix(in srgb, var(--color-brand-blue) 5%, transparent)',
+                        border: '1px solid color-mix(in srgb, var(--color-brand-blue) 15%, transparent)',
+                      }}
+                    >
                       <span className="tf-fp-hint-icon" aria-hidden="true">i</span>
                       <div>
                         <p className="tf-fp-hint-title">Didn&apos;t receive the code?</p>
@@ -972,8 +1019,9 @@ export default function StepIdentity({
                 </div>
               )}
 
-              {otpError && (
-                <div className="flex items-center gap-2 text-destructive text-sm">
+              {/* Send failed (before the cells exist). */}
+              {otpError && !(otpSent && !otpVerified) && (
+                <div ref={otpErrorRef} role="alert" className="flex items-center gap-2 text-destructive text-sm">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" /> {otpError}
                 </div>
               )}
@@ -981,20 +1029,23 @@ export default function StepIdentity({
 
             {privacyCard}
           </div>
-
-          {benefitsSidebar}
         </div>
 
-        <div className="flex items-center justify-between">
-          {onBack ? (
-            <Button type="button" variant="secondary" onClick={onBack}>
-              <ArrowLeft className="w-4 h-4" /> Back
-            </Button>
-          ) : <span />}
+        <div ref={continueWrapRef} className="w-full max-w-3xl mx-auto flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 sm:gap-4">
+          {/* Why Continue is still disabled. */}
+          {!submitting && !isFormValid && (
+            <p id="identity-continue-hint" className="text-xs text-gray-500 text-center sm:text-right sm:mr-auto">
+              {!name.trim() ? 'Enter your full name.'
+                : !otpSent ? 'Click "Send OTP" to verify your email.'
+                : !otpVerified ? 'Enter the 6-digit code sent to your email.'
+                : ''}
+            </p>
+          )}
           <Button
             type="button" variant="primary" onClick={handleFormSubmit}
             disabled={!isFormValid || submitting}
-            className="px-6"
+            aria-describedby={!isFormValid ? 'identity-continue-hint' : undefined}
+            className="w-full sm:w-auto px-6"
           >
             {submitting
               ? <><Loader2 className="w-4 h-4 animate-spin" /> Verifying…</>
@@ -1022,10 +1073,12 @@ export default function StepIdentity({
 
       <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
 
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Left: Video feed */}
-            <div className="relative bg-gray-900 rounded-xl aspect-[4/3] overflow-hidden flex items-center justify-center">
+            {/* On short laptops the 4:3 box is capped (by width, from the
+                viewport height) so the capture controls stay above the fold. */}
+            <div ref={photoCardRef} className="relative bg-gray-900 rounded-xl aspect-[4/3] overflow-hidden flex items-center justify-center w-full md:mx-auto md:self-start md:max-w-[max(20rem,calc((100dvh-var(--tf-sticky-h,0px)-15rem)*4/3))]">
               {phase !== 'captured' && (
                 <video ref={videoRef} muted playsInline className="w-full h-full object-cover" style={{ transform: 'scaleX(-1)' }} />
               )}
@@ -1037,7 +1090,10 @@ export default function StepIdentity({
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 text-white gap-2">
                   <Camera className="w-10 h-10 text-gray-400" />
                   <p className="text-sm text-gray-300">Camera access denied</p>
-                  <p className="text-xs text-gray-500">Please allow camera access and reload</p>
+                  <p className="text-xs text-gray-500 text-center px-4">Allow camera access in your browser&apos;s address bar, then retry.</p>
+                  <Button type="button" variant="secondary" size="sm" onClick={() => { void startCamera(); }} className="mt-1">
+                    <RefreshCw className="w-4 h-4" /> Retry camera
+                  </Button>
                 </div>
               )}
 
@@ -1058,13 +1114,13 @@ export default function StepIdentity({
                   face status so the candidate knows why capture is disabled. */}
               {phase !== 'captured' && !cameraError && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className={`w-36 h-44 md:w-44 md:h-52 rounded-[50%] border-2 border-dashed transition-all duration-300 ${
+                  <div className={`h-[68%] w-auto aspect-[9/11] rounded-[50%] border-2 border-dashed transition-all duration-300 ${
                     phase === 'countdown' || phase === 'verifying' ? 'border-warning-line shadow-[0_0_20px_rgba(250,204,21,0.4)]' :
                     phase === 'photo_ready' && liveFaceStatus === 'ok' ? 'border-success-line shadow-[0_0_20px_rgba(74,222,128,0.45)]' :
                     phase === 'photo_ready' && (liveFaceStatus === 'multiple' || liveFaceStatus === 'none') ? 'border-destructive-line shadow-[0_0_20px_rgba(248,113,113,0.45)]' :
                     'border-white/60'
                   }`} />
-                  <span className={`absolute bottom-3 inline-flex items-center gap-1.5 text-xs font-medium text-center px-3 py-1.5 rounded-full ${
+                  <span className={`absolute bottom-3 inset-x-3 mx-auto w-fit max-w-[calc(100%-1.5rem)] inline-flex items-center justify-center gap-1.5 text-xs font-medium text-center px-3 py-1.5 rounded-2xl ${
                     phase === 'countdown' || phase === 'verifying' ? 'bg-warning text-white' :
                     phase === 'photo_ready' && liveFaceStatus === 'ok' ? 'bg-success text-white' :
                     phase === 'photo_ready' && (liveFaceStatus === 'multiple' || liveFaceStatus === 'none') ? 'bg-destructive text-white' :
@@ -1162,7 +1218,7 @@ export default function StepIdentity({
               {phase === 'photo_ready' && (
                 <>
                   {faceError && (
-                    <div className="flex items-start gap-2 bg-destructive-subtle border border-destructive-line rounded-lg p-3">
+                    <div ref={faceErrorRef} role="alert" className="flex items-start gap-2 bg-destructive-subtle border border-destructive-line rounded-lg p-3">
                       <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0 mt-0.5" />
                       <p className="text-sm text-destructive">{faceError}</p>
                     </div>
@@ -1196,6 +1252,15 @@ export default function StepIdentity({
                           {faceError ? 'Retake Photo' : 'Capture Photo'}
                           <ArrowRight className="w-4 h-4" />
                         </Button>
+                        {/* The reason Capture is disabled — a `title` never
+                            shows on touch screens. */}
+                        {!captureReady && (
+                          <p role="status" className="text-xs text-gray-600 text-center">
+                            {cameraError
+                              ? 'Camera access is blocked — allow it in the address bar, then retry.'
+                              : blockedMsg || 'Starting camera…'}
+                          </p>
+                        )}
                       </>
                     );
                   })()}
@@ -1219,7 +1284,7 @@ export default function StepIdentity({
               )}
 
               {phase === 'captured' && (
-                <div className="space-y-3">
+                <div ref={capturedRef} className="space-y-3">
                   <div className="bg-success-subtle border border-success-line rounded-xl p-4 flex items-start gap-3">
                     <CheckCircle className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
                     <div>
@@ -1228,6 +1293,7 @@ export default function StepIdentity({
                     </div>
                   </div>
                   <Button
+                    ref={confirmBtnRef}
                     type="button"
                     variant="primary"
                     onClick={handleConfirmAndSubmit}
@@ -1278,7 +1344,13 @@ export default function StepIdentity({
       {privacyCard}
 
       <div className="flex items-center justify-between pt-2">
-        <Button type="button" variant="secondary" onClick={handleGoBackFromPhoto}>
+        {/* Locked while a capture is in flight: going back mid-capture would
+            be yanked back to the camera when the capture resolves. */}
+        <Button
+          type="button" variant="secondary" onClick={handleGoBackFromPhoto}
+          disabled={phase === 'countdown' || phase === 'verifying' || submitting}
+          className="w-full sm:w-auto"
+        >
           <ArrowLeft className="w-4 h-4" /> Back
         </Button>
       </div>
