@@ -10,6 +10,12 @@ interface RecordPagerProps {
   onPrev?: () => void;
   onNext?: () => void;
   className?: string;
+  /** Arrow buttons only, no "Previous" / "Next" words — for a second pager
+   *  beside the record pager (e.g. a candidate's scored jobs). */
+  iconOnly?: boolean;
+  /** What the arrows step through, for their tooltip / aria-label. */
+  prevLabel?: string;
+  nextLabel?: string;
 }
 
 /**
@@ -23,6 +29,9 @@ export default function RecordPager({
   onPrev,
   onNext,
   className = '',
+  iconOnly = false,
+  prevLabel = 'Previous',
+  nextLabel = 'Next',
 }: RecordPagerProps) {
   if (totalCount == null || totalCount <= 0) return null;
 
@@ -34,12 +43,12 @@ export default function RecordPager({
       <button
         onClick={onPrev}
         disabled={!onPrev || currentIndex === 0}
-        aria-label="Previous"
-        title="Previous"
+        aria-label={prevLabel}
+        title={prevLabel}
         className={btn}
       >
         <ChevronLeft className="w-4 h-4 flex-shrink-0" />
-        <span className="hidden sm:inline">Previous</span>
+        {!iconOnly && <span className="hidden sm:inline">Previous</span>}
       </button>
       <span className="text-xs sm:text-sm text-gray-500 dark:text-slate-400 font-medium px-1 tabular-nums whitespace-nowrap">
         {(currentIndex ?? 0) + 1} / {totalCount}
@@ -47,11 +56,11 @@ export default function RecordPager({
       <button
         onClick={onNext}
         disabled={!onNext || currentIndex === totalCount - 1}
-        aria-label="Next"
-        title="Next"
+        aria-label={nextLabel}
+        title={nextLabel}
         className={btn}
       >
-        <span className="hidden sm:inline">Next</span>
+        {!iconOnly && <span className="hidden sm:inline">Next</span>}
         <ChevronRight className="w-4 h-4 flex-shrink-0" />
       </button>
     </div>

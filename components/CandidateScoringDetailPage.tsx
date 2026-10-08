@@ -2,7 +2,6 @@
 
 import { RESUME_EMAIL_SHARE_ENABLED } from '@/lib/constants/featureFlags';
 import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, Briefcase, GraduationCap, Star, Calendar, Zap, FileText, AlertCircle, Download, Clock, Building2, ChevronLeft, ChevronRight, ChevronDown, Code, Languages, BarChart3, CheckSquare, MessageSquare, Minus, BookOpen, ThumbsUp, ThumbsDown, Loader2, Sparkles, UserPlus, History, File, HardDrive, User, X, Eye, Share2, Paperclip, Send, Plus } from 'lucide-react';
-import { MiniPagination } from '@/components/ui/mini-pagination';
 import DetailedScorecardTab from './DetailedScorecardTab';
 import { Button } from '@/components/ui/button';
 import { Tooltip } from '@/components/ui/tooltip';
@@ -145,7 +144,7 @@ interface CandidateScoringDetailPageProps {
   totalCount?: number;
   onPrev?: () => void;
   onNext?: () => void;
-  /** Steps through this candidate's other scored jobs (MiniPagination),
+  /** Steps through this candidate's other scored jobs (a RecordPager),
    *  shown beside the Version badge. */
   jobPager?: { page: number; total: number; onPageChange: (page: number) => void };
   /**
@@ -1419,11 +1418,9 @@ Best regards`);
           {/* Row 1: candidate identity. The record pager that used to sit on
               the right moved into the breadcrumb bar, as on job-details. */}
           <div className="flex items-start justify-between gap-4 mb-3">
-            <div className="flex min-w-0 items-start gap-3">
-              <div className="hidden sm:flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
-                <User className="h-4 w-4 text-brand-blue" />
-              </div>
-              <div className="min-w-0">
+            {/* pl-3 = the contact badges' own inset, so the name, the years
+                and the email / phone icons below start on one vertical line. */}
+            <div className="min-w-0 pl-3">
               <h1 className="text-lg sm:text-xl text-gray-900 font-semibold mb-2 truncate">{resume.candidateName}</h1>
               <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <p className="text-base sm:text-lg text-gray-700 font-medium">{resume.title || resume.experience || 'Candidate'}</p>
@@ -1498,25 +1495,20 @@ Best regards`);
                   </div>
                 ))}
               </div>
-              </div>
             </div>
-            {/* Top right of the header: this candidate's other scored jobs.
-                First and last are always shown (‹ 1 … 4 5 6 … 12 ›), with
-                "Job N of M" so the position is read, not guessed. */}
+            {/* Top right of the header: this candidate's other scored jobs, in
+                the breadcrumb's "‹ 6 / 87 ›" pager style (arrows only, so it
+                doesn't read as a second candidate Previous / Next). */}
             {jobPager && jobPager.total > 1 && (
-              <div className="flex flex-col items-center gap-1 flex-shrink-0">
-                <span className="text-xs text-gray-500 whitespace-nowrap text-center">
-                  Scored job <span className="font-semibold text-gray-700 tabular-nums">{jobPager.page}</span> of{' '}
-                  <span className="font-semibold text-gray-700 tabular-nums">{jobPager.total}</span>
-                </span>
-                <MiniPagination
-                  page={jobPager.page}
-                  totalPages={jobPager.total}
-                  onPageChange={jobPager.onPageChange}
-                  aria-label="Scored jobs"
-                  showEnds
-                />
-              </div>
+              <RecordPager
+                iconOnly
+                prevLabel="Previous scored job"
+                nextLabel="Next scored job"
+                currentIndex={jobPager.page - 1}
+                totalCount={jobPager.total}
+                onPrev={jobPager.page > 1 ? () => jobPager.onPageChange(jobPager.page - 1) : undefined}
+                onNext={jobPager.page < jobPager.total ? () => jobPager.onPageChange(jobPager.page + 1) : undefined}
+              />
             )}
           </div>
 
