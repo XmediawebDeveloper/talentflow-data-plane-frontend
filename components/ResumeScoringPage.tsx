@@ -4,7 +4,7 @@ import { SCORE_CELL_TEXT } from '@/lib/utils/score';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { WorkInProgressIcon } from '@/components/icons/nav-icons';
 import { Cell, Pie, PieChart as RechartsPieChart, ResponsiveContainer } from 'recharts';
-import { Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, TrendingUp, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, Loader2, Square, CheckSquare, Building2, Calendar, Users, ChevronDown, FileDown, Video, MinusSquare, ChevronsUpDown, MoreVertical, Info, PieChart, RefreshCw, Layers, ClipboardList } from 'lucide-react';
+import { Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, TrendingUp, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, Loader2, Square, CheckSquare, Building2, Calendar, Users, ChevronDown, FileDown, Video, MinusSquare, ChevronsUpDown, ChevronsDownUp, MoreVertical, Info, PieChart, RefreshCw, Layers, ClipboardList } from 'lucide-react';
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, useId } from 'react';
 import { useDialogHeightLock } from '@/lib/hooks/useDialogHeightLock';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -37,13 +37,20 @@ import QuotaBadge from '@/components/ui/quota-badge';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListViewToggle, { type ListDisplayMode } from '@/components/ui/list-view-toggle';
 import ScoredResumesExportModal from './ScoredResumesExportModal';
-import { BulkActionConfirmModal, BulkInviteModal, useScoringActionPermissions, type BulkActionKind } from './ScoredResumesTable';
+import { SelectAllMenu, SortByControl } from '@/components/ui/select-all-menu';
+import SearchableSelect from '@/components/ui/searchable-select';
+import { BulkActionConfirmModal, BulkInviteModal, useScoringActionPermissions, renderInviteTargetItems, resolveInviteTargetState, type BulkActionKind, type InviteTargetJob } from './ScoredResumesTable';
+import CreateInviteTargetModal from './resume-scoring/CreateInviteTargetModal';
+import { useAllJobInviteTargets } from '@/lib/hooks/useAllJobInviteTargets';
+import { assessmentService } from '@/lib/services/assessmentService';
+import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { buildCreateUrl, clearInviteHandoff, readInviteHandoff, saveInviteHandoff, RESUME_INVITE_PARAM, type InviteHandoff, type InviteHandoffKind } from '@/lib/utils/resumeScoringInviteHandoff';
 import InviteToAIInterviewFlow from './InviteToAIInterviewFlow';
 import { downloadScorecardPdf, downloadScorecardsZip, formatFileDate, scorecardVersionTag } from '@/lib/utils/scorecardDownload';
 import { TableSkeleton, Skeleton } from '@/components/ui/skeleton';
 import ResumeScoringSkeleton from '@/components/ResumeScoringSkeleton';
 import { useListSearch } from '@/lib/hooks/useListSearch';
-import { useJobInviteTargets } from '@/lib/hooks/useJobInviteTargets';
+import { useJobInviteTargets, isInvitableAssessment } from '@/lib/hooks/useJobInviteTargets';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import { lineageKey, resolveVersionHistoryRows, getDisplayStatus, getStatusConfig } from '@/lib/utils/jobOpeningDisplay';
 import { useJobRecords } from '@/lib/hooks/useJobRecords';
@@ -52,6 +59,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
@@ -283,6 +291,17 @@ type Verdict = 'Exact Match' | 'Partial Match' | 'No Match';
 /* The toolbar's own buttons — the exact look and 38px height of the
    toolbar's More Filters button, and of ScoredResumesTable's toolbar
    buttons, so both views' toolbars read the same. */
+type JobSortKey = 'scored' | 'title' | 'jdId' | 'candidates' | 'exact' | 'partial' | 'none';
+const JOB_SORT_OPTIONS: { value: JobSortKey; label: string }[] = [
+  { value: 'scored', label: 'Last Scored' },
+  { value: 'title', label: 'Job Title' },
+  { value: 'jdId', label: 'JD ID' },
+  { value: 'candidates', label: 'Candidates' },
+  { value: 'exact', label: 'Exact Match' },
+  { value: 'partial', label: 'Partial Match' },
+  { value: 'none', label: 'No Match' },
+];
+
 const TOOLBAR_BUTTON_CLASS =
   'h-[38px] px-3 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-2 text-sm whitespace-nowrap bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue disabled:opacity-50 disabled:cursor-not-allowed';
 
@@ -420,6 +439,16 @@ export default function ResumeScoringPage({
   /* A score opened from a resume's Candidate Activity card keeps that resume's
      trail (Resume Database › My Resumes › <candidate>) and returns to it. */
   const resumeTrail = useResumeActivityTrail(useSearchParams());
+  /* `view=candidates|job` on a candidate URL: it was opened from View by
+     Candidates / View by Job (the cross-job candidate page), not from one
+     job's scored list. Read once, so a refresh rebuilds THAT page — same
+     breadcrumb, same 1 / N, same scored-job pager — instead of the
+     single-job one the bare jd_id + score_id would otherwise mean. */
+  const urlSearchParams = useSearchParams();
+  const [initialOpenedFrom] = useState<'candidates' | 'job' | null>(() => {
+    const v = urlSearchParams.get('view');
+    return v === 'candidates' || v === 'job' ? v : null;
+  });
 
   // ✅ RBAC: Get user permissions (bypass for tenant admin)
   const { user, isTenantAdmin, hasPermissionCode } = useAuth();
@@ -465,9 +494,7 @@ export default function ResumeScoringPage({
      invites are offered here (AI Interview invites live on the JD page). The
      candidate detail page opened from this table reads the same value, so the
      table and the detail view can never disagree about what's invitable. */
-  const jdInviteTargets = useJobInviteTargets(selectedHistoryItem?.jobId, {
-    aiInterviewEnabled: false,
-  });
+  const jdInviteTargets = useJobInviteTargets(selectedHistoryItem?.jobId);
   // Version history for the "View by Job" list rows — same lineage endpoint
   // and panel the Job Openings list uses, so both surfaces read one history.
   const versionLineage = useJobVersionLineage();
@@ -857,6 +884,9 @@ export default function ResumeScoringPage({
   // History selection
   const [historyCurrentPage, setHistoryCurrentPage] = useState(1);
   const [historyItemsPerPage, setHistoryItemsPerPage] = useState(10);
+  // View by Job's Sort by — the Job Openings list's control.
+  const [jobSortBy, setJobSortBy] = useState<JobSortKey>('scored');
+  const [jobSortOrder, setJobSortOrder] = useState<'asc' | 'desc'>('desc');
 
   useEffect(() => {
     setHistoryCurrentPage(1);
@@ -877,6 +907,17 @@ export default function ResumeScoringPage({
 
   // Global view state (view all scored resumes across all JDs)
   const [isGlobalView, setIsGlobalView] = useState(false);
+  /* The View by toggle's tile position. It trails isGlobalView by two
+     frames: each view draws its own toggle, so the newly mounted one starts
+     where the tile WAS and then slides across, instead of just appearing. */
+  const [viewTileRight, setViewTileRight] = useState(false);
+  useEffect(() => {
+    let inner = 0;
+    const outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => setViewTileRight(isGlobalView));
+    });
+    return () => { cancelAnimationFrame(outer); cancelAnimationFrame(inner); };
+  }, [isGlobalView]);
   /* Which of the two global cards opened this view — "View by Candidates"
      groups rows by email (one cluster per person, see ScoredResumesTable's
      own `groupByEmail`); "Total Resumes Scored" shows the identical
@@ -917,6 +958,20 @@ export default function ResumeScoringPage({
      hide) from that list, so until it lands the job list is shown unfiltered
      with no counts rather than wrongly emptied. */
   const [globalLoaded, setGlobalLoaded] = useState(false);
+  /* First-paint gate. The page is held on its skeleton until the job list,
+     the candidate scores (the job cards' Exact / Partial / No Match chips and
+     the pill counts) and the units have all arrived — then shown in one step,
+     instead of a "0 / 0 / 0" stage and chips popping in afterwards. Each
+     flag also flips on failure, and a 10s cap stops a slow call from holding
+     the page. Latched: later refreshes never bring the skeleton back. */
+  const [globalSettled, setGlobalSettled] = useState(false);
+  const [quotaSettled, setQuotaSettled] = useState(false);
+  const [firstPaintCapped, setFirstPaintCapped] = useState(false);
+  const firstPaintDoneRef = useRef(false);
+  useEffect(() => {
+    const t = setTimeout(() => setFirstPaintCapped(true), 10000);
+    return () => clearTimeout(t);
+  }, []);
   const [globalSearchQuery, setGlobalSearchQuery] = useState('');
 
   // Locally uploaded resumes — feeds the (unused) legacy myResumes/databaseResumes
@@ -1044,6 +1099,7 @@ export default function ResumeScoringPage({
       if (!silent) toast.error('Failed to load all scored candidates');
     } finally {
       setIsLoadingGlobal(false);
+      setGlobalSettled(true);
     }
   };
 
@@ -1085,6 +1141,103 @@ export default function ResumeScoringPage({
     }),
     [globalScoredResumes, versionLineage.filterLineages],
   );
+
+  /* ---- No AI Assessment / AI Interview yet → create it → back → invite ----
+     1. Actions greys the invite and offers "＋ Create …" (one job).
+     2. A popup explains the three steps; Start saves the view, the ticks and
+        the pending invite (resumeScoringInviteHandoff) and opens the create
+        page with `from=resume-scoring` (its breadcrumb starts here).
+     3. Its published screen links back with `?resume_invite=1`; here the
+        ticks come back, the job is re-checked, and the invite opens for the
+        same candidates. Nothing published → ticks back, no invite. */
+  const jobViewInviteTargets = useAllJobInviteTargets(
+    !isGlobalView && (selectedHistoryItems.size > 0 || Object.keys(partialJobRows).length > 0),
+  );
+  const [createInviteTarget, setCreateInviteTarget] = useState<{
+    kind: InviteHandoffKind;
+    job: InviteTargetJob;
+    rows: any[];
+    view: 'job' | 'candidates';
+  } | null>(null);
+  const peopleIn = (rows: any[]) => new Set(rows.map(r => String(r.email || r.resumeId || r.id).toLowerCase())).size;
+  const startCreateInviteTarget = () => {
+    const t = createInviteTarget;
+    if (!t) return;
+    saveInviteHandoff({
+      kind: t.kind,
+      jdId: t.job.jdId,
+      jdCode: t.job.jdCode,
+      jdTitle: t.job.jdTitle,
+      scoreIds: t.rows.map(r => r.id),
+      candidateCount: peopleIn(t.rows),
+      view: t.view,
+      selectedJobKeys: Array.from(selectedHistoryItems),
+      partialJobRows,
+      selectedScoredResumes,
+    });
+    setCreateInviteTarget(null);
+    router.push(buildCreateUrl(t.kind, { id: t.job.jdId, title: t.job.jdTitle }));
+  };
+
+  // Back from a create: restore first (the persisted list state has already
+  // put the view and filters back), then — once scores are loaded — check.
+  const [handoffReturn, setHandoffReturn] = useState<InviteHandoff | null>(null);
+  const handoffCheckedRef = useRef(false);
+  const [handoffInvite, setHandoffInvite] = useState<{ handoff: InviteHandoff; rows: any[]; confirmed: boolean } | null>(null);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has(RESUME_INVITE_PARAM)) return;
+    // Drop the marker so a reload doesn't run this again.
+    params.delete(RESUME_INVITE_PARAM);
+    const q = params.toString();
+    window.history.replaceState(window.history.state, '', `${window.location.pathname}${q ? `?${q}` : ''}`);
+    const h = readInviteHandoff();
+    if (!h) return;
+    setIsGlobalView(h.view === 'candidates');
+    setSelectedHistoryItems(new Set(h.selectedJobKeys ?? []));
+    setPartialJobRows(h.partialJobRows ?? {});
+    setSelectedScoredResumes(h.selectedScoredResumes ?? []);
+    setHandoffReturn(h);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (!handoffReturn || !globalLoaded || handoffCheckedRef.current) return;
+    handoffCheckedRef.current = true;
+    const h = handoffReturn;
+    clearInviteHandoff();
+    const what = h.kind === 'assessment' ? 'AI Assessment' : 'AI Interview';
+    const jobName = h.jdCode || h.jdTitle;
+    (async () => {
+      let live = false;
+      try {
+        live = h.kind === 'assessment'
+          ? ((await assessmentService.list({ jd_id: h.jdId, page_size: 100 }))?.items || []).some(isInvitableAssessment)
+          : !!(await aiInterviewService.findLiveConfigForJd(h.jdId));
+      } catch {
+        live = false;
+      }
+      if (!live) {
+        toast.info(`No ${what} was published for ${jobName} yet — your selection is kept.`);
+        return;
+      }
+      const ids = new Set(h.scoreIds);
+      const rows = globalScoredResumesVersioned.filter(r => ids.has(r.id));
+      if (rows.length === 0) {
+        toast.success(`${what} is live for ${jobName}.`);
+        return;
+      }
+      toast.success(`${what} is live for ${jobName} — now invite your ${peopleIn(rows)} candidate${peopleIn(rows) === 1 ? '' : 's'}.`);
+      setHandoffInvite({ handoff: h, rows, confirmed: false });
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handoffReturn, globalLoaded]);
+  const finishHandoffInvite = (sent: boolean) => {
+    setHandoffInvite(null);
+    if (sent) {
+      clearJobSelection();
+      setSelectedScoredResumes([]);
+    }
+  };
   /* The verdict filter narrows this list. Read through `normalizeMatchResult`
      (see `rowVerdict`) because these rows carry either spelling depending on
      the endpoint that filled them, and a row with no verdict counts as No
@@ -1140,7 +1293,8 @@ export default function ResumeScoringPage({
    * conditions, and it would retry forever.
    */
   useEffect(() => {
-    if (historyLoading) return;
+    // Not waiting for the history any more: the first paint now waits for
+    // both, so fetching them side by side gets the page up sooner.
     // Already in the view — the effect above is handling it.
     if (isGlobalView) return;
     if (globalScoredResumes.length > 0 || isLoadingGlobal) return;
@@ -1149,7 +1303,7 @@ export default function ResumeScoringPage({
     globalPrefetchedRef.current = true;
     void fetchGlobalScoredResumes({ silent: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [historyLoading, isGlobalView, globalScoredResumes.length, isLoadingGlobal]);
+  }, [isGlobalView, globalScoredResumes.length, isLoadingGlobal]);
 
   /** `scroll`: bring the list into view. On for the stat cards (they sit
    *  above the list and open it); OFF for the view pills — those sit right on
@@ -1211,6 +1365,25 @@ export default function ResumeScoringPage({
   useEffect(() => {
     // Only handle initialJdId once
     if (initialJdHandled) return;
+
+    // Opened from View by Candidates / View by Job: reopen that page once the
+    // cross-job scores are in (see `initialOpenedFrom`).
+    if (initialJdId && initialScoreId && initialOpenedFrom) {
+      if (!globalSettled) {
+        if (!isWaitingForInitialJd) setIsWaitingForInitialJd(true);
+        return;
+      }
+      setIsGlobalView(initialOpenedFrom === 'candidates');
+      const row = globalScoredResumes.find((r: any) => r.id === initialScoreId);
+      if (row) {
+        setSelectedHistoryItem(null);
+        setSelectedCandidateForView(row);
+        setViewMode('candidateView');
+      }
+      setIsWaitingForInitialJd(false);
+      setInitialJdHandled(true);
+      return;
+    }
 
     // mode=new without a pre-selected JD (Quick Action entry): drop straight
     // into the "new scoring" view, same internal state change as the in-page
@@ -1320,7 +1493,7 @@ export default function ResumeScoringPage({
         }
       }
     }
-  }, [initialJdId, initialScoreId, scoredHistory, initialShowProgress, initialJdHandled, isWaitingForInitialJd, pendingScoringData, initialNewScoring, jobs]);
+  }, [initialJdId, initialScoreId, scoredHistory, initialShowProgress, initialJdHandled, isWaitingForInitialJd, pendingScoringData, initialNewScoring, jobs, initialOpenedFrom, globalSettled, globalScoredResumes]);
 
   // After scoring completes: auto-navigate to details view once scoredHistory is refreshed.
   // A layout effect, not useEffect: the popup that hid the "Choose JD" view has
@@ -1394,6 +1567,8 @@ export default function ResumeScoringPage({
         }
       } catch (error) {
         console.log('[ResumeScoringPage] Failed to load quota:', error);
+      } finally {
+        setQuotaSettled(true);
       }
     };
     fetchQuota();
@@ -1876,14 +2051,6 @@ export default function ResumeScoringPage({
     clearPartialJob(jobKey);
   };
 
-  /** Tick every listed job, or — when they're all ticked already — none. */
-  const handleSelectAllHistory = (jobKeys: string[]) => {
-    setSelectedHistoryItems(prev =>
-      jobKeys.length > 0 && jobKeys.every(k => prev.has(k)) ? new Set() : new Set(jobKeys),
-    );
-    setPartialJobRows({});
-  };
-
   /** Clear every job tick, whole and partial — the toolbar's Clear. */
   const clearJobSelection = () => {
     setSelectedHistoryItems(new Set());
@@ -2076,6 +2243,14 @@ export default function ResumeScoringPage({
     return <ResumeScoringSkeleton variant={initialJdId ? 'list' : 'overview'} />;
   }
 
+  // First paint of the list landing: hold the skeleton until everything the
+  // first screen shows has arrived (see `globalSettled`).
+  if (!firstPaintDoneRef.current) {
+    const ready = firstPaintCapped || (!historyLoading && globalSettled && quotaSettled);
+    if (!ready && !initialJdId) return <ResumeScoringSkeleton variant="overview" />;
+    firstPaintDoneRef.current = true;
+  }
+
   // View Candidate Scoring Detail Page
   if (viewMode === 'candidateView' && selectedCandidateForView && selectedHistoryItem) {
     const _scoredList = selectedHistoryItem.scoredResumes ?? [];
@@ -2192,7 +2367,7 @@ export default function ResumeScoringPage({
       setSelectedCandidateForView(candidate);
       const jdId = candidate.jdId || 'global';
       router.push(
-        `/recruitment/resume-scoring?jd_id=${jdId}&score_id=${candidate.id ?? candidate.resumeId}`,
+        `/recruitment/resume-scoring?jd_id=${jdId}&score_id=${candidate.id ?? candidate.resumeId}&view=${isGlobalView ? 'candidates' : 'job'}`,
         { scroll: false }
       );
     };
@@ -2852,9 +3027,38 @@ export default function ResumeScoringPage({
     /* Under a verdict filter, only jobs that have at least one such score.
        Not applied until the scores have loaded — an unloaded list would
        otherwise hide every job. */
-    const collapsedHistory = matchFilter && globalLoaded
+    const collapsedHistoryFiltered = matchFilter && globalLoaded
       ? collapsedHistoryAll.filter(item => jobScores(item).some(r => rowVerdict(r) === matchFilter))
       : collapsedHistoryAll;
+
+    /* Sort by — Last Scored / Job Title / JD ID / candidate counts (under
+       the verdict pill). Ties keep the list's own newest-first order. */
+    const jobSortValue = (item: ScoredResumeData): number | string => {
+      const verdictCount = (v: Verdict) => jobScores(item).filter(r => rowVerdict(r) === v).length;
+      switch (jobSortBy) {
+        case 'title': return (item.jobTitle || '').toLowerCase();
+        case 'jdId': {
+          const code = jdCodeOf(item) || '';
+          const n = parseInt(code.match(/(\d+)\s*$/)?.[1] ?? '', 10);
+          return isNaN(n) ? code.toLowerCase() : n;
+        }
+        case 'candidates':
+          return matchFilter ? verdictCount(matchFilter) : jobScores(item).length;
+        case 'exact': return verdictCount('Exact Match');
+        case 'partial': return verdictCount('Partial Match');
+        case 'none': return verdictCount('No Match');
+        default: return new Date(item.scoredAt).getTime() || 0;
+      }
+    };
+    const collapsedHistory = collapsedHistoryFiltered
+      .map((item, index) => ({ item, index, key: jobSortValue(item) }))
+      .sort((a, b) => {
+        const cmp = typeof a.key === 'string' || typeof b.key === 'string'
+          ? String(a.key).localeCompare(String(b.key), undefined, { numeric: true, sensitivity: 'base' })
+          : a.key - b.key;
+        return cmp !== 0 ? (jobSortOrder === 'asc' ? cmp : -cmp) : a.index - b.index;
+      })
+      .map(x => x.item);
 
 
     // Add processing entry at the top if it exists and matches filters
@@ -2867,6 +3071,11 @@ export default function ResumeScoringPage({
     const selectableJobs = displayHistory.filter(item => !item.isProcessing);
     const selectableJobKeys = selectableJobs.map(item => resolveHistoryGroupKey(item));
     const allJobsSelected = selectableJobKeys.length > 0 && selectableJobKeys.every(k => selectedHistoryItems.has(k));
+    // The jobs on the page being shown — Select All's "this page" scope.
+    const pageJobKeys = displayHistory
+      .slice((historyCurrentPage - 1) * historyItemsPerPage, historyCurrentPage * historyItemsPerPage)
+      .filter(item => !item.isProcessing)
+      .map(item => resolveHistoryGroupKey(item));
     const isJobPartlySelected = (k: string) => !selectedHistoryItems.has(k) && (partialJobRows[k]?.length ?? 0) > 0;
     // Jobs with anything ticked — whole or partly.
     const selectedJobCount = selectableJobKeys.filter(k => selectedHistoryItems.has(k) || isJobPartlySelected(k)).length;
@@ -3123,11 +3332,11 @@ export default function ResumeScoringPage({
           { id: 'Partial Match', label: 'Partial Match', count: matchCounts.partial },
           { id: 'No Match', label: 'No Match', count: matchCounts.none },
         ];
+        /* Rendered inside each view's second toolbar row (Job Openings
+           layout): verdict pills, then the view switch as one segmented
+           toggle — the active side lifts to a white chip. */
         const viewPills = (
-        /* Inset from the left by the card's own padding (p-4 / sm:p-6 plus
-           its border), so "All" lines up with the toolbar's first control
-           below instead of sitting flush with the page edge. */
-        <div className="flex items-center gap-2 flex-wrap mb-3 px-[17px] sm:px-[25px]">
+        <div className="flex items-center gap-2 flex-wrap">
           <div role="group" aria-label="Filter by match" className="flex items-center gap-2 flex-wrap">
             {verdictFilters.map(f => {
               const active = matchFilter === f.id;
@@ -3151,21 +3360,40 @@ export default function ResumeScoringPage({
 
           <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
 
-          <div role="group" aria-label="Group by" className="flex items-center gap-2 flex-wrap">
-            {([
-              { id: 'jobs', label: 'View by Job', active: !isGlobalView, open: () => openScoringListView(false, 'candidates', { scroll: false }) },
-              { id: 'candidates', label: 'View by Candidates', active: isGlobalView, open: () => openScoringListView(true, 'candidates', { scroll: false }) },
-            ]).map(view => (
-              <button
-                key={view.id}
-                type="button"
-                onClick={view.open}
-                aria-pressed={view.active}
-                className={pillClass(view.active)}
-              >
-                {view.label}
-              </button>
-            ))}
+          {/* "View by" once, then a sliding tile toggle: two equal halves on
+              one track, and a white tile that slides under the active one. */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap">View by</span>
+            <div
+              role="radiogroup"
+              aria-label="View by"
+              className="relative grid grid-cols-2 h-[38px] p-1 rounded-lg bg-brand-blue/5 ring-1 ring-brand-blue/10"
+            >
+              <span
+                aria-hidden
+                className={`absolute top-1 bottom-1 left-1 w-[calc(50%-0.25rem)] rounded-md bg-white dark:bg-slate-800 shadow-sm shadow-brand-blue/15 ring-1 ring-brand-blue/10 transition-transform duration-300 ease-out ${
+                  viewTileRight ? 'translate-x-full' : 'translate-x-0'
+                }`}
+              />
+              {([
+                { id: 'jobs', label: 'Job', icon: Briefcase, active: !isGlobalView, open: () => openScoringListView(false, 'candidates', { scroll: false }) },
+                { id: 'candidates', label: 'Candidates', icon: Users, active: isGlobalView, open: () => openScoringListView(true, 'candidates', { scroll: false }) },
+              ]).map(view => (
+                <button
+                  key={view.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={view.active}
+                  onClick={view.open}
+                  className={`relative z-10 inline-flex items-center justify-center gap-1.5 px-4 rounded-md text-sm font-medium whitespace-nowrap transition-colors duration-300 ${
+                    view.active ? 'text-brand-blue' : 'text-gray-600 dark:text-slate-400 hover:text-brand-blue'
+                  }`}
+                >
+                  <view.icon className="w-4 h-4" />
+                  {view.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
         );
@@ -3175,8 +3403,6 @@ export default function ResumeScoringPage({
         {/* The view row sits FIRST — above the search / filter bar of
             whichever view is open — so "what am I looking at" is read before
             "narrow it down". */}
-        {viewPills}
-
         {/* Global View - All Scored Candidates */}
         {isGlobalView ? (
           /* No space-y: the first child is the zero-height scroll anchor, so it
@@ -3186,6 +3412,8 @@ export default function ResumeScoringPage({
             {isLoadingGlobal ? (
               <TableSkeleton />
             ) : globalScoredResumes.length === 0 ? (
+              <>
+              <div className="mb-3">{viewPills}</div>
               <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-10 text-center">
                 <div className="w-12 h-12 mx-auto mb-3 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
                   <Search className="w-5 h-5 text-brand-blue" />
@@ -3193,6 +3421,7 @@ export default function ResumeScoringPage({
                 <h3 className="text-base sm:text-lg font-medium text-gray-900 dark:text-slate-50 mb-2 tracking-tight">No Scored Candidates</h3>
                 <p className="text-sm text-gray-600 dark:text-slate-400">Score resumes against jobs to see them here.</p>
               </div>
+              </>
             ) : (
               <ScoredResumesTable
                 resumes={globalScoredResumesWithVersion}
@@ -3211,7 +3440,7 @@ export default function ResumeScoringPage({
                   setViewMode('candidateView');
                   // Update URL with jd_id and score_id for shareable link & browser history
                   const jdId = resume.jdId || 'global';
-                  router.push(`/recruitment/resume-scoring?jd_id=${jdId}&score_id=${resume.id}`, { scroll: false });
+                  router.push(`/recruitment/resume-scoring?jd_id=${jdId}&score_id=${resume.id}&view=candidates`, { scroll: false });
                 }}
                 selectedResumes={selectedScoredResumes}
                 onSelectResume={(id) => {
@@ -3232,6 +3461,8 @@ export default function ResumeScoringPage({
                    scoring event, in plain newest-first order. */
                 groupByEmail={globalListMode === 'candidates'}
                 onCandidateOrderChange={(candidates) => { candidateNavOrderRef.current = candidates; }}
+                viewPillsSlot={viewPills}
+                onCreateInviteTarget={(kind, job, rows) => setCreateInviteTarget({ kind, job, rows, view: 'candidates' })}
               />
             )}
           </div>
@@ -3244,7 +3475,7 @@ export default function ResumeScoringPage({
         <div ref={listSectionRef} className="scroll-mt-4" aria-hidden="true" />
         {/* Search and Filter Bar — only when there's a list to filter */}
         {scoredHistory.length > 0 && (
-          <div className="mb-4">
+          <div className="mb-3">
             {/* No "Job List (N)" heading, and no count badge — the same bare
                 toolbar as View by Candidates; the pagination below carries
                 the totals. */}
@@ -3254,189 +3485,66 @@ export default function ResumeScoringPage({
               // The hook debounces into `appliedQuery`, so keystrokes pass through.
               searchDebounceMs={0}
               searchPlaceholder="Search by job title..."
-              // Same capped search box as View by Candidates' toolbar.
-              searchClassName="sm:flex-none sm:w-64 lg:w-80"
+              // Row 1: Search (fills the row), Location and Industry inline,
+              // More Filters, Reset, Sort by, List / Grid.
               controlsFollowSearch
               onToggleFilters={() => setShowHistoryFilters(!showHistoryFilters)}
               filtersOpen={showHistoryFilters}
               activeFilterCount={historySearch.activeFilterCount}
               filtersApplied={historySearch.filtersApplied}
               onClearFilters={clearHistoryFilters}
-              beforeSearch={
-                <>
-                  {/* Select all — the same toolbar control, in the same place, as
-                      View by Candidates'. Ticks every job listed right now. */}
-                  {selectableJobKeys.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => handleSelectAllHistory(selectableJobKeys)}
-                      aria-pressed={allJobsSelected}
-                      className={TOOLBAR_BUTTON_CLASS}
-                    >
-                      {allJobsSelected ? (
-                        <CheckSquare className="w-4 h-4 text-brand-blue" />
-                      ) : (
-                        <Square className="w-4 h-4" />
-                      )}
-                      {allJobsSelected ? 'Deselect all' : 'Select all'}
-                    </button>
-                  )}
-                </>
-              }
-              // sm:flex-wrap: on tablets the row wraps instead of squeezing its buttons.
-              className="mb-0 sm:flex-wrap"
-              // List / Grid pinned to the row's right edge, as in View by Candidates.
-              trailing={
-                <ListViewToggle
-                  value={jobListDisplayMode}
-                  onChange={setJobListDisplayMode}
-                  className="h-[38px] !border-brand-blue/10"
-                />
-              }
+              leadingActions={(() => {
+                const locations = [...new Set(scoredHistory.map(i => i.jdLocation).filter(Boolean))] as string[];
+                const industries = [...new Set(scoredHistory.map(i => i.jdIndustryType).filter(Boolean))] as string[];
+                return (
+                  <>
+                    <SearchableSelect
+                      className="w-full sm:w-48"
+                      value={historyLocation}
+                      onChange={(v) => historySearch.setFilter('location', v || '')}
+                      options={locations.map(l => ({ value: l, label: l }))}
+                      allLabel="All Locations"
+                      placeholder="All Locations"
+                      searchPlaceholder="Search location..."
+                      ariaLabel="Filter by location"
+                    />
+                    <SearchableSelect
+                      className="w-full sm:w-48"
+                      value={historyIndustry}
+                      onChange={(v) => historySearch.setFilter('industry', v || '')}
+                      options={industries.map(i => ({ value: i, label: formatIndustryType(i) }))}
+                      allLabel="All Industries"
+                      placeholder="All Industries"
+                      searchPlaceholder="Search industry..."
+                      ariaLabel="Filter by industry"
+                    />
+                  </>
+                );
+              })()}
+              className="mb-0"
             >
-              {/* Export — every score of the TICKED jobs (verdict pill
-                  applied), all versions. */}
-              <button
-                type="button"
-                onClick={() => {
-                  if (!canExportScores) {
-                    toast.error('You do not have permission to export');
-                    return;
-                  }
-                  if (selectedJobCount === 0) {
-                    toast.warning('Please select at least one job to export');
-                    return;
-                  }
-                  if (!globalLoaded) {
-                    toast.info('Candidates are still loading — try again in a moment');
-                    return;
-                  }
-                  if (jobViewExportRows.length === 0) {
-                    toast.warning(matchFilter
-                      ? `The selected jobs have no ${matchFilter} candidates to export`
-                      : 'The selected jobs have no scored resumes to export');
-                    return;
-                  }
-                  setShowJobExportModal(true);
-                }}
-                aria-disabled={!canExportScores}
-                title={!canExportScores ? 'You do not have permission to export' : 'Export the selected jobs\' scored resumes'}
-                className={`${TOOLBAR_BUTTON_CLASS} ${!canExportScores ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                <FileDown className="w-4 h-4" />
-                Export
-              </button>
-              {/* Actions — the same menu as View by Candidates', on the ticked
-                  jobs' candidates. Fades in with a blinking dot. */}
-              {selectedJobCount > 0 && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      type="button"
-                      className="relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-[var(--brand-blue)] text-white hover:bg-[var(--brand-blue-2)] shadow-sm hover:shadow-md animate-in fade-in zoom-in-95 duration-300"
-                      aria-label={`Actions for ${selectedJobCount} selected ${selectedJobCount === 1 ? 'job' : 'jobs'}`}
-                    >
-                      <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
-                        <span className="absolute inline-flex h-full w-full rounded-full bg-brand-orange opacity-75 animate-ping [animation-iteration-count:4]" />
-                        <span className="relative inline-flex h-3 w-3 rounded-full bg-brand-orange ring-2 ring-white" />
-                      </span>
-                      {jobBulkDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                      Actions ({selectedJobCount})
-                      <ChevronDown className="w-4 h-4" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-60 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
-                    {(() => {
-                      const guard = (): boolean => {
-                        if (!globalLoaded) { toast.info('Candidates are still loading — try again in a moment'); return false; }
-                        if (jobViewExportRows.length === 0) {
-                          toast.warning(matchFilter
-                            ? `The selected jobs have no ${matchFilter} candidates`
-                            : 'The selected jobs have no scored candidates');
-                          return false;
-                        }
-                        return true;
-                      };
-                      const itemCls = 'group !rounded-none !px-4 !py-2.5 text-sm text-gray-700';
-                      return (
-                        <>
-                          <DropdownMenuItem
-                            className={`${itemCls} ${!jobActionPerms.canDownloadScorecard ? 'text-gray-400 opacity-60' : ''}`}
-                            disabled={jobBulkDownloading}
-                            onSelect={(e) => {
-                              if (!jobActionPerms.canDownloadScorecard) {
-                                e.preventDefault();
-                                toast.error('You do not have permission to download the scorecard');
-                                return;
-                              }
-                              if (guard()) setJobBulkAction('download');
-                            }}
-                          >
-                            <Download className="w-4 h-4 text-menu-icon-download" />
-                            <span className={MENU_ITEM_SCALE_CLASS}>{jobBulkDownloading ? 'Downloading...' : 'Download All Scorecards'}</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            className={`${itemCls} ${!jobActionPerms.canCreateAssessments || !singleSelectedJob ? 'text-gray-400 opacity-60' : ''}`}
-                            title={!singleSelectedJob ? "Tick one job to invite to that job's assessment" : undefined}
-                            onSelect={(e) => {
-                              if (!jobActionPerms.canCreateAssessments) {
-                                e.preventDefault();
-                                toast.error(jobActionPerms.assessmentDeniedReason);
-                                return;
-                              }
-                              if (!singleSelectedJob) {
-                                e.preventDefault();
-                                toast.info("Assessment invites go to one job's assessment — tick a single job");
-                                return;
-                              }
-                              if (guard()) setJobBulkAction('assessment');
-                            }}
-                          >
-                            <FileText className="w-4 h-4 text-menu-icon-view" />
-                            <span className={MENU_ITEM_SCALE_CLASS}>AI Assessment Invite</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            className={`${itemCls} ${!jobActionPerms.mayInviteAIInterview ? 'text-gray-400 opacity-60' : ''}`}
-                            onSelect={(e) => {
-                              if (!jobActionPerms.mayInviteAIInterview) {
-                                e.preventDefault();
-                                toast.error(jobActionPerms.aiInterviewDeniedReason);
-                                return;
-                              }
-                              if (guard()) setJobBulkAction('interview');
-                            }}
-                          >
-                            <Video className="w-4 h-4 text-menu-icon-share" />
-                            <span className={MENU_ITEM_SCALE_CLASS}>AI Interview Invite</span>
-                          </DropdownMenuItem>
-                        </>
-                      );
-                    })()}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+              {/* Sort by, then List / Grid — where Export used to be (Export
+                  is now in the Actions menu, shown once jobs are ticked). */}
+              {displayHistory.length > 0 && (
+                <SortByControl
+                  value={jobSortBy}
+                  order={jobSortOrder}
+                  options={JOB_SORT_OPTIONS}
+                  onChange={(v) => { setJobSortBy(v); setHistoryCurrentPage(1); }}
+                  onToggleOrder={() => { setJobSortOrder(o => (o === 'asc' ? 'desc' : 'asc')); setHistoryCurrentPage(1); }}
+                />
               )}
-
-              {/* Clear — untick every job, once anything is ticked; the same
-                  control View by Candidates has beside its Actions. */}
-              {selectedJobCount > 0 && (
-                <button
-                  type="button"
-                  onClick={clearJobSelection}
-                  title="Clear the selection"
-                  className={TOOLBAR_BUTTON_CLASS}
-                >
-                  <X className="w-4 h-4" />
-                  Clear
-                </button>
-              )}
+              <ListViewToggle
+                value={jobListDisplayMode}
+                onChange={setJobListDisplayMode}
+                className="h-[38px] !border-brand-blue/10"
+              />
             </ListToolbar>
 
             {/* Expanded Filters */}
             {showHistoryFilters && (() => {
-              const uniqueLocations = [...new Set(scoredHistory.map(i => i.jdLocation).filter(Boolean))];
               const uniqueWorkModes = [...new Set(scoredHistory.map(i => i.jdRemoteType).filter(Boolean))];
               const uniqueJobTypes = [...new Set(scoredHistory.map(i => i.jdEmploymentType).filter(Boolean))];
-              const uniqueIndustries = [...new Set(scoredHistory.map(i => i.jdIndustryType).filter(Boolean))];
               const uniqueCreators = [...new Set(scoredHistory.map(i => i.jdCreatedByName).filter(Boolean))];
               const selectCls = "w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-50 text-sm";
               const inputCls = "w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-50 text-sm";
@@ -3462,13 +3570,6 @@ export default function ResumeScoringPage({
                       <DateField aria-label="Scored To" value={historyScoredTo} onChange={v => historySearch.setFilter('scoredTo', v)} />
                     </div>
                     <div>
-                      <label className={labelCls}>Location</label>
-                      <select value={historyLocation} onChange={e => historySearch.setFilter('location', e.target.value)} className={selectCls}>
-                        <option value="">All Locations</option>
-                        {uniqueLocations.map(l => <option key={l} value={l!}>{l}</option>)}
-                      </select>
-                    </div>
-                    <div>
                       <label className={labelCls}>Work Mode</label>
                       <select value={historyWorkMode} onChange={e => historySearch.setFilter('workMode', e.target.value)} className={selectCls}>
                         <option value="">All Work Modes</option>
@@ -3485,19 +3586,11 @@ export default function ResumeScoringPage({
                         {uniqueJobTypes.map(t => <option key={t} value={t!}>{formatEmploymentType(t)}</option>)}
                       </select>
                     </div>
-                    <div>
-                      <label className={labelCls}>Industry</label>
-                      <select value={historyIndustry} onChange={e => historySearch.setFilter('industry', e.target.value)} className={selectCls}>
-                        <option value="">All Industries</option>
-                        {uniqueIndustries.map(i => <option key={i} value={i!}>{formatIndustryType(i)}</option>)}
-                      </select>
-                    </div>
-
                     {/* Done rides the last row of fields, bottom-right, instead
                         of a footer row of its own — same as View by Candidates.
                         Clearing lives on the toolbar's Reset. The controls
                         commit as they change, so Done just closes the panel. */}
-                    <div className="flex items-end justify-end lg:col-span-2">
+                    <div className="flex items-end justify-end">
                       <Button
                         variant="primary"
                         size="sm"
@@ -3514,6 +3607,203 @@ export default function ResumeScoringPage({
           </div>
         )}
 
+        {/* Row 2: Select All, the verdict pills and View by toggle (Actions
+            and Clear get their own row below once jobs are ticked). */}
+        <div className={`${scoredHistory.length > 0 ? 'pt-3 border-t border-gray-200 dark:border-slate-700/60' : ''} mb-4 flex flex-wrap items-center gap-2`}>
+          {selectableJobKeys.length > 0 && (
+            <SelectAllMenu
+              selectedCount={selectedJobCount}
+              pageCount={pageJobKeys.length}
+              totalCount={selectableJobKeys.length}
+              noun="jobs"
+              allSelected={allJobsSelected}
+              onSelectPage={() => {
+                setSelectedHistoryItems(prev => new Set([...prev, ...pageJobKeys]));
+                setPartialJobRows(prev => {
+                  const next = { ...prev };
+                  pageJobKeys.forEach(k => { delete next[k]; });
+                  return next;
+                });
+              }}
+              onSelectAll={() => {
+                setSelectedHistoryItems(new Set(selectableJobKeys));
+                setPartialJobRows({});
+              }}
+              onClear={clearJobSelection}
+            />
+          )}
+          {selectableJobKeys.length > 0 && (
+            <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
+          )}
+          {viewPills}
+          {/* Expand all / Collapse all — every job on this page, the same
+              control View by Candidates has. */}
+          {pageJobKeys.length > 0 && (() => {
+            const allOpen = pageJobKeys.every(k => expandedJobKeys.has(k));
+            return (
+              <button
+                type="button"
+                onClick={() =>
+                  setExpandedJobKeys(prev => {
+                    const next = new Set(prev);
+                    pageJobKeys.forEach(k => (allOpen ? next.delete(k) : next.add(k)));
+                    return next;
+                  })
+                }
+                aria-pressed={allOpen}
+                className={`${TOOLBAR_BUTTON_CLASS} sm:ml-auto`}
+              >
+                {allOpen ? <ChevronsDownUp className="w-4 h-4" /> : <ChevronsUpDown className="w-4 h-4" />}
+                {allOpen ? 'Collapse all' : 'Expand all'}
+              </button>
+            );
+          })()}
+        </div>
+
+        {/* Row 3 — only while jobs are ticked: Actions and Clear, on a line
+            of their own under Select All. */}
+        {selectedJobCount > 0 && (
+          <div className="-mt-1 mb-4 flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+          {/* Actions — the same menu as View by Candidates', on the ticked
+                jobs' candidates. Fades in with a blinking dot. */}
+            {(
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
+                aria-label={`Actions for ${selectedJobCount} selected ${selectedJobCount === 1 ? 'job' : 'jobs'}`}
+              >
+                <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
+                  <span className="absolute inline-flex h-full w-full rounded-full bg-brand-orange opacity-75 animate-ping [animation-iteration-count:4]" />
+                  <span className="relative inline-flex h-3 w-3 rounded-full bg-brand-orange ring-2 ring-white" />
+                </span>
+                {jobBulkDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                Actions ({selectedJobCount})
+                <ChevronDown className="w-4 h-4" />
+              </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-60 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
+              {(() => {
+                const guard = (): boolean => {
+                  if (!globalLoaded) { toast.info('Candidates are still loading — try again in a moment'); return false; }
+                  if (jobViewExportRows.length === 0) {
+                    toast.warning(matchFilter
+                      ? `The selected jobs have no ${matchFilter} candidates`
+                      : 'The selected jobs have no scored candidates');
+                    return false;
+                  }
+                  return true;
+                };
+                const itemCls = 'group !rounded-none !px-4 !py-2.5 text-sm text-gray-700';
+                return (
+                  <>
+                    {/* Light grey header strip: how many jobs the actions run on. */}
+                    <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
+                      {selectedJobCount} {selectedJobCount === 1 ? 'job' : 'jobs'} selected
+                    </div>
+                    {/* Export — every score of the ticked jobs (verdict
+                        pill applied), all versions. */}
+                    <DropdownMenuItem
+                      className={`${itemCls} ${!canExportScores ? 'text-gray-400 opacity-60' : ''}`}
+                      onSelect={(e) => {
+                        if (!canExportScores) {
+                          e.preventDefault();
+                          toast.error('You do not have permission to export');
+                          return;
+                        }
+                        if (guard()) setShowJobExportModal(true);
+                      }}
+                    >
+                      <FileDown className="w-4 h-4 text-menu-icon-download" />
+                      <span className={MENU_ITEM_SCALE_CLASS}>Export</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className={`${itemCls} ${!jobActionPerms.canDownloadScorecard ? 'text-gray-400 opacity-60' : ''}`}
+                      disabled={jobBulkDownloading}
+                      onSelect={(e) => {
+                        if (!jobActionPerms.canDownloadScorecard) {
+                          e.preventDefault();
+                          toast.error('You do not have permission to download the scorecard');
+                          return;
+                        }
+                        if (guard()) setJobBulkAction('download');
+                      }}
+                    >
+                      <Download className="w-4 h-4 text-menu-icon-download" />
+                      <span className={MENU_ITEM_SCALE_CLASS}>{jobBulkDownloading ? 'Downloading...' : 'Download All Scorecards'}</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator className="my-1 bg-gray-100" />
+                    {(() => {
+                      /* The ticked jobs, each as the job its invite goes to
+                         (its latest version — the one the row shows). */
+                      const tickedJobs: InviteTargetJob[] = selectableJobs
+                        .filter(item => {
+                          const k = resolveHistoryGroupKey(item);
+                          return selectedHistoryItems.has(k) || isJobPartlySelected(k);
+                        })
+                        .map(item => ({ jdId: item.jobId, jdCode: jdCodeOf(item) || undefined, jdTitle: item.jobTitle }));
+                      const assessmentTarget = resolveInviteTargetState('assessment', tickedJobs, id => jobViewInviteTargets.hasAssessment(id));
+                      const interviewTarget = resolveInviteTargetState('interview', tickedJobs, id => jobViewInviteTargets.hasAIInterview(id));
+                      const create = (kind: InviteHandoffKind) => (job: InviteTargetJob) =>
+                        setCreateInviteTarget({ kind, job, rows: jobViewExportRows, view: 'job' });
+                      return (
+                        <>
+                          {renderInviteTargetItems({
+                            kind: 'assessment',
+                            target: assessmentTarget,
+                            itemClass: itemCls,
+                            allowed: jobActionPerms.canCreateAssessments,
+                            onInvite: (e) => {
+                              if (!jobActionPerms.canCreateAssessments) {
+                                e.preventDefault();
+                                toast.error(jobActionPerms.assessmentDeniedReason);
+                                return;
+                              }
+                              if (guard()) setJobBulkAction('assessment');
+                            },
+                            onCreate: create('assessment'),
+                          })}
+                          {renderInviteTargetItems({
+                            kind: 'interview',
+                            target: interviewTarget,
+                            itemClass: itemCls,
+                            allowed: jobActionPerms.mayInviteAIInterview,
+                            onInvite: (e) => {
+                              if (!jobActionPerms.mayInviteAIInterview) {
+                                e.preventDefault();
+                                toast.error(jobActionPerms.aiInterviewDeniedReason);
+                                return;
+                              }
+                              if (guard()) setJobBulkAction('interview');
+                            },
+                            onCreate: create('interview'),
+                          })}
+                        </>
+                      );
+                    })()}
+                  </>
+                );
+              })()}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+
+            {/* Clear — untick every job, once anything is ticked; the same
+                control View by Candidates has beside its Actions. */}
+            {(
+              <button
+                type="button"
+                onClick={clearJobSelection}
+                title="Clear the selection"
+                className={TOOLBAR_BUTTON_CLASS}
+              >
+                <X className="w-4 h-4" />
+                Clear
+              </button>
+            )}
+          </div>
+        )}
 
         {/* History List or Empty State */}
         {displayHistory.length > 0 ? (
@@ -3719,7 +4009,7 @@ export default function ResumeScoringPage({
                             setSelectedCandidateForView(resume);
                             setViewMode('candidateView');
                             const jdId = resume.jdId || item.jobId;
-                            router.push(`/recruitment/resume-scoring?jd_id=${jdId}&score_id=${resume.id}`, { scroll: false });
+                            router.push(`/recruitment/resume-scoring?jd_id=${jdId}&score_id=${resume.id}&view=job`, { scroll: false });
                           }}
                         />
                       )}
@@ -4827,6 +5117,55 @@ export default function ResumeScoringPage({
               </div>
             </div>
           </div>
+        );
+      })()}
+
+      {createInviteTarget && (
+        <CreateInviteTargetModal
+          kind={createInviteTarget.kind}
+          jdCode={createInviteTarget.job.jdCode}
+          jdTitle={createInviteTarget.job.jdTitle}
+          candidateCount={peopleIn(createInviteTarget.rows)}
+          onCancel={() => setCreateInviteTarget(null)}
+          onStart={startCreateInviteTarget}
+        />
+      )}
+
+      {/* Back from creating it: confirm who (the same popup as Actions), then invite. */}
+      {handoffInvite && !handoffInvite.confirmed && (
+        <BulkActionConfirmModal
+          action={handoffInvite.handoff.kind}
+          rows={handoffInvite.rows}
+          onCancel={() => finishHandoffInvite(false)}
+          onConfirm={(rows) => setHandoffInvite({ ...handoffInvite, rows, confirmed: true })}
+        />
+      )}
+      {handoffInvite?.confirmed && handoffInvite.handoff.kind === 'assessment' && (
+        <BulkInviteModal
+          selectedResumes={handoffInvite.rows}
+          jobId={handoffInvite.handoff.jdId}
+          jobTitle={handoffInvite.handoff.jdTitle}
+          onClose={() => finishHandoffInvite(false)}
+          onSuccess={() => finishHandoffInvite(true)}
+        />
+      )}
+      {handoffInvite?.confirmed && handoffInvite.handoff.kind === 'interview' && (() => {
+        const seen = new Set<string>();
+        const people = handoffInvite.rows.filter((r) => {
+          const k = String(r.email || r.resumeId || r.id).toLowerCase();
+          if (seen.has(k)) return false;
+          seen.add(k);
+          return true;
+        });
+        return (
+          <InviteToAIInterviewFlow
+            open
+            onClose={() => finishHandoffInvite(false)}
+            jobId={handoffInvite.handoff.jdId}
+            candidates={people.map((r) => ({ id: r.resumeId || r.id, name: r.candidateName || 'Unknown', email: r.email || undefined }))}
+            resumes={people.map((r) => ({ id: r.resumeId || r.id, name: r.candidateName || 'Unknown', email: r.email, phone: r.phone })) as any}
+            onInvited={() => finishHandoffInvite(true)}
+          />
         );
       })()}
 

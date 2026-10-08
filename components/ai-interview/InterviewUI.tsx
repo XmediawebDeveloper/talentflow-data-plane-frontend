@@ -5499,7 +5499,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         // NOT render any chip or inline note — the Follow-up indicator and
         // "Reframed as a follow-up…" note are post-interview-only and live
         // on the Question Analysis (EvaluationDashboardV2) page.
-        console.log(`[WS ${timestamp}] question_meta: is_followup=${data.is_followup}, skills=${JSON.stringify(data.follow_skills)}`);
+        console.log(`[INTERVIEW-DEBUG][WS ${timestamp}] question_meta: is_followup=${data.is_followup}, skills=${JSON.stringify(data.follow_skills)}, answer_type=${data.answer_type}, question_number=${data.question_number}, hr_question_id=${data.hr_question_id}, live_questionNumber=${questionNumberRef.current}`);
         if (data.is_followup) {
           isCurrentFollowupRef.current = true;
         } else {
@@ -5535,7 +5535,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               hrVoiceBlockedQuestionNumberRef.current = null;
             }
           } else {
-            console.log(`[WS ${timestamp}] question_meta: duplicate re-announcement of hr_question_id=${_hrQid} ignored`);
+            console.log(`[INTERVIEW-DEBUG][WS ${timestamp}] question_meta: duplicate re-announcement of hr_question_id=${_hrQid} ignored (armedHrQuestionIdRef already set to this id)`);
           }
         } else {
           // Ordinary free-form question (no HR tag at all) — make sure no
@@ -9529,6 +9529,27 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     !isAiSpeaking && !isProcessing &&
     questionTimerSeconds !== null && !questionTimerExpired;
 
+  // Debug-only: trace the exact AII-20 button render gate
+  // (structuredHrPrompt.questionNumber === questionNumber && answerType ===
+  // 'yes_no' && isCandidateTurn && !hrExplainMore) every time one of its
+  // inputs changes, so a report of "yes_no question showed no buttons" can
+  // be diagnosed from client-log without reproducing live.
+  useEffect(() => {
+    if (!structuredHrPrompt) return;
+    console.log('[INTERVIEW-DEBUG] AII-20 button gate state', {
+      structuredHrPrompt,
+      liveQuestionNumber: questionNumber,
+      numbersMatch: structuredHrPrompt.questionNumber === questionNumber,
+      isCandidateTurn,
+      hrExplainMore,
+      wouldRenderButtons:
+        structuredHrPrompt.questionNumber === questionNumber &&
+        structuredHrPrompt.answerType === 'yes_no' &&
+        isCandidateTurn &&
+        !hrExplainMore,
+    });
+  }, [structuredHrPrompt, questionNumber, isCandidateTurn, hrExplainMore]);
+
   // AII-20: submit a Yes/No click or a Text-based typed answer. Reuses the
   // EXISTING `text_input` WS message the backend already handles end-to-end
   // (run_text_pipeline) — no new message type, no new backend workflow.
@@ -10717,8 +10738,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 background (gray-50) before it reaches the floating turn banner,
                 so nothing shows sharply behind/around the banner. Non-
                 interactive so it never blocks scrolling or clicks. Sits under
-                the fixed banner (which is z-105) but above the scrolling text. */}
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-b from-transparent via-gray-50/70 to-gray-50 dark:to-slate-800/50" />
+                the fixed banner (which is z-105) but above the scrolling text.
+                Gated on bannerVisible: with no banner on screen there is
+                nothing to blend into, and the scroll container only reserves
+                pb-4 of clearance — the old unconditional h-32 fade washed out
+                the newest/currently-streaming BINA bubble (which the auto-scroll
+                pins right under it) whenever the banner wasn't showing. */}
+            <div className={`pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-b from-transparent via-gray-50/70 to-gray-50 dark:to-slate-800/50 transition-[height] duration-150 ${
+              bannerVisible ? 'h-32' : 'h-0'
+            }`} />
             {/* ── Big countdown overlays (under the question, high visibility) ──
                 Change 1: pre-turn "get ready" 5→1 before the mic opens.
                 Change 2: mid-speech silence 7→1 (final 7s of the 15s window).

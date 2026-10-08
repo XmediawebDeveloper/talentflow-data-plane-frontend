@@ -1,6 +1,7 @@
 'use client';
 
 import ChipsReveal from '@/components/ui/chips-reveal';
+import { handoffContinueLabel, safeResumeScoringReturnUrl } from '@/lib/utils/resumeScoringInviteHandoff';
 import { ArrowRight, Building2, Clock, Briefcase, Sliders, Plus, X, Share2, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Star, Video, Info, Eye, Edit3, MoreVertical, Loader2, Lock, Search, ChevronDown, RefreshCw } from 'lucide-react';
 import type { AssessmentResponse, HRTopic } from '@/lib/services/assessmentService';
 import { Button } from '@/components/ui/button';
@@ -653,6 +654,10 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
   // job instead of resetting to the Assessments trail, and `from`/`returnUrl`
   // survive every in-flow URL rewrite so the anchor holds across steps.
   const fromJobDetails = searchParams.get('from') === 'job-details';
+  // Entered from Resume Scoring's Actions › "Create AI Assessment" (the job
+  // had none to invite to). The trail starts at Resume Scoring and the
+  // published screen leads straight back there to send the invites.
+  const fromResumeScoring = !embedded && searchParams.get('from') === 'resume-scoring';
   const returnUrl = searchParams.get('returnUrl');
   // JD title carried in the URL. The JD list is fetched async, so without this
   // the JD crumb would render a placeholder on first paint and visibly swap to
@@ -818,6 +823,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
     // step, and Back would lose the job it came from.
     const withOrigin = (p: URLSearchParams) => {
       if (fromJobDetails) p.set('from', 'job-details');
+      if (fromResumeScoring) p.set('from', 'resume-scoring');
       if (returnUrl) p.set('returnUrl', returnUrl);
       if (urlJdTitle) p.set('jd_title', urlJdTitle);
       return p;
@@ -944,6 +950,19 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
   // chain above, so a step reads the same whichever way the flow was entered.
   const buildBreadcrumbItems = (): BreadcrumbCrumb[] => {
     const jdId = selectedJob?.id || preSelectedJobId || urlJdId;
+    if (fromResumeScoring) {
+      // Dashboard › Resume Scoring › Create AI Assessment › <step>.
+      // "Resume Scoring" goes back with the view and ticks kept; guarded
+      // like every other exit from an unsaved Configure step.
+      const back = safeResumeScoringReturnUrl(returnUrl);
+      return [
+        { label: 'Dashboard', onClick: () => attemptStepChange(() => router.push('/dashboard')) },
+        { label: 'Resume Scoring', onClick: () => attemptStepChange(() => router.push(back)) },
+        ...(step === 'publish' || step === 'preview'
+          ? buildStepCrumbs()
+          : [{ label: 'Create AI Assessment' }]),
+      ];
+    }
     if (fromJobDetails && jdId) {
       return [
         // onClick, not href: a plain Link navigates immediately and skips
@@ -1044,6 +1063,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
   const handleCreateNewJD = () => {
     const assessmentParams = new URLSearchParams();
     if (fromJobDetails) assessmentParams.set('from', 'job-details');
+    if (fromResumeScoring) assessmentParams.set('from', 'resume-scoring');
     if (returnUrl) assessmentParams.set('returnUrl', returnUrl);
     if (urlJdTitle) assessmentParams.set('jd_title', urlJdTitle);
     const assessmentQuery = assessmentParams.toString();
@@ -1496,6 +1516,35 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
        to is the one the host page is already showing. Close instead. */
     if (embedded) {
       onBack();
+      return;
+    }
+
+    if (fromResumeScoring) {
+      // Published → nothing to create, go back and invite. Only a draft →
+      // open it here (same origin), since that is what has to be published.
+      const jdForLookup = jdIdOverride || preSelectedJobId || urlJdId;
+      (async () => {
+        let draft: any = null;
+        let live = false;
+        try {
+          const resp: any = jdForLookup ? await assessmentService.list({ jd_id: jdForLookup, page_size: 100 }) : null;
+          const items: any[] = Array.isArray(resp) ? resp : (resp?.items ?? []);
+          live = items.some((x) => ['published', 'active'].includes(String(x?.status || '').toLowerCase()));
+          draft = items.find((x) => String(x?.status || '').toLowerCase() === 'draft') ?? null;
+        } catch {
+          /* fall through to going back */
+        }
+        if (!live && draft?.id && jdForLookup) {
+          toast.info('This job has a draft assessment — finish and publish it to invite.');
+          const params = new URLSearchParams({ step: 'configure', jd_id: draft.jd_id || jdForLookup, edit: draft.id, from: 'resume-scoring' });
+          if (returnUrl) params.set('returnUrl', returnUrl);
+          if (urlJdTitle) params.set('jd_title', urlJdTitle);
+          router.replace(`/recruitment/assessments/create?${params.toString()}`);
+          return;
+        }
+        toast.info('This job already has an assessment — taking you back to invite.');
+        router.replace(safeResumeScoringReturnUrl(returnUrl));
+      })();
       return;
     }
 
@@ -4158,6 +4207,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                 edit: draft.id,
               });
               if (fromJobDetails) params.set('from', 'job-details');
+              if (fromResumeScoring) params.set('from', 'resume-scoring');
               if (returnUrl) params.set('returnUrl', returnUrl);
               router.push(`/recruitment/assessments/create?${params.toString()}`);
             }}
@@ -5536,12 +5586,13 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
               </h2>
               <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-5">
                 Your assessment has been successfully published and is now live.
+                {fromResumeScoring && ' Next, send it to the candidates you picked in Resume Scoring.'}
               </p>
 
               {/* Narrower than the page it sits on: the name reads as one
                   line of a form rather than a band across a 1400px card, and
                   the buttons below line up under it. */}
-              <div className="mx-auto mb-5 sm:mb-6 w-full max-w-3xl bg-slate-50 rounded-xl border border-gray-100 ring-1 ring-black/[0.02] px-4 sm:px-5 py-3 sm:py-3.5 flex items-start gap-3 sm:gap-4 text-left">
+              <div className={`mx-auto mb-5 sm:mb-6 w-full ${fromResumeScoring ? 'max-w-xl' : 'max-w-3xl'} bg-slate-50 rounded-xl border border-gray-100 ring-1 ring-black/[0.02] px-4 sm:px-5 py-3 sm:py-3.5 flex items-start gap-3 sm:gap-4 text-left`}>
                 <div className="w-10 h-10 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
                   <FileText className="w-5 h-5 text-brand-blue" />
                 </div>
@@ -5594,7 +5645,10 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                   does not need were the widest thing on it after the
                   headline; one set of paddings across all three also means
                   their heights cannot drift apart at a breakpoint. */}
-              <div className="flex flex-col sm:flex-row gap-2.5 sm:gap-3 justify-center">
+              {/* Same width as the card above, buttons sharing it equally — so the
+                  row lines up edge to edge with the card instead of floating
+                  centred under a wider box. */}
+              <div className={`mx-auto w-full ${fromResumeScoring ? 'max-w-xl' : 'max-w-3xl'} flex flex-col sm:flex-row gap-2.5 sm:gap-3 justify-center [&>button]:sm:flex-1 [&>button]:justify-center`}>
                 {/* Both of these leave the flow for a real page, so they are
                     gated on the id the publish call returned - without it
                     there is nothing to open. */}
@@ -5608,7 +5662,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                     View Assessment
                   </Button>
                 )}
-                {publishedAssessment.id && (
+                {!fromResumeScoring && publishedAssessment.id && (
                   /* `?share=1` opens the assessment's own Share dialog on
                      arrival, so inviting candidates is one step from here
                      rather than a hunt through the list. */
@@ -5621,14 +5675,28 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                     Share Invites
                   </Button>
                 )}
-                <Button
-                  variant="primary"
-                  type="button"
-                  onClick={goToAssessmentsList}
-                  icon={<ArrowRight className="w-4 h-4" />}
-                >
-                  Go to Assessments
-                </Button>
+                {fromResumeScoring ? (
+                  /* Came from Resume Scoring to be able to invite: the one
+                     next step is back there, where the invite opens with the
+                     candidates already picked. */
+                  <Button
+                    variant="primary"
+                    type="button"
+                    onClick={() => router.replace(safeResumeScoringReturnUrl(returnUrl))}
+                    icon={<ArrowRight className="w-4 h-4" />}
+                  >
+                    {handoffContinueLabel()}
+                  </Button>
+                ) : (
+                  <Button
+                    variant="primary"
+                    type="button"
+                    onClick={goToAssessmentsList}
+                    icon={<ArrowRight className="w-4 h-4" />}
+                  >
+                    Go to Assessments
+                  </Button>
+                )}
               </div>
             </div>
           </div>

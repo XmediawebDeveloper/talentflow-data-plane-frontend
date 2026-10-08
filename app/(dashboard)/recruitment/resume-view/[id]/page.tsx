@@ -1,5 +1,6 @@
 'use client'
 
+import { RESUME_EMAIL_SHARE_ENABLED } from '@/lib/constants/featureFlags';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
@@ -1256,7 +1257,7 @@ Best regards`);
               <Eye className="w-4 h-4" />
               View
             </button>
-            {canShareResume && (
+            {RESUME_EMAIL_SHARE_ENABLED && canShareResume && (
               <button
                 onClick={handleShare}
                 className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-sm"

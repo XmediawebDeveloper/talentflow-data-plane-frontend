@@ -28,7 +28,6 @@ import type { Job as SharedJob } from '@/lib/types/types';
 import ResumeVersionsModal from './ResumeVersionsModal';
 import Pagination from './Pagination';
 import ListPagination from './ListPagination';
-import { recordUsage } from '@/lib/services/usageTrackingService';
 import { aiMatchService, MatchedCandidate, AIMatchSessionResponse } from '@/lib/services/aiMatchService';
 import AIMatchVersionHistoryTable, { AIMatchSessionVersion, buildAIMatchVersions } from './AIMatchVersionHistoryTable';
 import { scoringService } from '@/lib/services/scoringService';
@@ -1658,14 +1657,10 @@ export default function AITalentMatchPage({
       isMatchingInProgress.current = false;
     }, 500);
 
-    // Track usage - POST /api/v1/external/usage/record (RS - talent match uses resume scoring quota)
-    recordUsage({
-      quota_type: 'RS',
-      amount: results.length,
-      operation_type: 'talent_match',
-      resource_id: selectedJob,
-      metadata: { candidates_matched: results.length }
-    });
+    // Resume Scoring units for this run are checked and charged by the backend
+    // (POST /ai-match/run), capped at the tenant's remaining balance. Charging
+    // here as well would double-bill, and charging here instead is what let
+    // runs overshoot the quota.
 
     // Save to history
     if (selectedJobData) {

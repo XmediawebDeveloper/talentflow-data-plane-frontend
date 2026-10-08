@@ -1,5 +1,6 @@
 'use client';
 
+import { handoffContinueLabel, safeResumeScoringReturnUrl } from '@/lib/utils/resumeScoringInviteHandoff';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -1071,7 +1072,15 @@ export default function AIInterviewClusters() {
   // Carried from the Configure step when the flow started on a JD's Job Details
   // page — keeps the breadcrumb anchored to that job across the whole flow.
   const fromJobDetails = searchParams.get('from') === 'job-details';
-  const originParam = fromJobDetails ? '&from=job-details' : '';
+  // Entered from Resume Scoring's Actions › "Create AI Interview" (the job
+  // had none to invite to): the trail starts at Resume Scoring, the origin
+  // rides every step, and publishing leads straight back there to invite.
+  const fromResumeScoring = searchParams.get('from') === 'resume-scoring';
+  const resumeScoringReturn = safeResumeScoringReturnUrl(searchParams.get('returnUrl'));
+  const resumeScoringOrigin = fromResumeScoring
+    ? `&from=resume-scoring&returnUrl=${encodeURIComponent(resumeScoringReturn)}`
+    : '';
+  const originParam = (fromJobDetails ? '&from=job-details' : '') + resumeScoringOrigin;
 
   /* Loading / saving states */
   const [loading, setLoading] = useState(true);
@@ -1085,8 +1094,9 @@ export default function AIInterviewClusters() {
      draft prompt there included — means the recruiter came to finish one job's
      interview, so saving or discarding returns them to that job instead of the
      AI Interviews list they never asked for. */
-  const exitHref =
-    fromJobDetails && config?.jd_id
+  const exitHref = fromResumeScoring
+    ? resumeScoringReturn
+    : fromJobDetails && config?.jd_id
       ? `/recruitment/job-details?id=${encodeURIComponent(config.jd_id)}`
       : '/recruitment/ai-interviews';
 
@@ -3057,7 +3067,14 @@ export default function AIInterviewClusters() {
             <PageBreadcrumb
               className="mb-4 md:mb-6"
               items={
-                fromJobDetails && config?.jd_id
+                fromResumeScoring
+                  ? [
+                      { label: 'Dashboard', href: '/dashboard' },
+                      { label: 'Resume Scoring', href: resumeScoringReturn },
+                      { label: 'Create AI Interview' },
+                      { label: 'Clusters' },
+                    ]
+                  : fromJobDetails && config?.jd_id
                   ? [
                       // Entered from Job Details — repeat that page's trail and link
                       // the JD crumb back to it so the user returns where they started.

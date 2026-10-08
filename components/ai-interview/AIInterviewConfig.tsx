@@ -1,5 +1,6 @@
 'use client';
 
+import { handoffContinueLabel, safeResumeScoringReturnUrl } from '@/lib/utils/resumeScoringInviteHandoff';
 import {
   Clock, Plus, X, Sparkles, CheckCircle2, Loader2,
   Users, Brain, Shield, Globe, Save, ChevronDown, ChevronUp,
@@ -1351,6 +1352,14 @@ export default function AIInterviewConfig() {
   // breadcrumb anchored to that job instead of resetting to the AI Interviews
   // trail, and must be carried onto every later step in the flow.
   const fromJobDetails = searchParams.get('from') === 'job-details';
+  // Entered from Resume Scoring's Actions › "Create AI Interview" (the job
+  // had none to invite to): the trail starts at Resume Scoring, the origin
+  // rides every step, and publishing leads straight back there to invite.
+  const fromResumeScoring = searchParams.get('from') === 'resume-scoring';
+  const resumeScoringReturn = safeResumeScoringReturnUrl(searchParams.get('returnUrl'));
+  const resumeScoringOrigin = fromResumeScoring
+    ? `&from=resume-scoring&returnUrl=${encodeURIComponent(resumeScoringReturn)}`
+    : '';
 
   const [selectedJd, setSelectedJd] = useState<PublishedJD | null>(null);
   const [loadingJd, setLoadingJd] = useState(true);
@@ -1606,6 +1615,12 @@ export default function AIInterviewConfig() {
         // navigation and covers every entry point into this page.
         if (liveConfig) {
           setRedirecting(true);
+          if (fromResumeScoring) {
+            // Nothing to create — go back and invite to the one it has.
+            toast.info('This job already has an AI interview — taking you back to invite.');
+            router.replace(resumeScoringReturn);
+            return;
+          }
           toast.info('An AI interview already exists for this job.');
           // Carry the origin through. Without it the details page falls back to
           // its own trail and the breadcrumb resets to
@@ -2618,7 +2633,9 @@ export default function AIInterviewConfig() {
     // return there rather than to the AI Interviews list, matching the
     // breadcrumb this step already shows.
     router.push(
-      fromJobDetails && selectedJd?.id
+      fromResumeScoring
+        ? resumeScoringReturn
+        : fromJobDetails && selectedJd?.id
         ? `/recruitment/job-details?id=${encodeURIComponent(selectedJd.id)}`
         : '/recruitment/ai-interviews'
     );
@@ -2832,7 +2849,7 @@ export default function AIInterviewConfig() {
     // 3. Navigate immediately. Pass autogen=1 only when something changed
     // (needsRegeneration = skill set diff). No changes → reuse cached clusters,
     // no wasted LLM call.
-    const base = `/recruitment/ai-interviews/jd-selection/ai-interview-config/clusters?id=${existingDraftIdRef.current}${fromJobDetails ? '&from=job-details' : ''}`;
+    const base = `/recruitment/ai-interviews/jd-selection/ai-interview-config/clusters?id=${existingDraftIdRef.current}${fromJobDetails ? '&from=job-details' : ''}${resumeScoringOrigin}`;
     router.push(needsRegeneration ? `${base}&autogen=1` : base);
   };
 
@@ -2915,7 +2932,9 @@ export default function AIInterviewConfig() {
       }
     }
     router.push(
-      fromJobDetails && jdId
+      fromResumeScoring
+        ? resumeScoringReturn
+        : fromJobDetails && jdId
         ? `/recruitment/job-details?id=${encodeURIComponent(jdId)}`
         : '/recruitment/ai-interviews',
     );
@@ -2975,7 +2994,14 @@ export default function AIInterviewConfig() {
           <PageBreadcrumb
             className="mb-4 md:mb-6"
             items={
-              fromJobDetails && jdId
+              fromResumeScoring
+                ? [
+                    { label: 'Dashboard', href: '/dashboard' },
+                    { label: 'Resume Scoring', href: resumeScoringReturn },
+                    { label: 'Create AI Interview' },
+                    { label: 'Configure' },
+                  ]
+                : fromJobDetails && jdId
                 ? [
                     // Entered from Job Details — repeat that page's trail and link
                     // the JD crumb back to it so the user returns where they started.
