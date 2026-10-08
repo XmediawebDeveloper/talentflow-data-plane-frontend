@@ -2,6 +2,7 @@ import { Sparkles, CheckCircle2, Loader2, AlertCircle, Lightbulb } from 'lucide-
 import { useState, useRef, useEffect } from 'react';
 import { aiMatchService, MatchedCandidate } from '@/lib/services/aiMatchService';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 
 interface AITalentMatchProgressPanelProps {
   jobTitle: string;
@@ -65,6 +66,14 @@ export default function AITalentMatchProgressPanel({
         setProgress(100);
         setCurrentStep(steps.length);
         setIsLoading(false);
+
+        if (session.quota_limited && typeof session.matches_found === 'number') {
+          toast.warning(
+            `Showing the top ${candidates.length} of ${session.matches_found} matches. ` +
+            `You ran out of Resume Scoring units. Add more units to see the rest.`,
+            { duration: 8000 }
+          );
+        }
 
         setTimeout(() => {
           onComplete(candidates);

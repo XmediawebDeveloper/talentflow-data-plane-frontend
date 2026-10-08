@@ -3,6 +3,7 @@
 import React from 'react';
 import { Globe, CheckCircle, ChevronRight, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { revealAfterPaint } from '@/lib/utils/candidateScroll';
 
 interface StepLanguageSelectProps {
   availableLanguages: string[];
@@ -51,7 +52,7 @@ export default function StepLanguageSelect({
           </div>
         </div>
 
-        <div className="p-6 space-y-5">
+        <div className="p-4 sm:p-6 space-y-5">
           {/* Language grid */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             {availableLanguages.map((lang) => {
@@ -60,19 +61,24 @@ export default function StepLanguageSelect({
                 <button
                   key={lang}
                   type="button"
-                  onClick={() => onSelectLanguage(lang)}
-                  className={`relative border rounded-xl p-6 text-center transition-all ${
+                  onClick={() => {
+                    onSelectLanguage(lang);
+                    // With many languages on a phone, Continue is below the grid.
+                    revealAfterPaint(() => document.getElementById('tf-language-continue'));
+                  }}
+                  aria-pressed={isSelected}
+                  className={`relative min-h-14 border rounded-xl p-4 sm:p-6 pr-8 sm:pr-8 text-center break-words transition-all ${
                     isSelected
-                      ? 'border-gray-800 bg-gray-50 shadow-sm'
+                      ? 'border-brand-blue bg-brand-blue/10 ring-2 ring-brand-blue/30 shadow-sm'
                       : 'border-gray-200 bg-white hover:border-gray-400'
                   }`}
                 >
                   {isSelected && (
-                    <CheckCircle className="w-5 h-5 text-gray-600 absolute top-2 right-2" />
+                    <CheckCircle className="w-5 h-5 text-brand-blue absolute top-2 right-2" />
                   )}
                   <span
                     className={`text-sm font-medium ${
-                      isSelected ? 'text-gray-700' : 'text-gray-700'
+                      isSelected ? 'text-brand-blue' : 'text-gray-700'
                     }`}
                   >
                     {lang}
@@ -99,13 +105,14 @@ export default function StepLanguageSelect({
       </div>
 
       {/* Continue button */}
-      <div className="flex justify-center pt-2">
+      <div id="tf-language-continue" className="flex justify-center pt-2 scroll-mb-4">
         <Button
           type="button"
           variant="primary"
+          size="lg"
           onClick={onContinue}
           disabled={submitting}
-          className="px-8"
+          className="w-full sm:w-auto px-8"
         >
           {submitting ? 'Loading...' : 'Continue'}
           {!submitting && <ChevronRight className="w-4 h-4" />}

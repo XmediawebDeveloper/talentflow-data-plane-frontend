@@ -98,7 +98,6 @@ const isBulkActionable = (inv: any): boolean => isBulkRevocable(inv) || isBulkRe
 /* Resume versions live on the scoring records — see the join in
    loadAllCompletedCandidates. */
 import { scoringService } from '@/lib/services/scoringService';
-import { recordAssessment } from '@/lib/services/usageTrackingService';
 import api from '@/lib/services/api';
 import { proctoringService, ProctoringSettings, ProctoringEvent } from '@/lib/services/proctoringService';
 import { AlertTriangle, RefreshCw, Send, Ban, Layers, Briefcase, ChevronDown, Radar, Search, ChevronLeft, ArrowUpDown, Timer } from 'lucide-react';
@@ -3607,13 +3606,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       refreshAssessmentExistence(assessment?.jd_id),
     ]);
 
-    // Track usage via external API
-    if (assessment?.id) {
-      recordAssessment(assessment.id, {
-        assessment_title: assessment.title,
-        type: assessment.type
-      });
-    }
+    // No charge here. Assessment units are charged by the backend, one per
+    // candidate start ("assessment_start"). Recording another unit at creation
+    // billed every assessment one extra AS unit.
   };
 
   // Delete assessment via API
