@@ -1905,7 +1905,7 @@ Best regards`);
             few times — so the new control is noticed — then stays still. */}
         <button
           type="button"
-          className={`relative ${embedded ? 'h-9' : 'h-[38px]'} px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300`}
+          className="relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
           aria-label={`Actions for ${effectiveSelectedRows.length} selected`}
         >
           <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
@@ -2077,24 +2077,6 @@ Best regards`);
           activeFilterCount={search.activeFilterCount}
           filtersApplied={search.filtersApplied}
           onClearFilters={search.reset}
-          compactButtons={embedded}
-          /* Embedded in Job Details: the AI Talent Match reference's Select All
-             pill + dropdown at the head of the row. The standalone page keeps its
-             select-all in the Row-2 control below (staging's SelectAllMenu), so
-             nothing renders here off the tab to avoid two Select All controls. */
-          beforeSearch={embedded && filteredResumes.length > 0 ? (
-            <ToolbarSelectAll
-              selectedCount={selectedResumes.length}
-              allSelected={allVisibleSelected}
-              pageCount={paginatedResumes.length}
-              onSelectPage={selectCurrentPage}
-              totalCount={filteredResumes.length}
-              onSelectAll={selectAllResumes}
-              onClear={clearResumeSelection}
-            />
-          ) : undefined}
-          /* Job Title + Recruiter filters (from staging) — after the search,
-             ahead of More Filters. */
           leadingActions={
             <>
               <SearchableSelect
@@ -2119,12 +2101,10 @@ Best regards`);
               />
             </>
           }
-          // sm:flex-wrap: on tablets the row wraps instead of squeezing its buttons.
-          className="mb-0 sm:flex-wrap"
-          trailing={<ListViewToggle value={displayMode} onChange={setDisplayMode} className={embedded ? 'h-9' : 'h-[38px] !border-brand-blue/10'} />}
+          className="mb-0"
         >
-          {/* Sort by (from staging) — then Export and the selection's Actions
-              menu. The List / Grid switch is pinned right (trailing). */}
+          {/* Sort by, then List / Grid — where Export used to be (Export is
+              now in the Actions menu, shown once rows are ticked). */}
           {filteredResumes.length > 0 && (
             <SortByControl<SortKey>
               value={sortBy}
@@ -2134,32 +2114,7 @@ Best regards`);
               onToggleOrder={() => setSortOrder((o) => (o === 'asc' ? 'desc' : 'asc'))}
             />
           )}
-
-          {/* One Export for both states — handleExportExcel already exports the
-              selection, and asks for one when there isn't any. Which columns
-              go in is chosen in its dialog ("Columns included"). */}
-          <button
-            type="button"
-            onClick={() => {
-              if (!canExport) {
-                toast.error('You do not have permission to export');
-                return;
-              }
-              handleExportExcel();
-            }}
-            aria-disabled={!canExport}
-            title={!canExport ? 'You do not have permission to export' : undefined}
-            className={`${toolbarBtn} ${!canExport ? 'opacity-50 cursor-not-allowed' : ''}`}
-          >
-            <FileDown className="w-4 h-4" />
-            Export
-          </button>
-          {/* The selection's Actions menu — after Export, only while rows are
-              ticked. Embedded in Job Details it rides the toolbar row (the AI
-              Talent Match reference); the standalone page shows it in Row 3 below,
-              so only one Actions menu renders per mode. The List / Grid switch is
-              pinned right (trailing). */}
-          {embedded && !viewPillsSlot && selectionActions}
+          <ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-[38px] !border-brand-blue/10" />
         </ListToolbar>
 
         {/* Advanced Filters */}
@@ -2316,16 +2271,9 @@ Best regards`);
           </div>
         )}
 
-        {/* Row 2: Select All, the host's verdict pills and View by toggle.
-            Embedded in Job Details the Select All lives in the toolbar above (the
-            AI Talent Match reference) and there are no pills/grouping here, so the
-            whole row is skipped off the tab rather than leaving an empty divider. */}
-        {((!embedded && filteredResumes.length > 0) || viewPillsSlot || (isGrouped && paginatedGroups.length > 0)) && (
+        {/* Row 2: Select All, the host's verdict pills and View by toggle. */}
         <div className="mt-3 pt-3 border-t border-gray-200 dark:border-slate-700/60 flex flex-wrap items-center gap-2">
-          {/* Embedded in Job Details the Select All lives in the toolbar above
-              (the AI Talent Match reference), so this standalone Row-2 menu is
-              suppressed off the tab to avoid two Select All controls. */}
-          {!embedded && filteredResumes.length > 0 && (() => {
+          {filteredResumes.length > 0 && (() => {
             // Grouped: counted in candidates; flat: in rows.
             const pageRows = isGrouped ? paginatedGroups.flatMap((g) => g.rows) : paginatedResumes;
             const selectedCount = isGrouped
@@ -2375,6 +2323,13 @@ Best regards`);
             );
           })()}
         </div>
+
+        {/* Row 3 — only while something is ticked: Actions and Clear, on a
+            line of their own under Select All. */}
+        {selectionActions && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+            {selectionActions}
+          </div>
         )}
 
         {/* Row 3 — only while something is ticked: Actions and Clear, on a

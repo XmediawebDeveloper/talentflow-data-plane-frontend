@@ -761,6 +761,16 @@ function CurrentPlanContent() {
 
   // Queued upgrades state
   const [queuedUpgrades, setQueuedUpgrades] = useState<QueuedUpgrade[]>([]);
+  /* An earlier plan payment was captured but the plan isn't live yet (the
+     billing system is retrying, or it needs support). No new purchase until
+     it's resolved — the backend refuses the order (409
+     PLAN_CHANGE_IN_PROGRESS); this shows why and disables Choose Plan. */
+  const [purchaseHold, setPurchaseHold] = useState<{
+    message: string;
+    needsSupport: boolean;
+    planName?: string | null;
+    paymentReference?: string | null;
+  } | null>(null);
   const [showTCModal, setShowTCModal] = useState(false);
   const [selectedQueuedUpgrade, setSelectedQueuedUpgrade] = useState<QueuedUpgrade | null>(null);
   const [tcAccepted, setTcAccepted] = useState(false);
@@ -1171,6 +1181,36 @@ function CurrentPlanContent() {
     }
   };
 
+  const applyPurchaseStatus = (st: any) => {
+    if (st?.in_progress && st?.reason === 'unfulfilled_payment' && st?.hold) {
+      setPurchaseHold({
+        message: st.message,
+        needsSupport: !!st.hold.needs_support,
+        planName: st.hold.plan_name,
+        paymentReference: st.hold.payment_reference || st.hold.razorpay_order_id,
+      });
+    } else {
+      setPurchaseHold(null);
+    }
+  };
+
+  // Is an earlier plan payment still waiting to be applied?
+  const fetchPurchaseStatus = async () => {
+    try {
+      const token = localStorage.getItem('accessToken');
+      const tid = tenantId || user?.tenantId;
+      if (!token || !tid) return;
+      const response = await fetch(`${API_URL}/subscription/${tid}/purchase-status`, {
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      });
+      if (!response.ok) return;
+      const body = await response.json();
+      applyPurchaseStatus(body?.data);
+    } catch (err) {
+      console.error('[CurrentPlan] purchase-status failed:', err);
+    }
+  };
+
   // Fetch queued upgrades
   const fetchQueuedUpgrades = async () => {
     try {
@@ -1402,7 +1442,18 @@ function CurrentPlanContent() {
     hasFetchedRef.current = true;
     fetchData();
     fetchQueuedUpgrades();
+    fetchPurchaseStatus();
   }, [sharedQuotaData, quotaLoading]);
+
+  // While a payment is waiting to be applied, re-check whenever the tab
+  // regains focus — the billing system finishes it in the background.
+  useEffect(() => {
+    if (!purchaseHold) return;
+    const onFocus = () => { fetchPurchaseStatus(); };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [purchaseHold]);
 
   // Auto-select plan from URL parameter (from pricing page flow)
   useEffect(() => {
@@ -1671,8 +1722,22 @@ function CurrentPlanContent() {
         });
 
         const orderData = await orderResponse.json();
+        // An earlier payment is still being applied (or a plan change is
+        // queued): nothing was charged — explain and stop.
+        if (orderResponse.status === 409 && orderData?.detail?.error === 'PLAN_CHANGE_IN_PROGRESS') {
+          const d = orderData.detail;
+          if (d.reason === 'unfulfilled_payment') {
+            applyPurchaseStatus({ in_progress: true, reason: d.reason, message: d.message, hold: d.hold });
+          } else {
+            fetchQueuedUpgrades();
+          }
+          toast.warning('A plan change is already in progress', { description: d.message, duration: 10000 });
+          setShowPaymentModal(false);
+          return;
+        }
         if (!orderResponse.ok) {
-          throw new Error(orderData.detail || 'Failed to create payment order');
+          const detail = orderData.detail;
+          throw new Error((typeof detail === 'string' ? detail : detail?.message) || 'Failed to create payment order');
         }
 
         // Step 2: Open Razorpay checkout modal
@@ -1744,6 +1809,19 @@ function CurrentPlanContent() {
           throw new Error('Request timed out. Please try again or contact support.');
         }
         throw fetchErr;
+      }
+
+      // 202: payment captured, but the billing system has not applied the
+      // plan yet (it retries automatically). The plan was NOT switched here.
+      if (response.status === 202 && data.status === 'pending_retry') {
+        toast.info('Payment received - plan setup pending', {
+          description: data.data?.message || 'Your new plan will be applied automatically. Your current plan stays active until then.',
+          duration: 10000,
+        });
+        setShowPaymentModal(false);
+        window.dispatchEvent(new CustomEvent('notificationTrigger'));
+        fetchPurchaseStatus();
+        return;
       }
 
       // 202: payment captured, but the billing system has not applied the
@@ -2560,6 +2638,42 @@ function CurrentPlanContent() {
 
         </div>
 
+        {/* Earlier payment not applied yet — why Choose Plan is disabled. */}
+        {purchaseHold && (
+          <div
+            role="status"
+            className={`${purchaseHold.needsSupport ? 'bg-destructive-subtle border-destructive-line' : 'bg-warning-subtle border-warning-line'} border-2 rounded-xl p-4 sm:p-5 lg:p-6 mb-4 sm:mb-6 lg:mb-8 flex items-start gap-3`}
+          >
+            {purchaseHold.needsSupport ? (
+              <AlertTriangle className="w-6 h-6 sm:w-7 sm:h-7 text-destructive flex-shrink-0" />
+            ) : (
+              <Loader2 className="w-6 h-6 sm:w-7 sm:h-7 text-warning flex-shrink-0 animate-spin" />
+            )}
+            <div className="min-w-0 flex-1">
+              <h3 className={`text-sm sm:text-base lg:text-lg font-semibold ${purchaseHold.needsSupport ? 'text-destructive-strong' : 'text-warning-strong'}`}>
+                {purchaseHold.needsSupport ? 'Plan activation needs attention' : 'Your new plan is being set up'}
+              </h3>
+              <p className={`text-xs sm:text-sm mt-1 ${purchaseHold.needsSupport ? 'text-destructive' : 'text-warning'}`}>
+                {purchaseHold.message}
+              </p>
+              {purchaseHold.paymentReference && (
+                <p className="text-xs text-gray-600 dark:text-slate-400 mt-2">
+                  Payment reference: <span className="font-mono">{purchaseHold.paymentReference}</span>
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => fetchPurchaseStatus()}
+              className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 hover:text-brand-blue flex-shrink-0"
+              title="Check again"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Check again
+            </button>
+          </div>
+        )}
+
         {/* Queued Upgrades Section */}
         {queuedUpgrades.length > 0 && (
           <div className="bg-warning-subtle border-2 border-warning-line rounded-xl p-4 sm:p-5 lg:p-6 mb-4 sm:mb-6 lg:mb-8">
@@ -2978,6 +3092,7 @@ function CurrentPlanContent() {
                         isSelectedPending ||
                         (!plan.monthlyPrice && !plan.annualPrice) ||
                         queuedUpgrades.length > 0 ||
+                        !!purchaseHold ||
                         // Disable if viewing yearly but only monthly available
                         (isYearly && !plan.annualPrice && !!plan.monthlyPrice) ||
                         // Disable if viewing monthly but only yearly available
@@ -2988,7 +3103,7 @@ function CurrentPlanContent() {
                           ? "bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-slate-500 cursor-not-allowed"
                           : isCurrentForToggle || isSelectedPending
                           ? "bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-slate-500 cursor-not-allowed"
-                          : queuedUpgrades.length > 0
+                          : purchaseHold || queuedUpgrades.length > 0
                             ? "bg-warning-subtle text-warning cursor-not-allowed"
                             : (!plan.monthlyPrice && !plan.annualPrice)
                               ? "bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 cursor-not-allowed"
@@ -3006,6 +3121,8 @@ function CurrentPlanContent() {
                         'No Permission'
                       ) : isSelectedPending ? (
                         'Pending Payment'
+                      ) : purchaseHold ? (
+                        purchaseHold.needsSupport ? 'Contact Support' : 'Activation Pending'
                       ) : queuedUpgrades.length > 0 ? (
                         (() => {
                           const queuedPlan = plans.find(p => p.name === queuedUpgrades[0]?.new_plan_name);
