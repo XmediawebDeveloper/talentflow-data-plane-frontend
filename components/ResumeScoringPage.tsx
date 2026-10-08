@@ -439,6 +439,16 @@ export default function ResumeScoringPage({
   /* A score opened from a resume's Candidate Activity card keeps that resume's
      trail (Resume Database › My Resumes › <candidate>) and returns to it. */
   const resumeTrail = useResumeActivityTrail(useSearchParams());
+  /* `view=candidates|job` on a candidate URL: it was opened from View by
+     Candidates / View by Job (the cross-job candidate page), not from one
+     job's scored list. Read once, so a refresh rebuilds THAT page — same
+     breadcrumb, same 1 / N, same scored-job pager — instead of the
+     single-job one the bare jd_id + score_id would otherwise mean. */
+  const urlSearchParams = useSearchParams();
+  const [initialOpenedFrom] = useState<'candidates' | 'job' | null>(() => {
+    const v = urlSearchParams.get('view');
+    return v === 'candidates' || v === 'job' ? v : null;
+  });
 
   // ✅ RBAC: Get user permissions (bypass for tenant admin)
   const { user, isTenantAdmin, hasPermissionCode } = useAuth();
@@ -1356,6 +1366,25 @@ export default function ResumeScoringPage({
     // Only handle initialJdId once
     if (initialJdHandled) return;
 
+    // Opened from View by Candidates / View by Job: reopen that page once the
+    // cross-job scores are in (see `initialOpenedFrom`).
+    if (initialJdId && initialScoreId && initialOpenedFrom) {
+      if (!globalSettled) {
+        if (!isWaitingForInitialJd) setIsWaitingForInitialJd(true);
+        return;
+      }
+      setIsGlobalView(initialOpenedFrom === 'candidates');
+      const row = globalScoredResumes.find((r: any) => r.id === initialScoreId);
+      if (row) {
+        setSelectedHistoryItem(null);
+        setSelectedCandidateForView(row);
+        setViewMode('candidateView');
+      }
+      setIsWaitingForInitialJd(false);
+      setInitialJdHandled(true);
+      return;
+    }
+
     // mode=new without a pre-selected JD (Quick Action entry): drop straight
     // into the "new scoring" view, same internal state change as the in-page
     // "Score Resumes" button.
@@ -1464,7 +1493,7 @@ export default function ResumeScoringPage({
         }
       }
     }
-  }, [initialJdId, initialScoreId, scoredHistory, initialShowProgress, initialJdHandled, isWaitingForInitialJd, pendingScoringData, initialNewScoring, jobs]);
+  }, [initialJdId, initialScoreId, scoredHistory, initialShowProgress, initialJdHandled, isWaitingForInitialJd, pendingScoringData, initialNewScoring, jobs, initialOpenedFrom, globalSettled, globalScoredResumes]);
 
   // After scoring completes: auto-navigate to details view once scoredHistory is refreshed.
   // A layout effect, not useEffect: the popup that hid the "Choose JD" view has
@@ -2338,7 +2367,7 @@ export default function ResumeScoringPage({
       setSelectedCandidateForView(candidate);
       const jdId = candidate.jdId || 'global';
       router.push(
-        `/recruitment/resume-scoring?jd_id=${jdId}&score_id=${candidate.id ?? candidate.resumeId}`,
+        `/recruitment/resume-scoring?jd_id=${jdId}&score_id=${candidate.id ?? candidate.resumeId}&view=${isGlobalView ? 'candidates' : 'job'}`,
         { scroll: false }
       );
     };
@@ -3411,7 +3440,7 @@ export default function ResumeScoringPage({
                   setViewMode('candidateView');
                   // Update URL with jd_id and score_id for shareable link & browser history
                   const jdId = resume.jdId || 'global';
-                  router.push(`/recruitment/resume-scoring?jd_id=${jdId}&score_id=${resume.id}`, { scroll: false });
+                  router.push(`/recruitment/resume-scoring?jd_id=${jdId}&score_id=${resume.id}&view=candidates`, { scroll: false });
                 }}
                 selectedResumes={selectedScoredResumes}
                 onSelectResume={(id) => {
@@ -3980,7 +4009,7 @@ export default function ResumeScoringPage({
                             setSelectedCandidateForView(resume);
                             setViewMode('candidateView');
                             const jdId = resume.jdId || item.jobId;
-                            router.push(`/recruitment/resume-scoring?jd_id=${jdId}&score_id=${resume.id}`, { scroll: false });
+                            router.push(`/recruitment/resume-scoring?jd_id=${jdId}&score_id=${resume.id}&view=job`, { scroll: false });
                           }}
                         />
                       )}

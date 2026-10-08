@@ -5,7 +5,8 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from './utils';
 
 /**
- * Compact pager — `‹ 1 2 3 ›` — showing at most three page numbers.
+ * Compact pager — `‹ 1 2 3 ›` — showing at most three page numbers
+ * (or, with `showEnds`, `‹ 1 … 4 5 6 … 12 ›`: first and last always shown).
  *
  * Two motions, both plain CSS transitions (no animation library):
  *  - the filled active circle slides between the visible slots;
@@ -63,21 +64,17 @@ export function MiniPagination({
     if (p >= 1 && p <= total && p !== current) onPageChange(p);
   };
 
-  const windowEnd = windowStart + slots - 1;
-  const endClass =
-    'inline-flex h-7 w-7 items-center justify-center rounded-full text-sm tabular-nums text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40';
-  /* The end pages and gaps keep their space even while hidden (`invisible`),
-     so the pager is ONE width on every page and the arrows never move —
-     a pager that resized put the next ‹ click onto "1". Only needed when
-     there are more pages than the window shows. */
-  const ends = showEnds && total > slots;
-  const showFirst = windowStart > 1;
-  const showFirstGap = windowStart > 2;
-  const showLast = windowEnd < total;
-  const showLastGap = windowEnd < total - 1;
-  const gap = (visible: boolean) => (
-    <span aria-hidden className={cn('w-4 text-center text-sm text-gray-400', !visible && 'invisible')}>…</span>
-  );
+  /* showEnds: the classic packed list — first, last, the pages around the
+     current one, "…" for the gaps. Always ENDS_SLOTS items (or every page,
+     when there are fewer), so the pager is one width on every page and ‹ ›
+     never move under the cursor; no blank holes. */
+  const ENDS_SLOTS = 7;
+  const endsItems: (number | 'gap-l' | 'gap-r')[] = (() => {
+    if (total <= ENDS_SLOTS) return Array.from({ length: total }, (_, i) => i + 1);
+    if (current <= 4) return [1, 2, 3, 4, 5, 'gap-r', total];
+    if (current >= total - 3) return [1, 'gap-l', total - 4, total - 3, total - 2, total - 1, total];
+    return [1, 'gap-l', current - 1, current, current + 1, 'gap-r', total];
+  })();
 
   const arrowClass =
     'inline-flex h-7 w-7 items-center justify-center rounded-full text-gray-600 dark:text-slate-300 transition-colors hover:bg-gray-100 dark:hover:bg-slate-800 disabled:pointer-events-none disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40';
@@ -94,23 +91,33 @@ export function MiniPagination({
         <ChevronLeft className="h-4 w-4" />
       </button>
 
-      {/* First page, when it has scrolled out of the window. */}
-      {ends && (
-        <>
-          <button
-            type="button"
-            onClick={() => go(1)}
-            aria-label="First page, 1"
-            tabIndex={showFirst ? 0 : -1}
-            aria-hidden={!showFirst}
-            className={cn(endClass, !showFirst && 'invisible')}
-          >
-            1
-          </button>
-          {gap(showFirstGap)}
-        </>
-      )}
-
+      {showEnds ? (
+        <div className="flex items-center">
+          {endsItems.map((item) =>
+            typeof item === 'number' ? (
+              <button
+                key={item}
+                type="button"
+                onClick={() => go(item)}
+                aria-current={item === current ? 'page' : undefined}
+                aria-label={`Page ${item}`}
+                className={cn(
+                  'inline-flex h-7 w-7 items-center justify-center rounded-full text-sm tabular-nums transition-colors duration-200',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40',
+                  item === current
+                    ? 'bg-gray-800 dark:bg-slate-100 font-semibold text-white dark:text-slate-900 shadow-sm'
+                    : 'text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800',
+                )}
+              >
+                {item}
+              </button>
+            ) : (
+              <span key={item} aria-hidden className="inline-flex h-7 w-7 items-center justify-center text-sm text-gray-400">…</span>
+            ),
+          )}
+        </div>
+      ) : (
+      <>
       {/* Viewport: exactly `slots` cells wide; anything outside is clipped. */}
       <div className="relative h-7 overflow-hidden" style={{ width: slots * SLOT }}>
         {/* Active indicator — slides between the visible slots. */}
@@ -155,21 +162,7 @@ export function MiniPagination({
         </div>
       </div>
 
-      {/* Last page, when it is past the window. */}
-      {ends && (
-        <>
-          {gap(showLastGap)}
-          <button
-            type="button"
-            onClick={() => go(total)}
-            aria-label={`Last page, ${total}`}
-            tabIndex={showLast ? 0 : -1}
-            aria-hidden={!showLast}
-            className={cn(endClass, !showLast && 'invisible')}
-          >
-            {total}
-          </button>
-        </>
+      </>
       )}
 
       <button
