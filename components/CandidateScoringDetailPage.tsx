@@ -1,5 +1,6 @@
 'use client';
 
+import { RESUME_EMAIL_SHARE_ENABLED } from '@/lib/constants/featureFlags';
 import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, Briefcase, GraduationCap, Star, Calendar, Zap, FileText, AlertCircle, Download, Clock, Building2, ChevronLeft, ChevronRight, ChevronDown, Code, Languages, BarChart3, CheckSquare, MessageSquare, Minus, BookOpen, ThumbsUp, ThumbsDown, Loader2, Sparkles, UserPlus, History, File, HardDrive, User, X, Eye, Share2, Paperclip, Send } from 'lucide-react';
 import { MiniPagination } from '@/components/ui/mini-pagination';
 import DetailedScorecardTab from './DetailedScorecardTab';
@@ -1250,17 +1251,27 @@ Best regards`);
                     Version {resume.resumeVersion}
                   </span>
                 )}
-                {jobPager && jobPager.total > 1 && (
-                  <MiniPagination
-                    page={jobPager.page}
-                    totalPages={jobPager.total}
-                    onPageChange={jobPager.onPageChange}
-                    aria-label="Scored jobs"
-                  />
-                )}
               </div>
               </div>
             </div>
+            {/* Top right of the header: this candidate's other scored jobs.
+                First and last are always shown (‹ 1 … 4 5 6 … 12 ›), with
+                "Job N of M" so the position is read, not guessed. */}
+            {jobPager && jobPager.total > 1 && (
+              <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                <span className="text-xs text-gray-500 whitespace-nowrap text-center">
+                  Scored job <span className="font-semibold text-gray-700 tabular-nums">{jobPager.page}</span> of{' '}
+                  <span className="font-semibold text-gray-700 tabular-nums">{jobPager.total}</span>
+                </span>
+                <MiniPagination
+                  page={jobPager.page}
+                  totalPages={jobPager.total}
+                  onPageChange={jobPager.onPageChange}
+                  aria-label="Scored jobs"
+                  showEnds
+                />
+              </div>
+            )}
           </div>
 
           {/* Row 2: contact badges and actions share one line — badges left,
@@ -1286,7 +1297,7 @@ Best regards`);
             <div className="flex flex-wrap items-center gap-2 ml-auto">
               {/* Share leads the group: sending the resume on is a step that
                   usually comes before inviting anyone to anything. */}
-              {canShareResume && viewResumeId && (
+              {RESUME_EMAIL_SHARE_ENABLED && canShareResume && viewResumeId && (
                 <Button
                   variant="secondary"
                   size="sm"

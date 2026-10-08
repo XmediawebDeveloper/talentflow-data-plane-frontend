@@ -40,8 +40,8 @@ import { prefetchObjectDetectionModel } from '@/components/ai-interview/proctori
 import { checkVirtualCamera, isVirtualCameraLabel, INVALID_CAMERA_SELECTION_MESSAGE } from '@/lib/proctoring/virtualCameraDetection';
 import { canOpenDevice, enumerateAudioInputIds, saveVerifiedAudioInputs, currentAudioInputId } from '@/lib/utils/mediaDeviceProbe';
 import { Button } from '@/components/ui/button';
-import FadeIn from '@/components/ui/fade-in';
 import FadePresence from '@/components/ui/fade-presence';
+import { revealAfterPaint, revealIfHidden } from '@/lib/utils/candidateScroll';
 import SubStepProgress from './SubStepProgress';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
@@ -302,15 +302,6 @@ const FACE_POLL_BUSY_FACTOR = 3;
 // further down already uses, and for the same reason.
 const FACE_MISS_STREAK = 2;
 
-const SYSTEM_REQUIREMENTS: { label: string; note: string; icon: typeof Monitor; check: (d: DeviceInfo) => boolean }[] = [
-  {
-    label: 'Desktop or Laptop Computer',
-    note: 'Windows, macOS or Linux — mobile devices are not supported',
-    icon: Monitor,
-    check: (d: DeviceInfo) => !d.isMobile,
-  },
-];
-
 /** Filled round status mark: green tick when met, red cross when not. */
 function StatusDot({ ok, size = 'sm' }: { ok: boolean; size?: 'sm' | 'lg' }) {
   const box = size === 'lg' ? 'w-12 h-12' : 'w-7 h-7';
@@ -402,6 +393,15 @@ export default function StepSystemCheck({
   // below intentionally differ.
   const [voiceEnrollStatus, setVoiceEnrollStatus] =
     useState<'idle' | 'recording' | 'success' | 'failed' | 'disconnected'>('idle');
+  // Latches true the first time a voice sample succeeds. The environment
+  // section (Device Settings, the checks, Continue) is unlocked by it, not by
+  // the live status: a mic dropping after success flips the status to
+  // 'disconnected', and hiding Device Settings then would take away the very
+  // control the disconnect popup tells the candidate to use. Continue stays
+  // gated on the live status (voiceGateOk). Set during render (React's
+  // "adjust state when a value changes" pattern), not in an effect.
+  const [voiceEverSucceeded, setVoiceEverSucceeded] = useState(false);
+  if (voiceEnrollStatus === 'success' && !voiceEverSucceeded) setVoiceEverSucceeded(true);
   const [voiceEnrollProgress, setVoiceEnrollProgress] = useState(0); // 0..100
   // Local playback copy of the voice sample (object URL) — recorded in
   // parallel from the same mic track purely so the candidate can listen back;
@@ -528,12 +528,31 @@ export default function StepSystemCheck({
   // card heading into view, and a freshly recorded voice sample moves the
   // candidate on to the camera row (the next thing to set up).
   const systemChecksCardRef = useRef<HTMLElement>(null);
+  // The in-step progress card (Device Check → System Checks) on the loading
+  // and results views: the page opens scrolled to it, just below the pinned
+  // header + stepper.
+  const deviceStepperRef = useRef<HTMLDivElement>(null);
   const cameraRowRef = useRef<HTMLDivElement>(null);
-  // The checks grid: Run Check scrolls here on small screens so the first
-  // check is in view.
+  // The checks grid: Run Check brings it into view when it isn't already.
   const checksListRef = useRef<HTMLDivElement>(null);
+  // Further auto-scroll targets: the Continue row under the checks, the
+  // Device Check "Continue to System Checks" button, the voice section and the
+  // passage to read aloud.
+  const checksFooterRef = useRef<HTMLDivElement>(null);
+  const deviceContinueRef = useRef<HTMLDivElement>(null);
+  const voiceSectionRef = useRef<HTMLDivElement>(null);
+  const passageRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
+    // Detection finishing swaps the loading view for the results view with
+    // the heading in the same place: hold the position, no jump to the top.
+    if (phase === 'browser_results') {
+      deviceStepperRef.current?.scrollIntoView({ behavior: 'auto', block: 'start' });
+      return;
+    }
     window.scrollTo({ top: 0, behavior: 'instant' });
+    if (phase === 'browser_check') {
+      deviceStepperRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
+    }
     if (phase === 'system_checks') {
       systemChecksCardRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
     }
@@ -624,6 +643,20 @@ export default function StepSystemCheck({
     return () => clearTimeout(t);
   }, [voiceEnrollStatus]);
 
+  // No speech / mic dropped: bring the voice section (its notice and the
+  // retry control) back into view — after the recording dot's fade-out, which
+  // shortens the section. Recording start on a stacked layout (below lg):
+  // keep the passage to read in view; the recorder sits right under it.
+  useEffect(() => {
+    if (voiceEnrollStatus === 'failed' || voiceEnrollStatus === 'disconnected') {
+      const t = setTimeout(() => revealIfHidden(voiceSectionRef.current, 'start'), RECORDING_DOT_FADE_S * 1000 + 50);
+      return () => clearTimeout(t);
+    }
+    if (voiceEnrollStatus === 'recording' && window.matchMedia('(max-width: 1023px)').matches) {
+      revealAfterPaint(() => passageRef.current, 'start');
+    }
+  }, [voiceEnrollStatus]);
+
   // Drive the recording progress bar (~12 s capture) for visible feedback.
   useEffect(() => {
     if (voiceEnrollStatus !== 'recording') return;
@@ -675,11 +708,11 @@ export default function StepSystemCheck({
     { id: 'device', label: 'Device Type', detail: 'Pending...', icon: <Monitor className="w-4 h-4" />, status: 'pending', colorClass: 'text-gray-600' },
     { id: 'webcam', label: 'Webcam', detail: 'Pending...', icon: <Camera className="w-4 h-4" />, status: 'pending', colorClass: 'text-gray-600' },
     { id: 'microphone', label: 'Microphone', detail: 'Pending...', icon: <Mic className="w-4 h-4" />, status: 'pending', colorClass: 'text-brand-blue' },
-    { id: 'internet', label: 'Internet Connection', detail: `Required: ≥ ${MIN_INTERNET_MBPS} Mbps`, icon: <Wifi className="w-4 h-4" />, status: 'pending', colorClass: 'text-cyan-600' },
-    { id: 'ai_engine', label: 'AI Engine', detail: 'Pending...', icon: <Zap className="w-4 h-4" />, status: 'pending', colorClass: 'text-purple-600' },
-    { id: 'websocket', label: 'WebSocket Connection', detail: 'Pending...', icon: <Radio className="w-4 h-4" />, status: 'pending', colorClass: 'text-teal-600' },
+    { id: 'internet', label: 'Internet Connection', detail: `Required: ≥ ${MIN_INTERNET_MBPS} Mbps`, icon: <Wifi className="w-4 h-4" />, status: 'pending', colorClass: 'text-cyan-600 dark:text-cyan-400' },
+    { id: 'ai_engine', label: 'AI Engine', detail: 'Pending...', icon: <Zap className="w-4 h-4" />, status: 'pending', colorClass: 'text-purple-600 dark:text-purple-400' },
+    { id: 'websocket', label: 'WebSocket Connection', detail: 'Pending...', icon: <Radio className="w-4 h-4" />, status: 'pending', colorClass: 'text-teal-600 dark:text-teal-400' },
     { id: 'lighting', label: 'Lighting Conditions', detail: 'Pending...', icon: <Sun className="w-4 h-4" />, status: 'pending', colorClass: 'text-warning' },
-    { id: 'noise', label: 'Background Noise', detail: 'Pending...', icon: <Volume2 className="w-4 h-4" />, status: 'pending', colorClass: 'text-orange-600' },
+    { id: 'noise', label: 'Background Noise', detail: 'Pending...', icon: <Volume2 className="w-4 h-4" />, status: 'pending', colorClass: 'text-orange-600 dark:text-orange-400' },
     { id: 'face', label: 'Face Detection', detail: 'Pending...', icon: <Eye className="w-4 h-4" />, status: 'pending', colorClass: 'text-success' },
     { id: 'multiple', label: 'Multiple People Check', detail: 'Pending...', icon: <Users className="w-4 h-4" />, status: 'pending', colorClass: 'text-destructive' },
   ];
@@ -1956,6 +1989,36 @@ export default function StepSystemCheck({
   // until a valid, non-silent voice sample has been captured.
   const voiceGateOk = !onEnrollVoice || voiceEnrollStatus === 'success';
 
+  // Scroll to whatever the checks' outcome asks of the candidate, but only
+  // when it is off screen:
+  //  - a run finishes → all passed: the Continue row; some failed: the first
+  //    failed row;
+  //  - after a run, a single Retry turns everything green → the Continue row;
+  //  - after a run, switching a device fails more rows → the first failed row.
+  const failedCheckCount = systemChecks.filter((c) => c.status === 'fail').length;
+  const prevChecksRef = useRef({ completed: false, passed: false, failed: 0 });
+  useEffect(() => {
+    const prev = prevChecksRef.current;
+    prevChecksRef.current = { completed: checksCompleted, passed: allSystemPassed, failed: failedCheckCount };
+    if (checksRunning || !checksCompleted) return;
+    const firstFailed = () => checksListRef.current?.querySelector('[data-check-status="fail"]');
+    if (!prev.completed) {
+      if (allSystemPassed) revealAfterPaint(() => checksFooterRef.current, 'nearest');
+      else revealAfterPaint(firstFailed, 'center');
+    } else if (allSystemPassed && !prev.passed) {
+      revealAfterPaint(() => checksFooterRef.current, 'nearest');
+    } else if (failedCheckCount > prev.failed) {
+      revealAfterPaint(firstFailed, 'center');
+    }
+  }, [checksRunning, checksCompleted, allSystemPassed, failedCheckCount]);
+
+  // The mic-disconnected popup points at Device Settings: bring the
+  // microphone picker into view.
+  useEffect(() => {
+    if (!micDisconnectedPopup) return;
+    revealAfterPaint(() => document.getElementById('tf-mic-select'), 'center');
+  }, [micDisconnectedPopup]);
+
   const handleProceed = useCallback(async () => {
     if (isProceedLoading) return;
     setIsProceedLoading(true);
@@ -2131,13 +2194,24 @@ export default function StepSystemCheck({
   const blockedBrowserName = deviceInfo?.browser.name === 'Brave' || deviceInfo?.browser.name === 'Firefox' ? deviceInfo.browser.name : null;
   const deviceAllPass = deviceInfo ? !deviceInfo.isMobile && deviceInfo.browser.supported && !blockedBrowserName : false;
 
+  // Device Check results, all requirements met: after the hold on the in-step
+  // stepper, make sure "Continue to System Checks" is on screen (short
+  // laptops, phones). When requirements are NOT met, the warning sits right
+  // under the stepper, so the hold alone is right.
+  useEffect(() => {
+    if (phase !== 'browser_results' || !deviceAllPass) return;
+    revealAfterPaint(() => deviceContinueRef.current, 'nearest');
+  }, [phase, deviceAllPass]);
+
   // ────────────────────────────────────────
   // Phase 1: browser_check (loading)
   // ────────────────────────────────────────
   if (phase === 'browser_check') {
     return (
-      <div className="w-full max-w-7xl mx-auto px-4 py-8 space-y-6" style={{ colorScheme: 'light' }}>
-        <ProgressStepper phase={phase} />
+      <div className="w-full space-y-6">
+        <div ref={deviceStepperRef}>
+          <ProgressStepper phase={phase} />
+        </div>
 
         {/* Pill badge */}
         <div className="flex justify-center">
@@ -2188,8 +2262,10 @@ export default function StepSystemCheck({
       { label: 'Screen Resolution', value: `${deviceInfo.screenWidth} × ${deviceInfo.screenHeight}`, icon: Maximize2, image: SYSTEM_ICONS.resolution },
     ];
     return (
-      <div className="w-full max-w-7xl mx-auto px-4 py-8 space-y-6" style={{ colorScheme: 'light' }}>
-        <ProgressStepper phase={phase} />
+      <div className="w-full space-y-6">
+        <div ref={deviceStepperRef}>
+          <ProgressStepper phase={phase} />
+        </div>
 
         {/* Pill badge */}
         <div className="flex justify-center">
@@ -2212,11 +2288,11 @@ export default function StepSystemCheck({
         <div className="rounded-2xl border border-gray-200 bg-white shadow-lg">
           <div className="p-5 sm:p-6 space-y-5">
             {blockedBrowserName && (
-              <div className="bg-warning-subtle border border-warning-line rounded-xl p-4 flex items-start gap-3">
-                <XCircle className="w-5 h-5 text-warning flex-shrink-0 mt-0.5" />
+              <div className="bg-destructive-subtle border border-destructive-line rounded-xl p-4 flex items-start gap-3">
+                <XCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-semibold text-warning-strong">{blockedBrowserName} is not a compatible browser</p>
-                  <p className="text-sm text-warning-strong mt-1">
+                  <p className="font-semibold text-destructive-strong">{blockedBrowserName} is not a compatible browser</p>
+                  <p className="text-sm text-destructive-strong mt-1">
                     Use Chrome, Edge, or Safari to continue the interview. You cannot proceed while this interview is opened in {blockedBrowserName}.
                   </p>
                 </div>
@@ -2228,7 +2304,7 @@ export default function StepSystemCheck({
                 Each card fades in from its own side, one after the other. */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
               {/* ═══ LEFT: Device Type ═══ */}
-              <FadeIn from="left" distance={16} delay={0.1} duration={0.5} className="min-w-0">
+              <div className="min-w-0">
                 <div className="relative h-full border border-gray-200 rounded-xl overflow-hidden">
                   <div className="flex items-center gap-3 px-5 py-3.5 bg-gray-50 border-b border-gray-100">
                     <span className="w-10 h-10 rounded-full bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
@@ -2241,7 +2317,7 @@ export default function StepSystemCheck({
                   </div>
                   <dl className="px-5 py-4 space-y-3">
                     {deviceRows.map(({ label, value, icon: RowIcon, image }) => (
-                      <div key={label} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] items-center gap-3 text-sm">
+                      <div key={label} className="grid grid-cols-1 gap-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] sm:gap-3 items-center text-sm">
                         <dt className="text-gray-500">{label}</dt>
                         <dd className="flex items-center gap-2.5 font-semibold text-gray-900 min-w-0">
                           {image
@@ -2261,10 +2337,10 @@ export default function StepSystemCheck({
                     </div>
                   )}
                 </div>
-              </FadeIn>
+              </div>
 
               {/* ═══ RIGHT: Browser Compatibility ═══ */}
-              <FadeIn from="right" distance={16} delay={0.2} duration={0.5} className="min-w-0">
+              <div className="min-w-0">
                 <div className="h-full border border-gray-200 rounded-xl overflow-hidden">
                   <div className="flex items-center gap-3 px-5 py-3.5 bg-gray-50 border-b border-gray-100">
                     <span className="w-10 h-10 rounded-full bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
@@ -2276,7 +2352,7 @@ export default function StepSystemCheck({
                       : <XCircle className="w-5 h-5 text-destructive" />}
                   </div>
                   <div className="px-5 py-4 space-y-3">
-                    <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] items-center gap-3 text-sm">
+                    <div className="grid grid-cols-1 gap-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] sm:gap-3 items-center text-sm">
                       <span className="text-gray-500">Detected Browser</span>
                       <span className="flex items-center gap-2.5 font-semibold text-gray-900 min-w-0">
                         {detectedLogo
@@ -2286,7 +2362,7 @@ export default function StepSystemCheck({
                       </span>
                     </div>
                     <p className="text-sm text-gray-500">Supported Browsers</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3 gap-2.5">
                       {SUPPORTED_BROWSERS.map((b) => {
                         const isCurrent = deviceInfo.browser.name === b.name;
                         return (
@@ -2306,20 +2382,20 @@ export default function StepSystemCheck({
                       })}
                     </div>
                     {blockedBrowserName === 'Brave' && (
-                      <div className="p-3 bg-warning-subtle border border-warning-line rounded-lg">
-                        <p className="text-sm text-warning-strong font-medium">Brave browser is blocked for AI interviews.</p>
-                        <p className="text-xs text-warning mt-1">
+                      <div className="p-3 bg-destructive-subtle border border-destructive-line rounded-lg">
+                        <p className="text-sm text-destructive-strong font-medium">Brave browser is blocked for AI interviews.</p>
+                        <p className="text-xs text-destructive mt-1">
                           Please open this interview link in Chrome, Edge, or Safari.
                         </p>
                       </div>
                     )}
                   </div>
                 </div>
-              </FadeIn>
+              </div>
             </div>
 
             {/* ═══ Verdict, full width across both columns ═══ */}
-            <FadeIn from="down" distance={8} delay={0.6} duration={0.4}>
+            <div>
               <div className={`border rounded-xl px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-4 ${
                 deviceAllPass ? 'bg-success-subtle border-success-line' : 'bg-destructive-subtle border-destructive-line'
               }`}>
@@ -2339,36 +2415,24 @@ export default function StepSystemCheck({
                     )}
                   </div>
                 </div>
-                <ul className="space-y-1.5 sm:pl-4 flex-shrink-0">
-                  {SYSTEM_REQUIREMENTS.map((req) => {
-                    const passed = req.check(deviceInfo);
-                    return (
-                      <li key={req.label} className="flex items-center gap-2 text-sm text-gray-800">
-                        {passed
-                          ? <CheckCircle className="w-4 h-4 text-success flex-shrink-0" />
-                          : <XCircle className="w-4 h-4 text-destructive flex-shrink-0" />}
-                        <span title={req.note}>{req.label}</span>
-                      </li>
-                    );
-                  })}
-                </ul>
               </div>
-            </FadeIn>
+            </div>
 
             {/* Only offered once every requirement is met, and fades in just
                 after the verdict. */}
             {deviceAllPass && (
-              <FadeIn from="down" distance={16} delay={0.8} duration={0.5} className="flex justify-end">
+              <div ref={deviceContinueRef} className="flex sm:justify-end scroll-mb-4">
                 <Button
                   type="button"
                   variant="primary"
                   size="lg"
                   onClick={() => setPhase('system_checks')}
+                  className="w-full sm:w-auto whitespace-normal h-auto min-h-11 py-2 text-center"
                 >
                   Continue to System Checks
                   <ArrowRight className="w-4 h-4" />
                 </Button>
-              </FadeIn>
+              </div>
             )}
           </div>
         </div>
@@ -2383,8 +2447,11 @@ export default function StepSystemCheck({
     // Voice Verification must be completed before "Run Check" unlocks — see
     // micReadyForVoice / the mic-acquisition effect above, which make the
     // Voice Verification panel usable from the moment this screen loads.
-    const runCheckLocked = !!onEnrollVoice && voiceEnrollStatus !== 'success';
-    // Brand-palette only on this screen: blue = primary, orange = needs
+    // Unlocked by the first successful sample (see voiceEverSucceeded), so a
+    // later mic drop doesn't hide Device Settings; Continue still needs a
+    // live 'success' (voiceGateOk).
+    const runCheckLocked = !!onEnrollVoice && !voiceEverSucceeded;
+    // Brand-palette only on this screen: blue = primary, red = needs
     // attention (required, recording, failed), sky = soft accents; green is
     // kept for the per-check "Working" badge only.
     const recordSeconds = Math.round((voiceEnrollProgress / 100) * VOICE_CAPTURE_SECONDS);
@@ -2392,7 +2459,7 @@ export default function StepSystemCheck({
     const canStartRecording = voiceEnrollStatus === 'idle' && !micAcquireFailed && (micDevices.length <= 1 || !!selectedMicId);
 
     return (
-      <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 py-8 space-y-6" style={{ colorScheme: 'light' }}>
+      <div className="w-full space-y-6">
         <style>{`
           @keyframes tf-checks-fade-in { from { opacity: 0; } to { opacity: 1; } }
           .tf-checks-fade-in { animation: tf-checks-fade-in 0.6s ease-out both; }
@@ -2419,11 +2486,11 @@ export default function StepSystemCheck({
         {/* One full-width card, top to bottom: voice verification (read
             aloud, record, tips) → camera & devices → once the voice sample is
             in, the environment checks fade in → Continue. */}
-        <section ref={systemChecksCardRef} className="scroll-mt-4 rounded-2xl overflow-hidden border border-gray-200 bg-white shadow-lg">
+        <section ref={systemChecksCardRef} className="rounded-2xl overflow-hidden border border-gray-200 bg-white shadow-lg">
           <div className="p-5 sm:p-6 space-y-6">
             {/* ── 1. Voice Verification: read aloud → record → tips ── */}
             {onEnrollVoice && (
-              <div className="space-y-4">
+              <div ref={voiceSectionRef} className="space-y-4">
                 <div className="flex items-center gap-2">
                   <Mic className="w-6 h-6 text-brand-blue" />
                   <h3 className="text-lg sm:text-xl font-bold text-gray-900">Voice Verification</h3>
@@ -2439,7 +2506,7 @@ export default function StepSystemCheck({
                 <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] gap-4 items-stretch">
                   {/* A suggested line — NOT required. The candidate can say
                       anything; we only need to hear their voice. */}
-                  <div className="rounded-xl border border-brand-blue/15 bg-brand-sky/40 overflow-hidden flex flex-col justify-between">
+                  <div ref={passageRef} className="rounded-xl border border-brand-blue/15 bg-brand-sky/40 dark:bg-brand-blue/10 overflow-hidden flex flex-col justify-between">
                     <div className="flex items-start gap-3 p-4">
                       <span className="w-7 h-7 rounded-full bg-brand-blue text-white flex items-center justify-center flex-shrink-0">
                         <Info className="w-4 h-4" />
@@ -2448,7 +2515,7 @@ export default function StepSystemCheck({
                         <p className="text-sm font-semibold text-brand-blue">
                           Read this aloud — or just speak naturally:
                         </p>
-                        <p className="mt-1 text-sm text-gray-800 leading-relaxed">&ldquo;{ENROLL_PASSAGE}&rdquo;</p>
+                        <p className="mt-1 text-sm italic text-gray-800 leading-relaxed">&ldquo;{ENROLL_PASSAGE}&rdquo;</p>
                         <p className="text-2xs text-gray-500 mt-1.5">
                           You don&apos;t have to read this exactly — we only check that you spoke.
                         </p>
@@ -2481,7 +2548,7 @@ export default function StepSystemCheck({
                     </p>
                     {/* Bars fill with the capture's real progress — a progress
                         meter shaped like a waveform, not live audio levels. */}
-                    <div className="w-full flex items-center gap-[3px] h-8" aria-hidden>
+                    <div className="w-full flex items-center gap-px sm:gap-[3px] h-8" aria-hidden>
                       {VOICE_WAVE_BARS.map((h, i) => {
                         const filled = voiceEnrollStatus === 'success'
                           || (i / VOICE_WAVE_BARS.length) * 100 < voiceEnrollProgress;
@@ -2502,7 +2569,7 @@ export default function StepSystemCheck({
                         <button
                           type="button"
                           onClick={startVoiceEnroll}
-                          className="inline-flex items-center gap-1.5 text-sm font-semibold rounded-lg px-4 py-2 transition-colors bg-brand-blue text-white hover:bg-brand-blue-2"
+                          className="inline-flex items-center gap-1.5 text-sm font-semibold rounded-lg px-4 py-2 min-h-11 sm:min-h-0 transition-colors bg-brand-blue text-white hover:bg-brand-blue-2"
                         >
                           <Mic className="w-4 h-4" />
                           Start recording
@@ -2512,7 +2579,7 @@ export default function StepSystemCheck({
                         <button
                           type="button"
                           onClick={startVoiceEnroll}
-                          className="inline-flex items-center gap-1.5 text-sm font-semibold rounded-lg px-4 py-2 transition-colors bg-brand-blue text-white hover:bg-brand-blue-2"
+                          className="inline-flex items-center gap-1.5 text-sm font-semibold rounded-lg px-4 py-2 min-h-11 sm:min-h-0 transition-colors bg-brand-blue text-white hover:bg-brand-blue-2"
                         >
                           <RefreshCw className="w-4 h-4" />
                           Retry
@@ -2533,7 +2600,7 @@ export default function StepSystemCheck({
                                 type="button"
                                 onClick={toggleVoicePlayback}
                                 aria-label={voicePlaying ? 'Pause your recording' : 'Play your recording'}
-                                className="inline-flex items-center gap-1.5 text-sm font-semibold rounded-lg px-4 py-2 transition-colors border border-brand-blue/30 text-brand-blue bg-white hover:bg-brand-blue/5"
+                                className="inline-flex items-center gap-1.5 text-sm font-semibold rounded-lg px-4 py-2 min-h-11 sm:min-h-0 transition-colors border border-brand-blue/30 text-brand-blue bg-white hover:bg-brand-blue/5"
                               >
                                 {voicePlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
                                 {voicePlaying ? 'Pause' : 'Play'}
@@ -2546,7 +2613,8 @@ export default function StepSystemCheck({
                             type="button"
                             onClick={retryVoiceEnroll}
                             disabled={!micReadyForVoice || checksRunning || isProceedLoading}
-                            className={`inline-flex items-center gap-1.5 text-sm font-semibold rounded-lg px-4 py-2 transition-colors border ${
+                            title={checksRunning ? 'Available after the checks finish' : isProceedLoading ? 'Finishing up…' : !micReadyForVoice ? 'Connect a microphone first' : undefined}
+                            className={`inline-flex items-center gap-1.5 text-sm font-semibold rounded-lg px-4 py-2 min-h-11 sm:min-h-0 transition-colors border ${
                               micReadyForVoice && !checksRunning && !isProceedLoading
                                 ? 'border-brand-blue/30 text-brand-blue bg-white hover:bg-brand-blue/5'
                                 : 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
@@ -2562,7 +2630,7 @@ export default function StepSystemCheck({
                           type="button"
                           onClick={retryVoiceEnroll}
                           disabled={!micReadyForVoice}
-                          className={`inline-flex items-center gap-1.5 text-sm font-semibold rounded-lg px-4 py-2 transition-colors border ${
+                          className={`inline-flex items-center gap-1.5 text-sm font-semibold rounded-lg px-4 py-2 min-h-11 sm:min-h-0 transition-colors border ${
                             micReadyForVoice
                               ? 'border-brand-blue/30 text-brand-blue bg-white hover:bg-brand-blue/5'
                               : 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
@@ -2590,7 +2658,7 @@ export default function StepSystemCheck({
                 {/* Device Settings stays hidden until the voice sample is in, so
                     with 2+ mics the pick happens here; it writes the same
                     selection the Device Settings picker shows later. */}
-                {voiceEnrollStatus === 'idle' && !micAcquireFailed && micDevices.length > 1 && !selectedMicId && (
+                {((voiceEnrollStatus === 'idle' && !selectedMicId) || voiceEnrollStatus === 'disconnected') && !micAcquireFailed && micDevices.length > 1 && (
                   <div className="space-y-2">
                     <VoiceNotice>More than one microphone is connected. Choose the one you&apos;ll speak into, then click Start recording.</VoiceNotice>
                     <div className="flex items-center gap-2 max-w-md">
@@ -2601,7 +2669,7 @@ export default function StepSystemCheck({
                         value={selectedMicId}
                         onChange={(e) => switchMicrophone(e.target.value)}
                         disabled={isSwitchingDevice}
-                        className="w-full text-sm rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 disabled:bg-gray-50 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+                        className="w-full text-base sm:text-sm min-h-11 sm:min-h-0 rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 disabled:bg-gray-50 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
                       >
                         <option value="" disabled>Select your microphone…</option>
                         {micDevices.map((d, i) => (
@@ -2631,7 +2699,7 @@ export default function StepSystemCheck({
                 voice step, and unmounting it would drop the preview. ── */}
               <div
                 ref={cameraRowRef}
-                className={`scroll-mt-4 space-y-4 ${onEnrollVoice ? 'border-t border-gray-100 pt-6' : ''} ${runCheckLocked ? 'hidden' : 'tf-checks-fade-in'}`}
+                className={`space-y-4 ${onEnrollVoice ? 'border-t border-gray-100 pt-6' : ''} ${runCheckLocked ? 'hidden' : 'tf-checks-fade-in'}`}
               >
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
@@ -2643,29 +2711,28 @@ export default function StepSystemCheck({
                       fully-passed run shows Continue below. */}
                   {!checksRunning && !checksCompleted && (
                     <>
+                      {/* The pulse is a glow only (no scale), so the button's hit
+                          area never moves under the pointer; off for reduced
+                          motion. */}
                       <style>{`
                         @keyframes tfRunCheckPulse {
-                          0%, 100% { transform: scale(1);    box-shadow: 0 0 0 0 rgba(22,163,74,0.6); }
-                          50%      { transform: scale(1.06); box-shadow: 0 0 0 10px rgba(22,163,74,0); }
+                          0%, 100% { box-shadow: 0 0 0 0 rgba(22,163,74,0.6); }
+                          50%      { box-shadow: 0 0 0 10px rgba(22,163,74,0); }
                         }
+                        .tf-run-check-pulse { animation: tfRunCheckPulse 1.2s ease-in-out infinite; }
+                        @media (prefers-reduced-motion: reduce) { .tf-run-check-pulse { animation: none; } }
                       `}</style>
                       <button
                         type="button"
                         onClick={() => {
-                          // Small screens only (phones and small tablets, below
-                          // Tailwind's md, where the checks drop to one column
-                          // under the camera): after the click's re-render,
-                          // bring the first check into view. Wider screens
-                          // already show the checks, so they stay put.
-                          if (window.matchMedia('(max-width: 767px)').matches) {
-                            requestAnimationFrame(() => {
-                              checksListRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
-                            });
-                          }
+                          // After the click's re-render, bring the checks into
+                          // view — on any screen, but only when they aren't
+                          // already fully visible (stacked layouts, short
+                          // laptops). A large screen showing them stays put.
+                          revealAfterPaint(() => checksListRef.current, 'start');
                           void handleRunChecks();
                         }}
-                        style={{ animation: 'tfRunCheckPulse 1.2s ease-in-out infinite' }}
-                        className="flex-shrink-0 inline-flex items-center gap-2 font-bold py-2.5 px-5 rounded-lg text-sm transition-colors bg-success hover:bg-success-strong text-white shadow-lg"
+                        className="tf-run-check-pulse flex-shrink-0 inline-flex items-center justify-center gap-2 font-bold min-h-11 py-2.5 px-5 rounded-lg text-sm transition-colors bg-success hover:bg-success-strong text-white shadow-lg w-full min-[400px]:w-auto"
                       >
                         <Play className="w-4 h-4" />
                         Run Check
@@ -2678,7 +2745,7 @@ export default function StepSystemCheck({
                   feed. */}
               <div className="grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-5">
                 <div className="rounded-xl border border-gray-200 p-3">
-                  <div className="relative bg-gray-900 aspect-video rounded-lg overflow-hidden">
+                  <div className="relative bg-gray-900 aspect-video max-h-[42svh] w-full mx-auto rounded-lg overflow-hidden">
                     <video
                       ref={videoRef}
                       autoPlay
@@ -2695,13 +2762,13 @@ export default function StepSystemCheck({
                     {/* Reflects the video element's actual playback state
                         (cameraLive) instead of always claiming "Camera Active". */}
                     {cameraLive ? (
-                      <span className="absolute top-2.5 right-2.5 inline-flex items-center gap-1.5 bg-white/90 text-success text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
+                      <span className="absolute top-2.5 right-2.5 inline-flex items-center gap-1.5 bg-white/90 dark:bg-slate-900/90 text-success text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
                         <span className="w-2 h-2 bg-success rounded-full animate-pulse" />
                         Active
                       </span>
                     ) : (
-                      <span className="absolute top-2.5 right-2.5 inline-flex items-center gap-1.5 bg-white/90 text-brand-orange-deep text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
-                        <span className="w-2 h-2 bg-brand-orange rounded-full" />
+                      <span className="absolute top-2.5 right-2.5 inline-flex items-center gap-1.5 bg-white/90 dark:bg-slate-900/90 text-destructive text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
+                        <span className="w-2 h-2 bg-destructive rounded-full" />
                         No Camera Signal
                       </span>
                     )}
@@ -2727,7 +2794,7 @@ export default function StepSystemCheck({
                           value={selectedCameraId}
                           onChange={(e) => switchCamera(e.target.value)}
                           disabled={isSwitchingDevice || checksRunning}
-                          className="w-full text-sm rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 disabled:bg-gray-50 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+                          className="w-full text-base sm:text-sm min-h-11 sm:min-h-0 rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 disabled:bg-gray-50 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
                         >
                           {cameraDevices.length === 0 && <option value="">System Default</option>}
                           {cameraDevices.map((d, i) => (
@@ -2741,7 +2808,7 @@ export default function StepSystemCheck({
                           ))}
                         </select>
                         {cameraSelectionError && (
-                          <p className="mt-1 text-xs font-medium text-brand-orange-deep">{cameraSelectionError}</p>
+                          <p className="mt-1 text-xs font-medium text-destructive">{cameraSelectionError}</p>
                         )}
                       </div>
                     </div>
@@ -2750,14 +2817,14 @@ export default function StepSystemCheck({
                       <Mic className="w-5 h-5 text-brand-blue flex-shrink-0 mt-6" />
                       <div className="min-w-0 flex-1">
                         <label htmlFor="tf-mic-select" className="block text-sm font-semibold text-gray-900 mb-1">
-                          Microphone <span className="text-brand-orange-deep">*</span>
+                          Microphone <span className="text-destructive">*</span>
                         </label>
                         <select
                           id="tf-mic-select"
                           value={selectedMicId}
                           onChange={(e) => switchMicrophone(e.target.value)}
                           disabled={isSwitchingDevice || checksRunning}
-                          className="w-full text-sm rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 disabled:bg-gray-50 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+                          className="w-full text-base sm:text-sm min-h-11 sm:min-h-0 rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 disabled:bg-gray-50 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
                         >
                           <option value="" disabled>Select your microphone…</option>
                           {micDevices.map((d, i) => (
@@ -2775,7 +2842,7 @@ export default function StepSystemCheck({
                               : <>click <strong>Run Check</strong> below to detect your connected microphone(s)</>}, then select one here.
                           </p>
                         ) : !selectedMicId && (
-                          <p className="mt-1 text-xs text-brand-orange-deep font-medium">
+                          <p className="mt-1 text-xs text-destructive font-medium">
                             Required — select your microphone to complete the Microphone check.
                           </p>
                         )}
@@ -2783,38 +2850,41 @@ export default function StepSystemCheck({
                     </div>
 
                     <p className="text-xs text-gray-500">
-                      Not seeing the right device? Choose a different one above — we&apos;ll re-check it automatically.
+                      Not seeing the right device? Choose a different one above, then click Retry on the affected checks.
                     </p>
                   </div>
                 </div>
               </div>
 
-                {/* Checks — two columns, five rows */}
-                <div ref={checksListRef} className="scroll-mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* Checks — two columns from lg (one below, where a half-width
+                    row is too narrow to read); a row wraps its status/Retry
+                    under the label when it runs out of room. */}
+                <div ref={checksListRef} className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                   {systemChecks.map((check) => (
                     <div
                       key={check.id}
-                      className={`rounded-xl border px-3 py-2.5 flex items-center gap-3 min-w-0 ${
-                        check.status === 'fail' ? 'border-brand-orange/30 bg-brand-orange/[0.04]' : 'border-gray-200 bg-white'
+                      data-check-status={check.status}
+                      className={`rounded-xl border px-3 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-2 min-w-0 ${
+                        check.status === 'fail' ? 'border-destructive/30 bg-destructive/[0.04]' : 'border-gray-200 bg-white'
                       }`}
                     >
                       <span className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 [&_svg]:w-5 [&_svg]:h-5 ${
-                        check.status === 'fail' ? 'bg-brand-orange/10 text-brand-orange-deep' : 'bg-brand-blue/10 text-brand-blue'
+                        check.status === 'fail' ? 'bg-destructive/10 text-destructive' : 'bg-brand-blue/10 text-brand-blue'
                       }`}>
                         {check.icon}
                       </span>
 
                       {/* Label + detail (the "Pending..." placeholder stays
                           hidden until a check actually runs) */}
-                      <div className="flex-1 min-w-0">
+                      <div className="flex-1 min-w-[8rem]">
                         <p className="text-sm font-semibold text-gray-900">{check.label}</p>
                         {check.detail && check.detail !== 'Pending...' && (
-                          <p className="text-xs text-gray-500 truncate" title={check.detail}>{check.detail}</p>
+                          <p className="text-xs text-gray-500 line-clamp-2 break-words sm:line-clamp-1" title={check.detail}>{check.detail}</p>
                         )}
                       </div>
 
                       {/* Status + per-check retry (only that row re-runs) */}
-                      <div className="flex-shrink-0 flex items-center gap-2">
+                      <div className="flex-shrink-0 ml-auto flex items-center gap-2">
                         {check.status === 'pass' && (
                           <span className="inline-flex items-center gap-1.5 bg-success-subtle text-success text-xs font-semibold pl-1 pr-3 py-1 rounded-full">
                             <span className="w-5 h-5 rounded-full bg-success text-white flex items-center justify-center">
@@ -2825,7 +2895,7 @@ export default function StepSystemCheck({
                         )}
                         {check.status === 'fail' && (
                           <>
-                            <span className="inline-flex items-center gap-1.5 bg-brand-orange/10 text-brand-orange-deep text-xs font-semibold px-3 py-1 rounded-full">
+                            <span className="inline-flex items-center gap-1.5 bg-destructive/10 text-destructive text-xs font-semibold px-3 py-1 rounded-full">
                               <XCircle className="w-3.5 h-3.5" />
                               Failed
                             </span>
@@ -2833,11 +2903,14 @@ export default function StepSystemCheck({
                                 real "Run Check" flow (see retryCheck's guard
                                 above) — before that's completed once, a per-row
                                 Retry would be a dead click, so it's hidden. */}
-                            {(check.id !== 'microphone' || checksCompleted) && (
+                            {/* Also hidden while the full run is still going:
+                                a per-row retry then would run alongside it on
+                                the same stream. */}
+                            {!checksRunning && (check.id !== 'microphone' || checksCompleted) && (
                               <button
                                 type="button"
                                 onClick={() => retryCheck(check.id)}
-                                className="inline-flex items-center gap-1 text-xs font-semibold text-brand-blue border border-brand-blue/30 hover:bg-brand-blue/5 rounded-md px-2 py-1 transition-colors"
+                                className="inline-flex items-center gap-1 min-h-9 text-xs font-semibold text-brand-blue border border-brand-blue/30 hover:bg-brand-blue/5 rounded-md px-3 py-1.5 transition-colors"
                                 title={`Retry ${check.label}`}
                               >
                                 <RefreshCw className="w-3 h-3" />
@@ -2862,9 +2935,9 @@ export default function StepSystemCheck({
                     run is done), running indicator / Continue on the right.
                     Stacks on small screens. */}
                 {(checksRunning || checksCompleted) && (
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3 pt-2">
+                  <div ref={checksFooterRef} className="flex flex-col md:flex-row md:items-center md:justify-end gap-3 pt-2 scroll-mb-4">
                     {!checksRunning && checksCompleted && allSystemPassed && (
-                      <div className="sm:mr-auto inline-flex items-center gap-2.5 rounded-lg border border-brand-blue/15 bg-brand-blue/[0.06] px-3 py-2 min-w-0">
+                      <div className="md:mr-auto inline-flex items-center gap-2.5 rounded-lg border border-brand-blue/15 bg-brand-blue/[0.06] px-3 py-2 min-w-0">
                         <span className="w-7 h-7 rounded-full bg-brand-blue text-white flex items-center justify-center flex-shrink-0">
                           <Check className="w-4 h-4" strokeWidth={3} />
                         </span>
@@ -2875,12 +2948,12 @@ export default function StepSystemCheck({
                       </div>
                     )}
                     {!checksRunning && checksCompleted && !allSystemPassed && (
-                      <div className="sm:mr-auto inline-flex items-center gap-2.5 rounded-lg border border-brand-orange/25 bg-brand-orange/[0.07] px-3 py-2 min-w-0">
-                        <span className="w-7 h-7 rounded-full bg-brand-orange text-white flex items-center justify-center flex-shrink-0">
+                      <div className="md:mr-auto inline-flex items-center gap-2.5 rounded-lg border border-destructive/25 bg-destructive/[0.07] px-3 py-2 min-w-0">
+                        <span className="w-7 h-7 rounded-full bg-destructive text-white flex items-center justify-center flex-shrink-0">
                           <XCircle className="w-4 h-4" />
                         </span>
                         <div className="min-w-0">
-                          <p className="text-sm font-bold text-brand-orange-deep leading-tight">Some checks failed</p>
+                          <p className="text-sm font-bold text-destructive leading-tight">Some checks failed</p>
                           <p className="text-xs text-gray-600 leading-snug">
                             {systemChecks.find((c) => c.id === 'webcam' && c.status === 'fail')
                               ? 'Camera access is required for the interview. Allow camera access in your browser settings, then click Retry on that check.'
@@ -2906,8 +2979,8 @@ export default function StepSystemCheck({
                         size="lg"
                         onClick={() => { if (allSystemPassed && voiceGateOk && !isProceedLoading && !micDisconnectedPopup) handleProceed(); }}
                         disabled={!allSystemPassed || !voiceGateOk || isProceedLoading || micDisconnectedPopup}
-                        title={micDisconnectedPopup ? 'Please reconnect your microphone to continue' : !voiceGateOk ? 'Record your voice sample first' : undefined}
-                        className="w-full sm:w-auto sm:min-w-[260px]"
+                        title={micDisconnectedPopup ? 'Please reconnect your microphone to continue' : !voiceGateOk ? 'Record your voice sample first' : !allSystemPassed ? 'Fix the failed checks above (click Retry on each)' : undefined}
+                        className="w-full md:w-auto md:min-w-[240px] whitespace-normal h-auto min-h-11 py-2 text-center"
                       >
                         {isProceedLoading ? (
                           <><Loader2 className="w-4 h-4 animate-spin" /> Finishing…</>
@@ -2938,9 +3011,9 @@ export default function StepSystemCheck({
             DIFFERENT microphone. Auto-dismisses once the device is back. */}
         {micDisconnectedPopup && (
           <div className="fixed top-4 inset-x-0 z-[200] flex justify-center px-4 pointer-events-none">
-            <div className="w-full max-w-md bg-white border border-brand-orange/30 rounded-2xl shadow-2xl p-5 flex items-start gap-3 pointer-events-auto">
-              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-brand-orange/10 flex-shrink-0">
-                <MicOff className="w-5 h-5 text-brand-orange-deep" />
+            <div role="alert" aria-live="assertive" className="w-full max-w-md bg-white border border-destructive/30 rounded-2xl shadow-2xl p-5 flex items-start gap-3 pointer-events-auto">
+              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-destructive/10 flex-shrink-0">
+                <MicOff className="w-5 h-5 text-destructive" />
               </div>
               <div className="min-w-0">
                 <h3 className="text-gray-900 font-semibold text-sm mb-0.5">No microphone detected.</h3>
@@ -2957,11 +3030,12 @@ export default function StepSystemCheck({
             available, so tryMicFallbackOrFail already switched to it silently
             and the check stayed 'pass'. Purely informational: never blocks
             Continue and dismisses itself. */}
-        {micFallbackNotice && (
+        {/* Never stacked on the disconnect popup (same slot): that one wins. */}
+        {micFallbackNotice && !micDisconnectedPopup && (
           <div className="fixed top-4 inset-x-0 z-[200] flex justify-center px-4 pointer-events-none">
-            <div className="w-full max-w-md bg-white border border-brand-orange/30 rounded-2xl shadow-2xl p-5 flex items-start gap-3 pointer-events-auto">
-              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-brand-orange/10 flex-shrink-0">
-                <MicOff className="w-5 h-5 text-brand-orange-deep" />
+            <div role="status" aria-live="polite" className="w-full max-w-md bg-white border border-destructive/30 rounded-2xl shadow-2xl p-5 flex items-start gap-3 pointer-events-auto">
+              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-destructive/10 flex-shrink-0">
+                <MicOff className="w-5 h-5 text-destructive" />
               </div>
               <div className="min-w-0">
                 <h3 className="text-gray-900 font-semibold text-sm mb-0.5">Your device removed</h3>

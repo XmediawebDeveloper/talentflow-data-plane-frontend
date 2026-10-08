@@ -2183,7 +2183,7 @@ export function AssessmentInterface({
                 const notAnsweredCount = currentQuestion.total_questions - submittedCount - answeredCount;
                 const legend = [
                   { label: 'Not answered', count: notAnsweredCount, tone: 'bg-muted text-muted-foreground ring-border' },
-                  { label: 'Answered', count: answeredCount, tone: 'bg-warning-subtle text-warning-strong ring-warning-line' },
+                  { label: 'Draft', count: answeredCount, tone: 'bg-warning-subtle text-warning-strong ring-warning-line' },
                   { label: 'Submitted', count: submittedCount, tone: 'bg-success-subtle text-success-strong ring-success-line' },
                 ];
                 return (
@@ -2220,7 +2220,7 @@ export function AssessmentInterface({
                 } else if (hasDraft) {
                   colorClass = 'bg-warning-subtle text-warning-strong ring-1 ring-warning-line'; // Answered, not yet submitted
                   icon = <Save className="w-4 h-4" />;
-                  titleText = `Question ${num} - Answered (not submitted)`;
+                  titleText = `Question ${num} - Draft (not submitted)`;
                 }
 
                 return (
@@ -2292,7 +2292,7 @@ export function AssessmentInterface({
         const STATUS_LABEL = { completed: 'Completed', draft: 'Draft', unanswered: 'Unanswered' } as const;
 
         const statCards = [
-          { key: 'completed', label: 'Completed', count: lockedCount, Icon: CheckCircle, tile: 'border-success-line', icon: 'text-success', num: 'text-success-strong' },
+          { key: 'completed', label: 'Submitted', count: lockedCount, Icon: CheckCircle, tile: 'border-success-line', icon: 'text-success', num: 'text-success-strong' },
           { key: 'draft', label: 'Draft', count: draftCount, Icon: FileText, tile: 'border-warning-line', icon: 'text-warning', num: 'text-warning-strong' },
           { key: 'unanswered', label: 'Unanswered', count: unansweredCount, Icon: AlertCircle, tile: 'border-destructive-line', icon: 'text-destructive', num: 'text-destructive-strong' },
         ] as const;

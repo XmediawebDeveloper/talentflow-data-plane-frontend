@@ -14,6 +14,7 @@ import {
   VolumeX,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { revealAfterPaint } from '@/lib/utils/candidateScroll';
 
 interface StepIntroVideoProps {
   candidateName?: string;
@@ -61,6 +62,10 @@ export default function StepIntroVideo({
     : null;
 
   const videoRef = useRef<HTMLVideoElement>(null);
+  // Continue — brought into view (only if it's off screen) when the video
+  // ends or fails, and after a language is picked.
+  const continueRef = useRef<HTMLDivElement>(null);
+  const revealContinue = useCallback(() => revealAfterPaint(() => continueRef.current), []);
   const [videoError, setVideoError] = useState(false);
   // Browser autoplay policy blocks audio on programmatic play() — start muted,
   // then unmute via explicit user gesture so sound always works.
@@ -90,7 +95,7 @@ export default function StepIntroVideo({
   return (
     /* One card, two columns (stacked on small screens): the video on the
        left, the welcome, candidate note, language and Continue on the right. */
-    <div className="w-full" style={{ colorScheme: 'light' }}>
+    <div className="w-full">
       <div className="rounded-3xl border border-gray-100 bg-white shadow-xl shadow-brand-blue/5 p-4 sm:p-6 lg:p-8">
         {/* items-stretch: the details card fills the video column's height. */}
         <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] gap-6 xl:gap-8 items-stretch">
@@ -108,7 +113,7 @@ export default function StepIntroVideo({
                 <div className="aspect-video xl:h-full w-full rounded-2xl border border-destructive-line bg-destructive-subtle p-6 sm:p-8 flex flex-col items-center justify-center text-center">
                   <div className="text-destructive text-4xl mb-3">⚠️</div>
                   <p className="text-destructive font-medium">Failed to load the introduction video.</p>
-                  <p className="text-destructive text-sm mt-1">Please check your connection and refresh the page, or skip and continue.</p>
+                  <p className="text-destructive text-sm mt-1">Please check your connection and refresh the page, or continue below.</p>
                 </div>
               ) : (
                 <div className="relative w-full aspect-video xl:h-full rounded-2xl overflow-hidden bg-gray-900 border border-gray-200 shadow-sm">
@@ -119,13 +124,17 @@ export default function StepIntroVideo({
                     playsInline
                     muted={isMuted}
                     className="absolute inset-0 w-full h-full object-contain"
-                    onError={() => setVideoError(true)}
+                    onError={() => { setVideoError(true); revealContinue(); }}
+                    onEnded={revealContinue}
+                    // Keep the pill in step with the native controls: unmuting
+                    // there must not leave the pill saying "Click to unmute".
+                    onVolumeChange={(e) => setIsMuted(e.currentTarget.muted)}
                   />
                   {/* Unmute overlay — stays up so audio can be toggled any time */}
                   <button
                     type="button"
                     onClick={toggleMute}
-                    className={`absolute top-3 right-3 flex items-center gap-1.5 text-white text-xs sm:text-sm font-semibold px-3 py-1.5 rounded-full transition-colors ${
+                    className={`absolute top-3 right-3 min-h-10 flex items-center gap-1.5 text-white text-xs sm:text-sm font-semibold px-4 py-1.5 rounded-full transition-colors ${
                       isMuted ? 'bg-black/70 hover:bg-black/90' : 'bg-black/40 hover:bg-black/70'
                     }`}
                   >
@@ -151,7 +160,7 @@ export default function StepIntroVideo({
           {/* ═══ RIGHT: one card, as tall as the video. Greeting at the top,
               the interview at a glance in the middle, Continue pinned to the
               bottom. ═══ */}
-          <div className="min-w-0 xl:h-full rounded-2xl border border-gray-100 bg-gradient-to-b from-brand-sky/50 to-white p-5 sm:p-6 flex flex-col gap-5">
+          <div className="min-w-0 xl:h-full rounded-2xl border border-gray-100 bg-gradient-to-b from-brand-sky/50 dark:from-brand-blue/10 to-white dark:to-slate-900 p-5 sm:p-6 flex flex-col gap-5">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-brand-blue">Before you begin</p>
               <h2 className="mt-1.5 text-2xl sm:text-3xl font-bold text-gray-900 leading-tight break-words">
@@ -200,9 +209,9 @@ export default function StepIntroVideo({
                       <button
                         key={lang}
                         type="button"
-                        onClick={() => onSelectLanguage(lang)}
+                        onClick={() => { onSelectLanguage(lang); revealContinue(); }}
                         aria-pressed={isSelected}
-                        className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
+                        className={`inline-flex min-h-10 items-center gap-1.5 rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${
                           isSelected
                             ? 'border-brand-blue bg-brand-blue/10 text-brand-blue'
                             : 'border-gray-200 bg-white text-gray-700 hover:border-gray-400'
@@ -219,7 +228,7 @@ export default function StepIntroVideo({
 
             {/* mt-auto: the button sits on the card's bottom edge, level with
                 the bottom of the video. */}
-            <div className="mt-auto space-y-2">
+            <div ref={continueRef} className="mt-auto space-y-2 scroll-mb-4">
               <Button
                 variant="primary"
                 size="lg"

@@ -24,7 +24,7 @@ import { startClientLogForwarder, stopClientLogForwarder, flushClientLogBeacon }
 import SectionTransitionOverlay from "./SectionTransitionOverlay";
 import { toast } from 'sonner';
 import { requestFullscreen, getFullscreenChangeEvent, exitFullscreen } from "@/lib/utils/browserCompat";
-import { Clock, Timer, LogOut, Mic, MessageSquare, ShieldCheck, MicOff, SkipForward, Maximize, RefreshCw, PictureInPicture2, Camera } from "lucide-react";
+import { Clock, Timer, LogOut, Mic, MessageSquare, Check, ArrowRight, MicOff, SkipForward, Maximize, RefreshCw, PictureInPicture2, Camera } from "lucide-react";
 import { createAvatar3DSender } from "./avatar3d/avatar3d-channel";
 import { DEFAULT_VISEME_WEIGHTS } from "./avatar3d/avatar3d-types";
 import { VisemeTimeline } from "./avatar3d/text-to-viseme";
@@ -379,7 +379,7 @@ const YouAvatar = ({ photoUrl }: { photoUrl?: string | null }) => {
       <img
         src={photoUrl}
         alt="You"
-        className="w-6 h-6 rounded-full object-cover shrink-0 mt-0.5 shadow-sm ring-1 ring-emerald-300"
+        className="w-6 h-6 rounded-full object-cover shrink-0 mt-0.5 shadow-sm ring-1 ring-emerald-300 dark:ring-emerald-500/40"
       />
     );
   }
@@ -408,7 +408,7 @@ const MessageRow = (({ msg, candidatePhotoUrl }: MessageRowProps) => {
   if (msg.role === 'system') {
     return (
       <div className="flex justify-center">
-        <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 border border-amber-200 rounded-full">
+        <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-full">
           <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
           <p className="text-amber-700 text-xs">{msg.content}</p>
         </div>
@@ -421,7 +421,7 @@ const MessageRow = (({ msg, candidatePhotoUrl }: MessageRowProps) => {
     // spoken answer.
     return (
       <div className="flex justify-end">
-        <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700">
+        <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-300">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
           <p className="text-sm font-medium">{msg.content}</p>
         </div>
@@ -434,21 +434,21 @@ const MessageRow = (({ msg, candidatePhotoUrl }: MessageRowProps) => {
         <YouAvatar photoUrl={candidatePhotoUrl} />
         <div className="max-w-[80%]">
           <div className="flex items-center justify-end gap-2 mb-0.5">
-            <span className="text-2xs font-semibold text-emerald-600">Your Response</span>
+            <span className="text-2xs font-semibold text-emerald-600 dark:text-emerald-400">Your Response</span>
             {msg.responseTimeSeconds != null && (
               <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-2xs font-bold tabular-nums ${
                 msg.responseTimeSeconds <= 30
-                  ? 'bg-red-100 text-red-600 border border-red-200'
+                  ? 'bg-red-100 dark:bg-red-500/15 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-500/30'
                   : msg.responseTimeSeconds <= 60
-                  ? 'bg-amber-100 text-amber-700 border border-amber-200'
-                  : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                  ? 'bg-amber-100 dark:bg-amber-500/15 text-amber-700 border border-amber-200 dark:border-amber-500/30'
+                  : 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30'
               }`}>
                 <Clock className="w-2.5 h-2.5" />
                 {formatTimeMMSS(msg.responseTimeSeconds)} left
               </span>
             )}
           </div>
-          <div className="px-3.5 py-2.5 bg-emerald-50 text-emerald-900 rounded-2xl rounded-tr-sm border border-emerald-200 shadow-sm">
+          <div className="px-3.5 py-2.5 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-900 dark:text-emerald-300 rounded-2xl rounded-tr-sm border border-emerald-200 dark:border-emerald-500/30 shadow-sm">
             <p className="text-sm leading-relaxed">{msg.content}</p>
           </div>
           {msg.timestamp && (
@@ -468,9 +468,9 @@ const MessageRow = (({ msg, candidatePhotoUrl }: MessageRowProps) => {
       />
       <div className="max-w-[80%]">
         <div className="flex items-center gap-1.5 mb-0.5">
-          <span className="text-2xs font-semibold text-purple-600">BINA</span>
+          <span className="text-2xs font-semibold text-purple-600 dark:text-purple-400">BINA</span>
         </div>
-        <div className="px-3.5 py-2.5 bg-violet-50 text-violet-900 rounded-2xl rounded-tl-sm border border-violet-200 shadow-sm">
+        <div className="px-3.5 py-2.5 bg-violet-50 dark:bg-violet-500/10 text-violet-900 dark:text-violet-300 rounded-2xl rounded-tl-sm border border-violet-200 dark:border-violet-500/30 shadow-sm">
           {/* pre-line: keeps the committed opening warm-up (role summary +
               AII16 tips) laid out the same way it streamed. */}
           <p className="text-sm leading-relaxed whitespace-pre-line">{msg.content}</p>
@@ -508,9 +508,9 @@ const LiveAIBubble = (({ text }: LiveAIBubbleProps) => {
       />
       <div className="max-w-[80%]">
         <div className="flex items-center gap-1.5 mb-0.5">
-          <span className="text-2xs font-semibold text-purple-600">BINA</span>
+          <span className="text-2xs font-semibold text-purple-600 dark:text-purple-400">BINA</span>
         </div>
-        <div className="px-3.5 py-2.5 bg-violet-50 text-violet-900 rounded-2xl rounded-tl-sm border border-violet-200 shadow-sm">
+        <div className="px-3.5 py-2.5 bg-violet-50 dark:bg-violet-500/10 text-violet-900 dark:text-violet-300 rounded-2xl rounded-tl-sm border border-violet-200 dark:border-violet-500/30 shadow-sm">
           <div className="flex items-center gap-1 mb-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '0ms' }} />
             <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '150ms' }} />
@@ -5499,7 +5499,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         // NOT render any chip or inline note — the Follow-up indicator and
         // "Reframed as a follow-up…" note are post-interview-only and live
         // on the Question Analysis (EvaluationDashboardV2) page.
-        console.log(`[WS ${timestamp}] question_meta: is_followup=${data.is_followup}, skills=${JSON.stringify(data.follow_skills)}`);
+        console.log(`[INTERVIEW-DEBUG][WS ${timestamp}] question_meta: is_followup=${data.is_followup}, skills=${JSON.stringify(data.follow_skills)}, answer_type=${data.answer_type}, question_number=${data.question_number}, hr_question_id=${data.hr_question_id}, live_questionNumber=${questionNumberRef.current}`);
         if (data.is_followup) {
           isCurrentFollowupRef.current = true;
         } else {
@@ -5535,7 +5535,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               hrVoiceBlockedQuestionNumberRef.current = null;
             }
           } else {
-            console.log(`[WS ${timestamp}] question_meta: duplicate re-announcement of hr_question_id=${_hrQid} ignored`);
+            console.log(`[INTERVIEW-DEBUG][WS ${timestamp}] question_meta: duplicate re-announcement of hr_question_id=${_hrQid} ignored (armedHrQuestionIdRef already set to this id)`);
           }
         } else {
           // Ordinary free-form question (no HR tag at all) — make sure no
@@ -9529,6 +9529,27 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     !isAiSpeaking && !isProcessing &&
     questionTimerSeconds !== null && !questionTimerExpired;
 
+  // Debug-only: trace the exact AII-20 button render gate
+  // (structuredHrPrompt.questionNumber === questionNumber && answerType ===
+  // 'yes_no' && isCandidateTurn && !hrExplainMore) every time one of its
+  // inputs changes, so a report of "yes_no question showed no buttons" can
+  // be diagnosed from client-log without reproducing live.
+  useEffect(() => {
+    if (!structuredHrPrompt) return;
+    console.log('[INTERVIEW-DEBUG] AII-20 button gate state', {
+      structuredHrPrompt,
+      liveQuestionNumber: questionNumber,
+      numbersMatch: structuredHrPrompt.questionNumber === questionNumber,
+      isCandidateTurn,
+      hrExplainMore,
+      wouldRenderButtons:
+        structuredHrPrompt.questionNumber === questionNumber &&
+        structuredHrPrompt.answerType === 'yes_no' &&
+        isCandidateTurn &&
+        !hrExplainMore,
+    });
+  }, [structuredHrPrompt, questionNumber, isCandidateTurn, hrExplainMore]);
+
   // AII-20: submit a Yes/No click or a Text-based typed answer. Reuses the
   // EXISTING `text_input` WS message the backend already handles end-to-end
   // (run_text_pipeline) — no new message type, no new backend workflow.
@@ -9787,11 +9808,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       </svg>
     );
     const cfg = {
-      turn:    { grad: 'from-emerald-400 to-teal-500', ring: 'ring-emerald-200/60', glow: 'shadow-emerald-500/30', title: 'Your turn — speak now',        subtitle: 'Microphone is active · Bina is listening',          icon: micIcon,      dismissible: false },
-      hold:    { grad: 'from-rose-500 to-red-600',     ring: 'ring-rose-200/50',    glow: 'shadow-red-600/30',     title: 'Hold on — Bina is speaking',  subtitle: 'Please wait until she finishes the question',        icon: pauseIcon,    dismissible: false },
-      prepare: { grad: 'from-rose-500 to-red-600',     ring: 'ring-rose-200/50',    glow: 'shadow-red-600/30',     title: 'Hold on — getting ready',      subtitle: 'Please wait a moment…',                              icon: spinnerIcon,  dismissible: false },
-      timesup: { grad: 'from-rose-500 to-red-600',     ring: 'ring-rose-200/50',    glow: 'shadow-red-600/30',     title: "Time's up!",                   subtitle: 'Moving to the next question…',                       icon: <Clock className="w-5 h-5 text-white" />, dismissible: false },
-      silence: { grad: 'from-amber-400 to-orange-500', ring: 'ring-amber-200/60',   glow: 'shadow-amber-500/30',   title: 'Are you still there?',         subtitle: 'Take your time — Bina will move on if there’s no response.', icon: micIcon, dismissible: true },
+      turn:    { grad: 'from-emerald-400 to-teal-500', ring: 'ring-emerald-200/60 dark:ring-emerald-500/30', glow: 'shadow-emerald-500/30', title: 'Your turn — speak now',        subtitle: 'Microphone is active · Bina is listening',          icon: micIcon,      dismissible: false },
+      hold:    { grad: 'from-rose-500 to-red-600',     ring: 'ring-rose-200/50 dark:ring-rose-500/30',    glow: 'shadow-red-600/30',     title: 'Hold on — Bina is speaking',  subtitle: 'Please wait until she finishes the question',        icon: pauseIcon,    dismissible: false },
+      prepare: { grad: 'from-rose-500 to-red-600',     ring: 'ring-rose-200/50 dark:ring-rose-500/30',    glow: 'shadow-red-600/30',     title: 'Hold on — getting ready',      subtitle: 'Please wait a moment…',                              icon: spinnerIcon,  dismissible: false },
+      timesup: { grad: 'from-rose-500 to-red-600',     ring: 'ring-rose-200/50 dark:ring-rose-500/30',    glow: 'shadow-red-600/30',     title: "Time's up!",                   subtitle: 'Moving to the next question…',                       icon: <Clock className="w-5 h-5 text-white" />, dismissible: false },
+      silence: { grad: 'from-amber-400 to-orange-500', ring: 'ring-amber-200/60 dark:ring-amber-500/30',   glow: 'shadow-amber-500/30',   title: 'Are you still there?',         subtitle: 'Take your time — Bina will move on if there’s no response.', icon: micIcon, dismissible: true },
     }[variant];
 
     return (
@@ -9801,7 +9822,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           <div className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/25 to-transparent" />
           {/* icon in a frosted circle with a soft pulse ring */}
           <div className="relative shrink-0">
-            <div className="w-10 h-10 rounded-full bg-white/25 ring-1 ring-white/40 backdrop-blur flex items-center justify-center shadow-inner">
+            <div className="w-10 h-10 rounded-full bg-white/25 dark:bg-slate-900/25 ring-1 ring-white/40 backdrop-blur flex items-center justify-center shadow-inner">
               {cfg.icon}
             </div>
             <span className="absolute inset-0 rounded-full ring-2 ring-white/50 animate-ping opacity-40" />
@@ -9818,7 +9839,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 setShowSilenceBanner(false);
                 if (silenceCountdownRef.current) { clearInterval(silenceCountdownRef.current); silenceCountdownRef.current = null; }
               }}
-              className="relative shrink-0 -mr-1 w-6 h-6 rounded-full flex items-center justify-center text-white/80 hover:text-white hover:bg-white/15 text-lg leading-none transition-colors"
+              className="relative shrink-0 -mr-1 w-6 h-6 rounded-full flex items-center justify-center text-white/80 hover:text-white hover:bg-white/15 dark:hover:bg-slate-900/15 text-lg leading-none transition-colors"
               aria-label="Dismiss"
             >×</button>
           )}
@@ -10124,7 +10145,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 to a static Bina image with a speaking/listening indicator so
                 the candidate sees a proper face instead of a blank canvas. */}
             {avatarFailed && (
-              <div className="absolute inset-0 overflow-hidden flex items-center justify-center bg-gradient-to-b from-gray-900 to-gray-800">
+              <div className="absolute inset-0 overflow-hidden flex items-center justify-center bg-[radial-gradient(ellipse_at_50%_40%,#1e2a4a_0%,#111a33_45%,#0a1020_100%)]">
                 <div className="relative flex flex-col items-center">
                   <div
                     className={`relative w-44 h-44 rounded-full overflow-hidden border-4 transition-colors duration-300 ${
@@ -10213,12 +10234,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             {/* Label row — just the "You" label. The REC badge now lives INSIDE
                 the webcam frame (top-right corner) so it reads as an overlay on
                 the candidate's own video, not floating in the dark strip above. */}
-            <div className="absolute top-0 left-0 right-0 z-10 px-3 pt-2.5 pb-1 flex items-center">
+            <div className="absolute top-0 left-0 right-0 z-10 px-3 pt-1 pb-1 flex items-center">
               <span className="text-gray-400 text-2xs font-medium uppercase tracking-wide">You</span>
             </div>
 
             {/* Webcam feed fills this half */}
-            <div className="absolute inset-0 mt-8 mx-3 mb-3 rounded-xl overflow-hidden bg-[var(--raw-1a1f2e)]">
+            <div className="absolute inset-0 mt-6 mx-3 mb-3 rounded-xl overflow-hidden bg-[var(--raw-1a1f2e)]">
               <Webcam
                 ref={webcamRef}
                 className="w-full h-full object-cover"
@@ -10237,7 +10258,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               {isConnected && !isClosing && (
                 <div className={`absolute top-2 right-2 z-20 flex items-center gap-1 px-2 py-1 rounded-full border backdrop-blur-sm transition-colors duration-300 ${
                   isRecording && !isMuted
-                    ? 'bg-red-500/60 border-red-300/80'
+                    ? 'bg-red-500/60 border-red-300/80 dark:border-red-500/40'
                     : 'bg-black/45 border-red-400/50'
                 }`}>
                   <span className={`w-1.5 h-1.5 rounded-full bg-red-300 ${isRecording && !isMuted ? 'animate-pulse' : 'opacity-70'}`} />
@@ -10262,7 +10283,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                         {activeMicLabel || "Microphone"}
                       </span>
                     </div>
-                    <div className="w-20 h-1.5 rounded-full bg-white/15 overflow-hidden shrink-0">
+                    <div className="w-20 h-1.5 rounded-full bg-white/15 dark:bg-slate-900/15 overflow-hidden shrink-0">
                       <div
                         className={`h-full rounded-full transition-all duration-150 ${
                           micInputLow && isRecording && !isMuted ? 'bg-amber-300' : 'bg-emerald-300'
@@ -10286,49 +10307,57 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
         {/* ════ RIGHT PANEL: Chat (fills remaining width) ════ */}
         {/* Inset card with rounded corners, matching the webcam frame. */}
-        <div className="flex-1 flex flex-col min-w-0 bg-white m-3 rounded-xl overflow-hidden">
+        <div className="flex-1 flex flex-col min-w-0 bg-white my-3 mr-3 ml-1.5 rounded-xl overflow-hidden">
 
-          {/* Header — single light sky-blue color (was a purple→pink gradient).
-              Foreground darkened to sky/slate so text stays readable on the
-              lighter background. */}
-          <div
-            className="flex-shrink-0 flex items-center justify-between px-4 py-3"
-            style={{ background: 'var(--raw-7dd3fc)' }}
-          >
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-full bg-white/60 flex items-center justify-center shrink-0">
-                <MessageSquare className="w-4 h-4 text-sky-700" />
+          {/* Header — white status bar: title on the left; LIVE, ID Verified,
+              question progress and End on the right, separated by thin
+              dividers. Visual only — same badges, conditions and handlers. */}
+          <div className="flex-shrink-0 flex items-center justify-between gap-3 px-4 py-3 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 shadow-sm">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-full bg-brand-blue/10 dark:bg-sky-500/15 flex items-center justify-center shrink-0">
+                <MessageSquare className="w-5 h-5 text-brand-blue dark:text-sky-300" />
               </div>
-              <div>
-                <h2 className="text-sky-900 font-bold leading-tight" style={{ fontSize: 15 }}>Chat with BINA</h2>
-                <p className="text-sky-800/70 text-2xs leading-tight">Live AI-powered interview</p>
+              <div className="min-w-0">
+                <h2 className="text-gray-900 dark:text-white font-bold leading-tight truncate" style={{ fontSize: 16 }}>Chat with BINA</h2>
+                <p className="text-slate-500 dark:text-slate-400 text-xs leading-tight truncate">Live AI-powered interview</p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
               {/* LIVE badge — FIRST in the header, green. */}
-              <div className="flex items-center gap-1 px-2 py-1 bg-white/55 rounded-full border border-white/70">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="text-emerald-700 text-2xs font-bold">LIVE</span>
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-500/15 rounded-full">
+                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-emerald-600 dark:text-emerald-300 text-xs font-bold">LIVE</span>
               </div>
               {/* Identity verified */}
               {(faceVerification || voiceVerification) && (
-                <div className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-lg bg-white/55 border border-white/70">
-                  <ShieldCheck className="w-3 h-3 text-sky-700" />
-                  <span className="text-sky-800 text-2xs font-semibold">ID VERIFIED</span>
+                <div className="hidden sm:flex items-center gap-1.5 pl-1.5 pr-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-500/15">
+                  <span className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center">
+                    <Check className="w-3 h-3 text-white" strokeWidth={3} />
+                  </span>
+                  <span className="text-emerald-600 dark:text-emerald-300 text-xs font-semibold">ID Verified</span>
                 </div>
               )}
-              {/* Q counter — animates on each change */}
+              {/* Q counter + progress bar — animates on each change */}
               {questionNumber !== null && totalQuestions !== null && (
-                <div
-                  key={questionNumber}
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/55 border border-white/70"
-                  style={{ animation: 'qNumPop 0.35s cubic-bezier(0.34,1.56,0.64,1) both' }}
-                >
-                  <span className="text-sky-900 text-xs font-bold tabular-nums">Q {questionNumber}</span>
-                  <span className="text-sky-700/50 text-xs">/</span>
-                  <span className="text-sky-700 text-xs font-semibold tabular-nums">{totalQuestions}</span>
-                </div>
+                <>
+                  <div className="hidden md:block w-px h-7 bg-gray-200 dark:bg-slate-700" />
+                  <div
+                    key={questionNumber}
+                    className="flex flex-col gap-1.5 min-w-0"
+                    style={{ animation: 'qNumPop 0.35s cubic-bezier(0.34,1.56,0.64,1) both' }}
+                  >
+                    <span className="text-gray-900 dark:text-white text-xs font-semibold tabular-nums whitespace-nowrap">
+                      <span className="hidden sm:inline">Question </span>{questionNumber}<span className="hidden sm:inline"> of </span><span className="sm:hidden"> / </span>{totalQuestions}
+                    </span>
+                    <div className="hidden md:block w-28 lg:w-32 h-1.5 rounded-full bg-gray-200 dark:bg-slate-700 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-brand-blue dark:bg-sky-400 transition-all duration-500"
+                        style={{ width: `${totalQuestions > 0 ? Math.min(100, Math.max(0, (questionNumber / totalQuestions) * 100)) : 0}%` }}
+                      />
+                    </div>
+                  </div>
+                </>
               )}
               {/* Clarification badge removed per design — no banner indicator
                   when Bina is re-asking the same question. */}
@@ -10338,9 +10367,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                   interview time still runs in the backend; it's just not shown here. */}
               {/* REC badge moved to the candidate video's top-right corner; LIVE
                   moved to the front of the header (green) — see above / below. */}
+              <div className="hidden md:block w-px h-7 bg-gray-200 dark:bg-slate-700" />
               {/* Closing indicator */}
               {isClosing && (
-                <div className="px-2 py-1 bg-orange-100 border border-orange-300 text-orange-700 rounded-lg text-2xs font-medium animate-pulse">Ending...</div>
+                <div className="px-3 py-1.5 bg-orange-100 dark:bg-orange-500/15 border border-orange-300 dark:border-orange-500/40 text-orange-700 rounded-lg text-xs font-medium animate-pulse">Ending...</div>
               )}
               {/* End Interview button — hidden once closing has started so it
                   can't be clicked again (the "Ending..." badge shows instead). */}
@@ -10348,9 +10378,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 <button
                   onClick={() => setShowEndConfirm(true)}
                   disabled={!isConnected}
-                  className="flex items-center gap-1 px-2.5 py-1.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg border border-red-700 shadow-sm transition-all duration-200 font-semibold text-xs"
+                  className="flex items-center gap-1.5 px-3 sm:px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg shadow-sm transition-all duration-200 font-semibold text-sm"
                 >
-                  <LogOut className="w-3.5 h-3.5" />
+                  <LogOut className="w-4 h-4" />
                   <span className="hidden sm:inline">End</span>
                 </button>
               )}
@@ -10361,10 +10391,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           {/* ── Per-question timer banner — shown above chat when timer is active ── */}
           {questionTimerSeconds !== null && (
             <div className={`flex-shrink-0 px-4 py-2.5 border-b transition-colors duration-500 ${
-              questionTimerExpired       ? 'bg-red-50 border-red-200' :
-              questionTimerSeconds <= 30 ? 'bg-red-50 border-red-200' :
-              questionTimerSeconds <= 60 ? 'bg-amber-50 border-amber-200' :
-                                           'bg-violet-50 border-violet-200'
+              questionTimerExpired       ? 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/30' :
+              questionTimerSeconds <= 30 ? 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/30' :
+              questionTimerSeconds <= 60 ? 'bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30' :
+                                           'bg-violet-50 dark:bg-violet-500/10 border-violet-200 dark:border-violet-500/30'
             }`}>
               <div className="flex items-center gap-3">
                 {/* Icon */}
@@ -10376,8 +10406,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 {/* Label + time */}
                 <div className="flex items-center gap-2 min-w-0 flex-1">
                   <span className={`text-xs font-semibold shrink-0 ${
-                    questionTimerExpired || questionTimerSeconds <= 30 ? 'text-red-600' :
-                    questionTimerSeconds <= 60 ? 'text-amber-600' : 'text-violet-600'
+                    questionTimerExpired || questionTimerSeconds <= 30 ? 'text-red-600 dark:text-red-400' :
+                    questionTimerSeconds <= 60 ? 'text-amber-600' : 'text-violet-600 dark:text-violet-400'
                   }`}>
                     {(questionTimerExpired || questionTimerSeconds <= 0) ? "Time's up!" : isAiSpeaking ? 'Question time:' : isProcessing ? 'Answered:' : 'Answer time:'}
                   </span>
@@ -10402,8 +10432,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
                   {/* Countdown value */}
                   <span className={`text-sm font-bold tabular-nums shrink-0 ${
-                    questionTimerExpired || questionTimerSeconds <= 30 ? 'text-red-600' :
-                    questionTimerSeconds <= 60 ? 'text-amber-600' : 'text-violet-700'
+                    questionTimerExpired || questionTimerSeconds <= 30 ? 'text-red-600 dark:text-red-400' :
+                    questionTimerSeconds <= 60 ? 'text-amber-600' : 'text-violet-700 dark:text-violet-300'
                   } ${questionTimerExpired ? 'animate-pulse' : ''}`}>
                     {(questionTimerExpired || questionTimerSeconds <= 0) ? '00:00' : formatTime(questionTimerSeconds)}
                   </span>
@@ -10425,7 +10455,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
           {/* ── Buffer mode active banner ── */}
           {isInBuffer && !isClosing && (
-            <div className="flex-shrink-0 px-4 py-2.5 flex items-center gap-3 bg-amber-50 border-b border-amber-200">
+            <div className="flex-shrink-0 px-4 py-2.5 flex items-center gap-3 bg-amber-50 dark:bg-amber-500/10 border-b border-amber-200 dark:border-amber-500/30">
               <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shrink-0" />
               <div className="flex-1 min-w-0">
                 <span className="text-xs font-semibold text-amber-700">Buffer Time Active</span>
@@ -10496,7 +10526,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                       <button
                         type="button"
                         onClick={() => submitStructuredHrAnswer('Yes')}
-                        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800 text-sm font-semibold hover:bg-emerald-100 hover:border-emerald-300 transition-colors text-left"
+                        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 text-sm font-semibold hover:bg-emerald-100 dark:hover:bg-emerald-500/15 hover:border-emerald-300 dark:hover:border-emerald-500/40 transition-colors text-left"
                       >
                         <span className="flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500 text-white text-[10px] font-bold shrink-0">A</span>
                         Yes
@@ -10504,7 +10534,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                       <button
                         type="button"
                         onClick={() => submitStructuredHrAnswer('No')}
-                        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-rose-200 bg-rose-50 text-rose-800 text-sm font-semibold hover:bg-rose-100 hover:border-rose-300 transition-colors text-left"
+                        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-rose-200 dark:border-rose-500/30 bg-rose-50 dark:bg-rose-500/10 text-rose-800 dark:text-rose-300 text-sm font-semibold hover:bg-rose-100 dark:hover:bg-rose-500/15 hover:border-rose-300 dark:hover:border-rose-500/40 transition-colors text-left"
                       >
                         <span className="flex items-center justify-center w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-bold shrink-0">B</span>
                         No
@@ -10533,7 +10563,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                             wsRef.current?.send(JSON.stringify({ type: 'hr_voice_mode' }));
                           } catch { /* best-effort, mirrors other wsRef.current?.send call sites */ }
                         }}
-                        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-blue-200 bg-blue-50 text-blue-900 text-sm font-semibold hover:bg-blue-100 hover:border-blue-300 transition-colors text-left"
+                        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-blue-200 dark:border-blue-500/30 bg-blue-50 dark:bg-blue-500/10 text-blue-900 dark:text-blue-300 text-sm font-semibold hover:bg-blue-100 dark:hover:bg-blue-500/15 hover:border-blue-300 dark:hover:border-blue-500/40 transition-colors text-left"
                       >
                         <span className="flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold shrink-0">C</span>
                         Need to Explain More
@@ -10564,20 +10594,20 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               <div className="flex gap-2 flex-row-reverse">
                 <YouAvatar photoUrl={candidatePhotoUrl} />
                 <div className="max-w-[80%]">
-                  <span className="text-2xs font-semibold text-emerald-600 mb-0.5 block text-right">Your Response</span>
-                  <div className="px-3.5 py-2.5 bg-emerald-50 text-emerald-900 rounded-2xl rounded-tr-sm border border-emerald-200 shadow-sm">
+                  <span className="text-2xs font-semibold text-emerald-600 dark:text-emerald-400 mb-0.5 block text-right">Your Response</span>
+                  <div className="px-3.5 py-2.5 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-900 dark:text-emerald-300 rounded-2xl rounded-tr-sm border border-emerald-200 dark:border-emerald-500/30 shadow-sm">
                     {(isRecording || currentTranscript) ? (
                       <>
                         <div className="flex items-center gap-1 mb-1">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                          <span className="text-emerald-600 text-2xs font-medium">
+                          <span className="text-emerald-600 dark:text-emerald-400 text-2xs font-medium">
                             {currentTranscript ? 'speaking…' : candidateLiveTranscriptEnabled ? 'listening…' : 'recording…'}
                           </span>
                         </div>
                         {currentTranscript ? (
                           <p className="text-sm leading-relaxed italic">{currentTranscript}</p>
                         ) : candidateLiveTranscriptEnabled ? (
-                          <p className="text-xs leading-relaxed italic text-emerald-700/70">
+                          <p className="text-xs leading-relaxed italic text-emerald-700/70 dark:text-emerald-300">
                             {realtimeTranscriptionEnabled ? 'Start speaking...' : 'Listening for live transcript...'}
                           </p>
                         ) : (
@@ -10587,8 +10617,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                           // — the transcript is revealed after the turn is processed.
                           <div className="flex flex-col gap-1.5">
                             <MicWaveform analyserRef={micAnalyserRef} active={isRecording} />
-                            <p className="text-xs leading-relaxed italic text-emerald-700/70">
-                              Recording… your transcript appears after you finish speaking.
+                            <p className="text-xs leading-relaxed italic text-emerald-700/70 dark:text-emerald-300">
+                              Recording… Your transcript will appear after you finish speaking.
                             </p>
                           </div>
                         )}
@@ -10608,13 +10638,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                         processing state). Repeat = Bina re-reads the current
                         question (no count change); Next = move on. */}
                     {isCandidateTurn && (isRecording || currentTranscript) && (
-                      <div className="flex items-center gap-2 mt-2.5 pt-2.5 border-t border-emerald-200/70">
+                      <div className="flex items-center gap-2 mt-2.5 pt-2.5 border-t border-emerald-200/70 dark:border-emerald-500/30">
                         <button
                           type="button"
                           onClick={handleRepeatQuestion}
                           disabled={repeatInFlight || !canRepeat}
                           title={!canRepeat ? 'Repeat is only available in the first few seconds of your turn' : undefined}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-emerald-300 dark:border-emerald-500/40 bg-white text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-500/15 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >
                           <RefreshCw className="w-3.5 h-3.5" />
                           {repeatInFlight ? 'Repeating…' : 'Repeat Question'}
@@ -10692,7 +10722,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                   alt="Bina"
                   className="w-6 h-6 rounded-full object-cover shrink-0 shadow-sm mt-0.5"
                 />
-                <div className="px-3.5 py-2.5 bg-violet-50 rounded-2xl rounded-tl-sm border border-violet-200 shadow-sm">
+                <div className="px-3.5 py-2.5 bg-violet-50 dark:bg-violet-500/10 rounded-2xl rounded-tl-sm border border-violet-200 dark:border-violet-500/30 shadow-sm">
                   <div className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-violet-300 animate-bounce" style={{ animationDelay: '0ms' }} />
                     <span className="w-2 h-2 rounded-full bg-violet-300 animate-bounce" style={{ animationDelay: '150ms' }} />
@@ -10708,8 +10738,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 background (gray-50) before it reaches the floating turn banner,
                 so nothing shows sharply behind/around the banner. Non-
                 interactive so it never blocks scrolling or clicks. Sits under
-                the fixed banner (which is z-105) but above the scrolling text. */}
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-b from-transparent via-gray-50/70 to-gray-50" />
+                the fixed banner (which is z-105) but above the scrolling text.
+                Gated on bannerVisible: with no banner on screen there is
+                nothing to blend into, and the scroll container only reserves
+                pb-4 of clearance — the old unconditional h-32 fade washed out
+                the newest/currently-streaming BINA bubble (which the auto-scroll
+                pins right under it) whenever the banner wasn't showing. */}
+            <div className={`pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-b from-transparent via-gray-50/70 to-gray-50 dark:to-slate-800/50 transition-[height] duration-150 ${
+              bannerVisible ? 'h-32' : 'h-0'
+            }`} />
             {/* ── Big countdown overlays (under the question, high visibility) ──
                 Change 1: pre-turn "get ready" 5→1 before the mic opens.
                 Change 2: mid-speech silence 7→1 (final 7s of the 15s window).
@@ -10796,20 +10833,20 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 this answer, AC4) or Next (AC5). */}
             {midSilenceConfirm && (
               <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 z-[104] flex flex-col items-center justify-center px-4">
-                <div className="pointer-events-auto w-full max-w-sm rounded-2xl bg-black/80 backdrop-blur-md ring-1 ring-amber-400/40 shadow-2xl px-5 py-4 text-center">
-                  <div className="flex items-center justify-center gap-2 mb-2">
-                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                    <p className="text-base font-bold text-amber-300">Are you done with your response?</p>
+                <div className="pointer-events-auto w-full max-w-sm rounded-2xl bg-white dark:bg-slate-900 ring-1 ring-sky-100 dark:ring-slate-700 shadow-2xl px-5 pt-5 pb-4 text-center">
+                  <div className="mx-auto mb-3 w-12 h-12 rounded-full bg-sky-50 dark:bg-sky-500/15 flex items-center justify-center">
+                    <Mic className="w-5 h-5 text-brand-blue dark:text-sky-300" />
                   </div>
-                  <p className="text-xs sm:text-sm text-white/90 leading-snug mb-4">
+                  <p className="text-lg font-bold text-gray-900 dark:text-white mb-2">Are you done with your response?</p>
+                  <p className="text-sm text-slate-600 dark:text-slate-300 leading-snug mb-4">
                     If you are not done, please speak up to continue your response.
                     If you have completed your answer, click Submit to move to the next question.
                   </p>
-                  <div className="flex items-center justify-center gap-2">
+                  <div className="flex items-center justify-center gap-3">
                     <button
                       type="button"
                       onClick={handleSubmitResponse}
-                      className="inline-flex items-center gap-1.5 px-5 py-2 rounded-full bg-emerald-500 text-white text-sm font-semibold shadow-lg hover:bg-emerald-600 transition-colors"
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold shadow-sm hover:bg-emerald-700 transition-colors"
                     >
                       Submit
                     </button>
@@ -10817,13 +10854,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                       <button
                         type="button"
                         onClick={() => handleNextQuestion()}
-                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-white/10 text-white text-sm font-medium ring-1 ring-white/20 hover:bg-white/20 transition-colors"
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-sky-50 dark:bg-sky-500/15 text-brand-blue dark:text-sky-300 text-sm font-semibold ring-1 ring-sky-100 dark:ring-sky-500/30 hover:bg-sky-100 dark:hover:bg-sky-500/25 transition-colors"
                       >
-                        Next question →
+                        Next question <ArrowRight className="w-4 h-4" />
                       </button>
                     )}
                   </div>
-                  <p className="mt-3 text-2xs text-white/60">Still recording — just keep speaking to continue.</p>
+                  <p className="mt-3 text-2xs text-slate-500 dark:text-slate-400">Still recording — just keep speaking to continue.</p>
                 </div>
               </div>
             )}
@@ -10846,7 +10883,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               {/* Right: Recording indicator + Skip + Next Question */}
               <div className="flex items-center gap-2">
                 {/* Recording badge */}
-                <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-red-50 border border-red-100">
+                <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-red-50 dark:bg-red-500/10 border border-red-100 dark:border-red-500/30">
                   <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
                   <span className="text-red-500 text-2xs font-semibold">REC</span>
                 </div>
@@ -11029,7 +11066,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                     className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold border transition-all duration-200 ${
                       questionTimerExpired || (questionNumber !== null && totalQuestions !== null && questionNumber >= totalQuestions) || isMediaPaused
                         ? 'opacity-50 cursor-not-allowed bg-gray-50 border-gray-200 text-gray-400'
-                        : 'bg-white hover:bg-violet-50 border-violet-200 text-violet-700 hover:border-violet-400'
+                        : 'bg-white hover:bg-violet-50 dark:hover:bg-violet-500/10 border-violet-200 dark:border-violet-500/30 text-violet-700 dark:text-violet-300 hover:border-violet-400'
                     }`}
                   >
                     <SkipForward className="w-3.5 h-3.5" />
@@ -11140,7 +11177,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             {/* Timer display */}
             <div className="w-full grid grid-cols-2 gap-3">
               {/* Global timer */}
-              <div className="flex flex-col items-center gap-1 rounded-xl bg-white/5 border border-white/10 px-4 py-3">
+              <div className="flex flex-col items-center gap-1 rounded-xl bg-white/5 dark:bg-slate-900/5 border border-white/10 px-4 py-3">
                 <span className="text-2xs font-semibold text-[var(--raw-64748b)] uppercase tracking-widest">Interview Time</span>
                 <span className={`font-mono font-bold text-xl tabular-nums ${remainingSeconds <= 60 ? 'text-red-400' : 'text-white'}`}>
                   {formatTime(remainingSeconds)}
@@ -11148,7 +11185,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 <span className="text-2xs text-[var(--raw-475569)] font-medium">remaining</span>
               </div>
               {/* Question timer */}
-              <div className="flex flex-col items-center gap-1 rounded-xl bg-white/5 border border-white/10 px-4 py-3">
+              <div className="flex flex-col items-center gap-1 rounded-xl bg-white/5 dark:bg-slate-900/5 border border-white/10 px-4 py-3">
                 <span className="text-2xs font-semibold text-[var(--raw-64748b)] uppercase tracking-widest">Question Time</span>
                 {questionTimerSeconds !== null ? (
                   <>

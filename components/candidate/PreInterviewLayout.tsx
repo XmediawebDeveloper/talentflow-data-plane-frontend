@@ -1,9 +1,10 @@
 'use client';
 
-import React from 'react';
-import Image from 'next/image';
-import { CheckCircle, ChevronLeft, ChevronRight, HelpCircle } from 'lucide-react';
+import React, { useEffect, useRef } from 'react';
+import { CheckCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import CandidateHeader from './CandidateHeader';
+import { CANDIDATE_CONTAINER } from '@/lib/constants/candidateLayout';
 
 const STEP_LABELS = [
   'Job Details & Consent',
@@ -51,37 +52,53 @@ export default function PreInterviewLayout({
   const shouldShowBack = showBack !== undefined ? showBack : currentStep > 1;
   const steps = stepLabels ?? STEP_LABELS.slice(0, totalSteps);
 
+  // The pinned header + stepper's live height, published as --tf-sticky-h on
+  // <html>, and as <html>'s scroll-padding-top (+16px). It changes with the
+  // breakpoint and the viewport height, so it is measured, not hard-coded.
+  // scroll-padding makes every scrollIntoView and every native focus scroll
+  // (Tab, .focus()) stop just below the pinned block, so the steps' scroll
+  // targets need no per-element scroll-margin. On very short screens the
+  // block stops being sticky (see the wrapper) and the offset drops to 0.
+  // Set only while a pre-interview step is mounted, so no other page changes.
+  const stickyRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = stickyRef.current;
+    if (!el) return;
+    const root = document.documentElement;
+    const publish = () => {
+      const pinned = getComputedStyle(el).position === 'sticky';
+      const h = pinned ? el.offsetHeight : 0;
+      root.style.setProperty('--tf-sticky-h', `${h}px`);
+      root.style.scrollPaddingTop = `${h + 16}px`;
+    };
+    publish();
+    const ro = new ResizeObserver(publish);
+    ro.observe(el);
+    window.addEventListener('resize', publish);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', publish);
+      root.style.removeProperty('--tf-sticky-h');
+      root.style.scrollPaddingTop = '';
+    };
+  }, []);
+
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-gray-50 !bg-gray-50 [color-scheme:light]">
-      {/* Header with logo */}
-      <header className="w-full bg-white border-b border-gray-200">
-        <div className="w-full px-4 sm:px-6 lg:px-12 py-3 sm:py-4">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0">
-              <Image
-                src="/logos/talent_flow_logo.png"
-                alt="TalentFlow"
-                width={200}
-                height={70}
-                className="h-10 sm:h-12 lg:h-16 w-auto shrink-0"
-                priority
-                unoptimized
-              />
-            </div>
-            <a
-              href="mailto:support@talentflow.com"
-              className="flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900 transition-colors shrink-0"
-            >
-              <HelpCircle className="w-4 h-4" />
-              <span className="hidden sm:inline">Need help?</span>
-            </a>
-          </div>
-        </div>
-      </header>
+    <div className="flex min-h-[100dvh] flex-col bg-gray-50">
+      {/* Header + progress stepper, pinned together to the top while the
+          step scrolls. The header is the shared candidate header (the
+          dashboard's bar height, logo asset and size). */}
+      {/* Unpinned on very short screens (landscape phones), where the
+          block would cover close to half the viewport. */}
+      <div ref={stickyRef} className="sticky top-0 z-40 [@media(max-height:480px)]:static">
+      <CandidateHeader />
 
       {/* Progress Stepper */}
-      <nav className="bg-white/90 backdrop-blur-sm border-b border-gray-200 px-4 py-4 sm:px-8 sm:py-5 !bg-white/90 !border-gray-200">
-        <div className="w-full max-w-7xl mx-auto">
+      {/* Tighter on short screens (≤760px tall: small laptops) so the pinned
+          block doesn't eat the page. Same column as the header row, so the
+          logo, the dots and the page content share one left edge. */}
+      <nav className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm border-b border-gray-200 py-3 sm:py-4 lg:py-5 [@media(max-height:760px)]:py-2">
+        <div className={CANDIDATE_CONTAINER}>
           <div className="flex items-center justify-between">
             {steps.map((label, index) => {
               const stepNumber = index + 1;
@@ -91,7 +108,7 @@ export default function PreInterviewLayout({
               return (
                 <React.Fragment key={label}>
                   {/* Step */}
-                  <div className="flex flex-col items-center gap-2">
+                  <div className="flex flex-col items-center gap-2 [@media(max-height:760px)]:gap-1">
                     {/* Dot */}
                     <div className="relative flex items-center justify-center">
                       {isCompleted && (
@@ -117,9 +134,12 @@ export default function PreInterviewLayout({
                         </div>
                       )}
                     </div>
-                    {/* Label (hidden on mobile) */}
+                    {/* Label — from md (below it there isn't room for 5–7
+                        labels; the caption under the row names the current
+                        step instead). Capped and balanced so long labels
+                        wrap evenly instead of squeezing the connectors. */}
                     <span
-                      className={`hidden text-center text-2xs leading-tight sm:block ${
+                      className={`hidden md:block max-w-[7rem] text-balance text-center text-2xs leading-tight [@media(max-height:600px)]:hidden ${
                         isCurrent
                           ? 'font-semibold text-gray-900'
                           : isCompleted
@@ -134,7 +154,7 @@ export default function PreInterviewLayout({
                   {/* Connector line */}
                   {index < steps.length - 1 && (
                     <div
-                      className={`mx-1 h-0.5 flex-1 rounded-full sm:mx-2 ${
+                      className={`mx-0.5 min-w-3 h-0.5 flex-1 rounded-full sm:mx-2 ${
                         stepNumber < currentStep
                           ? 'bg-gray-700'
                           : 'bg-gray-200'
@@ -145,12 +165,20 @@ export default function PreInterviewLayout({
               );
             })}
           </div>
+          {/* Phones and small tablets: the labels are hidden, so name the
+              current step under the dots. */}
+          {steps[currentStep - 1] && (
+            <p className="mt-2 text-center text-xs font-medium text-gray-700 md:hidden [@media(max-height:600px)]:hidden">
+              Step {currentStep} of {steps.length} · {steps[currentStep - 1]}
+            </p>
+          )}
         </div>
       </nav>
+      </div>
 
       {/* Content */}
-      <main className="flex flex-1 flex-col px-4 sm:px-8">
-        <div className="w-full max-w-7xl mx-auto flex-1 py-6 sm:py-8">
+      <main className="flex flex-1 flex-col">
+        <div className={`${CANDIDATE_CONTAINER} flex-1 py-5 sm:py-8`}>
           {children}
         </div>
       </main>
@@ -189,7 +217,7 @@ export default function PreInterviewLayout({
       )}
 
       {/* Help text */}
-      <div className="bg-white/60 px-4 py-3 text-center">
+      <div className="bg-white/60 dark:bg-slate-900/60 px-4 py-3 text-center">
         <p className="text-xs text-gray-400 sm:text-sm">
           Need help?{' '}
           <a

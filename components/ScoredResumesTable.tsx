@@ -1,5 +1,6 @@
 import { SCORE_CELL_TEXT } from '@/lib/utils/score';
-import { Mail, Phone, Calendar, Search, Download, FileDown, CheckSquare, Square, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, ClipboardList, Share2, Paperclip, FileText, FileSpreadsheet, MoreVertical, Award, ChevronRight, ChevronDown, Video, BarChart3 } from 'lucide-react';
+import { RESUME_EMAIL_SHARE_ENABLED } from '@/lib/constants/featureFlags';
+import { Mail, Phone, Calendar, Search, Download, FileDown, CheckSquare, Square, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, ClipboardList, Share2, Paperclip, FileText, FileSpreadsheet, MoreVertical, Award, ChevronRight, ChevronDown, ChevronsUpDown, ChevronsDownUp, Plus, Video, BarChart3 } from 'lucide-react';
 import { matchBadgeClass, MATCH_SCORE_TEXT_CLASS, normalizeMatchResult, formatOverallScore, formatOverallScoreValue } from '@/lib/utils/matchStatus';
 import { truncateJobTitle } from '@/lib/utils/jobOpeningDisplay';
 import { useState, useEffect, useMemo, useRef, Fragment } from 'react';
@@ -46,6 +47,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu';
+import { SelectAllMenu, SortByControl } from '@/components/ui/select-all-menu';
 
 /* Action menu item styling — cloned from the Job Openings page's three-dot
    menu (JobsListing.tsx: gray-700 text, hover:bg-gray-50, px-4/py-2.5 rows,
@@ -65,6 +67,24 @@ const scoredResumesMenuItemClass = 'group !rounded-none !px-4 !py-2.5 text-sm te
    resting style as the toolbar's own More Filters button, which it cannot be
    handed a class for. 38px is that button's natural height (py-2 + text-sm +
    a 1px border each side). */
+/* Sort by — the Job Openings list's control. View by Candidates sorts
+   people; the flat list sorts rows. */
+type SortKey = 'date' | 'name' | 'versions' | 'exact' | 'partial' | 'none' | 'jobTitle' | 'score';
+const GROUPED_SORT_OPTIONS: { value: SortKey; label: string }[] = [
+  { value: 'date', label: 'Latest Updated' },
+  { value: 'name', label: 'Candidate Name' },
+  { value: 'versions', label: 'Job Versions' },
+  { value: 'exact', label: 'Exact Match' },
+  { value: 'partial', label: 'Partial Match' },
+  { value: 'none', label: 'No Match' },
+];
+const FLAT_SORT_OPTIONS: { value: SortKey; label: string }[] = [
+  { value: 'date', label: 'Scored Date' },
+  { value: 'name', label: 'Candidate Name' },
+  { value: 'jobTitle', label: 'Job Title' },
+  { value: 'score', label: 'Score' },
+];
+
 const TOOLBAR_BUTTON_CLASS =
   'h-[38px] px-3 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-2 text-sm whitespace-nowrap bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue disabled:opacity-50 disabled:cursor-not-allowed';
 /* 36px (h-9) variant — same chrome, used when this table is embedded in the
@@ -121,6 +141,19 @@ const capitalizeFirst = (value: string): string => {
 /** The 0.0–10.0 rating a row is filtered on — the same number the Score
  *  column prints. Older records without `overallRating10` fall back to their
  *  percentage on the same scale. */
+/** Stable sort by a number / text key; ties keep the incoming order. */
+function sortByKey<T>(items: T[], keyOf: (item: T) => number | string, order: 'asc' | 'desc'): T[] {
+  return items
+    .map((item, index) => ({ item, index, key: keyOf(item) }))
+    .sort((a, b) => {
+      const cmp = typeof a.key === 'string' || typeof b.key === 'string'
+        ? String(a.key).localeCompare(String(b.key), undefined, { numeric: true, sensitivity: 'base' })
+        : a.key - b.key;
+      return cmp !== 0 ? (order === 'asc' ? cmp : -cmp) : a.index - b.index;
+    })
+    .map((x) => x.item);
+}
+
 const rowRating10 = (r: { overallRating10?: number; scorePercentage: number }) =>
   r.overallRating10 ?? (r.scorePercentage ?? 0) / 10;
 
@@ -361,6 +394,13 @@ interface ScoredResumesTableProps {
    */
   viewPillsSlot?: React.ReactNode;
   /**
+   * Offer "＋ Create AI Assessment / AI Interview" under a greyed invite when
+   * the ticked candidates' one job has none yet. The host takes it from
+   * there (Resume Scoring: explain, keep the selection, go create, come
+   * back and invite). Without it the invite is just greyed with the reason.
+   */
+  onCreateInviteTarget?: (kind: 'assessment' | 'interview', job: InviteTargetJob, rows: ScoredResume[]) => void;
+  /**
    * Embedded use — the rows of ONE job opened inline under its row in
    * Resume Scoring's "View by Job". Drops the card chrome and the whole
    * search / More Filters / view-toggle toolbar (the host's own controls
@@ -392,6 +432,107 @@ interface ScoredResumesTableProps {
  * @param canCarryAIInterview the host can actually run an AI Interview
  *   invite (its own handler, or the internal resolve-and-share flow).
  */
+/** The job an invite / a "Create …" acts on. */
+export interface InviteTargetJob {
+  jdId: string;
+  jdCode?: string;
+  jdTitle: string;
+}
+
+/**
+ * Can the ticked candidates be invited to an AI Assessment / AI Interview?
+ *  - 'ready'   — yes (or unknown: never gate on a lookup that hasn't answered)
+ *  - 'missing' — one job, and it has none yet → offer to create it
+ *  - 'multi'   — the candidates span several jobs and the invite needs one
+ *                (assessment always; interview only when one lacks it)
+ */
+export type InviteTargetState =
+  | { state: 'ready' }
+  | { state: 'missing'; job: InviteTargetJob }
+  | { state: 'multi' };
+
+export function resolveInviteTargetState(
+  kind: 'assessment' | 'interview',
+  jobs: InviteTargetJob[],
+  configured: (jdId: string) => boolean | undefined,
+): InviteTargetState {
+  if (jobs.length === 0) return { state: 'ready' };
+  if (kind === 'assessment' && jobs.length > 1) return { state: 'multi' };
+  const missing = jobs.filter((j) => configured(j.jdId) === false);
+  if (missing.length === 0) return { state: 'ready' };
+  // Several jobs: an AI Interview invite can still go to any interview.
+  if (jobs.length > 1) return kind === 'assessment' ? { state: 'multi' } : { state: 'ready' };
+  return { state: 'missing', job: jobs[0] };
+}
+
+/**
+ * The invite item of a bulk Actions menu, for each target state: the
+ * normal item; a greyed, unclickable one saying why; and — for a job with
+ * none yet, when the host supports it — a "＋ Create …" item under it.
+ */
+export function renderInviteTargetItems({
+  kind,
+  target,
+  itemClass,
+  allowed,
+  extraDisabled,
+  extraDisabledReason,
+  onInvite,
+  onCreate,
+}: {
+  kind: 'assessment' | 'interview';
+  target: InviteTargetState;
+  itemClass: string;
+  /** Permission + plan allow this invite at all. */
+  allowed: boolean;
+  /** e.g. no assessment units left. */
+  extraDisabled?: boolean;
+  extraDisabledReason?: string;
+  onInvite: (e: Event) => void;
+  onCreate?: (job: InviteTargetJob) => void;
+}) {
+  const what = kind === 'assessment' ? 'AI Assessment' : 'AI Interview';
+  const Icon = kind === 'assessment' ? FileText : Video;
+  const iconClass = kind === 'assessment' ? 'text-menu-icon-view' : 'text-menu-icon-share';
+  if (!allowed || target.state === 'ready') {
+    return (
+      <DropdownMenuItem
+        className={`${itemClass} ${!allowed || extraDisabled ? 'text-gray-400 opacity-60' : ''}`}
+        disabled={allowed && extraDisabled}
+        title={allowed && extraDisabled ? extraDisabledReason : undefined}
+        onSelect={onInvite}
+      >
+        <Icon className={`w-4 h-4 ${iconClass}`} />
+        <span className={MENU_ITEM_SCALE_CLASS}>{what} Invite</span>
+      </DropdownMenuItem>
+    );
+  }
+  const reason = target.state === 'multi'
+    ? `Select candidates from one job to invite to its ${what}`
+    : `${target.job.jdCode || 'This job'} has no ${what} yet`;
+  return (
+    <>
+      {/* Greyed and not clickable — with the reason right under the label. */}
+      <DropdownMenuItem className={`${itemClass} !items-start text-gray-400`} disabled>
+        <Icon className="w-4 h-4 text-gray-400 mt-0.5" />
+        <span className="min-w-0">
+          <span className="block">{what} Invite</span>
+          <span className="block text-2xs text-gray-400 normal-case">{reason}</span>
+        </span>
+      </DropdownMenuItem>
+      {target.state === 'missing' && onCreate && (
+        <DropdownMenuItem
+          className={`${itemClass} !pl-11 text-brand-blue font-medium`}
+          onSelect={() => onCreate(target.job)}
+        >
+          <Plus className="w-4 h-4 text-brand-blue" />
+          <span className={MENU_ITEM_SCALE_CLASS}>Create {what}</span>
+        </DropdownMenuItem>
+      )}
+    </>
+  );
+}
+
 export function useScoringActionPermissions(canCarryAIInterview: boolean) {
   const { isTenantAdmin, hasPermissionCode, hasPermission, tenant } = useAuth();
   const { hasPlanFeature } = usePlanFeatures();
@@ -469,6 +610,7 @@ export default function ScoredResumesTable({
   assessmentConfigured,
   aiInterviewConfigured,
   viewPillsSlot,
+  onCreateInviteTarget,
   compact = false,
   hideSelectionBar = false,
   toolbarPortal,
@@ -726,6 +868,8 @@ Best regards`);
   const [bulkActionRows, setBulkActionRows] = useState<ScoredResume[] | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [sortBy, setSortBy] = useState<SortKey>('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   // Search + filters in the shared hook. This panel commits as you pick rather
   // than staging, so it uses `setFilter` and leaves the draft pair alone.
@@ -863,6 +1007,23 @@ Best regards`);
   // with no Group by control to switch it off.
   const isGrouped = groupByEmail;
   const [expandedGroupKeys, setExpandedGroupKeys] = useState<Set<string>>(new Set());
+  /** ▸ / ▾ — opens or closes one candidate's job history. */
+  const renderExpandButton = (key: string, expanded: boolean) => (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); toggleGroupExpanded(key); }}
+      aria-expanded={expanded}
+      aria-label={expanded ? 'Collapse' : 'Expand'}
+      title={expanded ? 'Collapse' : 'Expand'}
+      className={`p-2.5 rounded-lg border transition-all ${
+        expanded
+          ? 'bg-brand-blue/10 border-brand-blue/30 text-brand-blue'
+          : 'bg-gray-100 border-gray-200 text-gray-600 hover:bg-gray-200 hover:border-gray-300'
+      }`}
+    >
+      <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`} />
+    </button>
+  );
   const toggleGroupExpanded = (key: string) => {
     setExpandedGroupKeys((prev) => {
       const next = new Set(prev);
@@ -977,6 +1138,19 @@ Best regards`);
   }, [selectedResumes, filteredResumes, isGrouped]);
   const allVisibleSelected = filteredResumes.length > 0 && effectiveSelectedRows.length === filteredResumes.length;
 
+  /* The jobs the ticked rows belong to — a row's own JD, or this table's
+     one job on a single-job host. */
+  const selectionJobs = useMemo((): InviteTargetJob[] => {
+    const byId = new Map<string, InviteTargetJob>();
+    for (const r of effectiveSelectedRows) {
+      const id = r.jdId || (jobId && jobId !== 'global' ? jobId : '');
+      if (!id || byId.has(id)) continue;
+      byId.set(id, { jdId: id, jdCode: rowJobCode(r) || undefined, jdTitle: r.jobTitle || jobTitle });
+    }
+    return Array.from(byId.values());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveSelectedRows, jobId, jobTitle]);
+
   const candidateGroups = useMemo(() => {
     const groups = new Map<string, ScoredResume[]>();
     filteredResumes.forEach((r) => {
@@ -985,11 +1159,40 @@ Best regards`);
       if (group) group.push(r);
       else groups.set(key, [r]);
     });
-    return Array.from(groups.entries())
-      .map(([key, rows]) => ({ key, rows: [...rows].sort((a, b) => dateOf(b) - dateOf(a)) }))
-      .sort((a, b) => dateOf(b.rows[0]) - dateOf(a.rows[0]));
+    const groupKeyOf = (rows: ScoredResume[]): number | string => {
+      switch (sortBy) {
+        case 'name': return (rows[0].candidateName || '').toLowerCase();
+        case 'versions': return rows.length;
+        case 'exact': return tallyVerdicts(rows).exact;
+        case 'partial': return tallyVerdicts(rows).partial;
+        case 'none': return tallyVerdicts(rows).none;
+        default: return dateOf(rows[0]);
+      }
+    };
+    return sortByKey(
+      Array.from(groups.entries())
+        .map(([key, rows]) => ({ key, rows: [...rows].sort((a, b) => dateOf(b) - dateOf(a)) }))
+        .sort((a, b) => dateOf(b.rows[0]) - dateOf(a.rows[0])),
+      (g) => groupKeyOf(g.rows),
+      sortOrder,
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredResumes]);
+  }, [filteredResumes, sortBy, sortOrder]);
+
+  // The flat list in the chosen order (selection still reads filteredResumes).
+  const orderedResumes = useMemo(() => sortByKey(
+    filteredResumes,
+    (r): number | string => {
+      switch (sortBy) {
+        case 'name': return (r.candidateName || '').toLowerCase();
+        case 'jobTitle': return (r.jobTitle || '').toLowerCase();
+        case 'score': return rowRating10(r) ?? 0;
+        default: return dateOf(r);
+      }
+    },
+    sortOrder,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [filteredResumes, sortBy, sortOrder]);
   // Hand the host the candidate order the grouped list shows. Through a ref:
   // the callback is usually an inline arrow, so it is not an effect dep.
   const onCandidateOrderChangeRef = useRef(onCandidateOrderChange);
@@ -1007,7 +1210,7 @@ Best regards`);
   useEffect(() => {
     setCurrentPage(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchTerm, filterMatchStatus, filterScoreMin, filterScoreMax, filterDateFrom, filterDateTo, filterRecruiter, filterJdId, filterJobTitle, filterJobVersion, jobId, isGrouped]);
+  }, [searchTerm, filterMatchStatus, filterScoreMin, filterScoreMax, filterDateFrom, filterDateTo, filterRecruiter, filterJdId, filterJobTitle, filterJobVersion, jobId, isGrouped, sortBy, sortOrder]);
 
   // Grouped mode paginates candidate CLUSTERS (one page = N people, however
   // many scoring rows each carries); ungrouped mode paginates rows directly.
@@ -1017,7 +1220,7 @@ Best regards`);
     (isGrouped ? candidateGroups.length : filteredResumes.length) / itemsPerPage,
   ));
   const safeCurrentPage = Math.min(currentPage, totalPages);
-  const paginatedResumes = filteredResumes.slice(
+  const paginatedResumes = orderedResumes.slice(
     (safeCurrentPage - 1) * itemsPerPage,
     safeCurrentPage * itemsPerPage,
   );
@@ -1628,8 +1831,9 @@ Best regards`);
           <span className={MENU_ITEM_SCALE_CLASS}>View Resume</span>
         </DropdownMenuItem>
       )}
-      {/* Only scores that still point at a resume can be shared. */}
-      {resume.resumeId && (
+      {/* Only scores that still point at a resume can be shared. Hidden
+          for now (RESUME_EMAIL_SHARE_ENABLED). */}
+      {RESUME_EMAIL_SHARE_ENABLED && resume.resumeId && (
         <DropdownMenuItem
           className={`${scoredResumesMenuItemClass} ${!canShareResume ? 'text-gray-400 cursor-not-allowed opacity-60' : ''}`}
           aria-disabled={!canShareResume}
@@ -1682,6 +1886,16 @@ Best regards`);
     if (onSelectAll) onSelectAll([]);
     else setInternalSelectedResumes([]);
   };
+  /** Make the selection exactly these row ids. */
+  const selectExactly = (ids: string[]) => {
+    if (onSelectAll) onSelectAll(ids);
+    else if (onSelectResume) {
+      const want = new Set(ids);
+      resumes.forEach((r) => {
+        if (selectedResumes.includes(r.id) !== want.has(r.id)) onSelectResume(r.id);
+      });
+    } else setInternalSelectedResumes(ids);
+  };
 
   const selectionActions = effectiveSelectedRows.length > 0 ? (
     <>
@@ -1691,7 +1905,7 @@ Best regards`);
             few times — so the new control is noticed — then stays still. */}
         <button
           type="button"
-          className={`relative ${embedded ? 'h-9' : 'h-[38px]'} px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-[var(--brand-blue)] text-white hover:bg-[var(--brand-blue-2)] shadow-sm hover:shadow-md animate-in fade-in zoom-in-95 duration-300`}
+          className={`relative ${embedded ? 'h-9' : 'h-[38px]'} px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300`}
           aria-label={`Actions for ${effectiveSelectedRows.length} selected`}
         >
           <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
@@ -1703,7 +1917,27 @@ Best regards`);
           <ChevronDown className="w-4 h-4" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-60 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
+      <DropdownMenuContent align="start" className="w-60 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
+        {/* Light grey header strip: how many the actions run on. */}
+        <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
+          {(isGrouped ? new Set(effectiveSelectedRows.map(candidateGroupKey)).size : effectiveSelectedRows.length).toLocaleString()} selected
+        </div>
+        {/* Export — the selection, columns chosen in its dialog. */}
+        <DropdownMenuItem
+          className={`${scoredResumesMenuItemClass} ${!canExport ? 'text-gray-400 opacity-60' : ''}`}
+          title={!canExport ? 'You do not have permission to export' : undefined}
+          onSelect={(e) => {
+            if (!canExport) {
+              e.preventDefault();
+              toast.error('You do not have permission to export');
+              return;
+            }
+            handleExportExcel();
+          }}
+        >
+          <FileDown className="w-4 h-4 text-menu-icon-download" />
+          <span className={MENU_ITEM_SCALE_CLASS}>Export</span>
+        </DropdownMenuItem>
         <DropdownMenuItem
           className={`${scoredResumesMenuItemClass} ${!canDownloadScorecard ? 'text-gray-400 opacity-60' : ''}`}
           disabled={bulkDownloading}
@@ -1722,47 +1956,54 @@ Best regards`);
             {bulkDownloading ? 'Downloading...' : 'Download All Scorecards'}
           </span>
         </DropdownMenuItem>
-        <DropdownMenuItem
-          className={`${scoredResumesMenuItemClass} ${!canCreateAssessments ? 'text-gray-400 opacity-60' : ''}`}
-          /* Assessment invites go to this job's published assessment and
-             spend units — the same gate the old Invite button had. */
-          disabled={assessmentConfigured === false || availableUnits === 0}
-          title={
-            !canCreateAssessments
-              ? assessmentDeniedReason
-              : !canInviteAssessment
-                ? 'No published assessment for this job yet'
-                : availableUnits === 0
-                  ? 'No assessment units available'
-                  : undefined
-          }
-          onSelect={(e) => {
-            if (!canCreateAssessments) {
-              e.preventDefault();
-              toast.error(assessmentDeniedReason);
-              return;
-            }
-            setBulkAction('assessment');
-          }}
-        >
-          <FileText className="w-4 h-4 text-menu-icon-view" />
-          <span className={MENU_ITEM_SCALE_CLASS}>AI Assessment Invite</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          className={`${scoredResumesMenuItemClass} ${!mayInviteAIInterview ? 'text-gray-400 opacity-60' : ''}`}
-          title={!mayInviteAIInterview ? aiInterviewDeniedReason : undefined}
-          onSelect={(e) => {
-            if (!mayInviteAIInterview) {
-              e.preventDefault();
-              toast.error(aiInterviewDeniedReason);
-              return;
-            }
-            setBulkAction('interview');
-          }}
-        >
-          <Video className="w-4 h-4 text-menu-icon-share" />
-          <span className={MENU_ITEM_SCALE_CLASS}>AI Interview Invite</span>
-        </DropdownMenuItem>
+        <DropdownMenuSeparator className="my-1 bg-gray-100" />
+        {(() => {
+          /* Per invite: ready, greyed with the reason, or greyed plus
+             "＋ Create …" when the one job has none yet. */
+          const rowOf = (jdId: string) => effectiveSelectedRows.find((r) => (r.jdId || jobId) === jdId) ?? effectiveSelectedRows[0];
+          const assessmentTarget = resolveInviteTargetState('assessment', selectionJobs, (id) => resolveAssessmentConfigured(rowOf(id)));
+          const interviewTarget = resolveInviteTargetState('interview', selectionJobs, (id) => resolveAIInterviewConfigured(rowOf(id)));
+          const create = onCreateInviteTarget
+            ? (kind: 'assessment' | 'interview') => (job: InviteTargetJob) =>
+                onCreateInviteTarget(kind, job, effectiveSelectedRows.filter((r) => (r.jdId || jobId) === job.jdId))
+            : undefined;
+          return (
+            <>
+              {renderInviteTargetItems({
+                kind: 'assessment',
+                target: assessmentTarget,
+                itemClass: scoredResumesMenuItemClass,
+                allowed: canCreateAssessments,
+                extraDisabled: availableUnits === 0,
+                extraDisabledReason: 'No assessment units available',
+                onInvite: (e) => {
+                  if (!canCreateAssessments) {
+                    e.preventDefault();
+                    toast.error(assessmentDeniedReason);
+                    return;
+                  }
+                  setBulkAction('assessment');
+                },
+                onCreate: create?.('assessment'),
+              })}
+              {renderInviteTargetItems({
+                kind: 'interview',
+                target: interviewTarget,
+                itemClass: scoredResumesMenuItemClass,
+                allowed: mayInviteAIInterview,
+                onInvite: (e) => {
+                  if (!mayInviteAIInterview) {
+                    e.preventDefault();
+                    toast.error(aiInterviewDeniedReason);
+                    return;
+                  }
+                  setBulkAction('interview');
+                },
+                onCreate: create?.('interview'),
+              })}
+            </>
+          );
+        })()}
       </DropdownMenuContent>
     </DropdownMenu>
     {/* Clear — untick every row in one click (Select all only clears once
@@ -1805,25 +2046,9 @@ Best regards`);
       )}
 
       {/* Compact: no toolbar — just the selection's actions once rows are
-          ticked (Export included, since it exports the selection). */}
+          ticked (Export is one of them). */}
       {compact && !hideSelectionBar && selectionActions && (
         <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              if (!canExport) {
-                toast.error('You do not have permission to export');
-                return;
-              }
-              handleExportExcel();
-            }}
-            aria-disabled={!canExport}
-            title={!canExport ? 'You do not have permission to export' : undefined}
-            className={`${TOOLBAR_BUTTON_CLASS} ${!canExport ? 'opacity-50 cursor-not-allowed' : ''}`}
-          >
-            <FileDown className="w-4 h-4" />
-            Export
-          </button>
           {selectionActions}
         </div>
       )}
@@ -1844,10 +2069,8 @@ Best regards`);
           // The hook debounces into `appliedQuery`, so keystrokes pass through.
           searchDebounceMs={0}
           searchPlaceholder="Search by name, email, phone, or Job ID..."
-          /* A capped search box rather than one that fills the row; the
-             controls follow it on desktop instead of leaving a hole. Full
-             width on phones, where it takes its own line. */
-          searchClassName="sm:flex-none sm:w-64 lg:w-80"
+          // Row 1: Search (fills the row), the two main filters inline,
+          // More Filters, Reset, Sort by, List / Grid.
           controlsFollowSearch
           onToggleFilters={() => setShowFilters(!showFilters)}
           filtersOpen={showFilters}
@@ -1855,49 +2078,62 @@ Best regards`);
           filtersApplied={search.filtersApplied}
           onClearFilters={search.reset}
           compactButtons={embedded}
-          beforeSearch={
+          /* Embedded in Job Details: the AI Talent Match reference's Select All
+             pill + dropdown at the head of the row. The standalone page keeps its
+             select-all in the Row-2 control below (staging's SelectAllMenu), so
+             nothing renders here off the tab to avoid two Select All controls. */
+          beforeSearch={embedded && filteredResumes.length > 0 ? (
+            <ToolbarSelectAll
+              selectedCount={selectedResumes.length}
+              allSelected={allVisibleSelected}
+              pageCount={paginatedResumes.length}
+              onSelectPage={selectCurrentPage}
+              totalCount={filteredResumes.length}
+              onSelectAll={selectAllResumes}
+              onClear={clearResumeSelection}
+            />
+          ) : undefined}
+          /* Job Title + Recruiter filters (from staging) — after the search,
+             ahead of More Filters. */
+          leadingActions={
             <>
-              {/* Select all — in the toolbar row, the same place and look as View
-                  by Job's, for list and grid alike (grid cards have no header
-                  checkbox to do it). Embedded in Job Details it becomes the AI
-                  Talent Match reference's Select All pill + dropdown. */}
-              {filteredResumes.length > 0 && (
-                embedded ? (
-                  /* The AI Talent Match reference's Select All pill + dropdown
-                     (this page / all / clear), so this tab matches it exactly. */
-                  <ToolbarSelectAll
-                    selectedCount={selectedResumes.length}
-                    allSelected={allVisibleSelected}
-                    pageCount={paginatedResumes.length}
-                    onSelectPage={selectCurrentPage}
-                    totalCount={filteredResumes.length}
-                    onSelectAll={selectAllResumes}
-                    onClear={clearResumeSelection}
-                  />
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleSelectAll}
-                    aria-pressed={allVisibleSelected}
-                    className={TOOLBAR_BUTTON_CLASS}
-                  >
-                    {allVisibleSelected ? (
-                      <CheckSquare className="w-4 h-4 text-brand-blue" />
-                    ) : (
-                      <Square className="w-4 h-4" />
-                    )}
-                    {allVisibleSelected ? 'Deselect all' : 'Select all'}
-                  </button>
-                )
-              )}
+              <SearchableSelect
+                className="w-full sm:w-48"
+                value={filterJobTitle === 'all' ? '' : filterJobTitle}
+                onChange={(v) => search.setFilter('jobTitle', v || 'all')}
+                options={uniqueJobTitles.map((title) => ({ value: String(title), label: String(title) }))}
+                allLabel="All Job Titles"
+                placeholder="All Job Titles"
+                searchPlaceholder="Search job title..."
+                ariaLabel="Filter by job title"
+              />
+              <SearchableSelect
+                className="w-full sm:w-48"
+                value={filterRecruiter === 'all' ? '' : filterRecruiter}
+                onChange={(v) => search.setFilter('recruiter', v || 'all')}
+                options={uniqueRecruiters.map((recruiter) => ({ value: String(recruiter), label: String(recruiter) }))}
+                allLabel="All Recruiters"
+                placeholder="All Recruiters"
+                searchPlaceholder="Search recruiter..."
+                ariaLabel="Filter by recruiter"
+              />
             </>
           }
           // sm:flex-wrap: on tablets the row wraps instead of squeezing its buttons.
           className="mb-0 sm:flex-wrap"
           trailing={<ListViewToggle value={displayMode} onChange={setDisplayMode} className={embedded ? 'h-9' : 'h-[38px] !border-brand-blue/10'} />}
         >
-          {/* No view pills to sit after — the selection's actions join this
-              row instead, so search, filters and actions stay on one line. */}
+          {/* Sort by (from staging) — then Export and the selection's Actions
+              menu. The List / Grid switch is pinned right (trailing). */}
+          {filteredResumes.length > 0 && (
+            <SortByControl<SortKey>
+              value={sortBy}
+              order={sortOrder}
+              options={isGrouped ? GROUPED_SORT_OPTIONS : FLAT_SORT_OPTIONS}
+              onChange={setSortBy}
+              onToggleOrder={() => setSortOrder((o) => (o === 'asc' ? 'desc' : 'asc'))}
+            />
+          )}
 
           {/* One Export for both states — handleExportExcel already exports the
               selection, and asks for one when there isn't any. Which columns
@@ -1919,8 +2155,11 @@ Best regards`);
             Export
           </button>
           {/* The selection's Actions menu — after Export, only while rows are
-              ticked. The List / Grid switch is pinned right (trailing). */}
-          {!viewPillsSlot && selectionActions}
+              ticked. Embedded in Job Details it rides the toolbar row (the AI
+              Talent Match reference); the standalone page shows it in Row 3 below,
+              so only one Actions menu renders per mode. The List / Grid switch is
+              pinned right (trailing). */}
+          {embedded && !viewPillsSlot && selectionActions}
         </ListToolbar>
 
         {/* Advanced Filters */}
@@ -1944,24 +2183,6 @@ Best regards`);
                 so a row is always filled edge to edge. `max-w` keeps a short
                 final row from stretching two fields across the whole panel. */}
             <div className="flex flex-wrap gap-4">
-              {/* 1. Scored By */}
-              <div className={FILTER_FIELD_CLASS}>
-                <label className={FILTER_LABEL_CLASS}>Scored By</label>
-                {/* SearchableSelect, not native <select>: a native option popup
-                    is sized to its longest option by the browser and overflows
-                    small screens (recruiter names can be long). This keeps the
-                    menu within the field width and truncates. */}
-                <SearchableSelect
-                  value={filterRecruiter === 'all' ? '' : filterRecruiter}
-                  onChange={(v) => search.setFilter('recruiter', v || 'all')}
-                  options={uniqueRecruiters.map((recruiter) => ({ value: String(recruiter), label: String(recruiter) }))}
-                  allLabel="All Recruiters"
-                  placeholder="All Recruiters"
-                  searchPlaceholder="Search recruiter..."
-                  ariaLabel="Filter by recruiter"
-                />
-              </div>
-
               {/* 2. Date From */}
               <div className={FILTER_FIELD_CLASS}>
                 <label className={FILTER_LABEL_CLASS}>Date From</label>
@@ -2063,24 +2284,6 @@ Best regards`);
               </div>
 
               <div className={FILTER_FIELD_CLASS}>
-                <label className={FILTER_LABEL_CLASS}>Job Title</label>
-                {/* SearchableSelect, not native <select>: job titles are long and
-                    a native option popup sizes to the longest one, overflowing far
-                    past the screen on mobile. This keeps the menu within the field
-                    width, truncates long titles, and adds a search box for the
-                    (often long) list. */}
-                <SearchableSelect
-                  value={filterJobTitle === 'all' ? '' : filterJobTitle}
-                  onChange={(v) => search.setFilter('jobTitle', v || 'all')}
-                  options={uniqueJobTitles.map((title) => ({ value: String(title), label: String(title) }))}
-                  allLabel="All Job Titles"
-                  placeholder="All Job Titles"
-                  searchPlaceholder="Search job title..."
-                  ariaLabel="Filter by job title"
-                />
-              </div>
-
-              <div className={FILTER_FIELD_CLASS}>
                 <label className={FILTER_LABEL_CLASS}>Job Version</label>
                 <select
                   value={filterJobVersion}
@@ -2113,19 +2316,73 @@ Best regards`);
           </div>
         )}
 
-        {/* View pills, then — once rows are picked — the selection's actions
-            on the same line, set apart by a divider so they don't read as one
-            more view. The pills' own bottom margin is dropped here so the row
-            centres on one line. */}
-        {viewPillsSlot && (
-          <div className="pt-3 flex flex-wrap items-center gap-2 [&>*:first-child]:mb-0">
-            {viewPillsSlot}
-            {effectiveSelectedRows.length > 0 && (
-              <>
-                <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
-                {selectionActions}
-              </>
-            )}
+        {/* Row 2: Select All, the host's verdict pills and View by toggle.
+            Embedded in Job Details the Select All lives in the toolbar above (the
+            AI Talent Match reference) and there are no pills/grouping here, so the
+            whole row is skipped off the tab rather than leaving an empty divider. */}
+        {((!embedded && filteredResumes.length > 0) || viewPillsSlot || (isGrouped && paginatedGroups.length > 0)) && (
+        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-slate-700/60 flex flex-wrap items-center gap-2">
+          {/* Embedded in Job Details the Select All lives in the toolbar above
+              (the AI Talent Match reference), so this standalone Row-2 menu is
+              suppressed off the tab to avoid two Select All controls. */}
+          {!embedded && filteredResumes.length > 0 && (() => {
+            // Grouped: counted in candidates; flat: in rows.
+            const pageRows = isGrouped ? paginatedGroups.flatMap((g) => g.rows) : paginatedResumes;
+            const selectedCount = isGrouped
+              ? new Set(effectiveSelectedRows.map(candidateGroupKey)).size
+              : effectiveSelectedRows.length;
+            return (
+              <SelectAllMenu
+                selectedCount={selectedCount}
+                pageCount={isGrouped ? paginatedGroups.length : paginatedResumes.length}
+                totalCount={isGrouped ? candidateGroups.length : filteredResumes.length}
+                noun={isGrouped ? 'candidates' : 'resumes'}
+                allSelected={allVisibleSelected}
+                onSelectPage={() => {
+                  const ids = Array.from(new Set([...effectiveSelectedRows.map((r) => r.id), ...pageRows.map((r) => r.id)]));
+                  selectExactly(ids);
+                }}
+                onSelectAll={() => selectExactly(filteredResumes.map((r) => r.id))}
+                onClear={clearSelection}
+              />
+            );
+          })()}
+          {viewPillsSlot && (
+            <>
+              <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
+              {viewPillsSlot}
+            </>
+          )}
+          {/* Expand all / Collapse all — every candidate on this page. */}
+          {isGrouped && paginatedGroups.length > 0 && (() => {
+            const allOpen = paginatedGroups.every((g) => expandedGroupKeys.has(g.key));
+            return (
+              <button
+                type="button"
+                onClick={() =>
+                  setExpandedGroupKeys((prev) => {
+                    const next = new Set(prev);
+                    paginatedGroups.forEach((g) => (allOpen ? next.delete(g.key) : next.add(g.key)));
+                    return next;
+                  })
+                }
+                aria-pressed={allOpen}
+                className={`${TOOLBAR_BUTTON_CLASS} sm:ml-auto`}
+              >
+                {allOpen ? <ChevronsDownUp className="w-4 h-4" /> : <ChevronsUpDown className="w-4 h-4" />}
+                {allOpen ? 'Collapse all' : 'Expand all'}
+              </button>
+            );
+          })()}
+        </div>
+        )}
+
+        {/* Row 3 — only while something is ticked: Actions and Clear, on a
+            line of their own under Select All. Standalone only; embedded shows
+            the Actions menu in the toolbar row above (see above). */}
+        {!embedded && selectionActions && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+            {selectionActions}
           </div>
         )}
 
@@ -2280,12 +2537,13 @@ Best regards`);
                     ) : (
                       <span className="flex-1" aria-hidden />
                     )}
+                    {groupKey && renderExpandButton(groupKey, cardExpanded)}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <button
                           aria-label="Actions"
                           title="Actions"
-                          className="p-2.5 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-all"
+                          className="p-2.5 bg-gray-100 rounded-lg border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 transition-all"
                         >
                           <MoreVertical className="w-4 h-4 text-gray-600" />
                         </button>
@@ -2348,7 +2606,7 @@ Best regards`);
                                 <button
                                   aria-label="Actions"
                                   title="Actions"
-                                  className="p-2 bg-white rounded-lg hover:bg-gray-50 transition-all border border-gray-200 shrink-0"
+                                  className="p-2 bg-gray-100 rounded-lg border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 transition-all shrink-0"
                                 >
                                   <MoreVertical className="w-4 h-4 text-gray-600" />
                                 </button>
@@ -2395,7 +2653,7 @@ Best regards`);
                 <col className="w-[11%]" />
                 <col className="w-[10%]" />
                 <col className="w-[12%]" />
-                <col className="w-[6.5rem]" />
+                <col className="w-[8.5rem]" />
               </colgroup>
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
@@ -2496,12 +2754,14 @@ Best regards`);
                           <div className="text-xs text-gray-500">{formatISTTime(primary.scoredDate)}</div>
                         </td>
                         <td className="px-4 py-3 align-middle text-left tf-sticky-col" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center gap-1.5">
+                          {renderExpandButton(key, isExpanded)}
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <button
                                 aria-label="Actions"
                                 title="Actions"
-                                className="p-2.5 bg-white rounded-lg hover:bg-gray-50 transition-all border border-gray-200"
+                                className="p-2.5 bg-gray-100 rounded-lg border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 transition-all"
                               >
                                 <MoreVertical className="w-4 h-4 text-gray-600" />
                               </button>
@@ -2510,6 +2770,7 @@ Best regards`);
                               {renderActionsMenuItems(primary, rows)}
                             </DropdownMenuContent>
                           </DropdownMenu>
+                          </div>
                         </td>
                       </tr>
                       {isExpanded && (
@@ -2555,7 +2816,7 @@ Best regards`);
                                             <button
                                               aria-label="Actions"
                                               title="Actions"
-                                              className="p-2.5 bg-white rounded-lg hover:bg-gray-50 transition-all border border-gray-200"
+                                              className="p-2.5 bg-gray-100 rounded-lg border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 transition-all"
                                             >
                                               <MoreVertical className="w-4 h-4 text-gray-600" />
                                             </button>
@@ -2639,7 +2900,7 @@ Best regards`);
                           <button
                             aria-label="Actions"
                             title="Actions"
-                            className="p-2.5 bg-white rounded-lg hover:bg-gray-50 transition-all border border-gray-200"
+                            className="p-2.5 bg-gray-100 rounded-lg border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 transition-all"
                           >
                             <MoreVertical className="w-4 h-4 text-gray-600" />
                           </button>
@@ -2719,7 +2980,7 @@ Best regards`);
                                   <button
                                     aria-label="Actions"
                                     title="Actions"
-                                    className="p-2.5 bg-white rounded-lg hover:bg-gray-50 transition-all border border-gray-200"
+                                    className="p-2.5 bg-gray-100 rounded-lg border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 transition-all"
                                   >
                                     <MoreVertical className="w-4 h-4 text-gray-600" />
                                   </button>
@@ -2829,7 +3090,7 @@ Best regards`);
                       <button
                         aria-label="Actions"
                         title="Actions"
-                        className="p-2.5 bg-white rounded-lg hover:bg-gray-50 transition-all"
+                        className="p-2.5 bg-gray-100 rounded-lg border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 transition-all"
                       >
                         <MoreVertical className="w-4 h-4 text-gray-600" />
                       </button>
@@ -3026,7 +3287,7 @@ Best regards`);
                 </Button>
               )}
 
-              {resume.resumeId && (
+              {RESUME_EMAIL_SHARE_ENABLED && resume.resumeId && (
                 <Button
                   variant="secondary"
                   size="md"
@@ -3455,8 +3716,10 @@ Best regards`);
             const resume = resumes.find(r => r.id === id);
             return resume!;
           }).filter(Boolean)}
-          jobId={jobId}
-          jobTitle={jobTitle}
+          // A cross-job list has no one job of its own: use the selection's
+          // (the Actions menu only offers this when it is a single job).
+          jobId={jobId === 'global' && selectionJobs.length === 1 ? selectionJobs[0].jdId : jobId}
+          jobTitle={jobId === 'global' && selectionJobs.length === 1 ? selectionJobs[0].jdTitle : jobTitle}
           onClose={() => { setShowBulkInviteModal(false); setBulkActionRows(null); }}
           onSuccess={() => {
             setShowBulkInviteModal(false);
@@ -3512,7 +3775,6 @@ const BULK_ACTION_INFO: Record<BulkActionKind, {
     icon: FileText,
     what: "Invites the included candidates to this job's published assessment. You pick the assessment and the link expiry next. Each invitation uses one assessment unit.",
     continueLabel: 'Continue',
-    locked: { 'No Match': 'Not eligible — only Exact Match and Partial Match candidates can be invited to an assessment.' },
   },
   interview: {
     title: 'AI Interview Invite',
@@ -3615,6 +3877,15 @@ export function BulkActionConfirmModal({
                       {lockedReason && counts[b] > 0 && (
                         <span className="block mt-1 text-xs text-gray-500">{lockedReason}</span>
                       )}
+                      {/* No Match can be invited — the recruiter's call — but
+                          say what the status means, so it's a decision. */}
+                      {!lockedReason && b === 'No Match' && counts[b] > 0 && action !== 'download' && (
+                        <span className="block mt-1 text-xs text-amber-700">
+                          {included[b]
+                            ? 'Included. These candidates did not meet the job\'s must-have requirements — untick to leave them out.'
+                            : 'Left out. Tick to invite them anyway.'}
+                        </span>
+                      )}
                     </span>
                   </label>
                 );
@@ -3667,12 +3938,12 @@ export function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onS
     total_quota: number; consumed: number; pending: number; available: number;
   } | null>(null);
 
-  // Separate valid and invalid candidates
-  const validCandidates = selectedResumes.filter(r =>
-    r.matchStatus === 'Exact Match' || r.matchStatus === 'Partial Match'
-  );
+  // Everyone handed in is invited — which statuses to include was the
+  // recruiter's choice in the popup before this. No Match is only counted,
+  // to say so in the summary.
+  const validCandidates = selectedResumes;
   const noMatchCandidates = selectedResumes.filter(r =>
-    r.matchStatus === 'No Match' || (!r.matchStatus || r.matchStatus === '')
+    (normalizeMatchResult(r.matchStatus) ?? 'No Match') === 'No Match'
   );
 
   useEffect(() => {
@@ -3721,9 +3992,8 @@ export function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onS
       return;
     }
 
-    // Only send to valid candidates (Exact Match or Partial Match)
     if (validCandidates.length === 0) {
-      toast.error('No valid candidates to invite. Only "Exact Match" and "Partial Match" candidates can be invited.');
+      toast.error('No candidates to invite.');
       return;
     }
 
@@ -3756,9 +4026,7 @@ export function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onS
         expiry_days: expiryDays,
       });
 
-      const message = noMatchCandidates.length > 0
-        ? `Successfully sent ${validCandidates.length} invitation${validCandidates.length > 1 ? 's' : ''}! ${noMatchCandidates.length} "No Match" candidate${noMatchCandidates.length > 1 ? 's were' : ' was'} excluded.`
-        : `Successfully sent ${validCandidates.length} invitation${validCandidates.length > 1 ? 's' : ''}!`;
+      const message = `Successfully sent ${validCandidates.length} invitation${validCandidates.length > 1 ? 's' : ''}!`;
 
       toast.success(message);
       onSuccess();
@@ -3975,62 +4243,37 @@ export function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onS
             </select>
           </div>
 
-          {/* No Match Warning */}
+          {/* Included No Match candidates — a note, not an exclusion. */}
           {showNoMatchWarning && noMatchCandidates.length > 0 && (
-            <div className="bg-gray-50 border-2 border-gray-300 rounded-lg p-4">
-              <div className="flex items-start gap-3 mb-3">
-                <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center flex-shrink-0">
-                  <AlertCircle className="w-5 h-5 text-gray-600" />
-                </div>
-                <div className="flex-1">
-                  <h4 className="font-semibold text-gray-900 mb-1">
-                    {noMatchCandidates.length} Candidate{noMatchCandidates.length > 1 ? 's' : ''} Cannot Be Invited
-                  </h4>
-                  <p className="text-sm text-gray-700 mb-3">
-                    Only candidates with "Exact Match" or "Partial Match" status can be invited to assessments.
-                    The following {noMatchCandidates.length > 1 ? 'candidates have' : 'candidate has'} "No Match" status and will be excluded:
-                  </p>
-                  <div className="bg-white border border-gray-200 rounded-lg p-3 space-y-2 max-h-32 overflow-y-auto">
-                    {noMatchCandidates.map((resume) => (
-                      <div key={resume.id} className="flex items-center gap-2 text-sm">
-                        <X className="w-4 h-4 text-gray-500 flex-shrink-0" />
-                        <span className="font-medium text-gray-900">{resume.candidateName}</span>
-                        <span className="text-gray-500">({resume.email})</span>
-                        <span className="ml-auto px-2 py-0.5 text-xs bg-gray-200 text-gray-700 rounded-full">No Match</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center justify-between pt-3 border-t border-gray-200">
-                <p className="text-sm text-gray-600">
-                  <strong>{validCandidates.length}</strong> valid candidate{validCandidates.length !== 1 ? 's' : ''} will receive invitations
-                </p>
-                <button
-                  onClick={() => setShowNoMatchWarning(false)}
-                  className="text-sm text-gray-600 hover:text-gray-800 underline"
-                >
-                  Dismiss
-                </button>
-              </div>
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2.5">
+              <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+              <p className="flex-1 text-sm text-amber-800">
+                Includes <strong>{noMatchCandidates.length}</strong> No Match candidate{noMatchCandidates.length > 1 ? 's' : ''} — they did not meet the job's must-have requirements. They will be invited as you chose.
+              </p>
+              <button
+                onClick={() => setShowNoMatchWarning(false)}
+                className="text-xs text-amber-700 hover:text-amber-900 underline flex-shrink-0"
+              >
+                Dismiss
+              </button>
             </div>
           )}
 
-          {/* Candidates List - Valid Only */}
+          {/* Candidates to invite */}
           {validCandidates.length > 0 && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Candidates to Invite ({validCandidates.length})
               </label>
-              <div className="max-h-60 overflow-y-auto border border-success-line rounded-lg bg-success-subtle">
+              <div className="max-h-60 overflow-y-auto border border-gray-200 rounded-lg bg-white">
                 {validCandidates.map((resume, index) => (
                   <div
                     key={resume.id}
                     className={`p-3 flex items-center gap-3 ${
-                      index < validCandidates.length - 1 ? 'border-b border-success-line' : ''
+                      index < validCandidates.length - 1 ? 'border-b border-gray-100' : ''
                     }`}
                   >
-                    <div className="w-8 h-8 bg-success-subtle rounded-full flex items-center justify-center text-success font-medium text-sm">
+                    <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-600 font-medium text-sm">
                       {index + 1}
                     </div>
                     <div className="flex-1">
@@ -4058,10 +4301,9 @@ export function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onS
               <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-3">
                 <AlertCircle className="w-8 h-8 text-gray-600" />
               </div>
-              <h4 className="font-semibold text-gray-900 mb-2">No Valid Candidates Selected</h4>
+              <h4 className="font-semibold text-gray-900 mb-2">No Candidates Selected</h4>
               <p className="text-sm text-gray-600">
-                All selected candidates have "No Match" status and cannot be invited to assessments.
-                Please select candidates with "Exact Match" or "Partial Match" status.
+                Select the candidates you want to invite and try again.
               </p>
             </div>
           )}
@@ -4078,8 +4320,8 @@ export function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onS
                 <p><strong>Duration:</strong> {selectedAssessmentData?.duration_minutes} minutes</p>
                 <p><strong>Recipients:</strong> {validCandidates.length} candidate(s)</p>
                 {noMatchCandidates.length > 0 && (
-                  <p className="text-gray-600">
-                    <strong>Excluded:</strong> {noMatchCandidates.length} "No Match" candidate(s)
+                  <p className="text-amber-700">
+                    <strong>Includes:</strong> {noMatchCandidates.length} No Match candidate(s)
                   </p>
                 )}
                 <p><strong>Expires in:</strong> {expiryDays} day{expiryDays > 1 ? 's' : ''}</p>
@@ -4099,13 +4341,13 @@ export function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onS
                     <strong className={insufficient ? 'text-destructive' : 'text-success'}>{validCandidates.length}</strong> invitation{validCandidates.length !== 1 ? 's' : ''} will be sent
                     {insufficient && ` — only ${quotaStats!.available} unit(s) available`}
                     {!insufficient && noMatchCandidates.length > 0 && (
-                      <span className="ml-2 text-gray-500">({noMatchCandidates.length} excluded)</span>
+                      <span className="ml-2 text-amber-700">(incl. {noMatchCandidates.length} No Match)</span>
                     )}
                   </span>
                 );
               })()
             ) : (
-              <span className="text-gray-500">No valid candidates to invite</span>
+              <span className="text-gray-500">No candidates to invite</span>
             )}
           </div>
           <div className="flex items-center gap-3">

@@ -60,7 +60,7 @@ export default function SubStepProgress({
   allComplete?: boolean;
 }) {
   return (
-    <div className="w-full max-w-xl mx-auto bg-white border border-gray-200 rounded-2xl shadow-sm px-5 py-3 flex items-center gap-3 sm:gap-4">
+    <div className="w-full max-w-xl mx-auto bg-white border border-gray-200 rounded-2xl shadow-sm px-3 sm:px-5 py-3 flex items-center gap-2 sm:gap-4">
       <style>{STEP_RIPPLE_CSS}</style>
       {steps.map((label, idx) => {
         const done = allComplete || idx < activeIndex;
@@ -69,16 +69,18 @@ export default function SubStepProgress({
         return (
           <React.Fragment key={label}>
             {idx > 0 && (
-              <div className={`h-0.5 flex-1 rounded-full transition-colors ${idx <= activeIndex || allComplete ? 'bg-brand-blue' : 'bg-gray-200'}`} />
+              <div className={`h-0.5 flex-1 min-w-4 rounded-full transition-colors ${idx <= activeIndex || allComplete ? 'bg-brand-blue' : 'bg-gray-200'}`} />
             )}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 min-w-0">
               <StepCircle
                 active={active}
                 className={reached ? 'bg-brand-blue text-white' : 'bg-white border-2 border-gray-300 text-gray-400'}
               >
                 {done ? <CheckCircle className="w-4 h-4" /> : idx + 1}
               </StepCircle>
-              <span className={`text-sm font-semibold whitespace-nowrap ${
+              {/* Wraps on narrow phones (two long labels don't fit one
+                  line at 320px); one line from sm. */}
+              <span className={`text-xs sm:text-sm font-semibold leading-tight whitespace-normal sm:whitespace-nowrap ${
                 active ? 'text-gray-900' : done ? 'text-gray-500' : 'text-gray-400'
               }`}>
                 {label}

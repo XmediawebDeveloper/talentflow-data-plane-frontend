@@ -81,8 +81,8 @@ export function ScreenRecordingBlockedModal() {
       <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden">
         <div className="h-1.5 w-full bg-red-500" />
         <div className="p-7 text-center">
-          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-red-100">
-            <MonitorX className="h-8 w-8 text-red-600" />
+          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-red-100 dark:bg-red-500/15">
+            <MonitorX className="h-8 w-8 text-red-600 dark:text-red-400" />
           </div>
           <h2 id="screen-recording-blocked-title" className="mb-2 text-xl font-bold text-gray-900">
             Screen Recording Not Allowed
@@ -93,12 +93,12 @@ export function ScreenRecordingBlockedModal() {
               ? 'The recording was blocked and did not start.'
               : 'Stop the recording and close the recorder now — your interview stays paused and hidden until you do.'}
           </p>
-          <p className="mb-5 text-sm font-medium text-red-600">
+          <p className="mb-5 text-sm font-medium text-red-600 dark:text-red-400">
             This attempt has been recorded as a proctoring violation.
           </p>
 
           {attemptCount > 1 && (
-            <div className="mb-5 flex items-center justify-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+            <div className="mb-5 flex items-center justify-center gap-2 rounded-lg border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-800">
               <ShieldAlert className="h-4 w-4 shrink-0" />
               <span>
                 {attemptCount} recording attempts detected in this session. Repeated attempts

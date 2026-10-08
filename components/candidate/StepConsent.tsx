@@ -1,15 +1,16 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import {
-  Video, Mic, Eye, Shield, Clock, Trash2, CheckCircle, AlertTriangle,
-  Circle, MapPin, Building2, Award, ExternalLink, X,
+  Video, Eye, Shield, Clock, Trash2, CheckCircle, AlertTriangle,
+  MapPin, Building2, Award, ExternalLink, X,
   FileText, Timer, HelpCircle, ChevronRight, Smartphone, Wifi,
-  Lightbulb, Sparkles, Globe,
+  Lightbulb, Sparkles, Globe, SquareUser, Cpu, Laptop, ShieldCheck, Database,
 } from 'lucide-react';
+import { revealAfterPaint } from '@/lib/utils/candidateScroll';
 import { Button } from '@/components/ui/button';
 import type { IconComponent } from '@/lib/types/icon';
 
@@ -45,8 +46,6 @@ interface StepConsentProps {
   environmentVerificationEnabled?: boolean;
 }
 
-type ConsentKey = 'consent_video' | 'consent_audio' | 'consent_biometric' | 'consent_ai_analysis' | 'consent_terms';
-
 interface ConsentState {
   consent_video: boolean;
   consent_audio: boolean;
@@ -55,12 +54,21 @@ interface ConsentState {
   consent_terms: boolean;
 }
 
-const CONSENT_ITEMS: { key: ConsentKey; icon: React.ElementType; label: string; desc: string }[] = [
-  { key: 'consent_video', icon: Video, label: 'Video Recording', desc: 'I consent to video recording during this interview' },
-  { key: 'consent_audio', icon: Mic, label: 'Audio Recording', desc: 'I consent to audio recording and transcription' },
-  { key: 'consent_biometric', icon: Eye, label: 'Biometric Data', desc: 'I consent to biometric data processing (GDPR Art. 9)' },
-  { key: 'consent_ai_analysis', icon: Shield, label: 'AI Analysis', desc: 'I consent to AI-powered analysis of my responses' },
-  { key: 'consent_terms', icon: FileText, label: 'Terms of Service', desc: 'I have read and agree to the Privacy Policy and Terms of Service' },
+// Consent modal, row 1 - what the interview collects and why.
+const DATA_USAGE_ITEMS: { icon: IconComponent; title: string; desc: string }[] = [
+  { icon: Video, title: 'Video & Audio Recording', desc: 'Your video and audio may be recorded during the interview for evaluation, security, and audit purposes.' },
+  { icon: FileText, title: 'Interview Responses', desc: 'Your answers will be transcribed and analyzed to evaluate your skills and fit for the role.' },
+  { icon: SquareUser, title: 'Identity Verification', desc: 'We may capture a live photo or use identity verification to ensure a secure and fair interview.' },
+  { icon: Cpu, title: 'AI Usage', desc: 'Your responses may be processed using AI to assist with transcription, analysis, and evaluation.' },
+  { icon: Laptop, title: 'Technical Information', desc: 'We collect device, browser and network information to maintain interview security and prevent misuse.' },
+];
+
+// Consent modal, row 2 - "Learn More" cards; each expands to its details.
+type LearnMoreKey = 'privacy' | 'rights' | 'retention';
+const LEARN_MORE_ITEMS: { key: LearnMoreKey; icon: IconComponent; title: string; desc: string }[] = [
+  { key: 'privacy', icon: FileText, title: 'Privacy Policy', desc: 'Learn how we collect, use, protect, and manage your personal data.' },
+  { key: 'rights', icon: ShieldCheck, title: 'GDPR & DPDP Rights', desc: "Understand your rights under GDPR and India's DPDP Act, 2023." },
+  { key: 'retention', icon: Database, title: 'Data Retention Policy', desc: 'Learn how long your data is retained and when it is deleted.' },
 ];
 
 const GDPR_RIGHTS = [
@@ -104,6 +112,7 @@ export default function StepConsent({
 }: StepConsentProps) {
   const [showFullDesc, setShowFullDesc] = useState(false);
   const [showConsentModal, setShowConsentModal] = useState(false);
+  const [openLearnMore, setOpenLearnMore] = useState<LearnMoreKey | null>(null);
   const [consents, setConsents] = useState<ConsentState>({
     consent_video: false,
     consent_audio: false,
@@ -119,19 +128,29 @@ export default function StepConsent({
   // read THIS notice, not just the general consent block.
   const [mobileVerificationAcknowledged, setMobileVerificationAcknowledged] = useState(false);
 
-  const allChecked = Object.values(consents).every(Boolean);
+  // Auto-scroll targets: the JD card (after "Show less"), the mobile
+  // acknowledgement (when it's what still blocks Proceed) and Proceed itself.
+  const jdRef = useRef<HTMLDivElement>(null);
+  const mobileAckRef = useRef<HTMLLabelElement>(null);
+  const proceedRef = useRef<HTMLDivElement>(null);
+  const mobileAckPending = !!environmentVerificationEnabled && !mobileVerificationAcknowledged;
 
-  const toggleConsent = useCallback((key: ConsentKey) => {
-    setConsents(prev => ({ ...prev, [key]: !prev[key] }));
-  }, []);
+  /** After consent is given: bring the next thing to do into view — the
+   *  mobile acknowledgement if it is still unticked, otherwise Proceed. Only
+   *  scrolls when that target is off screen (phones, short laptops). */
+  const revealNextAction = useCallback(() => {
+    revealAfterPaint(() => (mobileAckPending ? mobileAckRef.current : proceedRef.current),
+      mobileAckPending ? 'center' : 'nearest');
+  }, [mobileAckPending]);
 
-  const toggleAll = useCallback(() => {
-    const newVal = !allChecked;
-    setConsents({
-      consent_video: newVal, consent_audio: newVal,
-      consent_biometric: newVal, consent_ai_analysis: newVal, consent_terms: newVal,
-    });
-  }, [allChecked]);
+  // The consent modal: stop the page behind it from scrolling (iOS scrolls
+  // the page when the modal body overscrolls).
+  useEffect(() => {
+    if (!showConsentModal) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [showConsentModal]);
 
   const ALL_CONSENTS: ConsentState = {
     consent_video: true, consent_audio: true,
@@ -147,14 +166,9 @@ export default function StepConsent({
       // check — select all, no modal
       setConsentAccepted(true);
       setConsents(ALL_CONSENTS);
+      revealNextAction();
     }
-  }, [consentAccepted]);
-
-  const handleModalAccept = useCallback(() => {
-    if (!allChecked) return;
-    setConsentAccepted(true);
-    setShowConsentModal(false);
-  }, [allChecked]);
+  }, [consentAccepted, revealNextAction]);
 
   const handleProceed = useCallback(() => {
     if (!consentAccepted || submitting) return;
@@ -200,7 +214,7 @@ export default function StepConsent({
   ];
 
   return (
-    <div className="w-full space-y-6" style={{ colorScheme: 'light' }}>
+    <div className="w-full space-y-6">
 
       {/* ── Two-column layout: details (left) + action panel (right) ── */}
       <div className="grid grid-cols-1 lg:grid-cols-[1.7fr_1fr] gap-6 items-start">
@@ -248,7 +262,7 @@ export default function StepConsent({
 
           {/* JD Description */}
           {jdDescription && (
-            <div className="bg-brand-sky/40 border border-brand-blue/15 rounded-xl overflow-hidden" style={{ colorScheme: 'light' }}>
+            <div ref={jdRef} className="bg-brand-sky/40 dark:bg-brand-blue/10 border border-brand-blue/15 rounded-xl overflow-hidden">
               <div className="px-5 py-3 border-b border-brand-blue/10 flex items-center gap-2">
                 <span className="flex h-6 w-6 items-center justify-center rounded-md bg-white text-brand-blue border border-brand-blue/20 flex-shrink-0">
                   <FileText className="w-3.5 h-3.5" />
@@ -256,9 +270,9 @@ export default function StepConsent({
                 <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">About the Role</h2>
               </div>
               <div className="p-5">
-                {/* prose-invert must NOT apply here — force light mode via inline style so
-                    the dark class on <html> (from OS dark mode / next-themes) cannot invert
-                    the typography plugin's colors inside this container. */}
+                {/* The typography plugin's colours are pinned by the .jd-prose rules
+                    below: the light values as before, and theme tokens under .dark
+                    so the description follows dark mode like the rest of the page. */}
                 <div
                   className="prose prose-sm max-w-none leading-relaxed
                     prose-headings:font-semibold
@@ -266,11 +280,9 @@ export default function StepConsent({
                     prose-li:my-0.5
                     prose-a:no-underline
                     prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-code:font-normal prose-code:before:content-none prose-code:after:content-none
-                    prose-pre:rounded-lg prose-pre:text-sm prose-pre:font-normal"
-                  style={{
-                    color: 'var(--raw-374151)',
-                    colorScheme: 'light',
-                  }}
+                    prose-pre:rounded-lg prose-pre:text-sm prose-pre:font-normal
+                    [overflow-wrap:anywhere] prose-table:block prose-table:overflow-x-auto prose-pre:overflow-x-auto prose-img:max-w-full
+                    text-gray-700"
                 >
                   <style>{`
                     .jd-prose * { color: var(--raw-374151) !important; background-color: transparent !important; }
@@ -278,6 +290,9 @@ export default function StepConsent({
                     .jd-prose strong { color: var(--raw-111827) !important; }
                     .jd-prose code { background-color: var(--raw-f3f4f6) !important; color: var(--raw-1f2937) !important; }
                     .jd-prose pre { background-color: var(--raw-f9fafb) !important; color: var(--raw-374151) !important; border: 1px solid var(--raw-e5e7eb) !important; }
+                    .dark .jd-prose * { color: var(--text-secondary) !important; }
+                    .dark .jd-prose h1, .dark .jd-prose h2, .dark .jd-prose h3, .dark .jd-prose h4, .dark .jd-prose strong { color: var(--text-primary) !important; }
+                    .dark .jd-prose code, .dark .jd-prose pre { background-color: var(--surface-hover) !important; color: var(--text-primary) !important; border-color: var(--border) !important; }
                   `}</style>
                   <div className="jd-prose">
                     <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{descToShow || ''}</ReactMarkdown>
@@ -286,8 +301,14 @@ export default function StepConsent({
                 {isLongDesc && (
                   <button
                     type="button"
-                    onClick={() => setShowFullDesc(!showFullDesc)}
-                    className="text-sm text-brand-blue hover:text-brand-blue-2 mt-2 underline underline-offset-2"
+                    onClick={() => {
+                      const collapsing = showFullDesc;
+                      setShowFullDesc(!showFullDesc);
+                      // Collapsing a long JD leaves a phone scrolled far past
+                      // it — bring the card's top back into view.
+                      if (collapsing) revealAfterPaint(() => jdRef.current, 'start');
+                    }}
+                    className="inline-flex min-h-10 items-center -mb-2 text-sm text-brand-blue hover:text-brand-blue-2 mt-1 underline underline-offset-2"
                   >
                     {showFullDesc ? 'Show less' : 'Read more'}
                   </button>
@@ -298,7 +319,10 @@ export default function StepConsent({
         </div>
 
         {/* ═══════════ RIGHT COLUMN — action panel ═══════════ */}
-        <div className="lg:sticky lg:top-6 bg-white border border-gray-200 rounded-2xl overflow-hidden min-w-0">
+        {/* Sticky below the pinned header + stepper (not under it). On short
+            laptops the panel scrolls inside itself, so Proceed is always
+            reachable without scrolling the whole JD first. */}
+        <div className="lg:sticky lg:top-[calc(var(--tf-sticky-h,0px)+24px)] lg:max-h-[calc(100dvh-var(--tf-sticky-h,0px)-48px)] lg:overflow-y-auto bg-white border border-gray-200 rounded-2xl overflow-hidden min-w-0">
 
           {/* Before You Begin */}
           <div className="p-5">
@@ -338,12 +362,16 @@ export default function StepConsent({
                     phone within reach. No app installation is required; it opens directly in your phone&apos;s
                     browser, which may ask for camera and microphone permission.
                   </p>
-                  <label className="mt-3 flex items-start gap-2 cursor-pointer select-none">
+                  <label ref={mobileAckRef} className="mt-3 -my-1 py-1 flex items-start gap-2.5 cursor-pointer select-none">
                     <input
                       type="checkbox"
                       checked={mobileVerificationAcknowledged}
-                      onChange={() => setMobileVerificationAcknowledged(prev => !prev)}
-                      className="mt-0.5 w-4 h-4 rounded border-gray-300 text-brand-blue focus:ring-brand-blue flex-shrink-0"
+                      onChange={() => {
+                        const next = !mobileVerificationAcknowledged;
+                        setMobileVerificationAcknowledged(next);
+                        if (next && consentAccepted) revealAfterPaint(() => proceedRef.current);
+                      }}
+                      className="mt-0.5 w-5 h-5 rounded border-gray-300 text-brand-blue focus:ring-brand-blue flex-shrink-0"
                     />
                     <span className="text-sm text-gray-700">
                       I have read and understood the mobile verification requirement above.
@@ -357,23 +385,36 @@ export default function StepConsent({
           {/* Consent acceptance */}
           <div className="px-5 pb-5 pt-5 border-t border-gray-100">
             <div className={`rounded-xl p-4 transition-colors ${consentAccepted ? 'bg-success-subtle/40 border border-success-line' : 'bg-brand-blue/5 border border-brand-blue/15'}`}>
-              <div className="flex items-start gap-3">
-                <span className={`flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0 transition-colors ${consentAccepted ? 'bg-success-subtle text-success' : 'bg-white text-brand-blue border border-brand-blue/20'}`}>
+              {/* The whole row toggles consent (not just the 20px box), by
+                  click, tap, Space or Enter. The "consent and terms" link
+                  inside stops propagation so it only opens the modal. */}
+              <div
+                role="checkbox"
+                aria-checked={consentAccepted}
+                tabIndex={0}
+                onClick={handleCheckboxClick}
+                onKeyDown={(e) => {
+                  if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); handleCheckboxClick(); }
+                }}
+                className="group flex items-start gap-3 cursor-pointer select-none rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40"
+              >
+                <span className={`hidden sm:flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0 transition-colors ${consentAccepted ? 'bg-success-subtle text-success' : 'bg-white text-brand-blue border border-brand-blue/20'}`}>
                   <Shield className="w-4 h-4" />
                 </span>
                 <div
-                  className={`mt-1 w-5 h-5 rounded flex items-center justify-center flex-shrink-0 border-2 cursor-pointer transition-all ${
-                    consentAccepted ? 'bg-gray-900 border-gray-900' : 'border-gray-300 hover:border-gray-500'
+                  aria-hidden
+                  className={`mt-1 w-5 h-5 rounded flex items-center justify-center flex-shrink-0 border-2 transition-all ${
+                    consentAccepted ? 'bg-gray-900 border-gray-900' : 'border-gray-300 group-hover:border-gray-500'
                   }`}
-                  onClick={handleCheckboxClick}
                 >
                   {consentAccepted && <CheckCircle className="w-3.5 h-3.5 text-white" />}
                 </div>
-                <div className="text-sm text-gray-700 leading-relaxed">
+                <div className="text-sm text-gray-700 leading-relaxed min-w-0">
                   I accept the{' '}
                   <button
                     type="button"
-                    onClick={() => setShowConsentModal(true)}
+                    onClick={(e) => { e.stopPropagation(); setShowConsentModal(true); }}
+                    onKeyDown={(e) => e.stopPropagation()}
                     className="text-gray-900 font-semibold underline underline-offset-2 hover:text-gray-600 transition-colors"
                   >
                     consent and terms
@@ -386,7 +427,7 @@ export default function StepConsent({
               </div>
 
               {consentAccepted && (
-                <div className="mt-3 ml-11 flex items-center gap-2 text-success text-sm font-medium">
+                <div className="mt-3 ml-8 sm:ml-[4.75rem] flex items-center gap-2 text-success text-sm font-medium">
                   <CheckCircle className="w-4 h-4" />
                   All consents accepted
                 </div>
@@ -395,10 +436,11 @@ export default function StepConsent({
           </div>
 
           {/* Proceed button */}
-          <div className="px-5 pb-5">
+          <div ref={proceedRef} className="px-5 pb-5">
             <Button
               type="button"
               variant="primary"
+              size="lg"
               onClick={handleProceed}
               disabled={!consentAccepted || submitting || (environmentVerificationEnabled && !mobileVerificationAcknowledged)}
               className="w-full"
@@ -410,6 +452,15 @@ export default function StepConsent({
                 </>
               )}
             </Button>
+            {/* Why Proceed is still disabled — a disabled button alone
+                doesn't say what's missing. */}
+            {!submitting && (!consentAccepted || mobileAckPending) && (
+              <p className="mt-2 text-center text-xs text-gray-500">
+                {!consentAccepted
+                  ? 'Accept the consent and terms above to continue.'
+                  : 'Confirm the mobile verification notice above to continue.'}
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -419,134 +470,110 @@ export default function StepConsent({
       ═══════════════════════════════════════════════════ */}
       {showConsentModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl max-h-[90dvh] flex flex-col">
+          <div
+            role="dialog" aria-modal="true" aria-labelledby="consent-modal-title"
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl max-h-[90dvh] flex flex-col"
+          >
 
             {/* Modal header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0">
-              <div className="flex items-center gap-2">
-                <Shield className="w-5 h-5 text-gray-700" />
-                <h2 className="text-base font-semibold text-gray-900">Privacy &amp; Consent</h2>
+            <div className="flex items-start justify-between gap-4 px-5 sm:px-7 pt-6 pb-4 flex-shrink-0">
+              <div className="min-w-0">
+                <h2 id="consent-modal-title" className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">Privacy &amp; Consent</h2>
+                <p className="mt-1 text-sm text-gray-500">Please review the information below before starting your AI interview.</p>
               </div>
               <button
                 type="button"
                 onClick={() => setShowConsentModal(false)}
-                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
-               aria-label="Close">
+                className="p-2.5 -mr-2 -mt-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors flex-shrink-0"
+                aria-label="Close"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Modal body (scrollable) */}
-            <div className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
+            {/* Modal body (scrollable) - the reference's two columns, stacked
+                as two rows to fit this width: what we collect, then Learn More. */}
+            <div className="overflow-y-auto overscroll-contain flex-1 px-5 sm:px-7 pb-5 space-y-5">
 
-              {/* GDPR notice */}
-              <div className="bg-warning-subtle border border-warning-line rounded-xl p-4 flex items-start gap-3">
-                <AlertTriangle className="w-4 h-4 text-warning flex-shrink-0 mt-0.5" />
-                <p className="text-sm text-warning-strong">
-                  This interview collects video, audio, and facial expression data (special category data under <strong>GDPR Art. 9</strong>). Your explicit consent is required.
-                </p>
-              </div>
-
-              {/* Data collected cards */}
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { icon: Video, label: 'Video' },
-                  { icon: Mic, label: 'Audio' },
-                  { icon: Eye, label: 'Facial' },
-                ].map(({ icon: Icon, label }) => (
-                  <div key={label} className="bg-gray-50 border border-gray-200 rounded-lg p-3 flex flex-col items-center gap-1.5 text-center">
-                    <Icon className="w-5 h-5 text-gray-600" />
-                    <span className="text-xs font-medium text-gray-700">{label}</span>
-                  </div>
+              {/* Row 1 - what this interview collects */}
+              <ul className="divide-y divide-gray-100">
+                {DATA_USAGE_ITEMS.map(({ icon: Icon, title, desc }) => (
+                  <li key={title} className="flex items-start gap-4 py-3.5">
+                    <span className="w-11 h-11 rounded-full bg-brand-blue/5 text-brand-blue flex items-center justify-center flex-shrink-0">
+                      <Icon className="w-5 h-5" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-gray-900">{title}</p>
+                      <p className="mt-0.5 text-sm text-gray-500 leading-relaxed">{desc}</p>
+                    </div>
+                  </li>
                 ))}
-              </div>
+              </ul>
 
-              {/* Consent checkboxes */}
-              <div className="bg-white border border-gray-200 rounded-xl p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold text-gray-900">Your Consent</h3>
-                  <button
-                    type="button"
-                    onClick={toggleAll}
-                    className="text-xs font-medium text-gray-500 hover:text-gray-800 underline underline-offset-2 transition-colors"
-                  >
-                    {allChecked ? 'Deselect All' : 'Select All'}
-                  </button>
-                </div>
-                <div className="space-y-3">
-                  {CONSENT_ITEMS.map(item => (
-                    <label key={item.key} className="flex items-start gap-3 cursor-pointer group">
-                      <input
-                        type="checkbox"
-                        checked={consents[item.key]}
-                        onChange={() => toggleConsent(item.key)}
-                        className="mt-0.5 w-4 h-4 rounded border-gray-300 text-gray-800 focus:ring-gray-500 cursor-pointer flex-shrink-0"
-                      />
-                      <div>
-                        <p className="text-sm font-medium text-gray-800 group-hover:text-gray-900 transition-colors">{item.label}</p>
-                        <p className="text-xs text-gray-500">{item.desc}</p>
+              {/* Row 2 - Learn More. Each card expands in place to its
+                  details (policy, rights, retention). */}
+              <div className="rounded-2xl bg-gray-50 border border-gray-100 p-4 sm:p-5">
+                <h3 className="text-lg font-bold text-gray-900">Learn More</h3>
+                <p className="mt-0.5 text-sm text-gray-500">Read detailed information about your privacy, rights and data retention.</p>
+                <div className="mt-4 space-y-3">
+                  {LEARN_MORE_ITEMS.map(({ key, icon: Icon, title, desc }) => {
+                    const open = openLearnMore === key;
+                    return (
+                      <div key={key} className="rounded-xl bg-white border border-gray-200 shadow-sm">
+                        <button
+                          type="button"
+                          onClick={() => setOpenLearnMore(open ? null : key)}
+                          aria-expanded={open}
+                          className="w-full flex items-center gap-4 p-4 text-left rounded-xl hover:bg-gray-50/60 transition-colors"
+                        >
+                          <span className="w-11 h-11 rounded-full bg-brand-blue/5 text-gray-700 flex items-center justify-center flex-shrink-0">
+                            <Icon className="w-5 h-5" />
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-gray-900">{title}</p>
+                            <p className="mt-0.5 text-sm text-gray-500 leading-relaxed">{desc}</p>
+                          </div>
+                          <ChevronRight className={`w-5 h-5 text-brand-blue flex-shrink-0 transition-transform ${open ? 'rotate-90' : ''}`} />
+                        </button>
+                        {open && (
+                          <div className="px-4 pb-4 sm:pl-[4.75rem] text-sm text-gray-600 space-y-2">
+                            {key === 'privacy' && (
+                              <>
+                                <p>Your data is encrypted in transit and at rest. It is never sold or shared with third parties beyond what&apos;s needed for this recruitment process.</p>
+                                <p>No automated hiring decision is made solely by AI &mdash; a human recruiter always reviews results.</p>
+                                <p>A recording indicator will be visible throughout the interview.</p>
+                              </>
+                            )}
+                            {key === 'rights' && (
+                              <ul className="space-y-1.5">
+                                {GDPR_RIGHTS.map(right => (
+                                  <li key={right} className="flex items-start gap-2">
+                                    <CheckCircle className="w-3.5 h-3.5 text-brand-blue mt-0.5 flex-shrink-0" /> {right}
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                            {key === 'retention' && (
+                              <>
+                                <p className="flex items-start gap-2">
+                                  <Clock className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                                  <span>Retained for <strong className="text-gray-900">90 days</strong>, then automatically deleted.</span>
+                                </p>
+                                <p className="flex items-start gap-2">
+                                  <Trash2 className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                                  You may request early deletion at any time.
+                                </p>
+                              </>
+                            )}
+                          </div>
+                        )}
                       </div>
-                    </label>
-                  ))}
+                    );
+                  })}
                 </div>
-              </div>
-
-              {/* Data retention */}
-              <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-2">
-                <h3 className="text-sm font-semibold text-gray-900">Data Retention</h3>
-                <div className="flex items-start gap-2 text-sm text-gray-600">
-                  <Clock className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
-                  Retained for <strong className="text-gray-900 mx-1">90 days</strong>, then automatically deleted.
-                </div>
-                <div className="flex items-start gap-2 text-sm text-gray-600">
-                  <Trash2 className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
-                  You may request early deletion at any time.
-                </div>
-              </div>
-
-              {/* Privacy policy */}
-              <div className="text-sm text-gray-700 space-y-2.5">
-                <h3 className="font-semibold text-gray-900">Key Points</h3>
-                <p>Your data is encrypted in transit and at rest. It is never sold or shared with third parties beyond what&apos;s needed for this recruitment process.</p>
-                <p>No automated hiring decision is made solely by AI — a human recruiter always reviews results.</p>
-              </div>
-
-              {/* GDPR rights */}
-              <details className="bg-gray-50 border border-gray-200 rounded-xl">
-                <summary className="px-4 py-3 cursor-pointer text-sm font-medium text-gray-700 hover:text-gray-900">
-                  Your GDPR Rights
-                </summary>
-                <ul className="px-4 pb-3 space-y-1.5">
-                  {GDPR_RIGHTS.map(right => (
-                    <li key={right} className="flex items-start gap-2 text-xs text-gray-600">
-                      <CheckCircle className="w-3.5 h-3.5 text-gray-400 mt-0.5 flex-shrink-0" /> {right}
-                    </li>
-                  ))}
-                </ul>
-              </details>
-
-              {/* Recording notice */}
-              <div className="bg-destructive-subtle border border-destructive-line rounded-xl p-3 flex items-center gap-2">
-                <Circle className="w-3.5 h-3.5 text-destructive flex-shrink-0" />
-                <p className="text-xs text-gray-700">A <span className="font-medium text-destructive">recording indicator</span> will be visible throughout the interview.</p>
               </div>
             </div>
 
-            {/* Modal footer */}
-            <div className="px-6 py-4 border-t border-gray-200 flex-shrink-0 space-y-2">
-              <Button
-                type="button"
-                variant="primary"
-                onClick={handleModalAccept}
-                disabled={!allChecked}
-                className="w-full"
-              >
-                Accept All &amp; Close
-              </Button>
-              {!allChecked && (
-                <p className="text-xs text-gray-400 text-center">Please check all consent boxes above to confirm.</p>
-              )}
-            </div>
           </div>
         </div>
       )}

@@ -734,6 +734,37 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
         ? 'Account suspended - contact support'
         : 'Upgrade to a paid plan to purchase addons';
 
+  // Which quota an add-on tops up. Same name rules the backend uses to pick the
+  // credit type (routers/addons.py), so the warning matches what gets credited.
+  const getAddonQuotaType = (addon: Addon): string | null => {
+    if (addon.credit_type) return addon.credit_type;
+    if (addon.quota_type) return addon.quota_type;
+    const n = (addon.name || addon.addon_name || '').toLowerCase();
+    if (n.includes('resume upload')) return 'RU';
+    if (n.includes('resume scoring')) return 'RS';
+    if (n.includes('assessment')) return 'AS';
+    if (n.includes('ai interview')) return 'AIU';
+    if (n.includes('seat') || n.includes('user')) return 'max_seats';
+    return null;
+  };
+
+  // Add-on units first pay off any usage already over the plan + add-on limit
+  // (Control Plane unified pool). Without this notice a tenant that is over can
+  // buy a pack and still see 0 remaining, as happened to sarathi on 2026-10-07.
+  const selectedAddonOverage = (() => {
+    if (!selectedAddon) return null;
+    const qt = getAddonQuotaType(selectedAddon);
+    const quota = qt ? quotaSummary?.quotas?.find((q: QuotaInfo) => q.quota_type === qt) : undefined;
+    if (!quota || !quota.is_exceeded || quota.exceeded_by <= 0) return null;
+    const newUnits = (selectedAddon.credit_amount || 0) * addonQuantity;
+    return {
+      name: quota.name,
+      overBy: quota.exceeded_by,
+      newUnits,
+      usableAfter: Math.max(0, newUnits - quota.exceeded_by),
+    };
+  })();
+
   // Handle addon buy click
   const handleBuyAddon = (addon: Addon) => {
     setSelectedAddon(addon);
@@ -1796,6 +1827,24 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                     </div>
                   </div>
                 </div>
+
+                {/* Over-quota notice: new units cover the existing overage first */}
+                {selectedAddonOverage && (
+                  <div role="alert" className="p-4 bg-warning-subtle border border-warning-line rounded-2xl flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-warning flex-shrink-0 mt-0.5" />
+                    <div className="min-w-0 text-xs sm:text-sm">
+                      <p className="font-semibold text-warning-strong">
+                        You are {selectedAddonOverage.overBy.toLocaleString()} {selectedAddonOverage.name} units over your limit
+                      </p>
+                      <p className="text-warning-strong/80 mt-1">
+                        New units first cover the units already used over your limit.{' '}
+                        {selectedAddonOverage.usableAfter > 0
+                          ? `After this purchase you will have ${selectedAddonOverage.usableAfter.toLocaleString()} of the ${selectedAddonOverage.newUnits.toLocaleString()} units available.`
+                          : `This purchase of ${selectedAddonOverage.newUnits.toLocaleString()} units will leave you with 0 units available. You need more than ${selectedAddonOverage.overBy.toLocaleString()} units to get any usable balance.`}
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 {/* Order Summary */}
                 <div className="border border-gray-200 dark:border-slate-700 rounded-2xl overflow-hidden">
