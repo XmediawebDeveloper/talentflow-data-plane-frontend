@@ -2,11 +2,11 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
+  Mic,
   MicOff,
   MessageSquare,
   Volume2,
   Loader2,
-  ChevronLeft,
   ChevronRight,
   Play,
   CheckCircle,
@@ -146,6 +146,8 @@ function PracticeTour({
   onClose: () => void;
 }) {
   const [ring, setRing] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
+  const [panelH, setPanelH] = useState(0);
+  const cardRef = useRef<HTMLDivElement>(null);
   const step = steps[stepIndex];
 
   useEffect(() => {
@@ -156,6 +158,7 @@ function PracticeTour({
       const target = panel.querySelector<HTMLElement>(`[data-tour="${step.id}"]`);
       if (!target) { setRing(null); return; }
       const p = panel.getBoundingClientRect();
+      setPanelH(p.height);
       const t = target.getBoundingClientRect();
       setRing({ top: t.top - p.top - 6, left: t.left - p.left - 6, width: t.width + 12, height: t.height + 12 });
     };
@@ -177,6 +180,14 @@ function PracticeTour({
 
   if (!step) return null;
   const isLast = stepIndex >= steps.length - 1;
+  // Card sits just below the highlighted target, or just above it when there
+  // isn't room below inside the panel.
+  const cardH = cardRef.current?.offsetHeight ?? 160;
+  const cardTop = ring
+    ? (ring.top + ring.height + 8 + cardH <= panelH - 8
+        ? ring.top + ring.height + 8
+        : Math.max(8, ring.top - cardH - 8))
+    : undefined;
 
   return (
     // pointer-events-none on the wrapper: the dim + ring are visual only, so
@@ -194,11 +205,13 @@ function PracticeTour({
         <div className="absolute inset-0 bg-[var(--raw-020614)]/70 pointer-events-none" />
       )}
 
-      {/* Tooltip card — fixed to the bottom of the VIEWPORT (not the panel),
-          so Next/Skip stay on screen however tall the panel is and wherever
-          the current target has scrolled to. z-50 sits above the pinned
-          header + stepper (z-40). */}
-      <div className="fixed left-1/2 bottom-4 -translate-x-1/2 w-[min(92vw,420px)] bg-white rounded-xl shadow-2xl ring-1 ring-black/5 p-4 z-50 pointer-events-auto">
+      {/* Tooltip card — positioned inside the panel next to the current
+          target (not fixed to the viewport), so it scrolls with the page. */}
+      <div
+        ref={cardRef}
+        className={`absolute left-1/2 -translate-x-1/2 w-[min(92%,420px)] bg-white rounded-xl shadow-2xl ring-1 ring-black/5 p-4 z-10 pointer-events-auto transition-[top] duration-200 ${cardTop === undefined ? 'bottom-4' : ''}`}
+        style={cardTop !== undefined ? { top: cardTop } : undefined}
+      >
         <div className="flex items-center justify-between mb-1">
           <p className="text-sm font-bold text-gray-900">{step.title}</p>
           <span className="text-2xs font-medium text-gray-400">{stepIndex + 1} / {steps.length}</span>
@@ -222,7 +235,6 @@ function PracticeTour({
 export default function StepSamplePractice({
   token,
   onStartInterview,
-  onGoBack,
   selectedLanguage = 'English',
   submitting = false,
   faceVerification,
@@ -1260,7 +1272,7 @@ export default function StepSamplePractice({
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-4" style={{ colorScheme: 'light' }}>
+    <div className="space-y-4">
       {/* Medium-speed blink used by the PRACTICE SESSION label and the
           Recording badge (1.4s cycle — steady, not fast). */}
       <style>{`
@@ -1288,7 +1300,7 @@ export default function StepSamplePractice({
             candidate sees exactly what to expect: identity chip, question
             counter, live 2-minute timer, a PRACTICE badge (where the real one
             shows LIVE), and a Tips button that re-opens the guided tour. */}
-        <div data-tour="header" className="flex items-center justify-between gap-2 px-4 py-2.5 border-b border-white/[0.07] bg-gradient-to-r from-[var(--raw-7c3aed)] to-[var(--raw-db2777)]">
+        <div data-tour="header" className="flex items-center justify-between gap-2 px-4 py-2.5 border-b border-white/[0.07] bg-brand-blue">
           <div className="flex items-center gap-2 min-w-0">
             <MessageSquare className="w-4 h-4 text-white/90 flex-shrink-0" />
             <div className="leading-tight min-w-0">
@@ -1297,26 +1309,26 @@ export default function StepSamplePractice({
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-1.5 sm:gap-2 flex-shrink-0">
-            <span className="hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white/15 text-white text-2xs font-medium ring-1 ring-white/20">
+            <span className="hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white/15 dark:bg-slate-900/15 text-white text-2xs font-medium ring-1 ring-white/20">
               <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2l7 4v6c0 5-3.5 8-7 10-3.5-2-7-5-7-10V6l7-4z" /></svg>
               ID Verified
             </span>
-            <span className="hidden sm:inline-flex items-center px-2 py-1 rounded-md bg-white/15 text-white text-2xs font-semibold ring-1 ring-white/20">
+            <span className="hidden sm:inline-flex items-center px-2 py-1 rounded-md bg-white/15 dark:bg-slate-900/15 text-white text-2xs font-semibold ring-1 ring-white/20">
               Practice · Q 1/1
             </span>
             <span data-tour="timer" className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-2xs font-bold tabular-nums ring-1 ${
-              timerLow ? 'bg-red-500 text-white ring-red-300/50 tf-blink' : 'bg-white/15 text-white ring-white/20'
+              timerLow ? 'bg-red-500 text-white ring-red-300/50 dark:ring-red-500/40 tf-blink' : 'bg-white/15 dark:bg-slate-900/15 text-white ring-white/20'
             }`}>
               <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2 2M9 2h6" /></svg>
               {fmtMMSS(secondsLeft)}
             </span>
-            <span className="tf-blink inline-flex items-center gap-1 px-2 py-1 rounded-md bg-amber-400 text-gray-900 text-2xs font-bold ring-1 ring-amber-300 shadow-sm">
+            <span className="tf-blink inline-flex items-center gap-1 px-2 py-1 rounded-md bg-amber-400 text-gray-900 text-2xs font-bold ring-1 ring-amber-300 dark:ring-amber-500/40 shadow-sm">
               <span className="w-1.5 h-1.5 rounded-full bg-gray-900" /> PRACTICE
             </span>
             <button
               type="button"
               onClick={() => setTourStep(0)}
-              className="inline-flex min-h-8 items-center gap-1 px-2.5 py-1.5 rounded-md bg-white/10 hover:bg-white/20 text-white text-2xs font-medium ring-1 ring-white/20 transition-colors"
+              className="inline-flex min-h-8 items-center gap-1 px-2.5 py-1.5 rounded-md bg-white/10 dark:bg-slate-900/10 hover:bg-white/20 dark:hover:bg-slate-900/20 text-white text-2xs font-medium ring-1 ring-white/20 transition-colors"
               title="Show the guided tour"
             >
               ? Tips
@@ -1351,7 +1363,7 @@ export default function StepSamplePractice({
             </div>
             <p className="text-white font-semibold text-lg leading-none">Bina</p>
             <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
-              aiSpeaking ? 'bg-[var(--raw-7c3aed)]/20 text-[var(--raw-c4b5fd)]' : isRecording ? 'bg-red-500/15 text-red-300' : 'bg-white/10 text-[var(--raw-94a3b8)]'
+              aiSpeaking ? 'bg-[var(--raw-7c3aed)]/20 text-[var(--raw-c4b5fd)]' : isRecording ? 'bg-red-500/15 text-red-300' : 'bg-white/10 dark:bg-slate-900/10 text-[var(--raw-94a3b8)]'
             }`}>
               {aiSpeaking ? (
                 <>
@@ -1385,7 +1397,7 @@ export default function StepSamplePractice({
                 </div>
               )}
               {!showReplay && (isRecording || isTranscribing) && (
-                <div className={`absolute top-2 left-2 flex items-center rounded-full backdrop-blur-sm text-white ${isRecording ? 'tf-blink gap-1.5 text-xs font-bold px-2.5 py-1 bg-red-500 shadow-lg shadow-red-500/40 ring-2 ring-red-300/50' : 'gap-1.5 text-xs font-medium px-2.5 py-1 bg-blue-600/90'}`}>
+                <div className={`absolute top-2 left-2 flex items-center rounded-full backdrop-blur-sm text-white ${isRecording ? 'tf-blink gap-1.5 text-xs font-bold px-2.5 py-1 bg-red-500 shadow-lg shadow-red-500/40 ring-2 ring-red-300/50 dark:ring-red-500/40' : 'gap-1.5 text-xs font-medium px-2.5 py-1 bg-blue-600/90'}`}>
                   {isRecording ? (<><span className="w-2 h-2 bg-white rounded-full animate-ping" />{`REC · ${recordingElapsed}s`}</>) : (<><Loader2 className="w-3 h-3 animate-spin" /> Transcribing…</>)}
                 </div>
               )}
@@ -1436,25 +1448,25 @@ export default function StepSamplePractice({
               Submit to finish the practice (same as the Next button). */}
           {doneConfirm && !practiceDone && (
             <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center justify-center px-4">
-              <div className="pointer-events-auto w-full max-w-sm rounded-2xl bg-black/80 backdrop-blur-md ring-1 ring-amber-400/40 shadow-2xl px-5 py-4 text-center">
-                <div className="flex items-center justify-center gap-2 mb-2">
-                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                  <p className="text-base font-bold text-amber-300">Are you done with your response?</p>
+              <div className="pointer-events-auto w-full max-w-sm rounded-2xl bg-white ring-1 ring-sky-100 shadow-2xl px-5 pt-5 pb-4 text-center">
+                <div className="mx-auto mb-3 w-12 h-12 rounded-full bg-sky-50 flex items-center justify-center">
+                  <Mic className="w-5 h-5 text-brand-blue" />
                 </div>
-                <p className="text-xs sm:text-sm text-white/90 leading-snug mb-4">
+                <p className="text-lg font-bold text-gray-900 mb-2">Are you done with your response?</p>
+                <p className="text-sm text-slate-600 leading-snug mb-4">
                   If you are not done, please speak up to continue your response.
                   If you have completed your answer, click Submit to finish the practice.
                 </p>
-                <div className="flex items-center justify-center gap-2">
+                <div className="flex items-center justify-center gap-3">
                   <button
                     type="button"
                     onClick={handlePracticeNext}
-                    className="inline-flex items-center gap-1.5 px-5 py-2 rounded-full bg-emerald-500 text-white text-sm font-semibold shadow-lg hover:bg-emerald-600 transition-colors"
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold shadow-sm hover:bg-emerald-700 transition-colors"
                   >
                     Submit
                   </button>
                 </div>
-                <p className="mt-3 text-2xs text-white/60">Still recording — just keep speaking to continue.</p>
+                <p className="mt-3 text-2xs text-slate-500">Still recording — just keep speaking to continue.</p>
               </div>
             </div>
           )}
@@ -1520,7 +1532,7 @@ export default function StepSamplePractice({
                       // candidate finishes speaking.
                       <div className="flex items-center gap-2">
                         <span className="w-1.5 h-1.5 bg-red-400 rounded-full animate-ping shrink-0" />
-                        <span className="text-xs italic text-emerald-200/70 leading-relaxed">Recording… your transcript appears after you finish speaking.</span>
+                        <span className="text-xs italic text-emerald-200/70 leading-relaxed">Recording… Your transcript will appear after you finish speaking.</span>
                       </div>
                     ) : isTranscribing ? (
                       // Processing: candidate finished, transcript in flight.
@@ -1574,13 +1586,13 @@ export default function StepSamplePractice({
                 : null;
               if (!variant) return null;
               const cfg = variant === 'turn'
-                ? { grad: 'from-emerald-400 to-teal-500', ring: 'ring-emerald-200/60', glow: 'shadow-emerald-500/30', title: 'Your turn — speak now', subtitle: 'Microphone is active · Bina is listening' }
-                : { grad: 'from-rose-500 to-red-600', ring: 'ring-rose-200/50', glow: 'shadow-red-600/30', title: 'Hold on — Bina is speaking', subtitle: 'Please wait until she finishes the question' };
+                ? { grad: 'from-emerald-400 to-teal-500', ring: 'ring-emerald-200/60 dark:ring-emerald-500/30', glow: 'shadow-emerald-500/30', title: 'Your turn — speak now', subtitle: 'Microphone is active · Bina is listening' }
+                : { grad: 'from-rose-500 to-red-600', ring: 'ring-rose-200/50 dark:ring-rose-500/30', glow: 'shadow-red-600/30', title: 'Hold on — Bina is speaking', subtitle: 'Please wait until she finishes the question' };
               return (
                 <div className="absolute inset-x-0 bottom-full z-30 flex justify-center px-4 pt-10 pb-3 pointer-events-none bg-gradient-to-t from-[var(--raw-060d1a)] via-[var(--raw-060d1a)] via-70% to-transparent">
                   <div className={`relative flex items-center gap-3 pl-3 pr-4 py-2.5 rounded-2xl bg-gradient-to-br ${cfg.grad} ring-1 ${cfg.ring} shadow-2xl ${cfg.glow} backdrop-blur-md min-w-0 sm:min-w-[240px] max-w-[94%]`}>
                     <div className="relative shrink-0">
-                      <div className="w-9 h-9 rounded-full bg-white/25 ring-1 ring-white/40 flex items-center justify-center">
+                      <div className="w-9 h-9 rounded-full bg-white/25 dark:bg-slate-900/25 ring-1 ring-white/40 flex items-center justify-center">
                         {variant === 'turn' ? (
                           <svg className="w-4.5 h-4.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" /><path strokeLinecap="round" strokeLinejoin="round" d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" y1="19" x2="12" y2="23" strokeLinecap="round" /><line x1="8" y1="23" x2="16" y2="23" strokeLinecap="round" /></svg>
                         ) : (
@@ -1692,20 +1704,11 @@ export default function StepSamplePractice({
       </div>{/* end outer dark panel */}
 
       {/* Footer Navigation */}
-      {/* Stacks below sm (Start Interview on top, Go Back under it). */}
-      <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between pt-2">
-        <button
-          type="button"
-          onClick={onGoBack}
-          className="self-start inline-flex items-center gap-1.5 px-2 py-2.5 -ml-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors"
-        >
-          <ChevronLeft className="w-4 h-4" />
-          Go Back
-        </button>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end pt-2">
         <div className="flex flex-col w-full sm:w-auto items-stretch sm:items-end gap-1.5">
           {/* Optional — show how long the practice answer was (not a gate) */}
           {!isRecording && recordedDurationSeconds !== null && (
-            <p className="text-xs font-medium text-green-600">
+            <p className="text-xs font-medium text-green-600 dark:text-green-400">
               ✓ Practice recorded ({recordedDurationSeconds}s)
             </p>
           )}
@@ -1730,7 +1733,7 @@ export default function StepSamplePractice({
               type="button"
               onClick={onStartInterview}
               disabled={submitting}
-              className="flex-1 sm:flex-none justify-center inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold text-white bg-gray-900 hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm"
+              className="flex-1 sm:flex-none justify-center inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold text-white bg-brand-blue hover:bg-brand-blue-2 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm"
             >
               {submitting ? (
                 <>
@@ -1766,7 +1769,7 @@ export default function StepSamplePractice({
                 type="button"
                 onClick={onStartInterview}
                 disabled={submitting}
-                className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold text-white bg-gray-900 hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all"
+                className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold text-white bg-brand-blue hover:bg-brand-blue-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all"
               >
                 {submitting ? (
                   <><Loader2 className="w-4 h-4 animate-spin" /> Starting…</>

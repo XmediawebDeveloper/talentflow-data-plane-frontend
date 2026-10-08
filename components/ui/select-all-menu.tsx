@@ -109,7 +109,7 @@ export function SortByControl<T extends string>({
 }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="hidden sm:inline text-sm text-gray-700 whitespace-nowrap">Sort by</span>
+      <span className="hidden sm:inline text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap">Sort by</span>
       <div className="inline-flex items-center h-[38px] bg-brand-blue/5 border border-brand-blue/10 rounded-lg p-1">
         <div className="relative">
           <select
@@ -118,7 +118,7 @@ export function SortByControl<T extends string>({
             aria-label="Sort by"
             // Fixed width: a native select sizes to its longest option, so the
             // two views' option lists made the row (and search box) shift.
-            className="appearance-none w-[9.5rem] truncate h-7 pl-2.5 pr-8 bg-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 text-sm text-gray-700 cursor-pointer"
+            className="appearance-none w-[9.5rem] truncate h-7 pl-2.5 pr-8 bg-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 text-sm font-medium text-gray-700 dark:text-slate-300 cursor-pointer"
           >
             {options.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>

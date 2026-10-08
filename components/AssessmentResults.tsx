@@ -1,5 +1,6 @@
 import { ArrowLeft, User, Clock, Timer, Award, XCircle, ChevronUp, FileText, TrendingUp, AlertCircle, Info, Filter, Layers, ArrowUpDown, Loader2, BarChart3, SlidersHorizontal, Columns3, Trash2, Users, Download, X, Play, CheckSquare, Eye, ArrowUp, ArrowDown, MoreVertical } from 'lucide-react';
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { assessmentService, jdService } from '@/lib/services';
 import { formatISTDate, formatISTWithSeconds } from '@/lib/utils/dateUtils';
@@ -43,6 +44,8 @@ import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
 import ListPagination from '@/components/ListPagination';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import ListViewToggle, { type ListDisplayMode } from '@/components/ui/list-view-toggle';
+import ToolbarFilterSelect from '@/components/ui/toolbar-filter-select';
+import ToolbarSelectAll from '@/components/ui/toolbar-select-all';
 
 interface AssessmentResultsProps {
   /**
@@ -121,6 +124,14 @@ interface AssessmentResultsProps {
   nextId?: string | null;
   currentIndex?: number;
   totalCount?: number;
+  /**
+   * When provided (embedded in Job Details), the search / More Filters toolbar
+   * portals into this node — the tab-navigation card's toolbar slot — with its
+   * own card chrome dropped, so the controls read as the tab card's second row.
+   * All toolbar state stays local. Optional; the standalone results page leaves
+   * it unset and the toolbar renders inline in its own card as before.
+   */
+  toolbarPortal?: HTMLElement | null;
 }
 
 interface CandidateResult {
@@ -218,8 +229,12 @@ interface QuestionResult {
 const resultOrderTime = (c: { completed_at?: string; created_at?: string }) =>
   new Date(c.completed_at || c.created_at || 0).getTime();
 
-export default function AssessmentResults({ onBack, assessmentId, assessmentTitle, assessmentVersion, jdTitle, jdId, jdShortId, jdVersion, jobVersionScope = null, assessmentVersionScope = null, embedded = false, openOnTotalCandidates = false, canDownloadPDF = false, canBatchDownload = false, prevId, nextId, currentIndex, totalCount }: AssessmentResultsProps) {
+export default function AssessmentResults({ onBack, assessmentId, assessmentTitle, assessmentVersion, jdTitle, jdId, jdShortId, jdVersion, jobVersionScope = null, assessmentVersionScope = null, embedded = false, openOnTotalCandidates = false, canDownloadPDF = false, canBatchDownload = false, prevId, nextId, currentIndex, totalCount, toolbarPortal }: AssessmentResultsProps) {
   const router = useRouter();
+  /* Embedded in the Job Details "Assessments Results" tab (toolbar portals into
+     that card's slot) → toolbar controls drop to the 36px AI Talent Match
+     height; the standalone assessment results page keeps 38px. */
+  const portaled = !!toolbarPortal;
   const dialog = useGlobalDialog();
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const [candidateResults, setCandidateResults] = useState<CandidateResult[]>([]);
@@ -1860,8 +1875,13 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             score bands, the From / To dates) now opens in the More Filters
             panel under it; the Columns picker is its own button beside it.
             The filters commit as they change, exactly as they did on the row,
-            so the panel's footer is Clear All + Done rather than an Apply. */}
-        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-3 sm:mb-4">
+            so the panel's footer is Clear All + Done rather than an Apply.
+            When `toolbarPortal` is set (the Job Details tab-navigation card
+            slot), the whole block portals there with its card chrome dropped so
+            it reads as the tab card's second row; otherwise inline as before. */}
+        {(() => {
+        const toolbarBlock = (
+        <div className={toolbarPortal ? '' : 'bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-3 sm:mb-4'}>
           <ListToolbar
             searchValue={searchQuery}
             /* Keystroke-by-keystroke, as the search field always was. */
@@ -1871,6 +1891,22 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               setCurrentPage(1);
             }}
             searchPlaceholder="Search by name, email, phone, or JD title..."
+            /* Embedded in Job Details: the AI Talent Match reference's Select All
+               pill + dropdown at the head of the row (the standalone page keeps
+               its table-header checkbox and shows nothing here). */
+            beforeSearch={portaled ? (
+              <ToolbarSelectAll
+                selectedCount={selectedRows.length}
+                allSelected={filteredCandidates.length > 0 && filteredCandidates.every((c) => selectedRows.includes(c.id))}
+                pageCount={paginatedCandidates.length}
+                onSelectPage={() =>
+                  setSelectedRows((prev) => Array.from(new Set([...prev, ...paginatedCandidates.map((c) => c.id)])))
+                }
+                totalCount={filteredCandidates.length}
+                onSelectAll={() => setSelectedRows(filteredCandidates.map((c) => c.id))}
+                onClear={() => setSelectedRows([])}
+              />
+            ) : undefined}
             /* Laid out by the TOOLBAR's width, not the viewport's: inside the
                assessment page's Results tab the vertical tab menu takes part of
                the screen, and viewport breakpoints put search + four controls on
@@ -1884,6 +1920,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                while the Columns picker is open so the row cannot clip it. */
             singleLine
             overflowVisible={showColumnSelector}
+            compactButtons={portaled}
             /* Status — what the four stat cards used to switch between, now a
                dropdown at the head of the controls, beside More Filters. Same
                state, same values the API's status filter matches on; only the
@@ -1906,7 +1943,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   aria-haspopup="dialog"
                   aria-controls="assessment-results-column-selector"
                   icon={<Columns3 className="w-4 h-4" />}
-                  className="whitespace-nowrap !h-[38px] !text-sm"
+                  className={`whitespace-nowrap ${portaled ? '!h-9' : '!h-[38px]'} !text-sm`}
                 >
                   Customize Columns ({enabledColumnsCount})
                 </Button>
@@ -1946,25 +1983,44 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   </>
                 )}
               </div>
-              <select
-                id="assessment-results-status-filter"
-                aria-label="Filter candidates by status"
-                value={statusFilter}
-                onChange={(e) => {
-                  setStatusFilter(e.target.value as 'all' | 'Completed' | 'In Progress' | 'Pending');
-                  setCurrentPage(1);
-                }}
-                className={`h-[38px] w-auto min-w-[9rem] max-w-[16rem] px-3 text-sm font-medium rounded-lg border cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-blue/40 transition-all ${
-                  statusFilter !== 'all'
-                    ? 'bg-brand-blue/10 text-brand-blue border-brand-blue/20'
-                    : 'bg-brand-blue/5 text-gray-700 border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue'
-                }`}
-              >
-                <option value="all">All Candidates</option>
-                <option value="In Progress">In Progress</option>
-                <option value="Completed">Completed</option>
-                <option value="Pending">{PENDING_STATUS_LABEL}</option>
-              </select>
+              {/* Embedded in Job Details this takes the AI Talent Match
+                  reference's tinted "All Matches" pill chrome; standalone keeps
+                  its own bordered box. Same state, same values either way. */}
+              {portaled ? (
+                <ToolbarFilterSelect
+                  value={statusFilter}
+                  onChange={(value) => {
+                    setStatusFilter(value as 'all' | 'Completed' | 'In Progress' | 'Pending');
+                    setCurrentPage(1);
+                  }}
+                  ariaLabel="Filter candidates by status"
+                >
+                  <option value="all">All Candidates</option>
+                  <option value="In Progress">In Progress</option>
+                  <option value="Completed">Completed</option>
+                  <option value="Pending">{PENDING_STATUS_LABEL}</option>
+                </ToolbarFilterSelect>
+              ) : (
+                <select
+                  id="assessment-results-status-filter"
+                  aria-label="Filter candidates by status"
+                  value={statusFilter}
+                  onChange={(e) => {
+                    setStatusFilter(e.target.value as 'all' | 'Completed' | 'In Progress' | 'Pending');
+                    setCurrentPage(1);
+                  }}
+                  className={`h-[38px] w-auto min-w-[9rem] max-w-[16rem] px-3 text-sm font-medium rounded-lg border cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-blue/40 transition-all ${
+                    statusFilter !== 'all'
+                      ? 'bg-brand-blue/10 text-brand-blue border-brand-blue/20'
+                      : 'bg-brand-blue/5 text-gray-700 border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue'
+                  }`}
+                >
+                  <option value="all">All Candidates</option>
+                  <option value="In Progress">In Progress</option>
+                  <option value="Completed">Completed</option>
+                  <option value="Pending">{PENDING_STATUS_LABEL}</option>
+                </select>
+              )}
               </>
             }
             onToggleFilters={() => setShowMoreFilters((open) => !open)}
@@ -1983,7 +2039,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 onClick={handleDownloadBulkPDFs}
                 disabled={downloadingBulkPDF || selectedRows.length === 0}
                 title={selectedRows.length === 0 ? 'Select candidates to download their PDF reports' : undefined}
-                className="whitespace-nowrap !h-[38px] !text-sm"
+                className={`whitespace-nowrap ${portaled ? '!h-9' : '!h-[38px]'} !text-sm`}
                 icon={downloadingBulkPDF ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
@@ -1999,14 +2055,14 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               variant="primary"
               size="sm"
               onClick={() => setShowExportModal(true)}
-              className="whitespace-nowrap !h-[38px] !text-sm"
+              className={`whitespace-nowrap ${portaled ? '!h-9' : '!h-[38px]'} !text-sm`}
               icon={<FileText className="w-4 h-4" />}
             >
               Export
             </Button>
             {/* The shared List / Grid switch — the row's last, far-right
                 control. */}
-            <ListViewToggle value={displayMode} onChange={setDisplayMode} />
+            <ListViewToggle value={displayMode} onChange={setDisplayMode} className={portaled ? 'h-9' : ''} />
           </ListToolbar>
 
           {showMoreFilters && (
@@ -2212,6 +2268,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             </ListFilterPanel>
           )}
         </div>
+        );
+        return toolbarPortal ? createPortal(toolbarBlock, toolbarPortal) : toolbarBlock;
+        })()}
 
         {/* Candidates Results Table */}
         <div className="rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden bg-white dark:bg-slate-900">

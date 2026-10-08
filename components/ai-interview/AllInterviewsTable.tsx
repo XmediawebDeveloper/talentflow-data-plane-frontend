@@ -26,6 +26,7 @@ import { formatISTStamp, parseIST } from '@/lib/utils/dateUtils';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { rememberAIInterviewPagerOrder, type AIInterviewPagerList } from '@/lib/utils/aiInterviewPagerList';
+import { resolveAIInterviewDraftResumeHref } from '@/lib/utils/aiInterviewDraftResume';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import { MENU_ITEM_SCALE_CLASS, MENU_ITEM_LIGHT_HIGHLIGHT_CLASS, MENU_PANEL_BORDER_CLASS } from '@/lib/constants/menuAnimation';
 
@@ -515,6 +516,15 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
     rememberAIInterviewPagerOrder(pagerList, sorted.map((r) => r.id));
   }, [sorted, pagerList, isLoading]);
   const detailsHref = (id: string) => `/recruitment/ai-interviews/${id}?list=${pagerList}`;
+  /* Row click: an editable DRAFT reopens its editor at the step it was left
+     on; everything else opens its details page as before. */
+  const openRow = (row: InterviewRow) => {
+    if (row.rawStatus === 'draft' && row.jdId && canUpdateAIInterviews) {
+      void resolveAIInterviewDraftResumeHref(row.id, row.jdId).then((href) => router.push(href));
+      return;
+    }
+    router.push(detailsHref(row.id));
+  };
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
   const safePage = Math.min(Math.max(1, page), totalPages);
@@ -696,7 +706,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
     if (row.rawStatus === 'draft' && row.jdId) {
       actions.push({
         key: 'edit', label: 'Edit', icon: Pencil,
-        run: () => router.push(`/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${row.jdId}&config_id=${row.id}`),
+        run: () => { void resolveAIInterviewDraftResumeHref(row.id, row.jdId!).then((href) => router.push(href)); },
         disabled: !canUpdateAIInterviews,
       });
     }
@@ -1015,7 +1025,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
                       if (el) rowRefs.current.set(row.id, el);
                       else rowRefs.current.delete(row.id);
                     }}
-                    onClick={() => router.push(detailsHref(row.id))}
+                    onClick={() => openRow(row)}
                     className={`border-b border-gray-100 dark:border-slate-700/60 last:border-b-0 cursor-pointer transition-colors duration-700 hover:bg-brand-blue/5 dark:hover:bg-brand-blue/10 ${
                       flashedRowId === row.id ? 'bg-brand-blue/10 dark:bg-brand-blue/15' : ''
                     }`}

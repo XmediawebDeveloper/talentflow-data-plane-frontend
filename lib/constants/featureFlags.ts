@@ -25,3 +25,18 @@ export const PROXY_INTEGRITY_VERIFICATION_ENABLED =
   (process.env.NEXT_PUBLIC_ENABLE_PROXY_INTEGRITY_VERIFICATION ?? 'true')
     .trim()
     .toLowerCase() !== 'false';
+
+/** "Share Resume" — emailing a resume (with its file) to someone.
+ *
+ *  Hidden for now, everywhere it is offered: Resume Scoring (row ⋮ menu, the
+ *  View Resume panel, the candidate's score page) and the Resume Database
+ *  (My Resumes / Internal Database row menus, the resume page). The dialogs and
+ *  the `my_resumes:share` permission stay in place, so turning this back on
+ *  is just setting it.
+ *
+ *  Unlike the flag above this one is OFF unless explicitly enabled. It only
+ *  hides the UI; the backend share endpoint is unchanged. */
+export const RESUME_EMAIL_SHARE_ENABLED =
+  (process.env.NEXT_PUBLIC_ENABLE_RESUME_EMAIL_SHARE ?? 'false')
+    .trim()
+    .toLowerCase() === 'true';

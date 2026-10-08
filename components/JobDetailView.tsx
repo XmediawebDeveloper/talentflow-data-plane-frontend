@@ -1,7 +1,8 @@
 'use client'
 
-import { ArrowLeft, ChevronLeft, ChevronRight, MapPin, Calendar, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, BarChart3, MessageSquare, FileText, Search, Paperclip, Loader2, AlertCircle, Info, ArrowRight, Zap, ClipboardList, Video } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, MapPin, Calendar, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, BarChart3, MessageSquare, FileText, Search, SlidersHorizontal, Paperclip, Loader2, AlertCircle, Info, ArrowRight, ArrowUpDown, Zap, ClipboardList, Video, CheckSquare, Square } from 'lucide-react';
 import { useState, useRef, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { Job } from '@/lib/types/types';
 import type { User, Tenant } from '@/lib/types/tenant';
@@ -14,6 +15,9 @@ import { formatJobVersionLabel, formatLastUpdated } from '@/lib/utils/jobOpening
 import SkillsList from '@/components/ui/SkillsList';
 import { Tooltip } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
+import { tabPill } from '@/components/ui/filter-pills';
+import ListToolbar from '@/components/ui/list-toolbar';
+import ListPagination from '@/components/ListPagination';
 import TabEmptyState from '@/components/ui/tab-empty-state';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
 import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
@@ -28,7 +32,6 @@ import InviteToAssessmentModal from './InviteToAssessmentModal';
 import ShareAssessmentModal from './ShareAssessmentModal';
 import SelectSourceModal from './SelectSourceModal';
 import AssessmentResults from './AssessmentResults';
-import Pagination from './Pagination';
 import JDVersionHistoryModal from './JDVersionHistoryModal';
 import ResumeDetailView from './ResumeDetailView';
 import CandidateScoringDetailPage from './CandidateScoringDetailPage';
@@ -72,6 +75,32 @@ import { toOneDecimalScore } from '@/lib/utils/score';
 const formatToIST = formatIST;
 const formatISTDateTime = formatIST;
 type ScoredResumesMatchFilter = 'all' | 'Exact Match' | 'Partial Match' | 'No Match';
+
+/* The detail-page content tabs (Overview / AI Talent Match Results / Scored
+   Resumes / Assessments / AI Interview) are standard underline tabs: text +
+   icon with a 2px bottom border that colours brand-blue on the active tab and
+   is transparent otherwise. `-mb-px` overlaps the tab-row's own bottom hairline
+   so the active underline sits ON that track. The disabled branch (plan-locked
+   / no-results) is muted with no underline. Colours/typography come from the
+   design system (brand-blue active, gray idle), matching the Job Openings UI. */
+const detailTabClass = (active: boolean, disabled = false): string => {
+  const base =
+    'relative inline-flex items-center gap-2 px-3 sm:px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors';
+  if (disabled)
+    return `${base} border-transparent text-gray-400 dark:text-slate-600 cursor-not-allowed`;
+  return active
+    ? `${base} border-brand-blue text-brand-blue`
+    : `${base} border-transparent text-gray-500 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200 hover:border-gray-300 dark:hover:border-slate-600`;
+};
+
+/* The count chip inside a tab. Tinted brand-blue on the active tab, neutral
+   grey when idle — legible against the plain (now non-pill) tab background. */
+const detailTabBadge = (active: boolean): string =>
+  `px-1.5 py-0.5 rounded-full text-xs font-medium ${
+    active
+      ? 'bg-brand-blue/10 text-brand-blue'
+      : 'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-400'
+  }`;
 
 /**
  * Quick Actions palette.
@@ -643,31 +672,12 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
    * "Preferred" criteria share the 40% block and never fail a candidate on their own.
    */
   const requirementLabel = requirementBadge;
-  /* ---- The two sticky layers on this page ----------------------------------
-     The breadcrumb pins at top-0 (z-30) and the tab bar pins below it (z-20).
-     The tab bar's offset used to be a hardcoded `top-[52px]`, a guess at the
-     breadcrumb's height that the breadcrumb outgrew the moment it started
-     carrying the RecordPager — 34px buttons inside py-2, and a row that wraps
-     onto a second line when space is tight. Once the bar is taller than the
-     offset it covers the top of the PINNED tab bar, and being the higher layer
-     it takes the clicks: pressing a tab hit the "Job Descriptions" crumb behind
-     it and navigated to the job list instead of switching tabs.
-
-     So the offset is measured rather than assumed, and re-measured whenever the
-     bar changes size (the wrap is a resize, not a re-render). `PageBreadcrumb`
-     hands back the bar element for exactly this — see its `barRef` docs for why
-     a wrapper div is not an option. */
+  /* The breadcrumb still pins at the top, but the tab bar below it no longer
+     sticks — the toolbar lives inside it now and must scroll naturally with the
+     page (matching the Job Openings master, whose toolbar doesn't pin either).
+     That removed the measured top-offset the pinned bar used to need.
+     `breadcrumbBarRef` is still handed to PageBreadcrumb for its own layout. */
   const breadcrumbBarRef = useRef<HTMLElement | null>(null);
-  const [tabBarTop, setTabBarTop] = useState(52);
-  useEffect(() => {
-    const bar = breadcrumbBarRef.current;
-    if (!bar || typeof ResizeObserver === 'undefined') return;
-    const measure = () => setTabBarTop(bar.getBoundingClientRect().height);
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(bar);
-    return () => observer.disconnect();
-  }, []);
 
   const jobBreadcrumbItems = breadcrumbItems ?? [
     { label: 'Dashboard', href: '/dashboard' },
@@ -1890,6 +1900,13 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   };
 
   const [activeTab, setActiveTab] = useState<'overview' | 'scored-resumes' | 'assessment-results' | 'ai-talent-match' | 'ai-interview-results'>(initialTab || 'overview');
+  /* The DOM node of the toolbar slot that sits INSIDE the sticky tab-navigation
+     card, directly under the tab row. Each result tab's search/filter toolbar
+     portals its markup here (keeping all of its own state local), so the
+     controls read as the second row of the tab card rather than a detached
+     panel below it. Held in state (not a plain ref) so the children re-render
+     and portal in once the node is actually mounted. */
+  const [tabToolbarSlot, setTabToolbarSlot] = useState<HTMLDivElement | null>(null);
   // Recent Activity panel — 10 events per page.
   const [activityPage, setActivityPage] = useState(1);
   const ACTIVITY_PAGE_SIZE = 10;
@@ -2646,10 +2663,17 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       />
       {/* Header */}
       <div className="mb-5">
-        {/* Job Details Card */}
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-brand-blue/30 dark:border-brand-blue/40 ring-1 ring-brand-blue/10 dark:ring-brand-blue/20 shadow-sm shadow-brand-blue/10 p-4 sm:p-5">
+        {/* Job Details Card — neutral card chrome matching the Job Openings
+            master (gray border + subtle ring/shadow), not a brand-tinted card. */}
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-5">
           <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3">
-            <div className="flex-1 min-w-0">
+            {/* Icon disc + content, mirroring the master page header's
+                leading brand-blue tile. */}
+            <div className="flex flex-1 min-w-0 items-start gap-3">
+              <div className="hidden sm:flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
+                <Briefcase className="h-4 w-4 text-brand-blue" />
+              </div>
+              <div className="flex-1 min-w-0">
               {/* Row 1: JD ID + Job Title + Status */}
               <div className="flex flex-wrap items-center gap-2 mb-2">
                 {job.job_id && (
@@ -2657,7 +2681,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                     {job.job_id}
                   </span>
                 )}
-                <h1 className="font-normal text-gray-900 dark:text-slate-50 text-base sm:text-lg truncate">
+                <h1 className="font-semibold text-gray-900 dark:text-slate-50 text-lg sm:text-xl truncate">
                   <button
                     type="button"
                     onClick={handleShowOverview}
@@ -2849,6 +2873,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   </span>
                 )}
               </div>
+              </div>
             </div>
 
             <div className="flex items-center gap-3 ml-6">
@@ -3039,28 +3064,33 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         </div>
       </div>
 
-      {/* Tab Navigation */}
+      {/* Tab Navigation — NOT sticky: the tabs and the toolbar they hold scroll
+          naturally with the page, like the Job Openings master toolbar. */}
       <div
-        style={{ top: tabBarTop }}
-        className="sticky z-20 mb-5 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5"
+        /* pb-2 only on Overview: that tab has no toolbar row below the tabs, so
+           without it the underline track would sit flush against the card's
+           bottom border (reading as a doubled border at the rounded corners).
+           Result tabs already get this breathing room from the toolbar slot. */
+        className={`mb-5 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5${activeTab === 'overview' ? ' pb-2' : ''}`}
       >
-        <div className="flex items-center border-b border-gray-200 dark:border-slate-700 overflow-x-auto">
+        {/* Underline tabs. The border-b "track" is on this NON-scrolling outer
+            div; the inner div is the horizontal scroll container (scrollbar-hide,
+            no border of its own) pulled up 1px via -mb-px so each active tab's
+            border-b-2 overlaps the track. Keeping the border OFF the scroll
+            container removes the stray 1px vertical scrollbar overflow-x would
+            otherwise force (overflow-x:auto makes the browser compute
+            overflow-y:auto, and the tabs were 1px taller than the row). */}
+        <div className="border-b border-gray-200 dark:border-slate-700">
+          <div className="flex items-center gap-1 px-2 sm:px-3 -mb-px overflow-x-auto scrollbar-hide">
           <button
             onClick={() => setActiveTab('overview')}
-            className={`px-4 py-2.5 text-sm transition-colors relative flex items-center gap-2 whitespace-nowrap rounded-t-[11px] ${
-              activeTab === 'overview'
-                ? 'text-blue-600 bg-blue-50'
-                : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-50 hover:bg-gray-50 dark:hover:bg-slate-800'
-            }`}
+            className={detailTabClass(activeTab === 'overview')}
           >
             {/* Tab icons carry no colour of their own — lucide draws in
                 `currentColor`, so each one inherits its tab's active, idle or
                 disabled text colour and cannot fall out of step with it. */}
             <FileText className="w-4 h-4" />
             Overview
-            {activeTab === 'overview' && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
-            )}
           </button>
           {(
             <button
@@ -3068,21 +3098,11 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               disabled={aiMatchPlanLocked}
               aria-disabled={aiMatchPlanLocked || undefined}
               title={aiMatchPlanLocked ? PLAN_LOCKED_MESSAGE : undefined}
-              className={`px-4 py-2.5 text-sm transition-colors relative flex items-center gap-2 whitespace-nowrap ${
-                aiMatchPlanLocked
-                  ? 'text-gray-400 dark:text-slate-600 cursor-not-allowed'
-                  : activeTab === 'ai-talent-match'
-                  ? 'text-blue-600 bg-blue-50'
-                  : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-50 hover:bg-gray-50 dark:hover:bg-slate-800'
-              }`}
+              className={detailTabClass(activeTab === 'ai-talent-match', aiMatchPlanLocked)}
             >
               <Users className="w-4 h-4" />
               AI Talent Match Results
-              <span className={`px-2 py-0.5 rounded-full text-xs ${
-                activeTab === 'ai-talent-match'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
-              }`}>
+              <span className={detailTabBadge(activeTab === 'ai-talent-match')}>
                 {/* Null while sessions are listing or the per-session dedup
                     fetch is still running — see aiMatchBadgeCount above. */}
                 {aiMatchPlanLocked ? (
@@ -3093,9 +3113,6 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   aiMatchBadgeCount
                 )}
               </span>
-              {activeTab === 'ai-talent-match' && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
-              )}
             </button>
           )}
           {(
@@ -3104,26 +3121,13 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               disabled={scoringPlanLocked}
               aria-disabled={scoringPlanLocked || undefined}
               title={scoringPlanLocked ? PLAN_LOCKED_MESSAGE : undefined}
-              className={`px-4 py-2.5 text-sm transition-colors relative flex items-center gap-2 whitespace-nowrap ${
-                scoringPlanLocked
-                  ? 'text-gray-400 dark:text-slate-600 cursor-not-allowed'
-                  : activeTab === 'scored-resumes'
-                  ? 'text-blue-600 bg-blue-50'
-                  : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-50 hover:bg-gray-50 dark:hover:bg-slate-800'
-              }`}
+              className={detailTabClass(activeTab === 'scored-resumes', scoringPlanLocked)}
             >
               <ClipboardList className="w-4 h-4" />
               Scored Resumes
-              <span className={`px-2 py-0.5 rounded-full text-xs ${
-                activeTab === 'scored-resumes'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
-              }`}>
+              <span className={detailTabBadge(activeTab === 'scored-resumes')}>
                 {scoringPlanLocked ? <Lock className="inline-block w-3 h-3 align-middle" aria-label="Not in plan" /> : scoredResumesStats.total}
               </span>
-              {activeTab === 'scored-resumes' && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
-              )}
             </button>
           )}
           {(
@@ -3146,26 +3150,13 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                         ? 'Send at least one invite first'
                         : 'Results appear once a candidate completes or is terminated'
               }
-              className={`px-4 py-2.5 text-sm transition-colors relative flex items-center gap-2 whitespace-nowrap ${
-                assessmentPlanLocked || !hasAssessmentResults
-                  ? 'text-gray-400 dark:text-slate-600 cursor-not-allowed'
-                  : activeTab === 'assessment-results'
-                    ? 'text-blue-600 bg-blue-50'
-                    : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-50 hover:bg-gray-50 dark:hover:bg-slate-800'
-              }`}
+              className={detailTabClass(activeTab === 'assessment-results', assessmentPlanLocked || !hasAssessmentResults)}
             >
               <BarChart3 className="w-4 h-4" />
               Assessments Results
-              <span className={`px-2 py-0.5 rounded-full text-xs ${
-                activeTab === 'assessment-results'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
-              }`}>
+              <span className={detailTabBadge(activeTab === 'assessment-results')}>
                 {assessmentPlanLocked ? <Lock className="inline-block w-3 h-3 align-middle" aria-label="Not in plan" /> : assessmentFinishedCount}
               </span>
-              {activeTab === 'assessment-results' && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
-              )}
             </button>
           )}
           {(aiInterviewPlanLocked || features.ai_interview) && permissions.canViewAIInterviews && (
@@ -3186,29 +3177,34 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                         ? 'Send at least one invite first'
                         : 'Results appear once a candidate completes or is terminated'
               }
-              className={`px-4 py-2.5 text-sm transition-colors relative flex items-center gap-2 whitespace-nowrap ${
-                aiInterviewPlanLocked || !hasAIInterviewResults
-                  ? 'text-gray-400 dark:text-slate-600 cursor-not-allowed'
-                  : activeTab === 'ai-interview-results'
-                    ? 'text-blue-600 bg-blue-50'
-                    : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-50 hover:bg-gray-50 dark:hover:bg-slate-800'
-              }`}
+              className={detailTabClass(activeTab === 'ai-interview-results', aiInterviewPlanLocked || !hasAIInterviewResults)}
             >
               <MessageSquare className="w-4 h-4" />
               AI Interview Result
-              <span className={`px-2 py-0.5 rounded-full text-xs ${
-                activeTab === 'ai-interview-results'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
-              }`}>
+              <span className={detailTabBadge(activeTab === 'ai-interview-results')}>
                 {aiInterviewPlanLocked ? <Lock className="inline-block w-3 h-3 align-middle" aria-label="Not in plan" /> : aiInterviewResultCount}
               </span>
-              {activeTab === 'ai-interview-results' && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
-              )}
             </button>
           )}
+          </div>
         </div>
+
+        {/* Toolbar slot — each result tab portals its search / dropdown / filter
+            row in here, so the controls render as the SECOND ROW of this tab
+            card (directly under the tabs) rather than as a detached panel below
+            it. Only present off Overview (which has no toolbar). `overflow-
+            visible` lets the Select All / Sort / More-Filters dropdowns escape
+            the card; `empty:hidden` drops the divider until a tab fills it. */}
+        {activeTab !== 'overview' && (
+          <div
+            ref={setTabToolbarSlot}
+            /* px-3 sm:px-4 insets BOTH the toolbar row and the More Filters
+               panel ~16px from the card's side borders (matching the Job
+               Openings master's p-4), so the filter inputs no longer sit flush
+               against the card edge. */
+            className="px-3 sm:px-4 pt-3 overflow-visible empty:hidden"
+          />
+        )}
       </div>
 
       {/* Overview Tab Content */}
@@ -3378,7 +3374,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
 
           {/* Extracted Data Summary - Collapsible (mirrors Step 2 / Review summary) */}
           {hasAnyExtractedData && (
-            <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+            <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
               {/* Header toggle */}
               <button
                 onClick={() => setShowExtractedSummary(!showExtractedSummary)}
@@ -3583,7 +3579,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         {/* Right Column - Actions & Activity */}
         <div className="lg:col-span-4 space-y-5">
           {/* Quick Actions */}
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4">
             <QuickActionHeader
               icon={<Zap className="w-4 h-4" />}
               title="Quick Actions"
@@ -4283,6 +4279,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             />
           ) : (
             <ScoredResumesTable
+              toolbarPortal={tabToolbarSlot}
               resumes={scoredResumes}
               jobTitle={job.title}
               jobId={job.id}
@@ -4340,6 +4337,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             return (
               <AssessmentResults
                 embedded
+                toolbarPortal={tabToolbarSlot}
                 onBack={() => setActiveTab('overview')}
                 assessmentId={anchor.id}
                 assessmentTitle={anchor.title || ''}
@@ -4424,6 +4422,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           ) : aiInterviewConfig ? (
             <AIInterviewResults
               embedded
+              toolbarPortal={tabToolbarSlot}
               // Reads like the AI Interview module's own results page: its
               // status cards, bulk actions and Job ID, no Job Details toolbar.
               showStats
@@ -4453,6 +4452,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       {/* AI Talent Match Tab Content */}
       {activeTab === 'ai-talent-match' && (
         <AIMatchTabContent
+          toolbarPortal={tabToolbarSlot}
           candidates={aiMatchCandidates}
           scoredResumes={scoredResumes}
           sessions={aiMatchSessions}
@@ -5134,6 +5134,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
 
 // ─── AI Match Tab Sub-component ──────────────────────────────────────────────
 function AIMatchTabContent({
+  toolbarPortal,
   candidates,
   scoredResumes,
   sessions,
@@ -5144,6 +5145,10 @@ function AIMatchTabContent({
   onScoreAll,
   onViewCandidate,
 }: {
+  /* When set, the search/filter toolbar portals into this node (the slot
+     inside the tab-navigation card) instead of rendering inline above the
+     table. Keeps all toolbar state local to this component. */
+  toolbarPortal?: HTMLElement | null;
   candidates: MatchedCandidate[];
   scoredResumes: any[];
   sessions: AIMatchSessionResponse[];
@@ -5162,9 +5167,33 @@ function AIMatchTabContent({
   const [filterExperienceMin, setFilterExperienceMin] = useState<number | ''>('');
   const [filterExperienceMax, setFilterExperienceMax] = useState<number | ''>('');
   const [sortBy, setSortBy] = useState<'rank' | 'name' | 'score' | 'experience'>('rank');
+  /* Direction toggle mirroring the Job Openings master's Sort control — same
+     'desc' default, applied uniformly to whichever field `sortBy` selects. */
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [displayMode, setDisplayMode] = useState<ListDisplayMode>('list');
+  /* The secondary filters (phone / location / experience range) collapse behind
+     a "More Filters" toggle so this tab's toolbar reads as one row like the Job
+     Openings master and the sibling tabs, rather than an always-expanded second
+     row. */
+  const [showMoreFilters, setShowMoreFilters] = useState(false);
+  /* Select All + Actions dropdowns, mirroring the Job Openings toolbar: one
+     "Select All" pill (this page / all / clear) and, once something is ticked,
+     an "Actions" pill holding the bulk operations (Score). */
+  const [showSelectMenu, setShowSelectMenu] = useState(false);
+  const [showActionsMenu, setShowActionsMenu] = useState(false);
+  const aiMatchActiveFilterCount =
+    (filterPhone.trim() !== '' ? 1 : 0) +
+    (filterLocation.trim() !== '' ? 1 : 0) +
+    (filterExperienceMin !== '' ? 1 : 0) +
+    (filterExperienceMax !== '' ? 1 : 0);
+  const clearAiMatchFilters = () => {
+    setFilterPhone('');
+    setFilterLocation('');
+    setFilterExperienceMin('');
+    setFilterExperienceMax('');
+  };
 
   // Attachments column → Version History popup. Same fetch-and-fallback
   // pattern as the standalone AI Talent Match page's handleAttachmentsClick:
@@ -5242,22 +5271,24 @@ function AIMatchTabContent({
     });
 
     const sorted = [...filtered];
-    switch (sortBy) {
-      case 'rank': sorted.sort((a, b) => (b.rank || 0) - (a.rank || 0)); break;
-      case 'name': sorted.sort((a, b) => a.name.localeCompare(b.name)); break;
-      case 'score': sorted.sort((a, b) => b.matchScore - a.matchScore); break;
-      case 'experience':
-        sorted.sort((a, b) => (parseFloat(a.experience || '0') || 0) - (parseFloat(b.experience || '0') || 0));
-        break;
-    }
+    /* Ascending comparator per field; the direction toggle (sortOrder) then
+       flips it — the same model the Job Openings master Sort control uses. */
+    const ascCompare: Record<'rank' | 'name' | 'score' | 'experience', (a: MatchedCandidate, b: MatchedCandidate) => number> = {
+      rank: (a, b) => (a.rank || 0) - (b.rank || 0),
+      name: (a, b) => a.name.localeCompare(b.name),
+      score: (a, b) => a.matchScore - b.matchScore,
+      experience: (a, b) => (parseFloat(a.experience || '0') || 0) - (parseFloat(b.experience || '0') || 0),
+    };
+    const dir = sortOrder === 'asc' ? 1 : -1;
+    sorted.sort((a, b) => dir * ascCompare[sortBy](a, b));
     return sorted;
-  }, [candidates, searchQuery, filterThreshold, filterPhone, filterLocation, filterExperienceMin, filterExperienceMax, sortBy]);
+  }, [candidates, searchQuery, filterThreshold, filterPhone, filterLocation, filterExperienceMin, filterExperienceMax, sortBy, sortOrder]);
 
   // Reset to page 1 whenever the filtered/sorted set changes shape, so a
   // narrowing filter never leaves the view stranded on a now-empty page.
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, filterThreshold, filterPhone, filterLocation, filterExperienceMin, filterExperienceMax, sortBy]);
+  }, [searchQuery, filterThreshold, filterPhone, filterLocation, filterExperienceMin, filterExperienceMax, sortBy, sortOrder]);
 
   const totalPages = Math.max(1, Math.ceil(filteredCandidates.length / itemsPerPage));
   const safeCurrentPage = Math.min(currentPage, totalPages);
@@ -5275,22 +5306,28 @@ function AIMatchTabContent({
     });
   };
 
-  const toggleAll = () => {
-    if (filteredCandidates.every(c => selectedIds.has(c.resumeId))) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(filteredCandidates.map((c) => c.resumeId)));
-    }
-  };
-
   const unscoredCount = candidates.filter((c) => !scoredResumeIds.has(c.resumeId)).length;
   const selectedCandidates = candidates.filter((c) => selectedIds.has(c.resumeId));
 
+  /* The Select All pill's three scopes, same as the Job Openings master:
+     add the current page's rows, select every filtered candidate, or clear. */
+  const selectCurrentPage = () =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      paginatedCandidates.forEach((c) => next.add(c.resumeId));
+      return next;
+    });
+  const selectAllCandidates = () => setSelectedIds(new Set(filteredCandidates.map((c) => c.resumeId)));
+  const clearSelection = () => setSelectedIds(new Set());
+  const allCandidatesSelected =
+    filteredCandidates.length > 0 && filteredCandidates.every((c) => selectedIds.has(c.resumeId));
+
   if (loading) {
     /* Mirrors this tab's real layout: a search + filters card, then the
-       AI-match table with the same columns in order (select, Match Rating,
-       Candidate Name, Email, Phone, Location, Skills, Experience, Uploaded
-       By, Uploaded Date, Scored Status, Attachments). */
+       AI-match table with the same columns in order (per-row select, Match
+       Rating, Candidate Name, Email, Phone, Location, Skills, Experience,
+       Uploaded By, Uploaded Date, Scored Status, Attachments). The select
+       column's HEADER is empty (no Select-All checkbox there). */
     return (
       <div className="space-y-4">
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 p-4 space-y-3">
@@ -5311,7 +5348,8 @@ function AIMatchTabContent({
             <table className="w-full md:min-w-[1100px] table-auto">
               <thead className="[&_th]:bg-gray-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                 <tr>
-                  <th className="px-4 py-3 w-10 align-middle"><Skeleton className="h-4 w-4 rounded" /></th>
+                  {/* Empty select-column header (no Select-All checkbox). */}
+                  <th className="px-4 py-3 w-10 align-middle" aria-label="Select" />
                   {['Match Rating', 'Candidate Name', 'Email', 'Phone', 'Location', 'Skills', 'Experience', 'Uploaded By', 'Uploaded Date', 'Scored Status', 'Attachments'].map((h) => (
                     <th key={h} className="px-4 py-3 text-left align-middle"><Skeleton className="h-3 w-20" /></th>
                   ))}
@@ -5371,98 +5409,262 @@ function AIMatchTabContent({
 
   return (
     <div className="space-y-4">
-      {/* Search & Filters */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4 space-y-3">
-        {/* Row 1: Search + Match filter + count + action buttons */}
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search candidates..."
-              className="w-full pl-9 pr-4 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black dark:text-slate-50 placeholder:text-gray-400 dark:placeholder:text-slate-500 bg-white dark:bg-slate-900"
-            />
-          </div>
-          <select
-            value={filterThreshold}
-            onChange={(e) => setFilterThreshold(Number(e.target.value))}
-            className="px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-900 text-xs sm:text-sm text-black dark:text-slate-50"
-          >
-            <option value={0}>All Matches</option>
-            <option value={50}>50%+ Match</option>
-            <option value={70}>70%+ Match</option>
-            <option value={85}>85%+ Match</option>
-          </select>
-          <div className="text-xs sm:text-sm text-gray-700 dark:text-slate-300 bg-gray-100 dark:bg-slate-800 px-3 py-2 rounded-lg font-medium border border-gray-200 dark:border-slate-700">
-            {filteredCandidates.length} candidates
-          </div>
-          {selectedIds.size > 0 && (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => onScoreSelected(selectedCandidates)}
-              icon={<ClipboardList className="w-3 h-3 sm:w-4 sm:h-4" />}
-            >
-              Score ({selectedIds.size})
-            </Button>
-          )}
-          {canRunAiMatch && (
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={onRunMatch}
-              icon={<Sparkles className="w-3 h-3 sm:w-4 sm:h-4" />}
-            >
-              Run AI Match
-            </Button>
-          )}
-        </div>
+      {/* Search & Filters — the shared ListToolbar. When a portal slot is given
+          (the tab-navigation card's toolbar row) it renders there, so the
+          controls read as the second row of the tab card rather than a detached
+          panel. Without a slot it falls back to rendering inline above the
+          table (e.g. if this component is ever reused outside the tab card). */}
+      {(() => {
+        const toolbar = (
+          <ListToolbar
+          searchValue={searchQuery}
+          onSearchChange={setSearchQuery}
+          searchDebounceMs={0}
+          searchPlaceholder="Search candidates..."
+          /* No onToggleFilters → ListToolbar's built-in 38px More Filters button
+             is hidden; a local h-9 (36px) one is rendered in leadingActions below
+             so every control in the row is a uniform height. filtersOpen still
+             drives the filter panel. */
+          filtersOpen={showMoreFilters}
+          activeFilterCount={aiMatchActiveFilterCount}
+          filtersApplied={aiMatchActiveFilterCount > 0}
+          onClearFilters={clearAiMatchFilters}
+          /* h-9 on the List/Grid switch so it matches the 36px toolbar band. */
+          trailing={<ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-9" />}
+          beforeSearch={
+            <>
+              {/* Select All — the Job Openings master's pill dropdown
+                  (this page / all / clear). */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowSelectMenu((open) => !open)}
+                  aria-haspopup="menu"
+                  aria-expanded={showSelectMenu}
+                  /* h-9 so this pill matches the 36px toolbar band (search,
+                     All Matches, Sort) instead of tabPill's default 32px — the
+                     controls sit on one row here, unlike the master's separate
+                     pill row, so they need a single uniform height. */
+                  className={`${tabPill(selectedIds.size > 0)} h-9`}
+                >
+                  {allCandidatesSelected ? (
+                    <CheckSquare className="w-3.5 h-3.5" />
+                  ) : selectedIds.size > 0 ? (
+                    <span className="h-2 w-2 rounded-full bg-current" />
+                  ) : (
+                    <Square className="w-3.5 h-3.5" />
+                  )}
+                  <span>{selectedIds.size > 0 ? `${selectedIds.size} Selected` : 'Select All'}</span>
+                  <ChevronDown className="w-4 h-4" />
+                </button>
+                {showSelectMenu && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowSelectMenu(false)} />
+                    <div className="absolute top-full left-0 mt-2 w-60 max-w-[calc(100vw-2rem)] bg-white dark:bg-slate-900 rounded-lg shadow-lg border border-gray-200 dark:border-slate-700 py-2 z-50">
+                      <button
+                        onClick={() => { selectCurrentPage(); setShowSelectMenu(false); }}
+                        className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800"
+                      >
+                        <Square className="w-4 h-4 text-gray-500" />
+                        Select all on this page ({paginatedCandidates.length})
+                      </button>
+                      <button
+                        onClick={() => { selectAllCandidates(); setShowSelectMenu(false); }}
+                        className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800"
+                      >
+                        <CheckSquare className="w-4 h-4 text-brand-blue" />
+                        Select all candidates ({filteredCandidates.length})
+                      </button>
+                      <div className="border-t border-gray-200 dark:border-slate-700 my-1" />
+                      <button
+                        onClick={() => { clearSelection(); setShowSelectMenu(false); }}
+                        disabled={selectedIds.size === 0}
+                        className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <X className="w-4 h-4 text-gray-500" />
+                        Clear selection
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
 
-        {/* Row 2: Additional filters */}
-        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 sm:gap-3">
-          <input
-            type="text"
-            value={filterPhone}
-            onChange={(e) => setFilterPhone(e.target.value)}
-            placeholder="Filter by phone..."
-            className="px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black dark:text-slate-50 placeholder:text-gray-400 dark:placeholder:text-slate-500 bg-white dark:bg-slate-900"
+              {/* Actions — appears once something is ticked; holds the bulk
+                  operations (Score), the Job Openings master's pattern. */}
+              {selectedIds.size > 0 && (
+                <div className="relative">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setShowActionsMenu((open) => !open)}
+                    className="rounded-full h-9"
+                  >
+                    Actions
+                    <ChevronDown className="w-4 h-4" />
+                  </Button>
+                  {showActionsMenu && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setShowActionsMenu(false)} />
+                      <div className="absolute top-full left-0 mt-2 w-56 max-w-[calc(100vw-2rem)] bg-white dark:bg-slate-900 rounded-lg shadow-lg border border-gray-200 dark:border-slate-700 py-2 z-50">
+                        <button
+                          onClick={() => { onScoreSelected(selectedCandidates); setShowActionsMenu(false); }}
+                          className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800"
+                        >
+                          <ClipboardList className="w-4 h-4 text-menu-icon-score" />
+                          Score Selected ({selectedIds.size})
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </>
+          }
+          /* All Matches, Sort AND the local More Filters button render together
+             here, giving the order: Select All → Search → All Matches → Sort →
+             More Filters → Grid/List (the "old" placement, More Filters after
+             Sort). All at a uniform h-9 (36px). */
+          leadingActions={
+            <>
+              {/* Match threshold + sort — styled to the Job Openings master's
+                  tinted "Sort by" control EXACTLY: a `bg-brand-blue/5` rounded
+                  pill wrapping an `appearance-none h-7` select with its own
+                  chevron, so these read identically to that page's Sort rather
+                  than as bordered boxes. (No asc/desc toggle — this tab's sort
+                  has no direction, so none is added; functionality unchanged.) */}
+              <div className="inline-flex items-center bg-brand-blue/5 dark:bg-brand-blue/10 rounded-lg p-1 transition-all">
+                <div className="relative">
+                  <select
+                    value={filterThreshold}
+                    onChange={(e) => setFilterThreshold(Number(e.target.value))}
+                    aria-label="Filter by match threshold"
+                    className="appearance-none h-7 pl-2.5 pr-8 bg-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 text-xs sm:text-sm text-gray-700 dark:text-slate-300 cursor-pointer"
+                  >
+                    <option value={0}>All Matches</option>
+                    <option value={50}>50%+ Match</option>
+                    <option value={70}>70%+ Match</option>
+                    <option value={85}>85%+ Match</option>
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500 dark:text-slate-400" />
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">Sort by</span>
+                <div className="inline-flex items-center bg-brand-blue/5 dark:bg-brand-blue/10 rounded-lg p-1 transition-all">
+                  <div className="relative">
+                    <select
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                      aria-label="Sort candidates"
+                      className="appearance-none h-7 pl-2.5 pr-8 bg-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 text-xs sm:text-sm text-gray-700 dark:text-slate-300 cursor-pointer"
+                    >
+                      <option value="rank">Rating</option>
+                      <option value="name">Name</option>
+                      <option value="score">Score</option>
+                      <option value="experience">Experience</option>
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500 dark:text-slate-400" />
+                  </div>
+                  {/* Direction toggle — the Job Openings master's exact button:
+                      white chip inside the tinted pill, ArrowUpDown that rotates
+                      180° on descending. */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+                    }}
+                    className="ml-0.5 h-7 w-7 flex items-center justify-center rounded-md bg-white dark:bg-slate-700 text-gray-700 dark:text-slate-200 hover:bg-brand-blue/10 hover:text-brand-blue dark:hover:bg-brand-blue/20 transition-colors cursor-pointer"
+                    title={sortOrder === 'asc' ? 'Sort Descending' : 'Sort Ascending'}
+                  >
+                    <ArrowUpDown className={`w-3.5 h-3.5 transition-transform ${sortOrder === 'asc' ? '' : 'rotate-180'}`} />
+                  </button>
+                </div>
+              </div>
+              {/* More Filters — a LOCAL button at h-9 (36px) so it matches every
+                  other control in this row (ListToolbar's built-in one is 38px).
+                  Same chrome/states as the master's filter button; toggles the
+                  same `showMoreFilters` panel the ListToolbar renders below. */}
+              <button
+                type="button"
+                onClick={() => setShowMoreFilters((open) => !open)}
+                className={`h-9 px-3 rounded-lg font-medium transition-all flex items-center gap-2 text-sm ${
+                  aiMatchActiveFilterCount > 0
+                    ? 'bg-brand-blue text-white border border-brand-blue shadow-sm shadow-brand-blue/25'
+                    : showMoreFilters
+                    ? 'bg-brand-blue/10 text-brand-blue border border-brand-blue/20'
+                    : 'bg-brand-blue/5 text-gray-700 dark:text-slate-300 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue'
+                }`}
+              >
+                <SlidersHorizontal className="w-4 h-4" />
+                <span className="hidden sm:inline">More Filters</span>
+                <span className="sm:hidden">Filters</span>
+                {aiMatchActiveFilterCount > 0 && (
+                  <span className="px-1.5 py-0.5 rounded text-xs bg-white text-brand-blue">
+                    {aiMatchActiveFilterCount}
+                  </span>
+                )}
+              </button>
+            </>
+          }
+          /* Run AI Match is intentionally NOT in the toolbar: once there are
+             match results, the recruiter shouldn't see a persistent "run" CTA.
+             It appears only in the empty state (candidates.length === 0, the
+             TabEmptyState above), i.e. when the results table is empty. */
+          /* No in-toolbar count label — the tab navigation's own badge already
+             shows the candidate count, so a "18 candidates" pill here only
+             duplicated it (and the siblings don't carry one). */
+          filterPanel={
+            /* pb-4 keeps the inputs off the card's bottom border (they were 1px
+               from it); gap-3 sm:gap-4 matches the master's field spacing. */
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 [&>div]:min-w-0 pb-4">
+              <div>
+                <label className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Phone</label>
+                <input
+                  type="text"
+                  value={filterPhone}
+                  onChange={(e) => setFilterPhone(e.target.value)}
+                  placeholder="Filter by phone..."
+                  className="w-full h-9 px-3 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue hover:border-brand-blue/40 transition-colors text-sm text-black dark:text-slate-50 placeholder:text-gray-400 dark:placeholder:text-slate-500 bg-white dark:bg-slate-900"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Location</label>
+                <input
+                  type="text"
+                  value={filterLocation}
+                  onChange={(e) => setFilterLocation(e.target.value)}
+                  placeholder="Filter by location..."
+                  className="w-full h-9 px-3 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue hover:border-brand-blue/40 transition-colors text-sm text-black dark:text-slate-50 placeholder:text-gray-400 dark:placeholder:text-slate-500 bg-white dark:bg-slate-900"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Experience (min)</label>
+                <input
+                  type="number"
+                  value={filterExperienceMin}
+                  onChange={(e) => setFilterExperienceMin(e.target.value === '' ? '' : Number(e.target.value))}
+                  placeholder="Min exp"
+                  className="w-full h-9 px-3 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue hover:border-brand-blue/40 transition-colors text-sm text-black dark:text-slate-50 placeholder:text-gray-400 dark:placeholder:text-slate-500 bg-white dark:bg-slate-900"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Experience (max)</label>
+                <input
+                  type="number"
+                  value={filterExperienceMax}
+                  onChange={(e) => setFilterExperienceMax(e.target.value === '' ? '' : Number(e.target.value))}
+                  placeholder="Max exp"
+                  className="w-full h-9 px-3 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue hover:border-brand-blue/40 transition-colors text-sm text-black dark:text-slate-50 placeholder:text-gray-400 dark:placeholder:text-slate-500 bg-white dark:bg-slate-900"
+                />
+              </div>
+            </div>
+          }
           />
-          <input
-            type="text"
-            value={filterLocation}
-            onChange={(e) => setFilterLocation(e.target.value)}
-            placeholder="Filter by location..."
-            className="px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black dark:text-slate-50 placeholder:text-gray-400 dark:placeholder:text-slate-500 bg-white dark:bg-slate-900"
-          />
-          <input
-            type="number"
-            value={filterExperienceMin}
-            onChange={(e) => setFilterExperienceMin(e.target.value === '' ? '' : Number(e.target.value))}
-            placeholder="Min exp"
-            className="w-full sm:w-28 px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black dark:text-slate-50 placeholder:text-gray-400 dark:placeholder:text-slate-500 bg-white dark:bg-slate-900"
-          />
-          <input
-            type="number"
-            value={filterExperienceMax}
-            onChange={(e) => setFilterExperienceMax(e.target.value === '' ? '' : Number(e.target.value))}
-            placeholder="Max exp"
-            className="w-full sm:w-28 px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black dark:text-slate-50 placeholder:text-gray-400 dark:placeholder:text-slate-500 bg-white dark:bg-slate-900"
-          />
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-            className="col-span-2 sm:col-span-1 px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-900 text-xs sm:text-sm text-black dark:text-slate-50"
-          >
-            <option value="rank">Sort by Rating</option>
-            <option value="name">Sort by Name</option>
-            <option value="score">Sort by Score</option>
-            <option value="experience">Sort by Experience</option>
-          </select>
-          <ListViewToggle value={displayMode} onChange={setDisplayMode} className="ml-auto" />
-        </div>
-      </div>
+        );
+        return toolbarPortal
+          ? createPortal(toolbar, toolbarPortal)
+          : <div className="space-y-3">{toolbar}</div>;
+      })()}
 
       {/* Table / Grid */}
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
@@ -5500,7 +5702,7 @@ function AIMatchTabContent({
                           onViewCandidate(candidate);
                         }
                       }}
-                      className={`group relative text-left bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/20 hover:-translate-y-0.5 transition-all p-4 flex flex-col gap-3 cursor-pointer ${gridCardSelectedClass(selectedIds.has(candidate.resumeId))}`}
+                      className={`group relative text-left bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/20 hover:-translate-y-0.5 transition-all p-4 flex flex-col gap-3 cursor-pointer ${gridCardSelectedClass(selectedIds.has(candidate.resumeId))}`}
                     >
                       <GridCardSelect
                         selected={selectedIds.has(candidate.resumeId)}
@@ -5593,14 +5795,12 @@ function AIMatchTabContent({
             {filteredCandidates.length > 0 && (
             <thead className="sticky top-0 z-10 [&_th]:bg-gray-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
               <tr>
-                <th className="px-4 py-3 w-10 align-middle tf-sticky-col-left">
-                  <input
-                    type="checkbox"
-                    checked={filteredCandidates.length > 0 && filteredCandidates.every(c => selectedIds.has(c.resumeId))}
-                    onChange={toggleAll}
-                    className="rounded border-gray-300"
-                  />
-                </th>
+                {/* Leading select column — an EMPTY header cell: the per-row
+                    checkboxes below need the column to line up under, but there
+                    is deliberately NO Select-All checkbox here (that control
+                    lives in the toolbar above). It keeps the left-pinned slot so
+                    the column stays in view on horizontal scroll. */}
+                <th className="px-4 py-3 w-10 align-middle tf-sticky-col-left" aria-label="Select" />
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Match Rating</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Candidate Name</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Email</th>
@@ -5646,6 +5846,11 @@ function AIMatchTabContent({
                         }
                       }}
                     >
+                      {/* Per-row select checkbox — kept for individual
+                          selection; the header cell above it is intentionally
+                          empty. Same native checkbox chrome as the sibling
+                          tables. stopPropagation so ticking a row doesn't also
+                          open the candidate. */}
                       <td className="px-4 py-3 tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
@@ -5822,17 +6027,20 @@ function AIMatchTabContent({
         </div>
         </>
         )}
-        {filteredCandidates.length > 0 && (
-          <Pagination
-            currentPage={safeCurrentPage}
-            totalPages={totalPages}
-            totalItems={filteredCandidates.length}
-            itemsPerPage={itemsPerPage}
-            onPageChange={setCurrentPage}
-            onItemsPerPageChange={(size) => { setItemsPerPage(size); setCurrentPage(1); }}
-          />
-        )}
       </div>
+
+      {/* Pagination — the shared ListPagination, so this tab gets the exact same
+          bordered-card format (Show / per page · Showing X to Y of N · Go to ·
+          page nav) as the Job Openings master and the Scored Resumes /
+          Assessments tabs, instead of the old in-table footer bar. */}
+      <ListPagination
+        currentPage={safeCurrentPage}
+        itemsPerPage={itemsPerPage}
+        totalItems={filteredCandidates.length}
+        onPageChange={setCurrentPage}
+        onItemsPerPageChange={(size) => { setItemsPerPage(size); setCurrentPage(1); }}
+        itemLabel="candidates"
+      />
 
       {/* Version History popup — same component and behavior as the
           standalone AI Talent Match page and the My Resumes list. */}

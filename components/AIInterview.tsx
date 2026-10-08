@@ -62,6 +62,7 @@ import AssessmentVersionHistoryPanel, {
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import AllInterviewsTable, { VersionPill } from '@/components/ai-interview/AllInterviewsTable';
+import { resolveAIInterviewDraftResumeHref } from '@/lib/utils/aiInterviewDraftResume';
 
 /* The version panel's 3-dot menu trigger — the 28px bordered square matched to
    the Assessment page's `QUICK_ACTION_BASE` in Assessments.tsx. */
@@ -1690,6 +1691,18 @@ export default function AIInterview() {
     const query = params.toString();
     return `/recruitment/ai-interviews/${id}${query ? `?${query}` : ''}`;
   };
+  /* Opening a version from the list: a DRAFT the recruiter may edit goes
+     straight back into its editor, at the step it was left on (see
+     aiInterviewDraftResume); anything else — or a draft without edit
+     permission — opens its details page as before. */
+  const openInterviewFromList = (id: string) => {
+    const config = configs.find((c) => c.id === id);
+    if (config?.status === 'draft' && config.jd_id && canUpdateAIInterviews) {
+      void resolveAIInterviewDraftResumeHref(config.id, config.jd_id).then((href) => router.push(href));
+      return;
+    }
+    router.push(interviewDetailsHref(id));
+  };
 
   /* ── Job List row figures (the Assessments Total Jobs row, for interviews) ──
      Bucketed by the same lineage key the list collapses by, and summed over
@@ -1975,7 +1988,8 @@ export default function AIInterview() {
                       return;
                     }
                     setOpenMenuId(null);
-                    router.push(`/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${config.jd_id}&config_id=${config.id}`);
+                    // Resumes at the step the draft was left on.
+                    void resolveAIInterviewDraftResumeHref(config.id, config.jd_id!).then((href) => router.push(href));
                   }}
                   aria-disabled={!canUpdateAIInterviews}
                   title={!canUpdateAIInterviews ? 'You do not have permission to edit AI interviews' : ''}
@@ -3134,7 +3148,7 @@ export default function AIInterview() {
                               }}
                               /* Opens the interview the row names, the same thing
                                  clicking the card does. */
-                              onRowClick={(interviewId) => router.push(interviewDetailsHref(interviewId))}
+                              onRowClick={openInterviewFromList}
                             />
                           </div>
                         )}

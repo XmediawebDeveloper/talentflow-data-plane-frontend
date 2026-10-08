@@ -39,13 +39,18 @@ import ListViewToggle, { type ListDisplayMode } from '@/components/ui/list-view-
 import ScoredResumesExportModal from './ScoredResumesExportModal';
 import { SelectAllMenu, SortByControl } from '@/components/ui/select-all-menu';
 import SearchableSelect from '@/components/ui/searchable-select';
-import { BulkActionConfirmModal, BulkInviteModal, useScoringActionPermissions, type BulkActionKind } from './ScoredResumesTable';
+import { BulkActionConfirmModal, BulkInviteModal, useScoringActionPermissions, renderInviteTargetItems, resolveInviteTargetState, type BulkActionKind, type InviteTargetJob } from './ScoredResumesTable';
+import CreateInviteTargetModal from './resume-scoring/CreateInviteTargetModal';
+import { useAllJobInviteTargets } from '@/lib/hooks/useAllJobInviteTargets';
+import { assessmentService } from '@/lib/services/assessmentService';
+import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { buildCreateUrl, clearInviteHandoff, readInviteHandoff, saveInviteHandoff, RESUME_INVITE_PARAM, type InviteHandoff, type InviteHandoffKind } from '@/lib/utils/resumeScoringInviteHandoff';
 import InviteToAIInterviewFlow from './InviteToAIInterviewFlow';
 import { downloadScorecardPdf, downloadScorecardsZip, formatFileDate, scorecardVersionTag } from '@/lib/utils/scorecardDownload';
 import { TableSkeleton, Skeleton } from '@/components/ui/skeleton';
 import ResumeScoringSkeleton from '@/components/ResumeScoringSkeleton';
 import { useListSearch } from '@/lib/hooks/useListSearch';
-import { useJobInviteTargets } from '@/lib/hooks/useJobInviteTargets';
+import { useJobInviteTargets, isInvitableAssessment } from '@/lib/hooks/useJobInviteTargets';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import { lineageKey, resolveVersionHistoryRows, getDisplayStatus, getStatusConfig } from '@/lib/utils/jobOpeningDisplay';
 import { useJobRecords } from '@/lib/hooks/useJobRecords';
@@ -434,6 +439,16 @@ export default function ResumeScoringPage({
   /* A score opened from a resume's Candidate Activity card keeps that resume's
      trail (Resume Database › My Resumes › <candidate>) and returns to it. */
   const resumeTrail = useResumeActivityTrail(useSearchParams());
+  /* `view=candidates|job` on a candidate URL: it was opened from View by
+     Candidates / View by Job (the cross-job candidate page), not from one
+     job's scored list. Read once, so a refresh rebuilds THAT page — same
+     breadcrumb, same 1 / N, same scored-job pager — instead of the
+     single-job one the bare jd_id + score_id would otherwise mean. */
+  const urlSearchParams = useSearchParams();
+  const [initialOpenedFrom] = useState<'candidates' | 'job' | null>(() => {
+    const v = urlSearchParams.get('view');
+    return v === 'candidates' || v === 'job' ? v : null;
+  });
 
   // ✅ RBAC: Get user permissions (bypass for tenant admin)
   const { user, isTenantAdmin, hasPermissionCode } = useAuth();
@@ -479,9 +494,7 @@ export default function ResumeScoringPage({
      invites are offered here (AI Interview invites live on the JD page). The
      candidate detail page opened from this table reads the same value, so the
      table and the detail view can never disagree about what's invitable. */
-  const jdInviteTargets = useJobInviteTargets(selectedHistoryItem?.jobId, {
-    aiInterviewEnabled: false,
-  });
+  const jdInviteTargets = useJobInviteTargets(selectedHistoryItem?.jobId);
   // Version history for the "View by Job" list rows — same lineage endpoint
   // and panel the Job Openings list uses, so both surfaces read one history.
   const versionLineage = useJobVersionLineage();
@@ -1128,6 +1141,103 @@ export default function ResumeScoringPage({
     }),
     [globalScoredResumes, versionLineage.filterLineages],
   );
+
+  /* ---- No AI Assessment / AI Interview yet → create it → back → invite ----
+     1. Actions greys the invite and offers "＋ Create …" (one job).
+     2. A popup explains the three steps; Start saves the view, the ticks and
+        the pending invite (resumeScoringInviteHandoff) and opens the create
+        page with `from=resume-scoring` (its breadcrumb starts here).
+     3. Its published screen links back with `?resume_invite=1`; here the
+        ticks come back, the job is re-checked, and the invite opens for the
+        same candidates. Nothing published → ticks back, no invite. */
+  const jobViewInviteTargets = useAllJobInviteTargets(
+    !isGlobalView && (selectedHistoryItems.size > 0 || Object.keys(partialJobRows).length > 0),
+  );
+  const [createInviteTarget, setCreateInviteTarget] = useState<{
+    kind: InviteHandoffKind;
+    job: InviteTargetJob;
+    rows: any[];
+    view: 'job' | 'candidates';
+  } | null>(null);
+  const peopleIn = (rows: any[]) => new Set(rows.map(r => String(r.email || r.resumeId || r.id).toLowerCase())).size;
+  const startCreateInviteTarget = () => {
+    const t = createInviteTarget;
+    if (!t) return;
+    saveInviteHandoff({
+      kind: t.kind,
+      jdId: t.job.jdId,
+      jdCode: t.job.jdCode,
+      jdTitle: t.job.jdTitle,
+      scoreIds: t.rows.map(r => r.id),
+      candidateCount: peopleIn(t.rows),
+      view: t.view,
+      selectedJobKeys: Array.from(selectedHistoryItems),
+      partialJobRows,
+      selectedScoredResumes,
+    });
+    setCreateInviteTarget(null);
+    router.push(buildCreateUrl(t.kind, { id: t.job.jdId, title: t.job.jdTitle }));
+  };
+
+  // Back from a create: restore first (the persisted list state has already
+  // put the view and filters back), then — once scores are loaded — check.
+  const [handoffReturn, setHandoffReturn] = useState<InviteHandoff | null>(null);
+  const handoffCheckedRef = useRef(false);
+  const [handoffInvite, setHandoffInvite] = useState<{ handoff: InviteHandoff; rows: any[]; confirmed: boolean } | null>(null);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has(RESUME_INVITE_PARAM)) return;
+    // Drop the marker so a reload doesn't run this again.
+    params.delete(RESUME_INVITE_PARAM);
+    const q = params.toString();
+    window.history.replaceState(window.history.state, '', `${window.location.pathname}${q ? `?${q}` : ''}`);
+    const h = readInviteHandoff();
+    if (!h) return;
+    setIsGlobalView(h.view === 'candidates');
+    setSelectedHistoryItems(new Set(h.selectedJobKeys ?? []));
+    setPartialJobRows(h.partialJobRows ?? {});
+    setSelectedScoredResumes(h.selectedScoredResumes ?? []);
+    setHandoffReturn(h);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (!handoffReturn || !globalLoaded || handoffCheckedRef.current) return;
+    handoffCheckedRef.current = true;
+    const h = handoffReturn;
+    clearInviteHandoff();
+    const what = h.kind === 'assessment' ? 'AI Assessment' : 'AI Interview';
+    const jobName = h.jdCode || h.jdTitle;
+    (async () => {
+      let live = false;
+      try {
+        live = h.kind === 'assessment'
+          ? ((await assessmentService.list({ jd_id: h.jdId, page_size: 100 }))?.items || []).some(isInvitableAssessment)
+          : !!(await aiInterviewService.findLiveConfigForJd(h.jdId));
+      } catch {
+        live = false;
+      }
+      if (!live) {
+        toast.info(`No ${what} was published for ${jobName} yet — your selection is kept.`);
+        return;
+      }
+      const ids = new Set(h.scoreIds);
+      const rows = globalScoredResumesVersioned.filter(r => ids.has(r.id));
+      if (rows.length === 0) {
+        toast.success(`${what} is live for ${jobName}.`);
+        return;
+      }
+      toast.success(`${what} is live for ${jobName} — now invite your ${peopleIn(rows)} candidate${peopleIn(rows) === 1 ? '' : 's'}.`);
+      setHandoffInvite({ handoff: h, rows, confirmed: false });
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handoffReturn, globalLoaded]);
+  const finishHandoffInvite = (sent: boolean) => {
+    setHandoffInvite(null);
+    if (sent) {
+      clearJobSelection();
+      setSelectedScoredResumes([]);
+    }
+  };
   /* The verdict filter narrows this list. Read through `normalizeMatchResult`
      (see `rowVerdict`) because these rows carry either spelling depending on
      the endpoint that filled them, and a row with no verdict counts as No
@@ -1256,6 +1366,25 @@ export default function ResumeScoringPage({
     // Only handle initialJdId once
     if (initialJdHandled) return;
 
+    // Opened from View by Candidates / View by Job: reopen that page once the
+    // cross-job scores are in (see `initialOpenedFrom`).
+    if (initialJdId && initialScoreId && initialOpenedFrom) {
+      if (!globalSettled) {
+        if (!isWaitingForInitialJd) setIsWaitingForInitialJd(true);
+        return;
+      }
+      setIsGlobalView(initialOpenedFrom === 'candidates');
+      const row = globalScoredResumes.find((r: any) => r.id === initialScoreId);
+      if (row) {
+        setSelectedHistoryItem(null);
+        setSelectedCandidateForView(row);
+        setViewMode('candidateView');
+      }
+      setIsWaitingForInitialJd(false);
+      setInitialJdHandled(true);
+      return;
+    }
+
     // mode=new without a pre-selected JD (Quick Action entry): drop straight
     // into the "new scoring" view, same internal state change as the in-page
     // "Score Resumes" button.
@@ -1364,7 +1493,7 @@ export default function ResumeScoringPage({
         }
       }
     }
-  }, [initialJdId, initialScoreId, scoredHistory, initialShowProgress, initialJdHandled, isWaitingForInitialJd, pendingScoringData, initialNewScoring, jobs]);
+  }, [initialJdId, initialScoreId, scoredHistory, initialShowProgress, initialJdHandled, isWaitingForInitialJd, pendingScoringData, initialNewScoring, jobs, initialOpenedFrom, globalSettled, globalScoredResumes]);
 
   // After scoring completes: auto-navigate to details view once scoredHistory is refreshed.
   // A layout effect, not useEffect: the popup that hid the "Choose JD" view has
@@ -2238,7 +2367,7 @@ export default function ResumeScoringPage({
       setSelectedCandidateForView(candidate);
       const jdId = candidate.jdId || 'global';
       router.push(
-        `/recruitment/resume-scoring?jd_id=${jdId}&score_id=${candidate.id ?? candidate.resumeId}`,
+        `/recruitment/resume-scoring?jd_id=${jdId}&score_id=${candidate.id ?? candidate.resumeId}&view=${isGlobalView ? 'candidates' : 'job'}`,
         { scroll: false }
       );
     };
@@ -3234,7 +3363,7 @@ export default function ResumeScoringPage({
           {/* "View by" once, then a sliding tile toggle: two equal halves on
               one track, and a white tile that slides under the active one. */}
           <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">View by</span>
+            <span className="text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap">View by</span>
             <div
               role="radiogroup"
               aria-label="View by"
@@ -3311,7 +3440,7 @@ export default function ResumeScoringPage({
                   setViewMode('candidateView');
                   // Update URL with jd_id and score_id for shareable link & browser history
                   const jdId = resume.jdId || 'global';
-                  router.push(`/recruitment/resume-scoring?jd_id=${jdId}&score_id=${resume.id}`, { scroll: false });
+                  router.push(`/recruitment/resume-scoring?jd_id=${jdId}&score_id=${resume.id}&view=candidates`, { scroll: false });
                 }}
                 selectedResumes={selectedScoredResumes}
                 onSelectResume={(id) => {
@@ -3333,6 +3462,7 @@ export default function ResumeScoringPage({
                 groupByEmail={globalListMode === 'candidates'}
                 onCandidateOrderChange={(candidates) => { candidateNavOrderRef.current = candidates; }}
                 viewPillsSlot={viewPills}
+                onCreateInviteTarget={(kind, job, rows) => setCreateInviteTarget({ kind, job, rows, view: 'candidates' })}
               />
             )}
           </div>
@@ -3541,7 +3671,7 @@ export default function ResumeScoringPage({
                 <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-800 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
+                className="relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
                 aria-label={`Actions for ${selectedJobCount} selected ${selectedJobCount === 1 ? 'job' : 'jobs'}`}
               >
                 <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
@@ -3604,40 +3734,54 @@ export default function ResumeScoringPage({
                       <span className={MENU_ITEM_SCALE_CLASS}>{jobBulkDownloading ? 'Downloading...' : 'Download All Scorecards'}</span>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator className="my-1 bg-gray-100" />
-                    <DropdownMenuItem
-                      className={`${itemCls} ${!jobActionPerms.canCreateAssessments || !singleSelectedJob ? 'text-gray-400 opacity-60' : ''}`}
-                      title={!singleSelectedJob ? "Tick one job to invite to that job's assessment" : undefined}
-                      onSelect={(e) => {
-                        if (!jobActionPerms.canCreateAssessments) {
-                          e.preventDefault();
-                          toast.error(jobActionPerms.assessmentDeniedReason);
-                          return;
-                        }
-                        if (!singleSelectedJob) {
-                          e.preventDefault();
-                          toast.info("Assessment invites go to one job's assessment — tick a single job");
-                          return;
-                        }
-                        if (guard()) setJobBulkAction('assessment');
-                      }}
-                    >
-                      <FileText className="w-4 h-4 text-menu-icon-view" />
-                      <span className={MENU_ITEM_SCALE_CLASS}>AI Assessment Invite</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      className={`${itemCls} ${!jobActionPerms.mayInviteAIInterview ? 'text-gray-400 opacity-60' : ''}`}
-                      onSelect={(e) => {
-                        if (!jobActionPerms.mayInviteAIInterview) {
-                          e.preventDefault();
-                          toast.error(jobActionPerms.aiInterviewDeniedReason);
-                          return;
-                        }
-                        if (guard()) setJobBulkAction('interview');
-                      }}
-                    >
-                      <Video className="w-4 h-4 text-menu-icon-share" />
-                      <span className={MENU_ITEM_SCALE_CLASS}>AI Interview Invite</span>
-                    </DropdownMenuItem>
+                    {(() => {
+                      /* The ticked jobs, each as the job its invite goes to
+                         (its latest version — the one the row shows). */
+                      const tickedJobs: InviteTargetJob[] = selectableJobs
+                        .filter(item => {
+                          const k = resolveHistoryGroupKey(item);
+                          return selectedHistoryItems.has(k) || isJobPartlySelected(k);
+                        })
+                        .map(item => ({ jdId: item.jobId, jdCode: jdCodeOf(item) || undefined, jdTitle: item.jobTitle }));
+                      const assessmentTarget = resolveInviteTargetState('assessment', tickedJobs, id => jobViewInviteTargets.hasAssessment(id));
+                      const interviewTarget = resolveInviteTargetState('interview', tickedJobs, id => jobViewInviteTargets.hasAIInterview(id));
+                      const create = (kind: InviteHandoffKind) => (job: InviteTargetJob) =>
+                        setCreateInviteTarget({ kind, job, rows: jobViewExportRows, view: 'job' });
+                      return (
+                        <>
+                          {renderInviteTargetItems({
+                            kind: 'assessment',
+                            target: assessmentTarget,
+                            itemClass: itemCls,
+                            allowed: jobActionPerms.canCreateAssessments,
+                            onInvite: (e) => {
+                              if (!jobActionPerms.canCreateAssessments) {
+                                e.preventDefault();
+                                toast.error(jobActionPerms.assessmentDeniedReason);
+                                return;
+                              }
+                              if (guard()) setJobBulkAction('assessment');
+                            },
+                            onCreate: create('assessment'),
+                          })}
+                          {renderInviteTargetItems({
+                            kind: 'interview',
+                            target: interviewTarget,
+                            itemClass: itemCls,
+                            allowed: jobActionPerms.mayInviteAIInterview,
+                            onInvite: (e) => {
+                              if (!jobActionPerms.mayInviteAIInterview) {
+                                e.preventDefault();
+                                toast.error(jobActionPerms.aiInterviewDeniedReason);
+                                return;
+                              }
+                              if (guard()) setJobBulkAction('interview');
+                            },
+                            onCreate: create('interview'),
+                          })}
+                        </>
+                      );
+                    })()}
                   </>
                 );
               })()}
@@ -3865,7 +4009,7 @@ export default function ResumeScoringPage({
                             setSelectedCandidateForView(resume);
                             setViewMode('candidateView');
                             const jdId = resume.jdId || item.jobId;
-                            router.push(`/recruitment/resume-scoring?jd_id=${jdId}&score_id=${resume.id}`, { scroll: false });
+                            router.push(`/recruitment/resume-scoring?jd_id=${jdId}&score_id=${resume.id}&view=job`, { scroll: false });
                           }}
                         />
                       )}
@@ -4973,6 +5117,55 @@ export default function ResumeScoringPage({
               </div>
             </div>
           </div>
+        );
+      })()}
+
+      {createInviteTarget && (
+        <CreateInviteTargetModal
+          kind={createInviteTarget.kind}
+          jdCode={createInviteTarget.job.jdCode}
+          jdTitle={createInviteTarget.job.jdTitle}
+          candidateCount={peopleIn(createInviteTarget.rows)}
+          onCancel={() => setCreateInviteTarget(null)}
+          onStart={startCreateInviteTarget}
+        />
+      )}
+
+      {/* Back from creating it: confirm who (the same popup as Actions), then invite. */}
+      {handoffInvite && !handoffInvite.confirmed && (
+        <BulkActionConfirmModal
+          action={handoffInvite.handoff.kind}
+          rows={handoffInvite.rows}
+          onCancel={() => finishHandoffInvite(false)}
+          onConfirm={(rows) => setHandoffInvite({ ...handoffInvite, rows, confirmed: true })}
+        />
+      )}
+      {handoffInvite?.confirmed && handoffInvite.handoff.kind === 'assessment' && (
+        <BulkInviteModal
+          selectedResumes={handoffInvite.rows}
+          jobId={handoffInvite.handoff.jdId}
+          jobTitle={handoffInvite.handoff.jdTitle}
+          onClose={() => finishHandoffInvite(false)}
+          onSuccess={() => finishHandoffInvite(true)}
+        />
+      )}
+      {handoffInvite?.confirmed && handoffInvite.handoff.kind === 'interview' && (() => {
+        const seen = new Set<string>();
+        const people = handoffInvite.rows.filter((r) => {
+          const k = String(r.email || r.resumeId || r.id).toLowerCase();
+          if (seen.has(k)) return false;
+          seen.add(k);
+          return true;
+        });
+        return (
+          <InviteToAIInterviewFlow
+            open
+            onClose={() => finishHandoffInvite(false)}
+            jobId={handoffInvite.handoff.jdId}
+            candidates={people.map((r) => ({ id: r.resumeId || r.id, name: r.candidateName || 'Unknown', email: r.email || undefined }))}
+            resumes={people.map((r) => ({ id: r.resumeId || r.id, name: r.candidateName || 'Unknown', email: r.email, phone: r.phone })) as any}
+            onInvited={() => finishHandoffInvite(true)}
+          />
         );
       })()}
 
