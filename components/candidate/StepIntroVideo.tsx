@@ -95,7 +95,7 @@ export default function StepIntroVideo({
   return (
     /* One card, two columns (stacked on small screens): the video on the
        left, the welcome, candidate note, language and Continue on the right. */
-    <div className="w-full" style={{ colorScheme: 'light' }}>
+    <div className="w-full">
       <div className="rounded-3xl border border-gray-100 bg-white shadow-xl shadow-brand-blue/5 p-4 sm:p-6 lg:p-8">
         {/* items-stretch: the details card fills the video column's height. */}
         <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] gap-6 xl:gap-8 items-stretch">
@@ -160,7 +160,7 @@ export default function StepIntroVideo({
           {/* ═══ RIGHT: one card, as tall as the video. Greeting at the top,
               the interview at a glance in the middle, Continue pinned to the
               bottom. ═══ */}
-          <div className="min-w-0 xl:h-full rounded-2xl border border-gray-100 bg-gradient-to-b from-brand-sky/50 to-white p-5 sm:p-6 flex flex-col gap-5">
+          <div className="min-w-0 xl:h-full rounded-2xl border border-gray-100 bg-gradient-to-b from-brand-sky/50 dark:from-brand-blue/10 to-white dark:to-slate-900 p-5 sm:p-6 flex flex-col gap-5">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-brand-blue">Before you begin</p>
               <h2 className="mt-1.5 text-2xl sm:text-3xl font-bold text-gray-900 leading-tight break-words">

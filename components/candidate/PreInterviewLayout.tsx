@@ -84,7 +84,7 @@ export default function PreInterviewLayout({
   }, []);
 
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-gray-50 !bg-gray-50 [color-scheme:light]">
+    <div className="flex min-h-[100dvh] flex-col bg-gray-50">
       {/* Header + progress stepper, pinned together to the top while the
           step scrolls. The header is the shared candidate header (the
           dashboard's bar height, logo asset and size). */}
@@ -97,7 +97,7 @@ export default function PreInterviewLayout({
       {/* Tighter on short screens (≤760px tall: small laptops) so the pinned
           block doesn't eat the page. Same column as the header row, so the
           logo, the dots and the page content share one left edge. */}
-      <nav className="bg-white/90 backdrop-blur-sm border-b border-gray-200 py-3 sm:py-4 lg:py-5 [@media(max-height:760px)]:py-2 !bg-white/90 !border-gray-200">
+      <nav className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm border-b border-gray-200 py-3 sm:py-4 lg:py-5 [@media(max-height:760px)]:py-2">
         <div className={CANDIDATE_CONTAINER}>
           <div className="flex items-center justify-between">
             {steps.map((label, index) => {
@@ -217,7 +217,7 @@ export default function PreInterviewLayout({
       )}
 
       {/* Help text */}
-      <div className="bg-white/60 px-4 py-3 text-center">
+      <div className="bg-white/60 dark:bg-slate-900/60 px-4 py-3 text-center">
         <p className="text-xs text-gray-400 sm:text-sm">
           Need help?{' '}
           <a
