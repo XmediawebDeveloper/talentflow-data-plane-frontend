@@ -44,14 +44,19 @@ import { RECRUITER_BAR_ROW, RECRUITER_HEADER_H, RECRUITER_LOGO_H, ICON_INLINE } 
 export default function CandidateHeader({
   children,
   showHelp = true,
+  sticky = false,
 }: {
   children?: React.ReactNode;
   /** The assessment screen turns the mailto link off: opening a mail client
    *  mid-test takes focus from the proctored fullscreen window. */
   showHelp?: boolean;
+  /** Pin the bar to the top of the viewport while the page scrolls (the AI
+   *  interview's pre-interview steps). Off by default, so the assessment
+   *  screens keep their scrolling header. */
+  sticky?: boolean;
 }) {
   return (
-    <header className={`${RECRUITER_HEADER_H} w-full bg-white border-b border-gray-200`}>
+    <header className={`${RECRUITER_HEADER_H} w-full bg-white border-b border-gray-200 ${sticky ? 'sticky top-0 z-40' : ''}`}>
       <div className={`${RECRUITER_BAR_ROW} flex h-full items-center justify-between gap-3`}>
         <Image
           src={brandLogo}
@@ -67,7 +72,10 @@ export default function CandidateHeader({
           {showHelp && (
             <a
               href="mailto:support@talentflow.com"
-              className="flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900 transition-colors shrink-0"
+              aria-label="Need help? Email support"
+              // On phones the link is the bare icon: pad it out to a 40px tap
+              // target (negative margin keeps the row's alignment unchanged).
+              className="flex items-center justify-center gap-2 text-sm text-gray-700 hover:text-gray-900 transition-colors shrink-0 -m-2 p-2 min-h-10 min-w-10 sm:m-0 sm:p-0 sm:min-h-0 sm:min-w-0"
             >
               <HelpCircle className={ICON_INLINE} />
               {/* The label goes on a small phone; the icon alone still reads as

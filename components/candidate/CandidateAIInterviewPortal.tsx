@@ -33,6 +33,7 @@ import PreInterviewLayout from '@/components/candidate/PreInterviewLayout';
 import StepConsent from '@/components/candidate/StepConsent';
 import StepIdentity from '@/components/candidate/StepIdentity';
 import { probeMediaDevices, deviceMissingMessage } from '@/lib/utils/mediaDeviceProbe';
+import { revealAfterPaint } from '@/lib/utils/candidateScroll';
 import StepSystemCheck, { ENROLL_PASSAGE } from '@/components/candidate/StepSystemCheck';
 import StepIntroVideo from '@/components/candidate/StepIntroVideo';
 import StepLanguageSelect from '@/components/candidate/StepLanguageSelect';
@@ -2237,63 +2238,72 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   // Final in-fullscreen consent gate → actually start the interview. Runs the
   // backend start (unit consumption) only after the candidate explicitly
   // accepts the "not allowed" rules one more time in fullscreen.
+  // Guards the whole accept, including the requestFullscreen() await that
+  // runs before startSubmitting flips — a fast double click would otherwise
+  // run it twice (startInterviewNow twice on non-Chromium browsers).
+  const finalConsentBusyRef = useRef(false);
   const handleFinalConsentAccept = useCallback(async () => {
-    if (startSubmitting) return;
-
-    // HARD REQUIREMENT: the interview must start IN fullscreen. If it was
-    // dropped on this screen (e.g. F11 / Esc), re-enter it NOW — this click is
-    // the user gesture fullscreen requires — issued BEFORE any await so the
-    // gesture isn't consumed. Then VERIFY it actually engaged; if not, abort
-    // and keep the candidate on the consent gate (the overlay guides them back)
-    // rather than starting the interview windowed. This is the fix for
-    // "F11 → accept → interview started without fullscreen".
-    if (!isFullscreen()) {
-      try { await requestFullscreen(); } catch { /* verified below */ }
-    }
-    if (!isFullscreen()) {
-      setFinalConsentFsExited(true);
-      toast.error(
-        'You must be in fullscreen to start. Click "Return to Fullscreen", then accept again.',
-        { duration: 6000 },
-      );
-      return;
-    }
-    setFinalConsentFsExited(false);
-    setStartSubmitting(true);
-
-    // Log the SECOND consent to the audit trail (best-effort, non-blocking).
-    candidateAIInterviewService.recordConsentAck(token, 'final_accept', {
-      phase: 'pre_interview_fullscreen',
-    }).catch(() => {});
-
-    // Resume the audio context so Bina's TTS is unlocked (Chrome autoplay
-    // policy requires a resume inside a user gesture).
+    if (startSubmitting || finalConsentBusyRef.current) return;
+    finalConsentBusyRef.current = true;
     try {
-      const ctx = (window as any).__interviewAudioContext || new AudioContext({ sampleRate: 24000 });
-      ctx.resume?.().catch(() => { /* ignore */ });
-      (window as any).__interviewAudioContext = ctx;
-    } catch (e) {
-      console.warn('[Portal] AudioContext resume on final consent failed:', e);
-    }
 
-    // The vision-LLM share-bar gate is ALWAYS enforced (regardless of the
-    // backend's verify_share_bar_hidden flag) — it must never be possible to
-    // slip into the interview without hiding the bar. Route through it instead
-    // of starting immediately: it captures a screen frame, verifies the bar is
-    // hidden, and only then consumes a unit + starts. The whole step is inside
-    // fullscreen with the screen recorder running, so the recording captures the
-    // candidate hiding the bar → interview start.
-    // Only Chromium (Chrome/Edge/Brave) has the hideable "sharing your screen"
-    // bar; on Safari/Firefox there's nothing to hide, so skip the step and start.
-    if (isChromiumBrowser()) {
-      setShareBarError(null);
-      setShareBarAttempts(0);
-      setStartSubmitting(false);
-      setStep('hide_share_bar');
-      return;
-    }
+      // HARD REQUIREMENT: the interview must start IN fullscreen. If it was
+      // dropped on this screen (e.g. F11 / Esc), re-enter it NOW — this click is
+      // the user gesture fullscreen requires — issued BEFORE any await so the
+      // gesture isn't consumed. Then VERIFY it actually engaged; if not, abort
+      // and keep the candidate on the consent gate (the overlay guides them back)
+      // rather than starting the interview windowed. This is the fix for
+      // "F11 → accept → interview started without fullscreen".
+      if (!isFullscreen()) {
+        try { await requestFullscreen(); } catch { /* verified below */ }
+      }
+      if (!isFullscreen()) {
+        setFinalConsentFsExited(true);
+        toast.error(
+          'You must be in fullscreen to start. Click "Return to Fullscreen", then accept again.',
+          { duration: 6000 },
+        );
+        return;
+      }
+      setFinalConsentFsExited(false);
+      setStartSubmitting(true);
 
-    await startInterviewNow();
+      // Log the SECOND consent to the audit trail (best-effort, non-blocking).
+      candidateAIInterviewService.recordConsentAck(token, 'final_accept', {
+        phase: 'pre_interview_fullscreen',
+      }).catch(() => {});
+
+      // Resume the audio context so Bina's TTS is unlocked (Chrome autoplay
+      // policy requires a resume inside a user gesture).
+      try {
+        const ctx = (window as any).__interviewAudioContext || new AudioContext({ sampleRate: 24000 });
+        ctx.resume?.().catch(() => { /* ignore */ });
+        (window as any).__interviewAudioContext = ctx;
+      } catch (e) {
+        console.warn('[Portal] AudioContext resume on final consent failed:', e);
+      }
+
+      // The vision-LLM share-bar gate is ALWAYS enforced (regardless of the
+      // backend's verify_share_bar_hidden flag) — it must never be possible to
+      // slip into the interview without hiding the bar. Route through it instead
+      // of starting immediately: it captures a screen frame, verifies the bar is
+      // hidden, and only then consumes a unit + starts. The whole step is inside
+      // fullscreen with the screen recorder running, so the recording captures the
+      // candidate hiding the bar → interview start.
+      // Only Chromium (Chrome/Edge/Brave) has the hideable "sharing your screen"
+      // bar; on Safari/Firefox there's nothing to hide, so skip the step and start.
+      if (isChromiumBrowser()) {
+        setShareBarError(null);
+        setShareBarAttempts(0);
+        setStartSubmitting(false);
+        setStep('hide_share_bar');
+        return;
+      }
+
+      await startInterviewNow();
+    } finally {
+      finalConsentBusyRef.current = false;
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startSubmitting, token, interview, startInterviewNow]);
 
@@ -2545,6 +2555,38 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       window.removeEventListener('keydown', onKey, true);
     };
   }, [step]);
+
+  // ── Interview-start screens (fullscreen prompt, share bar, re-auth):
+  // auto-scrolls. These screens have no pinned header; revealAfterPaint only
+  // moves the page when the target is actually off screen. ──
+  const reauthErrorRef = useRef<HTMLParagraphElement>(null);
+  const shareActionRef = useRef<HTMLDivElement>(null);
+  const meetingBannerRef = useRef<HTMLDivElement>(null);
+  const shareBarErrorRef = useRef<HTMLDivElement>(null);
+  // Re-auth: a wrong / expired code — show the error.
+  useEffect(() => {
+    if (reauthOtpError) revealAfterPaint(() => reauthErrorRef.current, 'nearest');
+  }, [reauthOtpError]);
+  // Fullscreen prompt: consent ticked → the Share button it enabled.
+  useEffect(() => {
+    if (step === 'fullscreen_prompt' && rulesConsent) revealAfterPaint(() => shareActionRef.current, 'nearest');
+  }, [step, rulesConsent]);
+  // Fullscreen prompt: camera/mic in use by a meeting app → the banner.
+  useEffect(() => {
+    if (step === 'fullscreen_prompt' && meetingBlockActive) revealAfterPaint(() => meetingBannerRef.current, 'center');
+  }, [step, meetingBlockActive]);
+  // Fullscreen prompt: share declined swaps to the short "Entire Screen
+  // Required" card on the same step — start it at the top.
+  useEffect(() => {
+    if (step === 'fullscreen_prompt' && screenShareDeclined) window.scrollTo({ top: 0, behavior: 'instant' });
+  }, [step, screenShareDeclined]);
+  // Share bar: the check failed → the error above Continue. Only once the
+  // check has finished (the page is restored), never during a capture.
+  useEffect(() => {
+    if (step === 'hide_share_bar' && shareBarError && !shareBarChecking) {
+      revealAfterPaint(() => shareBarErrorRef.current, 'center');
+    }
+  }, [step, shareBarError, shareBarChecking]);
 
   // ========== BLOCKED: interview already open on another device ==========
   // Shown when the pre-interview single-active-session lease is held by another
@@ -2810,9 +2852,9 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
 
     return (
       <div className="min-h-[100dvh] bg-gray-50 flex items-center justify-center p-4" style={{ colorScheme: 'light' }}>
-        <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-8">
-          <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <KeyRound className="w-8 h-8 text-indigo-600" />
+        <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 sm:p-8">
+          <div className="w-16 h-16 bg-brand-blue/10 rounded-full flex items-center justify-center mx-auto mb-6">
+            <KeyRound className="w-8 h-8 text-brand-blue" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2 text-center">Verify Your Identity</h1>
           <p className="text-sm text-gray-500 mb-6 text-center">
@@ -2831,7 +2873,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
             <button
               onClick={handleReauthSendOtp}
               disabled={reauthOtpSending || reauthLockoutSeconds > 0}
-              className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition-all"
+              className="w-full flex items-center justify-center gap-2 bg-brand-blue hover:bg-brand-blue-2 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition-all"
             >
               {reauthLockoutSeconds > 0
                 ? lockoutLabel
@@ -2849,21 +2891,23 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                   maxLength={6}
                   value={reauthOtpCode}
                   onChange={(e) => setReauthOtpCode(e.target.value.replace(/\D/g, ''))}
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleReauthVerifyOtp(); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && reauthOtpCode.length >= 4) handleReauthVerifyOtp(); }}
+                  // Mounts when the OTP is sent — put the cursor straight in it.
+                  autoFocus
                   placeholder="6-digit code"
                   disabled={reauthLockoutSeconds > 0}
-                  className="w-full border border-gray-300 rounded-xl px-4 py-3 text-center text-xl font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:text-gray-400"
+                  className="w-full border border-gray-300 rounded-xl px-4 py-3 text-center text-xl font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-brand-blue/30 disabled:bg-gray-100 disabled:text-gray-400"
                 />
               </div>
               {reauthOtpError && (
-                <p className="text-sm text-destructive flex items-center gap-1">
+                <p ref={reauthErrorRef} role="alert" className="text-sm text-destructive flex items-center gap-1">
                   <AlertTriangle className="w-4 h-4 shrink-0" />{reauthOtpError}
                 </p>
               )}
               <button
                 onClick={handleReauthVerifyOtp}
                 disabled={reauthOtpVerifying || reauthOtpCode.length < 4 || reauthLockoutSeconds > 0}
-                className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition-all"
+                className="w-full flex items-center justify-center gap-2 bg-brand-blue hover:bg-brand-blue-2 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition-all"
               >
                 {reauthLockoutSeconds > 0
                   ? lockoutLabel
@@ -2874,7 +2918,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
               <button
                 onClick={handleReauthSendOtp}
                 disabled={reauthOtpSending || reauthCooldown > 0 || reauthLockoutSeconds > 0}
-                className="w-full text-sm text-indigo-600 hover:text-indigo-700 disabled:text-gray-400 py-1"
+                className="w-full min-h-10 text-sm text-brand-blue hover:text-brand-blue-2 disabled:text-gray-400 py-2.5"
               >
                 {reauthLockoutSeconds > 0
                   ? lockoutLabel
@@ -2893,7 +2937,10 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   if (step === 'fullscreen_prompt') {
     return (
       <div className="min-h-[100dvh] bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4 overflow-y-auto">
-        <div className={`bg-white rounded-2xl shadow-2xl w-full my-auto ${screenShareDeclined ? 'max-w-2xl p-6 md:p-8' : 'max-w-6xl overflow-hidden'}`}>
+        {/* overflow-clip (not overflow-hidden) still rounds the corners but
+            doesn't make the card a scroll box, so the consent bar below can
+            stick to the bottom of the window. */}
+        <div className={`bg-white rounded-2xl shadow-2xl w-full my-auto ${screenShareDeclined ? 'max-w-2xl p-6 md:p-8' : 'max-w-6xl overflow-clip'}`}>
 
           {screenShareDeclined ? (
             /* ── Screen share declined — block the interview ── */
@@ -3005,7 +3052,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                         <p className="text-xs text-gray-500">Please follow the guidelines below to continue.</p>
                       </div>
                     </div>
-                    <ul className="mt-3 grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+                    <ul className="mt-3 grid grid-cols-1 min-[400px]:grid-cols-2 lg:grid-cols-4 gap-2.5">
                       {([
                         { icon: Monitor, title: 'Select Entire Screen', text: 'Share your entire screen only. Window or Current Tab is not allowed.' },
                         { icon: Shield, title: 'Keep screen sharing active', text: 'Screen sharing is required to prevent malpractice.' },
@@ -3061,7 +3108,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                             Monitored
                           </span>
                         </div>
-                        <ul className="mt-3 grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+                        <ul className="mt-3 grid grid-cols-1 min-[400px]:grid-cols-2 lg:grid-cols-4 gap-2.5">
                           {tiles.map(({ icon: BanIcon, text }, i) => (
                             <li key={i} className="rounded-xl bg-white border border-destructive-line/60 shadow-sm px-3 py-3.5 text-center">
                               <span className="w-10 h-10 rounded-full bg-destructive/10 text-destructive flex items-center justify-center mx-auto">
@@ -3097,7 +3144,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
               {/* Active-meeting block banner — shown after a start attempt found
                   the camera/mic already in use by another app (Teams/Zoom/Meet). */}
               {meetingBlockActive && (
-                <div className="mx-5 md:mx-6 mb-4 bg-brand-orange/10 border-2 border-brand-orange/30 rounded-xl p-4 text-left">
+                <div ref={meetingBannerRef} role="alert" className="mx-5 md:mx-6 mb-4 bg-brand-orange/10 border-2 border-brand-orange/30 rounded-xl p-4 text-left">
                   <p className="font-semibold text-brand-orange-deep mb-1 text-sm flex items-center gap-2">
                     <AlertTriangle className="w-4 h-4 shrink-0" />
                     You cannot be in a meeting during the interview
@@ -3110,8 +3157,11 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                 </div>
               )}
 
-              {/* Consent + action. The Share button stays disabled until ticked. */}
-              <div className="border-t border-gray-100 bg-gray-50/60 px-5 md:px-6 py-3.5 flex flex-col md:flex-row md:items-center gap-3 md:gap-5">
+              {/* Consent + action. The Share button stays disabled until ticked.
+                  Sticks to the bottom of the window while the card is taller
+                  than the screen, so the checkbox and button are always in
+                  reach; at its natural place when the card fits. */}
+              <div className="sticky bottom-0 z-10 rounded-b-2xl border-t border-gray-100 bg-gray-50/95 backdrop-blur px-5 md:px-6 py-3.5 flex flex-col md:flex-row md:items-center gap-3 md:gap-5">
                 <label className="flex items-start gap-3 cursor-pointer select-none text-left flex-1 min-w-0">
                   <input
                     type="checkbox"
@@ -3124,6 +3174,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                     I consent to Entire Screen sharing and active proctoring for the duration of this interview.
                   </span>
                 </label>
+                <div ref={shareActionRef} className="w-full md:w-auto flex-shrink-0 flex flex-col gap-1">
                 <button
                   onClick={() => {
                     // Log the FIRST consent (checkbox acknowledged) to the audit
@@ -3141,6 +3192,11 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                     <><Scan className="w-4 h-4" />Share Entire Screen &amp; Continue<ArrowRight className="w-4 h-4" /></>
                   )}
                 </button>
+                {/* Why it's disabled — a title tooltip never shows on touch. */}
+                {!rulesConsent && !startSubmitting && (
+                  <p className="text-2xs text-gray-500 text-center md:text-right">Tick the consent box to enable this button.</p>
+                )}
+                </div>
               </div>
             </>
           )}
@@ -3166,7 +3222,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
           </p>
           {/* Do-not-refresh warning: reloading here drops fullscreen + screen
               sharing and sends the candidate back to re-share. */}
-          <div className="w-fit max-w-full mx-auto mb-3 rounded-full border border-destructive-line bg-destructive-subtle px-4 py-1.5 text-xs sm:text-sm font-semibold text-destructive flex items-center justify-center gap-2 text-center">
+          <div className="w-fit max-w-full mx-auto mb-3 rounded-2xl sm:rounded-full border border-destructive-line bg-destructive-subtle px-4 py-1.5 text-xs sm:text-sm font-semibold text-destructive flex items-center justify-center gap-2 text-center">
             <AlertTriangle data-capture-decor className="w-4 h-4 shrink-0" />
             Do not refresh this page — it drops screen sharing and restarts setup.
           </div>
@@ -3201,7 +3257,11 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
               with the "Not allowed during the interview" header text above:
               the same 17px inset (1px border + px-4) and a w-7 icon slot +
               gap-3. */}
-          <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-5">
+          {/* Sticks to the bottom of the window when the card is taller than
+              the screen (1280×720 fullscreen, tablets), so Start is always
+              in reach. -mx/-mb cancel the card's padding so the bar spans the
+              card edge to edge; the tagline's 17px inset is unchanged. */}
+          <div className="sticky bottom-0 z-10 -mx-5 md:-mx-7 -mb-4 md:-mb-5 px-5 md:px-7 py-3 rounded-b-2xl border-t border-gray-100 bg-white/95 backdrop-blur flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-5">
             {/* Two lines: the headline, then the consequence. */}
             <p className="flex items-start gap-3 sm:pl-[17px] text-2xs sm:text-xs text-gray-500 leading-relaxed">
               <span className="w-7 flex justify-center flex-shrink-0 pt-px">
@@ -3273,7 +3333,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
 
           {/* Do-not-refresh warning — under the subheading, as on the
               "Before we begin" gate. */}
-          <div className="w-fit max-w-full mx-auto mb-4 rounded-full border border-destructive-line bg-destructive-subtle px-4 py-1.5 text-xs font-semibold text-destructive flex items-center justify-center gap-2 text-center">
+          <div className="w-fit max-w-full mx-auto mb-4 rounded-2xl sm:rounded-full border border-destructive-line bg-destructive-subtle px-4 py-1.5 text-xs font-semibold text-destructive flex items-center justify-center gap-2 text-center">
             <AlertTriangle data-capture-decor className="w-4 h-4 shrink-0" />
             <span>Do not refresh this page — it drops screen sharing and restarts setup.</span>
           </div>
@@ -3292,10 +3352,10 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                 <div aria-hidden className="absolute right-0 -top-10 w-60 h-60 rounded-full bg-brand-cyan/30 blur-3xl" />
 
                 {/* The sharing bar */}
-                <div className="absolute left-1/2 -translate-x-1/2 bottom-14 w-[92%] max-w-sm flex items-center gap-2 bg-white rounded-lg shadow-lg px-2.5 py-2">
+                <div className="absolute left-1/2 -translate-x-1/2 bottom-14 w-[96%] max-w-sm flex items-center gap-2 bg-white rounded-lg shadow-lg px-2.5 py-2">
                   <span className="w-4 h-4 rounded-sm bg-brand-blue shrink-0" />
                   <span className="text-2xs sm:text-xs text-gray-700 flex-1 truncate">This site is sharing your screen.</span>
-                  <span className="text-2xs font-semibold text-white bg-brand-blue rounded-md px-2 py-1 shrink-0">Stop sharing</span>
+                  <span className="text-2xs font-semibold text-white bg-brand-blue rounded-md px-1.5 py-1 shrink-0">Stop sharing</span>
                   <span className="relative shrink-0">
                     <span className="text-xs font-semibold text-brand-blue underline underline-offset-2 px-1.5 py-0.5 rounded-md ring-2 ring-brand-orange bg-brand-orange/10">Hide</span>
                     <Pointer className="absolute -bottom-5 -right-3 w-6 h-6 text-brand-orange fill-white animate-bounce" />
@@ -3379,7 +3439,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
           </div>
 
           {shareBarError && (
-            <div className="bg-destructive-subtle border border-destructive-line rounded-lg px-3 py-2.5 mb-3 flex items-start gap-2">
+            <div ref={shareBarErrorRef} role="alert" className="bg-destructive-subtle border border-destructive-line rounded-lg px-3 py-2.5 mb-3 flex items-start gap-2">
               <XCircle data-capture-decor className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-medium text-destructive">{shareBarError}</p>
@@ -3394,8 +3454,12 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
               (stacked, button first, on small screens). The note lines up with
               the example panel's "Example: look for this bar…" line: the same
               13px inset (1px border + p-3) and a 16px icon slot + gap-1.5. */}
-          <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
-            <p className="flex items-center justify-center sm:justify-start gap-1.5 sm:pl-[13px] text-2xs text-gray-400">
+          {/* Sticks to the bottom of the window when the card is taller than
+              the screen. Stays INSIDE shareBarCardRef so the capture hides it
+              with the rest of the card. -mx/-mb cancel the card's padding; the
+              13px tagline inset is unchanged. */}
+          <div className="sticky bottom-0 z-10 -mx-4 md:-mx-6 -mb-4 md:-mb-5 px-4 md:px-6 py-3 rounded-b-2xl border-t border-gray-100 bg-white/95 backdrop-blur flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
+            <p className="flex items-center justify-center sm:justify-start gap-1.5 sm:pl-[13px] text-2xs text-gray-400 text-center sm:text-left">
               <span data-capture-decor className="w-4 h-4 flex items-center justify-center shrink-0">
                 <span className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
               </span>
