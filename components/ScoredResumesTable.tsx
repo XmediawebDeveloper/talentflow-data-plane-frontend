@@ -1,5 +1,5 @@
 import { SCORE_CELL_TEXT } from '@/lib/utils/score';
-import { Mail, Phone, Calendar, Search, Download, FileDown, CheckSquare, Square, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, ClipboardList, Share2, Paperclip, FileText, FileSpreadsheet, MoreVertical, Award, ChevronRight, ChevronDown, Video, BarChart3 } from 'lucide-react';
+import { Mail, Phone, Calendar, Search, Download, FileDown, CheckSquare, Square, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, ClipboardList, Share2, Paperclip, FileText, FileSpreadsheet, MoreVertical, Award, ChevronRight, ChevronDown, ChevronsUpDown, ChevronsDownUp, Video, BarChart3 } from 'lucide-react';
 import { matchBadgeClass, MATCH_SCORE_TEXT_CLASS, normalizeMatchResult, formatOverallScore, formatOverallScoreValue } from '@/lib/utils/matchStatus';
 import { truncateJobTitle } from '@/lib/utils/jobOpeningDisplay';
 import { useState, useEffect, useMemo, useRef, Fragment } from 'react';
@@ -44,6 +44,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu';
+import { SelectAllMenu, SortByControl } from '@/components/ui/select-all-menu';
 
 /* Action menu item styling — cloned from the Job Openings page's three-dot
    menu (JobsListing.tsx: gray-700 text, hover:bg-gray-50, px-4/py-2.5 rows,
@@ -63,6 +64,24 @@ const scoredResumesMenuItemClass = 'group !rounded-none !px-4 !py-2.5 text-sm te
    resting style as the toolbar's own More Filters button, which it cannot be
    handed a class for. 38px is that button's natural height (py-2 + text-sm +
    a 1px border each side). */
+/* Sort by — the Job Openings list's control. View by Candidates sorts
+   people; the flat list sorts rows. */
+type SortKey = 'date' | 'name' | 'versions' | 'exact' | 'partial' | 'none' | 'jobTitle' | 'score';
+const GROUPED_SORT_OPTIONS: { value: SortKey; label: string }[] = [
+  { value: 'date', label: 'Latest Updated' },
+  { value: 'name', label: 'Candidate Name' },
+  { value: 'versions', label: 'Job Versions' },
+  { value: 'exact', label: 'Exact Match' },
+  { value: 'partial', label: 'Partial Match' },
+  { value: 'none', label: 'No Match' },
+];
+const FLAT_SORT_OPTIONS: { value: SortKey; label: string }[] = [
+  { value: 'date', label: 'Scored Date' },
+  { value: 'name', label: 'Candidate Name' },
+  { value: 'jobTitle', label: 'Job Title' },
+  { value: 'score', label: 'Score' },
+];
+
 const TOOLBAR_BUTTON_CLASS =
   'h-[38px] px-3 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-2 text-sm whitespace-nowrap bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue disabled:opacity-50 disabled:cursor-not-allowed';
 
@@ -116,6 +135,19 @@ const capitalizeFirst = (value: string): string => {
 /** The 0.0–10.0 rating a row is filtered on — the same number the Score
  *  column prints. Older records without `overallRating10` fall back to their
  *  percentage on the same scale. */
+/** Stable sort by a number / text key; ties keep the incoming order. */
+function sortByKey<T>(items: T[], keyOf: (item: T) => number | string, order: 'asc' | 'desc'): T[] {
+  return items
+    .map((item, index) => ({ item, index, key: keyOf(item) }))
+    .sort((a, b) => {
+      const cmp = typeof a.key === 'string' || typeof b.key === 'string'
+        ? String(a.key).localeCompare(String(b.key), undefined, { numeric: true, sensitivity: 'base' })
+        : a.key - b.key;
+      return cmp !== 0 ? (order === 'asc' ? cmp : -cmp) : a.index - b.index;
+    })
+    .map((x) => x.item);
+}
+
 const rowRating10 = (r: { overallRating10?: number; scorePercentage: number }) =>
   r.overallRating10 ?? (r.scorePercentage ?? 0) / 10;
 
@@ -706,6 +738,8 @@ Best regards`);
   const [bulkActionRows, setBulkActionRows] = useState<ScoredResume[] | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [sortBy, setSortBy] = useState<SortKey>('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   // Search + filters in the shared hook. This panel commits as you pick rather
   // than staging, so it uses `setFilter` and leaves the draft pair alone.
@@ -843,6 +877,23 @@ Best regards`);
   // with no Group by control to switch it off.
   const isGrouped = groupByEmail;
   const [expandedGroupKeys, setExpandedGroupKeys] = useState<Set<string>>(new Set());
+  /** ▸ / ▾ — opens or closes one candidate's job history. */
+  const renderExpandButton = (key: string, expanded: boolean) => (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); toggleGroupExpanded(key); }}
+      aria-expanded={expanded}
+      aria-label={expanded ? 'Collapse' : 'Expand'}
+      title={expanded ? 'Collapse' : 'Expand'}
+      className={`p-2.5 rounded-lg border transition-all ${
+        expanded
+          ? 'bg-brand-blue/10 border-brand-blue/30 text-brand-blue'
+          : 'bg-gray-100 border-gray-200 text-gray-600 hover:bg-gray-200 hover:border-gray-300'
+      }`}
+    >
+      <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`} />
+    </button>
+  );
   const toggleGroupExpanded = (key: string) => {
     setExpandedGroupKeys((prev) => {
       const next = new Set(prev);
@@ -965,11 +1016,40 @@ Best regards`);
       if (group) group.push(r);
       else groups.set(key, [r]);
     });
-    return Array.from(groups.entries())
-      .map(([key, rows]) => ({ key, rows: [...rows].sort((a, b) => dateOf(b) - dateOf(a)) }))
-      .sort((a, b) => dateOf(b.rows[0]) - dateOf(a.rows[0]));
+    const groupKeyOf = (rows: ScoredResume[]): number | string => {
+      switch (sortBy) {
+        case 'name': return (rows[0].candidateName || '').toLowerCase();
+        case 'versions': return rows.length;
+        case 'exact': return tallyVerdicts(rows).exact;
+        case 'partial': return tallyVerdicts(rows).partial;
+        case 'none': return tallyVerdicts(rows).none;
+        default: return dateOf(rows[0]);
+      }
+    };
+    return sortByKey(
+      Array.from(groups.entries())
+        .map(([key, rows]) => ({ key, rows: [...rows].sort((a, b) => dateOf(b) - dateOf(a)) }))
+        .sort((a, b) => dateOf(b.rows[0]) - dateOf(a.rows[0])),
+      (g) => groupKeyOf(g.rows),
+      sortOrder,
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredResumes]);
+  }, [filteredResumes, sortBy, sortOrder]);
+
+  // The flat list in the chosen order (selection still reads filteredResumes).
+  const orderedResumes = useMemo(() => sortByKey(
+    filteredResumes,
+    (r): number | string => {
+      switch (sortBy) {
+        case 'name': return (r.candidateName || '').toLowerCase();
+        case 'jobTitle': return (r.jobTitle || '').toLowerCase();
+        case 'score': return rowRating10(r) ?? 0;
+        default: return dateOf(r);
+      }
+    },
+    sortOrder,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [filteredResumes, sortBy, sortOrder]);
   // Hand the host the candidate order the grouped list shows. Through a ref:
   // the callback is usually an inline arrow, so it is not an effect dep.
   const onCandidateOrderChangeRef = useRef(onCandidateOrderChange);
@@ -987,7 +1067,7 @@ Best regards`);
   useEffect(() => {
     setCurrentPage(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchTerm, filterMatchStatus, filterScoreMin, filterScoreMax, filterDateFrom, filterDateTo, filterRecruiter, filterJdId, filterJobTitle, filterJobVersion, jobId, isGrouped]);
+  }, [searchTerm, filterMatchStatus, filterScoreMin, filterScoreMax, filterDateFrom, filterDateTo, filterRecruiter, filterJdId, filterJobTitle, filterJobVersion, jobId, isGrouped, sortBy, sortOrder]);
 
   // Grouped mode paginates candidate CLUSTERS (one page = N people, however
   // many scoring rows each carries); ungrouped mode paginates rows directly.
@@ -997,7 +1077,7 @@ Best regards`);
     (isGrouped ? candidateGroups.length : filteredResumes.length) / itemsPerPage,
   ));
   const safeCurrentPage = Math.min(currentPage, totalPages);
-  const paginatedResumes = filteredResumes.slice(
+  const paginatedResumes = orderedResumes.slice(
     (safeCurrentPage - 1) * itemsPerPage,
     safeCurrentPage * itemsPerPage,
   );
@@ -1638,6 +1718,16 @@ Best regards`);
     if (onSelectAll) onSelectAll([]);
     else setInternalSelectedResumes([]);
   };
+  /** Make the selection exactly these row ids. */
+  const selectExactly = (ids: string[]) => {
+    if (onSelectAll) onSelectAll(ids);
+    else if (onSelectResume) {
+      const want = new Set(ids);
+      resumes.forEach((r) => {
+        if (selectedResumes.includes(r.id) !== want.has(r.id)) onSelectResume(r.id);
+      });
+    } else setInternalSelectedResumes(ids);
+  };
 
   const selectionActions = effectiveSelectedRows.length > 0 ? (
     <>
@@ -1647,7 +1737,7 @@ Best regards`);
             few times — so the new control is noticed — then stays still. */}
         <button
           type="button"
-          className="relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-[var(--brand-blue)] text-white hover:bg-[var(--brand-blue-2)] shadow-sm hover:shadow-md animate-in fade-in zoom-in-95 duration-300"
+          className="relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-800 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
           aria-label={`Actions for ${effectiveSelectedRows.length} selected`}
         >
           <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
@@ -1659,7 +1749,27 @@ Best regards`);
           <ChevronDown className="w-4 h-4" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-60 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
+      <DropdownMenuContent align="start" className="w-60 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
+        {/* Light grey header strip: how many the actions run on. */}
+        <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
+          {(isGrouped ? new Set(effectiveSelectedRows.map(candidateGroupKey)).size : effectiveSelectedRows.length).toLocaleString()} selected
+        </div>
+        {/* Export — the selection, columns chosen in its dialog. */}
+        <DropdownMenuItem
+          className={`${scoredResumesMenuItemClass} ${!canExport ? 'text-gray-400 opacity-60' : ''}`}
+          title={!canExport ? 'You do not have permission to export' : undefined}
+          onSelect={(e) => {
+            if (!canExport) {
+              e.preventDefault();
+              toast.error('You do not have permission to export');
+              return;
+            }
+            handleExportExcel();
+          }}
+        >
+          <FileDown className="w-4 h-4 text-menu-icon-download" />
+          <span className={MENU_ITEM_SCALE_CLASS}>Export</span>
+        </DropdownMenuItem>
         <DropdownMenuItem
           className={`${scoredResumesMenuItemClass} ${!canDownloadScorecard ? 'text-gray-400 opacity-60' : ''}`}
           disabled={bulkDownloading}
@@ -1678,6 +1788,7 @@ Best regards`);
             {bulkDownloading ? 'Downloading...' : 'Download All Scorecards'}
           </span>
         </DropdownMenuItem>
+        <DropdownMenuSeparator className="my-1 bg-gray-100" />
         <DropdownMenuItem
           className={`${scoredResumesMenuItemClass} ${!canCreateAssessments ? 'text-gray-400 opacity-60' : ''}`}
           /* Assessment invites go to this job's published assessment and
@@ -1761,25 +1872,9 @@ Best regards`);
       )}
 
       {/* Compact: no toolbar — just the selection's actions once rows are
-          ticked (Export included, since it exports the selection). */}
+          ticked (Export is one of them). */}
       {compact && !hideSelectionBar && selectionActions && (
         <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              if (!canExport) {
-                toast.error('You do not have permission to export');
-                return;
-              }
-              handleExportExcel();
-            }}
-            aria-disabled={!canExport}
-            title={!canExport ? 'You do not have permission to export' : undefined}
-            className={`${TOOLBAR_BUTTON_CLASS} ${!canExport ? 'opacity-50 cursor-not-allowed' : ''}`}
-          >
-            <FileDown className="w-4 h-4" />
-            Export
-          </button>
           {selectionActions}
         </div>
       )}
@@ -1796,67 +1891,52 @@ Best regards`);
           // The hook debounces into `appliedQuery`, so keystrokes pass through.
           searchDebounceMs={0}
           searchPlaceholder="Search by name, email, phone, or Job ID..."
-          /* A capped search box rather than one that fills the row; the
-             controls follow it on desktop instead of leaving a hole. Full
-             width on phones, where it takes its own line. */
-          searchClassName="sm:flex-none sm:w-64 lg:w-80"
+          // Row 1: Search (fills the row), the two main filters inline,
+          // More Filters, Reset, Sort by, List / Grid.
           controlsFollowSearch
           onToggleFilters={() => setShowFilters(!showFilters)}
           filtersOpen={showFilters}
           activeFilterCount={search.activeFilterCount}
           filtersApplied={search.filtersApplied}
           onClearFilters={search.reset}
-          beforeSearch={
+          leadingActions={
             <>
-              {/* Select all — in the toolbar row, the same place and look as View
-                  by Job's, for list and grid alike (grid cards have no header
-                  checkbox to do it). */}
-              {filteredResumes.length > 0 && (
-                <button
-                  type="button"
-                  onClick={handleSelectAll}
-                  aria-pressed={allVisibleSelected}
-                  className={TOOLBAR_BUTTON_CLASS}
-                >
-                  {allVisibleSelected ? (
-                    <CheckSquare className="w-4 h-4 text-brand-blue" />
-                  ) : (
-                    <Square className="w-4 h-4" />
-                  )}
-                  {allVisibleSelected ? 'Deselect all' : 'Select all'}
-                </button>
-              )}
+              <SearchableSelect
+                className="w-full sm:w-48"
+                value={filterJobTitle === 'all' ? '' : filterJobTitle}
+                onChange={(v) => search.setFilter('jobTitle', v || 'all')}
+                options={uniqueJobTitles.map((title) => ({ value: String(title), label: String(title) }))}
+                allLabel="All Job Titles"
+                placeholder="All Job Titles"
+                searchPlaceholder="Search job title..."
+                ariaLabel="Filter by job title"
+              />
+              <SearchableSelect
+                className="w-full sm:w-48"
+                value={filterRecruiter === 'all' ? '' : filterRecruiter}
+                onChange={(v) => search.setFilter('recruiter', v || 'all')}
+                options={uniqueRecruiters.map((recruiter) => ({ value: String(recruiter), label: String(recruiter) }))}
+                allLabel="All Recruiters"
+                placeholder="All Recruiters"
+                searchPlaceholder="Search recruiter..."
+                ariaLabel="Filter by recruiter"
+              />
             </>
           }
-          // sm:flex-wrap: on tablets the row wraps instead of squeezing its buttons.
-          className="mb-0 sm:flex-wrap"
-          trailing={<ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-[38px] !border-brand-blue/10" />}
+          className="mb-0"
         >
-          {/* No view pills to sit after — the selection's actions join this
-              row instead, so search, filters and actions stay on one line. */}
-
-          {/* One Export for both states — handleExportExcel already exports the
-              selection, and asks for one when there isn't any. Which columns
-              go in is chosen in its dialog ("Columns included"). */}
-          <button
-            type="button"
-            onClick={() => {
-              if (!canExport) {
-                toast.error('You do not have permission to export');
-                return;
-              }
-              handleExportExcel();
-            }}
-            aria-disabled={!canExport}
-            title={!canExport ? 'You do not have permission to export' : undefined}
-            className={`${TOOLBAR_BUTTON_CLASS} ${!canExport ? 'opacity-50 cursor-not-allowed' : ''}`}
-          >
-            <FileDown className="w-4 h-4" />
-            Export
-          </button>
-          {/* The selection's Actions menu — after Export, only while rows are
-              ticked. The List / Grid switch is pinned right (trailing). */}
-          {!viewPillsSlot && selectionActions}
+          {/* Sort by, then List / Grid — where Export used to be (Export is
+              now in the Actions menu, shown once rows are ticked). */}
+          {filteredResumes.length > 0 && (
+            <SortByControl<SortKey>
+              value={sortBy}
+              order={sortOrder}
+              options={isGrouped ? GROUPED_SORT_OPTIONS : FLAT_SORT_OPTIONS}
+              onChange={setSortBy}
+              onToggleOrder={() => setSortOrder((o) => (o === 'asc' ? 'desc' : 'asc'))}
+            />
+          )}
+          <ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-[38px] !border-brand-blue/10" />
         </ListToolbar>
 
         {/* Advanced Filters */}
@@ -1880,24 +1960,6 @@ Best regards`);
                 so a row is always filled edge to edge. `max-w` keeps a short
                 final row from stretching two fields across the whole panel. */}
             <div className="flex flex-wrap gap-4">
-              {/* 1. Scored By */}
-              <div className={FILTER_FIELD_CLASS}>
-                <label className={FILTER_LABEL_CLASS}>Scored By</label>
-                {/* SearchableSelect, not native <select>: a native option popup
-                    is sized to its longest option by the browser and overflows
-                    small screens (recruiter names can be long). This keeps the
-                    menu within the field width and truncates. */}
-                <SearchableSelect
-                  value={filterRecruiter === 'all' ? '' : filterRecruiter}
-                  onChange={(v) => search.setFilter('recruiter', v || 'all')}
-                  options={uniqueRecruiters.map((recruiter) => ({ value: String(recruiter), label: String(recruiter) }))}
-                  allLabel="All Recruiters"
-                  placeholder="All Recruiters"
-                  searchPlaceholder="Search recruiter..."
-                  ariaLabel="Filter by recruiter"
-                />
-              </div>
-
               {/* 2. Date From */}
               <div className={FILTER_FIELD_CLASS}>
                 <label className={FILTER_LABEL_CLASS}>Date From</label>
@@ -1999,24 +2061,6 @@ Best regards`);
               </div>
 
               <div className={FILTER_FIELD_CLASS}>
-                <label className={FILTER_LABEL_CLASS}>Job Title</label>
-                {/* SearchableSelect, not native <select>: job titles are long and
-                    a native option popup sizes to the longest one, overflowing far
-                    past the screen on mobile. This keeps the menu within the field
-                    width, truncates long titles, and adds a search box for the
-                    (often long) list. */}
-                <SearchableSelect
-                  value={filterJobTitle === 'all' ? '' : filterJobTitle}
-                  onChange={(v) => search.setFilter('jobTitle', v || 'all')}
-                  options={uniqueJobTitles.map((title) => ({ value: String(title), label: String(title) }))}
-                  allLabel="All Job Titles"
-                  placeholder="All Job Titles"
-                  searchPlaceholder="Search job title..."
-                  ariaLabel="Filter by job title"
-                />
-              </div>
-
-              <div className={FILTER_FIELD_CLASS}>
                 <label className={FILTER_LABEL_CLASS}>Job Version</label>
                 <select
                   value={filterJobVersion}
@@ -2049,19 +2093,64 @@ Best regards`);
           </div>
         )}
 
-        {/* View pills, then — once rows are picked — the selection's actions
-            on the same line, set apart by a divider so they don't read as one
-            more view. The pills' own bottom margin is dropped here so the row
-            centres on one line. */}
-        {viewPillsSlot && (
-          <div className="pt-3 flex flex-wrap items-center gap-2 [&>*:first-child]:mb-0">
-            {viewPillsSlot}
-            {effectiveSelectedRows.length > 0 && (
-              <>
-                <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
-                {selectionActions}
-              </>
-            )}
+        {/* Row 2: Select All, the host's verdict pills and View by toggle. */}
+        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-slate-700/60 flex flex-wrap items-center gap-2">
+          {filteredResumes.length > 0 && (() => {
+            // Grouped: counted in candidates; flat: in rows.
+            const pageRows = isGrouped ? paginatedGroups.flatMap((g) => g.rows) : paginatedResumes;
+            const selectedCount = isGrouped
+              ? new Set(effectiveSelectedRows.map(candidateGroupKey)).size
+              : effectiveSelectedRows.length;
+            return (
+              <SelectAllMenu
+                selectedCount={selectedCount}
+                pageCount={isGrouped ? paginatedGroups.length : paginatedResumes.length}
+                totalCount={isGrouped ? candidateGroups.length : filteredResumes.length}
+                noun={isGrouped ? 'candidates' : 'resumes'}
+                allSelected={allVisibleSelected}
+                onSelectPage={() => {
+                  const ids = Array.from(new Set([...effectiveSelectedRows.map((r) => r.id), ...pageRows.map((r) => r.id)]));
+                  selectExactly(ids);
+                }}
+                onSelectAll={() => selectExactly(filteredResumes.map((r) => r.id))}
+                onClear={clearSelection}
+              />
+            );
+          })()}
+          {viewPillsSlot && (
+            <>
+              <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
+              {viewPillsSlot}
+            </>
+          )}
+          {/* Expand all / Collapse all — every candidate on this page. */}
+          {isGrouped && paginatedGroups.length > 0 && (() => {
+            const allOpen = paginatedGroups.every((g) => expandedGroupKeys.has(g.key));
+            return (
+              <button
+                type="button"
+                onClick={() =>
+                  setExpandedGroupKeys((prev) => {
+                    const next = new Set(prev);
+                    paginatedGroups.forEach((g) => (allOpen ? next.delete(g.key) : next.add(g.key)));
+                    return next;
+                  })
+                }
+                aria-pressed={allOpen}
+                className={`${TOOLBAR_BUTTON_CLASS} sm:ml-auto`}
+              >
+                {allOpen ? <ChevronsDownUp className="w-4 h-4" /> : <ChevronsUpDown className="w-4 h-4" />}
+                {allOpen ? 'Collapse all' : 'Expand all'}
+              </button>
+            );
+          })()}
+        </div>
+
+        {/* Row 3 — only while something is ticked: Actions and Clear, on a
+            line of their own under Select All. */}
+        {selectionActions && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+            {selectionActions}
           </div>
         )}
 
@@ -2214,12 +2303,13 @@ Best regards`);
                     ) : (
                       <span className="flex-1" aria-hidden />
                     )}
+                    {groupKey && renderExpandButton(groupKey, cardExpanded)}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <button
                           aria-label="Actions"
                           title="Actions"
-                          className="p-2.5 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-all"
+                          className="p-2.5 bg-gray-100 rounded-lg border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 transition-all"
                         >
                           <MoreVertical className="w-4 h-4 text-gray-600" />
                         </button>
@@ -2282,7 +2372,7 @@ Best regards`);
                                 <button
                                   aria-label="Actions"
                                   title="Actions"
-                                  className="p-2 bg-white rounded-lg hover:bg-gray-50 transition-all border border-gray-200 shrink-0"
+                                  className="p-2 bg-gray-100 rounded-lg border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 transition-all shrink-0"
                                 >
                                   <MoreVertical className="w-4 h-4 text-gray-600" />
                                 </button>
@@ -2329,7 +2419,7 @@ Best regards`);
                 <col className="w-[11%]" />
                 <col className="w-[10%]" />
                 <col className="w-[12%]" />
-                <col className="w-[6.5rem]" />
+                <col className="w-[8.5rem]" />
               </colgroup>
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
@@ -2430,12 +2520,14 @@ Best regards`);
                           <div className="text-xs text-gray-500">{formatISTTime(primary.scoredDate)}</div>
                         </td>
                         <td className="px-4 py-3 align-middle text-left tf-sticky-col" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center gap-1.5">
+                          {renderExpandButton(key, isExpanded)}
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <button
                                 aria-label="Actions"
                                 title="Actions"
-                                className="p-2.5 bg-white rounded-lg hover:bg-gray-50 transition-all border border-gray-200"
+                                className="p-2.5 bg-gray-100 rounded-lg border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 transition-all"
                               >
                                 <MoreVertical className="w-4 h-4 text-gray-600" />
                               </button>
@@ -2444,6 +2536,7 @@ Best regards`);
                               {renderActionsMenuItems(primary, rows)}
                             </DropdownMenuContent>
                           </DropdownMenu>
+                          </div>
                         </td>
                       </tr>
                       {isExpanded && (
@@ -2489,7 +2582,7 @@ Best regards`);
                                             <button
                                               aria-label="Actions"
                                               title="Actions"
-                                              className="p-2.5 bg-white rounded-lg hover:bg-gray-50 transition-all border border-gray-200"
+                                              className="p-2.5 bg-gray-100 rounded-lg border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 transition-all"
                                             >
                                               <MoreVertical className="w-4 h-4 text-gray-600" />
                                             </button>
@@ -2573,7 +2666,7 @@ Best regards`);
                           <button
                             aria-label="Actions"
                             title="Actions"
-                            className="p-2.5 bg-white rounded-lg hover:bg-gray-50 transition-all border border-gray-200"
+                            className="p-2.5 bg-gray-100 rounded-lg border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 transition-all"
                           >
                             <MoreVertical className="w-4 h-4 text-gray-600" />
                           </button>
@@ -2653,7 +2746,7 @@ Best regards`);
                                   <button
                                     aria-label="Actions"
                                     title="Actions"
-                                    className="p-2.5 bg-white rounded-lg hover:bg-gray-50 transition-all border border-gray-200"
+                                    className="p-2.5 bg-gray-100 rounded-lg border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 transition-all"
                                   >
                                     <MoreVertical className="w-4 h-4 text-gray-600" />
                                   </button>
@@ -2763,7 +2856,7 @@ Best regards`);
                       <button
                         aria-label="Actions"
                         title="Actions"
-                        className="p-2.5 bg-white rounded-lg hover:bg-gray-50 transition-all"
+                        className="p-2.5 bg-gray-100 rounded-lg border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 transition-all"
                       >
                         <MoreVertical className="w-4 h-4 text-gray-600" />
                       </button>
