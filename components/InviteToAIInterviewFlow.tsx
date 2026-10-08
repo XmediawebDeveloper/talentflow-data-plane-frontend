@@ -5,7 +5,7 @@ import { Brain, CheckCircle, Loader2, Mail, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiInterviewService, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import AIInterviewPicker, { type AIInterviewPickerSelection } from '@/components/ai-interview/AIInterviewPicker';
-import JobInterviewVersionPicker from '@/components/ai-interview/JobInterviewVersionPicker';
+import JobInterviewVersionPicker, { latestActiveInterviewConfig } from '@/components/ai-interview/JobInterviewVersionPicker';
 import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
 import ShareAIInterviewModal from '@/components/ai-interview/ShareAIInterviewModal';
 import SelectedCandidatesPanel from '@/components/SelectedCandidatesPanel';
@@ -33,6 +33,10 @@ interface InviteToAIInterviewFlowProps {
    *  the dialog lists only THAT job's interview versions to pick from, rather
    *  than every interview across all jobs. */
   jobId?: string;
+  /** With `jobId`: open with that job's latest Active interview version
+   *  already picked (the one tagged "Latest" — the only one when there is
+   *  just one), instead of nothing. */
+  preselectLatest?: boolean;
 }
 
 /**
@@ -50,6 +54,7 @@ export default function InviteToAIInterviewFlow({
   onInvited,
   resumes,
   jobId,
+  preselectLatest = false,
 }: InviteToAIInterviewFlowProps) {
   /** Escape hatch from the job-scoped picker to the full list. */
   const [browseAll, setBrowseAll] = useState(false);
@@ -99,6 +104,21 @@ export default function InviteToAIInterviewFlow({
       })
       .finally(() => setIsLoading(false));
   }, [open, hasLoaded]);
+
+  /* Pre-pick the job's latest Active version once per opening, after the
+     configs load — never over a choice the user has already made. */
+  const autoPickedRef = useRef(false);
+  useEffect(() => {
+    if (!open) {
+      autoPickedRef.current = false;
+      return;
+    }
+    if (!preselectLatest || !jobScoped || isLoading || autoPickedRef.current || selection) return;
+    const latest = latestActiveInterviewConfig(configs, jobId as string);
+    if (!latest) return;
+    autoPickedRef.current = true;
+    setSelection({ jobKey: latest.id, jdId: latest.jd_id, interviewId: latest.id });
+  }, [open, preselectLatest, jobScoped, isLoading, configs, jobId, selection]);
 
   const closePicker = () => {
     setSelection(null);

@@ -734,7 +734,9 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
                     Criteria
                   </th>
                   <th className="w-[32%] px-3 py-2.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                    <div className="flex items-center justify-between gap-2">
+                    {/* The toggle sits right after the label, not pushed to the
+                        column's far edge, so it reads as part of this header. */}
+                    <div className="flex items-center gap-2">
                       <span>AI Reasoning</span>
                       {criteriaScores.length > 0 && (
                         <button
@@ -743,7 +745,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
                           aria-pressed={reasoningExpanded}
                           aria-label={reasoningExpanded ? 'Collapse all AI reasoning' : 'Expand all AI reasoning'}
                           title={reasoningExpanded ? 'Collapse all reasoning' : 'Expand all reasoning'}
-                          className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium normal-case tracking-normal text-brand-blue hover:bg-brand-blue/10 transition-colors"
+                          className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium normal-case tracking-normal text-brand-blue hover:bg-brand-blue/10 transition-colors cursor-pointer"
                         >
                           {reasoningExpanded
                             ? <ChevronsDownUp className="w-3.5 h-3.5" />

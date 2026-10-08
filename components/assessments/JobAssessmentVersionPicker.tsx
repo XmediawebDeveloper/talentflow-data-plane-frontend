@@ -32,6 +32,19 @@ export function jobAssessments(assessments: JobAssessment[], jobId: string): Job
     .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
 }
 
+/** The cards actually listed, newest first: the matched job version's own
+ *  assessments when it has any, else the job's other versions'. */
+function listedJobAssessments(allOfJob: JobAssessment[], jobId: string): JobAssessment[] {
+  const ofMatchedVersion = allOfJob.filter((a) => a.jd_id === jobId);
+  return ofMatchedVersion.length > 0 ? ofMatchedVersion : allOfJob;
+}
+
+/** The card tagged "Latest" — what a host pre-ticks (and, with a single
+ *  version, the only choice). */
+export function latestJobAssessment(assessments: JobAssessment[], jobId: string): JobAssessment | undefined {
+  return listedJobAssessments(jobAssessments(assessments, jobId), jobId)[0];
+}
+
 /**
  * The assessment picker for an invite that already knows its job (candidates
  * opened from that job's AI Talent Match results) — the Assessment twin of
@@ -69,8 +82,7 @@ export default function JobAssessmentVersionPicker({
      "Assessment V1" cards that read as duplicates. Only when that job version
      has none are the job's other versions listed — each card then names its
      own job version (see `spansJobVersions`). */
-  const ofMatchedVersion = allOfJob.filter((a) => a.jd_id === jobId);
-  const versions = ofMatchedVersion.length > 0 ? ofMatchedVersion : allOfJob;
+  const versions = listedJobAssessments(allOfJob, jobId);
   const spansJobVersions = new Set(versions.map((a) => a.jd_id)).size > 1;
   const latestId = versions[0]?.id;
   // The job version the candidates were matched against — an assessment on

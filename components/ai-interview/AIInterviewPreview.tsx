@@ -1,6 +1,6 @@
 'use client';
 
-import { handoffContinueLabel, safeResumeScoringReturnUrl } from '@/lib/utils/resumeScoringInviteHandoff';
+import { handoffContinueLabel, safeResumeScoringReturnUrl, useHandoffCandidateCrumb } from '@/lib/utils/resumeScoringInviteHandoff';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -244,6 +244,8 @@ export default function AIInterviewPreview() {
   // rides every step, and publishing leads straight back there to invite.
   const fromResumeScoring = searchParams.get('from') === 'resume-scoring';
   const resumeScoringReturn = safeResumeScoringReturnUrl(searchParams.get('returnUrl'));
+  // Started from one candidate's page: the trail names that candidate.
+  const candidateCrumb = useHandoffCandidateCrumb();
   const resumeScoringOrigin = fromResumeScoring
     ? `&from=resume-scoring&returnUrl=${encodeURIComponent(resumeScoringReturn)}`
     : '';
@@ -501,7 +503,8 @@ export default function AIInterviewPreview() {
                 items={fromResumeScoring
                   ? [
                       { label: 'Dashboard', href: '/dashboard' },
-                      { label: 'Resume Scoring', href: resumeScoringReturn },
+                      { label: 'Resume Scoring', href: candidateCrumb ? '/recruitment/resume-scoring' : resumeScoringReturn },
+                      ...(candidateCrumb ? [candidateCrumb] : []),
                       { label: position },
                     ]
                   : [
@@ -626,7 +629,8 @@ export default function AIInterviewPreview() {
                 fromResumeScoring
                   ? [
                       { label: 'Dashboard', href: '/dashboard' },
-                      { label: 'Resume Scoring', href: resumeScoringReturn },
+                      { label: 'Resume Scoring', href: candidateCrumb ? '/recruitment/resume-scoring' : resumeScoringReturn },
+                      ...(candidateCrumb ? [candidateCrumb] : []),
                       { label: 'Create AI Interview' },
                       { label: 'Preview & Publish' },
                     ]

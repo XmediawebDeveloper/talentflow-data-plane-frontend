@@ -2485,6 +2485,11 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         resume={viewingScoredResume}
         jobTitle={job.title}
         jobId={job.id}
+        // Version dropdown: that version's score for this job, in place.
+        onSelectScore={(scoreId) => {
+          const r = scoredResumes.find((row: any) => row.id === scoreId);
+          if (r) setViewingScoredResume(toCandidateDetail(r));
+        }}
         onBack={() => setViewingScoredResume(null)}
         breadcrumbItems={[
           { label: 'Dashboard', href: '/dashboard' },
@@ -4887,7 +4892,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             type: 'AI-Generated',
             short_id: shareAssessments[0].short_id,
             version: shareAssessments[0].version,
-            jd_short_id: job.id,
+            // Display ID (JD-133), not `job.id` — the UUID the header printed.
+            jd_short_id: shareAssessments[0].jd_short_id || job.job_id,
             jd_title: job.title,
             jd_version: shareAssessments[0].jd_version,
           }}
@@ -4901,7 +4907,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             type: 'AI-Generated',
             short_id: a.short_id,
             version: a.version,
-            jd_short_id: job.id,
+            jd_short_id: a.jd_short_id || job.job_id,
             jd_title: job.title,
             jd_version: a.jd_version,
           }))}
