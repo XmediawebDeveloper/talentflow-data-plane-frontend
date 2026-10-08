@@ -10709,7 +10709,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                           // recording waveform of the candidate's mic while they answer
                           // — the transcript is revealed after the turn is processed.
                           <div className="flex flex-col gap-1.5">
-                            <MicWaveform analyserRef={micAnalyserRef} active={isRecording} />
+                            <MicWaveform analyserRef={micAnalyserRef} active={isRecording} color="#059669" quietColor="#6ee7b7" />
                             <p className="text-xs leading-relaxed italic text-emerald-700/70 dark:text-emerald-300">
                               Recording… Your transcript will appear after you finish speaking.
                             </p>
