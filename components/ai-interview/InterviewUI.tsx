@@ -24,7 +24,7 @@ import { startClientLogForwarder, stopClientLogForwarder, flushClientLogBeacon }
 import SectionTransitionOverlay from "./SectionTransitionOverlay";
 import { toast } from 'sonner';
 import { requestFullscreen, getFullscreenChangeEvent, exitFullscreen } from "@/lib/utils/browserCompat";
-import { Clock, Timer, LogOut, Mic, Headset, Check, ArrowRight, MicOff, SkipForward, Maximize, RefreshCw, PictureInPicture2, Camera, Loader2, WifiOff } from "lucide-react";
+import { Clock, Timer, LogOut, Mic, Headset, Check, ArrowRight, MicOff, SkipForward, Maximize, RefreshCw, PictureInPicture2, Camera, Loader2, WifiOff, Wifi } from "lucide-react";
 import { createAvatar3DSender } from "./avatar3d/avatar3d-channel";
 import { DEFAULT_VISEME_WEIGHTS } from "./avatar3d/avatar3d-types";
 import { VisemeTimeline } from "./avatar3d/text-to-viseme";
@@ -1021,6 +1021,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
   // WebSocket keepalive / reconnect refs
   const pingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Network strength for the candidate's camera overlay — the round trip of
+  // the keepalive ping above (sent every 5s) to its pong. Display only:
+  // averaged over the last 3 samples; null until the first pong arrives.
+  const pingSentAtRef = useRef<number | null>(null);
+  const rttSamplesRef = useRef<number[]>([]);
+  const [networkRttMs, setNetworkRttMs] = useState<number | null>(null);
   const reconnectAttemptsRef = useRef(0);
   // Separate fast-retry counter for the "WS connected before /start flipped the
   // interview to in_progress" race (backend rejects 4003 "not in progress").
@@ -4980,7 +4986,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     switch (data.type) {
       case "pong":
         console.log(`[WS ${timestamp}] Keepalive pong received`);
-        break; // Keepalive response — no action needed
+        // Only used to show network strength — no other action.
+        if (pingSentAtRef.current !== null) {
+          const rtt = performance.now() - pingSentAtRef.current;
+          pingSentAtRef.current = null;
+          rttSamplesRef.current = [...rttSamplesRef.current, rtt].slice(-3);
+          setNetworkRttMs(rttSamplesRef.current.reduce((a, b) => a + b, 0) / rttSamplesRef.current.length);
+        }
+        break;
       case "concurrent_session_blocked":
         // The interview link is already open/active in another window/device.
         // Stop everything and show a terminal message — do NOT reconnect (the
@@ -8774,6 +8787,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
       pingIntervalRef.current = setInterval(() => {
         if (wsRef.current?.readyState === WebSocket.OPEN) {
+          pingSentAtRef.current = performance.now();
           wsRef.current.send(JSON.stringify({ type: 'ping' }));
         }
       }, 5000);
@@ -10149,8 +10163,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               <span className="text-gray-400 text-2xs font-medium tracking-wide uppercase">Bina · AI Interviewer</span>
             </div>
 
-            {/* TalkingHead fills this half */}
-            <div className="absolute inset-0 overflow-hidden">
+            {/* TalkingHead fills this half. Hidden (not unmounted — Bina's
+                voice plays through it) once the static 2D fallback is showing,
+                so the two never draw on top of each other: the 3D can finish
+                loading late, or keep rendering after the FPS watchdog trips. */}
+            <div className={`absolute inset-0 overflow-hidden ${avatarFailed ? 'invisible' : ''}`} aria-hidden={avatarFailed || undefined}>
               <TalkingHeadAvatar
                 ref={talkingHeadRef}
                 avatarUrl="/models/rpm-recruiter.glb"
@@ -10241,7 +10258,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                   over Bina's white shirt and the navy background alike. */}
               <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border shadow-md transition-colors duration-300 ${
                 isAiSpeaking ? 'bg-purple-600/90 border-purple-400/50' :
-                isRecording  ? 'bg-red-600/90 border-red-400/50' :
+                isRecording  ? (isMuted ? 'bg-red-600/90 border-red-400/50' : 'bg-emerald-600/90 border-emerald-400/50') :
                                'bg-amber-700/90 border-amber-400/50'
               }`}>
                 <div className="w-1.5 h-1.5 rounded-full animate-pulse bg-white" />
@@ -10296,10 +10313,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               {/* Face detection ellipse */}
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[55%] w-16 h-24 border border-dashed border-purple-500/25 rounded-[50%] animate-pulse pointer-events-none" />
 
-              {/* Candidate mic health — confirms which input browser selected and whether level is usable. */}
-              <div className="absolute bottom-3 left-3 right-3 z-10 pointer-events-none">
-                <div className="rounded-lg border border-black/20 bg-black/55 backdrop-blur-md px-3 py-2">
-                  <div className="flex items-center justify-between gap-3">
+              {/* Candidate mic health (left) — confirms which input the browser
+                  selected and whether the level is usable — and network strength
+                  (right), side by side. */}
+              <div className="absolute bottom-3 left-3 right-3 z-10 pointer-events-none grid grid-cols-2 gap-2 items-end">
+                <div className="min-w-0 rounded-lg border border-black/20 bg-black/55 backdrop-blur-md px-3 py-2">
+                  <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
                       {isMuted ? (
                         <MicOff className="w-3.5 h-3.5 text-red-300 shrink-0" />
@@ -10310,7 +10329,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                         {activeMicLabel || "Microphone"}
                       </span>
                     </div>
-                    <div className="w-20 h-1.5 rounded-full bg-white/15 dark:bg-slate-900/15 overflow-hidden shrink-0">
+                    <div className="w-12 sm:w-16 h-1.5 rounded-full bg-white/15 dark:bg-slate-900/15 overflow-hidden shrink-0">
                       <div
                         className={`h-full rounded-full transition-all duration-150 ${
                           micInputLow && isRecording && !isMuted ? 'bg-amber-300' : 'bg-emerald-300'
@@ -10325,6 +10344,40 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                     </div>
                   )}
                 </div>
+                {(() => {
+                  // Approximate strength from the ping round trip:
+                  // ≤100ms → 100%, falling to 10% at ≥1s.
+                  const rtt = isConnected ? networkRttMs : null;
+                  const pct = rtt === null ? null : Math.round(Math.min(100, Math.max(10, 100 - ((rtt - 100) / 900) * 90)));
+                  const level = !isConnected ? 'offline' : rtt === null ? 'checking' : rtt < 250 ? 'good' : rtt < 600 ? 'moderate' : 'poor';
+                  const tone = {
+                    good: { icon: 'text-emerald-300', bar: 'bg-emerald-300', label: 'Good' },
+                    moderate: { icon: 'text-amber-300', bar: 'bg-amber-300', label: 'Moderate' },
+                    poor: { icon: 'text-red-300', bar: 'bg-red-400', label: 'Poor' },
+                    checking: { icon: 'text-white/60', bar: 'bg-white/40', label: 'Checking…' },
+                    offline: { icon: 'text-red-300', bar: 'bg-red-400', label: 'Offline' },
+                  }[level];
+                  return (
+                    <div className="min-w-0 rounded-lg border border-black/20 bg-black/55 backdrop-blur-md px-3 py-2" title={rtt !== null ? `Approx. ${Math.round(rtt)} ms round trip to the interview server` : undefined}>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {level === 'offline'
+                            ? <WifiOff className={`w-3.5 h-3.5 shrink-0 ${tone.icon}`} />
+                            : <Wifi className={`w-3.5 h-3.5 shrink-0 ${tone.icon}`} />}
+                          <span className="text-white/80 text-2xs truncate">
+                            Network · <span className="font-semibold text-white">{tone.label}</span>{pct !== null ? ` ${pct}%` : ''}
+                          </span>
+                        </div>
+                        <div className="w-12 sm:w-16 h-1.5 rounded-full bg-white/15 overflow-hidden shrink-0">
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${tone.bar}`}
+                            style={{ width: `${level === 'offline' ? 4 : pct ?? 30}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </div>
@@ -10342,7 +10395,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               Sized by the chat panel's own width (@container), not the
               window's: on narrower panels the title text, subtitle, progress
               bar and ID Verified drop out in turn so End is never clipped. */}
-          <div className="@container flex-shrink-0 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 shadow-sm">
+          <div id="iv-chat-header" className="@container flex-shrink-0 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 shadow-sm">
           <div className="flex items-center justify-between gap-3 px-4 py-3">
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-10 h-10 rounded-full bg-brand-blue/10 dark:bg-sky-500/15 flex items-center justify-center shrink-0">
@@ -10430,7 +10483,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
           {/* ── Per-question timer banner — shown above chat when timer is active ── */}
           {questionTimerSeconds !== null && (
-            <div className={`flex-shrink-0 px-4 py-2.5 border-b transition-colors duration-500 ${
+            <div id="iv-answer-timer" className={`flex-shrink-0 px-4 py-2.5 border-b transition-colors duration-500 ${
               questionTimerExpired       ? 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/30' :
               questionTimerSeconds <= 30 ? 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/30' :
               questionTimerSeconds <= 60 ? 'bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30' :
@@ -11419,7 +11472,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         </div>
       )}
 
-      <InterviewProctoringWarnings />
+      <InterviewProctoringWarnings anchorIds={['iv-answer-timer', 'iv-chat-header']} />
 
       {/* The screen-recording popup is mounted by CandidateAIInterviewPortal,
           not here: it has to cover the pre-interview steps too, and mounting it
