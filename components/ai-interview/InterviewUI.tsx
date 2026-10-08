@@ -5499,7 +5499,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         // NOT render any chip or inline note — the Follow-up indicator and
         // "Reframed as a follow-up…" note are post-interview-only and live
         // on the Question Analysis (EvaluationDashboardV2) page.
-        console.log(`[WS ${timestamp}] question_meta: is_followup=${data.is_followup}, skills=${JSON.stringify(data.follow_skills)}`);
+        console.log(`[INTERVIEW-DEBUG][WS ${timestamp}] question_meta: is_followup=${data.is_followup}, skills=${JSON.stringify(data.follow_skills)}, answer_type=${data.answer_type}, question_number=${data.question_number}, hr_question_id=${data.hr_question_id}, live_questionNumber=${questionNumberRef.current}`);
         if (data.is_followup) {
           isCurrentFollowupRef.current = true;
         } else {
@@ -5535,7 +5535,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               hrVoiceBlockedQuestionNumberRef.current = null;
             }
           } else {
-            console.log(`[WS ${timestamp}] question_meta: duplicate re-announcement of hr_question_id=${_hrQid} ignored`);
+            console.log(`[INTERVIEW-DEBUG][WS ${timestamp}] question_meta: duplicate re-announcement of hr_question_id=${_hrQid} ignored (armedHrQuestionIdRef already set to this id)`);
           }
         } else {
           // Ordinary free-form question (no HR tag at all) — make sure no
@@ -9528,6 +9528,27 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     isConnected && !isClosing &&
     !isAiSpeaking && !isProcessing &&
     questionTimerSeconds !== null && !questionTimerExpired;
+
+  // Debug-only: trace the exact AII-20 button render gate
+  // (structuredHrPrompt.questionNumber === questionNumber && answerType ===
+  // 'yes_no' && isCandidateTurn && !hrExplainMore) every time one of its
+  // inputs changes, so a report of "yes_no question showed no buttons" can
+  // be diagnosed from client-log without reproducing live.
+  useEffect(() => {
+    if (!structuredHrPrompt) return;
+    console.log('[INTERVIEW-DEBUG] AII-20 button gate state', {
+      structuredHrPrompt,
+      liveQuestionNumber: questionNumber,
+      numbersMatch: structuredHrPrompt.questionNumber === questionNumber,
+      isCandidateTurn,
+      hrExplainMore,
+      wouldRenderButtons:
+        structuredHrPrompt.questionNumber === questionNumber &&
+        structuredHrPrompt.answerType === 'yes_no' &&
+        isCandidateTurn &&
+        !hrExplainMore,
+    });
+  }, [structuredHrPrompt, questionNumber, isCandidateTurn, hrExplainMore]);
 
   // AII-20: submit a Yes/No click or a Text-based typed answer. Reuses the
   // EXISTING `text_input` WS message the backend already handles end-to-end
