@@ -2,6 +2,7 @@
 
 // `Folder` is already taken by the type imported below, so the icon comes in
 // under an alias.
+import { RESUME_EMAIL_SHARE_ENABLED } from '@/lib/constants/featureFlags';
 import { Eye, Briefcase, Download, MoreVertical, Paperclip, Upload, Zap, FileSearch, Edit3, FolderOpen, Folder as FolderIcon, Trash2, Copy, Share2, Mail, Send, Star, Tag, Archive, ArchiveRestore, Clock, GripVertical, FileText, Loader2, X } from 'lucide-react';
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
@@ -1026,6 +1027,8 @@ export default function ResumeTable({
                                 <span className={MENU_ITEM_SCALE_CLASS}>Download Resume</span>
                               </button>
                             )}
+                            {/* Share Resume — hidden for now (RESUME_EMAIL_SHARE_ENABLED). */}
+                            {RESUME_EMAIL_SHARE_ENABLED && (
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -1044,6 +1047,7 @@ export default function ResumeTable({
                               <Share2 className="w-4 h-4 text-menu-icon-share" />
                               <span className={MENU_ITEM_SCALE_CLASS}>Share Resume</span>
                             </button>
+                            )}
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();

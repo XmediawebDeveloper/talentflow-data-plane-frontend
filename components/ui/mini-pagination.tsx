@@ -33,6 +33,11 @@ export interface MiniPaginationProps {
   className?: string;
   /** Accessible label for the nav landmark. */
   'aria-label'?: string;
+  /**
+   * Always show the first and last page, with "…" for the gap:
+   * `‹ 1 … 4 5 6 … 12 ›` — so where the list starts and ends is never hidden.
+   */
+  showEnds?: boolean;
 }
 
 export function MiniPagination({
@@ -41,6 +46,7 @@ export function MiniPagination({
   onPageChange,
   className,
   'aria-label': ariaLabel = 'Pagination',
+  showEnds = false,
 }: MiniPaginationProps) {
   const total = Math.max(1, totalPages);
   const current = Math.min(Math.max(1, page), total);
@@ -57,6 +63,22 @@ export function MiniPagination({
     if (p >= 1 && p <= total && p !== current) onPageChange(p);
   };
 
+  const windowEnd = windowStart + slots - 1;
+  const endClass =
+    'inline-flex h-7 w-7 items-center justify-center rounded-full text-sm tabular-nums text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40';
+  /* The end pages and gaps keep their space even while hidden (`invisible`),
+     so the pager is ONE width on every page and the arrows never move —
+     a pager that resized put the next ‹ click onto "1". Only needed when
+     there are more pages than the window shows. */
+  const ends = showEnds && total > slots;
+  const showFirst = windowStart > 1;
+  const showFirstGap = windowStart > 2;
+  const showLast = windowEnd < total;
+  const showLastGap = windowEnd < total - 1;
+  const gap = (visible: boolean) => (
+    <span aria-hidden className={cn('w-4 text-center text-sm text-gray-400', !visible && 'invisible')}>…</span>
+  );
+
   const arrowClass =
     'inline-flex h-7 w-7 items-center justify-center rounded-full text-gray-600 dark:text-slate-300 transition-colors hover:bg-gray-100 dark:hover:bg-slate-800 disabled:pointer-events-none disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40';
 
@@ -71,6 +93,23 @@ export function MiniPagination({
       >
         <ChevronLeft className="h-4 w-4" />
       </button>
+
+      {/* First page, when it has scrolled out of the window. */}
+      {ends && (
+        <>
+          <button
+            type="button"
+            onClick={() => go(1)}
+            aria-label="First page, 1"
+            tabIndex={showFirst ? 0 : -1}
+            aria-hidden={!showFirst}
+            className={cn(endClass, !showFirst && 'invisible')}
+          >
+            1
+          </button>
+          {gap(showFirstGap)}
+        </>
+      )}
 
       {/* Viewport: exactly `slots` cells wide; anything outside is clipped. */}
       <div className="relative h-7 overflow-hidden" style={{ width: slots * SLOT }}>
@@ -115,6 +154,23 @@ export function MiniPagination({
           })}
         </div>
       </div>
+
+      {/* Last page, when it is past the window. */}
+      {ends && (
+        <>
+          {gap(showLastGap)}
+          <button
+            type="button"
+            onClick={() => go(total)}
+            aria-label={`Last page, ${total}`}
+            tabIndex={showLast ? 0 : -1}
+            aria-hidden={!showLast}
+            className={cn(endClass, !showLast && 'invisible')}
+          >
+            {total}
+          </button>
+        </>
+      )}
 
       <button
         type="button"

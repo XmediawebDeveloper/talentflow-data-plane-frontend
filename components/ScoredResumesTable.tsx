@@ -1,5 +1,6 @@
 import { SCORE_CELL_TEXT } from '@/lib/utils/score';
-import { Mail, Phone, Calendar, Search, Download, FileDown, CheckSquare, Square, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, ClipboardList, Share2, Paperclip, FileText, FileSpreadsheet, MoreVertical, Award, ChevronRight, ChevronDown, ChevronsUpDown, ChevronsDownUp, Video, BarChart3 } from 'lucide-react';
+import { RESUME_EMAIL_SHARE_ENABLED } from '@/lib/constants/featureFlags';
+import { Mail, Phone, Calendar, Search, Download, FileDown, CheckSquare, Square, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, ClipboardList, Share2, Paperclip, FileText, FileSpreadsheet, MoreVertical, Award, ChevronRight, ChevronDown, ChevronsUpDown, ChevronsDownUp, Plus, Video, BarChart3 } from 'lucide-react';
 import { matchBadgeClass, MATCH_SCORE_TEXT_CLASS, normalizeMatchResult, formatOverallScore, formatOverallScoreValue } from '@/lib/utils/matchStatus';
 import { truncateJobTitle } from '@/lib/utils/jobOpeningDisplay';
 import { useState, useEffect, useMemo, useRef, Fragment } from 'react';
@@ -388,6 +389,13 @@ interface ScoredResumesTableProps {
    */
   viewPillsSlot?: React.ReactNode;
   /**
+   * Offer "＋ Create AI Assessment / AI Interview" under a greyed invite when
+   * the ticked candidates' one job has none yet. The host takes it from
+   * there (Resume Scoring: explain, keep the selection, go create, come
+   * back and invite). Without it the invite is just greyed with the reason.
+   */
+  onCreateInviteTarget?: (kind: 'assessment' | 'interview', job: InviteTargetJob, rows: ScoredResume[]) => void;
+  /**
    * Embedded use — the rows of ONE job opened inline under its row in
    * Resume Scoring's "View by Job". Drops the card chrome and the whole
    * search / More Filters / view-toggle toolbar (the host's own controls
@@ -411,6 +419,107 @@ interface ScoredResumesTableProps {
  * @param canCarryAIInterview the host can actually run an AI Interview
  *   invite (its own handler, or the internal resolve-and-share flow).
  */
+/** The job an invite / a "Create …" acts on. */
+export interface InviteTargetJob {
+  jdId: string;
+  jdCode?: string;
+  jdTitle: string;
+}
+
+/**
+ * Can the ticked candidates be invited to an AI Assessment / AI Interview?
+ *  - 'ready'   — yes (or unknown: never gate on a lookup that hasn't answered)
+ *  - 'missing' — one job, and it has none yet → offer to create it
+ *  - 'multi'   — the candidates span several jobs and the invite needs one
+ *                (assessment always; interview only when one lacks it)
+ */
+export type InviteTargetState =
+  | { state: 'ready' }
+  | { state: 'missing'; job: InviteTargetJob }
+  | { state: 'multi' };
+
+export function resolveInviteTargetState(
+  kind: 'assessment' | 'interview',
+  jobs: InviteTargetJob[],
+  configured: (jdId: string) => boolean | undefined,
+): InviteTargetState {
+  if (jobs.length === 0) return { state: 'ready' };
+  if (kind === 'assessment' && jobs.length > 1) return { state: 'multi' };
+  const missing = jobs.filter((j) => configured(j.jdId) === false);
+  if (missing.length === 0) return { state: 'ready' };
+  // Several jobs: an AI Interview invite can still go to any interview.
+  if (jobs.length > 1) return kind === 'assessment' ? { state: 'multi' } : { state: 'ready' };
+  return { state: 'missing', job: jobs[0] };
+}
+
+/**
+ * The invite item of a bulk Actions menu, for each target state: the
+ * normal item; a greyed, unclickable one saying why; and — for a job with
+ * none yet, when the host supports it — a "＋ Create …" item under it.
+ */
+export function renderInviteTargetItems({
+  kind,
+  target,
+  itemClass,
+  allowed,
+  extraDisabled,
+  extraDisabledReason,
+  onInvite,
+  onCreate,
+}: {
+  kind: 'assessment' | 'interview';
+  target: InviteTargetState;
+  itemClass: string;
+  /** Permission + plan allow this invite at all. */
+  allowed: boolean;
+  /** e.g. no assessment units left. */
+  extraDisabled?: boolean;
+  extraDisabledReason?: string;
+  onInvite: (e: Event) => void;
+  onCreate?: (job: InviteTargetJob) => void;
+}) {
+  const what = kind === 'assessment' ? 'AI Assessment' : 'AI Interview';
+  const Icon = kind === 'assessment' ? FileText : Video;
+  const iconClass = kind === 'assessment' ? 'text-menu-icon-view' : 'text-menu-icon-share';
+  if (!allowed || target.state === 'ready') {
+    return (
+      <DropdownMenuItem
+        className={`${itemClass} ${!allowed || extraDisabled ? 'text-gray-400 opacity-60' : ''}`}
+        disabled={allowed && extraDisabled}
+        title={allowed && extraDisabled ? extraDisabledReason : undefined}
+        onSelect={onInvite}
+      >
+        <Icon className={`w-4 h-4 ${iconClass}`} />
+        <span className={MENU_ITEM_SCALE_CLASS}>{what} Invite</span>
+      </DropdownMenuItem>
+    );
+  }
+  const reason = target.state === 'multi'
+    ? `Select candidates from one job to invite to its ${what}`
+    : `${target.job.jdCode || 'This job'} has no ${what} yet`;
+  return (
+    <>
+      {/* Greyed and not clickable — with the reason right under the label. */}
+      <DropdownMenuItem className={`${itemClass} !items-start text-gray-400`} disabled>
+        <Icon className="w-4 h-4 text-gray-400 mt-0.5" />
+        <span className="min-w-0">
+          <span className="block">{what} Invite</span>
+          <span className="block text-2xs text-gray-400 normal-case">{reason}</span>
+        </span>
+      </DropdownMenuItem>
+      {target.state === 'missing' && onCreate && (
+        <DropdownMenuItem
+          className={`${itemClass} !pl-11 text-brand-blue font-medium`}
+          onSelect={() => onCreate(target.job)}
+        >
+          <Plus className="w-4 h-4 text-brand-blue" />
+          <span className={MENU_ITEM_SCALE_CLASS}>Create {what}</span>
+        </DropdownMenuItem>
+      )}
+    </>
+  );
+}
+
 export function useScoringActionPermissions(canCarryAIInterview: boolean) {
   const { isTenantAdmin, hasPermissionCode, hasPermission, tenant } = useAuth();
   const { hasPlanFeature } = usePlanFeatures();
@@ -488,6 +597,7 @@ export default function ScoredResumesTable({
   assessmentConfigured,
   aiInterviewConfigured,
   viewPillsSlot,
+  onCreateInviteTarget,
   compact = false,
   hideSelectionBar = false,
 }: ScoredResumesTableProps) {
@@ -1007,6 +1117,19 @@ Best regards`);
     return filteredResumes.filter((r) => tickedKeys.has(candidateGroupKey(r)));
   }, [selectedResumes, filteredResumes, isGrouped]);
   const allVisibleSelected = filteredResumes.length > 0 && effectiveSelectedRows.length === filteredResumes.length;
+
+  /* The jobs the ticked rows belong to — a row's own JD, or this table's
+     one job on a single-job host. */
+  const selectionJobs = useMemo((): InviteTargetJob[] => {
+    const byId = new Map<string, InviteTargetJob>();
+    for (const r of effectiveSelectedRows) {
+      const id = r.jdId || (jobId && jobId !== 'global' ? jobId : '');
+      if (!id || byId.has(id)) continue;
+      byId.set(id, { jdId: id, jdCode: rowJobCode(r) || undefined, jdTitle: r.jobTitle || jobTitle });
+    }
+    return Array.from(byId.values());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveSelectedRows, jobId, jobTitle]);
 
   const candidateGroups = useMemo(() => {
     const groups = new Map<string, ScoredResume[]>();
@@ -1664,8 +1787,9 @@ Best regards`);
           <span className={MENU_ITEM_SCALE_CLASS}>View Resume</span>
         </DropdownMenuItem>
       )}
-      {/* Only scores that still point at a resume can be shared. */}
-      {resume.resumeId && (
+      {/* Only scores that still point at a resume can be shared. Hidden
+          for now (RESUME_EMAIL_SHARE_ENABLED). */}
+      {RESUME_EMAIL_SHARE_ENABLED && resume.resumeId && (
         <DropdownMenuItem
           className={`${scoredResumesMenuItemClass} ${!canShareResume ? 'text-gray-400 cursor-not-allowed opacity-60' : ''}`}
           aria-disabled={!canShareResume}
@@ -1737,7 +1861,7 @@ Best regards`);
             few times — so the new control is noticed — then stays still. */}
         <button
           type="button"
-          className="relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-800 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
+          className="relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
           aria-label={`Actions for ${effectiveSelectedRows.length} selected`}
         >
           <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
@@ -1789,47 +1913,53 @@ Best regards`);
           </span>
         </DropdownMenuItem>
         <DropdownMenuSeparator className="my-1 bg-gray-100" />
-        <DropdownMenuItem
-          className={`${scoredResumesMenuItemClass} ${!canCreateAssessments ? 'text-gray-400 opacity-60' : ''}`}
-          /* Assessment invites go to this job's published assessment and
-             spend units — the same gate the old Invite button had. */
-          disabled={assessmentConfigured === false || availableUnits === 0}
-          title={
-            !canCreateAssessments
-              ? assessmentDeniedReason
-              : !canInviteAssessment
-                ? 'No published assessment for this job yet'
-                : availableUnits === 0
-                  ? 'No assessment units available'
-                  : undefined
-          }
-          onSelect={(e) => {
-            if (!canCreateAssessments) {
-              e.preventDefault();
-              toast.error(assessmentDeniedReason);
-              return;
-            }
-            setBulkAction('assessment');
-          }}
-        >
-          <FileText className="w-4 h-4 text-menu-icon-view" />
-          <span className={MENU_ITEM_SCALE_CLASS}>AI Assessment Invite</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          className={`${scoredResumesMenuItemClass} ${!mayInviteAIInterview ? 'text-gray-400 opacity-60' : ''}`}
-          title={!mayInviteAIInterview ? aiInterviewDeniedReason : undefined}
-          onSelect={(e) => {
-            if (!mayInviteAIInterview) {
-              e.preventDefault();
-              toast.error(aiInterviewDeniedReason);
-              return;
-            }
-            setBulkAction('interview');
-          }}
-        >
-          <Video className="w-4 h-4 text-menu-icon-share" />
-          <span className={MENU_ITEM_SCALE_CLASS}>AI Interview Invite</span>
-        </DropdownMenuItem>
+        {(() => {
+          /* Per invite: ready, greyed with the reason, or greyed plus
+             "＋ Create …" when the one job has none yet. */
+          const rowOf = (jdId: string) => effectiveSelectedRows.find((r) => (r.jdId || jobId) === jdId) ?? effectiveSelectedRows[0];
+          const assessmentTarget = resolveInviteTargetState('assessment', selectionJobs, (id) => resolveAssessmentConfigured(rowOf(id)));
+          const interviewTarget = resolveInviteTargetState('interview', selectionJobs, (id) => resolveAIInterviewConfigured(rowOf(id)));
+          const create = onCreateInviteTarget
+            ? (kind: 'assessment' | 'interview') => (job: InviteTargetJob) =>
+                onCreateInviteTarget(kind, job, effectiveSelectedRows.filter((r) => (r.jdId || jobId) === job.jdId))
+            : undefined;
+          return (
+            <>
+              {renderInviteTargetItems({
+                kind: 'assessment',
+                target: assessmentTarget,
+                itemClass: scoredResumesMenuItemClass,
+                allowed: canCreateAssessments,
+                extraDisabled: availableUnits === 0,
+                extraDisabledReason: 'No assessment units available',
+                onInvite: (e) => {
+                  if (!canCreateAssessments) {
+                    e.preventDefault();
+                    toast.error(assessmentDeniedReason);
+                    return;
+                  }
+                  setBulkAction('assessment');
+                },
+                onCreate: create?.('assessment'),
+              })}
+              {renderInviteTargetItems({
+                kind: 'interview',
+                target: interviewTarget,
+                itemClass: scoredResumesMenuItemClass,
+                allowed: mayInviteAIInterview,
+                onInvite: (e) => {
+                  if (!mayInviteAIInterview) {
+                    e.preventDefault();
+                    toast.error(aiInterviewDeniedReason);
+                    return;
+                  }
+                  setBulkAction('interview');
+                },
+                onCreate: create?.('interview'),
+              })}
+            </>
+          );
+        })()}
       </DropdownMenuContent>
     </DropdownMenu>
     {/* Clear — untick every row in one click (Select all only clears once
@@ -3053,7 +3183,7 @@ Best regards`);
                 </Button>
               )}
 
-              {resume.resumeId && (
+              {RESUME_EMAIL_SHARE_ENABLED && resume.resumeId && (
                 <Button
                   variant="secondary"
                   size="md"
@@ -3482,8 +3612,10 @@ Best regards`);
             const resume = resumes.find(r => r.id === id);
             return resume!;
           }).filter(Boolean)}
-          jobId={jobId}
-          jobTitle={jobTitle}
+          // A cross-job list has no one job of its own: use the selection's
+          // (the Actions menu only offers this when it is a single job).
+          jobId={jobId === 'global' && selectionJobs.length === 1 ? selectionJobs[0].jdId : jobId}
+          jobTitle={jobId === 'global' && selectionJobs.length === 1 ? selectionJobs[0].jdTitle : jobTitle}
           onClose={() => { setShowBulkInviteModal(false); setBulkActionRows(null); }}
           onSuccess={() => {
             setShowBulkInviteModal(false);
@@ -3539,7 +3671,6 @@ const BULK_ACTION_INFO: Record<BulkActionKind, {
     icon: FileText,
     what: "Invites the included candidates to this job's published assessment. You pick the assessment and the link expiry next. Each invitation uses one assessment unit.",
     continueLabel: 'Continue',
-    locked: { 'No Match': 'Not eligible — only Exact Match and Partial Match candidates can be invited to an assessment.' },
   },
   interview: {
     title: 'AI Interview Invite',
@@ -3642,6 +3773,15 @@ export function BulkActionConfirmModal({
                       {lockedReason && counts[b] > 0 && (
                         <span className="block mt-1 text-xs text-gray-500">{lockedReason}</span>
                       )}
+                      {/* No Match can be invited — the recruiter's call — but
+                          say what the status means, so it's a decision. */}
+                      {!lockedReason && b === 'No Match' && counts[b] > 0 && action !== 'download' && (
+                        <span className="block mt-1 text-xs text-amber-700">
+                          {included[b]
+                            ? 'Included. These candidates did not meet the job\'s must-have requirements — untick to leave them out.'
+                            : 'Left out. Tick to invite them anyway.'}
+                        </span>
+                      )}
                     </span>
                   </label>
                 );
@@ -3694,12 +3834,12 @@ export function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onS
     total_quota: number; consumed: number; pending: number; available: number;
   } | null>(null);
 
-  // Separate valid and invalid candidates
-  const validCandidates = selectedResumes.filter(r =>
-    r.matchStatus === 'Exact Match' || r.matchStatus === 'Partial Match'
-  );
+  // Everyone handed in is invited — which statuses to include was the
+  // recruiter's choice in the popup before this. No Match is only counted,
+  // to say so in the summary.
+  const validCandidates = selectedResumes;
   const noMatchCandidates = selectedResumes.filter(r =>
-    r.matchStatus === 'No Match' || (!r.matchStatus || r.matchStatus === '')
+    (normalizeMatchResult(r.matchStatus) ?? 'No Match') === 'No Match'
   );
 
   useEffect(() => {
@@ -3748,9 +3888,8 @@ export function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onS
       return;
     }
 
-    // Only send to valid candidates (Exact Match or Partial Match)
     if (validCandidates.length === 0) {
-      toast.error('No valid candidates to invite. Only "Exact Match" and "Partial Match" candidates can be invited.');
+      toast.error('No candidates to invite.');
       return;
     }
 
@@ -3783,9 +3922,7 @@ export function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onS
         expiry_days: expiryDays,
       });
 
-      const message = noMatchCandidates.length > 0
-        ? `Successfully sent ${validCandidates.length} invitation${validCandidates.length > 1 ? 's' : ''}! ${noMatchCandidates.length} "No Match" candidate${noMatchCandidates.length > 1 ? 's were' : ' was'} excluded.`
-        : `Successfully sent ${validCandidates.length} invitation${validCandidates.length > 1 ? 's' : ''}!`;
+      const message = `Successfully sent ${validCandidates.length} invitation${validCandidates.length > 1 ? 's' : ''}!`;
 
       toast.success(message);
       onSuccess();
@@ -4002,62 +4139,37 @@ export function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onS
             </select>
           </div>
 
-          {/* No Match Warning */}
+          {/* Included No Match candidates — a note, not an exclusion. */}
           {showNoMatchWarning && noMatchCandidates.length > 0 && (
-            <div className="bg-gray-50 border-2 border-gray-300 rounded-lg p-4">
-              <div className="flex items-start gap-3 mb-3">
-                <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center flex-shrink-0">
-                  <AlertCircle className="w-5 h-5 text-gray-600" />
-                </div>
-                <div className="flex-1">
-                  <h4 className="font-semibold text-gray-900 mb-1">
-                    {noMatchCandidates.length} Candidate{noMatchCandidates.length > 1 ? 's' : ''} Cannot Be Invited
-                  </h4>
-                  <p className="text-sm text-gray-700 mb-3">
-                    Only candidates with "Exact Match" or "Partial Match" status can be invited to assessments.
-                    The following {noMatchCandidates.length > 1 ? 'candidates have' : 'candidate has'} "No Match" status and will be excluded:
-                  </p>
-                  <div className="bg-white border border-gray-200 rounded-lg p-3 space-y-2 max-h-32 overflow-y-auto">
-                    {noMatchCandidates.map((resume) => (
-                      <div key={resume.id} className="flex items-center gap-2 text-sm">
-                        <X className="w-4 h-4 text-gray-500 flex-shrink-0" />
-                        <span className="font-medium text-gray-900">{resume.candidateName}</span>
-                        <span className="text-gray-500">({resume.email})</span>
-                        <span className="ml-auto px-2 py-0.5 text-xs bg-gray-200 text-gray-700 rounded-full">No Match</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center justify-between pt-3 border-t border-gray-200">
-                <p className="text-sm text-gray-600">
-                  <strong>{validCandidates.length}</strong> valid candidate{validCandidates.length !== 1 ? 's' : ''} will receive invitations
-                </p>
-                <button
-                  onClick={() => setShowNoMatchWarning(false)}
-                  className="text-sm text-gray-600 hover:text-gray-800 underline"
-                >
-                  Dismiss
-                </button>
-              </div>
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2.5">
+              <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+              <p className="flex-1 text-sm text-amber-800">
+                Includes <strong>{noMatchCandidates.length}</strong> No Match candidate{noMatchCandidates.length > 1 ? 's' : ''} — they did not meet the job's must-have requirements. They will be invited as you chose.
+              </p>
+              <button
+                onClick={() => setShowNoMatchWarning(false)}
+                className="text-xs text-amber-700 hover:text-amber-900 underline flex-shrink-0"
+              >
+                Dismiss
+              </button>
             </div>
           )}
 
-          {/* Candidates List - Valid Only */}
+          {/* Candidates to invite */}
           {validCandidates.length > 0 && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Candidates to Invite ({validCandidates.length})
               </label>
-              <div className="max-h-60 overflow-y-auto border border-success-line rounded-lg bg-success-subtle">
+              <div className="max-h-60 overflow-y-auto border border-gray-200 rounded-lg bg-white">
                 {validCandidates.map((resume, index) => (
                   <div
                     key={resume.id}
                     className={`p-3 flex items-center gap-3 ${
-                      index < validCandidates.length - 1 ? 'border-b border-success-line' : ''
+                      index < validCandidates.length - 1 ? 'border-b border-gray-100' : ''
                     }`}
                   >
-                    <div className="w-8 h-8 bg-success-subtle rounded-full flex items-center justify-center text-success font-medium text-sm">
+                    <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-600 font-medium text-sm">
                       {index + 1}
                     </div>
                     <div className="flex-1">
@@ -4085,10 +4197,9 @@ export function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onS
               <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-3">
                 <AlertCircle className="w-8 h-8 text-gray-600" />
               </div>
-              <h4 className="font-semibold text-gray-900 mb-2">No Valid Candidates Selected</h4>
+              <h4 className="font-semibold text-gray-900 mb-2">No Candidates Selected</h4>
               <p className="text-sm text-gray-600">
-                All selected candidates have "No Match" status and cannot be invited to assessments.
-                Please select candidates with "Exact Match" or "Partial Match" status.
+                Select the candidates you want to invite and try again.
               </p>
             </div>
           )}
@@ -4105,8 +4216,8 @@ export function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onS
                 <p><strong>Duration:</strong> {selectedAssessmentData?.duration_minutes} minutes</p>
                 <p><strong>Recipients:</strong> {validCandidates.length} candidate(s)</p>
                 {noMatchCandidates.length > 0 && (
-                  <p className="text-gray-600">
-                    <strong>Excluded:</strong> {noMatchCandidates.length} "No Match" candidate(s)
+                  <p className="text-amber-700">
+                    <strong>Includes:</strong> {noMatchCandidates.length} No Match candidate(s)
                   </p>
                 )}
                 <p><strong>Expires in:</strong> {expiryDays} day{expiryDays > 1 ? 's' : ''}</p>
@@ -4126,13 +4237,13 @@ export function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onS
                     <strong className={insufficient ? 'text-destructive' : 'text-success'}>{validCandidates.length}</strong> invitation{validCandidates.length !== 1 ? 's' : ''} will be sent
                     {insufficient && ` — only ${quotaStats!.available} unit(s) available`}
                     {!insufficient && noMatchCandidates.length > 0 && (
-                      <span className="ml-2 text-gray-500">({noMatchCandidates.length} excluded)</span>
+                      <span className="ml-2 text-amber-700">(incl. {noMatchCandidates.length} No Match)</span>
                     )}
                   </span>
                 );
               })()
             ) : (
-              <span className="text-gray-500">No valid candidates to invite</span>
+              <span className="text-gray-500">No candidates to invite</span>
             )}
           </div>
           <div className="flex items-center gap-3">

@@ -1,5 +1,6 @@
 'use client';
 
+import { handoffContinueLabel, safeResumeScoringReturnUrl } from '@/lib/utils/resumeScoringInviteHandoff';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -238,7 +239,15 @@ export default function AIInterviewPreview() {
   // stepping back keeps that page's breadcrumb instead of dropping to the
   // AI Interviews trail.
   const fromJobDetails = searchParams.get('from') === 'job-details';
-  const originParam = fromJobDetails ? '&from=job-details' : '';
+  // Entered from Resume Scoring's Actions › "Create AI Interview" (the job
+  // had none to invite to): the trail starts at Resume Scoring, the origin
+  // rides every step, and publishing leads straight back there to invite.
+  const fromResumeScoring = searchParams.get('from') === 'resume-scoring';
+  const resumeScoringReturn = safeResumeScoringReturnUrl(searchParams.get('returnUrl'));
+  const resumeScoringOrigin = fromResumeScoring
+    ? `&from=resume-scoring&returnUrl=${encodeURIComponent(resumeScoringReturn)}`
+    : '';
+  const originParam = (fromJobDetails ? '&from=job-details' : '') + resumeScoringOrigin;
 
   /* State */
   const [loading, setLoading] = useState(true);
@@ -387,7 +396,9 @@ export default function AIInterviewPreview() {
   /* Where "Go to AI Interviews" (and Back, once published — see below) land:
      the list, on the All Interviews tab, with this config flagged so that
      screen can scroll to and highlight the row it just created. */
-  const listHref = exitHref
+  const listHref = fromResumeScoring
+    ? resumeScoringReturn
+    : exitHref
     ? `${exitHref}&tab=ai-interview-results`
     : `/recruitment/ai-interviews?tab=all-interviews&highlight=${encodeURIComponent(id)}`;
 
@@ -487,11 +498,17 @@ export default function AIInterviewPreview() {
             <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
               <PageBreadcrumb
                 className="mb-4 md:mb-6"
-                items={[
-                  { label: 'Dashboard', href: '/dashboard' },
-                  { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
-                  { label: position },
-                ]}
+                items={fromResumeScoring
+                  ? [
+                      { label: 'Dashboard', href: '/dashboard' },
+                      { label: 'Resume Scoring', href: resumeScoringReturn },
+                      { label: position },
+                    ]
+                  : [
+                      { label: 'Dashboard', href: '/dashboard' },
+                      { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
+                      { label: position },
+                    ]}
               />
               <AIInterviewStepIndicator currentStep={CURRENT_STEP} />
 
@@ -510,7 +527,9 @@ export default function AIInterviewPreview() {
                 </h1>
                 <p className="mt-3 text-sm sm:text-base text-gray-500 max-w-xl mx-auto">
                   Your AI interview has been successfully published and is now live.
-                  You can invite candidates and track their responses.
+                  {fromResumeScoring
+                    ? ' Next, send it to the candidates you picked in Resume Scoring.'
+                    : ' You can invite candidates and track their responses.'}
                 </p>
 
                 {/* What was published */}
@@ -540,7 +559,7 @@ export default function AIInterviewPreview() {
                   </div>
                 </div>
 
-                <div className="mt-6 pt-6 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className={`mt-6 pt-6 border-t border-gray-100 grid grid-cols-1 ${fromResumeScoring ? 'sm:grid-cols-2' : 'sm:grid-cols-3'} gap-3`}>
                   <button
                     type="button"
                     onClick={() => router.push(`/recruitment/ai-interviews/${encodeURIComponent(id)}`)}
@@ -549,6 +568,7 @@ export default function AIInterviewPreview() {
                     <Eye className="w-4 h-4" />
                     View Interview
                   </button>
+                  {!fromResumeScoring && (
                   <button
                     type="button"
                     onClick={() => {
@@ -565,13 +585,14 @@ export default function AIInterviewPreview() {
                     <Share2 className="w-4 h-4" />
                     Share Invite Link
                   </button>
+                  )}
                   <button
                     type="button"
-                    onClick={() => router.push(listHref)}
+                    onClick={() => (fromResumeScoring ? router.replace(listHref) : router.push(listHref))}
                     className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
                   >
                     <ArrowRight className="w-4 h-4" />
-                    Go to AI Interviews
+                    {fromResumeScoring ? handoffContinueLabel() : 'Go to AI Interviews'}
                   </button>
                 </div>
               </div>
@@ -602,7 +623,14 @@ export default function AIInterviewPreview() {
             <PageBreadcrumb
               className="mb-4 md:mb-6"
               items={
-                fromJobDetails && interview?.jd_id
+                fromResumeScoring
+                  ? [
+                      { label: 'Dashboard', href: '/dashboard' },
+                      { label: 'Resume Scoring', href: resumeScoringReturn },
+                      { label: 'Create AI Interview' },
+                      { label: 'Preview & Publish' },
+                    ]
+                  : fromJobDetails && interview?.jd_id
                   ? [
                       // Entered from Job Details — repeat that page's trail and link
                       // the JD crumb back to it so the user returns where they started.
