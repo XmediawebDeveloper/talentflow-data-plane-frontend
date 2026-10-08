@@ -10729,8 +10729,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 background (gray-50) before it reaches the floating turn banner,
                 so nothing shows sharply behind/around the banner. Non-
                 interactive so it never blocks scrolling or clicks. Sits under
-                the fixed banner (which is z-105) but above the scrolling text. */}
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-b from-transparent via-gray-50/70 to-gray-50" />
+                the fixed banner (which is z-105) but above the scrolling text.
+                Gated on bannerVisible: with no banner on screen there is
+                nothing to blend into, and the scroll container only reserves
+                pb-4 of clearance — the old unconditional h-32 fade washed out
+                the newest/currently-streaming BINA bubble (which the auto-scroll
+                pins right under it) whenever the banner wasn't showing. */}
+            <div className={`pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-b from-transparent via-gray-50/70 to-gray-50 transition-[height] duration-150 ${
+              bannerVisible ? 'h-32' : 'h-0'
+            }`} />
             {/* ── Big countdown overlays (under the question, high visibility) ──
                 Change 1: pre-turn "get ready" 5→1 before the mic opens.
                 Change 2: mid-speech silence 7→1 (final 7s of the 15s window).
