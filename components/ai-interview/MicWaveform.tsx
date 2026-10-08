@@ -10,8 +10,12 @@ interface MicWaveformProps {
   bars?: number;
   width?: number;
   height?: number;
-  /** Bar colour (defaults to the banner's emerald). */
+  /** Bar colour (defaults to the banner's emerald). A CSS `var(--x)` works
+   *  too — it's resolved here, since canvas fillStyle can't read variables
+   *  (an unresolved one silently drew the bars black). */
   color?: string;
+  /** Colour of the resting bars (silence). Defaults to `color`. */
+  quietColor?: string;
   className?: string;
 }
 
@@ -29,6 +33,7 @@ function MicWaveformBase({
   width = 132,
   height = 30,
   color = "var(--raw-34d399)",
+  quietColor,
   className,
 }: MicWaveformProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -46,6 +51,15 @@ function MicWaveformBase({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     ctx.scale(dpr, dpr);
+
+    // Canvas can't resolve CSS variables — look them up once per effect run.
+    const resolve = (c: string) => {
+      const m = /^var\((--[^),\s]+)\s*(?:,\s*([^)]+))?\)$/.exec(c.trim());
+      if (!m) return c;
+      return getComputedStyle(canvas).getPropertyValue(m[1]).trim() || m[2]?.trim() || "#34d399";
+    };
+    const activeFill = resolve(color);
+    const quietFill = resolve(quietColor ?? color);
 
     if (smoothRef.current.length !== bars) {
       smoothRef.current = new Array(bars).fill(0);
@@ -88,13 +102,14 @@ function MicWaveformBase({
       const barW = width / bars;
       const gap = Math.max(1, barW * 0.4);
       const w = Math.max(1, barW - gap);
-      ctx.fillStyle = color;
       for (let b = 0; b < bars; b++) {
         // Ease toward target (attack fast, release slower) for a lively feel.
         const t = targets[b];
         smooth[b] += (t - smooth[b]) * (t > smooth[b] ? 0.5 : 0.18);
         const amp = smooth[b];
         const h = Math.max(2, amp * height * 1.15);
+        // Resting bars (silence) take the quiet colour; speaking bars the main one.
+        ctx.fillStyle = h <= 3 ? quietFill : activeFill;
         const x = b * barW + gap / 2;
         const y = (height - h) / 2;
         const r = Math.min(w / 2, 2);
@@ -113,7 +128,7 @@ function MicWaveformBase({
       if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     };
-  }, [active, analyserRef, bars, width, height, color]);
+  }, [active, analyserRef, bars, width, height, color, quietColor]);
 
   return (
     <canvas
