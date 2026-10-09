@@ -1503,7 +1503,6 @@ Best regards`);
                   </div>
                 ))}
               </div>
-              </div>
             </div>
             {/* Top right of the header: this candidate's other scored jobs, in
                 the breadcrumb's "‹ 6 / 87 ›" pager style (arrows only, so it
