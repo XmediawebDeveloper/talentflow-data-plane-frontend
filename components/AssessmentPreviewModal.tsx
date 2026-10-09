@@ -1,14 +1,31 @@
 import { X, Clock, Users, Brain, Code, BarChart, Sparkles, Shield, Video } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import LanguageLogo, { logoLabelForId } from '@/components/assessments/LanguageLogo';
+import { VersionPill } from '@/components/assessments/AllAssessmentsTable';
+import JobIdBadge from '@/components/jobs/JobIdBadge';
+import { parseAssessmentTitle } from '@/lib/utils/assessmentUtils';
 
 interface AssessmentPreviewModalProps {
   isOpen: boolean;
   onClose: () => void;
   assessment: any;
+  /** Set by hosts that open the preview from a job (AI Talent Match's Actions
+   *  menu): adds the assessment version, the job and its job version under the
+   *  title, and a Rounds row saying which of HR / Technical / Coding this
+   *  assessment configures — including that a round is NOT configured. Other
+   *  hosts omit it and the preview reads exactly as before. */
+  jobContext?: { jobVersionNumber?: number };
 }
 
-export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: AssessmentPreviewModalProps) {
+/* The rounds an assessment can run — the Rounds chips of
+   JobAssessmentVersionPicker / AssessmentPicker. */
+const ROUNDS: { key: 'hr' | 'technical' | 'coding'; label: string }[] = [
+  { key: 'hr', label: 'HR' },
+  { key: 'technical', label: 'Technical' },
+  { key: 'coding', label: 'Coding' },
+];
+
+export default function AssessmentPreviewModal({ isOpen, onClose, assessment, jobContext }: AssessmentPreviewModalProps) {
   if (!isOpen || !assessment) return null;
 
   // Extract section data from assessment
@@ -85,6 +102,19 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
           {/* Assessment Summary */}
           <div className="bg-white dark:bg-slate-900 rounded-lg border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm p-4 sm:p-6 mb-4 sm:mb-6">
             <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight mb-3 sm:mb-4 [overflow-wrap:anywhere]">{assessment.title}</h2>
+            {jobContext && (() => {
+              const assessmentVersion = typeof assessment.version === 'number'
+                ? assessment.version
+                : parseAssessmentTitle(assessment.title || '').version;
+              return (
+                <div className="-mt-1 sm:-mt-2 mb-3 sm:mb-4 flex items-center gap-2 flex-wrap min-w-0 text-xs sm:text-sm text-gray-600 dark:text-slate-400">
+                  {assessmentVersion ? <VersionPill kind="assessment" version={assessmentVersion} label="Assessment" /> : null}
+                  {assessment.jd_short_id && <JobIdBadge>{assessment.jd_short_id}</JobIdBadge>}
+                  {assessment.jd_title && <span className="min-w-0 [overflow-wrap:anywhere]">{assessment.jd_title}</span>}
+                  {jobContext.jobVersionNumber ? <VersionPill kind="job" version={jobContext.jobVersionNumber} label="Job" /> : null}
+                </div>
+              );
+            })()}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
               <div className="p-3 sm:p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg flex sm:block items-center justify-between">
                 <div className="text-xs sm:text-sm text-gray-700 dark:text-slate-300 sm:mb-1">Total Duration</div>
@@ -115,6 +145,28 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
                 </div>
               </div>
             </div>
+            {/* Which rounds the saved record turns on — read from its
+                `*_enabled` flags, so a coding round is never assumed. */}
+            {jobContext && (
+              <div className="mt-3 sm:mt-4 flex items-center gap-2 flex-wrap">
+                <span className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">Rounds:</span>
+                {ROUNDS.map((round) => {
+                  const configured = !!assessment[`${round.key}_enabled`];
+                  return (
+                    <span
+                      key={round.key}
+                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-2xs sm:text-xs font-semibold ring-1 whitespace-nowrap ${
+                        configured
+                          ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20'
+                          : 'bg-slate-100 dark:bg-slate-800 text-gray-500 dark:text-slate-400 ring-gray-200 dark:ring-slate-700'
+                      }`}
+                    >
+                      {round.label}{configured ? '' : ' · Not configured'}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Proctoring Status */}

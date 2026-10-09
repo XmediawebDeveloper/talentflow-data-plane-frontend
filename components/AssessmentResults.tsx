@@ -47,6 +47,7 @@ import ListViewToggle, { type ListDisplayMode } from '@/components/ui/list-view-
 import ToolbarFilterSelect from '@/components/ui/toolbar-filter-select';
 import ToolbarSelectAll from '@/components/ui/toolbar-select-all';
 import { SortByControl } from '@/components/ui/select-all-menu';
+import { FILTER_FIELD_CLASS, FILTER_LABEL_CLASS, FILTER_CONTROL_CLASS } from '@/components/ScoredResumesTable';
 
 interface AssessmentResultsProps {
   /**
@@ -289,6 +290,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   // Date range filter (submitted/completed date)
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  /* Embedded in Job Details the date fields are not offered, so a range
+     restored from a saved view must not go on filtering unseen. */
+  const appliedDateFrom = toolbarPortal ? '' : dateFrom;
+  const appliedDateTo = toolbarPortal ? '' : dateTo;
 
   // AS-24: Column customization
   const COLUMN_PREFERENCES_KEY = 'assessment_results_columns_v2';
@@ -851,7 +856,13 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     /* Status is not counted: it sits on the toolbar row, not in the panel. */
     (passFailFilter !== 'all' ? 1 : 0) +
     Object.values(roundFilters).filter(Boolean).length +
-    (dateFrom || dateTo ? 1 : 0);
+    (appliedDateFrom || appliedDateTo ? 1 : 0);
+  /* Embedded in Job Details the More Filters fields take the Scored Resumes
+     panel's field / label / select classes; standalone keeps its own. */
+  const filterFieldClass = portaled ? FILTER_FIELD_CLASS : undefined;
+  const filterLabelClass = portaled
+    ? FILTER_LABEL_CLASS
+    : 'block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5';
   /* What the panel's Clear All resets — the same set, and the same handler,
      the filter row's Clear button always had (search included), plus the three
      scopes, back to All Versions / All Assessments. */
@@ -993,8 +1004,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
         }
 
         // Date range filter — append time so FastAPI parses as valid datetime
-        if (dateFrom) params.date_from = `${dateFrom}T00:00:00`;
-        if (dateTo) params.date_to = `${dateTo}T23:59:59`;
+        if (appliedDateFrom) params.date_from = `${appliedDateFrom}T00:00:00`;
+        if (appliedDateTo) params.date_to = `${appliedDateTo}T23:59:59`;
 
         const responses = await Promise.all(
           scopedAssessmentIds.map(id =>
@@ -1176,7 +1187,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     /* `statusFilter` is deliberately absent: it no longer goes to the server, so
        a status card click must not refetch — refetching is what replaced the
        full set the cards are counted from. */
-  }, [jobVersionsLoaded, scopeKey, jobVersionByAssessmentId, assessmentVersionByAssessmentId, searchQuery, passFailFilter, dateFrom, dateTo]);
+  }, [jobVersionsLoaded, scopeKey, jobVersionByAssessmentId, assessmentVersionByAssessmentId, searchQuery, passFailFilter, appliedDateFrom, appliedDateTo]);
 
   // Canonical status → Badge variant (shared mapping so statuses don't drift).
   const getStatusVariant = (status: string): 'success' | 'info' | 'warning' | 'muted' | 'destructive' => {
@@ -1720,6 +1731,13 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   /* No tint: the All Assessments header is the shell's own white (globals.css
      `.tf-table-shell thead th`). */
   const stickyHeaderClass = '';
+  /* Embedded in Job Details the table takes the AI Talent Match table's cell
+     padding, header rule and native checkbox; the standalone results page
+     keeps the All Assessments table's own. */
+  const cellPad = portaled ? 'px-4 py-3' : 'px-3 py-2.5';
+  const rowCheckboxClass = portaled
+    ? 'rounded border-gray-300'
+    : 'w-4 h-4 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40';
   /* Previous / Next open another results page. While Total Candidates is the
      list on screen, the link carries `view=total` so that page opens on Total
      Candidates too, rather than falling back to the bare cards. Any other
@@ -1919,7 +1937,191 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             </div>
           </>
         );
+        /* The More Filters fields — every applicable one in its usual order.
+           Embedded in Job Details the Status select (the toolbar's status
+           dropdown already is it) and the date range are dropped, and the rest
+           is capped at four. */
+        const filterFields = [
+          showsJobVersionSelect && (
+            <div key="job-version" className={filterFieldClass}>
+              <label htmlFor="assessment-results-job-version" className={filterLabelClass}>Job Version</label>
+              <select
+                id="assessment-results-job-version"
+                value={effectiveJobVersion === 'all' ? 'all' : String(effectiveJobVersion)}
+                onChange={(e) => {
+                  setSelectedJobVersion(e.target.value === 'all' ? 'all' : Number(e.target.value));
+                  setCurrentPage(1);
+                  /* A selection made under the old scope would go on driving
+                     the bulk actions for rows that are no longer listed. */
+                  setSelectedRows([]);
+                }}
+                disabled={!jobVersionsLoaded}
+                className={portaled ? FILTER_CONTROL_CLASS : "w-full min-w-0 h-[38px] px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"}
+              >
+                <option value="all">All Versions</option>
+                {jobVersionScopes.map(scope => (
+                  <option key={scope.versionNumber} value={scope.versionNumber}>
+                    Job Version V{scope.versionNumber}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ),
+          showsAssessmentSelect && (
+            <div key="assessment" className={filterFieldClass}>
+              <label htmlFor="assessment-results-assessment" className={filterLabelClass}>Assessment</label>
+              <select
+                id="assessment-results-assessment"
+                value={effectiveAssessmentId}
+                onChange={(e) => {
+                  setSelectedAssessmentId(e.target.value);
+                  setCurrentPage(1);
+                  /* Same reason as the job version's above. */
+                  setSelectedRows([]);
+                }}
+                disabled={!jobVersionsLoaded}
+                className={portaled ? FILTER_CONTROL_CLASS : "w-full min-w-0 h-[38px] px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed truncate"}
+              >
+                <option value="all">All Assessments</option>
+                {assessmentOptions.map(option => (
+                  <option key={option.id} value={option.id}>
+                    {option.version != null ? `${option.title} (V${option.version})` : option.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ),
+          showsAssessmentVersionSelect && (
+            <div key="assessment-version" className={filterFieldClass}>
+              <label htmlFor="assessment-results-assessment-version" className={filterLabelClass}>Assessment Version</label>
+              <select
+                id="assessment-results-assessment-version"
+                value={effectiveAssessmentVersion === 'all' ? 'all' : String(effectiveAssessmentVersion)}
+                onChange={(e) => {
+                  setSelectedAssessmentVersion(e.target.value === 'all' ? 'all' : Number(e.target.value));
+                  setCurrentPage(1);
+                  /* Same reason as the job version's above. */
+                  setSelectedRows([]);
+                }}
+                disabled={!jobVersionsLoaded}
+                className={portaled ? FILTER_CONTROL_CLASS : "w-full min-w-0 h-[38px] px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"}
+              >
+                <option value="all">All Assessment Versions</option>
+                {assessmentVersionOptions.map(version => (
+                  <option key={version} value={version}>
+                    Assessment V{version}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ),
+          !portaled && (
+            <div key="status" className={filterFieldClass}>
+              <label htmlFor="assessment-results-status-filter" className={filterLabelClass}>Status</label>
+              <select
+                id="assessment-results-status-filter"
+                value={statusFilter}
+                onChange={(e) => {
+                  setStatusFilter(e.target.value as 'all' | 'Completed' | 'In Progress' | 'Terminated' | 'Pending');
+                  setCurrentPage(1);
+                }}
+                className={portaled ? FILTER_CONTROL_CLASS : "w-full min-w-0 h-[38px] px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"}
+              >
+                <option value="all">All</option>
+                <option value="Completed">Completed</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Terminated">Terminated</option>
+                <option value="Pending">{PENDING_STATUS_LABEL}</option>
+              </select>
+            </div>
+          ),
+          true && (
+            <div key="result" className={filterFieldClass}>
+              <label htmlFor="assessment-results-pass-fail-filter" className={filterLabelClass}>Result</label>
+              <select
+                id="assessment-results-pass-fail-filter"
+                value={passFailFilter}
+                onChange={(e) => {
+                  setPassFailFilter(e.target.value as 'all' | 'pass' | 'fail');
+                  setCurrentPage(1);
+                }}
+                className={portaled ? FILTER_CONTROL_CLASS : "w-full min-w-0 h-[38px] px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"}
+              >
+                <option value="all">All</option>
+                <option value="pass">Pass</option>
+                <option value="fail">Fail</option>
+              </select>
+            </div>
+          ),
+          !!assessmentDetails?.technical_enabled && (
+            <div key="tech" className={filterFieldClass}>
+              <label htmlFor="assessment-results-tech-filter" className={filterLabelClass}>Tech Score</label>
+              <select
+                id="assessment-results-tech-filter"
+                value={roundFilters.technical || 'all'}
+                onChange={(e) => {
+                  const value = e.target.value as 'all' | '50-70' | '70-90' | '90+';
+                  setRoundFilters(prev => value === 'all' ? { ...prev, technical: undefined } : { ...prev, technical: value });
+                  setCurrentPage(1);
+                }}
+                className={portaled ? FILTER_CONTROL_CLASS : "w-full min-w-0 h-[38px] px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"}
+              >
+                <option value="all">All</option>
+                <option value="50-70">50-70%</option>
+                <option value="70-90">70-90%</option>
+                <option value="90+">90%+</option>
+              </select>
+            </div>
+          ),
+          !!assessmentDetails?.coding_enabled && (
+            <div key="coding" className={filterFieldClass}>
+              <label htmlFor="assessment-results-coding-filter" className={filterLabelClass}>Coding Score</label>
+              <select
+                id="assessment-results-coding-filter"
+                value={roundFilters.coding || 'all'}
+                onChange={(e) => {
+                  const value = e.target.value as 'all' | '50-70' | '70-90' | '90+';
+                  setRoundFilters(prev => value === 'all' ? { ...prev, coding: undefined } : { ...prev, coding: value });
+                  setCurrentPage(1);
+                }}
+                className={portaled ? FILTER_CONTROL_CLASS : "w-full min-w-0 h-[38px] px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"}
+              >
+                <option value="all">All</option>
+                <option value="50-70">50-70%</option>
+                <option value="70-90">70-90%</option>
+                <option value="90+">90%+</option>
+              </select>
+            </div>
+          ),
+          !portaled && (
+            <div key="date" className="sm:col-span-2">
+              <label htmlFor="assessment-results-date-from" className={filterLabelClass}>Date</label>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                <DateField
+                  id="assessment-results-date-from"
+                  value={dateFrom}
+                  max={dateTo || undefined}
+                  onChange={(v) => { setDateFrom(v); setCurrentPage(1); }}
+                  aria-label="Filter from date"
+                  className="h-[38px] sm:flex-1 sm:min-w-0"
+                />
+                <span className="text-xs text-gray-400 text-center sm:text-left sm:flex-shrink-0">to</span>
+                <DateField
+                  id="assessment-results-date-to"
+                  value={dateTo}
+                  min={dateFrom || undefined}
+                  onChange={(v) => { setDateTo(v); setCurrentPage(1); }}
+                  aria-label="Filter to date"
+                  className="h-[38px] sm:flex-1 sm:min-w-0"
+                />
+              </div>
+            </div>
+          ),
+        ].filter(Boolean).slice(0, portaled ? 4 : undefined);
         const toolbarBlock = (
+        /* Embedded: the AI Talent Match tab's spacing — the row's own `mb-3`
+           under the controls and the More Filters panel's `pb-4` under the
+           fields, nothing on the block itself. */
         <div className={toolbarPortal ? '' : 'bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-3 sm:mb-4'}>
           <ListToolbar
             searchValue={searchQuery}
@@ -1946,41 +2148,61 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   onSelectAll={() => setSelectedRows(filteredCandidates.map((c) => c.id))}
                   onClear={() => setSelectedRows([])}
                 />
-                {/* Actions — the AI Talent Match reference's pill: hidden until
-                    a row is ticked, holding only the selection-bound bulk op
-                    (Download PDF Reports). Customize Columns and Export work
-                    with nothing ticked too, so they stay their own buttons
-                    (see `leadingActions` / the toolbar's trailing children). */}
-                {canBatchDownload && selectedRows.length > 0 && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        className="rounded-full whitespace-nowrap !h-9 !text-sm"
-                        aria-label={`Actions for ${selectedRows.length} selected`}
-                      >
-                        {downloadingBulkPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                        Actions
-                        <ChevronDown className="w-4 h-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-60 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
-                      <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
-                        {selectedRows.length.toLocaleString()} selected
-                      </div>
-                      <DropdownMenuItem
-                        className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer"
-                        disabled={downloadingBulkPDF}
-                        onSelect={() => handleDownloadBulkPDFs()}
-                      >
-                        <Download className="w-4 h-4 text-menu-icon-download" />
-                        <span className={MENU_ITEM_SCALE_CLASS}>
-                          {downloadingBulkPDF ? 'Downloading...' : 'Download PDF Reports'}
-                        </span>
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                {/* Actions — the Scored Resumes / AI Talent Match pill: shown
+                    once a row is ticked (one, several or Select All) and gone
+                    again when nothing is. Holds Customize Columns and Export
+                    (the toolbar has no separate buttons for them in Job
+                    Details) plus the selection-bound Download PDF Reports. The
+                    wrapper anchors the column picker (`columnSelectorPanel`). */}
+                {selectedRows.length > 0 && (
+                  <div className="relative">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="rounded-full h-9"
+                          aria-label={`Actions for ${selectedRows.length} selected`}
+                        >
+                          {downloadingBulkPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                          Actions
+                          <ChevronDown className="w-4 h-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-64 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
+                        <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
+                          {selectedRows.length.toLocaleString()} selected
+                        </div>
+                        <DropdownMenuItem
+                          className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer"
+                          onSelect={() => setShowColumnSelector(true)}
+                        >
+                          <Columns3 className="w-4 h-4 text-menu-icon-view" />
+                          <span className={MENU_ITEM_SCALE_CLASS}>Customize Columns ({enabledColumnsCount})</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer"
+                          onSelect={() => setShowExportModal(true)}
+                        >
+                          <FileText className="w-4 h-4 text-menu-icon-download" />
+                          <span className={MENU_ITEM_SCALE_CLASS}>Export</span>
+                        </DropdownMenuItem>
+                        {canBatchDownload && (
+                          <DropdownMenuItem
+                            className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer"
+                            disabled={downloadingBulkPDF}
+                            onSelect={() => handleDownloadBulkPDFs()}
+                          >
+                            <Download className="w-4 h-4 text-menu-icon-download" />
+                            <span className={MENU_ITEM_SCALE_CLASS}>
+                              {downloadingBulkPDF ? 'Downloading...' : 'Download PDF Reports'}
+                            </span>
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    {columnSelectorPanel}
+                  </div>
                 )}
               </>
             ) : undefined}
@@ -1994,8 +2216,12 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                Now ONE LINE at every width: search flexes, the controls keep
                their width, and a row too wide for the screen scrolls sideways
                (scrollbar hidden) rather than wrapping. The scroll is dropped
-               while the Columns picker is open so the row cannot clip it. */
-            singleLine
+               while the Columns picker is open so the row cannot clip it.
+               Embedded in Job Details it takes the AI Talent Match row's own
+               layout instead (search and controls on one row from `sm`, the
+               controls wrapping as a group, List / Grid pinned right) — no
+               sideways scroll hiding controls off the edge on a phone. */
+            singleLine={!portaled}
             overflowVisible={showColumnSelector}
             compactButtons={portaled}
             /* Status — what the four stat cards used to switch between, now a
@@ -2003,35 +2229,42 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                state, same values the API's status filter matches on; only the
                'Pending' label reads "Not Started". Default All Candidates. */
             /* Order: Search → Customize Columns → All Candidates → More
-               Filters → Download PDF → Export → List / Grid. */
+               Filters → Download PDF → Export → List / Grid. Embedded in Job
+               Details, Customize Columns and Export are Actions items, so the
+               row is Select All → Actions → Search → All Candidates → Sort
+               by → More Filters → List / Grid, as on AI Talent Match. */
             leadingActions={
               <>
-              {/* AS-24: Customize Columns — its own button in both modes
-                 (works with nothing ticked, unlike the selection-bound
-                 Actions pill beside Select All). */}
-              <div className="relative">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setShowColumnSelector(!showColumnSelector)}
-                  aria-expanded={showColumnSelector}
-                  aria-haspopup="dialog"
-                  aria-controls="assessment-results-column-selector"
-                  icon={<Columns3 className="w-4 h-4" />}
-                  className={`whitespace-nowrap ${portaled ? '!h-9' : '!h-[38px]'} !text-sm`}
-                >
-                  Customize Columns ({enabledColumnsCount})
-                </Button>
-                {columnSelectorPanel}
-              </div>
+              {/* AS-24: Customize Columns — its own button on the standalone
+                 page; embedded in Job Details it is an item in the Actions
+                 pill beside Select All (see `beforeSearch` above). */}
+              {!portaled && (
+                <div className="relative">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setShowColumnSelector(!showColumnSelector)}
+                    aria-expanded={showColumnSelector}
+                    aria-haspopup="dialog"
+                    aria-controls="assessment-results-column-selector"
+                    icon={<Columns3 className="w-4 h-4" />}
+                    className="whitespace-nowrap !h-[38px] !text-sm"
+                  >
+                    Customize Columns ({enabledColumnsCount})
+                  </Button>
+                  {columnSelectorPanel}
+                </div>
+              )}
               {/* Embedded in Job Details this takes the AI Talent Match
                   reference's tinted "All Matches" pill chrome; standalone keeps
                   its own bordered box. Same state, same values either way. */}
               {portaled ? (
+                /* Terminated too: the More Filters Status select it came from
+                   is dropped here, so this is the one status control. */
                 <ToolbarFilterSelect
                   value={statusFilter}
                   onChange={(value) => {
-                    setStatusFilter(value as 'all' | 'Completed' | 'In Progress' | 'Pending');
+                    setStatusFilter(value as typeof statusFilter);
                     setCurrentPage(1);
                   }}
                   ariaLabel="Filter candidates by status"
@@ -2039,6 +2272,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   <option value="all">All Candidates</option>
                   <option value="In Progress">In Progress</option>
                   <option value="Completed">Completed</option>
+                  <option value="Terminated">Terminated</option>
                   <option value="Pending">{PENDING_STATUS_LABEL}</option>
                 </ToolbarFilterSelect>
               ) : (
@@ -2068,37 +2302,32 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               <SortByControl<typeof sortField>
                 value={sortField}
                 order={sortDirection}
+                /* Embedded, Status too: the column headers there are plain
+                   labels, so this is where their Status sort lives. */
                 options={[
                   { value: 'name', label: 'Name' },
                   { value: 'score', label: 'Score' },
                   { value: 'date', label: 'Submitted' },
+                  ...(portaled ? [{ value: 'status' as const, label: 'Status' }] : []),
                 ]}
                 onChange={setSortField}
                 onToggleOrder={() => setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'))}
               />
-              {/* Clear Sort — embedded in Job Details only, moved in beside
-                  Sort by now that the heading row it used to share (with the
-                  candidate count, dropped for this tab to match the AI
-                  Talent Match reference) is gone there. Standalone keeps its
-                  original spot in that row below. */}
-              {portaled && !isDefaultSort && (
-                <button
-                  type="button"
-                  onClick={clearSort}
-                  title="Return the table to its default order"
-                  className="px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all whitespace-nowrap inline-flex items-center gap-1.5 bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue"
-                >
-                  <ArrowUpDown className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                  Clear Sort
-                </button>
-              )}
+              {/* No Clear Sort here in Job Details: it only returned the
+                  table to Submitted ↓, which the Sort by control beside it
+                  already does, and the AI Talent Match reference row carries
+                  no such duplicate. Standalone keeps its spot in the heading
+                  row below. */}
               </>
             }
+            trailing={portaled ? <ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-9" /> : undefined}
             onToggleFilters={() => setShowMoreFilters((open) => !open)}
             filtersOpen={showMoreFilters}
             activeFilterCount={activeFilterCount}
             filtersApplied={activeFilterCount > 0}
-            className="mb-0"
+            /* Standalone the card padding gives the gap; embedded the row keeps
+               ListToolbar's own `mb-3`, as on AI Talent Match. */
+            className={portaled ? undefined : 'mb-0'}
           >
             {/* AS-26: Bulk PDF download — standalone only here; embedded in
                 Job Details it moved into the Actions pill beside Select All
@@ -2135,28 +2364,37 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setShowExportModal(true)}
-              className={`whitespace-nowrap ${portaled ? '!h-9' : '!h-[38px]'} !text-sm`}
-              icon={<FileText className="w-4 h-4" />}
-            >
-              Export
-            </Button>
+            {/* Export — its own button on the standalone page; embedded in Job
+                Details it is an item in the Actions pill beside Select All. */}
+            {!portaled && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setShowExportModal(true)}
+                className="whitespace-nowrap !h-[38px] !text-sm"
+                icon={<FileText className="w-4 h-4" />}
+              >
+                Export
+              </Button>
+            )}
             {/* The shared List / Grid switch — the row's last, far-right
-                control. */}
-            <ListViewToggle value={displayMode} onChange={setDisplayMode} className={portaled ? 'h-9' : ''} />
+                control; embedded it is the toolbar's `trailing` instead. */}
+            {!portaled && <ListViewToggle value={displayMode} onChange={setDisplayMode} />}
           </ListToolbar>
 
-          {showMoreFilters && (
+          {/* More Filters. Embedded in Job Details: the Scored Resumes tab's
+              panel — its plain top divider, its wrapping row of flexing
+              fields (one row on desktop, wrapping on smaller screens) and its
+              neutral selects; no footer buttons. Standalone keeps its own
+              card with Clear All / Done. */}
+          {showMoreFilters && (portaled ? (
+            <div className="mt-4 sm:mt-5 pt-4 sm:pt-5 pb-4 border-t border-brand-blue/10">
+              <div className="flex flex-wrap gap-4">
+                {filterFields}
+              </div>
+            </div>
+          ) : (
             <ListFilterPanel
-              /* Embedded in Job Details, drop this panel's own tinted/bordered
-                 card chrome for the AI Talent Match reference's plain
-                 top-divider: the panel reads as part of the same tab card the
-                 toolbar sits in, rather than a secondary floating panel below
-                 it. Standalone keeps its own card. */
-              className={portaled ? '!mt-4 sm:!mt-5 !rounded-none !border-0 !border-t !border-brand-blue/10 !bg-transparent !p-0 !pt-4 sm:!pt-5' : undefined}
               footer={
                 <>
                   <Button
@@ -2174,189 +2412,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 </>
               }
             >
-              {/* The two version scopes — each rendered only where it is a
-                  choice the recruiter actually has (see
-                  `showsJobVersionSelect`). */}
-              {showsJobVersionSelect && (
-                <div>
-                  <label htmlFor="assessment-results-job-version" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Job Version</label>
-                  <select
-                    id="assessment-results-job-version"
-                    value={effectiveJobVersion === 'all' ? 'all' : String(effectiveJobVersion)}
-                    onChange={(e) => {
-                      setSelectedJobVersion(e.target.value === 'all' ? 'all' : Number(e.target.value));
-                      setCurrentPage(1);
-                      /* A selection made under the old scope would go on driving
-                         the bulk actions for rows that are no longer listed. */
-                      setSelectedRows([]);
-                    }}
-                    disabled={!jobVersionsLoaded}
-                    className="w-full min-w-0 h-[38px] px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    <option value="all">All Versions</option>
-                    {jobVersionScopes.map(scope => (
-                      <option key={scope.versionNumber} value={scope.versionNumber}>
-                        Job Version V{scope.versionNumber}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              {showsAssessmentSelect && (
-                <div>
-                  <label htmlFor="assessment-results-assessment" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Assessment</label>
-                  <select
-                    id="assessment-results-assessment"
-                    value={effectiveAssessmentId}
-                    onChange={(e) => {
-                      setSelectedAssessmentId(e.target.value);
-                      setCurrentPage(1);
-                      /* Same reason as the job version's above. */
-                      setSelectedRows([]);
-                    }}
-                    disabled={!jobVersionsLoaded}
-                    className="w-full min-w-0 h-[38px] px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed truncate"
-                  >
-                    <option value="all">All Assessments</option>
-                    {assessmentOptions.map(option => (
-                      <option key={option.id} value={option.id}>
-                        {option.version != null ? `${option.title} (V${option.version})` : option.title}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              {showsAssessmentVersionSelect && (
-                <div>
-                  <label htmlFor="assessment-results-assessment-version" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Assessment Version</label>
-                  <select
-                    id="assessment-results-assessment-version"
-                    value={effectiveAssessmentVersion === 'all' ? 'all' : String(effectiveAssessmentVersion)}
-                    onChange={(e) => {
-                      setSelectedAssessmentVersion(e.target.value === 'all' ? 'all' : Number(e.target.value));
-                      setCurrentPage(1);
-                      /* Same reason as the job version's above. */
-                      setSelectedRows([]);
-                    }}
-                    disabled={!jobVersionsLoaded}
-                    className="w-full min-w-0 h-[38px] px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    <option value="all">All Assessment Versions</option>
-                    {assessmentVersionOptions.map(version => (
-                      <option key={version} value={version}>
-                        Assessment V{version}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {/* Status Filter */}
-              <div>
-                <label htmlFor="assessment-results-status-filter" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Status</label>
-                <select
-                  id="assessment-results-status-filter"
-                  value={statusFilter}
-                  onChange={(e) => {
-                    setStatusFilter(e.target.value as 'all' | 'Completed' | 'In Progress' | 'Terminated' | 'Pending');
-                    setCurrentPage(1);
-                  }}
-                  className="w-full min-w-0 h-[38px] px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
-                >
-                  <option value="all">All</option>
-                  <option value="Completed">Completed</option>
-                  <option value="In Progress">In Progress</option>
-                  <option value="Terminated">Terminated</option>
-                  <option value="Pending">{PENDING_STATUS_LABEL}</option>
-                </select>
-              </div>
-
-              {/* Pass/Fail Filter */}
-              <div>
-                <label htmlFor="assessment-results-pass-fail-filter" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Result</label>
-                <select
-                  id="assessment-results-pass-fail-filter"
-                  value={passFailFilter}
-                  onChange={(e) => {
-                    setPassFailFilter(e.target.value as 'all' | 'pass' | 'fail');
-                    setCurrentPage(1);
-                  }}
-                  className="w-full min-w-0 h-[38px] px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
-                >
-                  <option value="all">All</option>
-                  <option value="pass">Pass</option>
-                  <option value="fail">Fail</option>
-                </select>
-              </div>
-
-              {/* Round-based Filters */}
-              {assessmentDetails?.technical_enabled && (
-                <div>
-                  <label htmlFor="assessment-results-tech-filter" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Tech Score</label>
-                  <select
-                    id="assessment-results-tech-filter"
-                    value={roundFilters.technical || 'all'}
-                    onChange={(e) => {
-                      const value = e.target.value as 'all' | '50-70' | '70-90' | '90+';
-                      setRoundFilters(prev => value === 'all' ? { ...prev, technical: undefined } : { ...prev, technical: value });
-                      setCurrentPage(1);
-                    }}
-                    className="w-full min-w-0 h-[38px] px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
-                  >
-                    <option value="all">All</option>
-                    <option value="50-70">50-70%</option>
-                    <option value="70-90">70-90%</option>
-                    <option value="90+">90%+</option>
-                  </select>
-                </div>
-              )}
-
-              {assessmentDetails?.coding_enabled && (
-                <div>
-                  <label htmlFor="assessment-results-coding-filter" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Coding Score</label>
-                  <select
-                    id="assessment-results-coding-filter"
-                    value={roundFilters.coding || 'all'}
-                    onChange={(e) => {
-                      const value = e.target.value as 'all' | '50-70' | '70-90' | '90+';
-                      setRoundFilters(prev => value === 'all' ? { ...prev, coding: undefined } : { ...prev, coding: value });
-                      setCurrentPage(1);
-                    }}
-                    className="w-full min-w-0 h-[38px] px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
-                  >
-                    <option value="all">All</option>
-                    <option value="50-70">50-70%</option>
-                    <option value="70-90">70-90%</option>
-                    <option value="90+">90%+</option>
-                  </select>
-                </div>
-              )}
-
-              {/* Date range — From / To, each bounding the other. */}
-              <div className="sm:col-span-2">
-                <label htmlFor="assessment-results-date-from" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Date</label>
-                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                  <DateField
-                    id="assessment-results-date-from"
-                    value={dateFrom}
-                    max={dateTo || undefined}
-                    onChange={(v) => { setDateFrom(v); setCurrentPage(1); }}
-                    aria-label="Filter from date"
-                    className="h-[38px] sm:flex-1 sm:min-w-0"
-                  />
-                  <span className="text-xs text-gray-400 text-center sm:text-left sm:flex-shrink-0">to</span>
-                  <DateField
-                    id="assessment-results-date-to"
-                    value={dateTo}
-                    min={dateFrom || undefined}
-                    onChange={(v) => { setDateTo(v); setCurrentPage(1); }}
-                    aria-label="Filter to date"
-                    className="h-[38px] sm:flex-1 sm:min-w-0"
-                  />
-                </div>
-              </div>
+              {filterFields}
             </ListFilterPanel>
-          )}
+          ))}
         </div>
         );
         return toolbarPortal ? createPortal(toolbarBlock, toolbarPortal) : toolbarBlock;
@@ -2368,8 +2426,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               Details this row is dropped entirely to match the AI Talent
               Match reference, whose table card has no heading/count row at
               all above it; the tab navigation's own badge already carries
-              the count. Clear Sort (this row's other job) moved into the
-              toolbar for that case — see `leadingActions` above.
+              the count. (Clear Sort, this row's other job, has no embedded
+              twin: the toolbar's Sort by already returns the default order.)
               Wraps: at 320–375px the count badge (nowrap) and Clear Sort do not
               fit beside the heading, so they drop under it rather than
               overflowing the card. */}
@@ -2516,24 +2574,36 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   with its ArrowUpDown / ArrowUp / ArrowDown. The column widths
                   stay — the table is `table-fixed` over them. */}
               {paginatedCandidates.length > 0 && (
-              <thead className="sticky top-0 z-10 [&_th]:bg-gray-50 dark:[&_th]:bg-slate-800">
-                <tr className="border-b border-gray-200 dark:border-slate-700">
-                  <th scope="col" className={`px-3 py-2.5 w-10 tf-sticky-col-left ${stickyHeaderClass}`}>
-                    <input
-                      type="checkbox"
-                      checked={selectedRows.length === paginatedCandidates.length && paginatedCandidates.length > 0}
-                      onChange={(e) => handleSelectAll(e.target.checked)}
-                      aria-label="Select all candidates on this page"
-                      className="w-4 h-4 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
-                    />
+              <thead className={portaled
+                ? 'sticky top-0 z-10 [&_th]:bg-gray-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700 [&_th]:align-middle'
+                : 'sticky top-0 z-10 [&_th]:bg-gray-50 dark:[&_th]:bg-slate-800'}>
+                <tr className={portaled ? undefined : 'border-b border-gray-200 dark:border-slate-700'}>
+                  <th scope="col" aria-label={portaled ? 'Select' : undefined} className={`${cellPad} w-10 tf-sticky-col-left ${stickyHeaderClass}`}>
+                    {/* Embedded in Job Details the toolbar's Select All is the
+                        one select-all control (the AI Talent Match reference's
+                        empty header cell); standalone keeps this checkbox. */}
+                    {!portaled && (
+                      <input
+                        type="checkbox"
+                        checked={selectedRows.length === paginatedCandidates.length && paginatedCandidates.length > 0}
+                        onChange={(e) => handleSelectAll(e.target.checked)}
+                        aria-label="Select all candidates on this page"
+                        className="w-4 h-4 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
+                      />
+                    )}
                   </th>
+                  {/* Embedded in Job Details the headers are plain labels, as on
+                      the AI Talent Match / Scored Resumes / AI Interview tables
+                      — sorting there is the toolbar's Sort by (which carries
+                      every field these headers sort on). Standalone keeps the
+                      All Assessments table's sortable headers and arrows. */}
                   {isColumnEnabled('candidate') && (
                     <th
                       scope="col"
                       aria-sort={sortField === 'name' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
-                      className={`w-64 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}
+                      className={`w-64 text-left ${cellPad} text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}
                     >
-                      {(() => {
+                      {portaled ? 'Candidate' : (() => {
                         const SortIcon = sortField !== 'name' ? ArrowUpDown : sortDirection === 'asc' ? ArrowUp : ArrowDown;
                         return (
                           <button
@@ -2553,9 +2623,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     <th
                       scope="col"
                       aria-sort={sortField === 'date' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
-                      className={`w-96 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}
+                      className={`w-96 text-left ${cellPad} text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}
                     >
-                      {(() => {
+                      {portaled ? 'Timeline' : (() => {
                         const SortIcon = sortField !== 'date' ? ArrowUpDown : sortDirection === 'asc' ? ArrowUp : ArrowDown;
                         return (
                           <button
@@ -2575,9 +2645,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     <th
                       scope="col"
                       aria-sort={sortField === 'status' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
-                      className={`w-28 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}
+                      className={`w-28 text-left ${cellPad} text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}
                     >
-                      {(() => {
+                      {portaled ? 'Status' : (() => {
                         const SortIcon = sortField !== 'status' ? ArrowUpDown : sortDirection === 'asc' ? ArrowUp : ArrowDown;
                         return (
                           <button
@@ -2597,9 +2667,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     <th
                       scope="col"
                       aria-sort={sortField === 'score' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
-                      className={`w-28 text-right px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}
+                      className={`w-28 text-right ${cellPad} text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}
                     >
-                      {(() => {
+                      {portaled ? 'Tech Score' : (() => {
                         const SortIcon = sortField !== 'score' ? ArrowUpDown : sortDirection === 'asc' ? ArrowUp : ArrowDown;
                         return (
                           <button
@@ -2619,9 +2689,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     <th
                       scope="col"
                       aria-sort={sortField === 'score' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
-                      className={`w-32 text-right px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}
+                      className={`w-32 text-right ${cellPad} text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}
                     >
-                      {(() => {
+                      {portaled ? 'Coding Score' : (() => {
                         const SortIcon = sortField !== 'score' ? ArrowUpDown : sortDirection === 'asc' ? ArrowUp : ArrowDown;
                         return (
                           <button
@@ -2638,27 +2708,27 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     </th>
                   )}
                   {isColumnEnabled('inviteSource') && (
-                    <th scope="col" className={`w-36 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}>Invite Source</th>
+                    <th scope="col" className={`w-36 text-left ${cellPad} text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}>Invite Source</th>
                   )}
                   {isColumnEnabled('phone') && (
-                    <th scope="col" className={`w-36 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}>Phone</th>
+                    <th scope="col" className={`w-36 text-left ${cellPad} text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}>Phone</th>
                   )}
                   {isColumnEnabled('cid') && (
-                    <th scope="col" className={`w-24 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}>CID</th>
+                    <th scope="col" className={`w-24 text-left ${cellPad} text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}>CID</th>
                   )}
                   {isColumnEnabled('jdId') && (
-                    <th scope="col" className={`w-28 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}>JD ID</th>
+                    <th scope="col" className={`w-28 text-left ${cellPad} text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}>JD ID</th>
                   )}
                   {isColumnEnabled('jdTitle') && (
-                    <th scope="col" className={`w-56 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}>Job Title</th>
+                    <th scope="col" className={`w-56 text-left ${cellPad} text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}>Job Title</th>
                   )}
                   {isColumnEnabled('jobVersion') && (
-                    <th scope="col" className={`w-28 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}>Job Version</th>
+                    <th scope="col" className={`w-28 text-left ${cellPad} text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}>Job Version</th>
                   )}
                   {isColumnEnabled('assessmentVersion') && (
-                    <th scope="col" className={`w-40 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}>Assessment Version</th>
+                    <th scope="col" className={`w-40 text-left ${cellPad} text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}>Assessment Version</th>
                   )}
-                  <th scope="col" className={`w-20 text-right px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 tf-sticky-col ${stickyHeaderClass}`}>Actions</th>
+                  <th scope="col" className={`w-20 text-right ${cellPad} text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 tf-sticky-col ${stickyHeaderClass}`}>Actions</th>
                 </tr>
               </thead>
               )}
@@ -2708,17 +2778,17 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         selectedRows.includes(candidate.id) ? 'bg-blue-50 dark:bg-slate-800/50' : 'bg-white dark:bg-slate-900'
                       }`}
                     >
-                      <td className="px-3 py-2.5 tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
+                      <td className={`${cellPad} tf-sticky-col-left`} onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
                           checked={selectedRows.includes(candidate.id)}
                           onChange={(e) => handleSelectRow(candidate.id, e.target.checked)}
                           aria-label={`Select ${candidate.name || 'candidate'}`}
-                          className="w-4 h-4 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
+                          className={rowCheckboxClass}
                         />
                       </td>
                       {isColumnEnabled('candidate') && (
-                        <td className="px-3 py-2.5">
+                        <td className={`${cellPad}`}>
                           <div className="flex min-w-0 items-center gap-2">
                             <div className="h-6 w-6 rounded-full bg-brand-blue ring-1 ring-white/10 shadow-sm shadow-brand-blue/25 flex shrink-0 items-center justify-center text-white text-2xs font-semibold">
                               {(candidate.name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2)}
@@ -2734,7 +2804,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         </td>
                       )}
                       {isColumnEnabled('timeline') && (
-                        <td className="px-3 py-2.5 overflow-hidden text-xs text-gray-500 dark:text-slate-400">
+                        <td className={`${cellPad} overflow-hidden text-xs text-gray-500 dark:text-slate-400`}>
                           {/* One event per line, in chronological order — the events
                               read as a timeline rather than a single run-on row. */}
                           <div className="flex min-w-0 flex-col gap-1 overflow-hidden" title={getTimelineSummary(candidate)}>
@@ -2764,14 +2834,14 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         </td>
                       )}
                       {isColumnEnabled('status') && (
-                        <td className="px-3 py-2.5">
+                        <td className={`${cellPad}`}>
                           <Badge variant={getStatusVariant(candidate.status)}>
                             {statusLabel(candidate.status)}
                           </Badge>
                         </td>
                       )}
                       {isColumnEnabled('techScore') && assessmentDetails?.technical_enabled && (
-                        <td className="px-3 py-2.5 text-right">
+                        <td className={`${cellPad} text-right`}>
                           <div className="flex items-center justify-end gap-1.5">
                             {/* Tech Score: green when ≥ threshold, red below.
                                 The 4-band gradient (red/yellow/gray/green)
@@ -2790,7 +2860,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         </td>
                       )}
                       {isColumnEnabled('codingScore') && assessmentDetails?.coding_enabled && (
-                        <td className="px-3 py-2.5 text-right">
+                        <td className={`${cellPad} text-right`}>
                           <div className="flex items-center justify-end gap-1.5">
                             <span className={`${SCORE_CELL_TEXT} ${candidate.coding_score !== undefined ? (candidate.coding_score >= passingThreshold ? 'text-success' : 'text-destructive') : 'text-gray-400'}`}>
                               {candidate.coding_score !== undefined ? `${candidate.coding_score}%` : '-'}
@@ -2804,17 +2874,17 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         </td>
                       )}
                       {isColumnEnabled('inviteSource') && (
-                        <td className="px-3 py-2.5 text-gray-700 dark:text-slate-300 whitespace-nowrap">
+                        <td className={`${cellPad} text-gray-700 dark:text-slate-300 whitespace-nowrap`}>
                           <InviteSourceValue inv={{ invite_source: candidate.inviteSource }} iconClassName="w-3.5 h-3.5" />
                         </td>
                       )}
                       {isColumnEnabled('phone') && (
-                        <td className="px-3 py-2.5">
+                        <td className={`${cellPad}`}>
                           <div className="truncate text-gray-600 dark:text-slate-400" title={candidate.phone || '-'}>{candidate.phone || '-'}</div>
                         </td>
                       )}
                       {isColumnEnabled('cid') && (
-                        <td className="px-3 py-2.5 whitespace-nowrap">
+                        <td className={`${cellPad} whitespace-nowrap`}>
                           <span className="inline-flex items-center whitespace-nowrap text-xs font-mono font-medium bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 px-2 py-1 rounded">
                             {candidate.candidateDisplayId || '-'}
                           </span>
@@ -2823,7 +2893,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       {isColumnEnabled('jdId') && (
                         /* Every version of a job shares one Job ID, so the
                            page's own is every row's — under All Versions too. */
-                        <td className="px-3 py-2.5">
+                        <td className={`${cellPad}`}>
                           {jdShortId ? (
                             <JobIdBadge>{jdShortId}</JobIdBadge>
                           ) : (
@@ -2832,7 +2902,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         </td>
                       )}
                       {isColumnEnabled('jdTitle') && (
-                        <td className="px-3 py-2.5">
+                        <td className={`${cellPad}`}>
                           <div className="truncate font-medium text-gray-900 dark:text-slate-50" title={jdTitle || 'N/A'}>
                             {jdTitle || 'N/A'}
                           </div>
@@ -2841,7 +2911,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       {isColumnEnabled('jobVersion') && (
                         /* The version of the assessment this attempt came from —
                            stamped per row, so All Versions shows a mix. */
-                        <td className="px-3 py-2.5">
+                        <td className={`${cellPad}`}>
                           {candidate.jobVersion != null ? (
                             <VersionPill kind="job" version={candidate.jobVersion} />
                           ) : (
@@ -2857,7 +2927,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                            without a second shape. A row whose assessment record
                            carries no version shows a dash — never an invented
                            v1. */
-                        <td className="px-3 py-2.5">
+                        <td className={`${cellPad}`}>
                           {candidate.assessmentVersion != null ? (
                             <VersionPill kind="assessment" version={candidate.assessmentVersion} />
                           ) : (
@@ -2868,7 +2938,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       {/* The All Assessments ⋮ menu: same trigger, same Radix
                           menu (it escapes the scroll shell), the row's two
                           actions as its items. */}
-                      <td className="px-3 py-2.5 text-right tf-sticky-col" onClick={(e) => e.stopPropagation()}>
+                      <td className={`${cellPad} text-right tf-sticky-col`} onClick={(e) => e.stopPropagation()}>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <button

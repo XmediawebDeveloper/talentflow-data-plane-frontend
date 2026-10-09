@@ -119,17 +119,33 @@ export default function JobInterviewVersionPicker({
                   isSelected
                     ? 'border-brand-blue/50 bg-brand-blue/[0.06] ring-1 ring-brand-blue/30'
                     : selectable
-                      ? 'border-gray-200 dark:border-slate-700/60 bg-white dark:bg-slate-900 hover:border-brand-blue/30 hover:bg-brand-blue/5 cursor-pointer'
+                      ? 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-brand-blue/30 hover:bg-brand-blue/5 cursor-pointer'
                       : 'border-gray-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 opacity-70 cursor-not-allowed'
                 }`}
               >
-                <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                  isSelected ? 'border-brand-blue' : 'border-gray-300 dark:border-slate-600'}`}>
-                  {isSelected && <span className="w-2.5 h-2.5 rounded-full bg-brand-blue" />}
+                {/* A native radio in the AI Talent Match results table's
+                    checkbox chrome (`border-gray-300`). Display only: the card
+                    is the control (role / aria-checked / keyboard above).
+                    `m-0`: a radio's default margin is uneven (none below), which
+                    sat it off the card's centre line.
+
+                    Level with the TITLE line (Interview + version pill), not
+                    with the card's middle — the Invite to Assessment cards'
+                    fix: a wrapper one title line tall (`h-6`, the title row's
+                    `min-h-6` below), pinned to the top of the text column. */}
+                <span className="self-start h-6 flex items-center shrink-0">
+                  <input
+                    type="radio"
+                    checked={isSelected}
+                    readOnly
+                    tabIndex={-1}
+                    aria-hidden="true"
+                    className="m-0 border-gray-300 pointer-events-none"
+                  />
                 </span>
 
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-2 flex-wrap min-h-6">
                     <span className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">Interview</span>
                     {/* Interview version as a badge — the cyan interview-version
                         pill used across the AI Interview tables. */}
@@ -192,7 +208,7 @@ export default function JobInterviewVersionPicker({
       )}
 
       {versions.length > 0 && (
-        <div className="mt-4 flex items-start gap-3 rounded-xl bg-brand-blue/5 border border-brand-blue/15 px-4 py-3">
+        <div className="mt-4 flex items-start gap-3 rounded-xl bg-brand-blue/5 border border-gray-200 dark:border-slate-700 px-4 py-3">
           <Info className="w-5 h-5 text-brand-blue shrink-0 mt-0.5" />
           <div className="text-sm">
             <div className="font-medium text-gray-900 dark:text-slate-100">You&apos;re about to use this interview version to invite candidates.</div>
