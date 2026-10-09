@@ -8691,7 +8691,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       stopRecordingSilent();
       noResponseRetryRef.current = 1;
 
-      const areYouThereMsg = "Are you there? I didn't hear a response.";
+      const areYouThereMsg = "Are you there? Take your time — share whatever comes to mind.";
       setMessages(prev => [...prev, {
         id: crypto.randomUUID(),
         role: "assistant" as const,
