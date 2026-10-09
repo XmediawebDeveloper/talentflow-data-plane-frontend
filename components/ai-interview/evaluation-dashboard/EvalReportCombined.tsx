@@ -12,12 +12,9 @@
 // numbers stay identical across tabs.
 import type { ReactNode } from 'react';
 import {
-  CheckCircle, XCircle, Play, Sparkles, Target, Info, Star, Network,
-  Layers, ListChecks, ClipboardList, FileText, AlertTriangle, Lightbulb, BarChart3,
+  CheckCircle, XCircle, Play, Sparkles, Target, Info, Star,
+  Layers, ListChecks, ClipboardList, FileText, AlertTriangle, Lightbulb, Scale, ClipboardCheck,
 } from 'lucide-react';
-import {
-  RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, ResponsiveContainer,
-} from 'recharts';
 import type { DashboardData } from './types';
 import { buildRationaleLines } from './types';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
@@ -26,6 +23,7 @@ import { formatScore1, formatSkillScore } from '@/lib/utils/matchStatus';
 interface Props {
   data: DashboardData;
   aiConfidence?: number | null;
+  /** No longer shown in the report (the photo lives in the page header); kept so callers needn't change. */
   candidateImage?: string | null;
   evaluationId?: string | null;
   /** The AI interview session id - only used to log the PDF download for the
@@ -42,6 +40,24 @@ function priorityLabel(p: 'High' | 'Medium' | 'Low'): { tag: 'P1' | 'P2' | 'P3';
 }
 
 // Project status tokens (globals.css), not raw Tailwind hues.
+/**
+ * The AI's free-text verdict summary as short points: one per sentence, with
+ * filler openers ("However,", "Additionally,", …) dropped and the first letter
+ * re-capitalised. The wording itself is the AI's — only the structure changes.
+ * Splits on sentence ends followed by a capital, so decimals ("1.5/10") and
+ * percentages stay intact.
+ */
+function summaryToPoints(summary: string | null | undefined): string[] {
+  const text = String(summary || '').replace(/\s+/g, ' ').trim();
+  if (!text) return [];
+  const FILLER = /^(however|additionally|moreover|furthermore|also|overall|in addition|in summary|in conclusion|notably|that said)\s*,?\s+/i;
+  return text
+    .split(/(?<=[.!?])\s+(?=["'(]?[A-Z])/)
+    .map(sentence => sentence.trim().replace(FILLER, ''))
+    .filter(Boolean)
+    .map(sentence => sentence.charAt(0).toUpperCase() + sentence.slice(1));
+}
+
 function scoreColor(score: number) {
   if (score >= 8.0) return { text: 'text-success', bar: 'bg-success' };
   if (score >= MHS_THRESHOLD) return { text: 'text-warning', bar: 'bg-warning' };
@@ -338,7 +354,7 @@ export async function exportEvalReportPDF(
         `${candidate.name} ${pass ? 'meets' : 'does not meet'} the Must-Have bar — ${formatScore1(scores.mustHave)}/10 vs the ${MHS_THRESHOLD.toFixed(1)} threshold (${pass ? '+' : '-'}${formatScore1(Math.abs(scores.mustHave - MHS_THRESHOLD))}).`,
         `This drives the ${finalResultLabel} decision; Nice-to-Have (${formatScore1(scores.niceToHave)}/10) is informational and HR is not scored.`,
       ];
-  if (aiSummary) verdictPoints.push(aiSummary);
+  verdictPoints.push(...summaryToPoints(aiSummary));
   doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
   const pointLines = verdictPoints.map((pt) => doc.splitTextToSize(pt, CW - 14) as string[]);
   const vBoxH = pointLines.reduce((h, ls) => h + ls.length * 4.4 + 1.5, 0) + 5;
@@ -490,7 +506,7 @@ export async function exportEvalReportPDF(
 }
 
 type CoverageStats = { total: number; covered: number; demonstrated: number; pct: number };
-type FlatSkill = { name: string; score: number; tag: string; weight: number };
+type FlatSkill = { name: string; score: number; tag: string; weight: number; cluster?: string };
 
 /** One Section Score row: the bar carries the pass threshold as a dashed marker. */
 function SectionRow({ label, value, Icon, bar, iconTone, badge }: {
@@ -545,30 +561,56 @@ function CoverageBlock({ label, cov, tone, Icon }: {
   );
 }
 
-/** Skill table for one section of the Skills Assessment Summary. */
-function SkillTable({ title, rows, tagClass }: {
-  title: string; rows: FlatSkill[]; tagClass: (tag: string) => string;
+function skillStatus(score: number): { label: string; cls: string } {
+  if (score >= MHS_THRESHOLD) return { label: 'Demonstrated', cls: 'bg-success-subtle text-success-strong ring-success-line' };
+  if (score > 0) return { label: 'Weak', cls: 'bg-warning-subtle text-warning-strong ring-warning-line' };
+  return { label: 'Not demonstrated', cls: 'bg-slate-100 text-slate-500 ring-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700' };
+}
+
+/** Skill table for one section of the Skills Assessment Summary. `wide` (when
+ *  it's the only section and has the full card width) adds Cluster, a 0–10
+ *  score bar and a Status column. */
+function SkillTable({ title, rows, tagClass, wide = false }: {
+  title: string; rows: FlatSkill[]; tagClass: (tag: string) => string; wide?: boolean;
 }) {
   return (
-  <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 overflow-hidden min-w-0">
+  <div className="rounded-xl border border-gray-200 dark:border-slate-600/70 overflow-hidden min-w-0">
     <div className="px-4 py-3 text-sm font-semibold text-gray-900 dark:text-slate-100">{title}</div>
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="bg-slate-50 dark:bg-slate-800/60 text-xs text-gray-500 dark:text-slate-400">
             <th className="text-left font-medium px-4 py-2">Skill</th>
+            {wide && <th className="text-left font-medium px-2 py-2 hidden md:table-cell">Cluster</th>}
             <th className="text-center font-medium px-2 py-2 w-14">Type</th>
             <th className="text-center font-medium px-2 py-2 w-16">Weight</th>
-            <th className="text-right font-medium px-4 py-2 w-16">Score</th>
+            <th className={`font-medium px-4 py-2 ${wide ? 'text-left w-56' : 'text-right w-16'}`}>Score</th>
+            {wide && <th className="text-left font-medium px-4 py-2 w-40 hidden sm:table-cell">Status</th>}
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
+        <tbody className="divide-y divide-gray-200 dark:divide-slate-700">
           {rows.map((s, i) => (
             <tr key={i}>
               <td className="px-4 py-2 text-gray-800 dark:text-slate-200">{s.name}</td>
+              {wide && <td className="px-2 py-2 text-gray-500 dark:text-slate-400 hidden md:table-cell">{s.cluster || '—'}</td>}
               <td className="px-2 py-2 text-center"><span className={`inline-block text-2xs font-bold px-1.5 py-0.5 rounded ${tagClass(s.tag)}`}>{s.tag}</span></td>
               <td className="px-2 py-2 text-center text-gray-500 dark:text-slate-400 tabular-nums">{s.weight}</td>
-              <td className={`px-4 py-2 text-right font-bold tabular-nums ${scoreColor(s.score).text}`}>{formatSkillScore(s.score)}</td>
+              {wide ? (
+                <td className="px-4 py-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex-1 h-1.5 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden">
+                      <div className={`h-full rounded-full ${scoreColor(s.score).bar}`} style={{ width: `${Math.max(0, Math.min(100, (s.score / 10) * 100))}%` }} />
+                    </div>
+                    <span className={`w-8 text-right font-bold tabular-nums ${scoreColor(s.score).text}`}>{formatSkillScore(s.score)}</span>
+                  </div>
+                </td>
+              ) : (
+                <td className={`px-4 py-2 text-right font-bold tabular-nums ${scoreColor(s.score).text}`}>{formatSkillScore(s.score)}</td>
+              )}
+              {wide && (() => {
+                const st = skillStatus(s.score);
+                return <td className="px-4 py-2 hidden sm:table-cell"><span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ring-1 ${st.cls}`}>{st.label}</span></td>;
+              })()}
             </tr>
           ))}
         </tbody>
@@ -582,7 +624,6 @@ function SkillTable({ title, rows, tagClass }: {
 export function EvalReportCombined({
   data,
   aiConfidence,
-  candidateImage,
   evaluationId,
   sessionId,
 }: Props) {
@@ -609,23 +650,19 @@ export function EvalReportCombined({
 
   // ── Skills (flattened, with priority tag/weight) ──────────────────────
   const flatMustHave = mustHaveClusters.flatMap(c => c.skills.map(s => ({
-    name: s.name, score: s.score, ...priorityLabel(c.priority),
+    name: s.name, score: s.score, cluster: c.name, ...priorityLabel(c.priority),
   })));
   const flatNiceToHave = niceToHaveClusters.flatMap(c => c.skills.map(s => ({
-    name: s.name, score: s.score, ...priorityLabel(c.priority),
+    name: s.name, score: s.score, cluster: c.name, ...priorityLabel(c.priority),
   })));
   const allSkills = [...mustHaveClusters, ...niceToHaveClusters].flatMap(c => c.skills);
+  // Skills Assessment Summary: which tables show, and whether one has the row to itself.
+  const showMustHaveTable = !!sectionsPresent.mustHave && flatMustHave.length > 0;
+  const showNiceToHaveTable = !!sectionsPresent.niceToHave && flatNiceToHave.length > 0;
+  const singleSkillTable = showMustHaveTable !== showNiceToHaveTable;
   const totalSkills = flatMustHave.length + flatNiceToHave.length;
   const totalQuestions = perQuestionDetails.length;
   const niceToHaveStrong = scores.niceToHave >= 7.5 ? 'strong' : 'adequate';
-
-  // ── Radar (top 6 scored skills; pad to keep polygon readable) ─────────
-  const scoredSkills = allSkills.filter(s => s.score > 0).sort((a, b) => b.score - a.score);
-  const topSkills = scoredSkills.slice(0, 6);
-  const radarBase = topSkills.length >= 3
-    ? topSkills
-    : [...topSkills, ...allSkills.filter(s => s.score === 0).slice(0, Math.max(0, 3 - topSkills.length))];
-  const radarData = radarBase.map(s => ({ skill: s.name, score: s.score, fullMark: 10 }));
 
   // ── Coverage per section ──────────────────────────────────────────────
   // Use the SAME definition as the Cluster Coverage tab (CoverageV2) so the two
@@ -652,53 +689,38 @@ export function EvalReportCombined({
   // ── Palette: the project's tokens only (globals.css) ─────────────────
   // Must-Have = brand blue, Nice-to-Have = brand orange, verdicts use the
   // success / destructive / warning status tokens.
+  // Key Strengths / Areas of Concern get their own cards (under AI Analysis /
+  // Recommendations). Always shown — with a "none identified" note when the
+  // evaluation returned an empty list (common for one side on a clear pass or
+  // fail) — so the 2×2 grid never has a hole.
+  const strengthItems = (strengths ?? []).slice(0, 5);
+  const concernItems = (weaknesses ?? []).slice(0, 5);
   const verdictTone = isPartialEvaluation
     ? { tile: 'bg-warning-subtle/60 border-warning-line', icon: 'bg-warning text-white', text: 'text-warning-strong', pill: 'bg-warning-subtle text-warning-strong ring-warning-line' }
     : isPassed
       ? { tile: 'bg-success-subtle/60 border-success-line', icon: 'bg-success text-white', text: 'text-success', pill: 'bg-success-subtle text-success-strong ring-success-line' }
       : { tile: 'bg-destructive-subtle/60 border-destructive-line', icon: 'bg-destructive text-white', text: 'text-destructive', pill: 'bg-destructive-subtle text-destructive ring-destructive-line' };
-  const card = 'rounded-2xl border border-gray-200 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5';
-  const cardHeader = 'flex items-center gap-3 px-5 py-4 border-b border-gray-100 dark:border-slate-700/60';
+  const card = 'rounded-2xl border border-gray-300 dark:border-slate-600/70 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5';
+  const cardHeader = 'flex items-center gap-3 px-5 py-4 border-b border-gray-200 dark:border-slate-600/70';
   const headerIcon = 'w-9 h-9 rounded-xl bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 flex items-center justify-center shrink-0';
   const cardTitle = 'text-base font-semibold text-gray-900 dark:text-slate-50';
 
   const statTiles = [
     { label: 'Questions Answered', value: `${questionsAnswered} / ${questionsAsked}`, Icon: Play,
-      tile: 'bg-brand-blue/5 border-brand-blue/15', icon: 'bg-brand-blue text-white' },
+      icon: 'bg-brand-blue text-white' },
     { label: 'Skills Evaluated', value: `${allSkills.filter(s => s.score > 0).length} / ${allSkills.length}`, Icon: CheckCircle,
-      tile: 'bg-success-subtle/50 border-success-line', icon: 'bg-success text-white' },
-    { label: isPartialEvaluation ? 'Partial Evaluation' : 'Overall Score', value: isPartialEvaluation ? '—' : `${confidence}%`, Icon: BarChart3,
-      tile: verdictTone.tile, icon: verdictTone.icon, valueClass: verdictTone.text },
+      // Brand cyan, not green: green reads as "pass" and clashed with the
+      // red Fail verdict beside it.
+      icon: 'bg-brand-cyan text-white' },
   ];
 
   return (
     <div className="space-y-5">
-      {/* 1. Report header — title and the photo + verdict (Download Report lives in the page header) */}
-      <div className={`${card} p-5`} style={{ pageBreakInside: 'avoid' }}>
-        <div className="flex items-start sm:items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-4 min-w-0">
-            <div className="w-12 h-12 rounded-xl bg-brand-blue text-white flex items-center justify-center shadow-sm shadow-brand-blue/25 shrink-0">
-              <Sparkles className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <div className="text-lg font-bold text-gray-900 dark:text-slate-50 leading-tight">AI Interview Evaluation Report</div>
-              </div>
-            </div>
-          </div>
-        </div>
-        {/* Candidate photo (identity check; initials when none) with the
-            verdict beside it — result, the Must-Have vs threshold line and the
-            Match Score — then the meta strip full width underneath. */}
-        <div className="mt-5 flex items-stretch gap-4">
-          <div className="w-24 sm:w-28 min-h-[96px] shrink-0 rounded-xl overflow-hidden bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
-            {candidateImage
-              ? <img src={candidateImage} alt={candidate.name} className="w-full h-full object-cover" />
-              : <span className="text-3xl font-bold text-brand-blue">
-                  {candidate.name.split(/\s+/).map(p => p[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || 'C'}
-                </span>}
-          </div>
-          <div className={`flex-1 min-w-0 rounded-xl border px-4 sm:px-5 py-4 flex flex-wrap items-center justify-between gap-4 ${verdictTone.tile}`}>
+      {/* 1. Verdict — result, the Must-Have vs threshold line, and the key
+          stats + Match Score. (The candidate photo now lives only in the page
+          header; Download Report too. The report title was removed — the tab
+          already names the view.) */}
+          <div className={`rounded-2xl border px-4 sm:px-5 py-4 flex flex-wrap items-center justify-between gap-4 ${verdictTone.tile}`} style={{ pageBreakInside: 'avoid' }}>
             <div className="min-w-0">
               {isPartialEvaluation ? (
                 <>
@@ -725,28 +747,32 @@ export function EvalReportCombined({
                 </>
               )}
             </div>
-            {!isPartialEvaluation && (
-              <div className={`px-5 py-2.5 rounded-xl text-center shrink-0 shadow-sm ${verdictTone.icon}`}>
-                <div className="text-2xl font-bold leading-none tabular-nums">{confidence}%</div>
-                <div className="text-xs font-semibold mt-1 opacity-95">Match Score</div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* 2. Key stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4" style={{ pageBreakInside: 'avoid' }}>
-        {statTiles.map(({ label, value, Icon, tile, icon, valueClass }) => (
-          <div key={label} className={`rounded-2xl border p-4 flex items-center gap-3 min-w-0 ${tile}`}>
-            <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${icon}`}><Icon className="w-5 h-5" /></div>
-            <div className="min-w-0">
-              <div className={`text-xl sm:text-2xl font-bold tabular-nums leading-tight ${valueClass ?? 'text-gray-900 dark:text-slate-50'}`}>{value}</div>
-              <div className="text-xs text-gray-600 dark:text-slate-400 truncate">{label}</div>
+            {/* Key stats sit beside the Match Score, same height as its
+                badge, so the row (and the photo, which follows the row
+                height) doesn't grow. */}
+            <div className="flex flex-wrap items-stretch gap-2.5 shrink-0">
+              {statTiles.map(({ label, value, Icon, icon }) => (
+                <div key={label} className="flex items-center gap-2.5 rounded-xl bg-white/80 dark:bg-slate-900/60 ring-1 ring-black/5 dark:ring-white/10 px-3 py-2">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${icon}`}><Icon className="w-4 h-4" /></div>
+                  <div className="min-w-0">
+                    <div className="text-lg font-bold tabular-nums leading-none text-gray-900 dark:text-slate-50">{value}</div>
+                    <div className="text-2xs text-gray-500 dark:text-slate-400 mt-1 whitespace-nowrap">{label}</div>
+                  </div>
+                </div>
+              ))}
+              {/* Match Score — same chip as the stats; the icon and number
+                  take the verdict colour (green pass / red fail). */}
+              {!isPartialEvaluation && (
+                <div className="flex items-center gap-2.5 rounded-xl bg-white/80 dark:bg-slate-900/60 ring-1 ring-black/5 dark:ring-white/10 px-3 py-2">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${verdictTone.icon}`}><Target className="w-4 h-4" /></div>
+                  <div className="min-w-0">
+                    <div className={`text-lg font-bold tabular-nums leading-none ${verdictTone.text}`}>{confidence}%</div>
+                    <div className="text-2xs text-gray-500 dark:text-slate-400 mt-1 whitespace-nowrap">Match Score</div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-        ))}
-      </div>
 
       {/* 3. Executive summary — first read, ahead of the score detail */}
       <div className={card} style={{ pageBreakInside: 'avoid' }}>
@@ -798,7 +824,7 @@ export function EvalReportCombined({
             <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-destructive" />Fail</span>
           </div>
         </div>
-        <div className="divide-y divide-gray-100 dark:divide-slate-800">
+        <div className="divide-y divide-gray-200 dark:divide-slate-700">
           {sectionsPresent.mustHave && (
             <SectionRow
               label="Must-Have Section Score"
@@ -826,38 +852,15 @@ export function EvalReportCombined({
         </div>
       </div>
 
-      {/* 5. Radar + cluster coverage */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5" style={{ pageBreakInside: 'avoid' }}>
-        <div className={card}>
-          <div className={cardHeader}>
-            <div className={headerIcon}><Network className="w-4 h-4" /></div>
-            <div className={cardTitle}>Skill Assessment Radar</div>
-          </div>
-          <div className="p-4">
-            {radarData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
-                <RadarChart data={radarData} outerRadius="70%">
-                  <PolarGrid stroke="var(--raw-e5e7eb)" />
-                  <PolarAngleAxis dataKey="skill" tick={{ fill: 'var(--raw-6b7280)', fontSize: 11, fontWeight: 500 }} />
-                  <PolarRadiusAxis angle={90} domain={[0, 10]} tick={{ fill: 'var(--raw-6b7280)', fontSize: 10 }} />
-                  <Radar name="Score" dataKey="score" stroke="var(--brand-blue)" fill="var(--brand-blue)" fillOpacity={0.35} strokeWidth={2} />
-                </RadarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-[300px] flex items-center justify-center text-gray-400 text-sm italic">
-                Not enough data to render radar chart.
-              </div>
-            )}
-          </div>
-        </div>
-
+      {/* 5. Cluster coverage (the Skill Assessment Radar was removed) */}
+      <div className="grid grid-cols-1 gap-5" style={{ pageBreakInside: 'avoid' }}>
         <div className={card}>
           <div className={cardHeader}>
             <div className={headerIcon}><Layers className="w-4 h-4" /></div>
             <div className={cardTitle}>Cluster Coverage Overview</div>
           </div>
           <div className="p-5">
-            <div className="divide-y divide-gray-100 dark:divide-slate-800">
+            <div className="divide-y divide-gray-200 dark:divide-slate-700">
               {sectionsPresent.mustHave && (
                 <CoverageBlock label="Must-Have Section" cov={mhCov} Icon={Target}
                   tone={{ icon: 'bg-brand-blue/10 text-brand-blue', bar: 'bg-brand-blue' }} />
@@ -867,7 +870,7 @@ export function EvalReportCombined({
                   tone={{ icon: 'bg-brand-orange/10 text-brand-orange-deep', bar: 'bg-brand-orange' }} />
               )}
             </div>
-            <div className="mt-4 flex items-start gap-2.5 rounded-xl bg-brand-blue/5 border border-brand-blue/15 px-4 py-3 text-xs text-gray-600 dark:text-slate-400 leading-relaxed">
+            <div className="mt-4 flex items-start gap-2.5 rounded-xl bg-brand-blue/5 border border-brand-blue/25 px-4 py-3 text-xs text-gray-600 dark:text-slate-400 leading-relaxed">
               <Info className="w-4 h-4 text-brand-blue shrink-0 mt-px" />
               <span><strong className="text-gray-800 dark:text-slate-200">Question Coverage</strong> reflects how much of the planned skill set was actually probed — not how well the candidate answered (that&apos;s the Section Score above).</span>
             </div>
@@ -881,24 +884,28 @@ export function EvalReportCombined({
           <div className={headerIcon}><ListChecks className="w-4 h-4" /></div>
           <div className={cardTitle}>Skills Assessment Summary</div>
           <div className="ml-auto flex items-center gap-4 text-xs text-gray-500 dark:text-slate-400">
-            <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-brand-blue" />Must-Have</span>
-            <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-brand-orange" />Nice-to-Have</span>
+            {showMustHaveTable && <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-brand-blue" />Must-Have</span>}
+            {showNiceToHaveTable && <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-brand-orange" />Nice-to-Have</span>}
           </div>
         </div>
         {flatMustHave.length === 0 && flatNiceToHave.length === 0 ? (
           <div className="p-6 text-sm text-gray-400 italic text-center">No skills evaluated yet.</div>
         ) : (
-          <div className="p-4 sm:p-5 grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
-            {sectionsPresent.mustHave && flatMustHave.length > 0 && (
+          // Two side-by-side tables when both sections exist; a single
+          // full-width table (with Cluster / score bar / Status) otherwise.
+          <div className={`p-4 sm:p-5 grid grid-cols-1 gap-4 items-start ${singleSkillTable ? '' : 'xl:grid-cols-2'}`}>
+            {showMustHaveTable && (
               <SkillTable
                 title={`Must-Have Skills (${flatMustHave.length} skill${flatMustHave.length !== 1 ? 's' : ''} evaluated)`}
+                wide={singleSkillTable}
                 rows={flatMustHave}
                 tagClass={(t) => t === 'P1' ? 'bg-brand-blue text-white' : t === 'P2' ? 'bg-brand-blue/75 text-white' : 'bg-brand-blue/15 text-brand-blue'}
               />
             )}
-            {sectionsPresent.niceToHave && flatNiceToHave.length > 0 && (
+            {showNiceToHaveTable && (
               <SkillTable
                 title={`Nice-to-Have Skills (${flatNiceToHave.length} skill${flatNiceToHave.length !== 1 ? 's' : ''} evaluated)`}
+                wide={singleSkillTable}
                 rows={flatNiceToHave}
                 tagClass={(t) => t === 'P1' ? 'bg-brand-orange text-white' : t === 'P2' ? 'bg-brand-orange/75 text-white' : 'bg-brand-orange/15 text-brand-orange-deep'}
               />
@@ -914,7 +921,7 @@ export function EvalReportCombined({
           <div className={cardTitle}>Question-by-Question Performance</div>
         </div>
         {perQuestionDetails.length > 0 ? (
-          <div className="divide-y divide-gray-100 dark:divide-slate-800">
+          <div className="divide-y divide-gray-200 dark:divide-slate-700">
             {perQuestionDetails.map((q, i) => {
               const isHR = q.section === 'hr';
               const sc = scoreColor(q.questionScore);
@@ -1003,18 +1010,25 @@ export function EvalReportCombined({
         )}
       </div>
 
-      {/* 8. AI analysis | recommendations */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+      {/* 8. Three titled sections, each sized to its own content:
+            Hiring Verdict             — AI Analysis (why pass / fail)
+            Strengths & Concerns       — Key Strengths | Areas of Concern
+            Recommendations & Next Steps
+          Colour lives in each part's title + icons; bodies are white. */}
+      <div className={card} style={{ pageBreakInside: 'avoid' }}>
+        <div className={cardHeader}>
+          <div className={headerIcon}><Scale className="w-4 h-4" /></div>
+          <div className={cardTitle}>Hiring Verdict</div>
+        </div>
         {/* AI Analysis — why pass / fail, plus the AI narrative */}
-        <div className={`rounded-2xl border overflow-hidden ${verdictTone.tile}`} style={{ pageBreakInside: 'avoid' }}>
-          <div className={`flex items-center gap-2 px-5 py-3 font-semibold text-sm ${verdictTone.text}`}>
-            {isPartialEvaluation || !isPassed ? <AlertTriangle className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />}
-            {isPartialEvaluation ? 'AI Analysis — Partial Interview Review' : `AI Analysis — Why this candidate ${isPassed ? 'Passed' : 'Failed'}`}
-          </div>
-          {/* Point-wise — the same wording, one sentence per point, each
-              marked with the verdict's icon and colour. */}
-          <div className="px-5 pb-5 space-y-3 text-sm leading-relaxed text-gray-700 dark:text-slate-300">
-            <ul className="space-y-2.5">
+          <div className="p-5">
+            <div className={`flex items-center gap-2 mb-3 font-semibold text-sm ${verdictTone.text}`}>
+              {isPartialEvaluation || !isPassed ? <AlertTriangle className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />}
+              {isPartialEvaluation ? 'AI Analysis — Partial Interview Review' : `AI Analysis — Why this candidate ${isPassed ? 'Passed' : 'Failed'}`}
+            </div>
+            {/* Point-wise — the same wording, one sentence per point, each
+                marked with the verdict's icon and colour. */}
+            <ul className="space-y-2.5 text-sm leading-relaxed text-gray-700 dark:text-slate-300">
               {[
                 ...(isPartialEvaluation ? [
                   <><strong>{candidate.name}</strong> was evaluated only on the portion of the interview completed before termination.</>,
@@ -1028,7 +1042,8 @@ export function EvalReportCombined({
                       : ` (below by ${formatScore1((MHS_THRESHOLD - scores.mustHave))})`}.</>,
                   <>This Must-Have result drives the <strong>{finalResultLabel}</strong> decision; Nice-to-Have ({formatScore1(scores.niceToHave)}/10) is informational and HR is not scored.</>,
                 ]),
-                ...(aiSummary ? [<>{aiSummary}</>] : []),
+                // The AI summary paragraph, broken into one point per sentence.
+                ...summaryToPoints(aiSummary).map(point => <>{point}</>),
               ].map((point, i) => {
                 const PointIcon = isPartialEvaluation ? AlertTriangle : isPassed ? CheckCircle : XCircle;
                 return (
@@ -1039,60 +1054,79 @@ export function EvalReportCombined({
                 );
               })}
             </ul>
-            {((strengths && strengths.length > 0) || (weaknesses && weaknesses.length > 0)) && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {strengths && strengths.length > 0 && (
-                  <div className="rounded-lg border border-success-line bg-white/70 dark:bg-slate-900/60 p-3">
-                    <div className="text-xs font-bold text-success-strong mb-1.5">Key Strengths</div>
-                    <ul className="space-y-1.5 text-xs">
-                      {strengths.slice(0, 5).map((s, i) => (
-                        <li key={i} className="flex items-start gap-1.5"><CheckCircle className="w-3.5 h-3.5 mt-px shrink-0 text-success" /><span>{s}</span></li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {weaknesses && weaknesses.length > 0 && (
-                  <div className="rounded-lg border border-destructive-line bg-white/70 dark:bg-slate-900/60 p-3">
-                    <div className="text-xs font-bold text-destructive mb-1.5">Areas of Concern</div>
-                    <ul className="space-y-1.5 text-xs">
-                      {weaknesses.slice(0, 5).map((w, i) => (
-                        <li key={i} className="flex items-start gap-1.5"><XCircle className="w-3.5 h-3.5 mt-px shrink-0 text-destructive" /><span>{w}</span></li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
+          </div>
+      </div>
+
+      <div className={card} style={{ pageBreakInside: 'avoid' }}>
+        <div className={cardHeader}>
+          <div className={headerIcon}><ClipboardCheck className="w-4 h-4" /></div>
+          <div className={cardTitle}>Strengths &amp; Concerns</div>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-gray-200 dark:divide-slate-600/70">
+          {/* Key Strengths */}
+          <div className="p-5">
+            <div className="flex items-center gap-2 mb-3 font-semibold text-sm text-success-strong">
+              <CheckCircle className="w-4 h-4" />
+              Key Strengths
+            </div>
+            {strengthItems.length > 0 ? (
+              <ul className="space-y-2 text-sm leading-relaxed text-gray-700 dark:text-slate-300">
+                {strengthItems.map((s, i) => (
+                  <li key={i} className="flex items-start gap-2"><CheckCircle className="w-4 h-4 mt-0.5 shrink-0 text-success" /><span>{s}</span></li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm italic text-gray-500 dark:text-slate-400">No notable strengths were identified in this interview.</p>
+            )}
+          </div>
+
+          {/* Areas of Concern */}
+          <div className="p-5">
+            <div className="flex items-center gap-2 mb-3 font-semibold text-sm text-destructive">
+              <XCircle className="w-4 h-4" />
+              Areas of Concern
+            </div>
+            {concernItems.length > 0 ? (
+              <ul className="space-y-2 text-sm leading-relaxed text-gray-700 dark:text-slate-300">
+                {concernItems.map((w, i) => (
+                  <li key={i} className="flex items-start gap-2"><XCircle className="w-4 h-4 mt-0.5 shrink-0 text-destructive" /><span>{w}</span></li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm italic text-gray-500 dark:text-slate-400">No significant concerns were identified in this interview.</p>
             )}
           </div>
         </div>
+      </div>
 
-        {/* Recommendations & Next Steps */}
-        <div className={`rounded-2xl border overflow-hidden ${isPassed && !isPartialEvaluation ? 'bg-success-subtle/50 border-success-line' : 'bg-brand-blue/5 border-brand-blue/15'}`} style={{ pageBreakInside: 'avoid' }}>
-          <div className={`flex items-center gap-2 px-5 py-3 font-semibold text-sm ${isPassed && !isPartialEvaluation ? 'text-success-strong' : 'text-brand-blue'}`}>
-            <Lightbulb className="w-4 h-4" />
-            Recommendations &amp; Next Steps
-          </div>
-          <ul className="px-5 pb-5 space-y-2 text-sm leading-relaxed text-gray-700 dark:text-slate-300 list-disc pl-10">
-            {isPassed ? (
-              <>
-                <li><strong>Proceed to next round:</strong> Candidate demonstrates strong technical competency across must-have skills</li>
-                <li><strong>Technical interview:</strong> Consider a deeper assessment in core architecture and design topics</li>
-                <li><strong>Cultural fit:</strong> Schedule a behavioral interview to assess team alignment</li>
-                <li><strong>Areas to explore:</strong> Skills showing medium-level proficiency can benefit from additional validation</li>
-              </>
-            ) : (
-              <>
-                <li><strong>Do not proceed:</strong> Candidate did not meet the minimum requirements for must-have skills</li>
-                <li><strong>Skills gap identified:</strong> Significant development needed in core technical areas</li>
-                <li><strong>Alternative path:</strong> Consider for junior positions or recommend additional training</li>
-              </>
-            )}
-          </ul>
+      {/* Recommendations & Next Steps — its own section, after the evidence. */}
+      <div className={card} style={{ pageBreakInside: 'avoid' }}>
+        <div className={cardHeader}>
+          <div className={headerIcon}><Lightbulb className="w-4 h-4" /></div>
+          <div className={cardTitle}>Recommendations &amp; Next Steps</div>
+        </div>
+        <div className="p-5">
+            <ul className="space-y-2 text-sm leading-relaxed text-gray-700 dark:text-slate-300 list-disc pl-5">
+              {isPassed ? (
+                <>
+                  <li><strong>Proceed to next round:</strong> Candidate demonstrates strong technical competency across must-have skills</li>
+                  <li><strong>Technical interview:</strong> Consider a deeper assessment in core architecture and design topics</li>
+                  <li><strong>Cultural fit:</strong> Schedule a behavioral interview to assess team alignment</li>
+                  <li><strong>Areas to explore:</strong> Skills showing medium-level proficiency can benefit from additional validation</li>
+                </>
+              ) : (
+                <>
+                  <li><strong>Do not proceed:</strong> Candidate did not meet the minimum requirements for must-have skills</li>
+                  <li><strong>Skills gap identified:</strong> Significant development needed in core technical areas</li>
+                  <li><strong>Alternative path:</strong> Consider for junior positions or recommend additional training</li>
+                </>
+              )}
+            </ul>
         </div>
       </div>
 
       {/* 9. Methodology + confidentiality */}
-      <div className="rounded-2xl bg-brand-blue/5 border border-brand-blue/15 px-5 py-4 flex items-start gap-3" style={{ pageBreakInside: 'avoid' }}>
+      <div className="rounded-2xl bg-brand-blue/5 border border-brand-blue/25 px-5 py-4 flex items-start gap-3" style={{ pageBreakInside: 'avoid' }}>
         <Info className="w-4 h-4 text-brand-blue shrink-0 mt-0.5" />
         <div className="text-xs leading-relaxed text-gray-600 dark:text-slate-400 space-y-1.5">
           <p>

@@ -55,3 +55,10 @@ e2e/data/*.json
 junit-*.xml
 report.json
 qa-cases-*.json
+
+# Playwright
+node_modules/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/

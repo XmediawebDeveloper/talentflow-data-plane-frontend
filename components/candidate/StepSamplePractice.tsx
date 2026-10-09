@@ -54,6 +54,21 @@ const PRACTICE_QUESTION =
 // Full script the AI voice reads aloud: greeting first, then the question.
 const PRACTICE_SPOKEN_SCRIPT = `${PRACTICE_GREETING} ${PRACTICE_QUESTION}`;
 
+// Bina's REAL voice for practice. The live interview's voice is synthesized on
+// the server and streamed over the interview WebSocket, which only opens for
+// the real interview — so practice plays pre-recorded clips of the same voice
+// saying its three fixed lines. Each clip must say EXACTLY its script:
+//   full     → PRACTICE_SPOKEN_SCRIPT (greeting + question, on Start)
+//   question → PRACTICE_QUESTION      (Repeat Question)
+//   closing  → PRACTICE_CLOSING_MESSAGE (after Next)
+// A clip that is missing or fails to load falls back to the browser voice.
+type PracticeClipKey = 'full' | 'question' | 'closing';
+const PRACTICE_VOICE_CLIPS: Record<PracticeClipKey, string> = {
+  full: '/audio/practice/bina-greeting-question.mp3',
+  question: '/audio/practice/bina-question.mp3',
+  closing: '/audio/practice/bina-closing.mp3',
+};
+
 // Bina's sign-off, spoken when the candidate finishes the practice (clicks Next).
 const PRACTICE_CLOSING_MESSAGE =
   "Great — that's the idea! You're all set and ready to begin the real interview. Take a breath, relax, and do your best. All the best!";
@@ -565,18 +580,102 @@ export default function StepSamplePractice({
   // ── TTS: Speak the practice question ──────────────────────────────────────
   // Called only on explicit user click so the browser always has a user gesture.
 
+  // ── Bina's recorded voice clips (see PRACTICE_VOICE_CLIPS) ───────────────
+  // Preloaded on mount; a clip counts as available once its metadata loads.
+  // Until then — or if it 404s — the browser voice below is used instead.
+  const clipAudioRef = useRef<Partial<Record<PracticeClipKey, HTMLAudioElement>>>({});
+  const clipReadyRef = useRef<Partial<Record<PracticeClipKey, boolean>>>({});
+  const playingClipRef = useRef<HTMLAudioElement | null>(null);
+  useEffect(() => {
+    if (typeof Audio === 'undefined') return;
+    const audios = clipAudioRef.current;
+    (Object.keys(PRACTICE_VOICE_CLIPS) as PracticeClipKey[]).forEach((key) => {
+      const a = new Audio();
+      a.preload = 'auto';
+      a.addEventListener('loadedmetadata', () => { clipReadyRef.current[key] = true; }, { once: true });
+      a.addEventListener('error', () => { clipReadyRef.current[key] = false; }, { once: true });
+      a.src = PRACTICE_VOICE_CLIPS[key];
+      audios[key] = a;
+    });
+    return () => {
+      Object.values(audios).forEach((a) => { if (a) { a.pause(); a.removeAttribute('src'); a.load(); } });
+    };
+  }, []);
+
+  const stopBinaClip = useCallback(() => {
+    const a = playingClipRef.current;
+    playingClipRef.current = null;
+    if (!a) return;
+    a.onplaying = null; a.onended = null; a.onerror = null;
+    a.pause();
+    try { a.currentTime = 0; } catch { /* not seekable yet */ }
+  }, []);
+
+  /** Plays one of Bina's clips. Returns false (nothing started) when that clip
+   *  isn't available, so the caller uses the browser voice instead. `onFail`
+   *  runs if playback is refused after starting the attempt. Called in the
+   *  click's own task, so the user gesture still covers play(). */
+  const playBinaClip = useCallback((
+    key: PracticeClipKey,
+    handlers: { onStart: () => void; onEnd: () => void; onFail: () => void },
+  ): boolean => {
+    const a = clipAudioRef.current[key];
+    if (!a || !clipReadyRef.current[key]) return false;
+    stopBinaClip();
+    window.speechSynthesis?.cancel();
+    try { a.currentTime = 0; } catch { /* ignore */ }
+    playingClipRef.current = a;
+    a.onplaying = () => { a.onplaying = null; handlers.onStart(); };
+    a.onended = () => { if (playingClipRef.current === a) playingClipRef.current = null; handlers.onEnd(); };
+    a.onerror = () => { if (playingClipRef.current === a) playingClipRef.current = null; handlers.onEnd(); };
+    a.play().catch(() => {
+      if (playingClipRef.current === a) playingClipRef.current = null;
+      a.onplaying = null; a.onended = null; a.onerror = null;
+      handlers.onFail();
+    });
+    return true;
+  }, [stopBinaClip]);
+
   // scriptOverride lets Repeat speak ONLY the question (no greeting). The initial
   // auto-speak passes nothing → full greeting + question.
   const speakQuestion = useCallback((scriptOverride?: string) => {
+    const scriptToSpeak = scriptOverride ?? PRACTICE_SPOKEN_SCRIPT;
+
+    // What happens when Bina finishes the question — shared by her recorded
+    // voice and the browser voice.
+    const onQuestionStart = () => { cancelPreTurnCountdown(); setAiSpeaking(true); };
+    const onQuestionEnd = () => {
+      setAiSpeaking(false);
+      if (!practiceDoneRef.current) {
+        // 3-2-1 "Get ready to answer" first, then open the mic (live parity).
+        runPreTurnCountdown(() => { if (!practiceDoneRef.current) startRecordingRef.current?.(); });
+      }
+    };
+
+    // Bina's real (recorded) voice first, when this line has a clip.
+    const clipKey: PracticeClipKey | null =
+      scriptToSpeak === PRACTICE_SPOKEN_SCRIPT ? 'full'
+      : scriptToSpeak === PRACTICE_QUESTION ? 'question'
+      : null;
+    if (clipKey && playBinaClip(clipKey, {
+      onStart: onQuestionStart,
+      onEnd: onQuestionEnd,
+      // Refused (autoplay policy): for the opening line the existing
+      // autoSpeakBlocked fallback opens the mic; for Repeat nothing played,
+      // so the candidate can press it again.
+      onFail: () => setAiSpeaking(false),
+    })) {
+      return;
+    }
+
     if (!window.speechSynthesis) {
       setTtsSupported(false);
       return;
     }
 
     // Cancel any ongoing speech first
+    stopBinaClip();
     window.speechSynthesis.cancel();
-
-    const scriptToSpeak = scriptOverride ?? PRACTICE_SPOKEN_SCRIPT;
 
     const doSpeak = (voice: SpeechSynthesisVoice | null) => {
       // Resume in case the synth engine was paused
@@ -588,17 +687,11 @@ export default function StepSamplePractice({
       utterance.volume = 1.0;
       if (voice) utterance.voice = voice;
 
-      utterance.onstart = () => { cancelPreTurnCountdown(); setAiSpeaking(true); };
+      utterance.onstart = onQuestionStart;
       // When Bina finishes the question, AUTO-OPEN the mic (no manual Start
       // button) — just like the real interview's "your turn, speak now". Guarded
       // so the practice-complete sign-off never re-opens the mic.
-      utterance.onend = () => {
-        setAiSpeaking(false);
-        if (!practiceDoneRef.current) {
-          // 3-2-1 "Get ready to answer" first, then open the mic (live parity).
-          runPreTurnCountdown(() => { if (!practiceDoneRef.current) startRecordingRef.current?.(); });
-        }
-      };
+      utterance.onend = onQuestionEnd;
       utterance.onerror = (e) => {
         const err = (e as SpeechSynthesisErrorEvent).error;
         // 'interrupted'/'canceled' are expected when cancel() is called — not real errors
@@ -648,7 +741,7 @@ export default function StepSamplePractice({
         window.speechSynthesis.removeEventListener('voiceschanged', onVoicesChanged);
       }, 3000);
     }
-  }, [cancelPreTurnCountdown, runPreTurnCountdown]);
+  }, [cancelPreTurnCountdown, runPreTurnCountdown, playBinaClip, stopBinaClip]);
 
   // Keep ref in sync with liveTranscript state (avoids stale-closure issues in callbacks)
   useEffect(() => { liveTranscriptRef.current = liveTranscript; }, [liveTranscript]);
@@ -1044,13 +1137,24 @@ export default function StepSamplePractice({
     // utterance's onend/onerror, with a fallback timer for when TTS is
     // unavailable/blocked (Brave, no voices) so the popup still appears.
     const revealPopup = () => setShowStartPopup(true);
+    let shown = false;
+    const showOnce = () => { if (!shown) { shown = true; revealPopup(); } };
+    // Bina's real (recorded) voice first, when the clip is available.
+    if (playBinaClip('closing', {
+      onStart: () => setAiSpeaking(true),
+      onEnd: () => { setAiSpeaking(false); showOnce(); },
+      onFail: () => { setAiSpeaking(false); showOnce(); },
+    })) {
+      // Safety net in case `ended` never arrives.
+      window.setTimeout(showOnce, 20000);
+      return;
+    }
     if (!window.speechSynthesis) {
       window.setTimeout(revealPopup, 1200);
       return;
     }
-    let shown = false;
-    const showOnce = () => { if (!shown) { shown = true; revealPopup(); } };
     try {
+      stopBinaClip();
       window.speechSynthesis.cancel();
       window.speechSynthesis.resume();
       const u = new SpeechSynthesisUtterance(PRACTICE_CLOSING_MESSAGE);
@@ -1065,7 +1169,7 @@ export default function StepSamplePractice({
       // generous window so the candidate is never stuck without the popup.
       window.setTimeout(showOnce, 9000);
     } catch { showOnce(); }
-  }, []);
+  }, [playBinaClip, stopBinaClip]);
 
   // Next — like the real interview's "Next Question": wrap up the answer (stop
   // the auto-recording), then Bina plays the "you're ready — all the best"
@@ -1087,7 +1191,7 @@ export default function StepSamplePractice({
     hasAutoSpokeRef.current = true;
     speakQuestion();
     // If TTS was silently blocked (Brave), flag it so the fallback opens the mic.
-    setTimeout(() => { if (!window.speechSynthesis?.speaking) setAutoSpeakBlocked(true); }, 2000);
+    setTimeout(() => { if (!window.speechSynthesis?.speaking && !playingClipRef.current) setAutoSpeakBlocked(true); }, 2000);
   }, [started, speakQuestion]);
 
   // ── Derived ───────────────────────────────────────────────────────────────
@@ -1447,7 +1551,7 @@ export default function StepSamplePractice({
               Submit to finish the practice (same as the Next button). */}
           {doneConfirm && !practiceDone && (
             <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center justify-center px-4">
-              <div className="pointer-events-auto w-full max-w-sm rounded-2xl bg-white ring-1 ring-sky-100 shadow-2xl px-5 pt-5 pb-4 text-center">
+              <div className="pointer-events-auto w-full max-w-sm rounded-2xl bg-white ring-1 ring-sky-100 dark:ring-white/10 shadow-2xl px-5 pt-5 pb-4 text-center">
                 <div className="mx-auto mb-3 w-12 h-12 rounded-full bg-sky-50 flex items-center justify-center">
                   <Mic className="w-5 h-5 text-brand-blue" />
                 </div>
@@ -1475,9 +1579,9 @@ export default function StepSamplePractice({
               shows the real chat, waveform and buttons instead of this cover;
               it appears as soon as the tour ends or is skipped. */}
           {!started && tourStep < 0 && (
-            <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/90 backdrop-blur-sm p-6">
+            <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm p-6">
               <div className="text-center max-w-sm">
-                <div className="w-14 h-14 rounded-full bg-violet-50 ring-1 ring-violet-200 flex items-center justify-center mx-auto mb-4">
+                <div className="w-14 h-14 rounded-full bg-violet-50 ring-1 ring-violet-200 dark:ring-violet-500/30 flex items-center justify-center mx-auto mb-4">
                   <MessageSquare className="w-7 h-7 text-violet-600" />
                 </div>
                 <h3 className="text-gray-900 text-lg font-semibold mb-1.5">Ready for a quick practice?</h3>
@@ -1498,7 +1602,7 @@ export default function StepSamplePractice({
           )}
           {/* Chat thread — same bubbles as the live interview: Bina (violet,
               left) and Your Response (mint, right). */}
-          <div ref={chatScrollRef} data-tour="answer" className="flex-1 overflow-y-auto p-4 pb-28 space-y-3 bg-slate-50/60" style={{ maxHeight: '420px' }}>
+          <div ref={chatScrollRef} data-tour="answer" className="flex-1 overflow-y-auto p-4 pb-28 space-y-3 bg-slate-50/60 dark:bg-transparent" style={{ maxHeight: '420px' }}>
             {/* Bina greeting */}
             <div className="flex gap-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -1546,7 +1650,7 @@ export default function StepSamplePractice({
                         </div>
                         <div data-tour="record" className="flex flex-col gap-1.5">
                           <MicWaveform analyserRef={analyserRef} active={isRecording} color="#059669" quietColor="#6ee7b7" />
-                          <p className="text-xs leading-relaxed italic text-emerald-700/70">Recording… Your transcript will appear after you finish speaking.</p>
+                          <p className="text-xs leading-relaxed italic text-emerald-700/70 dark:text-emerald-300/70">Recording… Your transcript will appear after you finish speaking.</p>
                         </div>
                       </>
                     ) : isTranscribing ? (
@@ -1562,7 +1666,7 @@ export default function StepSamplePractice({
                       // Waiting for the mic to open (Bina still speaking / not started).
                       <div data-tour="record" className="flex flex-col gap-1.5">
                         <MicWaveform analyserRef={analyserRef} active={false} color="#059669" quietColor="#6ee7b7" />
-                        <p className="text-xs leading-relaxed italic text-emerald-700/70">
+                        <p className="text-xs leading-relaxed italic text-emerald-700/70 dark:text-emerald-300/70">
                           {!started ? 'Press Start to begin.' : aiSpeaking ? 'The mic opens when Bina finishes the question.' : 'Getting ready…'}
                         </p>
                       </div>
@@ -1598,12 +1702,12 @@ export default function StepSamplePractice({
                           onClick={handlePracticeNext}
                           disabled={aiSpeaking || isTranscribing || practiceDone || (!isRecording && !hasAnswer)}
                           title={practiceDone ? 'Practice complete' : isRecording || hasAnswer ? 'Finish and hear Bina' : 'Answer first'}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors bg-emerald-600 hover:bg-emerald-700 border-emerald-600 text-white disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:border-gray-200 disabled:text-gray-400"
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors bg-emerald-600 hover:bg-emerald-700 border-emerald-600 text-white disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:border-gray-200 disabled:text-gray-400 dark:disabled:bg-slate-800 dark:disabled:border-slate-700 dark:disabled:text-slate-500"
                         >
                           Next <ChevronRight className="w-3.5 h-3.5" />
                         </button>
                         {started && !isRecording && !hasAnswer && !aiSpeaking && !isTranscribing && (
-                          <p className="basis-full text-2xs text-emerald-700/70">Answer first — Next unlocks once you speak.</p>
+                          <p className="basis-full text-2xs text-emerald-700/70 dark:text-emerald-300/70">Answer first — Next unlocks once you speak.</p>
                         )}
                       </div>
                     )}
@@ -1649,7 +1753,7 @@ export default function StepSamplePractice({
               ? { grad: 'from-emerald-400 to-teal-500', ring: 'ring-emerald-200/60', glow: 'shadow-emerald-500/30', title: 'Your turn — speak now', subtitle: 'Microphone is active · Bina is listening' }
               : { grad: 'from-rose-500 to-red-600', ring: 'ring-rose-200/50', glow: 'shadow-red-600/30', title: 'Hold on — Bina is speaking', subtitle: 'Please wait until she finishes the question' };
             return (
-              <div className={`absolute inset-x-0 z-20 flex justify-center px-4 pt-10 pb-3 pointer-events-none bg-gradient-to-t from-white via-white/90 via-60% to-transparent ${micReady ? 'bottom-0' : 'bottom-[120px]'}`}>
+              <div className={`absolute inset-x-0 z-20 flex justify-center px-4 pt-10 pb-3 pointer-events-none bg-gradient-to-t from-[var(--surface)] via-[color-mix(in_srgb,var(--surface)_90%,transparent)] via-60% to-transparent ${micReady ? 'bottom-0' : 'bottom-[120px]'}`}>
                 <div className={`relative flex items-center gap-3 pl-3 pr-4 py-2.5 rounded-2xl bg-gradient-to-br ${cfg.grad} ring-1 ${cfg.ring} shadow-2xl ${cfg.glow} backdrop-blur-md min-w-0 sm:min-w-[240px] max-w-[94%]`}>
                   <div className="relative shrink-0">
                     <div className="w-9 h-9 rounded-full bg-white/25 ring-1 ring-white/40 flex items-center justify-center">

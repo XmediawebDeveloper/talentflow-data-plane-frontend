@@ -31,6 +31,7 @@ import { Button } from '@/components/ui/button';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import { PageSkeleton } from '@/components/ui/skeleton';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
+import { isForcedNavigation } from '@/lib/utils/forcedNavigation';
 
 type CreationMode = 'ai' | 'manual';
 type Step = 'create' | 'extract' | 'review';
@@ -1780,6 +1781,11 @@ const PENDING_INDUSTRY_VALUE = '__pending_new_industry__';
  *  the recruiter is the one who can tell whether it is the right one. */
 const LOW_INDUSTRY_CONFIDENCE = 0.5;
 
+/** The JD text the browser's leave-prompt compares against the last save. */
+function jdContentKey(title: string, aiPrompt: string, manualJD: string, generatedJD: string): string {
+  return JSON.stringify([title.trim(), aiPrompt.trim(), manualJD.trim(), generatedJD.trim()]);
+}
+
 export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, isJDInUse = false, jdUsageMessage, breadcrumbItems, onStepChange, editingJDId, onClose, onSuccess, isEmbedded }: JDCreationProps = {}) {
   const router = useRouter();
   const [mode, setMode] = useState<CreationMode>('ai');
@@ -2847,6 +2853,16 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
   // Unsaved changes tracking
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  // What the BROWSER's "Leave site? Changes you made may not be saved" prompt
+  // keys on. `hasUnsavedChanges` above only means "the user has entered
+  // something" — it is never cleared by autosave on purpose (it also drives the
+  // in-app Unsaved Changes dialog and Cancel's delete-the-draft rule). The tab-
+  // close prompt instead compares the JD text with what was last saved
+  // (loaded draft, autosave, Save as Draft, step saves), so it only fires when
+  // there is something genuinely unsaved.
+  const currentContentKeyRef = useRef('');
+  const savedContentKeyRef = useRef<string | null>(null);
+  const markLoadedContentSavedRef = useRef(false);
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
   // True when the dialog was raised by the browser Back/Forward buttons rather
@@ -3630,6 +3646,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
         setAutosaveStatus('saved');
         setLastAutosaveTime(new Date());
+        // The text this autosave sent is now the saved state (typing during
+        // the request leaves the current key different → still prompts).
+        savedContentKeyRef.current = jdContentKey(jobTitle, aiPrompt, manualJD, generatedJD);
         // Deliberately NOT clearing hasUnsavedChanges here: this silent
         // background save happens on a timer the user never asked for, so it
         // must not disarm the leave-confirmation guard behind their back. If
@@ -3659,11 +3678,24 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     if (jobTitle.trim() || aiPrompt.trim() || manualJD.trim() || generatedJD.trim()) {
       setHasUnsavedChanges(true);
     }
+    const key = jdContentKey(jobTitle, aiPrompt, manualJD, generatedJD);
+    currentContentKeyRef.current = key;
+    // A draft just loaded from the server: its content IS the saved state.
+    if (markLoadedContentSavedRef.current) {
+      markLoadedContentSavedRef.current = false;
+      savedContentKeyRef.current = key;
+    }
   }, [jobTitle, aiPrompt, manualJD, generatedJD]);
 
   // Warn before closing browser tab/window if there are unsaved changes
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // A forced sign-out redirect (session timeout / logout / 401) must not
+      // be blocked by "Leave site?" — the session is already gone.
+      if (isForcedNavigation()) return;
+      // Everything already saved (autosave / Save as Draft / step save) —
+      // nothing would be lost, so no "Changes may not be saved" prompt.
+      if (currentContentKeyRef.current === savedContentKeyRef.current) return;
       if (hasUnsavedChanges && !isPublished) {
         e.preventDefault();
         e.returnValue = '';
@@ -5050,6 +5082,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           console.log('[TalentFlow] JD created with extract stage, new id:', savedJd.id);
         }
 
+        savedContentKeyRef.current = currentContentKeyRef.current;
         if (jdId) {
           ensureJDCreationUrl(jdId, 'extract');
         }
@@ -6341,6 +6374,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         console.log('[TalentFlow] JD created with review stage:', savedJd.id);
       }
 
+      savedContentKeyRef.current = currentContentKeyRef.current;
       if (jdId) {
         ensureJDCreationUrl(jdId, 'review');
       }
@@ -7254,6 +7288,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
       setIsSavingDraft(false);
       setHasUnsavedChanges(false); // Clear unsaved changes after successful save
+      savedContentKeyRef.current = currentContentKeyRef.current;
 
       // The backend silently refuses to move an already-Published JD to Draft
       // via this update path (it only allows Published -> Disabled/Archived),
@@ -7383,6 +7418,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         status: effectiveEditingJD.status
       });
 
+      // The hydrated content is what's saved — adopt it as the baseline on
+      // the next content update (see the change-tracking effect).
+      markLoadedContentSavedRef.current = true;
       // Use functional updates to preserve user edits if they exist
       setJobTitle(prev => prev || effectiveEditingJD.title);
       // Only hydrate the AI-mode buffer for an AI-generated JD. Populating it for a
