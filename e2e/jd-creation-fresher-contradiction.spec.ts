@@ -93,7 +93,7 @@ async function open(page: Page, jd = draftJd()) {
       },
     });
   });
-  await page.route("**/jd/access-check", (route) =>
+  await page.route(/\/jd\/access-check(\?|$)/, (route) =>   // also matches ?jd_id=…
     route.fulfill({
       status: 200,
       json: { has_access: true, can_create: true, can_create_jd: true, all_checks_passed: true },

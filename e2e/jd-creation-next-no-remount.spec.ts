@@ -110,7 +110,7 @@ const savedBodies: Record<string, unknown>[] = [];
 
 async function mockCreateFlow(page: Page) {
   savedBodies.length = 0;
-  await page.route("**/jd/access-check", (route) =>
+  await page.route(/\/jd\/access-check(\?|$)/, (route) =>   // also matches ?jd_id=…
     route.fulfill({
       status: 200,
       json: { has_access: true, can_create: true, can_create_jd: true, all_checks_passed: true },

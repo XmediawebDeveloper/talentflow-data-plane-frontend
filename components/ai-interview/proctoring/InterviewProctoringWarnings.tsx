@@ -98,9 +98,9 @@ const EVENT_NAMES: Record<ProctoringEventType, string> = {
 };
 
 const SEVERITY_COLORS: Record<'minor' | 'moderate' | 'severe', { bg: string; border: string; text: string; icon: string }> = {
-  minor:    { bg: 'bg-yellow-50', border: 'border-yellow-400', text: 'text-yellow-800', icon: 'text-yellow-500' },
-  moderate: { bg: 'bg-orange-50', border: 'border-orange-400', text: 'text-orange-800', icon: 'text-orange-500' },
-  severe:   { bg: 'bg-red-50',    border: 'border-red-400',    text: 'text-red-800',    icon: 'text-red-500'    },
+  minor:    { bg: 'bg-yellow-50', border: 'border-yellow-400', text: 'text-yellow-800 dark:text-yellow-300', icon: 'text-yellow-500' },
+  moderate: { bg: 'bg-orange-50', border: 'border-orange-400', text: 'text-orange-800 dark:text-orange-300', icon: 'text-orange-500' },
+  severe:   { bg: 'bg-red-50',    border: 'border-red-400',    text: 'text-red-800 dark:text-red-300',       icon: 'text-red-500'    },
 };
 
 // Individual warning card — memoized to prevent re-renders of siblings.
@@ -131,7 +131,10 @@ const WarningCard = memo(function WarningCard({
   return (
     // Compact card: icon + title + severity on one line, message under it,
     // so it covers as little of the chat as possible.
-    <div className={`relative overflow-hidden rounded-lg border-l-4 ${colors.bg} ${colors.border} px-3 py-2.5 shadow-lg animate-interview-slide-in`}>
+    // Solid base + the severity tint on its own layer: in dark mode the theme
+    // turns bg-*-50 into a 15% tint, which on its own let the chat show through.
+    <div className={`relative overflow-hidden rounded-lg border-l-4 bg-white dark:bg-slate-900 ${colors.border} px-3 py-2.5 shadow-lg dark:shadow-black/40 dark:ring-1 dark:ring-white/10 animate-interview-slide-in`}>
+      <div className={`pointer-events-none absolute inset-0 ${colors.bg}`} aria-hidden="true" />
       {!held && (
         <div
           className="absolute bottom-0 left-0 h-0.5 bg-current opacity-30 animate-interview-progress-shrink"
@@ -142,7 +145,7 @@ const WarningCard = memo(function WarningCard({
           }}
         />
       )}
-      <div className="flex items-start gap-2.5">
+      <div className="relative flex items-start gap-2.5">
         <div className={`flex-shrink-0 mt-0.5 ${colors.icon} [&_svg]:w-5 [&_svg]:h-5`}>
           {EVENT_ICONS[warning.type] || <AlertTriangle className="w-5 h-5" />}
         </div>

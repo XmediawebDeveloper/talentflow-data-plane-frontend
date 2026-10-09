@@ -44,6 +44,7 @@ import {
   sortJobs,
 } from '@/lib/utils/jobOpeningDisplay';
 import { Skeleton, PageSkeleton } from '@/components/ui/skeleton';
+import { isForcedNavigation } from '@/lib/utils/forcedNavigation';
 
 // Languages that have an executable runtime in the candidate's coding round.
 // Mirrors LANGUAGE_VERSIONS in backend app/routers/candidate.py — anything not
@@ -3116,6 +3117,9 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
   // Handle browser close/refresh - save draft
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // A forced sign-out redirect (session timeout / logout / 401) must not
+      // be blocked by "Leave site?" — the session is already gone.
+      if (isForcedNavigation()) return;
       /* The popup edits an assessment that already exists, and it is not the
          page being unloaded — a "leave site?" prompt raised from a dialog
          open over the details view would be asking about the wrong thing. */

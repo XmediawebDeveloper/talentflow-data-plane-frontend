@@ -55,6 +55,15 @@ export interface SearchableSelectProps {
   className?: string;
   /** Accessible name when `label` is not rendered. */
   ariaLabel?: string;
+  /**
+   * 'bordered' (default): the usual h-9 white box with a gray-200 border.
+   * 'pill': the Job Details "AI Talent Match Results" tab's tinted
+   * `bg-brand-blue/5` toolbar-filter chrome, for callers embedding this
+   * control in that same toolbar row so it reads identically to its plain
+   * `<select>` siblings instead of as a different, bordered control. Only the
+   * trigger's chrome changes — the search box and option list are unaffected.
+   */
+  variant?: 'bordered' | 'pill';
 }
 
 export default function SearchableSelect({
@@ -69,6 +78,7 @@ export default function SearchableSelect({
   disabled = false,
   className,
   ariaLabel,
+  variant = 'bordered',
 }: SearchableSelectProps) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState('');
@@ -177,46 +187,62 @@ export default function SearchableSelect({
         </label>
       )}
 
-      <button
-        ref={triggerRef}
-        type="button"
-        disabled={disabled}
-        onClick={() => (open ? setOpen(false) : openMenu())}
-        onKeyDown={(e) => {
-          // Down-arrow opens straight into the list, the convention for a
-          // collapsed combobox.
-          if (!open && (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ')) {
-            e.preventDefault();
-            openMenu();
-          }
-        }}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-label={ariaLabel || label}
-        className={cn(
-          'w-full h-9 px-3 pr-8 inline-flex items-center rounded-lg border text-sm text-left transition-colors relative',
-          'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700',
-          'focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue',
-          disabled
-            ? 'opacity-50 cursor-not-allowed'
-            : 'hover:border-brand-blue/40 cursor-pointer',
-          // A set filter is tinted, so a toolbar of six controls says at a
-          // glance which of them are doing something.
-          value
-            ? 'text-gray-900 dark:text-slate-100 bg-brand-blue/5 border-brand-blue/30'
-            : 'text-gray-500 dark:text-slate-400',
-        )}
-      >
-        <span className="truncate" title={selected?.label}>
-          {selected?.label || placeholder}
-        </span>
-        <ChevronDown
+      {/* `contents` makes this wrapper invisible to layout for the default
+          'bordered' variant (every existing caller) — only 'pill' callers get
+          the tinted pill background around the trigger. */}
+      <div className={variant === 'pill' ? 'inline-flex items-center bg-brand-blue/5 dark:bg-brand-blue/10 rounded-lg p-1 transition-all' : 'contents'}>
+        <button
+          ref={triggerRef}
+          type="button"
+          disabled={disabled}
+          onClick={() => (open ? setOpen(false) : openMenu())}
+          onKeyDown={(e) => {
+            // Down-arrow opens straight into the list, the convention for a
+            // collapsed combobox.
+            if (!open && (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ')) {
+              e.preventDefault();
+              openMenu();
+            }
+          }}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          aria-label={ariaLabel || label}
           className={cn(
-            'w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 transition-transform',
-            open && 'rotate-180',
+            'inline-flex items-center text-left transition-colors relative',
+            disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
+            variant === 'pill'
+              ? cn(
+                  'h-7 pl-2.5 pr-8 rounded-md bg-transparent text-xs sm:text-sm',
+                  'focus:outline-none focus:ring-2 focus:ring-brand-blue/40',
+                  value ? 'text-gray-900 dark:text-slate-100' : 'text-gray-700 dark:text-slate-300',
+                )
+              : cn(
+                  'w-full h-9 px-3 pr-8 rounded-lg border text-sm',
+                  'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700',
+                  'focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue',
+                  !disabled && 'hover:border-brand-blue/40',
+                  // A set filter is tinted, so a toolbar of six controls says
+                  // at a glance which of them are doing something.
+                  value
+                    ? 'text-gray-900 dark:text-slate-100 bg-brand-blue/5 border-brand-blue/30'
+                    : 'text-gray-500 dark:text-slate-400',
+                ),
           )}
-        />
-      </button>
+        >
+          <span className="truncate" title={selected?.label}>
+            {selected?.label || placeholder}
+          </span>
+          <ChevronDown
+            className={cn(
+              'pointer-events-none absolute transition-transform',
+              variant === 'pill'
+                ? 'right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500 dark:text-slate-400'
+                : 'right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400',
+              open && 'rotate-180',
+            )}
+          />
+        </button>
+      </div>
 
       {open && (
         <div
