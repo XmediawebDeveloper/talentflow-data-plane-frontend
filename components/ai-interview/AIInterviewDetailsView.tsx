@@ -1504,7 +1504,19 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
           the same buttons — a fixed side column there left a phone's table
           ~150px wide. From md it is the side column again, narrower until xl
           so the Results table keeps its width on laptops. */}
-      <div {...draftLockProps} className={`space-y-3 sm:space-y-4 ${draftLockProps.className}`}>
+      {/* A DRAFT: no tabs — just a short, greyed-out note in their place. */}
+      {draftLocked && (
+        <div className="rounded-xl border border-dashed border-gray-200 dark:border-slate-700 bg-gray-50/60 dark:bg-slate-800/30 px-6 py-12 text-center opacity-70 select-none">
+          <FileText className="w-8 h-8 text-gray-300 dark:text-slate-600 mx-auto mb-3" aria-hidden="true" />
+          <p className="text-sm font-medium text-gray-500 dark:text-slate-400">This AI interview is still a draft</p>
+          <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">Details, invitations and results appear here once it&apos;s published.</p>
+        </div>
+      )}
+
+      {/* A DRAFT shows only its header card (with Continue Editing) — no tabs
+          or tab content until it is published. */}
+      {!draftLocked && (
+      <div className="space-y-3 sm:space-y-4">
         {/* Horizontal pill tab bar (was a vertical sidebar rail): shared
             `tabPill` chrome, wrapping onto a second row so every tab stays
             visible. */}
@@ -2199,6 +2211,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
 
         </div>
       </div>
+      )}
 
       {/* Share — a dialog off the header's Share button / Invites tab's
           "Invite More", not embedded in a tab. */}
