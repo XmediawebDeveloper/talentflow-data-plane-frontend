@@ -29,7 +29,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import SearchableSelect from '@/components/ui/searchable-select';
-import { DateField } from '@/components/ui/date-field';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
@@ -87,9 +86,6 @@ const FLAT_SORT_OPTIONS: { value: SortKey; label: string }[] = [
 
 const TOOLBAR_BUTTON_CLASS =
   'h-[38px] px-3 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-2 text-sm whitespace-nowrap bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue disabled:opacity-50 disabled:cursor-not-allowed';
-/* 36px (h-9) variant — same chrome, used when this table is embedded in the
-   Job Details tabs so every control matches the AI Talent Match reference. */
-const TOOLBAR_BUTTON_CLASS_COMPACT = TOOLBAR_BUTTON_CLASS.replace('h-[38px]', 'h-9');
 
 
 /* ---- The More Filters panel's field metrics ---------------------------------
@@ -620,7 +616,6 @@ export default function ScoredResumesTable({
      chrome of the AI Talent Match reference; the standalone Resume Scoring
      page (no portal) keeps its existing 38px look. */
   const embedded = !!toolbarPortal;
-  const toolbarBtn = embedded ? TOOLBAR_BUTTON_CLASS_COMPACT : TOOLBAR_BUTTON_CLASS;
   // Names and job titles are shown with a capital first letter even when
   // they were typed in lower case ("jack" → "Jack", "python devloper" →
   // "Python devloper"). Done once, here, so the table, grouped view, grid,
@@ -1252,10 +1247,6 @@ Best regards`);
     const nb = parseInt(b.match(/(\d+)\s*$/)?.[1] ?? '', 10);
     return !isNaN(na) && !isNaN(nb) ? na - nb : a.localeCompare(b);
   });
-
-  const uniqueJobTitles = Array.from(
-    new Set(resumes.map(r => (r.jobTitle || '').trim()).filter(Boolean)),
-  ).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 
   /* Numeric sort, then rendered as "v2" — a plain string sort puts v10 before
      v2, which is exactly the order a version list must not be in. */
@@ -1898,19 +1889,19 @@ Best regards`);
   };
 
   const selectionActions = effectiveSelectedRows.length > 0 ? (
-    <>
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        {/* The AI Talent Match reference's Actions pill — a secondary rounded
-            button that fades in once the first row is ticked. */}
+        {/* The AI Talent Match reference's Actions pill, exactly: plain
+            "Actions" label (the count already shows on the Select All pill
+            and in this menu's own header strip below), no count suffix. */}
         <Button
           variant="secondary"
           size="sm"
-          className="rounded-full h-9 whitespace-nowrap animate-in fade-in zoom-in-95 duration-300"
+          className="rounded-full h-9"
           aria-label={`Actions for ${effectiveSelectedRows.length} selected`}
         >
           {bulkDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-          Actions ({effectiveSelectedRows.length})
+          Actions
           <ChevronDown className="w-4 h-4" />
         </Button>
       </DropdownMenuTrigger>
@@ -2015,18 +2006,6 @@ Best regards`);
         })()}
       </DropdownMenuContent>
     </DropdownMenu>
-    {/* Clear — untick every row in one click (Select all only clears once
-        EVERYTHING is ticked). */}
-    <button
-      type="button"
-      onClick={clearSelection}
-      title="Clear the selection"
-      className={toolbarBtn}
-    >
-      <X className="w-4 h-4" />
-      Clear
-    </button>
-    </>
   ) : null;
 
   // Embedded in a tab (toolbar portals out) drops the padded outer card so the
@@ -2129,18 +2108,12 @@ Best regards`);
           onClearFilters={search.reset}
           leadingActions={
             <>
+              {/* Embedded in Job Details this takes the AI Talent Match
+                  reference's tinted pill chrome (same as the Sort control
+                  beside it); standalone keeps its own bordered box. */}
               <SearchableSelect
-                className="w-full sm:w-48"
-                value={filterJobTitle === 'all' ? '' : filterJobTitle}
-                onChange={(v) => search.setFilter('jobTitle', v || 'all')}
-                options={uniqueJobTitles.map((title) => ({ value: String(title), label: String(title) }))}
-                allLabel="All Job Titles"
-                placeholder="All Job Titles"
-                searchPlaceholder="Search job title..."
-                ariaLabel="Filter by job title"
-              />
-              <SearchableSelect
-                className="w-full sm:w-48"
+                className={embedded ? '' : 'w-full sm:w-48'}
+                variant={embedded ? 'pill' : 'bordered'}
                 value={filterRecruiter === 'all' ? '' : filterRecruiter}
                 onChange={(v) => search.setFilter('recruiter', v || 'all')}
                 options={uniqueRecruiters.map((recruiter) => ({ value: String(recruiter), label: String(recruiter) }))}
@@ -2173,8 +2146,11 @@ Best regards`);
         {showFilters && (
           /* mt-3 is the gap under the toolbar. The wrapper's space-y-3 can't
              give it: in Tailwind v4 space-y is a margin-BOTTOM on the toolbar
-             row, which that row's own mb-0 overrides. */
-          <div className="mt-3 bg-gray-50 border border-gray-200 rounded-lg p-4">
+             row, which that row's own mb-0 overrides.
+             Embedded in Job Details this drops the tinted/bordered card for
+             the AI Talent Match reference's plain top-divider, so the panel
+             reads as part of the same tab card the toolbar sits in. */
+          <div className={embedded ? 'mt-4 sm:mt-5 pt-4 sm:pt-5 border-t border-brand-blue/10' : 'mt-3 bg-gray-50 border border-gray-200 rounded-lg p-4'}>
             {/* Flex-wrap, not the stretching 2/3-column grid this used to be:
                 a grid cell is a third of the panel wide and every control in it
                 stretched to fill that, so a "v2" dropdown was as wide as a job
@@ -2190,27 +2166,7 @@ Best regards`);
                 so a row is always filled edge to edge. `max-w` keeps a short
                 final row from stretching two fields across the whole panel. */}
             <div className="flex flex-wrap gap-4">
-              {/* 2. Date From */}
-              <div className={FILTER_FIELD_CLASS}>
-                <label className={FILTER_LABEL_CLASS}>Date From</label>
-                <DateField
-                  value={filterDateFrom}
-                  onChange={(v) => search.setFilter('dateFrom', v)}
-                  aria-label="Date From"
-                />
-              </div>
-
-              {/* 3. Date To */}
-              <div className={FILTER_FIELD_CLASS}>
-                <label className={FILTER_LABEL_CLASS}>Date To</label>
-                <DateField
-                  value={filterDateTo}
-                  onChange={(v) => search.setFilter('dateTo', v)}
-                  aria-label="Date To"
-                />
-              </div>
-
-              {/* 4. Match Status — dropped when the list is already one
+              {/* 1. Match Status — dropped when the list is already one
                   verdict; see `hideMatchStatusFilter`. The only conditional
                   field in this panel, and it turns on a host's explicit
                   statement about its own rows rather than on the data. */}
@@ -2230,7 +2186,7 @@ Best regards`);
                 </div>
               )}
 
-              {/* 5. Score Range — two inputs sharing ONE field, so the pair
+              {/* 2. Score Range — two inputs sharing ONE field, so the pair
                   reads as a single filter rather than two. Widened to take up
                   the first row's leftover space; see FILTER_FIELD_WIDE_CLASS. */}
               <div className={FILTER_FIELD_WIDE_CLASS}>
@@ -2258,16 +2214,9 @@ Best regards`);
                 </div>
               </div>
 
-              {/* Forced wrap, so the three job filters always start a new line.
-                  Even the verdict sections (no Match Status) have seven fields
-                  now that JD ID is here — too crowded for one row.
-
-                  A full-basis spacer is the only way to break a flex row; flex
-                  items have no `break-before`. Height zero, so it costs one
-                  row-gap and nothing else. */}
-              <div aria-hidden className="basis-full h-0" />
-
-              {/* 6-8. JD ID / Job Title / Job Version.
+              {/* 3-4. JD ID / Job Version — render on the same line as the
+                  fields above them now that Date From/To are gone, instead of
+                  being forced to a second row.
 
                   Both render unconditionally, like every other field in this
                   panel. They were gated on having more than one value to pick
@@ -2304,21 +2253,6 @@ Best regards`);
                 </select>
               </div>
 
-              {/* Done rides the last row of fields, bottom-right, instead of
-                  spending a footer row of its own. The controls commit as
-                  they change, so it just closes the panel. */}
-              <div className="w-full sm:w-auto sm:ml-auto flex items-end justify-end">
-                {/* Primary, same size as View by Job's Done — one look for the
-                    panel's one action in both views. */}
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => setShowFilters(false)}
-                  className="!h-[38px] !px-4 !text-sm"
-                >
-                  Done
-                </Button>
-              </div>
             </div>
           </div>
         )}
@@ -3021,11 +2955,11 @@ Best regards`);
                 )}
               </th>
               {enabledColumns.map((col) => (
-                <th key={col.id} className={`${CENTERED_COLUMNS.has(col.id) ? 'text-center' : 'text-left'} px-4 py-3 text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle`}>
+                <th key={col.id} className={`${CENTERED_COLUMNS.has(col.id) ? 'text-center' : 'text-left'} px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle`}>
                   {col.label}
                 </th>
               ))}
-              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle tf-sticky-col">Actions</th>
+              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle tf-sticky-col">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -3046,17 +2980,16 @@ Best regards`);
                     : 'bg-white dark:bg-slate-900'
                 }`}
               >
-                <td className="py-3 px-4 align-middle tf-sticky-col-left">
-                  <button
-                    onClick={() => handleSelectResume(resume.id)}
-                    className="inline-flex p-1.5 hover:bg-gray-200 rounded"
-                  >
-                    {selectedResumes.includes(resume.id) ? (
-                      <CheckSquare className="w-4 h-4 text-brand-blue" />
-                    ) : (
-                      <Square className="w-4 h-4 text-gray-400" />
-                    )}
-                  </button>
+                {/* Native checkbox, matching the AI Talent Match reference
+                    table's row-select cell exactly (that tab uses a plain
+                    `<input type="checkbox">`, not an icon button). */}
+                <td className="py-3 px-4 align-middle tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    checked={selectedResumes.includes(resume.id)}
+                    onChange={() => handleSelectResume(resume.id)}
+                    className="rounded border-gray-300"
+                  />
                 </td>
 
                 {enabledColumns.map((col) => renderResumeCell(col, resume))}

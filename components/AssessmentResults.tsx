@@ -1,4 +1,4 @@
-import { ArrowLeft, User, Clock, Timer, Award, XCircle, ChevronUp, FileText, TrendingUp, AlertCircle, Info, Filter, Layers, ArrowUpDown, Loader2, BarChart3, SlidersHorizontal, Columns3, Trash2, Users, Download, X, Play, CheckSquare, Eye, ArrowUp, ArrowDown, MoreVertical } from 'lucide-react';
+import { ArrowLeft, User, Clock, Timer, Award, XCircle, ChevronUp, ChevronDown, FileText, TrendingUp, AlertCircle, Info, Filter, Layers, ArrowUpDown, Loader2, BarChart3, SlidersHorizontal, Columns3, Trash2, Users, Download, X, Play, CheckSquare, Eye, ArrowUp, ArrowDown, MoreVertical } from 'lucide-react';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
@@ -1881,6 +1881,44 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             slot), the whole block portals there with its card chrome dropped so
             it reads as the tab card's second row; otherwise inline as before. */}
         {(() => {
+        /* The column picker's popover, shared by both anchor points below:
+           its own button when standalone, the Actions menu's "Customize
+           Columns" item when embedded in Job Details. */
+        const columnSelectorPanel = showColumnSelector && (
+          <>
+            <div
+              className="fixed inset-0 z-10"
+              onClick={() => setShowColumnSelector(false)}
+            ></div>
+            <div
+              id="assessment-results-column-selector"
+              role="dialog"
+              aria-label="Select visible result columns"
+              className="absolute left-0 top-full mt-2 w-56 sm:w-64 max-w-[calc(100vw-1.5rem)] bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-2 z-20 max-h-80 sm:max-h-96 overflow-y-auto"
+            >
+              <div className="px-3 sm:px-4 py-2 border-b border-gray-100">
+                <div className="text-xs sm:text-sm font-medium text-gray-900">Select Columns</div>
+                <div className="text-xs text-gray-500 mt-0.5">
+                  {enabledColumnsCount} of {columns.length} selected
+                </div>
+              </div>
+              {columns.map((column) => (
+                <label
+                  key={column.id}
+                  className="flex items-center gap-2.5 sm:gap-3 px-3 sm:px-4 py-2 sm:py-2.5 hover:bg-brand-blue/5 hover:text-brand-blue transition-colors cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    checked={column.enabled}
+                    onChange={() => handleToggleColumn(column.id)}
+                    className="w-4 h-4 text-brand-blue rounded border-gray-300 focus:ring-brand-blue/40"
+                  />
+                  <span className="text-xs sm:text-sm text-gray-700">{column.label}</span>
+                </label>
+              ))}
+            </div>
+          </>
+        );
         const toolbarBlock = (
         <div className={toolbarPortal ? '' : 'bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-3 sm:mb-4'}>
           <ListToolbar
@@ -1893,20 +1931,58 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             }}
             searchPlaceholder="Search by name, email, phone, or JD title..."
             /* Embedded in Job Details: the AI Talent Match reference's Select All
-               pill + dropdown at the head of the row (the standalone page keeps
-               its table-header checkbox and shows nothing here). */
+               pill + Actions dropdown at the head of the row (the standalone page
+               keeps its table-header checkbox and its own separate buttons). */
             beforeSearch={portaled ? (
-              <ToolbarSelectAll
-                selectedCount={selectedRows.length}
-                allSelected={filteredCandidates.length > 0 && filteredCandidates.every((c) => selectedRows.includes(c.id))}
-                pageCount={paginatedCandidates.length}
-                onSelectPage={() =>
-                  setSelectedRows((prev) => Array.from(new Set([...prev, ...paginatedCandidates.map((c) => c.id)])))
-                }
-                totalCount={filteredCandidates.length}
-                onSelectAll={() => setSelectedRows(filteredCandidates.map((c) => c.id))}
-                onClear={() => setSelectedRows([])}
-              />
+              <>
+                <ToolbarSelectAll
+                  selectedCount={selectedRows.length}
+                  allSelected={filteredCandidates.length > 0 && filteredCandidates.every((c) => selectedRows.includes(c.id))}
+                  pageCount={paginatedCandidates.length}
+                  onSelectPage={() =>
+                    setSelectedRows((prev) => Array.from(new Set([...prev, ...paginatedCandidates.map((c) => c.id)])))
+                  }
+                  totalCount={filteredCandidates.length}
+                  onSelectAll={() => setSelectedRows(filteredCandidates.map((c) => c.id))}
+                  onClear={() => setSelectedRows([])}
+                />
+                {/* Actions — the AI Talent Match reference's pill: hidden until
+                    a row is ticked, holding only the selection-bound bulk op
+                    (Download PDF Reports). Customize Columns and Export work
+                    with nothing ticked too, so they stay their own buttons
+                    (see `leadingActions` / the toolbar's trailing children). */}
+                {canBatchDownload && selectedRows.length > 0 && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="rounded-full whitespace-nowrap !h-9 !text-sm"
+                        aria-label={`Actions for ${selectedRows.length} selected`}
+                      >
+                        {downloadingBulkPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                        Actions
+                        <ChevronDown className="w-4 h-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-60 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
+                      <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
+                        {selectedRows.length.toLocaleString()} selected
+                      </div>
+                      <DropdownMenuItem
+                        className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer"
+                        disabled={downloadingBulkPDF}
+                        onSelect={() => handleDownloadBulkPDFs()}
+                      >
+                        <Download className="w-4 h-4 text-menu-icon-download" />
+                        <span className={MENU_ITEM_SCALE_CLASS}>
+                          {downloadingBulkPDF ? 'Downloading...' : 'Download PDF Reports'}
+                        </span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              </>
             ) : undefined}
             /* Laid out by the TOOLBAR's width, not the viewport's: inside the
                assessment page's Results tab the vertical tab menu takes part of
@@ -1930,11 +2006,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                Filters → Download PDF → Export → List / Grid. */
             leadingActions={
               <>
-              {/* AS-24: Customize Columns — its own button, the first control after
-                 the search, rather than a field inside the More Filters panel.
-                 Same toggle, same picker. As the row's first control the
-                 picker opens from the button's LEFT edge, so on a wrapped
-                 320–375px row it runs into the screen rather than off it. */}
+              {/* AS-24: Customize Columns — its own button in both modes
+                 (works with nothing ticked, unlike the selection-bound
+                 Actions pill beside Select All). */}
               <div className="relative">
                 <Button
                   variant="secondary"
@@ -1948,41 +2022,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 >
                   Customize Columns ({enabledColumnsCount})
                 </Button>
-                {showColumnSelector && (
-                  <>
-                    <div
-                      className="fixed inset-0 z-10"
-                      onClick={() => setShowColumnSelector(false)}
-                    ></div>
-                    <div
-                      id="assessment-results-column-selector"
-                      role="dialog"
-                      aria-label="Select visible result columns"
-                      className="absolute left-0 top-full mt-2 w-56 sm:w-64 max-w-[calc(100vw-1.5rem)] bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-2 z-20 max-h-80 sm:max-h-96 overflow-y-auto"
-                    >
-                      <div className="px-3 sm:px-4 py-2 border-b border-gray-100">
-                        <div className="text-xs sm:text-sm font-medium text-gray-900">Select Columns</div>
-                        <div className="text-xs text-gray-500 mt-0.5">
-                          {enabledColumnsCount} of {columns.length} selected
-                        </div>
-                      </div>
-                      {columns.map((column) => (
-                        <label
-                          key={column.id}
-                          className="flex items-center gap-2.5 sm:gap-3 px-3 sm:px-4 py-2 sm:py-2.5 hover:bg-brand-blue/5 hover:text-brand-blue transition-colors cursor-pointer"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={column.enabled}
-                            onChange={() => handleToggleColumn(column.id)}
-                            className="w-4 h-4 text-brand-blue rounded border-gray-300 focus:ring-brand-blue/40"
-                          />
-                          <span className="text-xs sm:text-sm text-gray-700">{column.label}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </>
-                )}
+                {columnSelectorPanel}
               </div>
               {/* Embedded in Job Details this takes the AI Talent Match
                   reference's tinted "All Matches" pill chrome; standalone keeps
@@ -2036,6 +2076,22 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 onChange={setSortField}
                 onToggleOrder={() => setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'))}
               />
+              {/* Clear Sort — embedded in Job Details only, moved in beside
+                  Sort by now that the heading row it used to share (with the
+                  candidate count, dropped for this tab to match the AI
+                  Talent Match reference) is gone there. Standalone keeps its
+                  original spot in that row below. */}
+              {portaled && !isDefaultSort && (
+                <button
+                  type="button"
+                  onClick={clearSort}
+                  title="Return the table to its default order"
+                  className="px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all whitespace-nowrap inline-flex items-center gap-1.5 bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue"
+                >
+                  <ArrowUpDown className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  Clear Sort
+                </button>
+              )}
               </>
             }
             onToggleFilters={() => setShowMoreFilters((open) => !open)}
@@ -2044,27 +2100,40 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             filtersApplied={activeFilterCount > 0}
             className="mb-0"
           >
-            {/* AS-26: Bulk PDF download — only for users with the download_pdf
-                permission. Always on the row for them; it acts on the ticked
-                rows, so it is disabled until at least one is ticked. */}
-            {canBatchDownload && (
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={handleDownloadBulkPDFs}
-                disabled={downloadingBulkPDF || selectedRows.length === 0}
-                title={selectedRows.length === 0 ? 'Select candidates to download their PDF reports' : undefined}
-                className={`whitespace-nowrap ${portaled ? '!h-9' : '!h-[38px]'} !text-sm`}
-                icon={downloadingBulkPDF ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Download className="w-4 h-4" />
-                )}
-              >
-                {downloadingBulkPDF
-                  ? 'Downloading...'
-                  : `PDF${selectedRows.length > 0 ? ` (${selectedRows.length})` : ''}`}
-              </Button>
+            {/* AS-26: Bulk PDF download — standalone only here; embedded in
+                Job Details it moved into the Actions pill beside Select All
+                (see `beforeSearch` above), which is selection-gated the same
+                way this one is. */}
+            {!portaled && canBatchDownload && selectedRows.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="rounded-full whitespace-nowrap !h-[38px] !text-sm"
+                    aria-label={`Actions for ${selectedRows.length} selected`}
+                  >
+                    {downloadingBulkPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                    Actions
+                    <ChevronDown className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-60 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
+                  <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
+                    {selectedRows.length.toLocaleString()} selected
+                  </div>
+                  <DropdownMenuItem
+                    className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer"
+                    disabled={downloadingBulkPDF}
+                    onSelect={() => handleDownloadBulkPDFs()}
+                  >
+                    <Download className="w-4 h-4 text-menu-icon-download" />
+                    <span className={MENU_ITEM_SCALE_CLASS}>
+                      {downloadingBulkPDF ? 'Downloading...' : 'Download PDF Reports'}
+                    </span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
             <Button
               variant="primary"
@@ -2082,6 +2151,12 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
           {showMoreFilters && (
             <ListFilterPanel
+              /* Embedded in Job Details, drop this panel's own tinted/bordered
+                 card chrome for the AI Talent Match reference's plain
+                 top-divider: the panel reads as part of the same tab card the
+                 toolbar sits in, rather than a secondary floating panel below
+                 it. Standalone keeps its own card. */
+              className={portaled ? '!mt-4 sm:!mt-5 !rounded-none !border-0 !border-t !border-brand-blue/10 !bg-transparent !p-0 !pt-4 sm:!pt-5' : undefined}
               footer={
                 <>
                   <Button
@@ -2289,9 +2364,16 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
         {/* Candidates Results Table */}
         <div className="rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden bg-white dark:bg-slate-900">
-          {/* Wraps: at 320–375px the count badge (nowrap) and Clear Sort do not
+          {/* Heading + candidate count — standalone only. Embedded in Job
+              Details this row is dropped entirely to match the AI Talent
+              Match reference, whose table card has no heading/count row at
+              all above it; the tab navigation's own badge already carries
+              the count. Clear Sort (this row's other job) moved into the
+              toolbar for that case — see `leadingActions` above.
+              Wraps: at 320–375px the count badge (nowrap) and Clear Sort do not
               fit beside the heading, so they drop under it rather than
               overflowing the card. */}
+          {!portaled && (
           <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
               <h2 className="truncate text-sm sm:text-base font-medium text-gray-900 tracking-tight">Candidate Results</h2>
@@ -2330,6 +2412,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               )}
             </div>
           </div>
+          )}
           {/* Grid view: the Candidate Results card (the shared
               CandidateResultCard), in that tab's grid, at every width. */}
           <div className={displayMode === 'grid' ? '@container/result-cards p-4 sm:p-5' : 'hidden'}>
@@ -2433,7 +2516,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   with its ArrowUpDown / ArrowUp / ArrowDown. The column widths
                   stay — the table is `table-fixed` over them. */}
               {paginatedCandidates.length > 0 && (
-              <thead>
+              <thead className="sticky top-0 z-10 [&_th]:bg-gray-50 dark:[&_th]:bg-slate-800">
                 <tr className="border-b border-gray-200 dark:border-slate-700">
                   <th scope="col" className={`px-3 py-2.5 w-10 tf-sticky-col-left ${stickyHeaderClass}`}>
                     <input
@@ -2448,7 +2531,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     <th
                       scope="col"
                       aria-sort={sortField === 'name' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
-                      className={`w-64 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${stickyHeaderClass}`}
+                      className={`w-64 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}
                     >
                       {(() => {
                         const SortIcon = sortField !== 'name' ? ArrowUpDown : sortDirection === 'asc' ? ArrowUp : ArrowDown;
@@ -2470,7 +2553,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     <th
                       scope="col"
                       aria-sort={sortField === 'date' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
-                      className={`w-96 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${stickyHeaderClass}`}
+                      className={`w-96 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}
                     >
                       {(() => {
                         const SortIcon = sortField !== 'date' ? ArrowUpDown : sortDirection === 'asc' ? ArrowUp : ArrowDown;
@@ -2492,7 +2575,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     <th
                       scope="col"
                       aria-sort={sortField === 'status' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
-                      className={`w-28 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${stickyHeaderClass}`}
+                      className={`w-28 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}
                     >
                       {(() => {
                         const SortIcon = sortField !== 'status' ? ArrowUpDown : sortDirection === 'asc' ? ArrowUp : ArrowDown;
@@ -2514,7 +2597,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     <th
                       scope="col"
                       aria-sort={sortField === 'score' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
-                      className={`w-28 text-right px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${stickyHeaderClass}`}
+                      className={`w-28 text-right px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}
                     >
                       {(() => {
                         const SortIcon = sortField !== 'score' ? ArrowUpDown : sortDirection === 'asc' ? ArrowUp : ArrowDown;
@@ -2536,7 +2619,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     <th
                       scope="col"
                       aria-sort={sortField === 'score' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
-                      className={`w-32 text-right px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${stickyHeaderClass}`}
+                      className={`w-32 text-right px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}
                     >
                       {(() => {
                         const SortIcon = sortField !== 'score' ? ArrowUpDown : sortDirection === 'asc' ? ArrowUp : ArrowDown;
@@ -2555,27 +2638,27 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     </th>
                   )}
                   {isColumnEnabled('inviteSource') && (
-                    <th scope="col" className={`w-36 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${stickyHeaderClass}`}>Invite Source</th>
+                    <th scope="col" className={`w-36 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}>Invite Source</th>
                   )}
                   {isColumnEnabled('phone') && (
-                    <th scope="col" className={`w-36 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${stickyHeaderClass}`}>Phone</th>
+                    <th scope="col" className={`w-36 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}>Phone</th>
                   )}
                   {isColumnEnabled('cid') && (
-                    <th scope="col" className={`w-24 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${stickyHeaderClass}`}>CID</th>
+                    <th scope="col" className={`w-24 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}>CID</th>
                   )}
                   {isColumnEnabled('jdId') && (
-                    <th scope="col" className={`w-28 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${stickyHeaderClass}`}>JD ID</th>
+                    <th scope="col" className={`w-28 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}>JD ID</th>
                   )}
                   {isColumnEnabled('jdTitle') && (
-                    <th scope="col" className={`w-56 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${stickyHeaderClass}`}>Job Title</th>
+                    <th scope="col" className={`w-56 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}>Job Title</th>
                   )}
                   {isColumnEnabled('jobVersion') && (
-                    <th scope="col" className={`w-28 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${stickyHeaderClass}`}>Job Version</th>
+                    <th scope="col" className={`w-28 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}>Job Version</th>
                   )}
                   {isColumnEnabled('assessmentVersion') && (
-                    <th scope="col" className={`w-40 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${stickyHeaderClass}`}>Assessment Version</th>
+                    <th scope="col" className={`w-40 text-left px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}>Assessment Version</th>
                   )}
-                  <th scope="col" className={`w-20 text-right px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 tf-sticky-col ${stickyHeaderClass}`}>Actions</th>
+                  <th scope="col" className={`w-20 text-right px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 tf-sticky-col ${stickyHeaderClass}`}>Actions</th>
                 </tr>
               </thead>
               )}
@@ -2618,7 +2701,12 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       key={candidate.id}
                       onClick={() => viewCandidateDetails(candidate)}
                       data-row-selected={selectedRows.includes(candidate.id)}
-                      className={`border-b border-gray-100 dark:border-slate-700/60 last:border-b-0 cursor-pointer transition-colors hover:bg-brand-blue/5 dark:hover:bg-brand-blue/10 ${selectedRows.includes(candidate.id) ? 'bg-brand-blue/5 dark:bg-brand-blue/10' : ''}`}
+                      /* Row styled to the AI Talent Match reference table:
+                         plain white/dark rows (no zebra), hover:bg-gray-50,
+                         selected tint bg-blue-50. */
+                      className={`border-b border-gray-100 dark:border-slate-700/60 last:border-b-0 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-800 ${
+                        selectedRows.includes(candidate.id) ? 'bg-blue-50 dark:bg-slate-800/50' : 'bg-white dark:bg-slate-900'
+                      }`}
                     >
                       <td className="px-3 py-2.5 tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
                         <input
@@ -2818,20 +2906,23 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               </tbody>
             </table>
           </div>
-
-          {/* AS-23: Pagination — the All Assessments tab's ListPagination,
-              under both views. */}
-          {totalItems > 0 && (
-            <ListPagination
-              currentPage={safePage}
-              itemsPerPage={pageSize}
-              totalItems={totalItems}
-              onPageChange={setCurrentPage}
-              onItemsPerPageChange={(size) => { setPageSize(size); setCurrentPage(1); }}
-              itemLabel="candidates"
-            />
-          )}
         </div>
+
+        {/* AS-23: Pagination — the All Assessments tab's ListPagination, under
+            both views. A sibling of the table's own card now (its own
+            bordered shell plus `mt-4 sm:mt-6` built-in), matching the AI
+            Talent Match reference instead of sitting inside the table card,
+            where the two borders ran together with no breathing room. */}
+        {totalItems > 0 && (
+          <ListPagination
+            currentPage={safePage}
+            itemsPerPage={pageSize}
+            totalItems={totalItems}
+            onPageChange={setCurrentPage}
+            onItemsPerPageChange={(size) => { setPageSize(size); setCurrentPage(1); }}
+            itemLabel="candidates"
+          />
+        )}
 
         </>
         )}

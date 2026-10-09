@@ -27,7 +27,20 @@ import ResumeVersionsModal from './ResumeVersionsModal';
 import { resumeService } from '@/lib/services/resumeService';
 import ResumeScoring from './ResumeScoring';
 import JobApplicants from './JobApplicants';
-import ScoredResumesTable from './ScoredResumesTable';
+import ScoredResumesTable, {
+  BulkInviteModal,
+  useScoringActionPermissions,
+  resolveInviteTargetState,
+  renderInviteTargetItems,
+  InviteTargetJob,
+  ScoredResume,
+} from './ScoredResumesTable';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import InviteToAssessmentModal from './InviteToAssessmentModal';
 import ShareAssessmentModal from './ShareAssessmentModal';
 import SelectSourceModal from './SelectSourceModal';
@@ -969,6 +982,12 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   // / quick-action Invite — candidates are added in the share step), a seed =
   // a Scored Resumes row's candidate, listed first.
   const [aiInviteSeed, setAiInviteSeed] = useState<{ name: string; email: string; resumeId?: string }[] | null>(null);
+  /* Bulk "Invite to Assessment" from the AI Talent Match tab's Actions menu —
+     the AI Interview counterpart (`aiInviteSeed` above) already has a shared
+     page-level dialog (`handleInviteAIInterview`); Assessment has no such
+     dialog yet, so this mounts `BulkInviteModal` (Scored Resumes' own) the
+     same way, scoped to this job. */
+  const [aiMatchAssessmentInviteSeed, setAiMatchAssessmentInviteSeed] = useState<MatchedCandidate[] | null>(null);
   // AI Interview Version History dialog (history icon on the AI Interview heading).
   const [showAIVersionHistory, setShowAIVersionHistory] = useState(false);
   // Assessment Version History dialog (history icon on the Assessment heading).
@@ -4325,7 +4344,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
 
       {/* Assessment Results Tab Content */}
       {activeTab === 'assessment-results' && (
-        <div className="mt-0">
+        <div className="mt-0 mb-5">
           {(() => {
             /* The Assessment module's own results page, embedded — same stat
                cards, version scopes, filters, table and exports. It fans out
@@ -4366,7 +4385,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           table the standalone results page renders, in `embedded` mode so it
           drops its own <main>/breadcrumb chrome and stays inside this page. */}
       {activeTab === 'ai-interview-results' && (
-        <div className="mt-0" ref={aiInterviewResultsSectionRef}>
+        <div className="mt-0 mb-5" ref={aiInterviewResultsSectionRef}>
           {loadingAIInterviewConfig ? (
             /* Mirrors the AIInterviewResults tab: a row of stat cards, a filter
                bar, then the candidate table with the same columns in order
@@ -4483,6 +4502,17 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             } catch { /* ignore */ }
             router.push(`/recruitment/resume-view/${candidate.resumeId}`);
           }}
+          jobId={job.id}
+          jobCode={job.job_id}
+          jobTitle={job.title}
+          canInviteToAssessment={canInviteToAssessment}
+          canInviteToAIInterview={canInviteToAIInterview}
+          onCreateAssessment={handleCreateAssessment}
+          onCreateAIInterview={handleCreateAIInterview}
+          onInviteAssessment={(selected) => setAiMatchAssessmentInviteSeed(selected)}
+          onInviteAIInterview={(selected) => handleInviteAIInterview(
+            selected.map((c) => ({ name: c.name, email: c.email, resumeId: c.resumeId })),
+          )}
         />
       )}
 
@@ -5134,6 +5164,28 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           toast.success('AI interview invitation sent');
         }}
       />
+
+      {/* Invite to Assessment — the AI Talent Match tab's bulk Actions menu,
+          Scored Resumes' own BulkInviteModal, scoped to this job. */}
+      {aiMatchAssessmentInviteSeed && aiMatchAssessmentInviteSeed.length > 0 && (
+        <BulkInviteModal
+          selectedResumes={aiMatchAssessmentInviteSeed.map((c): ScoredResume => ({
+            id: c.resumeId,
+            resumeId: c.resumeId,
+            candidateName: c.name,
+            email: c.email,
+            phone: c.phone,
+            matchStatus: c.matchScore >= 70 ? 'Exact Match' : c.matchScore >= 45 ? 'Partial Match' : 'No Match',
+            scorePercentage: c.matchScore,
+            scoredDate: c.uploadDate,
+            scoredBy: c.uploadedByName || c.uploadedBy || '',
+          }))}
+          jobId={job.id}
+          jobTitle={job.title}
+          onClose={() => setAiMatchAssessmentInviteSeed(null)}
+          onSuccess={() => setAiMatchAssessmentInviteSeed(null)}
+        />
+      )}
       </div>
       </div>
     </main>
@@ -5152,6 +5204,15 @@ function AIMatchTabContent({
   onScoreSelected,
   onScoreAll,
   onViewCandidate,
+  jobId,
+  jobCode,
+  jobTitle,
+  canInviteToAssessment,
+  canInviteToAIInterview,
+  onCreateAssessment,
+  onCreateAIInterview,
+  onInviteAssessment,
+  onInviteAIInterview,
 }: {
   /* When set, the search/filter toolbar portals into this node (the slot
      inside the tab-navigation card) instead of rendering inline above the
@@ -5166,6 +5227,20 @@ function AIMatchTabContent({
   onScoreSelected: (selected: MatchedCandidate[]) => void;
   onScoreAll: () => void;
   onViewCandidate?: (candidate: MatchedCandidate) => void;
+  /* Invite to Assessment / AI Interview from the Actions menu — the Scored
+     Resumes tab's pattern, scoped to this one job (unlike that tab, which can
+     span several). Ready when the job already has a published one; otherwise
+     the menu offers to create it (`onCreate*`), same as the page header's own
+     Invite gate. */
+  jobId: string;
+  jobCode?: string;
+  jobTitle: string;
+  canInviteToAssessment: boolean;
+  canInviteToAIInterview: boolean;
+  onCreateAssessment: () => void;
+  onCreateAIInterview: () => void;
+  onInviteAssessment: (selected: MatchedCandidate[]) => void;
+  onInviteAIInterview: (selected: MatchedCandidate[]) => void;
 }) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
@@ -5186,11 +5261,10 @@ function AIMatchTabContent({
      Openings master and the sibling tabs, rather than an always-expanded second
      row. */
   const [showMoreFilters, setShowMoreFilters] = useState(false);
-  /* Select All + Actions dropdowns, mirroring the Job Openings toolbar: one
-     "Select All" pill (this page / all / clear) and, once something is ticked,
-     an "Actions" pill holding the bulk operations (Score). */
+  /* Select All dropdown, mirroring the Job Openings toolbar: one "Select All"
+     pill (this page / all / clear). The Actions pill beside it (bulk Score /
+     Invite) is a Radix DropdownMenu now, which manages its own open state. */
   const [showSelectMenu, setShowSelectMenu] = useState(false);
-  const [showActionsMenu, setShowActionsMenu] = useState(false);
   const aiMatchActiveFilterCount =
     (filterPhone.trim() !== '' ? 1 : 0) +
     (filterLocation.trim() !== '' ? 1 : 0) +
@@ -5316,6 +5390,19 @@ function AIMatchTabContent({
 
   const unscoredCount = candidates.filter((c) => !scoredResumeIds.has(c.resumeId)).length;
   const selectedCandidates = candidates.filter((c) => selectedIds.has(c.resumeId));
+
+  /* Invite to Assessment / AI Interview — the Scored Resumes tab's Actions
+     menu pattern, reusing its exact shared helpers. Always exactly one job
+     here (this whole tab is scoped to the job the page is showing), so
+     `resolveInviteTargetState` only ever answers 'ready' or 'missing', never
+     'multi'. `true` below: this tab always has an internal AI interview
+     invite path (via `onInviteAIInterview`), unlike Scored Resumes where
+     that depends on what the host wired up. */
+  const { canCreateAssessments, assessmentDeniedReason, mayInviteAIInterview, aiInterviewDeniedReason } =
+    useScoringActionPermissions(true);
+  const inviteTargetJob: InviteTargetJob = { jdId: jobId, jdCode: jobCode, jdTitle: jobTitle };
+  const assessmentTarget = resolveInviteTargetState('assessment', [inviteTargetJob], () => canInviteToAssessment);
+  const interviewTarget = resolveInviteTargetState('interview', [inviteTargetJob], () => canInviteToAIInterview);
 
   /* The Select All pill's three scopes, same as the Job Openings master:
      add the current page's rows, select every filtered candidate, or clear. */
@@ -5498,33 +5585,65 @@ function AIMatchTabContent({
               </div>
 
               {/* Actions — appears once something is ticked; holds the bulk
-                  operations (Score), the Job Openings master's pattern. */}
+                  operations: Score, plus Invite to Assessment / AI Interview
+                  (the Scored Resumes tab's Actions menu pattern — ready, or a
+                  "+ Create" offer when this job has none yet). */}
               {selectedIds.size > 0 && (
-                <div className="relative">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setShowActionsMenu((open) => !open)}
-                    className="rounded-full h-9"
-                  >
-                    Actions
-                    <ChevronDown className="w-4 h-4" />
-                  </Button>
-                  {showActionsMenu && (
-                    <>
-                      <div className="fixed inset-0 z-40" onClick={() => setShowActionsMenu(false)} />
-                      <div className="absolute top-full left-0 mt-2 w-56 max-w-[calc(100vw-2rem)] bg-white dark:bg-slate-900 rounded-lg shadow-lg border border-gray-200 dark:border-slate-700 py-2 z-50">
-                        <button
-                          onClick={() => { onScoreSelected(selectedCandidates); setShowActionsMenu(false); }}
-                          className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800"
-                        >
-                          <ClipboardList className="w-4 h-4 text-menu-icon-score" />
-                          Score Selected ({selectedIds.size})
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="rounded-full h-9"
+                      aria-label={`Actions for ${selectedIds.size} selected`}
+                    >
+                      Actions
+                      <ChevronDown className="w-4 h-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-64 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
+                    <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
+                      {selectedIds.size.toLocaleString()} selected
+                    </div>
+                    <DropdownMenuItem
+                      className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer"
+                      onSelect={() => onScoreSelected(selectedCandidates)}
+                    >
+                      <ClipboardList className="w-4 h-4 text-menu-icon-score" />
+                      <span>Score Selected ({selectedIds.size})</span>
+                    </DropdownMenuItem>
+                    {renderInviteTargetItems({
+                      kind: 'assessment',
+                      target: assessmentTarget,
+                      itemClass: 'flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer',
+                      allowed: canCreateAssessments,
+                      onInvite: (e) => {
+                        if (!canCreateAssessments) {
+                          e.preventDefault();
+                          toast.error(assessmentDeniedReason);
+                          return;
+                        }
+                        onInviteAssessment(selectedCandidates);
+                      },
+                      onCreate: () => onCreateAssessment(),
+                    })}
+                    {renderInviteTargetItems({
+                      kind: 'interview',
+                      target: interviewTarget,
+                      itemClass: 'flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer',
+                      allowed: mayInviteAIInterview,
+                      onInvite: (e) => {
+                        if (!mayInviteAIInterview) {
+                          e.preventDefault();
+                          toast.error(aiInterviewDeniedReason);
+                          return;
+                        }
+                        onInviteAIInterview(selectedCandidates);
+                      },
+                      onCreate: () => onCreateAIInterview(),
+                    })}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               )}
             </>
           }
@@ -5810,17 +5929,17 @@ function AIMatchTabContent({
                     lives in the toolbar above). It keeps the left-pinned slot so
                     the column stays in view on horizontal scroll. */}
                 <th className="px-4 py-3 w-10 align-middle tf-sticky-col-left" aria-label="Select" />
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Match Rating</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Candidate Name</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Email</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Phone</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Location</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Skills</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Experience</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Uploaded By</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Uploaded Date</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Scored Status</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle tf-sticky-col">Attachments</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Match Rating</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Candidate Name</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Email</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Phone</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Location</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Skills</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Experience</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Uploaded By</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Uploaded Date</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Scored Status</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle tf-sticky-col">Attachments</th>
               </tr>
             </thead>
             )}
