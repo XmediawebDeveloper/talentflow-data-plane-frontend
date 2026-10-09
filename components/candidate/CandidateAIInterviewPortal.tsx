@@ -39,6 +39,7 @@ import StepIntroVideo from '@/components/candidate/StepIntroVideo';
 import StepLanguageSelect from '@/components/candidate/StepLanguageSelect';
 import StepSamplePractice from '@/components/candidate/StepSamplePractice';
 import InterviewFeedbackModal from '@/components/candidate/InterviewFeedbackModal';
+import CandidateHeader from '@/components/candidate/CandidateHeader';
 import {
   readInterviewStep,
   writeInterviewStep,
@@ -2685,19 +2686,26 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   // ========== COMPLETED ==========
   if (step === 'completed') {
     return (
-      <div className="min-h-[100dvh] flex items-center justify-center bg-gray-50 px-4">
-        <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-8 text-center">
-          <div className="w-16 h-16 rounded-full bg-success-subtle flex items-center justify-center mx-auto mb-6">
-            <CheckCircle className="w-8 h-8 text-success" />
+      // A simple full page (not a floating card): the candidate header, then a
+      // centred thank-you. Reached only after the recording upload + saving
+      // finished, so closing the window is safe now.
+      <div className="min-h-[100dvh] flex flex-col bg-gray-50">
+        <CandidateHeader />
+        <main className="flex-1 flex items-center justify-center px-4 py-12">
+          <div className="max-w-lg w-full text-center">
+            <div className="relative mx-auto mb-7 w-20 h-20">
+              <span className="absolute inset-0 rounded-full bg-success/10 ring-8 ring-success/5" aria-hidden="true" />
+              <span className="relative flex w-20 h-20 items-center justify-center">
+                <CheckCircle className="w-10 h-10 text-success" />
+              </span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">Thank you for attending the interview</h1>
+            <p className="mt-3 text-base text-gray-600">Your responses have been submitted successfully.</p>
+            <p className="mt-6 inline-flex items-center rounded-full bg-white px-4 py-2 text-sm font-medium text-gray-700 ring-1 ring-gray-200 shadow-sm">
+              You can now close this window.
+            </p>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-3">Interview Completed</h1>
-          <p className="text-gray-600 mb-2">
-            Thank you for completing your interview. Your responses have been recorded and are being reviewed.
-          </p>
-          <p className="text-sm text-gray-500">
-            You will be contacted with next steps. You may close this window.
-          </p>
-        </div>
+        </main>
         {/* AII17 — feedback popup layered OVER the completion card, so closing
             it leaves the candidate on the normal completion screen. */}
         {showFeedback && (
@@ -3940,6 +3948,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
           onGoBack={goBack}
           selectedLanguage={selectedLanguage}
           submitting={startSubmitting}
+          candidateName={interview?.candidate_name}
           faceVerification={faceVerification.baselineReady ? {
             hasBaseline: faceVerification.hasBaseline,
             startVerification: faceVerification.startVerification,

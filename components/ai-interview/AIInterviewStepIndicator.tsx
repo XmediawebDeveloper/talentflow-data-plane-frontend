@@ -1,6 +1,6 @@
 'use client';
 
-import { Check } from 'lucide-react';
+import { CheckCircle } from 'lucide-react';
 
 export const AI_INTERVIEW_STEPS = ['Select JD', 'Configure', 'Clusters', 'Preview & Publish'] as const;
 
@@ -43,14 +43,16 @@ export function AIInterviewStepIndicator({ currentStep }: Props) {
                   <div
                     className={`flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-full text-sm font-semibold shrink-0 transition-all duration-300 z-10 relative ${
                       isCompleted
-                        ? 'bg-gradient-to-br from-brand-cyan to-brand-cyan-2 text-white shadow-md shadow-brand-cyan/30 ring-1 ring-white/10'
+                        // Solid dark brand blue + white tick — the same completed
+                        // step as the candidate interview flow's progress bar.
+                        ? 'bg-brand-blue text-white shadow-sm'
                         : isCurrent
                         ? 'bg-gradient-to-br from-brand-blue to-brand-blue-2 text-white shadow-lg shadow-brand-blue/40 ring-2 ring-brand-blue/10'
                         : 'bg-gray-100 text-gray-400 ring-1 ring-gray-200'
                     }`}
                   >
                     {isCompleted ? (
-                      <Check className="w-5 h-5" strokeWidth={3} />
+                      <CheckCircle className="w-5 h-5" />
                     ) : (
                       <span className="tabular-nums">{stepNum}</span>
                     )}
@@ -85,7 +87,7 @@ export function AIInterviewStepIndicator({ currentStep }: Props) {
                 {!isLast && (
                   <div
                     className={`w-5 sm:w-12 lg:w-24 h-0.5 rounded-full transition-colors duration-500 ${
-                      isCompleted ? 'bg-brand-cyan' : 'bg-gray-200'
+                      isCompleted ? 'bg-brand-blue' : 'bg-gray-200'
                     }`}
                   />
                 )}

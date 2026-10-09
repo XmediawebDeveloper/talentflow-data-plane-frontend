@@ -2741,9 +2741,13 @@ export default function StepSystemCheck({
                   )}
                 </div>
 
-              {/* Camera Preview + Device Settings, shown with the checks they
-                  feed. */}
-              <div className="grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-5">
+              {/* Layout: left column = camera preview + Device Settings, with
+                  the checks as one top-down list on the right; below both, a
+                  row with Continue in the right corner. The result banner sits
+                  under Device Settings. Phones stack in DOM order: camera/settings
+                  → checks → result/Continue. */}
+              <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] gap-5 items-start">
+              <div className="space-y-4 min-w-0 lg:col-start-1 lg:row-start-1">
                 <div className="rounded-xl border border-gray-200 p-3">
                   <div className="relative bg-gray-900 aspect-video max-h-[42svh] w-full mx-auto rounded-lg overflow-hidden">
                     <video
@@ -2854,12 +2858,44 @@ export default function StepSystemCheck({
                     </p>
                   </div>
                 </div>
+                {/* The run's result, right under Device Settings — where the
+                    candidate fixes a failed check. */}
+                    {!checksRunning && checksCompleted && allSystemPassed && (
+                      <div className="flex items-center gap-2.5 rounded-xl border border-brand-blue/15 bg-brand-blue/[0.06] px-3 py-2 min-w-0">
+                        <span className="w-7 h-7 rounded-full bg-brand-blue text-white flex items-center justify-center flex-shrink-0">
+                          <Check className="w-4 h-4" strokeWidth={3} />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold text-brand-blue leading-tight">Everything Looks Good</p>
+                          <p className="text-xs text-gray-600 leading-snug">Your device and system have passed the required checks. You&apos;re all set for the interview.</p>
+                        </div>
+                      </div>
+                    )}
+                    {!checksRunning && checksCompleted && !allSystemPassed && (
+                      <div className="flex items-center gap-2.5 rounded-xl border border-destructive/25 bg-destructive/[0.07] px-3 py-2 min-w-0">
+                        <span className="w-7 h-7 rounded-full bg-destructive text-white flex items-center justify-center flex-shrink-0">
+                          <XCircle className="w-4 h-4" />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold text-destructive leading-tight">Some checks failed</p>
+                          <p className="text-xs text-gray-600 leading-snug">
+                            {systemChecks.find((c) => c.id === 'webcam' && c.status === 'fail')
+                              ? 'Camera access is required for the interview. Allow camera access in your browser settings, then click Retry on that check.'
+                              : systemChecks.find((c) => c.id === 'microphone' && c.status === 'fail')
+                              ? (!selectedMicId
+                                  ? 'Select your microphone in Device Settings to complete this check.'
+                                  : 'Click Retry on the Microphone check to verify your selected device.')
+                              : 'Fix the issues and click Retry on each failed check to re-run just that one.'}
+                          </p>
+                        </div>
+                      </div>
+                    )}
               </div>
 
-                {/* Checks — two columns from lg (one below, where a half-width
-                    row is too narrow to read); a row wraps its status/Retry
-                    under the label when it runs out of room. */}
-                <div ref={checksListRef} className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                {/* Checks — one top-down list in the right column (spans both
+                    rows on lg); a row wraps its status/Retry under the label
+                    when it runs out of room. */}
+                <div ref={checksListRef} className="flex flex-col gap-2 min-w-0 lg:col-start-2 lg:row-start-1">
                   {systemChecks.map((check) => (
                     <div
                       key={check.id}
@@ -2935,39 +2971,9 @@ export default function StepSystemCheck({
                     run is done), running indicator / Continue on the right.
                     Stacks on small screens. */}
                 {(checksRunning || checksCompleted) && (
-                  <div ref={checksFooterRef} className="flex flex-col md:flex-row md:items-center md:justify-end gap-3 pt-2 scroll-mb-4">
-                    {!checksRunning && checksCompleted && allSystemPassed && (
-                      <div className="md:mr-auto inline-flex items-center gap-2.5 rounded-lg border border-brand-blue/15 bg-brand-blue/[0.06] px-3 py-2 min-w-0">
-                        <span className="w-7 h-7 rounded-full bg-brand-blue text-white flex items-center justify-center flex-shrink-0">
-                          <Check className="w-4 h-4" strokeWidth={3} />
-                        </span>
-                        <div className="min-w-0">
-                          <p className="text-sm font-bold text-brand-blue leading-tight">Everything Looks Good</p>
-                          <p className="text-xs text-gray-600 leading-snug">Your device and system have passed the required checks. You&apos;re all set for the interview.</p>
-                        </div>
-                      </div>
-                    )}
-                    {!checksRunning && checksCompleted && !allSystemPassed && (
-                      <div className="md:mr-auto inline-flex items-center gap-2.5 rounded-lg border border-destructive/25 bg-destructive/[0.07] px-3 py-2 min-w-0">
-                        <span className="w-7 h-7 rounded-full bg-destructive text-white flex items-center justify-center flex-shrink-0">
-                          <XCircle className="w-4 h-4" />
-                        </span>
-                        <div className="min-w-0">
-                          <p className="text-sm font-bold text-destructive leading-tight">Some checks failed</p>
-                          <p className="text-xs text-gray-600 leading-snug">
-                            {systemChecks.find((c) => c.id === 'webcam' && c.status === 'fail')
-                              ? 'Camera access is required for the interview. Allow camera access in your browser settings, then click Retry on that check.'
-                              : systemChecks.find((c) => c.id === 'microphone' && c.status === 'fail')
-                              ? (!selectedMicId
-                                  ? 'Select your microphone from the Device Settings panel above to complete this check.'
-                                  : 'Click Retry on the Microphone check above to verify your selected device.')
-                              : 'Fix the issues and click Retry on each failed check to re-run just that one.'}
-                          </p>
-                        </div>
-                      </div>
-                    )}
+                  <div ref={checksFooterRef} className="flex flex-col md:flex-row md:items-center md:justify-end gap-3 min-w-0 scroll-mb-4 lg:col-span-2 lg:row-start-2">
                     {checksRunning ? (
-                      <div className="inline-flex items-center justify-center gap-2 bg-gray-100 text-gray-500 font-semibold py-3 px-6 rounded-lg text-sm cursor-not-allowed">
+                      <div className="shrink-0 flex items-center justify-center gap-2 bg-gray-100 text-gray-500 font-semibold py-3 px-6 rounded-lg text-sm cursor-not-allowed">
                         <Loader2 className="w-4 h-4 animate-spin" />
                         Running checks…
                       </div>
@@ -2980,7 +2986,7 @@ export default function StepSystemCheck({
                         onClick={() => { if (allSystemPassed && voiceGateOk && !isProceedLoading && !micDisconnectedPopup) handleProceed(); }}
                         disabled={!allSystemPassed || !voiceGateOk || isProceedLoading || micDisconnectedPopup}
                         title={micDisconnectedPopup ? 'Please reconnect your microphone to continue' : !voiceGateOk ? 'Record your voice sample first' : !allSystemPassed ? 'Fix the failed checks above (click Retry on each)' : undefined}
-                        className="w-full md:w-auto md:min-w-[240px] whitespace-normal h-auto min-h-11 py-2 text-center"
+                        className="w-full md:w-auto md:min-w-[240px] shrink-0 whitespace-normal h-auto min-h-11 py-2 text-center"
                       >
                         {isProceedLoading ? (
                           <><Loader2 className="w-4 h-4 animate-spin" /> Finishing…</>
@@ -2995,6 +3001,7 @@ export default function StepSystemCheck({
                     )}
                   </div>
                 )}
+              </div>
               </div>
           </div>
         </section>

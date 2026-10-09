@@ -648,46 +648,94 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
           // strictly needs) continues unaffected through the same TalkingHead
           // instance. Universal safety net — never fires on a capable machine;
           // saves the interview on the worst ones.
+          //
+          // Hardened 2026-10 — it was demoting capable machines to the static
+          // image permanently:
+          //   • it measured in the first 2s after ready, exactly when the
+          //     interview starts camera recording, face detection, VAD and the
+          //     WebSocket — a transient dip, not the device's real speed;
+          //   • Chrome PAUSES requestAnimationFrame for a hidden / minimised /
+          //     fully covered window, so "0 samples in 2s" read as
+          //     "catastrophically slow";
+          //   • one bad window was enough.
+          // Now: wait WARMUP_DELAY_MS before measuring, only measure while the
+          // page is visible (a window interrupted by hiding is discarded and
+          // retried once visible), and degrade only after SLOW_WINDOWS_TO_DEGRADE
+          // slow windows IN A ROW. A genuinely weak device still fails every
+          // window and still falls back.
           (() => {
-            const SAMPLE_MS = 2000;       // measurement window after ready
-            const WARMUP_FRAMES = 5;      // drop the first few frames (post-load jank)
-            const MIN_AVG_FPS = 20;       // below this we consider the device unviable for 3D
-            const watchdogStart = performance.now();
-            const frameIntervals: number[] = [];
-            let lastTick = watchdogStart;
-            const tick = () => {
-              if (!mounted) return;
-              const now = performance.now();
-              frameIntervals.push(now - lastTick);
-              lastTick = now;
-              if (now - watchdogStart < SAMPLE_MS) {
-                requestAnimationFrame(tick);
-                return;
-              }
-              // Window closed — evaluate.
-              const samples = frameIntervals.slice(WARMUP_FRAMES);
-              if (samples.length < 2) {
-                // Couldn't collect ≥2 intervals in 2s → average frame >1s →
-                // device is catastrophically slow; definitely degrade.
-                console.warn(
-                  `[TalkingHead][FPS-watchdog] only ${samples.length} sample(s) in ${SAMPLE_MS}ms — degrading`
-                );
-                onFallback?.();
-                return;
-              }
-              const meanDt = samples.reduce((s, x) => s + x, 0) / samples.length;
-              const avgFps = 1000 / meanDt;
-              console.log(
-                `[TalkingHead][FPS-watchdog] avg=${avgFps.toFixed(1)}fps samples=${samples.length} (threshold=${MIN_AVG_FPS}fps)`
-              );
-              if (avgFps < MIN_AVG_FPS) {
-                console.warn(
-                  `[TalkingHead][FPS-watchdog] ${avgFps.toFixed(1)}fps < ${MIN_AVG_FPS}fps — degrading to static fallback`
-                );
-                onFallback?.();
-              }
+            const WARMUP_DELAY_MS = 4000;      // let interview start-up settle
+            const SAMPLE_MS = 2000;            // one measurement window
+            const RETRY_GAP_MS = 3000;         // pause before re-measuring after a slow window
+            const WARMUP_FRAMES = 5;           // drop the first few frames of a window
+            const MIN_AVG_FPS = 20;            // below this the device is unviable for 3D
+            const SLOW_WINDOWS_TO_DEGRADE = 2; // consecutive slow windows before degrading
+            let slowWindows = 0;
+
+            const isVisible = () => typeof document === 'undefined' || document.visibilityState === 'visible';
+
+            // Re-arm once the page is visible again (a hidden page pauses rAF).
+            const whenVisible = (fn: () => void) => {
+              if (isVisible()) { fn(); return; }
+              const onVis = () => {
+                if (!isVisible()) return;
+                document.removeEventListener('visibilitychange', onVis);
+                if (mounted) setTimeout(fn, 500);
+              };
+              document.addEventListener('visibilitychange', onVis);
             };
-            requestAnimationFrame(tick);
+
+            const measure = () => {
+              if (!mounted) return;
+              const windowStart = performance.now();
+              const frameIntervals: number[] = [];
+              let lastTick = windowStart;
+              let interrupted = false;
+              const onHide = () => { if (!isVisible()) interrupted = true; };
+              document.addEventListener('visibilitychange', onHide);
+
+              const tick = () => {
+                if (!mounted) { document.removeEventListener('visibilitychange', onHide); return; }
+                const now = performance.now();
+                frameIntervals.push(now - lastTick);
+                lastTick = now;
+                if (now - windowStart < SAMPLE_MS && !interrupted) {
+                  requestAnimationFrame(tick);
+                  return;
+                }
+                document.removeEventListener('visibilitychange', onHide);
+                // Hidden part-way: the numbers mean nothing — measure again
+                // once visible, without counting this window.
+                if (interrupted || !isVisible()) {
+                  console.log('[TalkingHead][FPS-watchdog] page hidden during sampling — will re-measure when visible');
+                  whenVisible(measure);
+                  return;
+                }
+                const samples = frameIntervals.slice(WARMUP_FRAMES);
+                const avgFps = samples.length >= 2
+                  ? 1000 / (samples.reduce((acc, x) => acc + x, 0) / samples.length)
+                  : 0; // <2 frames in 2s while visible → genuinely slow
+                const slow = avgFps < MIN_AVG_FPS;
+                slowWindows = slow ? slowWindows + 1 : 0;
+                console.log(
+                  `[TalkingHead][FPS-watchdog] avg=${avgFps.toFixed(1)}fps samples=${samples.length} (threshold=${MIN_AVG_FPS}fps, slow ${slowWindows}/${SLOW_WINDOWS_TO_DEGRADE})`
+                );
+                if (!slow) return; // healthy — keep 3D
+                if (slowWindows >= SLOW_WINDOWS_TO_DEGRADE) {
+                  console.warn(
+                    `[TalkingHead][FPS-watchdog] ${slowWindows} slow windows in a row — degrading to static fallback`
+                  );
+                  onFallback?.();
+                  return;
+                }
+                // One slow window — could be a transient spike; check again.
+                setTimeout(() => whenVisible(measure), RETRY_GAP_MS);
+              };
+              requestAnimationFrame(tick);
+            };
+
+            setTimeout(() => whenVisible(measure), WARMUP_DELAY_MS);
+            // Every step checks `mounted`, so pending timers are no-ops after unmount.
           })();
 
         } catch (err) {
