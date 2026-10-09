@@ -148,6 +148,41 @@ function clipRect(shell: HTMLElement, rect: DOMRect) {
   return { top, bottom, left, right };
 }
 
+/* ── The trough's bottom corners ───────────────────────────────────────
+   The trough is an opaque rectangle in the body-level overlay, so nothing in
+   the table's own tree clips it. Where the shell sits in a rounded card
+   (`rounded-xl border overflow-hidden`, every Job Details result tab) — or is
+   rounded and bordered itself — the trough's square bottom corners painted over
+   the card's curved bottom-left / bottom-right border, and the outline read as
+   clipped there whenever the table scrolled sideways.
+
+   So the trough takes the inner bottom radius of the element whose rounded
+   corner it actually sits in: walking up from the shell through every element
+   whose inner bottom edge is flush with the trough's, the first one with a
+   bottom radius. A corner is only rounded where that element's inner side edge
+   meets the trough's too. Clamped to the visible band (a table taller than the
+   window) the trough is not at the card's bottom at all, the walk stops at the
+   shell, and both corners stay square. Read per frame, like everything else in
+   `sync`. */
+function troughCornerRadii(shell: HTMLElement, left: number, right: number, bottom: number) {
+  for (let el: HTMLElement | null = shell; el && el !== document.body; el = el.parentElement) {
+    const cs = getComputedStyle(el);
+    const r = el.getBoundingClientRect();
+    const bottomBorder = parseFloat(cs.borderBottomWidth || '0');
+    if (Math.abs(r.bottom - bottomBorder - bottom) > 1) break;
+    const outerLeft = parseFloat(cs.borderBottomLeftRadius || '0');
+    const outerRight = parseFloat(cs.borderBottomRightRadius || '0');
+    if (outerLeft <= 0 && outerRight <= 0) continue;
+    const leftBorder = parseFloat(cs.borderLeftWidth || '0');
+    const rightBorder = parseFloat(cs.borderRightWidth || '0');
+    return {
+      left: Math.abs(r.left + leftBorder - left) <= 1 ? Math.max(0, outerLeft - Math.max(leftBorder, bottomBorder)) : 0,
+      right: Math.abs(r.right - rightBorder - right) <= 1 ? Math.max(0, outerRight - Math.max(rightBorder, bottomBorder)) : 0,
+    };
+  }
+  return { left: 0, right: 0 };
+}
+
 /* Both trims assume the occluder is ONE contiguous band against the end being
    trimmed, which is what every occluder in this app is — a bar pinned to the
    top of a scroll container, or the window edge below. That assumption is what
@@ -623,10 +658,15 @@ export default function TableScrollbars() {
                a trough that stopped where the track does would leave a sliver
                of row showing at each end. */
             if (x.gutter) {
+              /* Rounded to the card's inner corners where it meets them — see
+                 `troughCornerRadii`. */
+              const corners = troughCornerRadii(shell, gutterLeft, gutterLeft + gutterWidth, stripTop + X_GUTTER);
               x.gutter.style.display = 'block';
               x.gutter.style.transform = `translate3d(${gutterLeft}px, ${stripTop}px, 0)`;
               x.gutter.style.width = `${Math.max(0, gutterWidth)}px`;
               x.gutter.style.height = `${X_GUTTER}px`;
+              x.gutter.style.borderBottomLeftRadius = `${corners.left}px`;
+              x.gutter.style.borderBottomRightRadius = `${corners.right}px`;
             }
 
             x.track.style.display = 'block';

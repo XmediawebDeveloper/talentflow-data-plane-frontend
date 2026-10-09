@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Calendar, Check, ClipboardCheck, Clock, Eye, Info, Layers, Mail, Star, User } from 'lucide-react';
+import { Calendar, ClipboardCheck, Clock, Eye, Info, Layers, Mail, Star, User } from 'lucide-react';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import AssessmentPreviewModal from '@/components/AssessmentPreviewModal';
 import { VersionPill } from '@/components/assessments/AllAssessmentsTable';
@@ -63,10 +63,15 @@ export default function JobAssessmentVersionPicker({
   multiple = false,
   selectedIds,
   onToggle,
+  jobVersionNumber,
 }: {
   assessments: JobAssessment[];
   /** The JD id the candidates were matched against. */
   jobId: string;
+  /** That JD row's own job version, when the host knows it (Job Details).
+   *  Heads the list and the preview instead of the assessment's `jd_version`
+   *  snapshot, which can read 1 for a later version's assessment. */
+  jobVersionNumber?: number;
   multiple?: boolean;
   selectedIds: string[];
   /** A card was clicked: the host adds / removes (multiple) or replaces it. */
@@ -99,7 +104,7 @@ export default function JobAssessmentVersionPicker({
         {job?.jd_title && <span className="min-w-0 text-sm text-gray-600 dark:text-slate-400 truncate">{job.jd_title}</span>}
         {job && !spansJobVersions && (
           <span className="text-xs font-semibold px-1.5 py-0.5 rounded-md bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20" title="Job version">
-            V{job.jd_version ?? 1}
+            V{jobVersionNumber ?? job.jd_version ?? 1}
           </span>
         )}
       </div>
@@ -134,26 +139,46 @@ export default function JobAssessmentVersionPicker({
                 className={`flex items-center gap-3 sm:gap-4 rounded-xl border px-3 sm:px-4 py-3.5 transition-colors cursor-pointer ${
                   isSelected
                     ? 'border-brand-blue/50 bg-brand-blue/[0.06] ring-1 ring-brand-blue/30'
-                    : 'border-gray-200 dark:border-slate-700/60 bg-white dark:bg-slate-900 hover:border-brand-blue/30 hover:bg-brand-blue/5'
+                    : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-brand-blue/30 hover:bg-brand-blue/5'
                 }`}
               >
-                {/* The interview card's radio dot; a checkbox tick when several
-                    can be picked. */}
-                {multiple ? (
-                  <span className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 ${
-                    isSelected ? 'border-brand-blue bg-brand-blue' : 'border-gray-300 dark:border-slate-600'}`}>
-                    {isSelected && <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />}
-                  </span>
-                ) : (
-                  <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                    isSelected ? 'border-brand-blue' : 'border-gray-300 dark:border-slate-600'}`}>
-                    {isSelected && <span className="w-2.5 h-2.5 rounded-full bg-brand-blue" />}
-                  </span>
-                )}
+                {/* The AI Talent Match results table's own native checkbox
+                    (`rounded border-gray-300`) — a native radio when only one
+                    can be picked. Display only: the card is the control (its
+                    role / aria-checked / keyboard handling above), so the input
+                    takes no focus or clicks of its own. `m-0` drops the
+                    browser's default input margin — uneven on a radio (no
+                    bottom margin), which sat it off the card's centre line.
+
+                    Level with the TITLE line (name + version pill), not with
+                    the card's middle: centred on the whole card it sat between
+                    the title and the details line under it. The wrapper is one
+                    title line tall (`h-6`, the title row's `min-h-6` below) and
+                    pinned to the top of the text column, so the box centres on
+                    that line at every width — and on the first line when a
+                    long name wraps. */}
+                <span className="self-start h-6 flex items-center shrink-0">
+                  <input
+                    type={multiple ? 'checkbox' : 'radio'}
+                    checked={isSelected}
+                    readOnly
+                    tabIndex={-1}
+                    aria-hidden="true"
+                    className={`${multiple ? 'rounded ' : ''}m-0 border-gray-300 pointer-events-none`}
+                  />
+                </span>
 
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">Assessment</span>
+                  <div className="flex items-center gap-2 flex-wrap min-h-6">
+                    {/* The assessment's own name (its title, version suffix
+                        stripped — the pill carries the version), so two
+                        assessments of one job version read apart. */}
+                    <span
+                      className="min-w-0 text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 [overflow-wrap:anywhere]"
+                      title={a.title || undefined}
+                    >
+                      {parseAssessmentTitle(a.title || '').cleanTitle || 'Assessment'}
+                    </span>
                     {/* The cyan assessment-version pill used across the
                         Assessments tables. */}
                     {/* Its own job version, only when the cards span several —
@@ -213,7 +238,7 @@ export default function JobAssessmentVersionPicker({
       )}
 
       {versions.length > 0 && (
-        <div className="mt-4 flex items-start gap-3 rounded-xl bg-brand-blue/5 border border-brand-blue/15 px-4 py-3">
+        <div className="mt-4 flex items-start gap-3 rounded-xl bg-brand-blue/5 border border-gray-200 dark:border-slate-700 px-4 py-3">
           <Info className="w-5 h-5 text-brand-blue shrink-0 mt-0.5" />
           <div className="text-sm min-w-0">
             <div className="font-medium text-gray-900 dark:text-slate-100">
@@ -230,7 +255,16 @@ export default function JobAssessmentVersionPicker({
         </div>
       )}
 
-      {preview && <AssessmentPreviewModal isOpen onClose={() => setPreview(null)} assessment={preview} />}
+      {preview && (
+        <AssessmentPreviewModal
+          isOpen
+          onClose={() => setPreview(null)}
+          assessment={preview}
+          /* Job Details hosts: the preview also names the assessment and job
+             versions and which rounds (Coding included) are configured. */
+          jobContext={jobVersionNumber !== undefined ? { jobVersionNumber } : undefined}
+        />
+      )}
     </div>
   );
 }

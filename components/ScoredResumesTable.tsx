@@ -99,14 +99,14 @@ const TOOLBAR_BUTTON_CLASS =
    other field needs less, and none of them needs the third-of-a-panel the old
    stretching grid handed out. Full width below `sm`, where one field per row is
    the only thing that fits. */
-const FILTER_FIELD_CLASS = 'w-full sm:w-auto sm:grow sm:basis-[170px] sm:max-w-[280px]';
+export const FILTER_FIELD_CLASS = 'w-full sm:w-auto sm:grow sm:basis-[170px] sm:max-w-[280px]';
 
 /* Score Range holds TWO controls in one field, so it asks for more room up
    front and takes a bigger share of whatever its row has spare — at the shared
    basis each input gets ~80px and reads cramped beside its neighbours. */
-const FILTER_FIELD_WIDE_CLASS = 'w-full sm:w-auto sm:grow-[1.5] sm:basis-[240px] sm:max-w-[380px]';
-const FILTER_LABEL_CLASS = 'block text-sm text-gray-700 mb-1 truncate';
-const FILTER_CONTROL_CLASS =
+export const FILTER_FIELD_WIDE_CLASS = 'w-full sm:w-auto sm:grow-[1.5] sm:basis-[240px] sm:max-w-[380px]';
+export const FILTER_LABEL_CLASS = 'block text-sm text-gray-700 mb-1 truncate';
+export const FILTER_CONTROL_CLASS =
   'w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white';
 
 /* The table's columns — FIXED, in this order (Actions follows as its own
@@ -1905,7 +1905,7 @@ Best regards`);
           <ChevronDown className="w-4 h-4" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-60 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
+      <DropdownMenuContent align="start" className="w-64 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
         {/* Light grey header strip: how many the actions run on. */}
         <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
           {(isGrouped ? new Set(effectiveSelectedRows.map(candidateGroupKey)).size : effectiveSelectedRows.length).toLocaleString()} selected
@@ -2053,7 +2053,10 @@ Best regards`);
           table exactly as before. */}
       {!compact && (() => {
         const toolbarBlock = (
-        <div className="mb-4 space-y-3">
+        /* In Job Details (portaled) the AI Talent Match tab's spacing: no gap
+           under the block — the row's own `mb-3` and the panel's `pb-4` give
+           it, exactly as there. */
+        <div className={toolbarPortal ? undefined : 'mb-4 space-y-3'}>
         {/* Canonical search + filters row (same component as job-openings). The
             previous hand-rolled version used grey focus rings, rounded-md and a
             `palaceholder-gray-500` typo, so it matched no other list in the app. */}
@@ -2064,8 +2067,9 @@ Best regards`);
           searchDebounceMs={0}
           searchPlaceholder="Search by name, email, phone, or Job ID..."
           // Row 1: Search (fills the row), the two main filters inline,
-          // More Filters, Reset, Sort by, List / Grid.
-          controlsFollowSearch
+          // More Filters, Reset, Sort by, List / Grid. In Job Details the
+          // controls keep the AI Talent Match row's 12px gap from the search.
+          controlsFollowSearch={!toolbarPortal}
           /* Select All — at the very start of the toolbar row, matching the AI
              Talent Match reference (it used to sit in its own strip below). */
           beforeSearch={
@@ -2139,7 +2143,9 @@ Best regards`);
           trailing={<ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-9" />}
           /* 36px control band like the AI Talent Match tab (its More Filters is h-9). */
           compactButtons={!!toolbarPortal}
-          className="mb-0"
+          /* Standalone the gap comes from the block's space-y; in Job Details
+             the row keeps ListToolbar's own `mb-3`, as on AI Talent Match. */
+          className={toolbarPortal ? undefined : 'mb-0'}
         />
 
         {/* Advanced Filters */}
@@ -2150,7 +2156,7 @@ Best regards`);
              Embedded in Job Details this drops the tinted/bordered card for
              the AI Talent Match reference's plain top-divider, so the panel
              reads as part of the same tab card the toolbar sits in. */
-          <div className={embedded ? 'mt-4 sm:mt-5 pt-4 sm:pt-5 border-t border-brand-blue/10' : 'mt-3 bg-gray-50 border border-gray-200 rounded-lg p-4'}>
+          <div className={embedded ? 'mt-4 sm:mt-5 pt-4 sm:pt-5 pb-4 border-t border-brand-blue/10' : 'mt-3 bg-gray-50 border border-gray-200 rounded-lg p-4'}>
             {/* Flex-wrap, not the stretching 2/3-column grid this used to be:
                 a grid cell is a third of the panel wide and every control in it
                 stretched to fill that, so a "v2" dropdown was as wide as a job
@@ -2940,7 +2946,7 @@ Best regards`);
               cell, light uppercase gray-500 labels with wider tracking, dark mode. */}
           <thead className="sticky top-0 z-10 [&_th]:bg-gray-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
             <tr>
-              <th className="text-left py-3 px-4 w-12 align-middle tf-sticky-col-left" aria-label="Select">
+              <th className="text-left py-3 px-4 w-10 align-middle tf-sticky-col-left" aria-label="Select">
                 {/* Only when there's no toolbar (compact: a job opened inline
                     in View by Job) — otherwise Select all is in the toolbar,
                     before the search box, and a second one here repeats it. */}
