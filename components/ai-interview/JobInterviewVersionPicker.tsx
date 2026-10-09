@@ -39,6 +39,12 @@ export function jobInterviewConfigs(configs: AIInterviewResponse[], jobId: strin
  * rounds, duration, invitations — with its status. Only Active versions are
  * listed: drafts and archived ones can't take an invite.
  */
+/** The version the cards tag "Latest": the job's newest Active interview —
+ *  what a host pre-selects (and, with a single version, the only choice). */
+export function latestActiveInterviewConfig(configs: AIInterviewResponse[], jobId: string): AIInterviewResponse | undefined {
+  return jobInterviewConfigs(configs, jobId).find((c) => normalizeStatus(c.status) === 'published');
+}
+
 export default function JobInterviewVersionPicker({
   configs,
   jobId,

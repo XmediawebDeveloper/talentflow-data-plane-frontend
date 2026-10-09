@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useEffect, useRef, ReactNode, useCallback } from 'react';
 import { User, Tenant, Permission, FeatureFlags, UserRole } from '@/lib/types/tenant';
 import { authService, clearTokens } from '@/lib/services';
-import { handleUnauthorized, dispatchAccessRestrictedEvent } from '@/lib/services/api';
+import { handleUnauthorized, dispatchAccessRestrictedEvent, ApiError } from '@/lib/services/api';
 import { getLoginUrl } from '@/lib/services/authService';
 import { mockTenant } from '@/lib/mockData/tenantData';
 import type { User as ApiUser, FeatureFlags as ApiFeatureFlags } from '@/lib/services/authService';
@@ -910,6 +910,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // The Sidebar and other components re-render naturally because setUser() above changes
       // the AuthContext user, which propagates through props automatically.
     } catch (error) {
+      // No HTTP status = the request never got a response (offline, laptop just woke,
+      // Wi-Fi switching, staging API restarting). refreshUser() fires on tab-visible
+      // and WS reconnect — exactly those moments — and the cached user is still valid,
+      // so this is a skipped refresh, not a failure. console.error would raise the
+      // Next.js dev overlay for it; warn instead and let the next trigger retry.
+      if (error instanceof ApiError && error.status === undefined) {
+        console.warn('[AUTH] refreshUser skipped — API unreachable:', error.message);
+        return;
+      }
       console.error('[AUTH] Failed to refresh user:', error);
     }
   }, []);

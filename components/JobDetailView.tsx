@@ -4267,6 +4267,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             </div>
           ) : scoredResumes.length === 0 ? (
             <TabEmptyState
+              bordered
               icon={Users}
               imageSrc="/scored-resumes-empty-state.webp"
               imageAlt="Scored resumes illustration"
@@ -4445,6 +4446,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                here — this is exactly when it matters most — so the tab actions
                ride the empty state rather than a separate strip above it. */
             <TabEmptyState
+              bordered
               icon={Brain}
               title="No AI Interview Results"
               description="Create and publish an AI interview to see candidate results here."
@@ -4890,7 +4892,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             type: 'AI-Generated',
             short_id: shareAssessments[0].short_id,
             version: shareAssessments[0].version,
-            jd_short_id: job.id,
+            // Display ID (JD-133), not `job.id` — the UUID the header printed.
+            jd_short_id: shareAssessments[0].jd_short_id || job.job_id,
             jd_title: job.title,
             jd_version: shareAssessments[0].jd_version,
           }}
@@ -4904,7 +4907,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             type: 'AI-Generated',
             short_id: a.short_id,
             version: a.version,
-            jd_short_id: job.id,
+            jd_short_id: a.jd_short_id || job.job_id,
             jd_title: job.title,
             jd_version: a.jd_version,
           }))}
@@ -5394,6 +5397,7 @@ function AIMatchTabContent({
   if (candidates.length === 0) {
     return (
       <TabEmptyState
+        bordered
         icon={Brain}
         imageSrc="/ai-talent-match-empty-state.webp"
         imageAlt="AI talent match illustration"
