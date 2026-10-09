@@ -606,7 +606,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
   // Interview completion modal (Req 16)
   const [showCompletionModal, setShowCompletionModal] = useState(false);
-  const [completionMessage, setCompletionMessage] = useState("");
+  // The server's completion text is still received, but the saving overlay
+  // no longer shows it (it claimed "recorded successfully" before the upload
+  // had finished).
+  const [, setCompletionMessage] = useState("");
   const shouldDisconnectAfterAudioRef = useRef(false);
   // Defer the completion modal until Bina's farewell audio actually ends.
   // Backend sends `interview_completion_message` right after `interview_ended`
@@ -9837,7 +9840,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       hold:    { grad: 'from-rose-500 to-red-600',     ring: 'ring-rose-200/50 dark:ring-rose-500/30',    glow: 'shadow-red-600/30',     title: 'Hold on — Bina is speaking',  subtitle: 'Please wait until she finishes the question',        icon: pauseIcon,    dismissible: false },
       prepare: { grad: 'from-rose-500 to-red-600',     ring: 'ring-rose-200/50 dark:ring-rose-500/30',    glow: 'shadow-red-600/30',     title: 'Hold on — getting ready',      subtitle: 'Please wait a moment…',                              icon: spinnerIcon,  dismissible: false },
       timesup: { grad: 'from-rose-500 to-red-600',     ring: 'ring-rose-200/50 dark:ring-rose-500/30',    glow: 'shadow-red-600/30',     title: "Time's up!",                   subtitle: 'Moving to the next question…',                       icon: <Clock className="w-5 h-5 text-white" />, dismissible: false },
-      silence: { grad: 'from-amber-400 to-orange-500', ring: 'ring-amber-200/60 dark:ring-amber-500/30',   glow: 'shadow-amber-500/30',   title: 'Are you still there?',         subtitle: 'Take your time — Bina will move on if there’s no response.', icon: micIcon, dismissible: true },
+      silence: { grad: 'from-amber-700 to-amber-700', ring: 'ring-amber-300/50 dark:ring-amber-500/30',   glow: 'shadow-amber-700/30',   title: 'Are you still there?',         subtitle: 'Take your time — Bina will move on if there’s no response.', icon: micIcon, dismissible: true },
     }[variant];
 
     return (
@@ -10022,27 +10025,24 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           below the chat messages. */}
 
       {/* ── Interview completion modal (Req 16) ── */}
+      {/* Interview over — saving step. Shown from the server's "interview
+          ended" until the recording upload + proctoring flush finish and the
+          portal swaps in its final "Thank you" page (onInterviewComplete).
+          No Done button: closing the tab now could cut the upload short, so
+          it doesn't claim anything is finished yet. Frontend-only — the old
+          Done just hid this overlay. */}
       {showCompletionModal && (
-        <div className="fixed inset-0 z-[110] bg-black/70 flex items-center justify-center backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-[var(--raw-0a1020)] border border-[var(--raw-10b981)]/30 rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full mx-4 text-center shadow-2xl">
-            <div className="w-16 h-16 rounded-full bg-[var(--raw-10b981)]/15 flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-[var(--raw-10b981)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-              </svg>
+        <div className="fixed inset-0 z-[110] bg-black/70 flex items-center justify-center backdrop-blur-sm animate-in fade-in duration-300" role="status" aria-live="polite">
+          <div className="bg-white dark:bg-slate-900 ring-1 ring-sky-100 dark:ring-slate-700 rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full mx-4 text-center shadow-2xl">
+            <div className="w-14 h-14 rounded-full bg-sky-50 dark:bg-sky-500/15 flex items-center justify-center mx-auto mb-4">
+              <Loader2 className="w-7 h-7 text-brand-blue dark:text-sky-300 animate-spin" />
             </div>
-            <h2 className="text-white font-bold mb-3" style={{ fontSize: 20 }}>
-              {closingReason === "candidate_ended" ? "Interview Ended" : "Interview Complete"}
+            <h2 className="text-gray-900 dark:text-white font-bold mb-2" style={{ fontSize: 20 }}>
+              {closingReason === "candidate_ended" ? "Interview ended — finishing up…" : "Finishing up…"}
             </h2>
-            <p className="text-[var(--raw-94a3b8)] mb-6" style={{ fontSize: 15, lineHeight: 1.6 }}>
-              {completionMessage}
+            <p className="text-slate-600 dark:text-slate-300" style={{ fontSize: 15, lineHeight: 1.6 }}>
+              Saving your interview. Please don&apos;t close this window.
             </p>
-            <button
-              onClick={() => setShowCompletionModal(false)}
-              className="px-8 py-3 rounded-xl bg-[var(--raw-10b981)] hover:bg-[var(--raw-059669)] text-white font-semibold transition-colors"
-              style={{ fontSize: 15 }}
-            >
-              Done
-            </button>
           </div>
         </div>
       )}

@@ -12,7 +12,7 @@ import {
   ShieldAlert, Monitor, Clipboard, MousePointer, Eye, UserX,
   Volume2, Users, Maximize2, Camera, Mic, User, ChevronLeft, ChevronRight, Smartphone,
   Shield, CheckCircle2, XCircle, Activity, RefreshCw, Award, TrendingUp, Target,
-  Download, Loader2, Sparkles, SkipForward, Play, X, Timer,
+  Download, Loader2, Sparkles, SkipForward, Play, X, Timer, Check,
   ArrowUpRight,
 } from 'lucide-react';
 import {
@@ -1546,11 +1546,16 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
   const renderEvaluationSpinner = () => {
     const mm = Math.floor(evalElapsedSec / 60);
     const ss = String(evalElapsedSec % 60).padStart(2, '0');
+    // Four-step rail, same look as the cluster-generation loader. Advances on
+    // a timer (the evaluation is one backend job with no progress events) and
+    // holds on the last step until the results land.
+    const EVAL_STAGES = ['Reading Answers', 'Scoring with AI', 'Analyzing Skills', 'Finalizing Report'];
+    const evalStage = Math.min(EVAL_STAGES.length - 1, Math.floor(evalElapsedSec / 20));
     return (
     <div className="flex flex-col items-center justify-center py-24 tf-loader-center">
-      <div className="relative mb-6">
-        <div className="w-16 h-16 rounded-full border-4 border-brand-blue/20" />
-        <Loader2 className="absolute inset-0 w-16 h-16 text-brand-blue animate-spin" />
+      {/* Same static spinner as the cluster-generation screen. */}
+      <div className="w-16 h-16 rounded-full bg-brand-blue/5 ring-1 ring-brand-blue/10 flex items-center justify-center mx-auto mb-6">
+        <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
       </div>
       <h3 className="text-base font-semibold text-gray-900 mb-1 tracking-tight">Generating Evaluation Results</h3>
       <p className="text-sm text-gray-500 max-w-xs text-center">
@@ -1558,6 +1563,38 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
         results. This typically takes 1–3 minutes — you can keep this page open;
         it refreshes automatically when ready.
       </p>
+      <div className="mt-6 flex items-start justify-center">
+        {EVAL_STAGES.map((label, i) => {
+          const done = i < evalStage;
+          const current = i === evalStage;
+          const isLast = i === EVAL_STAGES.length - 1;
+          return (
+            <div key={label} className="flex items-start">
+              <div className="flex flex-col items-center gap-2 w-16 sm:w-32">
+                <span
+                  className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors duration-500 ${
+                    done || current ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/30' : 'bg-slate-200 text-transparent'
+                  }`}
+                >
+                  {done ? (
+                    <Check className="w-3.5 h-3.5" strokeWidth={3} />
+                  ) : current ? (
+                    <span className="w-2 h-2 rounded-full bg-white tf-step-pulse-dot" />
+                  ) : null}
+                </span>
+                <span className={`text-2xs sm:text-xs leading-tight text-center transition-colors duration-500 ${done || current ? 'text-brand-blue font-medium' : 'text-gray-400'}`}>
+                  {label}
+                </span>
+              </div>
+              {!isLast && (
+                <div className="mt-3.5 h-0.5 w-2 sm:w-12 rounded-full bg-slate-200 overflow-hidden flex-shrink-0">
+                  <div className={`h-full bg-brand-blue rounded-full transition-all duration-700 ${done ? 'w-full' : 'w-0'}`} />
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
       <div className="flex items-center gap-2 mt-4">
         <span className="w-2 h-2 rounded-full bg-brand-blue animate-pulse" />
         <span className="text-xs text-brand-blue font-medium tabular-nums">
