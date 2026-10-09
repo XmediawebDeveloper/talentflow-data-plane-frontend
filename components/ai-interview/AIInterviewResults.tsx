@@ -18,14 +18,21 @@ import TimelineStamps from '@/components/ui/timeline-stamps';
 import { DateField } from '@/components/ui/date-field';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
-import ResultRowActions, { DownloadPdfsButton, isPhoneWidth } from './ResultRowActions';
+import ResultRowActions, { isPhoneWidth } from './ResultRowActions';
+import { downloadSessionReports } from './evaluation-dashboard/downloadSessionReport';
 import { useRouter } from 'next/navigation';
 import {
-  ChevronLeft, ChevronRight, Eye, Loader2,
+  ChevronLeft, ChevronRight, ChevronDown, Eye, Loader2,
   Users, CheckCircle, Clock, Mail, XCircle, AlertTriangle, CalendarDays,
   Ban, SlidersHorizontal, FileDown, FileText, FileSpreadsheet, Info, Download, X,
-  Square, CheckSquare, Play,
+  Play,
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse, AIInterviewInvitationListResponse } from '@/lib/services/aiInterviewService';
@@ -729,6 +736,35 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
     await loadSessions();
   };
 
+  /* Bulk PDF download — moved inline (rather than the shared
+     `DownloadPdfsButton`) so it can live as a menu item inside the Actions
+     dropdown alongside Revoke/Resend, matching the AI Talent Match / Scored
+     Resumes / Assessments Results reference pattern. Same zip logic and
+     toast wording `DownloadPdfsButton` uses. */
+  const [downloadingPdfs, setDownloadingPdfs] = useState<{ done: number; total: number } | null>(null);
+  const handleDownloadSelectedPdfs = async () => {
+    setDownloadingPdfs({ done: 0, total: 0 });
+    try {
+      const rows = Array.from(selected.values());
+      const zipName = `${(configTitle || jdTitle || 'AI_Interview').replace(/\s+/g, '_')}_Reports_${new Date().toISOString().slice(0, 10)}.zip`;
+      const { downloaded, skipped, failed } = await downloadSessionReports(
+        rows, zipName, (done, total) => setDownloadingPdfs({ done, total }),
+      );
+      if (downloaded === 0 && failed === 0) {
+        toast.warning('No evaluated candidates to download — reports are available once an interview is evaluated.');
+      } else if (failed > 0) {
+        toast.error(`Downloaded ${downloaded} report${downloaded === 1 ? '' : 's'}; ${failed} could not be generated.`);
+      } else if (skipped > 0) {
+        toast.success(`Downloaded ${downloaded} report${downloaded === 1 ? '' : 's'}. ${skipped} candidate${skipped === 1 ? ' has' : 's have'} no report yet.`);
+      }
+    } catch (err) {
+      console.error('[AIInterviewResults] Bulk PDF download failed:', err);
+      toast.error('Could not download the reports. Please try again.');
+    } finally {
+      setDownloadingPdfs(null);
+    }
+  };
+
   const allOnPageSelected = paginatedSessions.length > 0 && paginatedSessions.every((s) => selected.has(s.id));
   const toggleAllOnPage = () =>
     setSelected((prev) => {
@@ -832,19 +868,80 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
              server-paginated, so the dropdown offers this page + clear only — no
              cross-page "select all", which it can't fulfil. */
           beforeSearch={portaled ? (
-            <ToolbarSelectAll
-              selectedCount={selected.size}
-              allSelected={allOnPageSelected}
-              pageCount={paginatedSessions.length}
-              onSelectPage={() =>
-                setSelected((prev) => {
-                  const next = new Map(prev);
-                  paginatedSessions.forEach((s) => next.set(s.id, s));
-                  return next;
-                })
-              }
-              onClear={() => setSelected(new Map())}
-            />
+            <>
+              <ToolbarSelectAll
+                selectedCount={selected.size}
+                allSelected={allOnPageSelected}
+                pageCount={paginatedSessions.length}
+                onSelectPage={() =>
+                  setSelected((prev) => {
+                    const next = new Map(prev);
+                    paginatedSessions.forEach((s) => next.set(s.id, s));
+                    return next;
+                  })
+                }
+                onClear={() => setSelected(new Map())}
+              />
+              {/* Actions — the AI Talent Match reference's pill: hidden until
+                  a row is ticked, holding only the selection-bound bulk ops
+                  (Revoke / Resend / Download PDF Reports). Customize Columns
+                  and Export work with nothing ticked too, so they stay their
+                  own buttons (see `leadingActions` / the toolbar's trailing
+                  children). */}
+              {selected.size > 0 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="rounded-full whitespace-nowrap !h-9 !text-sm"
+                      aria-label={`Actions for ${selected.size} selected`}
+                    >
+                      {isBulkWorking || downloadingPdfs ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                      Actions
+                      <ChevronDown className="w-4 h-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-60 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
+                    <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
+                      {selected.size.toLocaleString()} selected
+                    </div>
+                    {revocableSelected.length > 0 && (
+                      <DropdownMenuItem
+                        className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer text-destructive"
+                        disabled={isBulkWorking}
+                        onSelect={() => setBulkAction('revoke')}
+                      >
+                        <Ban className="w-4 h-4" />
+                        <span>Revoke ({revocableSelected.length})</span>
+                      </DropdownMenuItem>
+                    )}
+                    {resendableSelected.length > 0 && (
+                      <DropdownMenuItem
+                        className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer"
+                        disabled={isBulkWorking}
+                        onSelect={() => setBulkAction('resend')}
+                      >
+                        <Mail className="w-4 h-4 text-menu-icon-score" />
+                        <span>Resend ({resendableSelected.length})</span>
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem
+                      className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer"
+                      disabled={!!downloadingPdfs}
+                      onSelect={() => handleDownloadSelectedPdfs()}
+                    >
+                      <Download className="w-4 h-4 text-menu-icon-download" />
+                      <span>
+                        {downloadingPdfs
+                          ? (downloadingPdfs.total > 1 ? `Preparing ${downloadingPdfs.done}/${downloadingPdfs.total}…` : 'Preparing…')
+                          : 'Download PDF Reports'}
+                      </span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </>
           ) : undefined}
           // Six controls beside the search — lay out by the toolbar's own
           // width, since beside the details page's nav it's far narrower
@@ -927,7 +1024,12 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
           }
           className="mb-0"
         >
-          {revocableSelected.length > 0 && (
+          {/* Revoke / Resend / Download PDF — standalone only here; embedded
+              in Job Details they moved into the Actions pill beside Select
+              All (see `beforeSearch` above), selection-gated the same way.
+              Customize Columns and Export stay their own buttons below in
+              both modes, since they work with nothing ticked too. */}
+          {!portaled && revocableSelected.length > 0 && (
             <Button
               variant="destructive"
               size="sm"
@@ -935,12 +1037,12 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
               disabled={isBulkWorking}
               title="Revoke the selected candidates' interview links"
               icon={isBulkWorking ? <Loader2 className="w-4 h-4 animate-spin" /> : <Ban className="w-4 h-4" />}
-              className={`whitespace-nowrap ${portaled ? '!h-9' : '!h-[38px]'} !text-sm`}
+              className="whitespace-nowrap !h-[38px] !text-sm"
             >
               {isBulkWorking ? 'Revoking…' : `Revoke (${revocableSelected.length})`}
             </Button>
           )}
-          {resendableSelected.length > 0 && (
+          {!portaled && resendableSelected.length > 0 && (
             <Button
               variant="primary"
               size="sm"
@@ -948,7 +1050,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
               disabled={isBulkWorking}
               title="Resend a fresh link to the selected expired invitations"
               icon={isBulkWorking ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
-              className={`whitespace-nowrap ${portaled ? '!h-9' : '!h-[38px]'} !text-sm`}
+              className="whitespace-nowrap !h-[38px] !text-sm"
             >
               {isBulkWorking ? 'Sending…' : `Resend (${resendableSelected.length})`}
             </Button>
@@ -963,14 +1065,21 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             <span className="hidden md:inline">Customize Columns</span>
             <span className="md:hidden">Columns</span>
           </Button>
-          {/* Download PDF acts on the ticked rows only (disabled until one is
-              selected); Export is always on — the ticked rows, else every
-              row matching the search and filters. */}
-          <DownloadPdfsButton
-            getRows={() => Array.from(selected.values())}
-            selectedCount={selected.size}
-            zipName={`${(configTitle || jdTitle || 'AI_Interview').replace(/\s+/g, '_')}_Reports_${new Date().toISOString().slice(0, 10)}.zip`}
-          />
+          {!portaled && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => handleDownloadSelectedPdfs()}
+              disabled={selected.size === 0 || !!downloadingPdfs}
+              title={selected.size === 0 ? 'Select candidates to download their reports' : undefined}
+              icon={downloadingPdfs ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+              className="whitespace-nowrap !h-[38px] !text-sm"
+            >
+              {downloadingPdfs
+                ? (downloadingPdfs.total > 1 ? `Preparing ${downloadingPdfs.done}/${downloadingPdfs.total}…` : 'Preparing…')
+                : <span><span className="hidden sm:inline">Download </span>PDF{selected.size > 0 ? ` (${selected.size})` : ''}</span>}
+            </Button>
+          )}
           <Button
             variant="primary"
             size="sm"
@@ -1109,7 +1218,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
       {/* Table — the card is only drawn once there is something to invite the
           user into. Unstarted, the empty state stands on its own like the AI
           Talent Match tab's does. */}
-      <div className={isUnstarted ? '' : 'bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden'}>
+      <div className={isUnstarted ? '' : 'bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden'}>
         {isLoading ? (
           /* Skeleton matches the results table structure (no double border — the
              parent card already provides it) instead of a bare spinner. */
@@ -1277,103 +1386,43 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                 );
               })}
             </div>
-
-            {/* Pagination — the Job Openings master's bordered-card format
-                (shared ListPagination look). Page size is server-fixed here, so
-                there is no "per page" selector, but the card, the "Showing X to
-                Y of N" line and the Go to / page-nav controls match the master. */}
-            {totalPages > 1 && (
-              <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4 mt-4">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  <span className="text-xs sm:text-sm text-gray-600">
-                    Showing <span className="font-medium text-gray-900">{((currentPage - 1) * PAGE_SIZE) + 1}</span> to{' '}
-                    <span className="font-medium text-gray-900">{Math.min(currentPage * PAGE_SIZE, totalSessions)}</span> of{' '}
-                    <span className="font-medium text-gray-900">{totalSessions}</span> candidates
-                  </span>
-                  <div className="flex items-center justify-center sm:justify-end gap-2">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-sm text-gray-600 whitespace-nowrap">Go to</span>
-                      <input
-                        type="number"
-                        min={1}
-                        max={totalPages}
-                        value={goToPage}
-                        onChange={(e) => setGoToPage(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.currentTarget.blur();
-                            commitGoToPage();
-                          }
-                        }}
-                        onBlur={commitGoToPage}
-                        aria-label="Go to page"
-                        className="w-14 h-9 px-1.5 text-sm text-center border border-gray-200 rounded-xl bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
-                      />
-                    </div>
-                    <button
-                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}
-                      className={`inline-flex items-center justify-center w-9 h-9 rounded-md border border-gray-200 transition-colors ${
-                        currentPage === 1
-                          ? 'text-gray-400 opacity-40 cursor-not-allowed'
-                          : 'text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue hover:border-brand-blue/30'
-                      }`}
-                      aria-label="Previous page" title="Previous page"
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                    </button>
-                    <span className="text-sm font-medium text-gray-700 whitespace-nowrap px-1">
-                      <span className="text-brand-blue font-semibold">{currentPage}</span> / {totalPages}
-                    </span>
-                    <button
-                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                      disabled={currentPage === totalPages}
-                      className={`inline-flex items-center justify-center w-9 h-9 rounded-md border border-gray-200 transition-colors ${
-                        currentPage === totalPages
-                          ? 'text-gray-400 opacity-40 cursor-not-allowed'
-                          : 'text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue hover:border-brand-blue/30'
-                      }`}
-                      aria-label="Next page" title="Next page"
-                    >
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
           </>
         ) : (
           <>
             <div className="overflow-x-auto tf-table-shell">
               <table className="w-full text-sm">
-                <thead className="bg-slate-50 border-b border-gray-100">
+                {/* Styled to the AI Talent Match reference table: sticky,
+                    bg-gray-50 per cell, light uppercase gray-500 labels with
+                    wider tracking, dark mode. */}
+                <thead className="sticky top-0 z-10 [&_th]:bg-gray-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                   <tr>
-<th className="text-left px-4 py-3 w-12 align-middle tf-sticky-col-left">
-                      <button
-                        type="button"
-                        onClick={toggleAllOnPage}
-                        className="p-1 rounded hover:bg-gray-100"
-                        aria-label={allOnPageSelected ? 'Deselect all on this page' : 'Select all on this page'}
-                        title={allOnPageSelected ? 'Deselect all on this page' : 'Select all on this page'}
-                      >
-                        {allOnPageSelected ? (
-                          <CheckSquare className="w-4 h-4 text-brand-blue" />
-                        ) : (
-                          <Square className="w-4 h-4 text-gray-400" />
-                        )}
-                      </button>
+                    <th className="text-left px-4 py-3 w-12 align-middle tf-sticky-col-left">
+                      {/* Embedded in Job Details, Select All already lives in
+                          the toolbar above (the reference pattern) — this
+                          header checkbox would duplicate it, so it's empty
+                          there, same as the Scored Resumes table. Standalone
+                          (no toolbar Select All) keeps it. */}
+                      {!portaled && (
+                        <input
+                          type="checkbox"
+                          checked={allOnPageSelected}
+                          onChange={toggleAllOnPage}
+                          aria-label={allOnPageSelected ? 'Deselect all on this page' : 'Select all on this page'}
+                          className="rounded border-gray-300"
+                        />
+                      )}
                     </th>
-                    {col('candidate') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide">Candidate</th>}
-                    {col('timeline') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Timeline</th>}
-                    {col('status') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide">Status</th>}
-                    {col('score') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Score</th>}
-                    {col('result') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Result</th>}
-                    {col('proctoring') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Proctoring Risk</th>}
-                    {col('inviteSource') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Invite Source</th>}
-                    {col('cid') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">CID</th>}
-                    {col('jobVersion') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Job Version</th>}
-                    {col('interviewVersion') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Interview Version</th>}
-                    <th className="text-right px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide tf-sticky-col">Actions</th>
+                    {col('candidate') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Candidate</th>}
+                    {col('timeline') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Timeline</th>}
+                    {col('status') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Status</th>}
+                    {col('score') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Score</th>}
+                    {col('result') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Result</th>}
+                    {col('proctoring') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Proctoring Risk</th>}
+                    {col('inviteSource') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Invite Source</th>}
+                    {col('cid') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">CID</th>}
+                    {col('jobVersion') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Job Version</th>}
+                    {col('interviewVersion') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Interview Version</th>}
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle tf-sticky-col">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -1383,21 +1432,21 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                       <tr
                         key={session.id}
                         onClick={() => handleViewDetails(session)}
-                        className="hover:bg-brand-blue/5 transition-colors cursor-pointer"
+                        /* Row styled to the AI Talent Match reference table:
+                           plain white/dark rows (no zebra), hover:bg-gray-50,
+                           selected tint bg-blue-50. */
+                        className={`transition-colors cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800 ${
+                          selected.has(session.id) ? 'bg-blue-50 dark:bg-slate-800/50' : 'bg-white dark:bg-slate-900'
+                        }`}
                       >
-<td className="px-4 py-3 w-12 align-middle tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
-                          <button
-                            type="button"
-                            onClick={() => toggleSelected(session)}
-                            className="p-1 rounded hover:bg-gray-200"
+                        <td className="px-4 py-3 w-12 align-middle tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={selected.has(session.id)}
+                            onChange={() => toggleSelected(session)}
                             aria-label={selected.has(session.id) ? 'Deselect candidate' : 'Select candidate'}
-                          >
-                            {selected.has(session.id) ? (
-                              <CheckSquare className="w-4 h-4 text-brand-blue" />
-                            ) : (
-                              <Square className="w-4 h-4 text-gray-400" />
-                            )}
-                          </button>
+                            className="rounded border-gray-300"
+                          />
                         </td>
                         {col('candidate') && (
                           <td className="px-4 py-3">
@@ -1529,73 +1578,77 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                 </tbody>
               </table>
             </div>
-
-            {/* Pagination — the Job Openings master's bordered-card format
-                (shared ListPagination look). Page size is server-fixed here, so
-                there is no "per page" selector, but the card, the "Showing X to
-                Y of N" line and the Go to / page-nav controls match the master. */}
-            {totalPages > 1 && (
-              <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4 mt-4">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  <span className="text-xs sm:text-sm text-gray-600">
-                    Showing <span className="font-medium text-gray-900">{((currentPage - 1) * PAGE_SIZE) + 1}</span> to{' '}
-                    <span className="font-medium text-gray-900">{Math.min(currentPage * PAGE_SIZE, totalSessions)}</span> of{' '}
-                    <span className="font-medium text-gray-900">{totalSessions}</span> candidates
-                  </span>
-                  <div className="flex items-center justify-center sm:justify-end gap-2">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-sm text-gray-600 whitespace-nowrap">Go to</span>
-                      <input
-                        type="number"
-                        min={1}
-                        max={totalPages}
-                        value={goToPage}
-                        onChange={(e) => setGoToPage(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.currentTarget.blur();
-                            commitGoToPage();
-                          }
-                        }}
-                        onBlur={commitGoToPage}
-                        aria-label="Go to page"
-                        className="w-14 h-9 px-1.5 text-sm text-center border border-gray-200 rounded-xl bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
-                      />
-                    </div>
-                    <button
-                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}
-                      className={`inline-flex items-center justify-center w-9 h-9 rounded-md border border-gray-200 transition-colors ${
-                        currentPage === 1
-                          ? 'text-gray-400 opacity-40 cursor-not-allowed'
-                          : 'text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue hover:border-brand-blue/30'
-                      }`}
-                      aria-label="Previous page" title="Previous page"
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                    </button>
-                    <span className="text-sm font-medium text-gray-700 whitespace-nowrap px-1">
-                      <span className="text-brand-blue font-semibold">{currentPage}</span> / {totalPages}
-                    </span>
-                    <button
-                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                      disabled={currentPage === totalPages}
-                      className={`inline-flex items-center justify-center w-9 h-9 rounded-md border border-gray-200 transition-colors ${
-                        currentPage === totalPages
-                          ? 'text-gray-400 opacity-40 cursor-not-allowed'
-                          : 'text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue hover:border-brand-blue/30'
-                      }`}
-                      aria-label="Next page" title="Next page"
-                    >
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
           </>
         )}
         </div>
+
+        {/* Pagination — the Job Openings master's bordered-card format
+            (shared ListPagination look). A sibling of the table's own card
+            now (matching the AI Talent Match reference) instead of being
+            duplicated inside each display mode's branch, where its border
+            ran straight into the card's own bottom border with no gap.
+            Page size is server-fixed here, so there is no "per page"
+            selector, but the card, the "Showing X to Y of N" line and the
+            Go to / page-nav controls match the master. */}
+        {!isLoading && !isUnstarted && paginatedSessions.length > 0 && totalPages > 1 && (
+          <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4 mt-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <span className="text-xs sm:text-sm text-gray-600">
+                Showing <span className="font-medium text-gray-900">{((currentPage - 1) * PAGE_SIZE) + 1}</span> to{' '}
+                <span className="font-medium text-gray-900">{Math.min(currentPage * PAGE_SIZE, totalSessions)}</span> of{' '}
+                <span className="font-medium text-gray-900">{totalSessions}</span> candidates
+              </span>
+              <div className="flex items-center justify-center sm:justify-end gap-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm text-gray-600 whitespace-nowrap">Go to</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={totalPages}
+                    value={goToPage}
+                    onChange={(e) => setGoToPage(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.currentTarget.blur();
+                        commitGoToPage();
+                      }
+                    }}
+                    onBlur={commitGoToPage}
+                    aria-label="Go to page"
+                    className="w-14 h-9 px-1.5 text-sm text-center border border-gray-200 rounded-xl bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+                  />
+                </div>
+                <button
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className={`inline-flex items-center justify-center w-9 h-9 rounded-md border border-gray-200 transition-colors ${
+                    currentPage === 1
+                      ? 'text-gray-400 opacity-40 cursor-not-allowed'
+                      : 'text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue hover:border-brand-blue/30'
+                  }`}
+                  aria-label="Previous page" title="Previous page"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <span className="text-sm font-medium text-gray-700 whitespace-nowrap px-1">
+                  <span className="text-brand-blue font-semibold">{currentPage}</span> / {totalPages}
+                </span>
+                <button
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className={`inline-flex items-center justify-center w-9 h-9 rounded-md border border-gray-200 transition-colors ${
+                    currentPage === totalPages
+                      ? 'text-gray-400 opacity-40 cursor-not-allowed'
+                      : 'text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue hover:border-brand-blue/30'
+                  }`}
+                  aria-label="Next page" title="Next page"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
       {showColumnModal && (
         <ColumnCustomizationModal
