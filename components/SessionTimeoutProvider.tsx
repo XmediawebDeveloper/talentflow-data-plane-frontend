@@ -7,6 +7,7 @@ import { clearTokens, getTokens } from '@/lib/services/api';
 import { getLoginUrl } from '@/lib/services/authService';
 import { userSettingsApi } from '@/lib/services/settingsService';
 import { toast } from 'sonner';
+import { forceNavigate } from '@/lib/utils/forcedNavigation';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -43,6 +44,7 @@ export function SessionTimeoutProvider({ children, skipSettingsLoad = false }: S
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const warningTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
+  const loggingOutRef = useRef(false);
   const lastActivityRef = useRef<number>(Date.now());
 
   // FIX: Use a ref for warning visibility so resetTimer doesn't need it as a dependency.
@@ -86,6 +88,14 @@ export function SessionTimeoutProvider({ children, skipSettingsLoad = false }: S
   // Logout function — calls backend /auth/logout so the inactivity event is
   // recorded in audit logs with full inactivity metadata.
   const handleLogout = useCallback(async () => {
+    // Once only. The countdown interval used to keep calling this every second
+    // after reaching 0 (and the warning timeout called it again), so each call
+    // re-attempted the redirect — re-raising a page's "Leave site?" prompt over
+    // and over. Stop both timers and ignore any repeat.
+    if (loggingOutRef.current) return;
+    loggingOutRef.current = true;
+    if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null; }
+    if (warningTimeoutRef.current) { clearTimeout(warningTimeoutRef.current); warningTimeoutRef.current = null; }
     console.log('[SessionTimeout] Auto-logout due to inactivity');
 
     const inactiveSeconds = Math.floor((Date.now() - lastActivityRef.current) / 1000);
@@ -117,8 +127,9 @@ export function SessionTimeoutProvider({ children, skipSettingsLoad = false }: S
     toast.error('Session expired due to inactivity. Please log in again.');
     // Use hard redirect (not router.push) so the full page reloads and all
     // React state is cleared — router.push leaves the current page mounted
-    // and the user stays on the page with no operations allowed.
-    window.location.href = loginUrl;
+    // and the user stays on the page with no operations allowed. Forced, so a
+    // page's unsaved-changes prompt doesn't block the sign-out.
+    forceNavigate(loginUrl);
   }, []);
 
   // Show warning before logout

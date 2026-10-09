@@ -2,9 +2,6 @@
 // /root/staging/MVP 1- Timed mode (Evaluation) 12-5-26/src/app/components/EvaluationOverview.tsx
 // MUI Box/Card/Typography → Tailwind. Wired to live DashboardData (no mocks).
 import { CheckCircle, XCircle, Play, TrendingUp } from 'lucide-react';
-import {
-  RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, ResponsiveContainer,
-} from 'recharts';
 import type { DashboardData } from './types';
 
 import { formatSkillScore, formatScore1 } from '@/lib/utils/matchStatus';
@@ -75,12 +72,6 @@ export function OverviewSectionV2({
   const hasStrongSkill = topSkills.some(s => s.score >= MHS_THRESHOLD);
   const topPanelHeading = hasStrongSkill ? 'Top Performing Skills' : 'Highest Scoring Skills';
 
-  // ── Radar chart data (top 6 by score; pads with 0-score skills only
-  // when fewer than 3 entries to keep the polygon readable) ───────────
-  const radarBase = topSkills.length >= 3
-    ? topSkills
-    : [...topSkills, ...allSkills.filter(s => s.score === 0).slice(0, Math.max(0, 3 - topSkills.length))];
-  const radarData = radarBase.map(s => ({ skill: s.name, score: s.score, fullMark: 10 }));
 
   // ── Section breakdown table ─────────────────────────────────────────
   // Question counts come from data.perQuestionDetails grouped by section
@@ -389,27 +380,8 @@ export function OverviewSectionV2({
         </div>
       </div>
 
-      {/* ── Skill Radar + Section Breakdown ──────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_1fr] gap-6">
-        {/* Skill Assessment Radar */}
-        <div className="rounded-2xl bg-white border border-gray-200 p-6 shadow-sm">
-          <div className="text-lg font-semibold text-gray-900 mb-4">Skill Assessment Radar</div>
-          {radarData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={380}>
-              <RadarChart data={radarData}>
-                <PolarGrid stroke="var(--raw-e5e7eb)" />
-                <PolarAngleAxis dataKey="skill" tick={{ fill: 'var(--raw-6b7280)', fontSize: 12, fontWeight: 500 }} />
-                <PolarRadiusAxis angle={90} domain={[0, 10]} tick={{ fill: 'var(--raw-6b7280)', fontSize: 10 }} />
-                <Radar name="Score" dataKey="score" stroke="var(--raw-4f46e5)" fill="var(--raw-4f46e5)" fillOpacity={0.6} strokeWidth={2} />
-              </RadarChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-[380px] flex items-center justify-center text-gray-400 text-sm italic">
-              Not enough data to render radar chart.
-            </div>
-          )}
-        </div>
-
+      {/* ── Section Breakdown (the Skill Assessment Radar was removed) ── */}
+      <div className="grid grid-cols-1 gap-6">
         {/* Section Score Breakdown */}
         <div className="rounded-2xl bg-white border border-gray-200 p-6 shadow-sm">
           <div className="text-lg font-semibold text-gray-900 mb-4">Section Score Breakdown</div>

@@ -9,6 +9,7 @@ import {
   clearTokens,
 } from '@/lib/services/api';
 import { getLoginUrl } from '@/lib/services/authService';
+import { forceNavigate } from '@/lib/utils/forcedNavigation';
 
 // Auth / unauthenticated routes where a logged-in restriction modal makes no
 // sense (the user is already signed out or setting up their account).
@@ -85,7 +86,7 @@ export default function AccessRestrictedModal() {
     setIsOpen(false);
     // Hard navigate — re-mounts the login page cleanly and guarantees no dashboard
     // state survives (mirrors AuthProvider.logout()).
-    if (typeof window !== 'undefined') window.location.href = loginUrl;
+    forceNavigate(loginUrl);   // forced — skips pages' unsaved-changes prompt
   };
 
   if (!isOpen || isExcludedPath) return null;

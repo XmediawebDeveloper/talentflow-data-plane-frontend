@@ -1,7 +1,7 @@
 // Coverage tab — converted from Vite source:
 // /root/staging/MVP 1- Timed mode (Evaluation) 12-5-26/src/app/components/ClusterCoverage.tsx
 // MUI Card/Box/Chip → Tailwind. Wired to live DashboardData clusters.
-import { Check, X, Layers } from 'lucide-react';
+import { Check, X } from 'lucide-react';
 import type { DashboardData, Cluster } from './types';
 
 interface Props {
@@ -152,18 +152,6 @@ export function CoverageV2({ data }: Props) {
 
   return (
     <div className="space-y-6">
-      {/* Header banner */}
-      <div className="rounded-2xl p-6 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700/60 shadow-sm shadow-brand-blue/5 text-gray-900 dark:text-slate-50">
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-xl bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 flex items-center justify-center shrink-0"><Layers className="w-5 h-5" /></div>
-          <div>
-            <div className="text-xl font-bold mb-0.5">Cluster Coverage Analysis</div>
-            <div className="text-sm text-gray-600 dark:text-slate-400">
-              Shows which skill clusters and skills were covered in the interview questions.
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* Side-by-side: Must-Have / Nice-to-Have */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

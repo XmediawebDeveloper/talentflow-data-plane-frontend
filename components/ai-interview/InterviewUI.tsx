@@ -1460,6 +1460,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // perf the real fix is GLB compression (Meshopt/Draco + KTX2 textures),
   // not preemptively skipping the 3D render.
   const [avatarFailed, setAvatarFailed] = useState(false);
+  // Display only (avatarFailed above also drives the WS connect and the
+  // timers — left untouched). Which Bina to SHOW:
+  //  - avatar3DCantRun: the 3D genuinely can't be used here — load error,
+  //    FPS watchdog, or a low-tier device (use3DAvatar === false).
+  //  - avatar3DLoaded: the 3D finished loading.
+  // The 12s "slow" timer sets only avatarFailed, so on a capable machine the
+  // static image covers the wait and the 3D takes over once it loads.
+  const [avatar3DCantRun, setAvatar3DCantRun] = useState(false);
+  const [avatar3DLoaded, setAvatar3DLoaded] = useState(false);
+  const showStaticBina = avatarFailed && (avatar3DCantRun || !avatar3DLoaded);
 
   // Video recording refs
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -9030,6 +9040,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   useEffect(() => {
     if (effectiveDeviceCapability && effectiveDeviceCapability.use3DAvatar === false) {
       setAvatarFailed(true);
+      setAvatar3DCantRun(true);
     }
   }, [effectiveDeviceCapability]);
 
@@ -10165,14 +10176,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
             {/* TalkingHead fills this half. Hidden (not unmounted — Bina's
                 voice plays through it) once the static 2D fallback is showing,
-                so the two never draw on top of each other: the 3D can finish
-                loading late, or keep rendering after the FPS watchdog trips. */}
-            <div className={`absolute inset-0 overflow-hidden ${avatarFailed ? 'invisible' : ''}`} aria-hidden={avatarFailed || undefined}>
+                so the two never draw on top of each other. A 3D that only
+                loaded slowly (past the 12s timer) takes over again once ready;
+                one that can't run here (error / FPS watchdog / low-tier device)
+                stays on the static image. */}
+            <div className={`absolute inset-0 overflow-hidden ${showStaticBina ? 'invisible' : ''}`} aria-hidden={showStaticBina || undefined}>
               <TalkingHeadAvatar
                 ref={talkingHeadRef}
                 avatarUrl="/models/rpm-recruiter.glb"
-                onReady={() => setAvatarReady(true)}
-                onFallback={() => setAvatarFailed(true)}
+                onReady={() => { setAvatarReady(true); setAvatar3DLoaded(true); }}
+                onFallback={() => { setAvatarFailed(true); setAvatar3DCantRun(true); }}
                 className="w-full h-full rounded-none"
                 // Low-tier devices: skip the 3D avatar entirely (no GLB/Three.js/
                 // render loop) — voice still plays via TalkingHead's Web Audio
@@ -10186,7 +10199,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 the interview runs at full speed; only the visual is downgraded
                 to a static Bina image with a speaking/listening indicator so
                 the candidate sees a proper face instead of a blank canvas. */}
-            {avatarFailed && (
+            {showStaticBina && (
               <div className="absolute inset-0 overflow-hidden flex items-center justify-center bg-[radial-gradient(ellipse_at_50%_40%,#1e2a4a_0%,#111a33_45%,#0a1020_100%)]">
                 <div className="relative flex flex-col items-center">
                   <div
@@ -10830,7 +10843,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             <div ref={messagesEndRef} />
           </div>
             {/* Bottom fade mask — dissolves any chat content into the chat
-                background (gray-50) before it reaches the floating turn banner,
+                background (--surface: gray-50 in light, the dark surface in dark
+                mode — so no light band shows) before it reaches the floating turn banner,
                 so nothing shows sharply behind/around the banner. Non-
                 interactive so it never blocks scrolling or clicks. Sits under
                 the fixed banner (which is z-105) but above the scrolling text.
@@ -10839,7 +10853,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 pb-4 of clearance — the old unconditional h-32 fade washed out
                 the newest/currently-streaming BINA bubble (which the auto-scroll
                 pins right under it) whenever the banner wasn't showing. */}
-            <div className={`pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-b from-transparent via-gray-50/70 to-gray-50 dark:to-slate-800/50 transition-[height] duration-150 ${
+            <div className={`pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-b from-transparent via-[color-mix(in_srgb,var(--surface)_70%,transparent)] to-[var(--surface)] transition-[height] duration-150 ${
               bannerVisible ? 'h-32' : 'h-0'
             }`} />
             {/* ── Big countdown overlays (under the question, high visibility) ──

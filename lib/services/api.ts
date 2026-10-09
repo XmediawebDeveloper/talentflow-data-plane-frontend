@@ -6,6 +6,7 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import Cookies from 'js-cookie';
 import { encodeParam, encodePlanId } from '@/lib/utils/planEncoder';
+import { forceNavigate } from '@/lib/utils/forcedNavigation';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -228,7 +229,7 @@ export const performSessionLogout = () => {
   clearTokens();
   localStorage.removeItem('user');
   sessionStorage.clear();
-  window.location.href = loginUrl;
+  forceNavigate(loginUrl);   // forced — skips pages' unsaved-changes prompt
 };
 
 // Helper to check response and handle 401 automatically

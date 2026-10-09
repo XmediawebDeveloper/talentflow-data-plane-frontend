@@ -3,7 +3,7 @@
 // - QuestionAnalysis.tsx   → "Questions" sub-view (per-question accordion + math)
 // - ExampleScenarios.tsx   → "Formula" sub-view (scoring formula reference)
 // MUI Accordion/Card → Tailwind disclosure. Wired to live DashboardData.
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
   ChevronDown, ChevronUp, TrendingUp, TrendingDown, Minus, Clock, Brain, Calculator, X, MessageSquare, SkipForward,
 } from 'lucide-react';
@@ -241,18 +241,6 @@ export function SkillsView({ data }: { data: DashboardData }) {
 
   return (
     <div className="space-y-4">
-      {/* Header banner */}
-      <div className="rounded-2xl p-6 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700/60 shadow-sm shadow-brand-blue/5 text-gray-900 dark:text-slate-50">
-        <div className="flex items-start gap-3">
-          <div className="w-11 h-11 rounded-xl bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 flex items-center justify-center shrink-0"><Brain className="w-5 h-5" /></div>
-          <div className="min-w-0 flex-1">
-            <div className="text-xl font-bold mb-2">Skill-by-Skill Analysis</div>
-            <div className="text-sm text-gray-600 dark:text-slate-400">
-              Detailed breakdown of candidate performance across all evaluated skills with AI-powered insights and per-skill scoring.
-            </div>
-          </div>
-        </div>
-      </div>
       {isPartialEvaluation && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
           This interview ended early. The AI evaluated only the questions the candidate attended, so no final pass/fail or overall match score is shown here.
@@ -370,7 +358,12 @@ export function SkillsView({ data }: { data: DashboardData }) {
  *   • HR is not scored
  * Source: data.perQuestionDetails — built by adapter.ts:buildPerQuestionDetails.
  */
-export function QuestionsView({ data }: { data: DashboardData }) {
+export function QuestionsView({ data, renderAnswerAction }: {
+  data: DashboardData;
+  /** Optional control shown beside "Candidate's Answer" for each question
+   *  (the results page passes "▶ Watch in recording"). */
+  renderAnswerAction?: (q: PerQuestionDetail) => ReactNode;
+}) {
   const delivered = data.perQuestionDetails;
   const isPartialEvaluation = data.isPartialEvaluation;
 
@@ -569,8 +562,11 @@ export function QuestionsView({ data }: { data: DashboardData }) {
 
         {/* 2. Candidate's answer */}
         <div className="border-l-2 border-indigo-200 pl-3">
-          <div className="text-xs font-medium text-gray-500 mb-1">
-            Candidate's Answer
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+            <div className="text-xs font-medium text-gray-500">
+              Candidate's Answer
+            </div>
+            {renderAnswerAction?.(q)}
           </div>
           <div className="text-sm whitespace-pre-wrap break-words">
             {(() => {

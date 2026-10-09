@@ -367,16 +367,8 @@ function RecordingTabContent({
 
   return (
     <div className="space-y-4">
-      {/* Sub-tab pills */}
+      {/* Sub-tab pills — Interview View (the default) first. */}
       <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1 w-fit ring-1 ring-slate-200">
-        <button
-          onClick={() => setRecView('candidate')}
-          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
-            isCandidate ? 'bg-white text-brand-blue shadow-sm ring-1 ring-brand-blue/15' : 'text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          <Camera className="w-3.5 h-3.5" /> Candidate View
-        </button>
         <button
           onClick={() => setRecView('screen')}
           className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
@@ -384,6 +376,14 @@ function RecordingTabContent({
           }`}
         >
           <Monitor className="w-3.5 h-3.5" /> Interview View
+        </button>
+        <button
+          onClick={() => setRecView('candidate')}
+          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+            isCandidate ? 'bg-white text-brand-blue shadow-sm ring-1 ring-brand-blue/15' : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Camera className="w-3.5 h-3.5" /> Candidate View
         </button>
       </div>
 
@@ -1448,6 +1448,58 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
     return stamps[0];
   }, [liveSession.started_at, violations]);
 
+  // ── "▶ Watch in recording" for questions ──────────────────────────────
+  // When was each question asked? Bina's transcript messages carry their
+  // time; question_history timestamps fill gaps. Keyed by the question's
+  // normalised opening text (as the Q&A tab matches transcript messages).
+  const questionKey = (text: unknown) =>
+    String(text || '').toLowerCase().replace(/\s+/g, ' ').trim().slice(0, 60);
+  const questionAskedAt = useMemo(() => {
+    const map = new Map<string, string>();
+    const convo = ((liveSession as any).conversation_transcript || (interview as any).conversation_transcript || []) as any[];
+    for (const m of convo) {
+      if (m?.role !== 'assistant' || !m?.content || !m?.timestamp) continue;
+      const k = questionKey(m.content);
+      if (k && !map.has(k)) map.set(k, m.timestamp);
+    }
+    const history = (((liveSession as any).ai_evaluation || (interview as any).ai_evaluation || {}).question_history || []) as any[];
+    for (const h of history) {
+      const k = questionKey(h?.question);
+      if (k && h?.timestamp && !map.has(k)) map.set(k, h.timestamp);
+    }
+    return map;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveSession, interview]);
+  const hasAnyRecording = !!(liveSession.recording_file_path || liveSession.screen_recording_file_path);
+  // Same timestamp → video-offset mapping as the Event Log's Video Time
+  // (session start ≈ recording start), started a few seconds early so the
+  // moment isn't missed if the recording began slightly after the session.
+  const WATCH_LEAD_SEC = 3;
+  const renderWatchInRecording = (timestamp?: string | null) => {
+    if (!hasAnyRecording) return null;
+    const offsetSec = videoOffsetSeconds(timestamp || undefined, videoAnchor);
+    if (offsetSec == null) return null;
+    const startSec = Math.max(0, offsetSec - WATCH_LEAD_SEC);
+    const mm = Math.floor(startSec / 60);
+    const ss = String(startSec % 60).padStart(2, '0');
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          seekNonceRef.current += 1;
+          setRecordingSeek({ seconds: startSec, key: seekNonceRef.current });
+          setActiveTab('recording');
+        }}
+        className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 hover:bg-brand-blue/15 transition-colors normal-case tracking-normal"
+        title="Open the recording at this question"
+      >
+        <Play className="w-3 h-3" /> Watch in recording · {mm}:{ss}
+      </button>
+    );
+  };
+  const watchQuestion = (question: unknown, ownTimestamp?: string | null) =>
+    renderWatchInRecording(questionAskedAt.get(questionKey(question)) || ownTimestamp || null);
+
   const ROWS_PER_PAGE = violationsPerPage;
   const totalPages = Math.max(1, Math.ceil(groupedViolations.length / ROWS_PER_PAGE));
   const safeViolationPage = Math.min(violationPage, totalPages);
@@ -1773,17 +1825,28 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
       <div>
         <div className="w-full">
           {/* Candidate header banner */}
-          <div className="mb-6 rounded-xl bg-brand-blue/5 border border-brand-blue/15 ring-1 ring-brand-blue/10 shadow-sm shadow-brand-blue/10 p-5">
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="flex items-center gap-3 mb-2">
-                  {/* The identity-check photo when there is one (it used to sit
-                      only in the Eval tab's banner), else the initial. */}
-                  <div className="w-12 h-12 rounded-full overflow-hidden bg-brand-blue shadow-md shadow-brand-blue/25 ring-1 ring-white/20 flex items-center justify-center text-white font-semibold text-base shrink-0">
-                    {identityPhotoUrl
-                      ? <img src={identityPhotoUrl} alt={interview.candidate_name || 'Candidate'} className="w-full h-full object-cover" />
-                      : (interview.candidate_name || 'U')[0].toUpperCase()}
-                  </div>
+          {/* `relative overflow-hidden`: on sm+ the photo is absolutely
+              positioned against this banner's left / top / bottom border and
+              clipped to its rounded corners — so it can be large without the
+              banner growing. */}
+          <div className="relative overflow-hidden mb-6 rounded-xl bg-brand-blue/5 border border-brand-blue/15 ring-1 ring-brand-blue/10 shadow-sm shadow-brand-blue/10 p-5">
+            {/* Phones: details on top, the two buttons in a row underneath.
+                sm+: details left (shifted clear of the photo), buttons stacked
+                on the right. */}
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 sm:pl-[150px]">
+              <div className="flex items-start gap-3 sm:gap-4 min-w-0">
+                {/* The identity-check photo (else the initial).
+                    Phones: a 64px rounded square in the flow.
+                    sm+: absolute, 144px wide, inset 10px from the banner's
+                    left / top / bottom border with all four corners rounded —
+                    the banner's height still comes from its content. */}
+                <div className="w-16 h-16 rounded-xl ring-1 ring-brand-blue/15 sm:absolute sm:top-2.5 sm:bottom-2.5 sm:left-2.5 sm:w-36 sm:h-auto sm:rounded-lg shadow-sm overflow-hidden bg-brand-blue/10 flex items-center justify-center shrink-0">
+                  {identityPhotoUrl
+                    ? <img src={identityPhotoUrl} alt={interview.candidate_name || 'Candidate'} className="w-full h-full object-cover object-top" />
+                    : <span className="text-2xl sm:text-3xl font-bold text-brand-blue">{(interview.candidate_name || 'U')[0].toUpperCase()}</span>}
+                </div>
+                <div className="min-w-0">
+                <div className="mb-2">
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <h1 className="text-xl font-semibold text-gray-900 tracking-tight">
@@ -1846,7 +1909,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                     })()}
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500 mt-2 ml-[60px]">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500 mt-2">
                   {interview.completed_at && (
                     <span>
                       Completed {formatISTDate(interview.completed_at)}, {formatISTTime(interview.completed_at).toLowerCase()}
@@ -1880,9 +1943,11 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                     );
                   })()}
                 </div>
+                </div>
               </div>
-              {/* View Resume, with Download Report stacked under it. */}
-              <div className="flex flex-col items-stretch gap-2 flex-shrink-0">
+              {/* View Resume, with Download Report stacked under it (side by
+                  side on phones, under the details). */}
+              <div className="flex flex-row sm:flex-col items-stretch gap-2 flex-shrink-0 [&>*]:flex-1 sm:[&>*]:flex-none">
               {/* View Resume — always rendered, like the assessment result
                   page. Once the load-time lookup finds no resume it's
                   disabled, and hovering explains why. A disabled button
@@ -2932,7 +2997,10 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                         <div className="px-4 pb-4 space-y-4 border-t border-gray-100">
                           {/* Candidate Answer */}
                           <div className="pt-4">
-                            <div className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Candidate Answer</div>
+                            <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+                              <div className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Candidate Answer</div>
+                              {item.response_type !== 'not_asked' && watchQuestion(item.question, item.timestamp)}
+                            </div>
                             <div className={`text-sm leading-relaxed ${isSkipped ? 'text-gray-400 italic' : 'text-gray-700'}`}>
                               {item.answer || '—'}
                             </div>
@@ -3071,7 +3139,10 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                       {isExpanded && (
                         <div className="px-4 pb-4 border-t border-gray-100 pt-4 space-y-3">
                           <div>
-                            <div className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Candidate Answer</div>
+                            <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+                              <div className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Candidate Answer</div>
+                              {item.response_type !== 'not_asked' && watchQuestion(item.question, item.timestamp)}
+                            </div>
                             <div className={`text-sm leading-relaxed ${isSkipped ? 'text-gray-400 italic' : 'text-gray-700'}`}>
                               {item.answer || '—'}
                             </div>
@@ -4547,7 +4618,13 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                 // text-scan extras, no evaluator-topic extras.
                 special_instructions: (interview as any).special_instructions || (liveSession as any).special_instructions,
               });
-              return <QuestionsView data={data} />;
+              return (
+                <QuestionsView
+                  data={data}
+                  // Never-asked questions have no moment in the recording.
+                  renderAnswerAction={(q) => (q.notDelivered || q.responseType === 'not_asked') ? null : watchQuestion(q.question)}
+                />
+              );
             })()}
 
             {/* Example Scenarios Tab — Vite ExampleScenarios.tsx (scoring formula reference) */}

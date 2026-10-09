@@ -9,6 +9,7 @@ import { mockTenant } from '@/lib/mockData/tenantData';
 import type { User as ApiUser, FeatureFlags as ApiFeatureFlags } from '@/lib/services/authService';
 import { ensureTokenCookies } from '@/lib/utils/tokenRecovery';
 import { encodeParam, encodePlanId } from '@/lib/utils/planEncoder';
+import { forceNavigate } from '@/lib/utils/forcedNavigation';
 
 // Helper to store/retrieve user from localStorage
 const USER_STORAGE_KEY = 'talentflow_user';
@@ -858,8 +859,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // empty email (backend 422). A full reload re-mounts the form cleanly, matching
     // the working first-load behaviour. (On *.BASE_DOMAIN subdomains loginUrl is an
     // absolute https:// URL; on custom/vanity domains it's a relative "/login" —
-    // both are handled correctly by window.location.href.)
-    window.location.href = loginUrl;
+    // both are handled correctly by window.location.href.) Forced, so a page's
+    // unsaved-changes prompt doesn't stand between the user and the sign-out.
+    forceNavigate(loginUrl);
   };
 
   const updateUser = (userData: User) => {
