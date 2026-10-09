@@ -109,8 +109,11 @@ export function SortByControl<T extends string>({
 }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="hidden sm:inline text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap">Sort by</span>
-      <div className="inline-flex items-center h-[38px] bg-brand-blue/5 border border-brand-blue/10 rounded-lg p-1">
+      {/* Styled to the AI Talent Match reference's tinted "Sort by" pill: no
+          border, the label always shown, and a single ArrowUpDown that flips
+          180° on descending. */}
+      <span className="text-xs sm:text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">Sort by</span>
+      <div className="inline-flex items-center bg-brand-blue/5 dark:bg-brand-blue/10 rounded-lg p-1 transition-all">
         <div className="relative">
           <select
             value={value}
@@ -118,18 +121,18 @@ export function SortByControl<T extends string>({
             aria-label="Sort by"
             // Fixed width: a native select sizes to its longest option, so the
             // two views' option lists made the row (and search box) shift.
-            className="appearance-none w-[9.5rem] truncate h-7 pl-2.5 pr-8 bg-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 text-sm font-medium text-gray-700 dark:text-slate-300 cursor-pointer"
+            className="appearance-none w-[9.5rem] truncate h-7 pl-2.5 pr-8 bg-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 text-xs sm:text-sm text-gray-700 dark:text-slate-300 cursor-pointer"
           >
             {options.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
-          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
+          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500 dark:text-slate-400" />
         </div>
         <button
           type="button"
           onClick={onToggleOrder}
-          className="ml-0.5 h-7 w-7 flex items-center justify-center rounded-md bg-white text-gray-700 hover:bg-brand-blue/10 hover:text-brand-blue transition-colors cursor-pointer"
+          className="ml-0.5 h-7 w-7 flex items-center justify-center rounded-md bg-white dark:bg-slate-700 text-gray-700 dark:text-slate-200 hover:bg-brand-blue/10 hover:text-brand-blue dark:hover:bg-brand-blue/20 transition-colors cursor-pointer cursor-pointer"
           title={order === 'asc' ? 'Sort Descending' : 'Sort Ascending'}
           aria-label={order === 'asc' ? 'Sort descending' : 'Sort ascending'}
         >

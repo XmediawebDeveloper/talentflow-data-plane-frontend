@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
 import ToolbarFilterSelect from '@/components/ui/toolbar-filter-select';
 import ToolbarSelectAll from '@/components/ui/toolbar-select-all';
+import { SortByControl } from '@/components/ui/select-all-menu';
 import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
 import TimelineStamps from '@/components/ui/timeline-stamps';
 import { DateField } from '@/components/ui/date-field';
@@ -317,6 +318,13 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
 
   const [showFilters, setShowFilters] = useState(false);
   const [displayMode, setDisplayMode] = useState<ListDisplayMode>('list');
+  /* Sort — the toolbar's Sort by control, matching the AI Talent Match
+     reference. Default (date desc = newest first) mirrors the server's own
+     order; any other choice is applied client-side over the full fetched set
+     (see sortActive / sortSessions / pageBySource), since this list's API has
+     no sort parameter. */
+  const [sortField, setSortField] = useState<'name' | 'score' | 'date'>('date');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -403,7 +411,11 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
      same figures every other AI Interview list shows. The server's
      score_min/max filters the legacy blended score instead, so Score Range
      is applied here, like Source and Result, which have no server filter. */
-  const needsClientFilter = !!(sourceFilter || resultFilter || scoreMin !== '' || scoreMax !== '' || statusFilter === 'all');
+  /* A non-default sort (anything but newest-first) is applied over the full
+     fetched set, so it forces the client-paged path even when the server could
+     otherwise page this list itself (a specific status, no other filter). */
+  const sortActive = !(sortField === 'date' && sortDirection === 'desc');
+  const needsClientFilter = !!(sourceFilter || resultFilter || scoreMin !== '' || scoreMax !== '' || statusFilter === 'all' || sortActive);
   const matchesClientFilters = useCallback((s: AIInterviewResponse) => {
     if (statusFilter === 'all' && !RESULT_STATUSES.has(String(s.status))) return false;
     if (sourceFilter && (s as any).invite_source !== sourceFilter) return false;
@@ -413,6 +425,32 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
     if (scoreMax !== '' && (score == null || score > parseFloat(scoreMax))) return false;
     return true;
   }, [sourceFilter, resultFilter, scoreMin, scoreMax, statusFilter]);
+
+  /* The Sort by control, over the full fetched set. Name A→Z, Must-Have
+     Skills % (displayInviteScore), or date (completed, else started, else
+     invited). Nulls sort last whichever direction. */
+  const sortSessions = useCallback((list: AIInterviewResponse[]) => {
+    const dir = sortDirection === 'asc' ? 1 : -1;
+    const dateKey = (s: AIInterviewResponse) =>
+      new Date(s.completed_at || s.started_at || s.created_at || 0).getTime();
+    return [...list].sort((a, b) => {
+      let cmp = 0;
+      if (sortField === 'name') {
+        cmp = (a.candidate_name || '').localeCompare(b.candidate_name || '');
+      } else if (sortField === 'score') {
+        const sa = displayInviteScore(a);
+        const sb = displayInviteScore(b);
+        // Missing scores always sort to the bottom, regardless of direction.
+        if (sa == null && sb == null) cmp = 0;
+        else if (sa == null) return 1;
+        else if (sb == null) return -1;
+        else cmp = sa - sb;
+      } else {
+        cmp = dateKey(a) - dateKey(b);
+      }
+      return dir * cmp;
+    });
+  }, [sortField, sortDirection]);
 
   const requestParams = useMemo(() => ({
     search: search.appliedQuery || undefined,
@@ -435,11 +473,11 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
     if (!needsClientFilter) {
       return { items: res.items, total: res.total, pages: Math.max(1, res.total_pages || 1) };
     }
-    const matching = res.items.filter(matchesClientFilters);
+    const matching = sortSessions(res.items.filter(matchesClientFilters));
     const pages = Math.max(1, Math.ceil(matching.length / PAGE_SIZE));
     const page = Math.min(currentPage, pages);
     return { items: matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), total: matching.length, pages };
-  }, [needsClientFilter, matchesClientFilters, currentPage]);
+  }, [needsClientFilter, matchesClientFilters, currentPage, sortSessions]);
 
   const loadSessions = useCallback(async () => {
     setIsLoading(true);
@@ -871,6 +909,20 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                   ))}
                 </select>
               )}
+              {/* Sort by — the AI Talent Match reference's tinted control, so this
+                  tab matches the siblings. Field + direction drive sortSessions
+                  over the full fetched set; a change returns to page 1. */}
+              <SortByControl<typeof sortField>
+                value={sortField}
+                order={sortDirection}
+                options={[
+                  { value: 'name', label: 'Name' },
+                  { value: 'score', label: 'Score' },
+                  { value: 'date', label: 'Completed' },
+                ]}
+                onChange={(v) => { setSortField(v); setCurrentPage(1); }}
+                onToggleOrder={() => { setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc')); setCurrentPage(1); }}
+              />
             </>
           }
           className="mb-0"
@@ -1066,6 +1118,9 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
           /* Nothing here yet — the shared tab empty state, carrying the actions
              since the toolbar they normally sit in is gone. */
           <TabEmptyState
+            // In the Job Details tab the empty state keeps the same outer card
+            // the populated table would show; standalone it stands on its own.
+            bordered={embedded}
             icon={Users}
             title="No AI Interview Results"
             description={summary.all > 0

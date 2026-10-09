@@ -46,6 +46,7 @@ import ListCountBadge from '@/components/ui/list-count-badge';
 import ListViewToggle, { type ListDisplayMode } from '@/components/ui/list-view-toggle';
 import ToolbarFilterSelect from '@/components/ui/toolbar-filter-select';
 import ToolbarSelectAll from '@/components/ui/toolbar-select-all';
+import { SortByControl } from '@/components/ui/select-all-menu';
 
 interface AssessmentResultsProps {
   /**
@@ -2021,6 +2022,20 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   <option value="Pending">{PENDING_STATUS_LABEL}</option>
                 </select>
               )}
+              {/* Sort by — the AI Talent Match reference's tinted control, driving
+                  the same sortField / sortDirection the column headers do, surfaced
+                  in the toolbar so this tab matches the siblings. */}
+              <SortByControl<typeof sortField>
+                value={sortField}
+                order={sortDirection}
+                options={[
+                  { value: 'name', label: 'Name' },
+                  { value: 'score', label: 'Score' },
+                  { value: 'date', label: 'Submitted' },
+                ]}
+                onChange={setSortField}
+                onToggleOrder={() => setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'))}
+              />
               </>
             }
             onToggleFilters={() => setShowMoreFilters((open) => !open)}

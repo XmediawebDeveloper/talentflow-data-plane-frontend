@@ -47,7 +47,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu';
-import { SelectAllMenu, SortByControl } from '@/components/ui/select-all-menu';
+import { SortByControl } from '@/components/ui/select-all-menu';
 
 /* Action menu item styling — cloned from the Job Openings page's three-dot
    menu (JobsListing.tsx: gray-700 text, hover:bg-gray-50, px-4/py-2.5 rows,
@@ -1901,27 +1901,36 @@ Best regards`);
     <>
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        {/* Fades in when the first row is ticked, with a dot that blinks a
-            few times — so the new control is noticed — then stays still. */}
-        <button
-          type="button"
-          className="relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
+        {/* The AI Talent Match reference's Actions pill — a secondary rounded
+            button that fades in once the first row is ticked. */}
+        <Button
+          variant="secondary"
+          size="sm"
+          className="rounded-full h-9 whitespace-nowrap animate-in fade-in zoom-in-95 duration-300"
           aria-label={`Actions for ${effectiveSelectedRows.length} selected`}
         >
-          <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
-            <span className="absolute inline-flex h-full w-full rounded-full bg-brand-orange opacity-75 animate-ping [animation-iteration-count:4]" />
-            <span className="relative inline-flex h-3 w-3 rounded-full bg-brand-orange ring-2 ring-white" />
-          </span>
           {bulkDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
           Actions ({effectiveSelectedRows.length})
           <ChevronDown className="w-4 h-4" />
-        </button>
+        </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-60 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
         {/* Light grey header strip: how many the actions run on. */}
         <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
           {(isGrouped ? new Set(effectiveSelectedRows.map(candidateGroupKey)).size : effectiveSelectedRows.length).toLocaleString()} selected
         </div>
+        {/* Score Resumes — opens the host's "Select Applicants to Score" modal.
+            Moved here from a standalone toolbar button so it matches the AI
+            Talent Match tab's selection Actions menu. */}
+        {onScoreResumes && (
+          <DropdownMenuItem
+            className={scoredResumesMenuItemClass}
+            onSelect={() => onScoreResumes()}
+          >
+            <ClipboardList className="w-4 h-4 text-menu-icon-score" />
+            <span className={MENU_ITEM_SCALE_CLASS}>Score Resumes</span>
+          </DropdownMenuItem>
+        )}
         {/* Export — the selection, columns chosen in its dialog. */}
         <DropdownMenuItem
           className={`${scoredResumesMenuItemClass} ${!canExport ? 'text-gray-400 opacity-60' : ''}`}
@@ -2020,13 +2029,19 @@ Best regards`);
     </>
   ) : null;
 
+  // Embedded in a tab (toolbar portals out) drops the padded outer card so the
+  // table sits in a single bordered card like the AI Talent Match tab, not a
+  // card inside a card. Standalone keeps its own card.
   return (
-    <div className={compact ? '' : 'bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6'}>
+    <div className={compact || toolbarPortal ? '' : 'bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6'}>
       {/* Header — title and the one page-level action. Everything that acts on
           the list lives in the toolbar below, and everything that acts on a
           selection lives in its own row under that, same as job-openings. */}
-      {/* An empty `title` with no Score Resumes action drops the row. */}
-      {(title || onScoreResumes) && (
+      {/* Embedded in a tab, the title heading and the Score Resumes button both
+          come off this row (matching the AI Talent Match tab, which has no
+          in-table heading): the heading is dropped and Score Resumes moves into
+          the selection Actions menu. Standalone keeps the header row. */}
+      {!toolbarPortal && (title || onScoreResumes) && (
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
         {title && <h2 className="text-gray-900">{title}</h2>}
         {/* Score Resumes — opens the host's "Select Applicants to Score" modal. */}
@@ -2072,6 +2087,41 @@ Best regards`);
           // Row 1: Search (fills the row), the two main filters inline,
           // More Filters, Reset, Sort by, List / Grid.
           controlsFollowSearch
+          /* Select All — at the very start of the toolbar row, matching the AI
+             Talent Match reference (it used to sit in its own strip below). */
+          beforeSearch={
+            filteredResumes.length > 0
+              ? (
+                <>
+                  {(() => {
+                  // Grouped: counted in candidates; flat: in rows.
+                  const pageRows = isGrouped ? paginatedGroups.flatMap((g) => g.rows) : paginatedResumes;
+                  const selectedCount = isGrouped
+                    ? new Set(effectiveSelectedRows.map(candidateGroupKey)).size
+                    : effectiveSelectedRows.length;
+                  return (
+                    <ToolbarSelectAll
+                      selectedCount={selectedCount}
+                      allSelected={allVisibleSelected}
+                      pageCount={isGrouped ? paginatedGroups.length : paginatedResumes.length}
+                      totalCount={isGrouped ? candidateGroups.length : filteredResumes.length}
+                      onSelectPage={() => {
+                        const ids = Array.from(new Set([...effectiveSelectedRows.map((r) => r.id), ...pageRows.map((r) => r.id)]));
+                        selectExactly(ids);
+                      }}
+                      onSelectAll={() => selectExactly(filteredResumes.map((r) => r.id))}
+                      onClear={clearSelection}
+                    />
+                  );
+                  })()}
+                  {/* Actions — beside Select All once rows are ticked, the AI
+                      Talent Match reference's pattern (it used to sit in a row
+                      below the toolbar). */}
+                  {selectionActions}
+                </>
+              )
+              : undefined
+          }
           onToggleFilters={() => setShowFilters(!showFilters)}
           filtersOpen={showFilters}
           activeFilterCount={search.activeFilterCount}
@@ -2099,23 +2149,25 @@ Best regards`);
                 searchPlaceholder="Search recruiter..."
                 ariaLabel="Filter by recruiter"
               />
+              {/* Sort by — ahead of More Filters, matching the AI Talent Match
+                  reference's control order. */}
+              {filteredResumes.length > 0 && (
+                <SortByControl<SortKey>
+                  value={sortBy}
+                  order={sortOrder}
+                  options={isGrouped ? GROUPED_SORT_OPTIONS : FLAT_SORT_OPTIONS}
+                  onChange={setSortBy}
+                  onToggleOrder={() => setSortOrder((o) => (o === 'asc' ? 'desc' : 'asc'))}
+                />
+              )}
             </>
           }
+          /* List / Grid pinned to the far right, as on the AI Talent Match tab. */
+          trailing={<ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-9" />}
+          /* 36px control band like the AI Talent Match tab (its More Filters is h-9). */
+          compactButtons={!!toolbarPortal}
           className="mb-0"
-        >
-          {/* Sort by, then List / Grid — where Export used to be (Export is
-              now in the Actions menu, shown once rows are ticked). */}
-          {filteredResumes.length > 0 && (
-            <SortByControl<SortKey>
-              value={sortBy}
-              order={sortOrder}
-              options={isGrouped ? GROUPED_SORT_OPTIONS : FLAT_SORT_OPTIONS}
-              onChange={setSortBy}
-              onToggleOrder={() => setSortOrder((o) => (o === 'asc' ? 'desc' : 'asc'))}
-            />
-          )}
-          <ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-[38px] !border-brand-blue/10" />
-        </ListToolbar>
+        />
 
         {/* Advanced Filters */}
         {showFilters && (
@@ -2271,36 +2323,12 @@ Best regards`);
           </div>
         )}
 
-        {/* Row 2: Select All, the host's verdict pills and View by toggle. */}
+        {/* Row 2: the host's verdict pills and View by toggle. Select All now
+            rides the toolbar row above (beforeSearch), matching the AI Talent
+            Match reference; this row renders only when it still has content. */}
+        {(viewPillsSlot || (isGrouped && paginatedGroups.length > 0)) && (
         <div className="mt-3 pt-3 border-t border-gray-200 dark:border-slate-700/60 flex flex-wrap items-center gap-2">
-          {filteredResumes.length > 0 && (() => {
-            // Grouped: counted in candidates; flat: in rows.
-            const pageRows = isGrouped ? paginatedGroups.flatMap((g) => g.rows) : paginatedResumes;
-            const selectedCount = isGrouped
-              ? new Set(effectiveSelectedRows.map(candidateGroupKey)).size
-              : effectiveSelectedRows.length;
-            return (
-              <SelectAllMenu
-                selectedCount={selectedCount}
-                pageCount={isGrouped ? paginatedGroups.length : paginatedResumes.length}
-                totalCount={isGrouped ? candidateGroups.length : filteredResumes.length}
-                noun={isGrouped ? 'candidates' : 'resumes'}
-                allSelected={allVisibleSelected}
-                onSelectPage={() => {
-                  const ids = Array.from(new Set([...effectiveSelectedRows.map((r) => r.id), ...pageRows.map((r) => r.id)]));
-                  selectExactly(ids);
-                }}
-                onSelectAll={() => selectExactly(filteredResumes.map((r) => r.id))}
-                onClear={clearSelection}
-              />
-            );
-          })()}
-          {viewPillsSlot && (
-            <>
-              <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
-              {viewPillsSlot}
-            </>
-          )}
+          {viewPillsSlot}
           {/* Expand all / Collapse all — every candidate on this page. */}
           {isGrouped && paginatedGroups.length > 0 && (() => {
             const allOpen = paginatedGroups.every((g) => expandedGroupKeys.has(g.key));
@@ -2323,23 +2351,11 @@ Best regards`);
             );
           })()}
         </div>
-
-        {/* Row 3 — only while something is ticked: Actions and Clear, on a
-            line of their own under Select All. */}
-        {selectionActions && (
-          <div className="mt-3 flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
-            {selectionActions}
-          </div>
         )}
 
-        {/* Row 3 — only while something is ticked: Actions and Clear, on a
-            line of their own under Select All. Standalone only; embedded shows
-            the Actions menu in the toolbar row above (see above). */}
-        {!embedded && selectionActions && (
-          <div className="mt-3 flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
-            {selectionActions}
-          </div>
-        )}
+        {/* Actions now rides the toolbar row beside Select All (see
+            beforeSearch), matching the AI Talent Match reference — no separate
+            Actions row below the toolbar. */}
 
         </div>
         );
@@ -2347,7 +2363,7 @@ Best regards`);
       })()}
 
       {displayMode === 'grid' ? (
-        <div className="rounded-xl border border-gray-200 overflow-hidden">
+        <div className="rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 bg-white dark:bg-slate-900 overflow-hidden">
           {gridRows.length === 0 ? (
             <ListEmptyState
               icon={Search}
@@ -2584,7 +2600,7 @@ Best regards`);
           )}
         </div>
       ) : isGrouped ? (
-        <div className="rounded-xl border border-gray-200 overflow-hidden">
+        <div className="rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 bg-white dark:bg-slate-900 overflow-hidden">
           {/* Desktop Table View — grouped. From lg: nine columns don't fit a
               tablet without scrolling, so below lg the cards take over. */}
           <div className="hidden lg:block overflow-x-auto tf-table-shell">
@@ -2980,11 +2996,16 @@ Best regards`);
         </div>
       ) : (
         <>
-      {/* Desktop Table View */}
-      <div className="hidden md:block overflow-x-auto tf-table-shell">
+      {/* Desktop Table View — wrapped in the AI Talent Match table's bordered
+          card (rounded border + ring + subtle shadow), which the flat view was
+          missing, so it reads the same as that tab. */}
+      <div className="hidden md:block rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 bg-white dark:bg-slate-900 overflow-hidden">
+        <div className="overflow-x-auto tf-table-shell">
         <table className="w-full table-auto">
-          <thead>
-            <tr className="border-b border-gray-200">
+          {/* Header styled to the AI Talent Match table: sticky, bg-gray-50 per
+              cell, light uppercase gray-500 labels with wider tracking, dark mode. */}
+          <thead className="sticky top-0 z-10 [&_th]:bg-gray-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
+            <tr>
               <th className="text-left py-3 px-4 w-12 align-middle tf-sticky-col-left" aria-label="Select">
                 {/* Only when there's no toolbar (compact: a job opened inline
                     in View by Job) — otherwise Select all is in the toolbar,
@@ -3000,11 +3021,11 @@ Best regards`);
                 )}
               </th>
               {enabledColumns.map((col) => (
-                <th key={col.id} className={`${CENTERED_COLUMNS.has(col.id) ? 'text-center' : 'text-left'} py-3 px-4 text-sm font-medium text-gray-600 uppercase whitespace-nowrap align-middle`}>
+                <th key={col.id} className={`${CENTERED_COLUMNS.has(col.id) ? 'text-center' : 'text-left'} px-4 py-3 text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle`}>
                   {col.label}
                 </th>
               ))}
-              <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 uppercase whitespace-nowrap align-middle tf-sticky-col">Actions</th>
+              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle tf-sticky-col">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -3017,10 +3038,12 @@ Best regards`);
                    cells (globals.css), which carry their own background. */
                 data-row-selected={selectedResumes.includes(resume.id) ? 'true' : undefined}
                 aria-selected={selectedResumes.includes(resume.id)}
-                className={`border-b border-gray-100 transition-colors cursor-pointer ${
+                /* Row styled to the AI Talent Match table: plain white/dark rows
+                   (no zebra), hover:bg-gray-50, selected tint bg-blue-50. */
+                className={`border-b border-gray-100 dark:border-slate-700/60 transition-colors cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800 ${
                   selectedResumes.includes(resume.id)
-                    ? 'bg-brand-blue/[0.08] hover:bg-brand-blue/[0.12] dark:bg-brand-blue/15'
-                    : `hover:bg-[var(--raw-fafbfc)] ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`
+                    ? 'bg-blue-50 dark:bg-slate-800/50'
+                    : 'bg-white dark:bg-slate-900'
                 }`}
               >
                 <td className="py-3 px-4 align-middle tf-sticky-col-left">
@@ -3091,6 +3114,7 @@ Best regards`);
             ) : undefined}
           />
         )}
+        </div>
       </div>
 
       {/* Mobile Card View */}

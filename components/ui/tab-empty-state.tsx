@@ -41,6 +41,13 @@ export interface TabEmptyStateProps {
    * message alone is still worth showing.
    */
   action?: React.ReactNode;
+  /**
+   * Draw the shared results-table frame (rounded border + subtle ring/shadow)
+   * around the message, so an empty tab keeps the same outer card the populated
+   * table would show. Off by default — only the Job Details results tabs that
+   * sit beside a bordered table turn it on.
+   */
+  bordered?: boolean;
   className?: string;
 }
 
@@ -51,10 +58,18 @@ export default function TabEmptyState({
   title,
   description,
   action,
+  bordered = false,
   className,
 }: TabEmptyStateProps) {
   return (
-    <div className={cn('flex flex-col items-center justify-center py-12 text-center', className)}>
+    <div
+      className={cn(
+        'flex flex-col items-center justify-center py-12 text-center',
+        bordered &&
+          'px-4 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 bg-white dark:bg-slate-900',
+        className,
+      )}
+    >
       {imageSrc ? (
         <Image
           src={imageSrc}
