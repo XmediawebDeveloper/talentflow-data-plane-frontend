@@ -703,12 +703,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // Time spent paused (while Bina speaks) — subtracted from wall-clock elapsed.
   const questionTimerPausedMsRef = useRef<number>(0);
   const questionTimerPausedAtRef = useRef<number | null>(null);
-  // Fix 2: track the seconds Bina used out of the 120s slot so we can render
-  // "Bina spoke 23s — you have 97s" under the timer. The candidate is
-  // otherwise surprised when the displayed time is less than the documented
-  // 2 minutes; exposing this explicitly sets expectations.
-  const [lindaSpokeSeconds, setLindaSpokeSeconds] = useState<number | null>(null);
-  const [fullSlotSeconds, setFullSlotSeconds] = useState<number | null>(null);
 
   // Compute the remaining seconds for the per-question timer using the
   // monotonic anchor + paused-time accounting. Returns null if the timer
@@ -6357,16 +6351,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           console.log(`[Timer ${timestamp}] Repeat re-speak done — answer window will RESUME at ${resumeSec}s when the candidate's turn opens`);
           break;
         }
-        // Fix 2: capture Bina's speech share so the UI can show the candidate
-        // WHY they have less than the full 2-min slot.
-        if (typeof data.linda_spoke_seconds === 'number') {
-          setLindaSpokeSeconds(Math.round(data.linda_spoke_seconds));
-        } else {
-          setLindaSpokeSeconds(null);
-        }
-        if (typeof data.total_seconds === 'number') {
-          setFullSlotSeconds(data.total_seconds);
-        }
         console.log(`[WS ${timestamp}] Timer duration: ${dur}s, question_number=${data.question_number}, total_questions=${data.total_questions}, is_follow_up=${data.is_follow_up}, is_clarification=${data.is_clarification}`);
         // DON'T show the timer yet if Bina is still speaking — it will be shown
         // once Bina stops (via the pending timer useEffect below).
@@ -10166,8 +10150,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
           {/* ── Top half: BINA AI Avatar ── */}
           {/* Inset card with rounded corners, matching the webcam frame below
-              (mx-3 + rounded-xl). */}
-          <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden mx-3 mt-3 rounded-xl">
+              (mx-1.5 + rounded-xl). */}
+          <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden mx-1.5 mt-1.5 rounded-xl">
             {/* Label */}
             <div className="absolute top-3 left-3 z-10 flex items-center gap-1.5">
               <div className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse shrink-0" />
@@ -10287,7 +10271,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             {/* Label row — just the "You" label. The REC badge now lives INSIDE
                 the webcam frame (top-right corner) so it reads as an overlay on
                 the candidate's own video, not floating in the dark strip above. */}
-            <div className="absolute top-0 left-0 right-0 z-10 px-3 pt-1 pb-1 flex items-center">
+            <div className="absolute top-0 left-0 right-0 z-10 px-1.5 pt-1 pb-1 flex items-center">
               {/* "You · <name>" — mirrors Bina's label; just "You" when no name. */}
               <span className="min-w-0 truncate text-gray-400 text-2xs font-medium uppercase tracking-wide" title={interviewInfo?.candidate_name?.trim() || undefined}>
                 You{interviewInfo?.candidate_name?.trim() ? ` · ${interviewInfo.candidate_name.trim().toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())}` : ''}
@@ -10295,7 +10279,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             </div>
 
             {/* Webcam feed fills this half */}
-            <div className="absolute inset-0 mt-6 mx-3 mb-3 rounded-xl overflow-hidden bg-[var(--raw-1a1f2e)]">
+            <div className="absolute inset-0 mt-6 mx-1.5 mb-1.5 rounded-xl overflow-hidden bg-[var(--raw-1a1f2e)]">
               <Webcam
                 ref={webcamRef}
                 className="w-full h-full object-cover"
@@ -10323,8 +10307,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 </div>
               )}
 
-              {/* Face detection ellipse */}
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[55%] w-16 h-24 border border-dashed border-purple-500/25 rounded-[50%] animate-pulse pointer-events-none" />
 
               {/* Candidate mic health (left) — confirms which input the browser
                   selected and whether the level is usable — and network strength
@@ -10547,17 +10529,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                   </span>
                 </div>
               </div>
-              {/* Fix 2: subtitle explaining the reduced window. Only shown
-                  when Bina's speech ate a meaningful chunk of the 2-min slot
-                  (≥5s), to avoid noise on clean cases where her question was
-                  short and the candidate effectively has the full window.
-                  Rendered as its own row BELOW the icon+timer row so it
-                  doesn't overlap (was previously inside the flex-row). */}
-              {lindaSpokeSeconds !== null && fullSlotSeconds !== null && lindaSpokeSeconds >= 5 && (
-                <div className="pl-7 mt-1 text-2xs text-gray-500 leading-snug">
-                  Bina used {lindaSpokeSeconds}s of the {fullSlotSeconds}s question slot — you have {questionTimerTotalRef.current}s to answer.
-                </div>
-              )}
             </div>
           )}
 

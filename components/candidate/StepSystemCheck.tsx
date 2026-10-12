@@ -2861,12 +2861,12 @@ export default function StepSystemCheck({
                 {/* The run's result, right under Device Settings — where the
                     candidate fixes a failed check. */}
                     {!checksRunning && checksCompleted && allSystemPassed && (
-                      <div className="flex items-center gap-2.5 rounded-xl border border-brand-blue/15 bg-brand-blue/[0.06] px-3 py-2 min-w-0">
-                        <span className="w-7 h-7 rounded-full bg-brand-blue text-white flex items-center justify-center flex-shrink-0">
+                      <div className="flex items-center gap-2.5 rounded-xl border border-success-line bg-success-subtle px-3 py-2 min-w-0">
+                        <span className="w-7 h-7 rounded-full bg-success text-white flex items-center justify-center flex-shrink-0">
                           <Check className="w-4 h-4" strokeWidth={3} />
                         </span>
                         <div className="min-w-0">
-                          <p className="text-sm font-bold text-brand-blue leading-tight">Everything Looks Good</p>
+                          <p className="text-sm font-bold text-success-strong leading-tight">Everything Looks Good</p>
                           <p className="text-xs text-gray-600 leading-snug">Your device and system have passed the required checks. You&apos;re all set for the interview.</p>
                         </div>
                       </div>
