@@ -4,7 +4,7 @@ import { SCORE_CELL_TEXT } from '@/lib/utils/score';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { WorkInProgressIcon } from '@/components/icons/nav-icons';
 import { Cell, Pie, PieChart as RechartsPieChart, ResponsiveContainer } from 'recharts';
-import { Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, TrendingUp, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, Loader2, Square, CheckSquare, Building2, Calendar, Users, ChevronDown, FileDown, Video, MinusSquare, ChevronsUpDown, ChevronsDownUp, MoreVertical, Info, PieChart, RefreshCw, Layers, ClipboardList } from 'lucide-react';
+import { Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, TrendingUp, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, Loader2, Square, CheckSquare, Building2, Calendar, Users, ChevronDown, FileDown, Video, MinusSquare, ChevronsUpDown, ChevronsDownUp, MoreVertical, Info, PieChart, RefreshCw, Layers, ClipboardList, MinusCircle } from 'lucide-react';
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, useId } from 'react';
 import { useDialogHeightLock } from '@/lib/hooks/useDialogHeightLock';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -350,6 +350,8 @@ interface AlreadyScoredItem {
   resumeId: string;
   candidateName: string;
   score: number;
+  /** 0-10 Overall Rating — what the progress table's Score column prints. */
+  overallRating10?: number;
   scoredAt?: string;
   matchStatus?: string;
 }
@@ -368,6 +370,8 @@ interface BatchProgressItem {
   candidateName: string;
   status: 'queued' | 'processing' | 'completed' | 'failed' | 'already_scored';
   score?: number;
+  /** 0-10 Overall Rating — what the progress table's Score column prints. */
+  overallRating10?: number;
   matchStatus?: string;
   // snake_case alias: the read site does `item.matchStatus || item.match_status`, a
   // defensive fallback for raw (untransformed) API payloads. Declared so that read
@@ -745,6 +749,7 @@ export default function ResumeScoringPage({
         : 'Queued' as const,
       errorReason: item.errorMessage,
       score: item.score,
+      overallRating10: item.overallRating10,
       scoredDateTime: item.status === 'already_scored' && item.scoredAt
         ? new Date(item.scoredAt)
         : normalizeScoringStatus(item.status) === 'completed'
@@ -1195,7 +1200,8 @@ export default function ResumeScoringPage({
     const q = params.toString();
     window.history.replaceState(window.history.state, '', `${window.location.pathname}${q ? `?${q}` : ''}`);
     const h = readInviteHandoff();
-    if (!h) return;
+    // AI Talent Match's own hand-off is finished there, not here.
+    if (!h || (h.source && h.source !== 'resume-scoring')) return;
     setIsGlobalView(h.view === 'candidates');
     setSelectedHistoryItems(new Set(h.selectedJobKeys ?? []));
     setPartialJobRows(h.partialJobRows ?? {});
@@ -1597,12 +1603,13 @@ export default function ResumeScoringPage({
     console.log('[ResumeScoringPage] Starting pending scoring for job:', jobTitle, 'with', resumeIds.length, 'new resumes,', alreadyScoredItems.length, 'already scored');
 
     // Build already-scored items for the progress modal
-    const alreadyScoredProgressItems: { resumeId: string; candidateName: string; status: 'already_scored'; score?: number; scoredAt?: string; matchStatus?: string }[] =
+    const alreadyScoredProgressItems: { resumeId: string; candidateName: string; status: 'already_scored'; score?: number; overallRating10?: number; scoredAt?: string; matchStatus?: string }[] =
       alreadyScoredItems.map(item => ({
         resumeId: item.resumeId,
         candidateName: item.candidateName,
         status: 'already_scored' as const,
         score: item.score,
+        overallRating10: item.overallRating10,
         scoredAt: item.scoredAt,
         matchStatus: item.matchStatus,
       }));
@@ -1660,6 +1667,7 @@ export default function ResumeScoringPage({
           : 'Queued' as const,
         errorReason: item.errorMessage,
         score: item.score,
+        overallRating10: item.overallRating10,
         scoredDateTime: item.status === 'already_scored' && item.scoredAt
           ? new Date(item.scoredAt)
           : normalizeScoringStatus(item.status) === 'completed'
@@ -1731,9 +1739,11 @@ export default function ResumeScoringPage({
                 if (itemStatus === 'completed' && newItemStatuses[idx].status !== 'completed') {
                   newItemStatuses[idx].status = 'completed';
                   newItemStatuses[idx].score = item.overall_score ?? 0;
+                  (newItemStatuses[idx] as any).overallRating10 = item.overall_rating_10;
                   newItemStatuses[idx].matchStatus = item.match_status;
                   updateItemStatus(jobId, itemId, 'Scored successfully', {
                     score: item.overall_score ?? 0,
+                    overallRating10: item.overall_rating_10,
                     matchResult: convertMatchStatus(item.match_status),
                     scoredDateTime: new Date().toISOString(),
                   });
@@ -1842,6 +1852,7 @@ export default function ResumeScoringPage({
       candidateName: item.candidateName || 'Unknown',
       status: item.status,
       score: item.score,
+      overallRating10: item.overallRating10,
       errorMessage: item.errorMessage,
       matchStatus: item.matchStatus || item.match_status,
     }));
@@ -1869,6 +1880,7 @@ export default function ResumeScoringPage({
         : 'Queued' as const,
       errorReason: item.errorMessage,
       score: item.score,
+      overallRating10: item.overallRating10,
       matchResult: item.matchStatus
         ? convertMatchStatus(item.matchStatus)
         : undefined, // Stay "Pending" until real match_status is fetched after completion
@@ -1910,6 +1922,7 @@ export default function ResumeScoringPage({
         scoredDateTime: item.scoredDateTime ? item.scoredDateTime.toISOString() : undefined,
         matchResult: item.matchResult,
         score: item.score,
+        overallRating10: item.overallRating10,
       })),
     });
 
@@ -1930,12 +1943,15 @@ export default function ResumeScoringPage({
           .then(jdScores => {
             // Build map of resume_id → match_status from the actual score records
             const scoreMap = new Map(jdScores.items.map(s => [s.resume_id, s.match_status]));
-            // Update the popup items with correct match results
+            const ratingMap = new Map(jdScores.items.map((s: any) => [s.resume_id, s.overall_rating_10 as number | undefined]));
+            // Update the popup items with correct match results (and the
+            // 0-10 rating the Score column prints)
             setProgressData(prev => prev.map(item => ({
               ...item,
               matchResult: scoreMap.has(item.resumeId)
                 ? convertMatchStatus(scoreMap.get(item.resumeId)!)
                 : item.matchResult,
+              overallRating10: ratingMap.get(item.resumeId) ?? item.overallRating10,
             })));
           })
           .catch(e => console.warn('[ResumeScoringPage] Could not update match statuses from scores:', e))
@@ -2897,7 +2913,8 @@ export default function ResumeScoringPage({
                           errorReason: undefined,
                           scoredDateTime: new Date(),
                           matchResult: convertMatchStatus(retryData.match_status),
-                          score: retryData.overall_score
+                          score: retryData.overall_score,
+                          overallRating10: retryData.overall_rating_10
                         }
                       : p
                   ));
@@ -3895,6 +3912,7 @@ export default function ResumeScoringPage({
                       scoredDateTime: resume.created_at ? new Date(resume.created_at) : undefined,
                       matchResult: convertMatchStatus(resume.match_status),
                       score: resume.overall_score || 0,
+                      overallRating10: resume.overall_rating_10 ?? resume.overallRating10,
                     }));
                   }));
                   const allProgressItems: ScoringProgressItem[] = perVersion
@@ -4039,7 +4057,7 @@ export default function ResumeScoringPage({
                     /* No lift on hover: the card grows when opened inline, and
                        a translating card under the pointer reads as jumpy. */
                     className={`bg-white dark:bg-slate-900 rounded-xl border ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 transition-all duration-150 cursor-pointer ${
-                      isJobExpanded || isSelected || isPartlySelected ? 'border-brand-blue/40 dark:border-brand-blue/40' : 'border-gray-100 dark:border-slate-700/60'
+                      isJobExpanded || isSelected || isPartlySelected ? 'border-brand-blue/40 dark:border-brand-blue/40' : 'border-gray-300 dark:border-slate-700/60'
                     } ${isSelected ? '!bg-brand-blue/[0.06] dark:!bg-brand-blue/15' : ''} ${jobListDisplayMode === 'grid' ? 'flex flex-col min-w-0' : ''} ${jobListDisplayMode === 'grid' && isJobExpanded ? 'md:col-span-2 xl:col-span-3' : ''}`}
                     // The row opens its candidates in place; the job title (and
                     // the View Details button) still go to the job's own page.
@@ -4139,21 +4157,36 @@ export default function ResumeScoringPage({
                             own details (experience, industry, location, salary,
                             type, work mode, posted date / by) are left to the
                             Job Descriptions page. */}
+                        {/* "By: name  Scored: date" — the Job Descriptions cards'
+                            icon-less meta line: label in the form-label weight,
+                            value a shade lighter (JobOpeningSummary's
+                            MetaLabelValue). */}
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-gray-600 dark:text-slate-400 mb-2">
                           {item.scoredResumes?.[0]?.scoredBy && (
-                            <span className="flex items-center gap-1.5">
-                              <User className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-                              Scored by {item.scoredResumes[0].scoredBy}
+                            <span className="flex items-center gap-1">
+                              <span className="font-medium text-gray-700 dark:text-slate-300">By:</span>
+                              <span className="font-normal text-gray-500 dark:text-slate-400">{item.scoredResumes[0].scoredBy}</span>
                             </span>
                           )}
-                          <span className="flex items-center gap-1.5">
-                            <Calendar className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-                            {formatIST(item.scoredAt)}
+                          <span className="flex items-center gap-1">
+                            <span className="font-medium text-gray-700 dark:text-slate-300">Scored:</span>
+                            <span className="font-normal text-gray-500 dark:text-slate-400">{formatIST(item.scoredAt)}</span>
                           </span>
-                          {/* Verdict counts across every version of this job.
-                              Under a filter, only that verdict's count. Until
-                              the scores load, the version's own total. */}
-                          {!globalLoaded ? (
+                          {/* How many scores this job has — every version, the
+                              same rows the Exact / Partial / No Match badges
+                              add up to. Until those load, the version's own
+                              total. */}
+                          <span className="flex items-center gap-1">
+                            <span className="font-medium text-gray-700 dark:text-slate-300">Scored Count:</span>
+                            <span className="font-normal text-gray-500 dark:text-slate-400 tabular-nums">
+                              {globalLoaded ? verdictTally.exact + verdictTally.partial + verdictTally.none : item.totalScored}
+                            </span>
+                          </span>
+                          {/* Grid only: the verdict counts inline. The list
+                              view stacks them on the right, as the Job
+                              Descriptions cards stack Applicants / Assessed /
+                              Interviewed. */}
+                          {jobListDisplayMode !== 'grid' ? null : !globalLoaded ? (
                             <span className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
                               <FileText className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                               {item.totalScored} {item.totalScored === 1 ? 'candidate' : 'candidates'} scored
@@ -4187,7 +4220,52 @@ export default function ResumeScoringPage({
                           so every card's actions line up across the row. */}
                       <div className={jobListDisplayMode === 'grid'
                         ? 'mt-auto flex items-center gap-2 w-full pt-1'
-                        : 'flex flex-col gap-2 flex-shrink-0 w-full sm:w-auto'}>
+                        : 'flex items-start justify-end gap-6 flex-shrink-0 w-full sm:w-auto'}>
+                        {/* List view: Exact / Partial / No Match one below
+                            another, equal width, beside the icon buttons — the
+                            Job Descriptions cards' Applicants / Assessed /
+                            Interviewed stack, in the verdict colours. Across
+                            every version of this job; under a verdict filter,
+                            only that one. Until the scores load, the version's
+                            own total. */}
+                        {jobListDisplayMode !== 'grid' && (
+                          <div className="flex flex-col items-stretch gap-1.5 flex-shrink-0">
+                            {!globalLoaded ? (
+                              <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs bg-info-subtle text-info-strong whitespace-nowrap">
+                                <FileText className="w-4 h-4" />
+                                {item.totalScored} Scored
+                              </span>
+                            ) : ([
+                              { id: 'Exact Match' as const, count: verdictTally.exact, Icon: CheckCircle2, cls: 'bg-success-subtle text-success-strong' },
+                              { id: 'Partial Match' as const, count: verdictTally.partial, Icon: MinusCircle, cls: 'bg-warning-subtle text-warning-strong' },
+                              { id: 'No Match' as const, count: verdictTally.none, Icon: XCircle, cls: 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300' },
+                            ])
+                              /* Under a verdict filter all three stay, so every
+                                 card keeps the same shape; the ones outside the
+                                 filter are muted (grey, faded) and the filtered
+                                 verdict keeps its colour. */
+                              .map(({ id, count, Icon, cls }) => {
+                                const muted = !!matchFilter && id !== matchFilter;
+                                return (
+                                  <span
+                                    key={id}
+                                    className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs whitespace-nowrap transition-opacity ${
+                                      muted ? 'bg-gray-50 text-gray-400 opacity-60 dark:bg-slate-800/50 dark:text-slate-500' : cls
+                                    }`}
+                                  >
+                                    <Icon className="w-4 h-4" />
+                                    <span className="tabular-nums">{count}</span> {id}
+                                  </span>
+                                );
+                              })}
+                          </div>
+                        )}
+                        {/* List view: the icon buttons with View Candidates
+                            directly under them, as one column beside the badge
+                            stack — so the button sits up by the badges instead
+                            of below the whole stack. Grid: `contents`, i.e. no
+                            box at all, keeping the footer row as it was. */}
+                        <div className={jobListDisplayMode === 'grid' ? 'contents' : 'flex flex-col items-stretch gap-2'}>
                         <div className={`flex items-center gap-1.5 ${jobListDisplayMode === 'grid' ? 'flex-shrink-0' : 'self-end'}`}>
                           <Button
                             variant="secondary"
@@ -4247,6 +4325,7 @@ export default function ResumeScoringPage({
                           {isJobExpanded ? 'Hide Candidates' : 'View Candidates'}
                           <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isJobExpanded ? 'rotate-180' : ''}`} />
                         </button>
+                        </div>
                       </div>
                     </div>
                     {inlineCandidatesPanel}
@@ -4501,7 +4580,8 @@ export default function ResumeScoringPage({
                           errorReason: undefined,
                           scoredDateTime: new Date(),
                           matchResult: convertMatchStatus(retryData.match_status),
-                          score: retryData.overall_score
+                          score: retryData.overall_score,
+                          overallRating10: retryData.overall_rating_10
                         }
                       : p
                   ));
@@ -5343,7 +5423,8 @@ export default function ResumeScoringPage({
                         errorReason: undefined,
                         scoredDateTime: new Date(),
                         matchResult: convertMatchStatus(retryData.match_status),
-                        score: retryData.overall_score
+                        score: retryData.overall_score,
+                        overallRating10: retryData.overall_rating_10
                       }
                     : p
                 ));

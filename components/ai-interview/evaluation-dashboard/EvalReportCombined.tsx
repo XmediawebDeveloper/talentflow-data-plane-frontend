@@ -18,8 +18,49 @@ import {
 import type { DashboardData } from './types';
 import { buildRationaleLines } from './types';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { labelOfViolation, recruiterSeverity, summarizeViolations, type ViolationRecord } from '../violationTaxonomy';
+import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 
 import { formatScore1, formatSkillScore } from '@/lib/utils/matchStatus';
+
+/** Session facts the PDF shows that aren't part of DashboardData. */
+export interface ReportSessionDetails {
+  candidateCid?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  identityVerified?: boolean;
+  /** data: URL of the identity photo, or null when there isn't one. */
+  photoDataUrl?: string | null;
+  violations?: ViolationRecord[];
+  /** Absolute URL of this candidate's result page in the app. */
+  resultUrl?: string | null;
+}
+
+// jsPDF's built-in Helvetica only has WinAnsi (Latin-1 + cp1252) glyphs.
+// Anything else (Tamil, Hindi, ≥, ✓ …) prints as mojibake AND makes jsPDF
+// letter-space the whole line, so text is filtered before it is drawn.
+const CP1252_EXTRA = '€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ';
+const PDF_CHAR_SUBS: Record<string, string> = { '≥': '>=', '≤': '<=', '→': '->', '←': '<-', '×': 'x', '−': '-' };
+const isPdfSafeChar = (ch: string) => {
+  const c = ch.codePointAt(0) ?? 0;
+  return (c >= 0x20 && c <= 0x7e) || (c >= 0xa0 && c <= 0xff) || CP1252_EXTRA.includes(ch);
+};
+const pdfSafe = (value: string) =>
+  Array.from(value || '')
+    .map((ch) => (ch === '\n' || isPdfSafeChar(ch) ? ch : (PDF_CHAR_SUBS[ch] ?? '')))
+    .join('')
+    .replace(/[ \t]{2,}/g, ' ');
+/** True when a meaningful share (≥30%) of the letters are in a script
+ *  Helvetica can't draw — a few stray words in an English answer are just
+ *  dropped by pdfSafe instead of hiding the whole answer. */
+const hasNonLatinScript = (value: string) => {
+  const letters = Array.from(value || '').filter((ch) => /\p{L}/u.test(ch));
+  if (letters.length === 0) return false;
+  const nonLatin = letters.filter((ch) => !isPdfSafeChar(ch)).length;
+  return nonLatin / letters.length >= 0.3;
+};
+// The backend prefixes answers it couldn't score as English with this tag.
+const NON_ENGLISH_TAG = /^\s*\[non-English[^\]]*\]\s*/i;
 interface Props {
   data: DashboardData;
   aiConfidence?: number | null;
@@ -73,21 +114,29 @@ function scoreColor(score: number) {
  */
 export async function exportEvalReportPDF(
   data: DashboardData,
-  { evaluationId, sessionId, save = true }: { evaluationId?: string | null; sessionId?: string | null; save?: boolean } = {},
+  { evaluationId, sessionId, save = true, details = {} }: {
+    evaluationId?: string | null; sessionId?: string | null; save?: boolean; details?: ReportSessionDetails;
+  } = {},
 ): Promise<{ blob: Blob | null; fileName: string }> {
   const {
     candidate, interview, scores, finalResult, sectionsPresent,
     perQuestionDetails, aiSummary, strengths, weaknesses, isPartialEvaluation,
-    mustHaveClusters, niceToHaveClusters,
+    mustHaveClusters, niceToHaveClusters, questionsAnswered, questionsAsked,
   } = data;
+  // Same figures as the on-screen report's "Questions Answered" /
+  // "Skills Evaluated" stat tiles.
+  const allSkillsFlat = [...mustHaveClusters, ...niceToHaveClusters].flatMap((c) => c.skills);
+  const skillsEvaluated = allSkillsFlat.filter((s) => s.score > 0).length;
   const isPassed = finalResult ? finalResult === 'Pass' : scores.mustHave >= MHS_THRESHOLD;
   const finalResultLabel = (finalResult ?? (isPassed ? 'Pass' : 'Fail')).toUpperCase();
   const confidence = Math.round(scores.mustHave * 10);
   const reportGenerated = new Date().toLocaleString('en-US', {
     year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
   });
-  const evalId = evaluationId
-    ?? `EV-${(interview.date || '').replace(/[^0-9]/g, '').slice(0, 8) || 'XXXXXXXX'}`;
+  // Only a real backend id is shown. The old fallback ("EV-" + the
+  // interview date's digits) gave every report from the same day the same
+  // number, so with no real id the report simply carries none.
+  const evalId = evaluationId || null;
 
   const { jsPDF } = await import('jspdf');
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
@@ -105,7 +154,9 @@ export async function exportEvalReportPDF(
   const fill = (c: RGB) => doc.setFillColor(c[0], c[1], c[2]);
   const txt = (c: RGB) => doc.setTextColor(c[0], c[1], c[2]);
   const stroke = (c: RGB) => doc.setDrawColor(c[0], c[1], c[2]);
-  const ensure = (h: number) => { if (y + h > pageH - M) { doc.addPage(); y = M; } };
+  // Bottom limit leaves room for the per-page footer (page X of Y).
+  const ensure = (h: number) => { if (y + h > pageH - M - 4) { doc.addPage(); y = M; } };
+  const splitSafe = (value: string, width: number) => doc.splitTextToSize(pdfSafe(value), width) as string[];
   const bar = (x: number, by: number, w: number, score: number, c: RGB) => {
     fill(line); doc.roundedRect(x, by, w, 2, 1, 1, 'F');
     const fw = Math.max(0, Math.min(w, (score / 10) * w));
@@ -125,24 +176,51 @@ export async function exportEvalReportPDF(
   ): string[] => {
     doc.setFont('helvetica', fontStyle);
     doc.setFontSize(fontSize);
-    const raw = doc.splitTextToSize(value || '', width);
+    const raw = doc.splitTextToSize(pdfSafe(value || ''), width);
     const lines = (Array.isArray(raw) ? raw : [raw]).map((line) => String(line));
     return lines.length > 0 ? lines : [''];
   };
 
-  // Header
+  // Header — identity photo (when on file), title, candidate line, and the
+  // interview facts row. "Generated" is when this PDF was built; the
+  // interview's own date is labelled separately so the two aren't confused.
+  const photoSize = 20;
+  let textX = M;
+  if (details.photoDataUrl) {
+    try {
+      const fmt = details.photoDataUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+      doc.addImage(details.photoDataUrl, fmt, M, y, photoSize, photoSize);
+      stroke(line); doc.roundedRect(M, y, photoSize, photoSize, 1.2, 1.2, 'S');
+      textX = M + photoSize + 4;
+    } catch { /* unsupported image — header without photo */ }
+  }
   doc.setFont('helvetica', 'bold'); doc.setFontSize(16); txt(ink);
-  doc.text('AI Interview Evaluation Report', M, y + 4);
+  doc.text('AI Interview Evaluation Report', textX, y + 4);
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9); txt(sub);
-  doc.text(`${candidate.name}  ·  ${candidate.role}`, M, y + 9.5);
+  doc.text(pdfSafe(`${candidate.name}  ·  ${candidate.role}`), textX, y + 9.5);
+  const interviewedAt = details.completedAt
+    ? `${formatISTDate(details.completedAt)}, ${formatISTTime(details.completedAt)}`
+    : interview.date;
+  const factParts = [
+    details.candidateCid,
+    candidate.email,
+    interview.mode ? `${interview.mode} Mode` : null,
+    interviewedAt ? `Interviewed: ${interviewedAt}` : null,
+    interview.duration && interview.duration !== '0s' ? `Time taken: ${interview.duration}` : null,
+  ].filter(Boolean) as string[];
+  doc.setFontSize(7.5); txt(sub);
+  const factLines = splitSafe(factParts.join('   |   '), pageW - M - textX - 45);
+  doc.text(factLines, textX, y + 14);
   doc.setFontSize(7.5); txt(faint);
-  doc.text(`#${evalId}`, pageW - M, y + 2, { align: 'right' });
-  doc.text(reportGenerated, pageW - M, y + 6, { align: 'right' });
-  y += 13; stroke(indigo); doc.setLineWidth(0.7); doc.line(M, y, pageW - M, y); doc.setLineWidth(0.2); y += 5;
+  let ry = y + 2;
+  if (evalId) { doc.text(`Report #${evalId}`, pageW - M, ry, { align: 'right' }); ry += 4; }
+  doc.text(`Generated: ${reportGenerated}`, pageW - M, ry, { align: 'right' });
+  const headerH = Math.max(details.photoDataUrl && textX > M ? photoSize : 0, 14 + factLines.length * 3.4);
+  y += headerH + 1; stroke(indigo); doc.setLineWidth(0.7); doc.line(M, y, pageW - M, y); doc.setLineWidth(0.2); y += 5;
 
   // Final result + Match Score
   fill(isPartialEvaluation ? [255, 251, 235] : (pass ? [236, 253, 245] : [254, 242, 242])); stroke(verdict); doc.setLineWidth(0.4);
-  doc.roundedRect(M, y, CW, 18, 2, 2, 'FD'); doc.setLineWidth(0.2);
+  doc.roundedRect(M, y, CW, 24, 2, 2, 'FD'); doc.setLineWidth(0.2);
   doc.setFont('helvetica', 'bold'); doc.setFontSize(13); txt(verdict);
   doc.text(isPartialEvaluation ? 'Partial Evaluation' : `Final Result: ${finalResultLabel}`, M + 4, y + 7.5);
   doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); txt(ink);
@@ -159,25 +237,22 @@ export async function exportEvalReportPDF(
     doc.setFont('helvetica', 'normal'); doc.setFontSize(7); txt(sub);
     doc.text('Match Score (Must-Have)', pageW - M - 4, y + 13, { align: 'right' });
   }
-  y += 23;
-
-  // Section scores summary
-  fill(bgc); stroke(line); doc.roundedRect(M, y, CW, 9, 1.5, 1.5, 'FD');
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(9); txt(ink);
-  let sx = M + 3;
-  if (sectionsPresent.mustHave) {
-    doc.text(`Must-Have Section: `, sx, y + 6); sx += doc.getTextWidth('Must-Have Section: ');
-    const mustHaveLabel = isPartialEvaluation
-      ? `${formatScore1(scores.mustHave)}/10 (Partial)`
-      : `${formatScore1(scores.mustHave)}/10 (${pass ? 'PASS' : 'FAIL'})`;
-    txt(isPartialEvaluation ? amber : (pass ? green : red)); doc.text(mustHaveLabel, sx, y + 6);
-    sx += doc.getTextWidth(mustHaveLabel) + 8; txt(ink);
+  // Participation line — the on-screen stat tiles (Questions Answered /
+  // Skills Evaluated), as label: value pairs under the verdict.
+  {
+    let sx = M + 4;
+    const stat = (label: string, value: string) => {
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8); txt(sub);
+      doc.text(label, sx, y + 19.5); sx += doc.getTextWidth(label) + 1.2;
+      doc.setFont('helvetica', 'bold'); txt(ink);
+      doc.text(value, sx, y + 19.5); sx += doc.getTextWidth(value) + 8;
+    };
+    stat('Questions Answered:', `${questionsAnswered} / ${questionsAsked}`);
+    stat('Skills Evaluated:', `${skillsEvaluated} / ${allSkillsFlat.length}`);
   }
-  if (sectionsPresent.niceToHave) {
-    doc.text(`Nice-to-Have Section: `, sx, y + 6); sx += doc.getTextWidth('Nice-to-Have Section: ');
-    txt(indigo); doc.text(`${formatScore1(scores.niceToHave)}/10 (Info)`, sx, y + 6); txt(ink);
-  }
-  y += 13;
+  y += 29;
+  // (The separate "Must-Have Section: x/10" box that sat here repeated the
+  // section bars' own scores, so it was removed.)
 
   // ── Per-section question + skill breakdown ────────────────────────
   const drawSection = (key: 'mth' | 'nth' | 'hr', title: string, scoreVal: number, scored: boolean, badge: string, badgeColor: RGB) => {
@@ -194,26 +269,37 @@ export async function exportEvalReportPDF(
     qs.forEach((q) => {
       const rt = (q.responseType || '').toLowerCase();
       const src = (q.skipSource || '').toLowerCase();
-      let status: { label: string; color: RGB; isScore: boolean };
-      if (key === 'hr') status = { label: 'Not Scored', color: faint, isScore: false };
-      else if (q.notDelivered) status = { label: `Not Delivered · ${formatScore1(q.questionScore)}/10`, color: scoreRGB(q.questionScore), isScore: false };
-      else if (rt === 'skipped' || src === 'candidate') status = { label: 'Skipped', color: sub, isScore: false };
-      else if (['not_answered', 'idk', 'timeout', 'low_coverage'].includes(rt)) status = { label: 'Not Answered', color: faint, isScore: false };
-      else status = { label: `${formatScore1(q.questionScore)}/10`, color: scoreRGB(q.questionScore), isScore: true };
-
-      const qSkills = key === 'hr' ? [] : q.skills;
-      const qText = splitLines(q.question || `Question ${q.qNum}`, CW - 28, 8.5);
       // Candidate's answer — recruiters need the actual response to validate
       // the score, not just the question/skills/rationale. Derive a clear
       // placeholder for the no-answer cases so a blank never reads as "the
       // candidate said nothing scorable" when they were simply never asked.
       const _rawAns = String(q.answer || '').trim();
-      const _rt = (q.responseType || '').toLowerCase();
-      const _src = (q.skipSource || '').toLowerCase();
+      const _rt = rt;
+      const _src = src;
+      const _hasAnswer = !!_rawAns && _rawAns.toUpperCase() !== '[SKIPPED]' && _rawAns.toUpperCase() !== '[NOT ASKED]';
+      // Non-English answers can't be drawn in Helvetica (they print as
+      // garbage), so they're named rather than reproduced.
+      const _nonEnglish = _hasAnswer && (NON_ENGLISH_TAG.test(_rawAns) || hasNonLatinScript(_rawAns));
+
+      let status: { label: string; color: RGB; isScore: boolean };
+      if (key === 'hr') status = { label: 'Not Scored', color: faint, isScore: false };
+      else if (q.notDelivered) status = { label: `Not Delivered · ${formatScore1(q.questionScore)}/10`, color: scoreRGB(q.questionScore), isScore: false };
+      else if (rt === 'skipped' || src === 'candidate') status = { label: 'Skipped', color: sub, isScore: false };
+      else if (_nonEnglish) status = { label: 'Not Scored (non-English)', color: faint, isScore: false };
+      else if (['not_answered', 'idk', 'timeout', 'low_coverage'].includes(rt)) {
+        // An answer that exists but couldn't be scored isn't "not answered".
+        status = { label: _hasAnswer && rt !== 'idk' ? 'No Usable Answer' : 'Not Answered', color: faint, isScore: false };
+      }
+      else status = { label: `${formatScore1(q.questionScore)}/10`, color: scoreRGB(q.questionScore), isScore: true };
+
+      const qSkills = key === 'hr' ? [] : q.skills;
+      const qText = splitLines(q.question || `Question ${q.qNum}`, CW - 28, 8.5);
       let answerDisplay: string;
       if (q.notDelivered) {
         answerDisplay = 'Not asked — the interview ended before this question was reached.';
-      } else if (!_rawAns || _rawAns.toUpperCase() === '[SKIPPED]' || _rawAns.toUpperCase() === '[NOT ASKED]') {
+      } else if (_nonEnglish) {
+        answerDisplay = 'Answered in a language other than English — not scored. The original answer is in the interview transcript.';
+      } else if (!_hasAnswer) {
         answerDisplay = _src === 'candidate'
           ? 'Skipped — candidate moved to the next question.'
           : _rt === 'idk'
@@ -222,7 +308,7 @@ export async function exportEvalReportPDF(
       } else {
         answerDisplay = _rawAns;
       }
-      const ansLines = splitLines(answerDisplay, CW - 10, 8);
+      const ansLines = splitLines(answerDisplay, CW - 14, 8);
       const answerBlockH = 4.5 + ansLines.length * ANSWER_LINE_H;
       const skillRows = qSkills.map((s) => {
         const lines = splitLines(s.name, CW - 62, 8);
@@ -266,10 +352,7 @@ export async function exportEvalReportPDF(
       const _ansTop = cursorY;
       doc.setFont('helvetica', 'bold'); doc.setFontSize(7); txt(sub);
       doc.text('Answer', M, _ansTop + 2.5);
-      const _ansIsPlaceholder = q.notDelivered
-        || !_rawAns
-        || _rawAns.toUpperCase() === '[SKIPPED]'
-        || _rawAns.toUpperCase() === '[NOT ASKED]';
+      const _ansIsPlaceholder = q.notDelivered || !_hasAnswer || _nonEnglish;
       doc.setFont('helvetica', _ansIsPlaceholder ? 'italic' : 'normal');
       doc.setFontSize(8); txt(_ansIsPlaceholder ? faint : ink);
       ansLines.forEach((lineText, idx) => {
@@ -323,11 +406,155 @@ export async function exportEvalReportPDF(
     });
     y += 3;
   };
+  // Section header bar — same style as the AI Analysis bar below.
+  const sectionBar = (title: string, color: RGB) => {
+    ensure(20);
+    fill(color); doc.roundedRect(M, y, CW, 9, 1.5, 1.5, 'F');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); txt(white);
+    doc.text(title, M + 3, y + 6); y += 13;
+  };
+  // Page order — a one-page scorecard first (verdict, integrity status,
+  // executive summary, AI analysis, skills, recommendations, AI notice),
+  // then the "Detailed Evidence" appendix on a new page (integrity detail,
+  // question-by-question, scoring note). The scorecard stands on its own
+  // for a hiring manager who only reads the first page.
 
-  drawSection('mth', 'MUST-HAVE SECTION', scores.mustHave, true, isPartialEvaluation ? 'Partial' : (pass ? 'PASS' : 'FAIL'), verdict);
-  drawSection('nth', 'NICE-TO-HAVE SECTION', scores.niceToHave, true, 'Informational only', indigo);
-  drawSection('hr', 'HR SECTION', 0, false, '', faint);
+  // ── Integrity data ────────────────────────────────────────────────
+  // The same violations the result page's Violations tab and malpractice
+  // banners read (session.proctoring_violations).
+  const violations = details.violations ?? [];
+  const vs = summarizeViolations(violations);
+  const timeOf = (ts?: string) => (ts ? formatISTTime(ts) : '');
+  const times = (n: number) => `${n} time${n !== 1 ? 's' : ''}`;
+  // Each flag the result page raises as a banner: long form for the
+  // appendix callouts, short form for the page-1 status line.
+  const integrityFlags: { long: string; short: string }[] = [];
+  const voiceHits = violations.filter((v) => v.event_type === 'multiple_voices' || v.event_type === 'voice_identity_changed');
+  if (voiceHits.length > 0) {
+    const at = timeOf(voiceHits[0].timestamp);
+    integrityFlags.push({
+      long: `Multiple speakers detected — possible malpractice. A voice other than the enrolled candidate was heard ${times(voiceHits.length)}${at ? `, first at ${at}` : ''}. The affected answers are marked and not scored.`,
+      short: `Multiple speakers (${voiceHits.length}x${at ? `, first at ${at}` : ''})`,
+    });
+  }
+  const faceHits = violations.filter((v) => ['multiple_faces', 'face_identity_changed'].includes(v.event_type));
+  if (faceHits.length > 0) {
+    integrityFlags.push({
+      long: `Another person or a different face was seen on camera (${times(faceHits.length)}).`,
+      short: `Another person on camera (${faceHits.length}x)`,
+    });
+  }
+  if (vs.phoneSeen) integrityFlags.push({ long: 'A mobile phone was detected on camera.', short: 'Phone on camera' });
+  if (vs.terminated) integrityFlags.push({ long: 'The interview was ended automatically by proctoring.', short: 'Ended by proctoring' });
+  if (vs.repeatDeviceDisconnects) {
+    integrityFlags.push({
+      long: `The camera or microphone was disconnected ${vs.deviceDisconnects} times.`,
+      short: `Device disconnected ${vs.deviceDisconnects}x`,
+    });
+  }
+  // Per-issue rows (advisory timeline markers excluded, as on the Violations tab).
+  const issueMap = new Map<string, { label: string; sev: string; count: number; first?: string }>();
+  violations.forEach((v) => {
+    const sev = recruiterSeverity(v);
+    if (sev === 'advisory') return;
+    const raw = labelOfViolation(v);
+    const label = raw.charAt(0).toUpperCase() + raw.slice(1);
+    const row = issueMap.get(label) ?? { label, sev, count: 0, first: v.timestamp };
+    row.count += 1;
+    if (v.timestamp && (!row.first || v.timestamp < row.first)) row.first = v.timestamp;
+    issueMap.set(label, row);
+  });
+  const sevRank: Record<string, number> = { serious: 0, moderate: 1, minor: 2 };
+  const issueRows = [...issueMap.values()].sort((a, b) => (sevRank[a.sev] - sevRank[b.sev]) || (b.count - a.count));
+  const integrityLevel: 'high' | 'review' | 'clear' =
+    vs.someoneElse || vs.terminated || vs.phoneSeen || vs.serious > 0 ? 'high'
+      : vs.counted > 0 || !details.identityVerified ? 'review'
+        : 'clear';
+  const hasIntegrityDetail = integrityFlags.length > 0 || issueRows.length > 0;
 
+  // ── Integrity status (page 1, every report) ───────────────────────
+  // Always in the same place, so a reader learns where to look — and
+  // "No issues" is information too.
+  {
+    const tone = integrityLevel === 'high'
+      ? { label: 'High Risk', color: red, bg: [254, 242, 242] as RGB }
+      : integrityLevel === 'review'
+        ? { label: 'Review Needed', color: amber, bg: amberBg }
+        : { label: 'No Issues', color: green, bg: [236, 253, 245] as RGB };
+    const countLabel = vs.counted === 0
+      ? 'no violations recorded'
+      : `${vs.counted} violation${vs.counted !== 1 ? 's' : ''} (${vs.serious} serious, ${vs.moderate} moderate, ${vs.minor} minor)`;
+    const flagText = integrityFlags.length > 0
+      ? `Flags: ${integrityFlags.map((f) => f.short).join('  ·  ')}. Details in the Detailed Evidence section.`
+      : hasIntegrityDetail ? 'Details in the Detailed Evidence section.' : '';
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+    const flagLines = flagText ? splitSafe(flagText, CW - 10) : [];
+    const boxH = 9 + flagLines.length * 3.8;
+    ensure(boxH + 4);
+    fill(tone.bg); stroke(tone.color); doc.setLineWidth(0.35); doc.roundedRect(M, y, CW, boxH, 1.5, 1.5, 'FD'); doc.setLineWidth(0.2);
+    fill(tone.color); doc.roundedRect(M, y, 1.6, boxH, 0.8, 0.8, 'F');
+    let ix = M + 5;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); txt(ink);
+    doc.text('Integrity:', ix, y + 5.6); ix += doc.getTextWidth('Integrity: ');
+    txt(tone.color); doc.text(tone.label, ix, y + 5.6); ix += doc.getTextWidth(tone.label) + 6;
+    doc.setFontSize(8); txt(sub); doc.setFont('helvetica', 'normal');
+    doc.text('ID verification:', ix, y + 5.6); ix += doc.getTextWidth('ID verification: ');
+    const idLabel = details.identityVerified ? 'Verified' : 'Not verified';
+    doc.setFont('helvetica', 'bold'); txt(details.identityVerified ? green : red);
+    doc.text(idLabel, ix, y + 5.6); ix += doc.getTextWidth(idLabel) + 6;
+    doc.setFont('helvetica', 'normal'); txt(sub);
+    doc.text(`Proctoring: ${countLabel}`, ix, y + 5.6);
+    if (flagLines.length > 0) {
+      txt(integrityLevel === 'high' ? [185, 28, 28] : ink);
+      doc.text(flagLines, M + 5, y + 10);
+    }
+    y += boxH + 5;
+  }
+
+  // Executive Summary — the same three paragraphs as the on-screen report.
+  const pdfQuestions = perQuestionDetails.length;
+  const pdfHrQuestions = perQuestionDetails.filter((q) => q.section === 'hr').length;
+  const pdfSkills = [...mustHaveClusters, ...niceToHaveClusters].reduce((n, c) => n + c.skills.length, 0);
+  // "14 questions" read as 14 scored ones; say how many of them are HR.
+  const questionBreakdown = pdfHrQuestions > 0 && pdfHrQuestions < pdfQuestions
+    ? ` (${pdfQuestions - pdfHrQuestions} scored, ${pdfHrQuestions} HR not scored)`
+    : '';
+  // The original summary sentences, one per point with a drawn tick —
+  // matching the on-screen Executive Summary (helvetica has no ✓ glyph).
+  const nhStrength = scores.niceToHave >= 7.5 ? 'strong' : 'adequate';
+  const execPoints: string[] = [
+    `${candidate.name} completed an AI-powered technical interview for the ${candidate.role} position on ${interview.date || 'the scheduled date'}.`,
+    `The evaluation consisted of ${pdfQuestions} question${pdfQuestions !== 1 ? 's' : ''}${questionBreakdown} covering ${pdfSkills} skill${pdfSkills !== 1 ? 's' : ''} across multiple priority levels.`,
+  ];
+  if (sectionsPresent.mustHave) {
+    execPoints.push(`The candidate achieved a Must-Have Section Score of ${formatScore1(scores.mustHave)}/10, ` + (isPartialEvaluation
+      ? 'based only on the questions the candidate attended before the interview ended.'
+      : pass
+        ? `which exceeds the required threshold of ${MHS_THRESHOLD.toFixed(1)} by ${formatScore1((scores.mustHave - MHS_THRESHOLD))} points.`
+        : `which falls below the required threshold of ${MHS_THRESHOLD.toFixed(1)} by ${formatScore1((MHS_THRESHOLD - scores.mustHave))} points.`));
+    if (sectionsPresent.niceToHave) {
+      execPoints.push(`The Nice-to-Have Section Score was ${formatScore1(scores.niceToHave)}/10, demonstrating ${nhStrength} proficiency in supplementary skills.`);
+    }
+  }
+  execPoints.push(isPartialEvaluation
+    ? 'Because the interview was terminated early, this report provides question-by-question and skill-by-skill analysis only; it does not generate a final hiring recommendation or match score.'
+    : `Based on this evaluation, the assessment recommends ${pass ? 'proceeding with the hiring process' : 'not proceeding with the current application'} with a match score of ${confidence}%.`);
+  sectionBar('EXECUTIVE SUMMARY', indigo);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
+  const tickIndent = 6;
+  execPoints.forEach((text) => {
+    const lines = splitSafe(text, CW - tickIndent);
+    ensure(lines.length * 4.4 + 2);
+    // Tick: a short down-stroke then a long up-stroke.
+    stroke(indigo); doc.setLineWidth(0.5);
+    doc.line(M + 0.6, y + 1.8, M + 1.6, y + 2.9);
+    doc.line(M + 1.6, y + 2.9, M + 3.6, y + 0.4);
+    doc.setLineWidth(0.2);
+    txt(ink); doc.text(lines, M + tickIndent, y + 3);
+    y += lines.length * 4.4 + 2;
+  });
+  txt(ink);
+  y += 3;
   // AI Analysis — header bar
   ensure(20);
   fill(indigo); doc.roundedRect(M, y, CW, 9, 1.5, 1.5, 'F');
@@ -352,11 +579,14 @@ export async function exportEvalReportPDF(
       ]
     : [
         `${candidate.name} ${pass ? 'meets' : 'does not meet'} the Must-Have bar — ${formatScore1(scores.mustHave)}/10 vs the ${MHS_THRESHOLD.toFixed(1)} threshold (${pass ? '+' : '-'}${formatScore1(Math.abs(scores.mustHave - MHS_THRESHOLD))}).`,
-        `This drives the ${finalResultLabel} decision; Nice-to-Have (${formatScore1(scores.niceToHave)}/10) is informational and HR is not scored.`,
+        // Nice-to-Have is only mentioned when the interview actually had that section.
+        sectionsPresent.niceToHave
+          ? `This drives the ${finalResultLabel} decision; Nice-to-Have (${formatScore1(scores.niceToHave)}/10) is informational and HR is not scored.`
+          : `This drives the ${finalResultLabel} decision; HR questions are not scored.`,
       ];
   verdictPoints.push(...summaryToPoints(aiSummary));
   doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
-  const pointLines = verdictPoints.map((pt) => doc.splitTextToSize(pt, CW - 14) as string[]);
+  const pointLines = verdictPoints.map((pt) => splitSafe(pt, CW - 14));
   const vBoxH = pointLines.reduce((h, ls) => h + ls.length * 4.4 + 1.5, 0) + 5;
   ensure(vBoxH + 3);
   const vTint: RGB = isPartialEvaluation ? [255, 251, 235] : (pass ? [236, 253, 245] : [254, 242, 242]);
@@ -375,9 +605,9 @@ export async function exportEvalReportPDF(
     let height = 11;
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
-    const safeItems = items.length > 0 ? items.slice(0, 5) : ['No items captured.'];
+    const safeItems = items.length > 0 ? items.slice(0, 5) : ['None identified.'];
     safeItems.forEach((item) => {
-      const lines = doc.splitTextToSize(`• ${item}`, width - 8);
+      const lines = splitSafe(`• ${item}`, width - 8);
       height += lines.length * 4 + 1;
     });
     return Math.max(height + 3, 22);
@@ -397,9 +627,9 @@ export async function exportEvalReportPDF(
     doc.text(title, x + 3, topY + 5);
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8); txt(ink);
     let cy = topY + 9;
-    const safeItems = items.length > 0 ? items.slice(0, 5) : ['No items captured.'];
+    const safeItems = items.length > 0 ? items.slice(0, 5) : ['None identified.'];
     safeItems.forEach((item) => {
-      const lines = doc.splitTextToSize(`• ${item}`, width - 8);
+      const lines = splitSafe(`• ${item}`, width - 8);
       doc.text(lines, x + 3, cy + 3);
       cy += lines.length * 4 + 1;
     });
@@ -411,55 +641,64 @@ export async function exportEvalReportPDF(
   drawInsightCard(M, y, columnWidth, insightHeight, 'Key Strengths', strengths, [4, 120, 87], [236, 253, 245]);
   drawInsightCard(M + columnWidth + columnGap, y, columnWidth, insightHeight, 'Areas of Concern', weaknesses, [185, 28, 28], [254, 242, 242]);
   y += insightHeight + 4;
+  // ── Skills Assessment Summary ─────────────────────────────────────
+  // Every skill in one table — the on-screen report's Skills Assessment
+  // Summary (same flattening, P-tag/weight and Demonstrated/Weak/Not
+  // demonstrated status), so strengths and gaps read without the
+  // question-by-question pages.
+  {
+    const flatten = (clusters: typeof mustHaveClusters) => clusters.flatMap((c) =>
+      c.skills.map((s) => ({ name: s.name, score: s.score, cluster: c.name, ...priorityLabel(c.priority) })));
+    const groups = [
+      { title: 'Must-Have Skills', rows: sectionsPresent.mustHave ? flatten(mustHaveClusters) : [] },
+      { title: 'Nice-to-Have Skills', rows: sectionsPresent.niceToHave ? flatten(niceToHaveClusters) : [] },
+    ].filter((g) => g.rows.length > 0);
 
-  // Section header bar — same style as the AI Analysis bar above.
-  const sectionBar = (title: string, color: RGB) => {
-    ensure(20);
-    fill(color); doc.roundedRect(M, y, CW, 9, 1.5, 1.5, 'F');
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); txt(white);
-    doc.text(title, M + 3, y + 6); y += 13;
-  };
-
-  // Executive Summary — the same three paragraphs as the on-screen report.
-  const pdfQuestions = perQuestionDetails.length;
-  const pdfSkills = [...mustHaveClusters, ...niceToHaveClusters].reduce((n, c) => n + c.skills.length, 0);
-  // The original summary sentences, one per point with a drawn tick —
-  // matching the on-screen Executive Summary (helvetica has no ✓ glyph).
-  const nhStrength = scores.niceToHave >= 7.5 ? 'strong' : 'adequate';
-  const execPoints: string[] = [
-    `${candidate.name} completed an AI-powered technical interview for the ${candidate.role} position on ${interview.date || 'the scheduled date'}.`,
-    `The evaluation consisted of ${pdfQuestions} question${pdfQuestions !== 1 ? 's' : ''} covering ${pdfSkills} skill${pdfSkills !== 1 ? 's' : ''} across multiple priority levels.`,
-  ];
-  if (sectionsPresent.mustHave) {
-    execPoints.push(`The candidate achieved a Must-Have Section Score of ${formatScore1(scores.mustHave)}/10, ` + (isPartialEvaluation
-      ? 'based only on the questions the candidate attended before the interview ended.'
-      : pass
-        ? `which exceeds the required threshold of ${MHS_THRESHOLD.toFixed(1)} by ${formatScore1((scores.mustHave - MHS_THRESHOLD))} points.`
-        : `which falls below the required threshold of ${MHS_THRESHOLD.toFixed(1)} by ${formatScore1((MHS_THRESHOLD - scores.mustHave))} points.`));
-    if (sectionsPresent.niceToHave) {
-      execPoints.push(`The Nice-to-Have Section Score was ${formatScore1(scores.niceToHave)}/10, demonstrating ${nhStrength} proficiency in supplementary skills.`);
+    if (groups.length > 0) {
+      sectionBar('SKILLS ASSESSMENT SUMMARY', indigo);
+      const cSkill = M + 2, cCluster = M + 66, cType = M + 112, cWeight = M + 129;
+      const cBar = M + 134, barW = 18, cScore = M + 162, cStatus = M + 164;
+      const head = () => {
+        fill(bgc); doc.rect(M, y, CW, 6, 'F');
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); txt(sub);
+        doc.text('Skill', cSkill, y + 4); doc.text('Cluster', cCluster, y + 4);
+        doc.text('Type', cType, y + 4); doc.text('Weight', cWeight, y + 4, { align: 'right' });
+        doc.text('Score', cBar, y + 4); doc.text('Status', cStatus, y + 4);
+        y += 7;
+      };
+      groups.forEach((g) => {
+        ensure(20);
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); txt(ink);
+        doc.text(`${g.title} (${g.rows.length} skill${g.rows.length !== 1 ? 's' : ''})`, M, y + 3);
+        y += 5;
+        head();
+        g.rows.forEach((r) => {
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+          const nameLines = splitSafe(r.name, cCluster - cSkill - 3);
+          const clusterLines = splitSafe(r.cluster || '—', cType - cCluster - 3);
+          const h = Math.max(nameLines.length, clusterLines.length) * 3.6 + 1.6;
+          if (y + h > pageH - M - 4) { doc.addPage(); y = M; head(); }
+          txt(ink); doc.text(nameLines, cSkill, y + 3);
+          txt(sub); doc.text(clusterLines, cCluster, y + 3);
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(7);
+          txt(r.tag === 'P1' ? indigo : r.tag === 'P2' ? amber : faint); doc.text(r.tag, cType, y + 3);
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(8); txt(sub);
+          doc.text(String(r.weight), cWeight, y + 3, { align: 'right' });
+          bar(cBar, y + 1.3, barW, r.score, scoreRGB(r.score));
+          doc.setFont('helvetica', 'bold'); txt(scoreRGB(r.score));
+          doc.text(formatSkillScore(r.score), cScore, y + 3, { align: 'right' });
+          const status = r.score >= MHS_THRESHOLD
+            ? { label: 'Demonstrated', color: green }
+            : r.score > 0 ? { label: 'Weak', color: amber } : { label: 'Not demonstrated', color: faint };
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); txt(status.color);
+          doc.text(status.label, cStatus, y + 3);
+          y += h;
+          stroke(line); doc.setLineWidth(0.1); doc.line(M, y - 0.4, M + CW, y - 0.4); doc.setLineWidth(0.2);
+        });
+        y += 4;
+      });
     }
   }
-  execPoints.push(isPartialEvaluation
-    ? 'Because the interview was terminated early, this report provides question-by-question and skill-by-skill analysis only; it does not generate a final hiring recommendation or match score.'
-    : `Based on this evaluation, the assessment recommends ${pass ? 'proceeding with the hiring process' : 'not proceeding with the current application'} with a match score of ${confidence}%.`);
-  sectionBar('EXECUTIVE SUMMARY', indigo);
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
-  const tickIndent = 6;
-  execPoints.forEach((text) => {
-    const lines = doc.splitTextToSize(text, CW - tickIndent);
-    ensure(lines.length * 4.4 + 2);
-    // Tick: a short down-stroke then a long up-stroke.
-    stroke(indigo); doc.setLineWidth(0.5);
-    doc.line(M + 0.6, y + 1.8, M + 1.6, y + 2.9);
-    doc.line(M + 1.6, y + 2.9, M + 3.6, y + 0.4);
-    doc.setLineWidth(0.2);
-    txt(ink); doc.text(lines, M + tickIndent, y + 3);
-    y += lines.length * 4.4 + 2;
-  });
-  txt(ink);
-  y += 3;
-
   // Recommendations & Next Steps — the same bullets as the on-screen report.
   const recs: [string, string][] = pass
     ? [
@@ -471,7 +710,9 @@ export async function exportEvalReportPDF(
     : [
         ['Do not proceed:', 'Candidate did not meet the minimum requirements for must-have skills'],
         ['Skills gap identified:', 'Significant development needed in core technical areas'],
-        ['Alternative path:', 'Consider for junior positions or recommend additional training'],
+        // Was "Consider for junior positions" — contradicted reports whose role
+        // is already entry level.
+        ['Re-assess later:', 'Consider a fresh interview only once the candidate has gained hands-on experience in the must-have skills'],
       ];
   sectionBar('RECOMMENDATIONS & NEXT STEPS', pass && !isPartialEvaluation ? teal : indigo);
   doc.setFontSize(8.5);
@@ -486,17 +727,107 @@ export async function exportEvalReportPDF(
     y += lines.length * 4.4 + 2;
   });
   txt(ink); y += 3;
+  // ── AI-assisted evaluation notice + link back to the full interview ──
+  // Hiring compliance expects AI-generated assessments to say so and to
+  // leave the decision with a person; the link takes the reader to the
+  // recording and transcript this PDF can only summarise.
+  {
+    const notice = 'AI-assisted evaluation. This report was produced by an AI interviewer to support, not replace, human judgement. The final hiring decision must be made by an authorized reviewer after checking the interview recording and transcript.';
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5);
+    const noticeLines = splitSafe(notice, CW - 8);
+    const boxH = noticeLines.length * 3.6 + (details.resultUrl ? 9 : 5);
+    ensure(boxH + 2);
+    fill(bgc); stroke(line); doc.roundedRect(M, y, CW, boxH, 1.5, 1.5, 'FD');
+    txt(sub); doc.text(noticeLines, M + 4, y + 4.5);
+    if (details.resultUrl) {
+      const ly = y + 4.5 + noticeLines.length * 3.6 + 0.6;
+      doc.setFont('helvetica', 'bold'); txt(indigo);
+      doc.textWithLink('View the full interview in TalentFlow (recording, transcript, violations)', M + 4, ly, { url: details.resultUrl });
+    }
+    y += boxH + 4;
+  }
 
-  // Footer
-  ensure(18);
-  fill([238, 242, 255]); doc.roundedRect(M, y, CW, 16, 2, 2, 'F');
+  // ═════ Detailed Evidence — appendix, always from a fresh page ═════
+  doc.addPage(); y = M;
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(13); txt(ink);
+  doc.text('Detailed Evidence', M, y + 4);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8); txt(sub);
+  doc.text(pdfSafe(`${candidate.name}  ·  ${candidate.role}`), M, y + 9);
+  y += 12; stroke(indigo); doc.setLineWidth(0.5); doc.line(M, y, pageW - M, y); doc.setLineWidth(0.2); y += 5;
+
+  // Integrity detail — callouts + per-issue table. Skipped when there's
+  // nothing to detail (the page-1 status already says "No Issues").
+  if (hasIntegrityDetail) {
+    sectionBar('INTEGRITY & PROCTORING', integrityLevel === 'high' ? red : indigo);
+    integrityFlags.forEach(({ long }) => {
+      const lines = splitSafe(long, CW - 8);
+      const h = lines.length * 4 + 4;
+      ensure(h + 2);
+      fill([254, 242, 242]); stroke(red); doc.roundedRect(M, y, CW, h, 1.2, 1.2, 'FD');
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8); txt([185, 28, 28]);
+      doc.text(lines, M + 4, y + 4.6);
+      y += h + 2;
+    });
+    if (issueRows.length > 0) {
+      const colSev = M + CW - 62, colCount = M + CW - 30, colFirst = M + CW;
+      const head = () => {
+        fill(bgc); doc.rect(M, y, CW, 6, 'F');
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); txt(sub);
+        doc.text('Issue', M + 2, y + 4); doc.text('Severity', colSev, y + 4);
+        doc.text('Count', colCount, y + 4, { align: 'right' }); doc.text('First seen', colFirst - 2, y + 4, { align: 'right' });
+        y += 7;
+      };
+      ensure(14); head();
+      issueRows.forEach((r) => {
+        const lines = splitSafe(r.label, colSev - M - 6);
+        const h = lines.length * 3.8 + 1.5;
+        if (y + h > pageH - M - 4) { doc.addPage(); y = M; head(); }
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8); txt(ink);
+        doc.text(lines, M + 2, y + 3);
+        const sevColor: RGB = r.sev === 'serious' ? red : r.sev === 'moderate' ? amber : sub;
+        doc.setFont('helvetica', 'bold'); txt(sevColor);
+        doc.text(r.sev.charAt(0).toUpperCase() + r.sev.slice(1), colSev, y + 3);
+        doc.setFont('helvetica', 'normal'); txt(ink);
+        doc.text(String(r.count), colCount, y + 3, { align: 'right' });
+        txt(sub); doc.text(timeOf(r.first) || '—', colFirst - 2, y + 3, { align: 'right' });
+        y += h;
+        stroke(line); doc.setLineWidth(0.1); doc.line(M, y - 0.5, M + CW, y - 0.5); doc.setLineWidth(0.2);
+      });
+    }
+    y += 5;
+  }
+
+  // ── Question-by-question detail ───────────────────────────────────
+  drawSection('mth', 'MUST-HAVE SECTION', scores.mustHave, true, isPartialEvaluation ? 'Partial' : (pass ? 'PASS' : 'FAIL'), verdict);
+  drawSection('nth', 'NICE-TO-HAVE SECTION', scores.niceToHave, true, 'Informational only', indigo);
+  drawSection('hr', 'HR SECTION', 0, false, '', faint);
+
+  // Scoring note (confidentiality now sits in every page's footer).
+  ensure(14);
+  fill([238, 242, 255]); doc.roundedRect(M, y, CW, 12, 2, 2, 'F');
   doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); txt(indigoDk);
+  const nthNote = sectionsPresent.niceToHave ? ' Nice-to-Have is informational;' : '';
   const foot = isPartialEvaluation
-    ? `Scoring: This terminated interview report evaluates only the attended questions. No final result or match score is generated. Nice-to-Have is informational; HR is not scored. Question Score = Sum(Skill x Weight) / Sum(Weights), where P1=10, P2=7, P3=4. All scores are 0-10.   Confidentiality: proprietary — for authorized hiring personnel only.`
-    : `Scoring: Must-Have Section Score (Pass >= ${MHS_THRESHOLD.toFixed(1)}) drives the final result; Nice-to-Have is informational; HR is not scored. Question Score = Sum(Skill x Weight) / Sum(Weights), where P1=10, P2=7, P3=4. All scores are 0-10.   Confidentiality: proprietary — for authorized hiring personnel only.`;
+    ? `Scoring: This terminated interview report evaluates only the attended questions. No final result or match score is generated.${nthNote} HR is not scored. Question Score = Sum(Skill x Weight) / Sum(Weights), where P1=10, P2=7, P3=4. All scores are 0-10.`
+    : `Scoring: Must-Have Section Score (Pass >= ${MHS_THRESHOLD.toFixed(1)}) drives the final result;${nthNote} HR is not scored. Question Score = Sum(Skill x Weight) / Sum(Weights), where P1=10, P2=7, P3=4. All scores are 0-10.`;
   doc.text(doc.splitTextToSize(foot, CW - 6), M + 3, y + 4);
 
-  const fileName = `eval_report_${candidate.name || 'candidate'}_${evalId}`.replace(/\s+/g, '_') + '.pdf';
+  // Footer on every page: who/which report, confidentiality, page X of Y.
+  const pageCount = doc.getNumberOfPages();
+  for (let p = 1; p <= pageCount; p++) {
+    doc.setPage(p);
+    stroke(line); doc.setLineWidth(0.2); doc.line(M, pageH - 9, pageW - M, pageH - 9);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); txt(faint);
+    doc.text(pdfSafe(`${candidate.name}${evalId ? `  ·  Report #${evalId}` : ''}  ·  AI-assisted evaluation  ·  Confidential — for authorized hiring personnel only`), M, pageH - 5.5);
+    doc.text(`Page ${p} of ${pageCount}`, pageW - M, pageH - 5.5, { align: 'right' });
+  }
+
+  // eval_report_<name>_<report id | CID>_<interview date>.pdf — unique per
+  // candidate/interview even without a backend report id.
+  const fileDate = details.completedAt ? new Date(details.completedAt) : null;
+  const fileDateStr = fileDate && !Number.isNaN(fileDate.getTime()) ? fileDate.toISOString().slice(0, 10) : '';
+  const fileName = ['eval_report', candidate.name || 'candidate', evalId || details.candidateCid, fileDateStr]
+    .filter(Boolean).join('_').replace(/[\s/\:*?"<>|]+/g, '_') + '.pdf';
   if (save) doc.save(fileName);
 
   if (sessionId) {
@@ -1118,7 +1449,7 @@ export function EvalReportCombined({
                 <>
                   <li><strong>Do not proceed:</strong> Candidate did not meet the minimum requirements for must-have skills</li>
                   <li><strong>Skills gap identified:</strong> Significant development needed in core technical areas</li>
-                  <li><strong>Alternative path:</strong> Consider for junior positions or recommend additional training</li>
+                  <li><strong>Re-assess later:</strong> Consider a fresh interview only once the candidate has gained hands-on experience in the must-have skills</li>
                 </>
               )}
             </ul>

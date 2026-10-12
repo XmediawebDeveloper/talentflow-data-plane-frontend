@@ -8,52 +8,104 @@ import { mapJDToJob } from '@/lib/utils/jobOpeningDisplay';
 import FeatureGate from '@/components/shared/FeatureGate';
 import { Skeleton } from '@/components/ui/skeleton';
 
-// Neutral-gray skeleton mirroring the AI Talent Match "Matched Jobs" landing
-// (viewMode='history', historyPageView='cards') exactly, so there is no layout
-// jump when AITalentMatchPage takes over: the same unpadded <main>/max-w/white
-// card chrome, breadcrumb, header (icon + title + "Run AI Match" action), and
-// the four clickable StatsCards. The landing shows ONLY the cards until one is
-// clicked, so the skeleton stops there too — no list is drawn.
+// Neutral-gray skeleton mirroring the AI Talent Match landing as it is now —
+// the stat cards are off (SHOW_STAT_CARDS), so it opens straight on View by
+// Job — so there is no layout jump when AITalentMatchPage takes over:
+//   breadcrumb bar · header (icon, title, Run AI Match)
+//   one card: row 1 search + Location + Industry + More Filters + Sort by + List/Grid,
+//             row 2 Select All | All + 3 rating pills | View by toggle … Expand all,
+//             then the job cards (tick, JD badge, title, version, history;
+//             By / Matched / Scored line; rating stack, details icon, View Candidates).
 function AITalentMatchSkeleton() {
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
+    <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950" aria-busy="true" aria-label="Loading AI Talent Match">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
-          {/* Breadcrumb (Dashboard / AI Talent Match) */}
-          <Skeleton className="h-4 w-48 mb-4 md:mb-6" />
+        <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl min-h-[calc(100dvh-7rem)]">
+          {/* Breadcrumb bar (Dashboard › AI Talent Match) */}
+          <div className="flex items-center gap-3 h-[46px] px-4 mb-4 md:mb-6 rounded-lg border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-800/40">
+            <Skeleton className="h-4 w-20" />
+            <Skeleton className="h-3 w-3 rounded-sm" />
+            <Skeleton className="h-4 w-28" />
+          </div>
 
           {/* Header: icon + title/subtitle + Run AI Match action */}
           <div className="mb-5">
             <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
               <Skeleton className="h-9 w-9 rounded-lg shrink-0" />
               <div className="flex-1 min-w-0 space-y-2">
-                <Skeleton className="h-6 w-56" />
-                <Skeleton className="h-4 w-72 max-w-full" />
+                <Skeleton className="h-6 w-64 max-w-full" />
+                <Skeleton className="h-4 w-80 max-w-full" />
               </div>
-              <Skeleton className="h-9 w-full sm:w-32 rounded-lg shrink-0" />
+              <Skeleton className="h-9 w-full sm:w-36 rounded-lg shrink-0" />
             </div>
           </div>
 
-          {/* Stat cards — mirrors StatsCardGrid (columns=4) + neutral clickable
-              StatsCard: icon tile, label, value, and top-right click arrow. */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5 sm:gap-3 mb-5">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div
-                key={i}
-                className="relative overflow-hidden rounded-xl border border-brand-blue/15 dark:border-brand-blue/25 bg-white dark:bg-slate-900 shadow-sm px-3.5 py-3.5 sm:px-4 sm:py-4 pr-12"
-              >
-                <div className="relative flex items-start justify-between gap-4">
-                  <div className="flex min-w-0 items-start gap-2.5">
-                    <Skeleton className="h-9 w-9 rounded-xl shrink-0" />
-                    <div className="min-w-0 space-y-2">
-                      <Skeleton className="h-4 w-24" />
-                      <Skeleton className="h-7 w-12" />
+          <div className="rounded-lg border border-gray-200 dark:border-slate-700/60 p-4 sm:p-6">
+            {/* Row 1: search + Location + Industry + More Filters + Sort by + List/Grid */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 lg:gap-2">
+              <Skeleton className="h-[38px] w-full sm:flex-1 rounded-lg" />
+              <div className="flex flex-wrap items-center gap-2">
+                <Skeleton className="h-[38px] w-full sm:w-48 rounded-lg" />
+                <Skeleton className="h-[38px] w-full sm:w-48 rounded-lg" />
+                <Skeleton className="h-[38px] w-36 rounded-lg" />
+                <Skeleton className="hidden sm:block h-4 w-12" />
+                <Skeleton className="h-[38px] w-[12rem] rounded-lg" />
+                <Skeleton className="h-[38px] w-[4.5rem] rounded-lg" />
+              </div>
+            </div>
+
+            {/* Row 2: Select All | All + Rating 10 / 9 – 7 / Below 7 | View by … Expand all */}
+            <div className="mt-3 pt-3 mb-4 border-t border-gray-200 dark:border-slate-700/60 flex flex-wrap items-center gap-2">
+              <Skeleton className="h-[38px] w-36 rounded-lg" />
+              <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-200 dark:bg-slate-700 mx-1" />
+              <Skeleton className="h-[38px] w-28 rounded-lg" />
+              <Skeleton className="h-[38px] w-36 rounded-lg" />
+              <Skeleton className="h-[38px] w-40 rounded-lg" />
+              <Skeleton className="h-[38px] w-48 rounded-lg" />
+              <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-200 dark:bg-slate-700 mx-1" />
+              <Skeleton className="h-4 w-14" />
+              <Skeleton className="h-[38px] w-[20rem] max-w-full rounded-lg" />
+              <Skeleton className="h-[38px] w-36 rounded-lg sm:ml-auto" />
+            </div>
+
+            {/* Job cards */}
+            <div className="space-y-3">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="rounded-xl border border-gray-100 dark:border-slate-700/60 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-4"
+                >
+                  <div className="flex-1 min-w-0 space-y-3">
+                    {/* tick · JD badge · title · version · history */}
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <Skeleton className="h-4 w-4 rounded" />
+                      <Skeleton className="h-7 w-16 rounded-md" />
+                      <Skeleton className="h-6 w-64 max-w-[50vw]" />
+                      <Skeleton className="h-6 w-12 rounded-full" />
+                      <Skeleton className="h-8 w-8 rounded-full" />
+                    </div>
+                    {/* By · Matched · Scored */}
+                    <div className="flex items-center gap-4 flex-wrap pl-7">
+                      <Skeleton className="h-4 w-28" />
+                      <Skeleton className="h-4 w-48" />
+                      <Skeleton className="h-4 w-28" />
+                    </div>
+                  </div>
+                  {/* rating stack · details icon / View Candidates */}
+                  <div className="flex items-center gap-4">
+                    <div className="space-y-1.5">
+                      <Skeleton className="h-6 w-32 rounded-md" />
+                      <Skeleton className="h-6 w-32 rounded-md" />
+                      <Skeleton className="h-6 w-32 rounded-md" />
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      <Skeleton className="h-11 w-11 rounded-lg" />
+                      <Skeleton className="h-11 w-48 rounded-lg" />
                     </div>
                   </div>
                 </div>
-                <Skeleton className="absolute right-3 top-3 h-7 w-7 rounded-lg" />
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       </div>

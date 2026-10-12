@@ -2,18 +2,18 @@
 
 import { useState, useMemo, useEffect, useRef } from 'react';
 // Shared with the assessment results page — one duration probe for all four recordings.
-import { VideoWithDuration } from '@/components/recording/RecordingPlayer';
+import { VideoWithDuration, type VideoMarker } from '@/components/recording/RecordingPlayer';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import {
-  ArrowLeft, Clock, MessageSquare, ThumbsUp, ThumbsDown,
+  Clock, MessageSquare, ThumbsUp, ThumbsDown,
   AlertTriangle, VideoOff, ChevronDown, ChevronUp, Video,
-  BarChart3, Brain, FileText, Layers, Bot,
+  BarChart3, Brain, FileText, Layers,
   ShieldAlert, Monitor, Clipboard, MousePointer, Eye, UserX,
   Volume2, Users, Maximize2, Camera, Mic, User, ChevronLeft, ChevronRight, Smartphone,
   Shield, CheckCircle2, XCircle, Activity, RefreshCw, Award, TrendingUp, Target,
   Download, Loader2, Sparkles, SkipForward, Play, X, Timer, Check,
-  ArrowUpRight,
+  ArrowUpRight, ChevronsUpDown, ChevronsDownUp, ScanQrCode,
 } from 'lucide-react';
 import {
   XAxis, YAxis, CartesianGrid, Tooltip,
@@ -48,15 +48,15 @@ import ListPagination from '@/components/ListPagination';
 import RecordPager from '@/components/RecordPager';
 import IntegrityCheckTab from './IntegrityCheckTab';
 import { QuestionDistributionPopover } from './QuestionDistributionPopover';
-import { summarizeViolations } from './violationTaxonomy';
+import { summarizeViolations, recruiterSeverity, labelOfViolation } from './violationTaxonomy';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useUrlTab } from '@/lib/hooks/useUrlTab';
-import ResumeDetailView from '@/components/ResumeDetailView';
+import ResumeTextPreviewModal from '@/components/ResumeTextPreviewModal';
 import ViewResumeButton from '@/components/ui/view-resume-button';
 import { RESUME_EMAIL_MISMATCH_MESSAGE, emailsMatch, normalizeEmail, pickResumeByEmail, resumeEmailOf, verifyResumeBelongsToInvite } from '@/lib/utils/resumeEmailMatch';
 import ResumeHoverPreview from '@/components/ResumeHoverPreview';
+import TruncatedTextCell from './TruncatedTextCell';
 import { Tooltip as HoverTooltip } from '@/components/ui/tooltip';
-import TabEmptyState, { TAB_EMPTY_ACTION_CLASS } from '@/components/ui/tab-empty-state';
 import { formatScore1, truncate1 } from '@/lib/utils/matchStatus';
 
 interface CandidateResultsViewProps {
@@ -204,6 +204,7 @@ function VideoPane({
   onDuration,
   seekTo,
   seekKey,
+  markers,
 }: {
   label: string;
   hasFile: boolean;
@@ -214,6 +215,7 @@ function VideoPane({
   onDuration?: (seconds: number) => void;
   seekTo?: number | null;
   seekKey?: number;
+  markers?: VideoMarker[];
 }) {
   if (!hasFile) {
     return (
@@ -246,7 +248,7 @@ function VideoPane({
   }
   if (blobUrl) {
     return (
-      <VideoWithDuration src={blobUrl} onError={onError} onDuration={onDuration} seekTo={seekTo} seekKey={seekKey} />
+      <VideoWithDuration src={blobUrl} onError={onError} onDuration={onDuration} seekTo={seekTo} seekKey={seekKey} markers={markers} />
     );
   }
   return null;
@@ -308,6 +310,7 @@ function RecordingTabContent({
   videoBlobUrl, videoBlobSize, videoDownloadUrl, videoLoading, videoError, setVideoError,
   screenBlobUrl, screenBlobSize, screenDownloadUrl, screenLoading, screenError,
   seekRequest,
+  markers,
 }: {
   interview: AIInterviewResponse;
   videoBlobUrl: string | null;
@@ -322,6 +325,8 @@ function RecordingTabContent({
   screenLoading: boolean;
   screenError: boolean;
   seekRequest?: { seconds: number; key: number } | null;
+  /** Question markers for the timeline strip under the video. */
+  markers?: VideoMarker[];
 }) {
   // Default to the Interview View (screen recording) whenever one exists — the
   // recruiter wants the screen recording to open first, not the candidate webcam.
@@ -367,20 +372,29 @@ function RecordingTabContent({
 
   return (
     <div className="space-y-4">
-      {/* Sub-tab pills — Interview View (the default) first. */}
-      <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1 w-fit ring-1 ring-slate-200">
+      {/* Sub-tab pills — Interview View (the default) first. Equal-width
+          columns so one white indicator can slide between them. */}
+      <div className="relative inline-grid grid-cols-2 bg-slate-100 rounded-lg p-1 ring-1 ring-slate-200">
+        <span
+          aria-hidden
+          className={`absolute top-1 bottom-1 left-1 w-[calc(50%-0.25rem)] rounded-md bg-white shadow-sm ring-1 ring-brand-blue/15 transition-transform duration-300 ease-out motion-reduce:transition-none ${
+            isCandidate ? 'translate-x-full' : 'translate-x-0'
+          }`}
+        />
         <button
           onClick={() => setRecView('screen')}
-          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
-            !isCandidate ? 'bg-white text-brand-blue shadow-sm ring-1 ring-brand-blue/15' : 'text-gray-500 hover:text-gray-700'
+          aria-pressed={!isCandidate}
+          className={`relative z-10 flex items-center justify-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-colors duration-300 ${
+            !isCandidate ? 'text-brand-blue' : 'text-gray-500 hover:text-gray-700'
           }`}
         >
           <Monitor className="w-3.5 h-3.5" /> Interview View
         </button>
         <button
           onClick={() => setRecView('candidate')}
-          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
-            isCandidate ? 'bg-white text-brand-blue shadow-sm ring-1 ring-brand-blue/15' : 'text-gray-500 hover:text-gray-700'
+          aria-pressed={isCandidate}
+          className={`relative z-10 flex items-center justify-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-colors duration-300 ${
+            isCandidate ? 'text-brand-blue' : 'text-gray-500 hover:text-gray-700'
           }`}
         >
           <Camera className="w-3.5 h-3.5" /> Candidate View
@@ -389,10 +403,8 @@ function RecordingTabContent({
 
       {/* Split layout: video left, info right */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 space-y-2">
-          {!isCandidate && (
-            <p className="text-xs text-gray-500">Screen recording captured during the interview session.</p>
-          )}
+        {/* Keyed on the view so the incoming recording fades in. */}
+        <div key={recView} className="lg:col-span-2 space-y-2 animate-in fade-in duration-300 motion-reduce:animate-none">
           {isCandidate ? (
             <VideoPane
               label="Candidate recording"
@@ -404,6 +416,7 @@ function RecordingTabContent({
               onDuration={setCandidateDuration}
               seekTo={seekRequest?.seconds ?? null}
               seekKey={seekRequest?.key ?? 0}
+              markers={markers}
             />
           ) : (
             <VideoPane
@@ -416,6 +429,7 @@ function RecordingTabContent({
               onDuration={setScreenDuration}
               seekTo={seekRequest?.seconds ?? null}
               seekKey={seekRequest?.key ?? 0}
+              markers={markers}
             />
           )}
         </div>
@@ -446,6 +460,20 @@ function RecordingTabContent({
             >
               <Download className="w-4 h-4" /> Download Recording
             </a>
+          )}
+          {/* Shortcut hint for the question timeline (VideoWithDuration). */}
+          {(markers ?? []).some(m => m.kind !== 'violation') && (
+            <div className="flex items-center justify-center gap-1 whitespace-nowrap text-xs text-gray-500">
+              <kbd className="rounded border border-gray-300 bg-white px-1 py-px font-sans text-[10px] font-semibold text-gray-600 shadow-[0_1px_0_#e5e7eb]">Ctrl</kbd>+<kbd className="rounded border border-gray-300 bg-white px-1 py-px font-sans text-[10px] font-semibold text-gray-600 shadow-[0_1px_0_#e5e7eb]">←</kbd>/<kbd className="rounded border border-gray-300 bg-white px-1 py-px font-sans text-[10px] font-semibold text-gray-600 shadow-[0_1px_0_#e5e7eb]">→</kbd>
+              <span>jump between questions</span>
+            </div>
+          )}
+          {/* Hint for the collapsed violation strip under the player. */}
+          {(markers ?? []).some(m => m.kind === 'violation') && (
+            <div className="flex items-center justify-center gap-1 whitespace-nowrap text-xs text-gray-500">
+              <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+              <span>under the video shows violations on the timeline</span>
+            </div>
           )}
         </div>
       </div>
@@ -531,7 +559,7 @@ function diffWords(raw: string, corrected: string): { raw: DiffPart[]; corrected
 function DiffText({ parts, tone }: { parts: DiffPart[]; tone: 'raw' | 'corrected' }) {
   const hl = tone === 'raw'
     ? 'bg-brand-orange/25 text-brand-orange-deep rounded px-0.5'
-    : 'bg-success-subtle/80 text-success-strong rounded px-0.5 font-medium';
+    : 'bg-success/20 text-success-strong rounded px-0.5 font-medium';
   return (
     <span>
       {parts.map((p, i) => p.changed
@@ -549,16 +577,11 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
   // deep-link / fallback still works.
   // In the URL (`?resultTab=`), so a refresh reopens the same tab.
   const [activeTab, setActiveTab] = useUrlTab<TabKey>('resultTab', TAB_KEYS, 'eval', tabInUrl);
-  // View Resume — same in-place swap as the assessment candidate-result page
-  // (CandidateResultDetails): the body is replaced by ResumeDetailView and the
-  // breadcrumb gains a "Resume" crumb. `resumeDetail` is cached so reopening
-  // doesn't refetch.
-  const [resumeDetail, setResumeDetail] = useState<any>(null);
+  // View Resume opens the resume in a preview popup (ResumeTextPreviewModal,
+  // the same one the candidate panels and share dialogs use) instead of
+  // swapping the page out, so the recruiter never leaves the results.
   const [isLoadingResume, setIsLoadingResume] = useState(false);
-  const [showResume, setShowResume] = useState(false);
-  // Set when the lookup finds nothing — the resume view then renders a
-  // "Resume Not Available" state in place of the document.
-  const [resumeUnavailable, setResumeUnavailable] = useState(false);
+  const [previewResumeId, setPreviewResumeId] = useState<string | null>(null);
   // Resolved on load so the button can explain on hover that there's no
   // resume: undefined = still checking, null = none found.
   const [resolvedResumeId, setResolvedResumeId] = useState<string | null | undefined>(undefined);
@@ -571,6 +594,10 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
   const seekNonceRef = useRef(0);
   const [transcriptView, setTranscriptView] = useState<'chat' | 'table'>('chat');
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  // Transcript table's Question / Raw Transcript columns: 4-word pills
+  // (default) or full text, toggled together from the toolbar — same pill
+  // as Resume Scoring's AI Reasoning.
+  const [transcriptExpanded, setTranscriptExpanded] = useState(false);
   const [qaExportMenuOpen, setQaExportMenuOpen] = useState(false);
   const [videoError, setVideoError] = useState(false);
   const [videoBlobUrl, setVideoBlobUrl] = useState<string | null>(null);
@@ -1500,6 +1527,62 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
   const watchQuestion = (question: unknown, ownTimestamp?: string | null) =>
     renderWatchInRecording(questionAskedAt.get(questionKey(question)) || ownTimestamp || null);
 
+  // The Question Analysis tab's data — also the source of the Recording
+  // tab's question markers, so both show the same questions and moments.
+  const buildQuestionAnalysisData = () => buildDashboardData({
+    ai_evaluation: eval_,
+    cluster_config: clusterConfig,
+    candidate: {
+      name: interview.candidate_name || liveSession.candidate_name || 'Candidate',
+      role: (interview as any).job_title || (interview as any).role || interview.position || 'Candidate',
+      email: interview.candidate_email || liveSession.candidate_email,
+    },
+    interview: {
+      mode: (interview as any).special_instructions
+        ? (() => { try { const si = JSON.parse((interview as any).special_instructions); return si.interview_mode; } catch { return undefined; } })()
+        : undefined,
+      completed_at: liveSession.completed_at,
+      created_at: liveSession.created_at,
+    },
+    rounds_config: (interview as any).rounds_config || (liveSession as any).rounds_config,
+    conversation_transcript: (liveSession as any).conversation_transcript || (interview as any).conversation_transcript,
+    // Pass special_instructions so the Analysis tab can read
+    // the Question Distribution plan (mth/nth_question_skill_map)
+    // and show EXACTLY the configured skills per slot — no
+    // text-scan extras, no evaluator-topic extras.
+    special_instructions: (interview as any).special_instructions || (liveSession as any).special_instructions,
+  });
+
+  // One marker per delivered question, at the same moment its "Watch in
+  // recording" button seeks to.
+  const recordingQuestionMarkers = (): VideoMarker[] => {
+    if (!hasAnyRecording || evaluationPending) return [];
+    try {
+      return buildQuestionAnalysisData().perQuestionDetails
+        .filter(q => !q.notDelivered && q.responseType !== 'not_asked')
+        .flatMap(q => {
+          const offsetSec = videoOffsetSeconds(questionAskedAt.get(questionKey(q.question)) || undefined, videoAnchor);
+          if (offsetSec == null) return [];
+          return [{ seconds: Math.max(0, offsetSec - WATCH_LEAD_SEC), label: `Q${q.qNum}`, title: q.question }];
+        });
+    } catch {
+      return [];
+    }
+  };
+
+  // One dot per counted violation (advisory markers excluded, as on the
+  // Violations tab), at the same moment its Event Log "Video Time" seeks to.
+  const recordingViolationMarkers = (): VideoMarker[] => {
+    if (!hasAnyRecording) return [];
+    return violations.flatMap(v => {
+      const severity = recruiterSeverity(v);
+      if (severity === 'advisory') return [];
+      const offsetSec = videoOffsetSeconds(v.timestamp, videoAnchor);
+      if (offsetSec == null) return [];
+      return [{ seconds: offsetSec, label: labelOfViolation(v), kind: 'violation' as const, severity }];
+    });
+  };
+
   const ROWS_PER_PAGE = violationsPerPage;
   const totalPages = Math.max(1, Math.ceil(groupedViolations.length / ROWS_PER_PAGE));
   const safeViolationPage = Math.min(violationPage, totalPages);
@@ -1530,7 +1613,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
     { key: 'recording',        label: 'Recording',        icon: <Video className="w-4 h-4" /> },
     { key: 'transcript',       label: 'Transcript',       icon: <FileText className="w-4 h-4" /> },
     { key: 'violations',       label: 'Violations',  icon: <ShieldAlert className="w-4 h-4" />, badge: (violationSummary.serious > 0 ? violationSummary.serious : violationSummary.counted) || undefined, badgeTone: violationSummary.serious > 0 ? 'critical' : 'neutral' },
-    { key: 'verification',     label: 'QR Verification',  icon: <ShieldAlert className="w-4 h-4" />, badge: (envVerifications?.length || undefined), badgeTone: 'neutral' },
+    { key: 'verification',     label: 'QR Verification',  icon: <ScanQrCode className="w-4 h-4" />, badge: (envVerifications?.length || undefined), badgeTone: 'neutral' },
   ];
 
   const renderPlaceholder = (message: string) => (
@@ -1668,11 +1751,6 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
   // Generic placeholder (for tabs that don't pass a key)
   const placeholderMsg = getPlaceholderMessage();
 
-  const openResumeUnavailable = () => {
-    setResumeUnavailable(true);
-    setShowResume(true);
-  };
-
   const inviteEmail = () => normalizeEmail(interview.candidate_email || liveSession.candidate_email);
 
   // A session invited from the resume database carries resume_id, but that
@@ -1724,9 +1802,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
   // the cached resume belongs to the previous candidate and must be dropped,
   // and availability is re-checked for the new one.
   useEffect(() => {
-    setResumeDetail(null);
-    setShowResume(false);
-    setResumeUnavailable(false);
+    setPreviewResumeId(null);
     setResolvedResumeId(undefined);
     let cancelled = false;
     resolveResumeId().then(id => { if (!cancelled) setResolvedResumeId(id); });
@@ -1734,40 +1810,38 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [interview.id]);
 
+  // No resume (or a mismatched one) → the button turns disabled and its hover
+  // tooltip explains why, same as when the load-time lookup finds none.
+  const markResumeUnavailable = () => {
+    setResolvedResumeId(null);
+    toast.info('Resume not available for this candidate.');
+  };
+
   const handleViewResume = async () => {
-    if (resumeDetail) { setShowResume(true); return; }
     setIsLoadingResume(true);
-    setResumeUnavailable(false);
     try {
       const id = resolvedResumeId !== undefined ? resolvedResumeId : await resolveResumeId();
       if (!id) {
-        openResumeUnavailable();
+        markResumeUnavailable();
         return;
       }
       const { resumeService } = await import('@/lib/services/resumeService');
-      const { convertApiResume } = await import('@/lib/utils/resumeMapper');
-      // The API record is snake_case — ResumeDetailView needs the mapped shape.
-      const [data, versions] = await Promise.all([
-        resumeService.get(id, true), // a genuine user view
-        resumeService.getVersions(id).catch(() => []),
-      ]);
-      // Re-checked on the record actually shown, in case it changed since
-      // the load-time check.
+      // A genuine user view (logged), and the email is re-checked on the
+      // record actually shown, in case it changed since the load-time check.
+      const data = await resumeService.get(id, true);
       if (!emailsMatch(resumeEmailOf(data), inviteEmail())) {
         setResumeEmailMismatch(true);
-        setResolvedResumeId(null);
-        openResumeUnavailable();
+        markResumeUnavailable();
         return;
       }
-      setResumeDetail(convertApiResume(data, versions || []));
-      setShowResume(true);
+      setPreviewResumeId(id);
     } catch (err: any) {
       // A linked resume that has since been deleted 404s — that's "not
       // available", not a transient failure worth retrying. resumeService
       // rethrows as a plain Error carrying only the backend detail, so the
       // status is gone and the message is all there is to go on.
       if (err?.response?.status === 404 || /not found/i.test(err?.message || '')) {
-        openResumeUnavailable();
+        markResumeUnavailable();
       } else {
         console.error('[CandidateResultsView] Failed to load resume:', err);
         toast.error('Could not load the resume. Please try again.');
@@ -1786,46 +1860,6 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
     // Deepest crumb names the candidate whose results are open.
     { label: interview.candidate_name || 'Candidate Results' },
   ];
-
-  if (showResume && (resumeDetail || resumeUnavailable)) {
-    const inviteSource = liveSession.invite_source || interview.invite_source;
-    return (
-      <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
-        <div className="mx-auto w-full max-w-[1400px]">
-          <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
-            <PageBreadcrumb
-              className="mb-4 md:mb-6"
-              items={[
-                ...candidateBreadcrumbItems.slice(0, -1),
-                // onClick, not href: the candidate crumb is the route we're
-                // already on, which a link cannot re-trigger.
-                { ...candidateBreadcrumbItems[candidateBreadcrumbItems.length - 1], href: undefined, onClick: () => setShowResume(false) },
-                { label: 'Resume' },
-              ]}
-            />
-            {resumeDetail ? (
-              <ResumeDetailView embedded resume={resumeDetail} onClose={() => setShowResume(false)} />
-            ) : (
-              <TabEmptyState
-                icon={FileText}
-                title="Resume Not Available"
-                description={resumeEmailMismatch
-                  ? RESUME_EMAIL_MISMATCH_MESSAGE
-                  : inviteSource === 'email'
-                  ? 'This candidate was invited via direct email, so no resume is linked to this interview.'
-                  : 'No resume was found for this candidate.'}
-                action={
-                  <button type="button" onClick={() => setShowResume(false)} className={TAB_EMPTY_ACTION_CLASS}>
-                    <ArrowLeft className="w-4 h-4" /> Back to Results
-                  </button>
-                }
-              />
-            )}
-          </div>
-        </div>
-      </main>
-    );
-  }
 
   return (
     // overflow-x-clip, not overflow-x-hidden/overflow-y-auto: that pair made
@@ -2013,6 +2047,14 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                 // look clickable and then flip to disabled.
                 <ViewResumeButton onClick={handleViewResume} loading className="flex-shrink-0" />
               )}
+              {previewResumeId && (
+                <ResumeTextPreviewModal
+                  resumeId={previewResumeId}
+                  title={interview.candidate_name || liveSession.candidate_name || 'Resume'}
+                  subtitle={interview.candidate_email || liveSession.candidate_email || undefined}
+                  onClose={() => setPreviewResumeId(null)}
+                />
+              )}
               {/* Download Report — the evaluation report PDF (moved here from
                   the Eval tab's card, so it's reachable from every tab). Shown
                   once there is an evaluation to download. */}
@@ -2034,7 +2076,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                   className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-brand-blue hover:bg-brand-blue-2 disabled:opacity-60 text-white text-sm font-medium shadow-sm shadow-brand-blue/25 transition-colors"
                 >
                   {reportDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                  {reportDownloading ? 'Preparing…' : 'Download Report'}
+                  {reportDownloading ? 'Preparing…' : 'Report'}
                 </button>
               )}
               </div>
@@ -2251,13 +2293,14 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
             as the AI Interview Details page (`AIInterviewDetailsView.tsx`), so
             the two detail pages read as one screen. The strip this replaced was
             horizontal and scrolled sideways with nine tabs. */}
-        <div className="space-y-3 sm:space-y-4">
-          {/* Horizontal pill tab bar (was a vertical sidebar rail): shared
-              `tabPill` chrome, wrapping onto further rows so every tab stays
-              visible; alert tabs flip to solid red when active. */}
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+        <div className="space-y-3 sm:space-y-4 lg:space-y-0 lg:grid lg:grid-cols-[210px_minmax(0,1fr)] lg:items-start lg:gap-6">
+          {/* Tablet/mobile: horizontal pill tab bar (shared `tabPill` chrome,
+              wrapping onto further rows; alert tabs flip to solid red when
+              active). Desktop (lg+): a sticky vertical rail on the left with the
+              content on the right. top-12 clears the sticky breadcrumb. */}
+          <div className="lg:sticky lg:top-12 lg:self-start bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
             <nav className="p-2 sm:p-3" aria-label="Candidate result sections">
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 lg:flex-col lg:flex-nowrap lg:items-stretch lg:gap-1.5">
                 {tabs.map(tab => {
                   const isActive = activeTab === tab.key;
                   const isAlertTab = tab.key === 'violations' || tab.key === 'verification';
@@ -2267,7 +2310,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                       type="button"
                       onClick={() => { setActiveTab(tab.key); setViolationPage(1); }}
                       aria-current={isActive ? 'page' : undefined}
-                      className={
+                      className={`${
                         isAlertTab
                           ? `inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs sm:text-sm whitespace-nowrap transition-all ${
                               isActive
@@ -2275,10 +2318,16 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                 : 'bg-destructive-subtle/50 text-gray-600 dark:text-slate-300 hover:bg-destructive-subtle hover:text-destructive'
                             }`
                           : `${tabPill(isActive)} whitespace-nowrap`
-                      }
+                      } lg:flex lg:w-full lg:gap-2 lg:px-3 lg:py-2.5 lg:text-left lg:whitespace-normal lg:shadow-none ${
+                        isActive
+                          ? isAlertTab
+                            ? 'lg:bg-destructive-subtle lg:text-destructive lg:font-medium lg:ring-1 lg:ring-destructive-line'
+                            : 'lg:bg-brand-blue/5 lg:text-brand-blue lg:font-medium lg:ring-1 lg:ring-brand-blue/20'
+                          : 'lg:bg-transparent lg:text-gray-600 lg:dark:text-slate-400 lg:hover:bg-brand-blue/5 lg:hover:text-brand-blue'
+                      }`}
                     >
                       <span className="shrink-0 [&>svg]:w-3.5 [&>svg]:h-3.5 sm:[&>svg]:w-4 sm:[&>svg]:h-4">{tab.icon}</span>
-                      <span className="leading-snug">{tab.label}</span>
+                      <span className="leading-snug lg:min-w-0 lg:flex-1">{tab.label}</span>
                       {tab.live && (
                         <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-destructive text-white text-2xs font-bold rounded-full ring-1 ring-destructive-line">
                           <span className="w-1 h-1 rounded-full bg-white animate-pulse" />
@@ -2288,7 +2337,11 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                       {tab.badge !== undefined && (
                         <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${
                           isActive
-                            ? 'bg-white/20 text-white'
+                            // Solid pill on tablet/mobile; the desktop rail's
+                            // active row is light, so the badge reverts there.
+                            ? tab.badge > 0 && tab.badgeTone === 'critical'
+                              ? 'bg-white/20 text-white lg:bg-destructive-subtle lg:text-destructive lg:ring-1 lg:ring-destructive-line'
+                              : 'bg-white/20 text-white lg:bg-slate-100 lg:text-slate-500 lg:ring-1 lg:ring-slate-200'
                             : tab.badge > 0 && tab.badgeTone === 'critical'
                               ? 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line'
                               : 'bg-slate-100 text-slate-500 ring-1 ring-slate-200'
@@ -3293,6 +3346,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                   screenLoading={screenLoading}
                   screenError={screenError}
                   seekRequest={recordingSeek}
+                  markers={[...recordingQuestionMarkers(), ...recordingViolationMarkers()]}
                 />
               )
             )}
@@ -3981,11 +4035,14 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                   labeled.push({ msg: m, label: currentLabel, isFollowUp: currentQtype !== 'main', qtype: currentQtype });
                 }
 
-                const ToggleBtn = ({ value, label, icon }: { value: 'chat' | 'table'; label: string; icon: React.ReactNode }) => (
+                // Plain render helper (not a component) — the white indicator
+                // behind the buttons slides between them.
+                const toggleBtn = (value: 'chat' | 'table', label: string, icon: React.ReactNode) => (
                   <button
                     onClick={() => setTranscriptView(value)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                      transcriptView === value ? 'bg-white text-brand-blue shadow-sm ring-1 ring-brand-blue/15' : 'text-gray-500 hover:text-gray-700'
+                    aria-pressed={transcriptView === value}
+                    className={`relative z-10 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors duration-300 ${
+                      transcriptView === value ? 'text-brand-blue' : 'text-gray-500 hover:text-gray-700'
                     }`}
                   >
                     {icon}
@@ -3999,8 +4056,8 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                     <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
                       <div className="flex items-center gap-3">
                         <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-full bg-brand-blue ring-1 ring-white/20 shadow-sm shadow-brand-blue/20 flex items-center justify-center">
-                            <Bot className="w-3.5 h-3.5 text-white" />
+                          <div className="w-7 h-7 rounded-full bg-brand-blue ring-1 ring-white/20 shadow-sm shadow-brand-blue/20 flex items-center justify-center text-white font-semibold text-2xs">
+                            B
                           </div>
                           <span className="text-xs text-gray-500">Bina (AI Interviewer)</span>
                         </div>
@@ -4014,15 +4071,21 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                       </div>
                       <div className="flex items-center gap-3">
                         <span className="text-xs text-gray-400">{messages.length} messages</span>
-                        <div className="flex items-center bg-slate-100 rounded-lg p-0.5 ring-1 ring-slate-200">
-                          <ToggleBtn value="chat" label="Chat" icon={<MessageSquare className="w-3.5 h-3.5" />} />
-                          <ToggleBtn value="table" label="Table" icon={<Layers className="w-3.5 h-3.5" />} />
+                        <div className="relative inline-grid grid-cols-2 bg-slate-100 rounded-lg p-0.5 ring-1 ring-slate-200">
+                          <span
+                            aria-hidden
+                            className={`absolute top-0.5 bottom-0.5 left-0.5 w-[calc(50%-0.125rem)] rounded-md bg-white shadow-sm ring-1 ring-brand-blue/15 transition-transform duration-300 ease-out motion-reduce:transition-none ${
+                              transcriptView === 'table' ? 'translate-x-full' : 'translate-x-0'
+                            }`}
+                          />
+                          {toggleBtn('chat', 'Chat', <MessageSquare className="w-3.5 h-3.5" />)}
+                          {toggleBtn('table', 'Table', <Layers className="w-3.5 h-3.5" />)}
                         </div>
                       </div>
                     </div>
 
                     {transcriptView === 'chat' && (
-                      <div className="space-y-4 w-full">
+                      <div className="space-y-4 w-full animate-in fade-in duration-300 motion-reduce:animate-none">
                         {labeled.map(({ msg, label, isFollowUp, qtype }, idx) => {
                           const isAssistant = msg.role === 'assistant';
                           const ts = formatTs(msg.timestamp);
@@ -4066,7 +4129,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                               <div className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold mt-0.5 ring-1 ring-white/20 shadow-sm ${
                                 isAssistant ? 'bg-brand-blue text-white shadow-brand-blue/20' : 'bg-brand-cyan text-white shadow-brand-cyan/15'
                               }`}>
-                                {isAssistant ? <Bot className="w-3.5 h-3.5" /> : candidateName[0].toUpperCase()}
+                                {isAssistant ? 'B' : candidateName[0].toUpperCase()}
                               </div>
 
                               <div className={`max-w-[75%] ${isAssistant ? '' : 'items-end flex flex-col'}`}>
@@ -4089,7 +4152,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
 
                                 {isAssistant ? (
                                   <>
-                                    <div className="px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed bg-slate-100 text-gray-800 rounded-tl-sm ring-1 ring-slate-200/60">
+                                    <div className="px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed bg-[#08132e]/5 text-[#08132e] rounded-tl-sm whitespace-pre-line">
                                       {content}
                                     </div>
                                     {skipNote && (
@@ -4110,8 +4173,8 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                     {/* Original (raw ASR) — ALWAYS shown, even when the
                                         enhancer made no change, so the recruiter can always
                                         see exactly what the ASR engine produced. */}
-                                    <div className="px-3.5 py-2.5 rounded-2xl rounded-tr-sm text-sm leading-relaxed bg-brand-orange/10 ring-1 ring-brand-orange/25 text-brand-orange-deep">
-                                      <div className="text-2xs font-semibold text-brand-orange-deep mb-1 uppercase tracking-wide">Original (ASR)</div>
+                                    <div className="px-3.5 py-2.5 rounded-2xl rounded-tr-sm text-sm leading-relaxed bg-sky-100/60 text-sky-900">
+                                      <div className="text-2xs font-semibold text-sky-700 mb-1 uppercase tracking-wide">Original (ASR)</div>
                                       {hasCorrection && diff && diff.mode === 'word'
                                         ? <DiffText parts={diff.raw} tone="raw" />
                                         : <span>{rawContent || content}</span>}
@@ -4120,10 +4183,10 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                         raw ASR it simply repeats the same text (no correction).
                                         For a non-English discard there is no scorable English,
                                         so it shows a muted "not scored" marker instead of text. */}
-                                    <div className="mt-1.5 px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed bg-brand-blue text-white ring-1 ring-brand-blue/30 shadow-sm shadow-brand-blue/15">
-                                      <div className="text-2xs font-semibold text-white/80 mb-1 uppercase tracking-wide">Corrected</div>
+                                    <div className="mt-1.5 px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed bg-success-subtle/60 text-success-strong">
+                                      <div className="text-2xs font-semibold text-success mb-1 uppercase tracking-wide">Corrected</div>
                                       {noScorableEnglish
-                                        ? <span className="italic text-white/50">— no scorable English (not scored)</span>
+                                        ? <span className="italic text-gray-500">— no scorable English (not scored)</span>
                                         : hasCorrection && diff && diff.mode === 'word'
                                           ? <DiffText parts={diff.corrected} tone="corrected" />
                                           : <span>{content}</span>}
@@ -4399,9 +4462,22 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                       };
 
                       return (
-                        <div className="space-y-3">
-                          {/* Export toolbar */}
-                          <div className="flex justify-end relative">
+                        <div className="space-y-3 animate-in fade-in duration-300 motion-reduce:animate-none">
+                          {/* Toolbar — Expand all (Question + Raw Transcript), then Export */}
+                          <div className="flex justify-end items-center gap-2 relative">
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => setTranscriptExpanded(v => !v)}
+                              disabled={flatRows.length === 0}
+                              aria-pressed={transcriptExpanded}
+                              title={transcriptExpanded ? 'Collapse all questions and transcripts' : 'Expand all questions and transcripts'}
+                            >
+                              {transcriptExpanded
+                                ? <ChevronsDownUp className="w-3.5 h-3.5" />
+                                : <ChevronsUpDown className="w-3.5 h-3.5" />}
+                              {transcriptExpanded ? 'Collapse all' : 'Expand all'}
+                            </Button>
                             <Button
                               variant="primary"
                               size="sm"
@@ -4421,18 +4497,23 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                             />
                           </div>
 
-                          <div className="overflow-x-auto rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 bg-white tf-table-shell">
+                          {/* Scrolls on its own (max 70vh) so the header row can
+                              stay pinned to the top while the rows scroll. */}
+                          <div className="overflow-auto max-h-[70vh] rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 bg-white tf-table-shell">
                             <table className="w-full text-sm">
-                              <thead className="bg-slate-50 text-gray-600 text-xs uppercase tracking-wide border-b border-gray-100">
+                              <thead className="bg-brand-sky text-gray-600 text-xs uppercase tracking-wide">
                                 <tr>
-                                  <th className="px-3 py-2.5 text-left font-semibold w-12">S.No</th>
-                                  <th className="px-3 py-2.5 text-left font-semibold w-20">Question ID</th>
-                                  <th className="px-3 py-2.5 text-left font-semibold w-24">Type</th>
-                                  <th className="px-3 py-2.5 text-left font-semibold">Question</th>
-                                  <th className="px-3 py-2.5 text-left font-semibold">Raw Transcript</th>
-                                  <th className="px-3 py-2.5 text-left font-semibold">Corrected Transcript</th>
-                                  <th className="px-3 py-2.5 text-left font-semibold w-20">Language</th>
-                                  <th className="px-3 py-2.5 text-left font-semibold w-20">Timestamp</th>
+                                  {/* Every header cell sticks to the top. Question ID (left)
+                                      and Timestamp (right) also stay pinned sideways, so
+                                      they sit above the rest (z-30). The inset shadows
+                                      draw the borders, which sticky cells don't keep. */}
+                                  <th className="px-3 py-2.5 text-left font-semibold w-20 whitespace-nowrap sticky top-0 left-0 z-30 bg-brand-sky shadow-[inset_-1px_-1px_0_#e5e7eb]">Question ID</th>
+                                  <th className="px-3 py-2.5 text-left font-semibold w-24 sticky top-0 z-20 bg-brand-sky shadow-[inset_0_-1px_0_#e5e7eb]">Type</th>
+                                  <th className="px-3 py-2.5 text-left font-semibold sticky top-0 z-20 bg-brand-sky shadow-[inset_0_-1px_0_#e5e7eb]">Question</th>
+                                  <th className="px-3 py-2.5 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-brand-sky shadow-[inset_0_-1px_0_#e5e7eb]">Raw Transcript</th>
+                                  <th className="px-3 py-2.5 text-left font-semibold sticky top-0 z-20 bg-brand-sky shadow-[inset_0_-1px_0_#e5e7eb]">Corrected Transcript</th>
+                                  <th className="px-3 py-2.5 text-left font-semibold w-20 sticky top-0 z-20 bg-brand-sky shadow-[inset_0_-1px_0_#e5e7eb]">Language</th>
+                                  <th className="px-3 py-2.5 text-left font-semibold w-20 sticky top-0 right-0 z-30 bg-brand-sky shadow-[inset_1px_-1px_0_#e5e7eb]">Timestamp</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-gray-100">
@@ -4447,10 +4528,13 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                   // empty raw+corrected IS the "not answered" signal.
                                   const _rowAnswered = !!(r.raw?.trim() || r.corrected?.trim());
                                   const rowSkip = _skipReason(r.question, _rowAnswered);
+                                  // Sticky cells need an opaque fill — the row tints are
+                                  // translucent (brand-teal/5, brand-cyan/5), so these are
+                                  // the same tints pre-blended over white.
+                                  const stickyBg = isDd ? 'bg-[#f3fafb]' : isFu ? 'bg-[#f3fafc]' : 'bg-white';
                                   return (
                                     <tr key={idx} className={`align-top ${isDd ? 'bg-brand-teal/5' : isFu ? 'bg-brand-cyan/5' : 'bg-white'}`}>
-                                      <td className="px-3 py-3 align-top text-xs text-gray-500">{r.sno}</td>
-                                      <td className="px-3 py-3 align-top">
+                                      <td className={`px-3 py-3 align-top sticky left-0 z-10 ${stickyBg} shadow-[inset_-1px_0_0_#e5e7eb]`}>
                                         <span className="text-2xs font-semibold px-1.5 py-0.5 rounded bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
                                           {r.questionId}
                                         </span>
@@ -4462,15 +4546,25 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                           {r.type}
                                         </span>
                                       </td>
-                                      <td className="px-3 py-3 align-top text-xs text-gray-700 leading-snug italic">
-                                        {r.question || '—'}
+                                      <td className={`px-3 py-3 align-top text-xs text-gray-700 leading-snug ${transcriptExpanded ? 'min-w-[280px]' : ''}`}>
+                                        <TruncatedTextCell
+                                          text={r.question}
+                                          expanded={transcriptExpanded}
+                                          textClassName="italic"
+                                        />
                                       </td>
-                                      <td className="px-3 py-3 align-top text-brand-orange-deep leading-snug">
-                                        {diff && diff.mode === 'word'
-                                          ? <DiffText parts={diff.raw} tone="raw" />
-                                          : rowSkip
-                                            ? <span className="text-gray-400">—</span>
-                                            : <span className="text-gray-700">{r.raw || '—'}</span>}
+                                      <td className={`px-3 py-3 align-top text-brand-orange-deep leading-snug ${transcriptExpanded ? 'min-w-[280px]' : ''}`}>
+                                        {rowSkip && !(diff && diff.mode === 'word')
+                                          ? <span className="text-gray-400">—</span>
+                                          : (
+                                            // Collapsed: 4-word pill + hover box. Expanded (or
+                                            // short): the existing diff / plain rendering.
+                                            <TruncatedTextCell text={r.raw} expanded={transcriptExpanded}>
+                                              {diff && diff.mode === 'word'
+                                                ? <DiffText parts={diff.raw} tone="raw" />
+                                                : <span className="text-gray-700">{r.raw || '—'}</span>}
+                                            </TruncatedTextCell>
+                                          )}
                                       </td>
                                       <td className="px-3 py-3 align-top text-gray-800 leading-snug">
                                         {diff && diff.mode === 'word'
@@ -4482,12 +4576,12 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                             : <span>{r.corrected || '—'}</span>}
                                       </td>
                                       <td className="px-3 py-3 align-top text-xs text-gray-500">{r.language || 'English'}</td>
-                                      <td className="px-3 py-3 align-top text-xs text-gray-500 whitespace-nowrap">{formatTs(r.timestamp)}</td>
+                                      <td className={`px-3 py-3 align-top text-xs text-gray-500 whitespace-nowrap sticky right-0 z-10 ${stickyBg} shadow-[inset_1px_0_0_#e5e7eb]`}>{formatTs(r.timestamp)}</td>
                                     </tr>
                                   );
                                 })}
                                 {flatRows.length === 0 && (
-                                  <tr><td colSpan={8} className="px-4 py-6 text-center text-xs text-gray-400">No candidate responses recorded.</td></tr>
+                                  <tr><td colSpan={7} className="px-4 py-6 text-center text-xs text-gray-400">No candidate responses recorded.</td></tr>
                                 )}
                               </tbody>
                             </table>
@@ -4632,29 +4726,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
             {!evaluationPending && activeTab === 'question_analysis' && (() => {
               const placeholderMsg = getPlaceholderMessage('question_analysis');
               if (placeholderMsg) return renderPlaceholder(placeholderMsg);
-              const data = buildDashboardData({
-                ai_evaluation: eval_,
-                cluster_config: clusterConfig,
-                candidate: {
-                  name: interview.candidate_name || liveSession.candidate_name || 'Candidate',
-                  role: (interview as any).job_title || (interview as any).role || interview.position || 'Candidate',
-                  email: interview.candidate_email || liveSession.candidate_email,
-                },
-                interview: {
-                  mode: (interview as any).special_instructions
-                    ? (() => { try { const si = JSON.parse((interview as any).special_instructions); return si.interview_mode; } catch { return undefined; } })()
-                    : undefined,
-                  completed_at: liveSession.completed_at,
-                  created_at: liveSession.created_at,
-                },
-                rounds_config: (interview as any).rounds_config || (liveSession as any).rounds_config,
-                conversation_transcript: (liveSession as any).conversation_transcript || (interview as any).conversation_transcript,
-                // Pass special_instructions so the Analysis tab can read
-                // the Question Distribution plan (mth/nth_question_skill_map)
-                // and show EXACTLY the configured skills per slot — no
-                // text-scan extras, no evaluator-topic extras.
-                special_instructions: (interview as any).special_instructions || (liveSession as any).special_instructions,
-              });
+              const data = buildQuestionAnalysisData();
               return (
                 <QuestionsView
                   data={data}

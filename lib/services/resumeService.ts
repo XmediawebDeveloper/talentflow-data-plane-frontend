@@ -37,6 +37,8 @@ export interface ResumeActivityTalentMatch {
   resume_version: number;
   final_score: number | null;
   status: string;
+  /** This resume version has been scored against this job in Resume Scoring. */
+  scored: boolean;
   run_by_name: string;
   created_at: string | null;
 }
@@ -53,6 +55,9 @@ export interface ResumeActivityAssessment {
   status: string;
   score: number | null;
   passed: boolean | null;
+  /** Section scores (%) — null when the section is off or not scored yet. */
+  technical_score: number | null;
+  coding_score: number | null;
   hiring_recommendation: string | null;
   integrity_status: string | null;
   invited_by_name: string | null;

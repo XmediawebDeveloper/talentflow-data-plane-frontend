@@ -1516,13 +1516,13 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
       {/* A DRAFT shows only its header card (with Continue Editing) — no tabs
           or tab content until it is published. */}
       {!draftLocked && (
-      <div className="space-y-3 sm:space-y-4">
-        {/* Horizontal pill tab bar (was a vertical sidebar rail): shared
-            `tabPill` chrome, wrapping onto a second row so every tab stays
-            visible. */}
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+      <div className="space-y-3 sm:space-y-4 lg:space-y-0 lg:grid lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start lg:gap-4 xl:grid-cols-[260px_minmax(0,1fr)] xl:gap-6">
+        {/* Tablet/mobile: horizontal pill tab bar (shared `tabPill` chrome,
+            wrapping onto a second row so every tab stays visible). Desktop
+            (lg+): a sticky vertical rail on the left, content on the right. */}
+        <div className="lg:sticky lg:top-20 lg:self-start bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
           <nav className="p-2 sm:p-3" aria-label="Interview details sections">
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 lg:flex-col lg:flex-nowrap lg:items-stretch lg:gap-1.5">
               {([
                 { key: 'overview', label: 'Interview Details', icon: FileText },
                 { key: 'invites', label: 'Invitation Status', icon: Mail },
@@ -1538,20 +1538,25 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     type="button"
                     onClick={() => setActiveTab(t.key)}
                     aria-current={isActive ? 'page' : undefined}
-                    className={`${tabPill(isActive)} whitespace-nowrap`}
+                    className={`${tabPill(isActive)} whitespace-nowrap lg:flex lg:w-full lg:gap-2 lg:px-3 lg:py-2.5 lg:text-left lg:whitespace-normal lg:shadow-none ${
+                      isActive
+                        ? 'lg:bg-brand-blue/5 lg:text-brand-blue lg:font-medium lg:ring-1 lg:ring-brand-blue/20'
+                        : 'lg:bg-transparent lg:text-gray-600 lg:dark:text-slate-400 lg:hover:bg-brand-blue/5 lg:hover:text-brand-blue'
+                    }`}
                   >
                     <t.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-                    <span className="leading-snug">{t.label}</span>
+                    <span className="leading-snug lg:min-w-0">{t.label}</span>
                   </button>
                 );
               })}
-              {/* Go to JD — leaves the page; sits after a divider at the row's end. */}
+              {/* Go to JD — leaves the page. Tablet/mobile: after a divider at
+                  the row's end. Desktop: under the rail, above a top rule. */}
               {config.jd_id && (
-                <div className="flex items-center border-l border-gray-200 dark:border-slate-700/60 pl-2 ml-1">
+                <div className="flex items-center border-l border-gray-200 dark:border-slate-700/60 pl-2 ml-1 lg:border-l-0 lg:border-t lg:pl-0 lg:ml-0 lg:pt-2 lg:mt-1">
                   <button
                     type="button"
                     onClick={() => router.push(`/recruitment/job-details?id=${config.jd_id}`)}
-                    className={`${tabPill(false)} whitespace-nowrap`}
+                    className={`${tabPill(false)} whitespace-nowrap lg:w-full lg:justify-start lg:px-3 lg:py-2 lg:bg-transparent lg:font-medium lg:text-brand-blue lg:hover:bg-brand-blue/5 lg:hover:underline lg:underline-offset-2`}
                   >
                     Go to JD
                     <ExternalLink className="w-3.5 h-3.5" />

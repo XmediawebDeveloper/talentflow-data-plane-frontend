@@ -1,3 +1,4 @@
+import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { SCORE_CELL_TEXT } from '@/lib/utils/score';
 import { X, Clock, CheckCircle2, XCircle, AlertCircle, Loader2, Database, FolderOpen, Target, TrendingUp, RotateCcw, Minus, Maximize2, RefreshCw, SlidersHorizontal, ChevronDown, Eye, ClipboardList } from 'lucide-react';
 import { useState, useEffect } from 'react';
@@ -269,11 +270,14 @@ export default function BulkScoringProgressModal({
     /* Grouped on the internal id, which every row carries — the readable code
        is what gets DISPLAYED, but it is optional, so grouping on it would treat
        a whole run of code-less rows as one anonymous job. */
+    const codes = new Set(scoped.map(item => item.jobCode || ''));
+    const allCoded = !codes.has('');
+    /* Versions of one job are separate JD rows, so their ids differ — a
+       whole-job popup (every version) grouped on ids fell back to the generic
+       "Bulk Scoring Progress" with the job repeated on every row. Rows that
+       all carry the same JD code are one job. */
     const ids = new Set(scoped.map(item => item.jobId));
-    if (ids.size !== 1) return null;
-    const versions = new Set(
-      scoped.map(item => item.jobVersion).filter((v): v is number => v !== undefined)
-    );
+    if (allCoded ? codes.size !== 1 : ids.size !== 1) return null;
     return {
       /* The JD's human code only. It used to fall back to `jobId`, which is an
          internal uuid — so a caller that did not carry the code put
@@ -281,12 +285,12 @@ export default function BulkScoringProgressModal({
          belongs. No code means no chip. */
       code: scoped[0].jobCode || null,
       title: scoped[0].jobTitle,
-      /* One version names itself; several mean the popup is the whole job,
-         which is exactly what "All Versions" says. */
-      versionLabel: versions.size === 1 ? `v${[...versions][0]}` : versions.size > 1 ? 'All Versions' : null,
     };
   })();
   const scopedToJobTitle = Boolean(headerJob?.title);
+  /* Job ID / Job Title columns only when the rows span several jobs; one job
+     is named in the header, and the table keeps just its Job Version. */
+  const showJobIdTitleColumns = showJobColumns && !headerJob;
 
   // Calculate summary stats
   const totalResumes = progressData.length;
@@ -406,6 +410,10 @@ export default function BulkScoringProgressModal({
     }
   };
 
+  /* One shape for every chip in the table — status, match, versions, source —
+     so they read as a set: 28px tall, rounded-md, xs medium text, 14px icon. */
+  const TABLE_BADGE = 'inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-xs font-medium border whitespace-nowrap w-fit [&>svg]:w-3.5 [&>svg]:h-3.5 [&>svg]:flex-shrink-0';
+
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
       case 'Queued':
@@ -449,7 +457,7 @@ export default function BulkScoringProgressModal({
     }
 
     return (
-      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border ${badgeClass} w-fit`}>
+      <span className={`${TABLE_BADGE} ${badgeClass}`}>
         {icon}
         {displayText}
       </span>
@@ -463,7 +471,7 @@ export default function BulkScoringProgressModal({
 
   return (
     <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-7xl h-[calc(100dvh-1.5rem)] sm:h-[calc(100dvh-3rem)] max-h-[880px] flex flex-col overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-[min(95vw,1400px)] h-[calc(100dvh-1.5rem)] sm:h-[calc(100dvh-3rem)] max-h-[880px] flex flex-col overflow-hidden">
         {/* A DEFINITE height, not just a max-height. `flex-1` can only hand out
             space a parent actually has, and a content-sized dialog has none to
             hand out — so the table region either collapsed to a couple of rows
@@ -492,9 +500,18 @@ export default function BulkScoringProgressModal({
                     subtitle beside the processed count. Unscoped, the heading
                     carries that name itself and the subtitle would only
                     repeat it, so only the count shows. */}
-                <h2 className="text-base sm:text-xl font-bold text-gray-900 dark:text-slate-50 break-words sm:truncate">
-                  {scopedToJobTitle ? headerJob!.title : 'Bulk Scoring Progress'}
-                </h2>
+                {/* Line 1: JD ID · title — the job named once, with its ID up
+                    front. No version here: the table's Job Version column
+                    carries it per row. */}
+                <div className="flex items-center gap-2 min-w-0">
+                  {scopedToJobTitle && headerJob!.code && (
+                    <JobIdBadge className="flex-shrink-0">{headerJob!.code}</JobIdBadge>
+                  )}
+                  <h2 className="text-base sm:text-xl font-bold text-gray-900 dark:text-slate-50 break-words sm:truncate min-w-0" title={scopedToJobTitle ? headerJob!.title : undefined}>
+                    {scopedToJobTitle ? headerJob!.title : 'Bulk Scoring Progress'}
+                  </h2>
+                </div>
+                {/* Line 2: what this is, and how far it got. */}
                 <div className="mt-0.5 flex flex-wrap items-center gap-2">
                   {scopedToJobTitle && (
                     <span className="text-xs sm:text-sm font-medium text-gray-600 dark:text-slate-400">
@@ -505,25 +522,6 @@ export default function BulkScoringProgressModal({
                     {completedCount + skippedCount + failedCount}/{totalResumes} resumes processed
                   </span>
                 </div>
-                {headerJob && (
-                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs">
-                    {headerJob.code && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-brand-blue/10 text-brand-blue font-mono font-semibold">
-                        {headerJob.code}
-                      </span>
-                    )}
-                    {headerJob.title && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 max-w-[240px] sm:max-w-none truncate">
-                        {headerJob.title}
-                      </span>
-                    )}
-                    {headerJob.versionLabel && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 font-medium">
-                        {headerJob.versionLabel}
-                      </span>
-                    )}
-                  </div>
-                )}
               </div>
             </div>
 
@@ -843,10 +841,10 @@ export default function BulkScoringProgressModal({
               </div>
           )}
 
-          <div className="mt-1.5 flex items-center justify-between text-sm">
-            <span className="text-gray-600 dark:text-slate-400">
-              Showing <span className="font-medium text-gray-900 dark:text-slate-50">{filteredData.length}</span> of <span className="font-medium text-gray-900 dark:text-slate-50">{totalResumes}</span> records
-            </span>
+          {/* "Showing N of M records" lived here too — the pagination footer
+              already says it, so only Clear Filters remains, when it applies. */}
+          {anyFiltersApplied && (
+          <div className="mt-1.5 flex items-center justify-end text-sm">
             {anyFiltersApplied && (
               <button
                 onClick={clearAllFilters}
@@ -856,6 +854,7 @@ export default function BulkScoringProgressModal({
               </button>
             )}
           </div>
+          )}
         </div>
 
         {/* Table / Cards */}
@@ -894,28 +893,38 @@ export default function BulkScoringProgressModal({
                   own scroll box around nothing. */}
               <div className="tf-table-shell tf-table-shell--compact tf-table-shell--fill hidden sm:block flex-1 min-h-0">
                 <table className="w-full">
+                  {/* One job (the header names it — JD ID, title, version):
+                      only Job Version stays as a column. Several jobs: Job ID
+                      and Job Title too. Order: Candidate, Status, Score out of
+                      10, Match Status, Job Version, Resume Version, Source,
+                      Scored By / Date, Actions. */}
                   <thead className="sticky top-0 z-10">
                     <tr>
-                      {showJobColumns && (
+                      {showJobIdTitleColumns && (
                         <>
-                          <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Job ID</th>
-                          <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Job Title</th>
-                          <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Job Version</th>
+                          <th className="text-left py-3 px-3 text-sm font-medium text-gray-700 dark:text-slate-300 leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Job ID</th>
+                          <th className="text-left py-3 px-3 text-sm font-medium text-gray-700 dark:text-slate-300 leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Job Title</th>
                         </>
                       )}
-                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Candidate Name</th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Resume Version</th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Source</th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Status</th>
-                      {showScoredByColumn && <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Scored By</th>}
-                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Scored Date &amp; Time</th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Match Result</th>
-                      {showScoreColumn && <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Score out of 10</th>}
-                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700 tf-sticky-col">Actions</th>
+                      <th className="text-left py-3 px-3 text-sm font-medium text-gray-700 dark:text-slate-300 leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Candidate</th>
+                      <th className="text-left py-3 px-3 text-sm font-medium text-gray-700 dark:text-slate-300 leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Status</th>
+                      {showScoreColumn && <th className="text-center py-3 px-3 text-sm font-medium text-gray-700 dark:text-slate-300 leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Score out of 10</th>}
+                      <th className="text-left py-3 px-3 text-sm font-medium text-gray-700 dark:text-slate-300 leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Match Status</th>
+                      {showJobColumns && <th className="text-center py-3 px-3 text-sm font-medium text-gray-700 dark:text-slate-300 leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Job Version</th>}
+                      <th className="text-center py-3 px-3 text-sm font-medium text-gray-700 dark:text-slate-300 leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Resume Version</th>
+                      <th className="text-left py-3 px-3 text-sm font-medium text-gray-700 dark:text-slate-300 leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Source</th>
+                      <th className="text-left py-3 px-3 text-sm font-medium text-gray-700 dark:text-slate-300 leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">{showScoredByColumn ? 'Scored By / Date' : 'Scored Date'}</th>
+                      <th className="text-left py-3 px-3 text-sm font-medium text-gray-700 dark:text-slate-300 bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700 tf-sticky-col">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {pagedData.map((item, index) => (
+                    {pagedData.map((item, index) => {
+                      const scoredAt = item.scoredDateTime
+                        ? formatDateTimeIST(item.scoredDateTime)
+                        : item.status === 'Scored successfully'
+                          ? formatDateTimeIST(new Date())
+                          : null;
+                      return (
                       <tr
                         key={item.id}
                         onClick={canViewResult(item) ? () => onViewResult!(item) : undefined}
@@ -923,36 +932,25 @@ export default function BulkScoringProgressModal({
                           index % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-gray-50 dark:bg-slate-800/50'
                         } ${canViewResult(item) ? 'cursor-pointer' : ''}`}
                       >
-                        {showJobColumns && (
+                        {showJobIdTitleColumns && (
                           <>
-                            <td className="py-3 px-4 whitespace-nowrap">
+                            <td className="py-3 px-3 whitespace-nowrap">
                               <span className="font-mono text-xs font-semibold text-brand-blue">{item.jobCode || item.jobId}</span>
                             </td>
-                            <td className="py-3 px-4 whitespace-nowrap">
+                            <td className="py-3 px-3 whitespace-nowrap">
                               <div className="text-sm text-gray-900 dark:text-slate-50" title={item.jobTitle}>{truncateJobTitle(item.jobTitle)}</div>
-                            </td>
-                            <td className="py-3 px-4 whitespace-nowrap">
-                              {item.jobVersion !== undefined ? (
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs border bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/30">
-                                  v{item.jobVersion}
-                                </span>
-                              ) : (
-                                <span className="text-sm text-gray-400 dark:text-slate-500">&mdash;</span>
-                              )}
                             </td>
                           </>
                         )}
-                        <td className="py-3 px-4 whitespace-nowrap">
+                        {/* 1. Candidate */}
+                        <td className="py-3 px-3 whitespace-nowrap">
                           <div className="flex flex-col gap-1">
-                            <div className="font-medium text-gray-900 dark:text-slate-50">{item.candidateName}</div>
+                            <div className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate max-w-[200px]" title={item.candidateName}>{item.candidateName}</div>
                             {item.email && (
-                              <div className="text-xs text-gray-500 dark:text-slate-500 truncate max-w-[240px]">{item.email}</div>
+                              <div className="text-xs text-gray-500 dark:text-slate-500 truncate max-w-[200px]" title={item.email}>{item.email}</div>
                             )}
                             {/* The job title doubles as a caption ONLY for a table
-                                that spans several jobs. One job means the header
-                                already names it, so repeating it on every row
-                                pushed the candidate's email out of the space it
-                                belongs in. */}
+                                that spans several jobs and has no job columns. */}
                             {item.jobTitle && !filterByJobId && !showJobColumns && !scopedToJobTitle && (
                               <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-500">
                                 <Target className="w-3 h-3 flex-shrink-0" />
@@ -961,20 +959,10 @@ export default function BulkScoringProgressModal({
                             )}
                           </div>
                         </td>
-                        <td className="py-3 px-4 whitespace-nowrap">
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs border bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700">
-                            v{item.resumeVersion ?? 1}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 whitespace-nowrap">
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border bg-gray-50 dark:bg-slate-800/50 text-gray-900 dark:text-slate-50 border-gray-200 dark:border-slate-700">
-                            {item.source === 'Internal DB' ? <Database className="w-3 h-3" /> : <FolderOpen className="w-3 h-3" />}
-                            {item.source}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 whitespace-nowrap">
+                        {/* 2. Status */}
+                        <td className="py-3 px-3 whitespace-nowrap">
                           <div className="flex flex-col gap-1">
-                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border w-fit ${getStatusBadgeClass(item.status)}`}>
+                            <span className={`${TABLE_BADGE} ${getStatusBadgeClass(item.status)}`}>
                               {getStatusIcon(item.status)}
                               {item.status}
                             </span>
@@ -986,33 +974,10 @@ export default function BulkScoringProgressModal({
                             )}
                           </div>
                         </td>
-                        {showScoredByColumn && (
-                          <td className="py-3 px-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900 dark:text-slate-50">{item.scoredBy || '-'}</div>
-                          </td>
-                        )}
-                        <td className="py-3 px-4 whitespace-nowrap">
-                          {item.scoredDateTime ? (
-                            <div className="text-sm text-gray-700 dark:text-slate-300">
-                              <div className="font-medium">{formatDateTimeIST(item.scoredDateTime).date}</div>
-                              <div className="text-xs text-gray-500 dark:text-slate-500">{formatDateTimeIST(item.scoredDateTime).time}</div>
-                            </div>
-                          ) : item.status === 'Scored successfully' ? (
-                            <div className="text-sm text-gray-700 dark:text-slate-300">
-                              <div className="font-medium">{formatDateTimeIST(new Date()).date}</div>
-                              <div className="text-xs text-gray-500 dark:text-slate-500">{formatDateTimeIST(new Date()).time}</div>
-                            </div>
-                          ) : (
-                            <span className="text-sm text-gray-400 dark:text-slate-500">Pending</span>
-                          )}
-                        </td>
-                        <td className="py-3 px-4 whitespace-nowrap">
-                          {item.matchResult ? getMatchResultBadge(item.matchResult, item.score) : <span className="text-sm text-gray-400 dark:text-slate-500">Pending</span>}
-                        </td>
+                        {/* 3. Score out of 10 — the Match Status badge's colours,
+                            so the number and the verdict read as one. */}
                         {showScoreColumn && (
-                          <td className="py-3 px-4 whitespace-nowrap">
-                            {/* Same three colours the Match Result badge uses,
-                                so the number and the verdict read as one. */}
+                          <td className="py-3 px-3 whitespace-nowrap text-center">
                             {item.score !== undefined && item.matchResult ? (
                               <span className={`${SCORE_CELL_TEXT} ${SCORE_TEXT_CLASS[item.matchResult]}`}>{formatOverallScoreValue(item.overallRating10, item.score)}</span>
                             ) : (
@@ -1020,7 +985,55 @@ export default function BulkScoringProgressModal({
                             )}
                           </td>
                         )}
-                        <td className="py-3 px-4 whitespace-nowrap tf-sticky-col">
+                        {/* 4. Match Status */}
+                        <td className="py-3 px-3 whitespace-nowrap">
+                          {item.matchResult ? getMatchResultBadge(item.matchResult, item.score) : <span className="text-sm text-gray-400 dark:text-slate-500">Pending</span>}
+                        </td>
+                        {/* Job Version — the job itself is in the header. */}
+                        {showJobColumns && (
+                          <td className="py-3 px-3 whitespace-nowrap text-center">
+                            {item.jobVersion !== undefined ? (
+                              <span className={`${TABLE_BADGE} bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/30`}>
+                                v{item.jobVersion}
+                              </span>
+                            ) : (
+                              <span className="text-sm text-gray-400 dark:text-slate-500">&mdash;</span>
+                            )}
+                          </td>
+                        )}
+                        {/* 5. Resume Version */}
+                        <td className="py-3 px-3 whitespace-nowrap text-center">
+                          <span className={`${TABLE_BADGE} bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700`}>
+                            v{item.resumeVersion ?? 1}
+                          </span>
+                        </td>
+                        {/* 6. Source */}
+                        <td className="py-3 px-3 whitespace-nowrap">
+                          <span className={`${TABLE_BADGE} bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700`}>
+                            {item.source === 'Internal DB' ? <Database className="w-3 h-3" /> : <FolderOpen className="w-3 h-3" />}
+                            {item.source}
+                          </span>
+                        </td>
+                        {/* 7. Scored By / Date — who, then when (date · time). */}
+                        <td className="py-3 px-3 whitespace-nowrap">
+                          {scoredAt ? (
+                            <div className="text-sm text-gray-700 dark:text-slate-300">
+                              {showScoredByColumn && (
+                                <div className="text-sm font-medium text-gray-900 dark:text-slate-50">{item.scoredBy || '-'}</div>
+                              )}
+                              <div className={showScoredByColumn ? 'text-xs text-gray-500 dark:text-slate-500' : 'font-medium'}>
+                                {scoredAt.date}
+                                {showScoredByColumn ? <> &middot; {scoredAt.time}</> : null}
+                              </div>
+                              {!showScoredByColumn && (
+                                <div className="text-xs text-gray-500 dark:text-slate-500">{scoredAt.time}</div>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-sm text-gray-400 dark:text-slate-500">Pending</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-3 whitespace-nowrap tf-sticky-col">
                           <div className="flex items-center gap-2">
                             {item.resumeId && (
                               <Button
@@ -1029,7 +1042,7 @@ export default function BulkScoringProgressModal({
                                 onClick={(e) => { e.stopPropagation(); viewItem(item); }}
                                 aria-label={viewTitle}
                                 title={viewTitle}
-                                className="w-8 px-0"
+                                className="!h-8 !w-8 !px-0"
                               >
                                 <Eye className="w-4 h-4" />
                               </Button>
@@ -1040,6 +1053,7 @@ export default function BulkScoringProgressModal({
                                 size="sm"
                                 onClick={() => handleRetry(item)}
                                 disabled={retryingItems.has(item.id)}
+                                className="!h-8"
                               >
                                 {retryingItems.has(item.id) ? <><Loader2 className="w-3 h-3 animate-spin" />Retrying...</> : <><RotateCcw className="w-3 h-3" />Retry</>}
                               </Button>
@@ -1050,7 +1064,8 @@ export default function BulkScoringProgressModal({
                           </div>
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -1069,8 +1084,13 @@ export default function BulkScoringProgressModal({
                       <div className="min-w-0">
                         {showJobColumns && (
                           <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-500 mb-0.5">
-                            <span className="font-mono font-semibold text-brand-blue">{item.jobCode || item.jobId}</span>
-                            <span title={item.jobTitle}>{truncateJobTitle(item.jobTitle)}</span>
+                            {/* One job: the header names it, so only the version. */}
+                            {showJobIdTitleColumns && (
+                              <>
+                                <span className="font-mono font-semibold text-brand-blue">{item.jobCode || item.jobId}</span>
+                                <span title={item.jobTitle}>{truncateJobTitle(item.jobTitle)}</span>
+                              </>
+                            )}
                             {item.jobVersion !== undefined && (
                               <span className="inline-flex items-center px-1.5 rounded-full border bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/30">
                                 v{item.jobVersion}

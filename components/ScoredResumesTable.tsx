@@ -46,7 +46,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu';
-import { SortByControl } from '@/components/ui/select-all-menu';
+import { SelectAllMenu, SortByControl } from '@/components/ui/select-all-menu';
 
 /* Action menu item styling — cloned from the Job Openings page's three-dot
    menu (JobsListing.tsx: gray-700 text, hover:bg-gray-50, px-4/py-2.5 rows,
@@ -419,12 +419,11 @@ interface ScoredResumesTableProps {
    */
   toolbarPortal?: HTMLElement | null;
   /**
-   * How a candidate's name is SHOWN in the rows, grid cards and mobile cards
-   * (Job Details: first name capitalised). Display only — search, sort,
-   * filters, exports and everything sent on keep the name as it is. Other
-   * hosts leave it unset and see the name exactly as before.
+   * Table column ids to leave out (see TABLE_COLUMNS) — for a host that
+   * already shows them around the table, e.g. AI Talent Match's per-candidate
+   * score table, whose row above names the candidate and the job.
    */
-  formatCandidateName?: (name: string) => string;
+  hiddenColumnIds?: string[];
 }
 
 /**
@@ -617,7 +616,7 @@ export default function ScoredResumesTable({
   compact = false,
   hideSelectionBar = false,
   toolbarPortal,
-  formatCandidateName,
+  hiddenColumnIds,
 }: ScoredResumesTableProps) {
   const showName = (name: string) => (formatCandidateName ? formatCandidateName(name) : name);
   /* Embedded in the Job Details tabs (the toolbar portals into that card's
@@ -940,7 +939,9 @@ Best regards`);
 
   // The table's columns are fixed; only the EXPORT's are chosen, in the
   // shared Export dialog (ScoredResumesExportModal).
-  const enabledColumns = TABLE_COLUMNS;
+  const enabledColumns = hiddenColumnIds?.length
+    ? TABLE_COLUMNS.filter((col) => !hiddenColumnIds.includes(col.id))
+    : TABLE_COLUMNS;
   // The JD ID column's value: the row's own code in cross-job lists, the host
   // job's in a single-job table. One helper so cell, export, search and the
   // JD ID filter can never disagree.
@@ -2079,10 +2080,12 @@ Best regards`);
           // More Filters, Reset, Sort by, List / Grid. In Job Details the
           // controls keep the AI Talent Match row's 12px gap from the search.
           controlsFollowSearch={!toolbarPortal}
-          /* Select All — at the very start of the toolbar row, matching the AI
-             Talent Match reference (it used to sit in its own strip below). */
+          /* Select All — embedded in Job Details, at the very start of the
+             toolbar row, matching the AI Talent Match reference. Standalone
+             Resume Scoring keeps it leading row 2 instead (see below), the
+             same place View by Job has it, so both views' toolbars match. */
           beforeSearch={
-            filteredResumes.length > 0
+            embedded && filteredResumes.length > 0
               ? (
                 <>
                   {(() => {
@@ -2135,9 +2138,10 @@ Best regards`);
                 searchPlaceholder="Search recruiter..."
                 ariaLabel="Filter by recruiter"
               />
-              {/* Sort by — ahead of More Filters, matching the AI Talent Match
-                  reference's control order. */}
-              {filteredResumes.length > 0 && (
+              {/* Sort by — embedded: ahead of More Filters, matching the AI
+                  Talent Match reference's control order. Standalone: after
+                  More Filters (the toolbar's children), as View by Job. */}
+              {embedded && filteredResumes.length > 0 && (
                 <SortByControl<SortKey>
                   value={sortBy}
                   order={sortOrder}
@@ -2149,13 +2153,28 @@ Best regards`);
             </>
           }
           /* List / Grid pinned to the far right, as on the AI Talent Match tab. */
-          trailing={<ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-9" />}
+          trailing={embedded ? <ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-9" /> : undefined}
           /* 36px control band like the AI Talent Match tab (its More Filters is h-9). */
           compactButtons={!!toolbarPortal}
           /* Standalone the gap comes from the block's space-y; in Job Details
              the row keeps ListToolbar's own `mb-3`, as on AI Talent Match. */
           className={toolbarPortal ? undefined : 'mb-0'}
-        />
+        >
+          {/* Standalone: Sort by, then List / Grid, after More Filters — the
+              same order and sizes as View by Job's toolbar row. */}
+          {!embedded && filteredResumes.length > 0 && (
+            <SortByControl<SortKey>
+              value={sortBy}
+              order={sortOrder}
+              options={isGrouped ? GROUPED_SORT_OPTIONS : FLAT_SORT_OPTIONS}
+              onChange={setSortBy}
+              onToggleOrder={() => setSortOrder((o) => (o === 'asc' ? 'desc' : 'asc'))}
+            />
+          )}
+          {!embedded && (
+            <ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-[38px] !border-brand-blue/10" />
+          )}
+        </ListToolbar>
 
         {/* Advanced Filters */}
         {showFilters && (
@@ -2275,8 +2294,36 @@ Best regards`);
         {/* Row 2: the host's verdict pills and View by toggle. Select All now
             rides the toolbar row above (beforeSearch), matching the AI Talent
             Match reference; this row renders only when it still has content. */}
-        {(viewPillsSlot || (isGrouped && paginatedGroups.length > 0)) && (
+        {(viewPillsSlot || (isGrouped && paginatedGroups.length > 0) || (!embedded && filteredResumes.length > 0)) && (
         <div className="mt-3 pt-3 border-t border-gray-200 dark:border-slate-700/60 flex flex-wrap items-center gap-2">
+          {/* Standalone: Select All leads this row, then a divider and the
+              verdict pills — exactly View by Job's row 2. */}
+          {!embedded && filteredResumes.length > 0 && (() => {
+            const pageRows = isGrouped ? paginatedGroups.flatMap((g) => g.rows) : paginatedResumes;
+            const selectedCount = isGrouped
+              ? new Set(effectiveSelectedRows.map(candidateGroupKey)).size
+              : effectiveSelectedRows.length;
+            return (
+              <>
+                <SelectAllMenu
+                  selectedCount={selectedCount}
+                  pageCount={isGrouped ? paginatedGroups.length : paginatedResumes.length}
+                  totalCount={isGrouped ? candidateGroups.length : filteredResumes.length}
+                  noun={isGrouped ? 'candidates' : 'resumes'}
+                  allSelected={allVisibleSelected}
+                  onSelectPage={() => {
+                    const ids = Array.from(new Set([...effectiveSelectedRows.map((r) => r.id), ...pageRows.map((r) => r.id)]));
+                    selectExactly(ids);
+                  }}
+                  onSelectAll={() => selectExactly(filteredResumes.map((r) => r.id))}
+                  onClear={clearSelection}
+                />
+                {viewPillsSlot && (
+                  <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
+                )}
+              </>
+            );
+          })()}
           {viewPillsSlot}
           {/* Expand all / Collapse all — every candidate on this page. */}
           {isGrouped && paginatedGroups.length > 0 && (() => {
@@ -2302,9 +2349,15 @@ Best regards`);
         </div>
         )}
 
-        {/* Actions now rides the toolbar row beside Select All (see
-            beforeSearch), matching the AI Talent Match reference — no separate
-            Actions row below the toolbar. */}
+        {/* Actions — embedded: in the toolbar row beside Select All (see
+            beforeSearch), matching the AI Talent Match reference. Standalone:
+            on a line of its own under Select All once rows are ticked, as
+            View by Job shows it. */}
+        {!embedded && selectionActions && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+            {selectionActions}
+          </div>
+        )}
 
         </div>
         );

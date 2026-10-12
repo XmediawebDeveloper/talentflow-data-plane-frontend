@@ -130,6 +130,41 @@ function ClusterCard({
   );
 }
 
+function SummaryTile({
+  label, covered, total, demonstrated, pct, accent, bar,
+}: {
+  label: string;
+  covered: number;
+  total: number;
+  demonstrated: number;
+  pct: number;
+  accent: string;
+  bar: string;
+}) {
+  return (
+    <div className="rounded-xl border border-gray-200 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-800/40 p-4">
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="text-sm font-semibold text-gray-700 dark:text-slate-300">{label}</div>
+        <div className={`text-2xl font-bold tabular-nums ${accent}`}>{pct}%</div>
+      </div>
+      <div
+        className="mt-2 h-2 rounded-full bg-gray-200 dark:bg-slate-700 overflow-hidden"
+        role="progressbar"
+        aria-valuenow={pct}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={`${label} coverage`}
+      >
+        <div className={`h-full rounded-full ${bar}`} style={{ width: `${pct}%` }} />
+      </div>
+      <div className="mt-3 flex items-center justify-between gap-3 text-sm text-gray-600 dark:text-slate-400">
+        <span><span className="font-semibold text-gray-900 dark:text-slate-100 tabular-nums">{covered} / {total}</span> covered</span>
+        <span><span className="font-semibold text-gray-900 dark:text-slate-100 tabular-nums">{demonstrated}</span> demonstrated</span>
+      </div>
+    </div>
+  );
+}
+
 export function CoverageV2({ data }: Props) {
   const mhClusters = data.mustHaveClusters;
   const nhClusters = data.niceToHaveClusters;
@@ -150,11 +185,14 @@ export function CoverageV2({ data }: Props) {
   const nhDemo  = demonstratedSkills(nhClusters);
   const nhPct   = nhTotal > 0 ? Math.round((nhCov / nhTotal) * 100) : 0;
 
+  const bothSections = data.sectionsPresent.mustHave && data.sectionsPresent.niceToHave;
+
   return (
     <div className="space-y-6">
 
-      {/* Side-by-side: Must-Have / Nice-to-Have */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Side-by-side: Must-Have / Nice-to-Have. With only one section
+          configured it takes the full width instead of half. */}
+      <div className={`grid grid-cols-1 gap-6 ${bothSections ? 'lg:grid-cols-2' : ''}`}>
         {/* Must-Have Section */}
         {data.sectionsPresent.mustHave && (
           <div>
@@ -198,25 +236,19 @@ export function CoverageV2({ data }: Props) {
         )}
       </div>
 
-      {/* Coverage Summary */}
+      {/* Coverage Summary — one tile per configured section: label and
+          coverage % on one line, a bar for the %, then the counts. */}
       <div className="rounded-2xl p-6 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700/60 shadow-sm shadow-brand-blue/5 text-gray-900 dark:text-slate-50">
-        <div className="text-lg font-bold mb-4">Coverage Summary</div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="mb-4">
+          <div className="text-lg font-bold">Coverage Summary</div>
+          <div className="text-sm text-gray-500 dark:text-slate-400">Skills asked during the interview, out of the skills configured for each section.</div>
+        </div>
+        <div className={`grid grid-cols-1 gap-4 ${bothSections ? 'md:grid-cols-2' : ''}`}>
           {data.sectionsPresent.mustHave && (
-            <div>
-              <div className="text-sm text-gray-600 dark:text-slate-400 mb-1">Must-Have Skills Coverage:</div>
-              <div className="text-2xl font-bold mb-1">{mhCov} / {mhTotal} covered</div>
-              <div className="text-sm text-gray-500 dark:text-slate-400 mb-1">{mhDemo} demonstrated</div>
-              <div className="text-4xl font-bold text-brand-blue">{mhPct}%</div>
-            </div>
+            <SummaryTile label="Must-Have Skills" covered={mhCov} total={mhTotal} demonstrated={mhDemo} pct={mhPct} accent="text-brand-blue" bar="bg-brand-blue" />
           )}
           {data.sectionsPresent.niceToHave && (
-            <div>
-              <div className="text-sm text-gray-600 dark:text-slate-400 mb-1">Nice-to-Have Skills Coverage:</div>
-              <div className="text-2xl font-bold mb-1">{nhCov} / {nhTotal} covered</div>
-              <div className="text-sm text-gray-500 dark:text-slate-400 mb-1">{nhDemo} demonstrated</div>
-              <div className="text-4xl font-bold text-brand-orange-deep">{nhPct}%</div>
-            </div>
+            <SummaryTile label="Nice-to-Have Skills" covered={nhCov} total={nhTotal} demonstrated={nhDemo} pct={nhPct} accent="text-brand-orange-deep" bar="bg-brand-orange" />
           )}
         </div>
       </div>
