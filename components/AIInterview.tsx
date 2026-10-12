@@ -2354,7 +2354,7 @@ export default function AIInterview() {
               </p>
             </div>
           </div>
-          <div className="flex items-stretch gap-2 sm:gap-3 flex-wrap lg:flex-nowrap">
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap lg:flex-nowrap">
             {/* AI Interview Quota Card */}
             {totalUnits > 0 && (
               <QuotaBadge
@@ -2376,7 +2376,7 @@ export default function AIInterview() {
               }}
               aria-disabled={!canAccessHRQuestionBank}
               title={!canAccessHRQuestionBank ? 'You do not have permission to access the HR Question Bank' : ''}
-              className={`inline-flex items-center gap-1.5 border px-3.5 py-2 rounded-lg transition-all duration-200 text-xs font-medium shadow-sm ${
+              className={`inline-flex items-center gap-1.5 h-10 border px-4 rounded-lg transition-all duration-200 text-sm font-medium shadow-sm ${
                 canAccessHRQuestionBank
                   ? 'border-brand-blue/30 bg-white dark:bg-slate-900 text-brand-blue hover:bg-brand-blue/5'
                   : 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-400 dark:text-slate-500 cursor-not-allowed opacity-60'
@@ -2387,7 +2387,7 @@ export default function AIInterview() {
             </button>
             <Button
               variant="secondary"
-              size="sm"
+              size="md"
               onClick={() => {
                 if (!canShareAIInterviews) {
                   toast.error('You do not have permission to invite candidates');
@@ -2397,6 +2397,9 @@ export default function AIInterview() {
               }}
               aria-disabled={!canShareAIInterviews}
               className={!canShareAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}
+              // Inline so it beats the secondary variant's border-[var(--border)];
+              // matches the HR Question Bank button's border-brand-blue/30.
+              style={{ borderColor: 'color-mix(in srgb, var(--brand-blue) 30%, transparent)' }}
               title={!canShareAIInterviews ? 'You do not have permission to invite candidates' : ''}
               icon={<Send className="w-3.5 h-3.5" />}
             >
@@ -2404,7 +2407,7 @@ export default function AIInterview() {
             </Button>
             <Button
               variant="primary"
-              size="sm"
+              size="md"
               onClick={() => {
                 if (!canCreateAIInterviews) {
                   toast.error('You do not have permission to create AI interviews');
@@ -2473,7 +2476,7 @@ export default function AIInterview() {
               cardKey: 'draft' as OverviewCardKey,
             },
             {
-              label: 'Candidates Interviewed',
+              label: 'Total Interviewed',
               value: interviewedCount ?? stats?.completed ?? 0,
               icon: Users,
               tab: 'candidate-results' as TabKey,

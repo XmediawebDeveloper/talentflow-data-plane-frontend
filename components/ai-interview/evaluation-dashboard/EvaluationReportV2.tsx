@@ -417,7 +417,7 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
               <ul className="space-y-2 text-sm leading-relaxed text-gray-900">
                 <li><strong>Do not proceed:</strong> Candidate did not meet the minimum requirements for must-have skills</li>
                 <li><strong>Skills gap identified:</strong> Significant development needed in core technical areas</li>
-                <li><strong>Alternative path:</strong> Consider for junior positions or recommend additional training</li>
+                <li><strong>Re-assess later:</strong> Consider a fresh interview only once the candidate has gained hands-on experience in the must-have skills</li>
               </ul>
             </>
           )}

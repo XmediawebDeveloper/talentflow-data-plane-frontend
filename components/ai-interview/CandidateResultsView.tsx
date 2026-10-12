@@ -8,12 +8,12 @@ import { Badge } from '@/components/ui/badge';
 import {
   ArrowLeft, Clock, MessageSquare, ThumbsUp, ThumbsDown,
   AlertTriangle, VideoOff, ChevronDown, ChevronUp, Video,
-  BarChart3, Brain, FileText, Layers, Bot,
+  BarChart3, Brain, FileText, Layers,
   ShieldAlert, Monitor, Clipboard, MousePointer, Eye, UserX,
   Volume2, Users, Maximize2, Camera, Mic, User, ChevronLeft, ChevronRight, Smartphone,
   Shield, CheckCircle2, XCircle, Activity, RefreshCw, Award, TrendingUp, Target,
   Download, Loader2, Sparkles, SkipForward, Play, X, Timer, Check,
-  ArrowUpRight,
+  ArrowUpRight, ChevronsUpDown, ChevronsDownUp, ScanQrCode,
 } from 'lucide-react';
 import {
   XAxis, YAxis, CartesianGrid, Tooltip,
@@ -55,6 +55,7 @@ import ResumeDetailView from '@/components/ResumeDetailView';
 import ViewResumeButton from '@/components/ui/view-resume-button';
 import { RESUME_EMAIL_MISMATCH_MESSAGE, emailsMatch, normalizeEmail, pickResumeByEmail, resumeEmailOf, verifyResumeBelongsToInvite } from '@/lib/utils/resumeEmailMatch';
 import ResumeHoverPreview from '@/components/ResumeHoverPreview';
+import TruncatedTextCell from './TruncatedTextCell';
 import { Tooltip as HoverTooltip } from '@/components/ui/tooltip';
 import TabEmptyState, { TAB_EMPTY_ACTION_CLASS } from '@/components/ui/tab-empty-state';
 import { formatScore1, truncate1 } from '@/lib/utils/matchStatus';
@@ -571,6 +572,11 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
   const seekNonceRef = useRef(0);
   const [transcriptView, setTranscriptView] = useState<'chat' | 'table'>('chat');
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  // Transcript table's Question / Raw Transcript columns: 4-word pills
+  // (default) or full text, each toggled from its own column header — same
+  // as Resume Scoring's AI Reasoning.
+  const [transcriptQuestionsExpanded, setTranscriptQuestionsExpanded] = useState(false);
+  const [transcriptRawExpanded, setTranscriptRawExpanded] = useState(false);
   const [qaExportMenuOpen, setQaExportMenuOpen] = useState(false);
   const [videoError, setVideoError] = useState(false);
   const [videoBlobUrl, setVideoBlobUrl] = useState<string | null>(null);
@@ -1530,7 +1536,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
     { key: 'recording',        label: 'Recording',        icon: <Video className="w-4 h-4" /> },
     { key: 'transcript',       label: 'Transcript',       icon: <FileText className="w-4 h-4" /> },
     { key: 'violations',       label: 'Violations',  icon: <ShieldAlert className="w-4 h-4" />, badge: (violationSummary.serious > 0 ? violationSummary.serious : violationSummary.counted) || undefined, badgeTone: violationSummary.serious > 0 ? 'critical' : 'neutral' },
-    { key: 'verification',     label: 'QR Verification',  icon: <ShieldAlert className="w-4 h-4" />, badge: (envVerifications?.length || undefined), badgeTone: 'neutral' },
+    { key: 'verification',     label: 'QR Verification',  icon: <ScanQrCode className="w-4 h-4" />, badge: (envVerifications?.length || undefined), badgeTone: 'neutral' },
   ];
 
   const renderPlaceholder = (message: string) => (
@@ -2034,7 +2040,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                   className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-brand-blue hover:bg-brand-blue-2 disabled:opacity-60 text-white text-sm font-medium shadow-sm shadow-brand-blue/25 transition-colors"
                 >
                   {reportDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                  {reportDownloading ? 'Preparing…' : 'Download Report'}
+                  {reportDownloading ? 'Preparing…' : 'Report'}
                 </button>
               )}
               </div>
@@ -2251,13 +2257,14 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
             as the AI Interview Details page (`AIInterviewDetailsView.tsx`), so
             the two detail pages read as one screen. The strip this replaced was
             horizontal and scrolled sideways with nine tabs. */}
-        <div className="space-y-3 sm:space-y-4">
-          {/* Horizontal pill tab bar (was a vertical sidebar rail): shared
-              `tabPill` chrome, wrapping onto further rows so every tab stays
-              visible; alert tabs flip to solid red when active. */}
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+        <div className="space-y-3 sm:space-y-4 lg:space-y-0 lg:grid lg:grid-cols-[210px_minmax(0,1fr)] lg:items-start lg:gap-6">
+          {/* Tablet/mobile: horizontal pill tab bar (shared `tabPill` chrome,
+              wrapping onto further rows; alert tabs flip to solid red when
+              active). Desktop (lg+): a sticky vertical rail on the left with the
+              content on the right. top-12 clears the sticky breadcrumb. */}
+          <div className="lg:sticky lg:top-12 lg:self-start bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
             <nav className="p-2 sm:p-3" aria-label="Candidate result sections">
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 lg:flex-col lg:flex-nowrap lg:items-stretch lg:gap-1.5">
                 {tabs.map(tab => {
                   const isActive = activeTab === tab.key;
                   const isAlertTab = tab.key === 'violations' || tab.key === 'verification';
@@ -2267,7 +2274,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                       type="button"
                       onClick={() => { setActiveTab(tab.key); setViolationPage(1); }}
                       aria-current={isActive ? 'page' : undefined}
-                      className={
+                      className={`${
                         isAlertTab
                           ? `inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs sm:text-sm whitespace-nowrap transition-all ${
                               isActive
@@ -2275,10 +2282,16 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                 : 'bg-destructive-subtle/50 text-gray-600 dark:text-slate-300 hover:bg-destructive-subtle hover:text-destructive'
                             }`
                           : `${tabPill(isActive)} whitespace-nowrap`
-                      }
+                      } lg:flex lg:w-full lg:gap-2 lg:px-3 lg:py-2.5 lg:text-left lg:whitespace-normal lg:shadow-none ${
+                        isActive
+                          ? isAlertTab
+                            ? 'lg:bg-destructive-subtle lg:text-destructive lg:font-medium lg:ring-1 lg:ring-destructive-line'
+                            : 'lg:bg-brand-blue/5 lg:text-brand-blue lg:font-medium lg:ring-1 lg:ring-brand-blue/20'
+                          : 'lg:bg-transparent lg:text-gray-600 lg:dark:text-slate-400 lg:hover:bg-brand-blue/5 lg:hover:text-brand-blue'
+                      }`}
                     >
                       <span className="shrink-0 [&>svg]:w-3.5 [&>svg]:h-3.5 sm:[&>svg]:w-4 sm:[&>svg]:h-4">{tab.icon}</span>
-                      <span className="leading-snug">{tab.label}</span>
+                      <span className="leading-snug lg:min-w-0 lg:flex-1">{tab.label}</span>
                       {tab.live && (
                         <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-destructive text-white text-2xs font-bold rounded-full ring-1 ring-destructive-line">
                           <span className="w-1 h-1 rounded-full bg-white animate-pulse" />
@@ -2288,7 +2301,11 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                       {tab.badge !== undefined && (
                         <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${
                           isActive
-                            ? 'bg-white/20 text-white'
+                            // Solid pill on tablet/mobile; the desktop rail's
+                            // active row is light, so the badge reverts there.
+                            ? tab.badge > 0 && tab.badgeTone === 'critical'
+                              ? 'bg-white/20 text-white lg:bg-destructive-subtle lg:text-destructive lg:ring-1 lg:ring-destructive-line'
+                              : 'bg-white/20 text-white lg:bg-slate-100 lg:text-slate-500 lg:ring-1 lg:ring-slate-200'
                             : tab.badge > 0 && tab.badgeTone === 'critical'
                               ? 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line'
                               : 'bg-slate-100 text-slate-500 ring-1 ring-slate-200'
@@ -3999,8 +4016,8 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                     <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
                       <div className="flex items-center gap-3">
                         <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-full bg-brand-blue ring-1 ring-white/20 shadow-sm shadow-brand-blue/20 flex items-center justify-center">
-                            <Bot className="w-3.5 h-3.5 text-white" />
+                          <div className="w-7 h-7 rounded-full bg-brand-blue ring-1 ring-white/20 shadow-sm shadow-brand-blue/20 flex items-center justify-center text-white font-semibold text-2xs">
+                            B
                           </div>
                           <span className="text-xs text-gray-500">Bina (AI Interviewer)</span>
                         </div>
@@ -4066,7 +4083,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                               <div className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold mt-0.5 ring-1 ring-white/20 shadow-sm ${
                                 isAssistant ? 'bg-brand-blue text-white shadow-brand-blue/20' : 'bg-brand-cyan text-white shadow-brand-cyan/15'
                               }`}>
-                                {isAssistant ? <Bot className="w-3.5 h-3.5" /> : candidateName[0].toUpperCase()}
+                                {isAssistant ? 'B' : candidateName[0].toUpperCase()}
                               </div>
 
                               <div className={`max-w-[75%] ${isAssistant ? '' : 'items-end flex flex-col'}`}>
@@ -4120,7 +4137,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                         raw ASR it simply repeats the same text (no correction).
                                         For a non-English discard there is no scorable English,
                                         so it shows a muted "not scored" marker instead of text. */}
-                                    <div className="mt-1.5 px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed bg-brand-blue text-white ring-1 ring-brand-blue/30 shadow-sm shadow-brand-blue/15">
+                                    <div className="mt-1.5 px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed bg-success text-white ring-1 ring-success/30 shadow-sm shadow-success/15">
                                       <div className="text-2xs font-semibold text-white/80 mb-1 uppercase tracking-wide">Corrected</div>
                                       {noScorableEnglish
                                         ? <span className="italic text-white/50">— no scorable English (not scored)</span>
@@ -4428,8 +4445,46 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                   <th className="px-3 py-2.5 text-left font-semibold w-12">S.No</th>
                                   <th className="px-3 py-2.5 text-left font-semibold w-20">Question ID</th>
                                   <th className="px-3 py-2.5 text-left font-semibold w-24">Type</th>
-                                  <th className="px-3 py-2.5 text-left font-semibold">Question</th>
-                                  <th className="px-3 py-2.5 text-left font-semibold">Raw Transcript</th>
+                                  <th className="px-3 py-2.5 text-left font-semibold">
+                                    <div className="flex items-center gap-2">
+                                      <span>Question</span>
+                                      {flatRows.length > 0 && (
+                                        <button
+                                          type="button"
+                                          onClick={() => setTranscriptQuestionsExpanded(v => !v)}
+                                          aria-pressed={transcriptQuestionsExpanded}
+                                          aria-label={transcriptQuestionsExpanded ? 'Collapse all questions' : 'Expand all questions'}
+                                          title={transcriptQuestionsExpanded ? 'Collapse all questions' : 'Expand all questions'}
+                                          className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium normal-case tracking-normal text-brand-blue hover:bg-brand-blue/10 transition-colors cursor-pointer whitespace-nowrap"
+                                        >
+                                          {transcriptQuestionsExpanded
+                                            ? <ChevronsDownUp className="w-3.5 h-3.5" />
+                                            : <ChevronsUpDown className="w-3.5 h-3.5" />}
+                                          {transcriptQuestionsExpanded ? 'Collapse all' : 'Expand all'}
+                                        </button>
+                                      )}
+                                    </div>
+                                  </th>
+                                  <th className="px-3 py-2.5 text-left font-semibold">
+                                    <div className="flex items-center gap-2">
+                                      <span className="whitespace-nowrap">Raw Transcript</span>
+                                      {flatRows.length > 0 && (
+                                        <button
+                                          type="button"
+                                          onClick={() => setTranscriptRawExpanded(v => !v)}
+                                          aria-pressed={transcriptRawExpanded}
+                                          aria-label={transcriptRawExpanded ? 'Collapse all raw transcripts' : 'Expand all raw transcripts'}
+                                          title={transcriptRawExpanded ? 'Collapse all raw transcripts' : 'Expand all raw transcripts'}
+                                          className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium normal-case tracking-normal text-brand-blue hover:bg-brand-blue/10 transition-colors cursor-pointer whitespace-nowrap"
+                                        >
+                                          {transcriptRawExpanded
+                                            ? <ChevronsDownUp className="w-3.5 h-3.5" />
+                                            : <ChevronsUpDown className="w-3.5 h-3.5" />}
+                                          {transcriptRawExpanded ? 'Collapse all' : 'Expand all'}
+                                        </button>
+                                      )}
+                                    </div>
+                                  </th>
                                   <th className="px-3 py-2.5 text-left font-semibold">Corrected Transcript</th>
                                   <th className="px-3 py-2.5 text-left font-semibold w-20">Language</th>
                                   <th className="px-3 py-2.5 text-left font-semibold w-20">Timestamp</th>
@@ -4462,15 +4517,25 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                           {r.type}
                                         </span>
                                       </td>
-                                      <td className="px-3 py-3 align-top text-xs text-gray-700 leading-snug italic">
-                                        {r.question || '—'}
+                                      <td className={`px-3 py-3 align-top text-xs text-gray-700 leading-snug ${transcriptQuestionsExpanded ? 'min-w-[280px]' : ''}`}>
+                                        <TruncatedTextCell
+                                          text={r.question}
+                                          expanded={transcriptQuestionsExpanded}
+                                          textClassName="italic"
+                                        />
                                       </td>
-                                      <td className="px-3 py-3 align-top text-brand-orange-deep leading-snug">
-                                        {diff && diff.mode === 'word'
-                                          ? <DiffText parts={diff.raw} tone="raw" />
-                                          : rowSkip
-                                            ? <span className="text-gray-400">—</span>
-                                            : <span className="text-gray-700">{r.raw || '—'}</span>}
+                                      <td className={`px-3 py-3 align-top text-brand-orange-deep leading-snug ${transcriptRawExpanded ? 'min-w-[280px]' : ''}`}>
+                                        {rowSkip && !(diff && diff.mode === 'word')
+                                          ? <span className="text-gray-400">—</span>
+                                          : (
+                                            // Collapsed: 4-word pill + hover box. Expanded (or
+                                            // short): the existing diff / plain rendering.
+                                            <TruncatedTextCell text={r.raw} expanded={transcriptRawExpanded}>
+                                              {diff && diff.mode === 'word'
+                                                ? <DiffText parts={diff.raw} tone="raw" />
+                                                : <span className="text-gray-700">{r.raw || '—'}</span>}
+                                            </TruncatedTextCell>
+                                          )}
                                       </td>
                                       <td className="px-3 py-3 align-top text-gray-800 leading-snug">
                                         {diff && diff.mode === 'word'

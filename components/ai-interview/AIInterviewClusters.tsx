@@ -1,6 +1,6 @@
 'use client';
 
-import { handoffContinueLabel, safeResumeScoringReturnUrl, useHandoffCandidateCrumb } from '@/lib/utils/resumeScoringInviteHandoff';
+import { handoffContinueLabel, resolveInviteHandoffOrigin, useHandoffCandidateCrumb } from '@/lib/utils/resumeScoringInviteHandoff';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -1072,17 +1072,19 @@ export default function AIInterviewClusters() {
   // Carried from the Configure step when the flow started on a JD's Job Details
   // page — keeps the breadcrumb anchored to that job across the whole flow.
   const fromJobDetails = searchParams.get('from') === 'job-details';
-  // Entered from Resume Scoring's Actions › "Create AI Interview" (the job
-  // had none to invite to): the trail starts at Resume Scoring, the origin
-  // rides every step, and publishing leads straight back there to invite.
-  const fromResumeScoring = searchParams.get('from') === 'resume-scoring';
-  const resumeScoringReturn = safeResumeScoringReturnUrl(searchParams.get('returnUrl'));
+  // Entered from Resume Scoring's / AI Talent Match's Actions › "Create AI
+  // Interview" (the job had none to invite to): the trail starts at that
+  // page, the origin rides every step, and publishing leads straight back
+  // there to invite.
+  const inviteOrigin = resolveInviteHandoffOrigin(searchParams.get('from'), searchParams.get('returnUrl'));
+  const fromInviteOrigin = !!inviteOrigin;
+  const inviteOriginReturn = inviteOrigin?.returnUrl ?? '';
+  const inviteOriginLabel = inviteOrigin?.label ?? '';
+  const inviteOriginPath = inviteOrigin?.path ?? '';
   // Started from one candidate's page: the trail names that candidate.
   const candidateCrumb = useHandoffCandidateCrumb();
-  const resumeScoringOrigin = fromResumeScoring
-    ? `&from=resume-scoring&returnUrl=${encodeURIComponent(resumeScoringReturn)}`
-    : '';
-  const originParam = (fromJobDetails ? '&from=job-details' : '') + resumeScoringOrigin;
+  const inviteOriginQuery = inviteOrigin?.query ?? '';
+  const originParam = (fromJobDetails ? '&from=job-details' : '') + inviteOriginQuery;
 
   /* Loading / saving states */
   const [loading, setLoading] = useState(true);
@@ -1096,8 +1098,8 @@ export default function AIInterviewClusters() {
      draft prompt there included — means the recruiter came to finish one job's
      interview, so saving or discarding returns them to that job instead of the
      AI Interviews list they never asked for. */
-  const exitHref = fromResumeScoring
-    ? resumeScoringReturn
+  const exitHref = fromInviteOrigin
+    ? inviteOriginReturn
     : fromJobDetails && config?.jd_id
       ? `/recruitment/job-details?id=${encodeURIComponent(config.jd_id)}`
       : '/recruitment/ai-interviews';
@@ -3069,10 +3071,10 @@ export default function AIInterviewClusters() {
             <PageBreadcrumb
               className="mb-4 md:mb-6"
               items={
-                fromResumeScoring
+                fromInviteOrigin
                   ? [
                       { label: 'Dashboard', href: '/dashboard' },
-                      { label: 'Resume Scoring', href: candidateCrumb ? '/recruitment/resume-scoring' : resumeScoringReturn },
+                      { label: inviteOriginLabel, href: candidateCrumb ? inviteOriginPath : inviteOriginReturn },
                       ...(candidateCrumb ? [candidateCrumb] : []),
                       { label: 'Create AI Interview' },
                       { label: 'Clusters' },

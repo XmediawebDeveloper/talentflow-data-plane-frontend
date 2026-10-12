@@ -418,6 +418,12 @@ interface ScoredResumesTableProps {
    * host leaves it unset and the toolbar renders inline exactly as before.
    */
   toolbarPortal?: HTMLElement | null;
+  /**
+   * Table column ids to leave out (see TABLE_COLUMNS) — for a host that
+   * already shows them around the table, e.g. AI Talent Match's per-candidate
+   * score table, whose row above names the candidate and the job.
+   */
+  hiddenColumnIds?: string[];
 }
 
 /**
@@ -610,6 +616,7 @@ export default function ScoredResumesTable({
   compact = false,
   hideSelectionBar = false,
   toolbarPortal,
+  hiddenColumnIds,
 }: ScoredResumesTableProps) {
   /* Embedded in the Job Details tabs (the toolbar portals into that card's
      slot). When so, the toolbar controls switch to the 36px / tinted-pill
@@ -931,7 +938,9 @@ Best regards`);
 
   // The table's columns are fixed; only the EXPORT's are chosen, in the
   // shared Export dialog (ScoredResumesExportModal).
-  const enabledColumns = TABLE_COLUMNS;
+  const enabledColumns = hiddenColumnIds?.length
+    ? TABLE_COLUMNS.filter((col) => !hiddenColumnIds.includes(col.id))
+    : TABLE_COLUMNS;
   // The JD ID column's value: the row's own code in cross-job lists, the host
   // job's in a single-job table. One helper so cell, export, search and the
   // JD ID filter can never disagree.
