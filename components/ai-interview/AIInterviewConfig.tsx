@@ -1,6 +1,6 @@
 'use client';
 
-import { handoffContinueLabel, safeResumeScoringReturnUrl, useHandoffCandidateCrumb } from '@/lib/utils/resumeScoringInviteHandoff';
+import { handoffContinueLabel, resolveInviteHandoffOrigin, useHandoffCandidateCrumb } from '@/lib/utils/resumeScoringInviteHandoff';
 import {
   Clock, Plus, X, Sparkles, CheckCircle2, Loader2,
   Users, Brain, Shield, Globe, Save, ChevronDown, ChevronUp,
@@ -1352,16 +1352,18 @@ export default function AIInterviewConfig() {
   // breadcrumb anchored to that job instead of resetting to the AI Interviews
   // trail, and must be carried onto every later step in the flow.
   const fromJobDetails = searchParams.get('from') === 'job-details';
-  // Entered from Resume Scoring's Actions › "Create AI Interview" (the job
-  // had none to invite to): the trail starts at Resume Scoring, the origin
-  // rides every step, and publishing leads straight back there to invite.
-  const fromResumeScoring = searchParams.get('from') === 'resume-scoring';
-  const resumeScoringReturn = safeResumeScoringReturnUrl(searchParams.get('returnUrl'));
+  // Entered from Resume Scoring's / AI Talent Match's Actions › "Create AI
+  // Interview" (the job had none to invite to): the trail starts at that
+  // page, the origin rides every step, and publishing leads straight back
+  // there to invite.
+  const inviteOrigin = resolveInviteHandoffOrigin(searchParams.get('from'), searchParams.get('returnUrl'));
+  const fromInviteOrigin = !!inviteOrigin;
+  const inviteOriginReturn = inviteOrigin?.returnUrl ?? '';
+  const inviteOriginLabel = inviteOrigin?.label ?? '';
+  const inviteOriginPath = inviteOrigin?.path ?? '';
   // Started from one candidate's page: the trail names that candidate.
   const candidateCrumb = useHandoffCandidateCrumb();
-  const resumeScoringOrigin = fromResumeScoring
-    ? `&from=resume-scoring&returnUrl=${encodeURIComponent(resumeScoringReturn)}`
-    : '';
+  const inviteOriginQuery = inviteOrigin?.query ?? '';
 
   const [selectedJd, setSelectedJd] = useState<PublishedJD | null>(null);
   const [loadingJd, setLoadingJd] = useState(true);
@@ -1617,10 +1619,10 @@ export default function AIInterviewConfig() {
         // navigation and covers every entry point into this page.
         if (liveConfig) {
           setRedirecting(true);
-          if (fromResumeScoring) {
+          if (fromInviteOrigin) {
             // Nothing to create — go back and invite to the one it has.
             toast.info('This job already has an AI interview — taking you back to invite.');
-            router.replace(resumeScoringReturn);
+            router.replace(inviteOriginReturn);
             return;
           }
           toast.info('An AI interview already exists for this job.');
@@ -2635,8 +2637,8 @@ export default function AIInterviewConfig() {
     // return there rather than to the AI Interviews list, matching the
     // breadcrumb this step already shows.
     router.push(
-      fromResumeScoring
-        ? resumeScoringReturn
+      fromInviteOrigin
+        ? inviteOriginReturn
         : fromJobDetails && selectedJd?.id
         ? `/recruitment/job-details?id=${encodeURIComponent(selectedJd.id)}`
         : '/recruitment/ai-interviews'
@@ -2851,7 +2853,7 @@ export default function AIInterviewConfig() {
     // 3. Navigate immediately. Pass autogen=1 only when something changed
     // (needsRegeneration = skill set diff). No changes → reuse cached clusters,
     // no wasted LLM call.
-    const base = `/recruitment/ai-interviews/jd-selection/ai-interview-config/clusters?id=${existingDraftIdRef.current}${fromJobDetails ? '&from=job-details' : ''}${resumeScoringOrigin}`;
+    const base = `/recruitment/ai-interviews/jd-selection/ai-interview-config/clusters?id=${existingDraftIdRef.current}${fromJobDetails ? '&from=job-details' : ''}${inviteOriginQuery}`;
     router.push(needsRegeneration ? `${base}&autogen=1` : base);
   };
 
@@ -2934,8 +2936,8 @@ export default function AIInterviewConfig() {
       }
     }
     router.push(
-      fromResumeScoring
-        ? resumeScoringReturn
+      fromInviteOrigin
+        ? inviteOriginReturn
         : fromJobDetails && jdId
         ? `/recruitment/job-details?id=${encodeURIComponent(jdId)}`
         : '/recruitment/ai-interviews',
@@ -2996,10 +2998,10 @@ export default function AIInterviewConfig() {
           <PageBreadcrumb
             className="mb-4 md:mb-6"
             items={
-              fromResumeScoring
+              fromInviteOrigin
                 ? [
                     { label: 'Dashboard', href: '/dashboard' },
-                    { label: 'Resume Scoring', href: candidateCrumb ? '/recruitment/resume-scoring' : resumeScoringReturn },
+                    { label: inviteOriginLabel, href: candidateCrumb ? inviteOriginPath : inviteOriginReturn },
                     ...(candidateCrumb ? [candidateCrumb] : []),
                     { label: 'Create AI Interview' },
                     { label: 'Configure' },

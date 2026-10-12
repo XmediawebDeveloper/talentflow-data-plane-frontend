@@ -5,9 +5,10 @@ import { Button } from '@/components/ui/button';
 import type { InviteHandoffKind } from '@/lib/utils/resumeScoringInviteHandoff';
 
 /**
- * The step before leaving Resume Scoring to create the AI Assessment / AI
- * Interview a job is missing. Says, in three steps, exactly what will happen
- * — create & publish, come back, invite — and that nothing picked here is
+ * The step before leaving Resume Scoring (or AI Talent Match — see
+ * `sourceLabel`) to create the AI Assessment / AI Interview a job is
+ * missing. Says, in three steps, exactly what will happen — create &
+ * publish, come back, invite — and that nothing picked here is
  * lost, so a first-time user is never surprised by where they land.
  */
 export default function CreateInviteTargetModal({
@@ -15,6 +16,7 @@ export default function CreateInviteTargetModal({
   jdCode,
   jdTitle,
   candidateCount,
+  sourceLabel = 'Resume Scoring',
   onCancel,
   onStart,
 }: {
@@ -22,6 +24,8 @@ export default function CreateInviteTargetModal({
   jdCode?: string;
   jdTitle: string;
   candidateCount: number;
+  /** The page the user comes back to. */
+  sourceLabel?: string;
   onCancel: () => void;
   onStart: () => void;
 }) {
@@ -37,7 +41,7 @@ export default function CreateInviteTargetModal({
     {
       icon: Undo2,
       title: 'Come back here',
-      text: 'When it is published, one click brings you back to Resume Scoring.',
+      text: `When it is published, one click brings you back to ${sourceLabel}.`,
     },
     {
       icon: Send,
@@ -109,7 +113,7 @@ export default function CreateInviteTargetModal({
           </div>
           <p className="flex items-start gap-2 text-xs text-gray-500">
             <Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-            Changed your mind? Use “Resume Scoring” in the breadcrumb at any step to come back.
+            Changed your mind? Use “{sourceLabel}” in the breadcrumb at any step to come back.
           </p>
         </div>
 

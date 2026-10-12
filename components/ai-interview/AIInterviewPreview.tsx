@@ -1,6 +1,6 @@
 'use client';
 
-import { handoffContinueLabel, safeResumeScoringReturnUrl, useHandoffCandidateCrumb } from '@/lib/utils/resumeScoringInviteHandoff';
+import { handoffContinueLabel, resolveInviteHandoffOrigin, useHandoffCandidateCrumb } from '@/lib/utils/resumeScoringInviteHandoff';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -239,17 +239,19 @@ export default function AIInterviewPreview() {
   // stepping back keeps that page's breadcrumb instead of dropping to the
   // AI Interviews trail.
   const fromJobDetails = searchParams.get('from') === 'job-details';
-  // Entered from Resume Scoring's Actions › "Create AI Interview" (the job
-  // had none to invite to): the trail starts at Resume Scoring, the origin
-  // rides every step, and publishing leads straight back there to invite.
-  const fromResumeScoring = searchParams.get('from') === 'resume-scoring';
-  const resumeScoringReturn = safeResumeScoringReturnUrl(searchParams.get('returnUrl'));
+  // Entered from Resume Scoring's / AI Talent Match's Actions › "Create AI
+  // Interview" (the job had none to invite to): the trail starts at that
+  // page, the origin rides every step, and publishing leads straight back
+  // there to invite.
+  const inviteOrigin = resolveInviteHandoffOrigin(searchParams.get('from'), searchParams.get('returnUrl'));
+  const fromInviteOrigin = !!inviteOrigin;
+  const inviteOriginReturn = inviteOrigin?.returnUrl ?? '';
+  const inviteOriginLabel = inviteOrigin?.label ?? '';
+  const inviteOriginPath = inviteOrigin?.path ?? '';
   // Started from one candidate's page: the trail names that candidate.
   const candidateCrumb = useHandoffCandidateCrumb();
-  const resumeScoringOrigin = fromResumeScoring
-    ? `&from=resume-scoring&returnUrl=${encodeURIComponent(resumeScoringReturn)}`
-    : '';
-  const originParam = (fromJobDetails ? '&from=job-details' : '') + resumeScoringOrigin;
+  const inviteOriginQuery = inviteOrigin?.query ?? '';
+  const originParam = (fromJobDetails ? '&from=job-details' : '') + inviteOriginQuery;
 
   /* State */
   const [loading, setLoading] = useState(true);
@@ -398,8 +400,8 @@ export default function AIInterviewPreview() {
   /* Where "Go to AI Interviews" (and Back, once published — see below) land:
      the list, on the All Interviews tab, with this config flagged so that
      screen can scroll to and highlight the row it just created. */
-  const listHref = fromResumeScoring
-    ? resumeScoringReturn
+  const listHref = fromInviteOrigin
+    ? inviteOriginReturn
     : exitHref
     ? `${exitHref}&tab=ai-interview-results`
     : `/recruitment/ai-interviews?tab=all-interviews&highlight=${encodeURIComponent(id)}`;
@@ -500,10 +502,10 @@ export default function AIInterviewPreview() {
             <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
               <PageBreadcrumb
                 className="mb-4 md:mb-6"
-                items={fromResumeScoring
+                items={fromInviteOrigin
                   ? [
                       { label: 'Dashboard', href: '/dashboard' },
-                      { label: 'Resume Scoring', href: candidateCrumb ? '/recruitment/resume-scoring' : resumeScoringReturn },
+                      { label: inviteOriginLabel, href: candidateCrumb ? inviteOriginPath : inviteOriginReturn },
                       ...(candidateCrumb ? [candidateCrumb] : []),
                       { label: position },
                     ]
@@ -530,8 +532,8 @@ export default function AIInterviewPreview() {
                 </h1>
                 <p className="mt-3 text-sm sm:text-base text-gray-500 max-w-xl mx-auto">
                   Your AI interview has been successfully published and is now live.
-                  {fromResumeScoring
-                    ? ' Next, send it to the candidates you picked in Resume Scoring.'
+                  {fromInviteOrigin
+                    ? ` Next, send it to the candidates you picked in ${inviteOriginLabel}.`
                     : ' You can invite candidates and track their responses.'}
                 </p>
 
@@ -562,7 +564,7 @@ export default function AIInterviewPreview() {
                   </div>
                 </div>
 
-                <div className={`mt-6 pt-6 border-t border-gray-100 grid grid-cols-1 ${fromResumeScoring ? 'sm:grid-cols-2' : 'sm:grid-cols-3'} gap-3`}>
+                <div className={`mt-6 pt-6 border-t border-gray-100 grid grid-cols-1 ${fromInviteOrigin ? 'sm:grid-cols-2' : 'sm:grid-cols-3'} gap-3`}>
                   <button
                     type="button"
                     onClick={() => router.push(`/recruitment/ai-interviews/${encodeURIComponent(id)}`)}
@@ -571,7 +573,7 @@ export default function AIInterviewPreview() {
                     <Eye className="w-4 h-4" />
                     View Interview
                   </button>
-                  {!fromResumeScoring && (
+                  {!fromInviteOrigin && (
                   <button
                     type="button"
                     onClick={() => {
@@ -591,11 +593,11 @@ export default function AIInterviewPreview() {
                   )}
                   <button
                     type="button"
-                    onClick={() => (fromResumeScoring ? router.replace(listHref) : router.push(listHref))}
+                    onClick={() => (fromInviteOrigin ? router.replace(listHref) : router.push(listHref))}
                     className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
                   >
                     <ArrowRight className="w-4 h-4" />
-                    {fromResumeScoring ? handoffContinueLabel() : 'Go to AI Interviews'}
+                    {fromInviteOrigin ? handoffContinueLabel() : 'Go to AI Interviews'}
                   </button>
                 </div>
               </div>
@@ -626,10 +628,10 @@ export default function AIInterviewPreview() {
             <PageBreadcrumb
               className="mb-4 md:mb-6"
               items={
-                fromResumeScoring
+                fromInviteOrigin
                   ? [
                       { label: 'Dashboard', href: '/dashboard' },
-                      { label: 'Resume Scoring', href: candidateCrumb ? '/recruitment/resume-scoring' : resumeScoringReturn },
+                      { label: inviteOriginLabel, href: candidateCrumb ? inviteOriginPath : inviteOriginReturn },
                       ...(candidateCrumb ? [candidateCrumb] : []),
                       { label: 'Create AI Interview' },
                       { label: 'Preview & Publish' },
