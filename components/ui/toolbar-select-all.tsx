@@ -24,6 +24,7 @@ export default function ToolbarSelectAll({
   totalCount,
   onSelectAll,
   onClear,
+  itemLabel = 'candidates',
 }: {
   /** How many rows are currently selected (drives the label + icon). */
   selectedCount: number;
@@ -37,6 +38,8 @@ export default function ToolbarSelectAll({
   /** Omit to hide the "select all" item (e.g. a server-paginated list). */
   onSelectAll?: () => void;
   onClear: () => void;
+  /** What the rows are, for the "select all" item ("Select all candidates (N)"). */
+  itemLabel?: string;
 }) {
   const [open, setOpen] = React.useState(false);
 
@@ -84,7 +87,7 @@ export default function ToolbarSelectAll({
                 className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800"
               >
                 <CheckSquare className="w-4 h-4 text-brand-blue" />
-                Select all candidates ({totalCount ?? 0})
+                Select all {itemLabel} ({totalCount ?? 0})
               </button>
             )}
             <div className="border-t border-gray-200 dark:border-slate-700 my-1" />

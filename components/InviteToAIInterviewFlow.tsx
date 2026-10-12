@@ -38,6 +38,22 @@ interface InviteToAIInterviewFlowProps {
    *  already picked (the one tagged "Latest" — the only one when there is
    *  just one), instead of nothing. */
   preselectLatest?: boolean;
+  /** Opt-in: pick SEVERAL interviews (checkboxes + Select All, as the Invite
+   *  to Assessment dialog's `multiple`). Send then runs the existing share
+   *  step once per picked interview, one after another — each send exactly
+   *  as a single pick's. Omitted, one interview per invite, as before. */
+  multiple?: boolean;
+  /** `jobId`'s own job version, when the host knows it (Job Details) — heads
+   *  the version cards, as on the Invite to Assessment dialog. */
+  jobVersionNumber?: number;
+  /** Opt-in (Job Details): with `jobId`, the version cards list ONLY the AI
+   *  interview that job version is mapped to — the live interview
+   *  `findLiveConfigForJd` returns, the one Job Details itself uses — never
+   *  several versions for one job version or another job version's. */
+  mappedVersionOnly?: boolean;
+  /** Opt-in: how a candidate's name is SHOWN in the Candidates list. Display
+   *  only; the names sent on are the originals. */
+  formatCandidateName?: (name: string) => string;
 }
 
 /**
@@ -56,6 +72,10 @@ export default function InviteToAIInterviewFlow({
   resumes,
   jobId,
   preselectLatest = false,
+  multiple = false,
+  jobVersionNumber,
+  mappedVersionOnly = false,
+  formatCandidateName,
 }: InviteToAIInterviewFlowProps) {
   /** Escape hatch from the job-scoped picker to the full list. */
   const [browseAll, setBrowseAll] = useState(false);
@@ -63,10 +83,33 @@ export default function InviteToAIInterviewFlow({
   const [configs, setConfigs] = useState<AIInterviewResponse[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
+  /** `mappedVersionOnly`: the job version's mapped interview id, null when it
+   *  has none; undefined when not asked for. */
+  const [mappedId, setMappedId] = useState<string | null | undefined>(undefined);
   const [selection, setSelection] = useState<AIInterviewPickerSelection | null>(null);
   const selectedConfig = selection ? configs.find((c) => c.id === selection.interviewId) ?? null : null;
+  /** Multi-select's picks (`multiple`), in the order they were ticked. */
+  const [pickedIds, setPickedIds] = useState<string[]>([]);
+  /* What Send goes out with: every pick in multi-select, else the one. */
+  const pickedConfigs = multiple
+    ? pickedIds.map((id) => configs.find((c) => c.id === id)).filter((c): c is AIInterviewResponse => !!c)
+    : selectedConfig ? [selectedConfig] : [];
+  const pickedCount = pickedConfigs.length;
+  /* One picked version in the job view: named on the footer and the button
+     ("Send with V2"), as the Invite to Assessment dialog names its pick. */
+  const singlePick = jobScoped && pickedCount === 1 ? pickedConfigs[0] : null;
   const bodyScrollRef = useRef<HTMLDivElement | null>(null);
   const [isSharing, setIsSharing] = useState(false);
+  /** The share step's queue — the picked interviews, sent one at a time. */
+  const [shareQueue, setShareQueue] = useState<AIInterviewResponse[]>([]);
+  const [shareIndex, setShareIndex] = useState(0);
+  /* The share step calls onInviteSent THEN onClose: `advancingRef` tells that
+     onClose to move on to the next interview rather than end the flow, and
+     `sentRef` / `invitedRef` report a send once, even if the recruiter
+     cancels part-way through the queue. */
+  const advancingRef = useRef(false);
+  const sentRef = useRef(false);
+  const invitedRef = useRef(false);
   const [prefilled, setPrefilled] = useState<{ name: string; email: string; resumeId?: string }[]>([]);
   /** Candidates unticked in the panel — listed, but not invited. */
   const [excludedIds, setExcludedIds] = useState<string[]>([]);
@@ -96,15 +139,23 @@ export default function InviteToAIInterviewFlow({
         ? (await aiInterviewService.listConfigs({ status: 'archived', page_size: archivedProbe.total, compact: true })).items
         : archivedProbe.items;
       const seen = new Set<string>();
-      return [...live, ...archived].filter((c) => (seen.has(c.id) ? false : (seen.add(c.id), true)));
+      const all = [...live, ...archived].filter((c) => (seen.has(c.id) ? false : (seen.add(c.id), true)));
+      // The job version's mapping, resolved with the list so the cards and
+      // the pre-pick never show anything else first.
+      const mapped = mappedVersionOnly && jobId ? await aiInterviewService.findLiveConfigForJd(jobId) : undefined;
+      return { all, mapped };
     })()
-      .then(setConfigs)
+      .then(({ all, mapped }) => {
+        setConfigs(all);
+        if (mapped !== undefined) setMappedId(mapped?.id ?? null);
+      })
       .catch(() => {
         toast.error('Failed to load AI interviews');
         setConfigs([]);
+        if (mappedVersionOnly) setMappedId(null);
       })
       .finally(() => setIsLoading(false));
-  }, [open, hasLoaded]);
+  }, [open, hasLoaded, mappedVersionOnly, jobId]);
 
   /* Pre-pick the job's latest Active version once per opening, after the
      configs load — never over a choice the user has already made. */
@@ -114,24 +165,39 @@ export default function InviteToAIInterviewFlow({
       autoPickedRef.current = false;
       return;
     }
-    if (!preselectLatest || !jobScoped || isLoading || autoPickedRef.current || selection) return;
-    const latest = latestActiveInterviewConfig(configs, jobId as string);
+    if (!preselectLatest || !jobScoped || isLoading || autoPickedRef.current || selection || pickedIds.length > 0) return;
+    const latest = mappedVersionOnly
+      ? configs.find((c) => c.id === mappedId)
+      : latestActiveInterviewConfig(configs, jobId as string);
     if (!latest) return;
     autoPickedRef.current = true;
-    setSelection({ jobKey: latest.id, jdId: latest.jd_id, interviewId: latest.id });
-  }, [open, preselectLatest, jobScoped, isLoading, configs, jobId, selection]);
+    if (multiple) setPickedIds([latest.id]);
+    else setSelection({ jobKey: latest.id, jdId: latest.jd_id, interviewId: latest.id });
+  }, [open, preselectLatest, jobScoped, isLoading, configs, jobId, selection, pickedIds, multiple, mappedVersionOnly, mappedId]);
 
   const closePicker = () => {
     setSelection(null);
+    setPickedIds([]);
     setBrowseAll(false);
     setExcludedIds([]);
     onClose();
   };
 
+  /* Opens the share step on the first picked interview. */
+  const startSharing = (withCandidates: { name: string; email: string; resumeId?: string }[]) => {
+    setPrefilled(withCandidates);
+    setShareQueue(pickedConfigs);
+    setShareIndex(0);
+    advancingRef.current = false;
+    sentRef.current = false;
+    invitedRef.current = false;
+    setIsSharing(true);
+  };
+
   const proceedToShare = () => {
+    if (pickedCount === 0) return;
     if (noPresetCandidates) {
-      setPrefilled([]);
-      setIsSharing(true);
+      startSharing([]);
       return;
     }
     // Only candidates with an email can be invited — the rest would fail
@@ -153,29 +219,55 @@ export default function InviteToAIInterviewFlow({
       toast.warning(`${skipped} resume${skipped > 1 ? 's' : ''} skipped — no email address on file`);
     }
 
-    setPrefilled(withEmail);
-    setIsSharing(true);
+    startSharing(withEmail);
   };
 
   const closeShare = () => {
     setIsSharing(false);
+    setShareQueue([]);
+    setShareIndex(0);
     setBrowseAll(false);
     setSelection(null);
+    setPickedIds([]);
     setPrefilled([]);
     setExcludedIds([]);
     onClose();
   };
+  /* Reports the sends to the host once — after the last interview, or when
+     the recruiter stops part-way with some already sent. */
+  const reportInvited = () => {
+    if (!sentRef.current || invitedRef.current) return;
+    invitedRef.current = true;
+    onInvited?.();
+  };
 
-  if (isSharing && selectedConfig) {
+  const sharingConfig = isSharing ? shareQueue[shareIndex] : undefined;
+  if (sharingConfig) {
     return (
       <ShareAIInterviewModal
+        /* Keyed per interview: the modal reads its candidates once on mount,
+           so each queued interview opens a fresh, pre-filled form. */
+        key={sharingConfig.id}
         isOpen
-        config={selectedConfig}
+        config={sharingConfig}
         initialCandidates={prefilled.length > 0 ? prefilled : undefined}
-        onClose={closeShare}
-        onInviteSent={() => {
+        onClose={() => {
+          if (advancingRef.current) {
+            advancingRef.current = false;
+            return;
+          }
           closeShare();
-          onInvited?.();
+          reportInvited();
+        }}
+        onInviteSent={() => {
+          sentRef.current = true;
+          if (shareIndex + 1 < shareQueue.length) {
+            advancingRef.current = true;
+            setShareIndex(shareIndex + 1);
+            return;
+          }
+          closeShare();
+          reportInvited();
         }}
       />
     );
@@ -194,6 +286,7 @@ export default function InviteToAIInterviewFlow({
       }
       tip="Invitations go to each candidate's email address — untick anyone you want to leave out."
       tableCheckboxes
+      formatName={formatCandidateName}
     />
   ) : null;
 
@@ -214,7 +307,7 @@ export default function InviteToAIInterviewFlow({
             body, its wide table sideways in its own shell) rather than growing
             the dialog. */}
         <div className={`bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl ${jobId ? 'lg:max-w-4xl xl:max-w-5xl h-[calc(100dvh-1.5rem)] sm:h-[min(46rem,calc(100dvh-3rem))]' : 'lg:max-w-6xl xl:max-w-7xl'} max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200`}>
-          <div className="flex-shrink-0 flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60">
+          <div className="flex-shrink-0 flex items-center justify-between gap-2 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60">
             <div className="flex items-center gap-3 min-w-0 flex-1">
               <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
                 <Brain className="w-4 h-4 text-brand-blue" />
@@ -232,7 +325,7 @@ export default function InviteToAIInterviewFlow({
           {/* One scrolling body. Over the job's version cards, the cards come
               first and the Candidates Selected panel follows; over the full
               list, the panel leads as before (the list pages and searches). */}
-          <div ref={bodyScrollRef} className="flex-1 overflow-y-auto p-4 sm:p-6">
+          <div ref={bodyScrollRef} className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
             {!jobScoped && candidatesPanel}
 
             {/* The interview list — the same shared picker as the AI Interview
@@ -251,10 +344,15 @@ export default function InviteToAIInterviewFlow({
                   jobId={jobId as string}
                   selection={selection}
                   onSelectionChange={setSelection}
+                  multiple={multiple}
+                  selectedIds={pickedIds}
+                  onSelectedIdsChange={setPickedIds}
+                  jobVersionNumber={jobVersionNumber}
+                  onlyConfigId={mappedVersionOnly ? mappedId ?? null : undefined}
                 />
                 <button
                   type="button"
-                  onClick={() => { setSelection(null); setBrowseAll(true); }}
+                  onClick={() => { setSelection(null); setPickedIds([]); setBrowseAll(true); }}
                   className="mt-3 text-xs font-medium text-brand-blue hover:text-brand-blue-2 hover:underline underline-offset-2"
                 >
                   Browse all AI interviews instead
@@ -265,8 +363,8 @@ export default function InviteToAIInterviewFlow({
                 {jobId && (
                   <button
                     type="button"
-                    onClick={() => { setSelection(null); setBrowseAll(false); }}
-                    className="mt-4 mb-1 inline-flex items-center gap-1 text-xs font-medium text-brand-blue hover:text-brand-blue-2 hover:underline underline-offset-2"
+                    onClick={() => { setSelection(null); setPickedIds([]); setBrowseAll(false); }}
+                    className="mt-4 mb-4 inline-flex items-center gap-1 text-xs font-medium text-brand-blue hover:text-brand-blue-2 hover:underline underline-offset-2"
                   >
                     <ArrowLeft className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
                     Back to this job&apos;s interview versions
@@ -276,6 +374,9 @@ export default function InviteToAIInterviewFlow({
                   configs={configs}
                   selection={selection}
                   onSelectionChange={setSelection}
+                  multiple={multiple}
+                  selectedIds={pickedIds}
+                  onSelectedIdsChange={setPickedIds}
                   scrollContainerRef={bodyScrollRef}
                   searchLabel="Search AI Interviews"
                 />
@@ -288,19 +389,21 @@ export default function InviteToAIInterviewFlow({
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 sm:p-6 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 shrink-0">
             {/* Same footer sentence as the job dialog: what is missing, then
                 what is about to happen. */}
-            <div className="min-w-0 truncate whitespace-nowrap text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+            <div className="min-w-0 sm:truncate sm:whitespace-nowrap text-xs sm:text-sm text-gray-700 dark:text-slate-300">
               {noPresetCandidates
-                ? (!selectedConfig
-                    ? (jobScoped ? 'Select an interview version to continue' : 'Select one AI interview to continue')
+                ? (pickedCount === 0
+                    ? (jobScoped ? 'Select an interview version to continue' : multiple ? 'Select at least one AI interview to continue' : 'Select one AI interview to continue')
                     : 'Next: add the candidates to invite')
                 : invitees.length === 0
                 ? 'Select at least one candidate to continue'
-                : !selectedConfig
-                  ? (jobScoped ? 'Select an interview version to continue' : 'Select one AI interview to continue')
+                : pickedCount === 0
+                  ? (jobScoped ? 'Select an interview version to continue' : multiple ? 'Select at least one AI interview to continue' : 'Select one AI interview to continue')
                   : (
                     <span className="inline-flex items-center gap-1.5 align-middle">
                       <CheckCircle className="w-4 h-4 text-brand-blue flex-shrink-0" />
-                      Ready to invite {invitees.length} candidate{invitees.length === 1 ? '' : 's'} to {jobScoped ? `Interview V${interviewVersionOrdinal(selectedConfig, configs)}` : '1 AI interview'}
+                      Ready to invite {invitees.length} candidate{invitees.length === 1 ? '' : 's'} to {singlePick
+                        ? `Interview V${interviewVersionOrdinal(singlePick, configs)}`
+                        : `${pickedCount} AI interview${pickedCount === 1 ? '' : 's'}`}
                     </span>
                   )}
             </div>
@@ -312,13 +415,13 @@ export default function InviteToAIInterviewFlow({
               </Button>
               <button
                 onClick={proceedToShare}
-                disabled={!selectedConfig || (!noPresetCandidates && invitees.length === 0)}
+                disabled={pickedCount === 0 || (!noPresetCandidates && invitees.length === 0)}
                 className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Mail className="w-4 h-4" />
                 {noPresetCandidates
-                  ? (jobScoped && selectedConfig ? `Continue with V${interviewVersionOrdinal(selectedConfig, configs)}` : 'Continue')
-                  : jobScoped && selectedConfig ? `Send with V${interviewVersionOrdinal(selectedConfig, configs)}` : 'Send Invitations'}
+                  ? (singlePick ? `Continue with V${interviewVersionOrdinal(singlePick, configs)}` : 'Continue')
+                  : singlePick ? `Send with V${interviewVersionOrdinal(singlePick, configs)}` : 'Send Invitations'}
               </button>
             </div>
           </div>

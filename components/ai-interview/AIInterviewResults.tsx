@@ -74,6 +74,10 @@ interface AIInterviewResultsProps {
    *  by the page, so the Job Version column and filter are left out while
    *  Interview Version stays. */
   hideJobVersion?: boolean;
+  /** How a candidate's name is SHOWN in the table rows and cards (Job Details:
+   *  first name capitalised). Display only — search, sort, filters and exports
+   *  keep the name as it is; other hosts leave it unset. */
+  formatCandidateName?: (name: string) => string;
   /** When provided (embedded case), clicking a candidate opens their details
    *  inline via this callback (passing the session id and the ordered list of
    *  currently-visible session ids for Prev/Next) instead of navigating to the
@@ -255,7 +259,8 @@ const DEFAULT_RESULT_STATUS = 'all';
 const RESULT_STATUSES = new Set(['in_progress', 'completed', 'terminated']);
 const isResultStatus = (v: unknown) => RESULT_STATUS_OPTIONS.some((o) => o.value === v);
 
-export default function AIInterviewResults({ configId, configTitle, jdTitle, jdShortId, embedded = false, showStats, hideVersionDetails = false, hideJobVersion = false, onViewCandidate, breadcrumbItems, toolbarActions, emptyStateAction, jobVersion: jobVersionProp, interviewVersion: interviewVersionProp, toolbarPortal }: AIInterviewResultsProps) {
+export default function AIInterviewResults({ configId, configTitle, jdTitle, jdShortId, embedded = false, showStats, hideVersionDetails = false, hideJobVersion = false, onViewCandidate, breadcrumbItems, toolbarActions, emptyStateAction, jobVersion: jobVersionProp, interviewVersion: interviewVersionProp, toolbarPortal, formatCandidateName }: AIInterviewResultsProps) {
+  const showName = (name?: string | null) => (formatCandidateName && name ? formatCandidateName(name) : name);
   const router = useRouter();
   const [sessions, setSessions] = useState<AIInterviewResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -1317,7 +1322,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="font-medium text-gray-900 truncate">
-                          {session.candidate_name || 'Unknown'}
+                          {showName(session.candidate_name) || 'Unknown'}
                         </p>
                         <p className="text-xs text-gray-500 truncate">
                           {session.candidate_email || '—'}
@@ -1495,8 +1500,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                               {/* Email under the name, as on Track Invites,
                                   rather than a column of its own. */}
                               <div className="min-w-0 max-w-[220px]">
-                                <p className="font-medium text-gray-900 truncate" title={session.candidate_name || 'Unknown'}>
-                                  {session.candidate_name || 'Unknown'}
+                                <p className="font-medium text-gray-900 truncate" title={showName(session.candidate_name) || 'Unknown'}>
+                                  {showName(session.candidate_name) || 'Unknown'}
                                 </p>
                                 <p className="text-xs text-gray-500 truncate" title={session.candidate_email || undefined}>
                                   {session.candidate_email || '—'}
