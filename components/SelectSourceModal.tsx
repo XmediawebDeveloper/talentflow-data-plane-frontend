@@ -285,7 +285,8 @@ export default function SelectSourceModal({
   const refreshTabCounts = async () => {
     try {
       const [mine, internal] = await Promise.all([
-        resumeService.list({ source: 'my-resumes', page_size: 1, include_archived: true }),
+        // Active only — the number All Resumes lists (archived sit in their folder).
+        resumeService.list({ source: 'my-resumes', page_size: 1 }),
         hasInternalDBAccess
           ? resumeService.list({ source: 'internal-db', page_size: 1, include_archived: true })
           : Promise.resolve(null),
@@ -318,11 +319,10 @@ export default function SelectSourceModal({
 
       /* The list we just loaded is the freshest count this tab has. */
       const loadedTotal = resumeResponse.total ?? (resumeResponse.items || []).length;
-      setTabCounts(prev =>
-        activeTab === 'my-resumes'
-          ? { ...prev, myResumes: loadedTotal }
-          : { ...prev, internalDb: loadedTotal },
-      );
+      // My Resumes' badge counts active resumes only (see refreshTabCounts);
+      // this list includes archived ones, so it is not that number.
+      if (activeTab === 'my-resumes') refreshTabCounts();
+      else setTabCounts(prev => ({ ...prev, internalDb: loadedTotal }));
 
       // Fetch folders only for my-resumes tab
       if (activeTab === 'my-resumes') {
@@ -376,6 +376,12 @@ export default function SelectSourceModal({
     if (activeTab === 'my-resumes' && selectedFolder !== 'all') {
       filtered = filtered.filter(r => r.folder_id === selectedFolder);
     }
+    /* All Resumes leaves archived resumes out, as on the My Resumes page —
+       they live in the Archived Resumes folder only. (Archiving one from the
+       row menu left it listed in BOTH places.) */
+    if (activeTab === 'my-resumes' && selectedFolder === 'all') {
+      filtered = filtered.filter(r => !r.is_archived);
+    }
 
     // Filter by search term
     if (searchTerm) {
@@ -413,6 +419,7 @@ export default function SelectSourceModal({
      flat (it filters resumes by a single id), but the tree draws its
      hierarchy from `children`, so re-link parents to children here and
      prepend the virtual "All Resumes" fixture the My Resumes page also adds. */
+  const activeResumeCount = useMemo(() => resumes.filter(r => !r.is_archived).length, [resumes]);
   const folderTree = useMemo<TableFolder[]>(() => {
     const nodes = new Map<string, TableFolder>();
     folders.forEach(f => {
@@ -431,10 +438,11 @@ export default function SelectSourceModal({
       else roots.push(node);
     });
     return [
-      { id: 'all', name: 'All Resumes', count: resumes.length, children: [] },
+      // Counts what All Resumes lists — active resumes, not archived ones.
+      { id: 'all', name: 'All Resumes', count: activeResumeCount, children: [] },
       ...roots,
     ];
-  }, [folders, resumes.length]);
+  }, [folders, activeResumeCount]);
 
   /* Folder name per row — the My Resumes page adds this column only in the
      aggregated "All Resumes" view, where rows come from many folders. */

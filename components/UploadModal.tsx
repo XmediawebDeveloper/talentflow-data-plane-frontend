@@ -130,7 +130,19 @@ export default function UploadModal(props: UploadModalProps) {
   return <UploadModalBody {...props} />;
 }
 
-function UploadModalBody({ folders, tenant, uploadSection, onClose, onUpload, onCreateFolder, onViewResume, onScoreResume, onScoreResumes, onDuplicateDetected, targetFolder }: UploadModalProps) {
+function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose, onUpload, onCreateFolder, onViewResume, onScoreResume, onScoreResumes, onDuplicateDetected, targetFolder: requestedTargetFolder }: UploadModalProps) {
+  /* Never a destination: the root "Archived Resumes" folder. A resume filed
+     there is archived (the flag follows the folder), so a fresh upload would
+     land archived — unscorable and hidden from every list. My Resumes already
+     left it out of the folders it passes; Resume Scoring's Select Source did
+     not, so it was offered (and pre-selected when that folder was open).
+     Filtered here so no host can offer it. */
+  const isArchivedRootFolder = (f: { name: string; parentId?: string | null }) =>
+    f.name === 'Archived Resumes' && !f.parentId;
+  const folders = useMemo(() => hostFolders.filter(f => !isArchivedRootFolder(f)), [hostFolders]);
+  const targetFolder = requestedTargetFolder && hostFolders.some(f => f.id === requestedTargetFolder && isArchivedRootFolder(f))
+    ? undefined
+    : requestedTargetFolder;
 
   const [activeTab, setActiveTab] = useState<'single' | 'bulk'>('single');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -296,10 +308,9 @@ function UploadModalBody({ folders, tenant, uploadSection, onClose, onUpload, on
   };
 
   /* Same System Folders / My Folders split as the "Move to Folder" picker in
-     BulkActionsBar — Root and Archived Resumes grouped and pinned above a
-     "My Folders" heading, rather than only Root pinned and Archived Resumes
-     unreachable from this picker entirely. */
-  const isSystemPickerFolder = (f: Folder) => !f.parentId && (f.name.toLowerCase() === 'root' || f.name === 'Archived Resumes');
+     BulkActionsBar — Root pinned above a "My Folders" heading. Archived
+     Resumes is not an upload destination (see `folders` above). */
+  const isSystemPickerFolder = (f: Folder) => !f.parentId && f.name.toLowerCase() === 'root';
   const systemPickerFolders = folders
     .filter(isSystemPickerFolder)
     .sort((a, b) => (a.name.toLowerCase() === 'root' ? 0 : 1) - (b.name.toLowerCase() === 'root' ? 0 : 1));

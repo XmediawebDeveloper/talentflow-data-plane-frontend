@@ -4667,7 +4667,7 @@ export default function AITalentMatchPage({
                                                       )}
                                                     </DropdownMenuContent>
                                                   </DropdownMenu>
-                                                  {jobScoreId && (
+                                                  {jobScoreId ? (
                                                     <button
                                                       type="button"
                                                       onClick={() => toggleScoreSummary(job.jobId, job.jobTitle, jobScoreId)}
@@ -4678,6 +4678,10 @@ export default function AITalentMatchPage({
                                                     >
                                                       <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${jobSummaryOpen ? 'rotate-180' : ''}`} />
                                                     </button>
+                                                  ) : (
+                                                    <span /* unscored: an invisible ▾-sized slot, so ⋮ sits in one column on every row */ aria-hidden="true" className={`${ROW_ACTION_BUTTON_CLASS} invisible pointer-events-none`}>
+                                                      <ChevronDown className="w-4 h-4" />
+                                                    </span>
                                                   )}
                                                   </div>
                                                 </td>
@@ -6125,7 +6129,7 @@ export default function AITalentMatchPage({
                                         </DropdownMenuContent>
                                       </DropdownMenu>
                                       {/* ▾ — the score, inline (scored candidates only). */}
-                                      {scored && (
+                                      {scored ? (
                                         <button
                                           type="button"
                                           onClick={() => toggleScoreSummary(item.jobId, item.jobTitle, scoreId!)}
@@ -6136,6 +6140,10 @@ export default function AITalentMatchPage({
                                         >
                                           <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${summaryOpen ? 'rotate-180' : ''}`} />
                                         </button>
+                                      ) : (
+                                        <span /* unscored: an invisible ▾-sized slot, so ⋮ sits in one column on every row */ aria-hidden="true" className={`${ROW_ACTION_BUTTON_CLASS} invisible pointer-events-none`}>
+                                          <ChevronDown className="w-4 h-4" />
+                                        </span>
                                       )}
                                       </div>
                                     </td>
@@ -7120,6 +7128,16 @@ export default function AITalentMatchPage({
       {scoringReviewDialog}
       {assessmentInviteDialogs}
       {createInviteTargetModal}
+      {/* Preview Resume from a row's ⋮ menu (View by Job / View by Candidates) —
+          this view returns early, so the results view's copy below never rendered here. */}
+      {previewResume && (
+        <ResumeTextPreviewModal
+          resumeId={previewResume.id}
+          title={previewResume.name}
+          subtitle={previewResume.fileName}
+          onClose={() => setPreviewResume(null)}
+        />
+      )}
       <ExportFormatModal
         open={!!exportRows}
         onClose={() => setExportRows(null)}

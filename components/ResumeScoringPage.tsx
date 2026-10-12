@@ -1165,6 +1165,52 @@ export default function ResumeScoringPage({
     view: 'job' | 'candidates';
   } | null>(null);
   const peopleIn = (rows: any[]) => new Set(rows.map(r => String(r.email || r.resumeId || r.id).toLowerCase())).size;
+  /* The progress popup's View (and a click on a settled row): that
+     candidate's scoring result for THIS job, opened in place — the same
+     candidate view the job rows open — instead of the resume in a new tab.
+     Rows carry the resume and job, not the score id, so the score is found
+     in the loaded scores, else fetched for that job. */
+  const openProgressResult = async (item: ScoringProgressItem) => {
+    if (!item.resumeId || !item.jobId) return;
+    const newest = (rows: any[]) =>
+      [...rows].sort((a, b) => new Date(b.scoredDate || b.created_at || 0).getTime() - new Date(a.scoredDate || a.created_at || 0).getTime())[0];
+    let row = newest(globalScoredResumes.filter(r => r.resumeId === item.resumeId && (r.jdId || '') === item.jobId));
+    if (!row) {
+      try {
+        const res = await scoringService.getJDScoredResumes(item.jobId, { page_size: 500 });
+        const hit = newest((res.items || []).filter((r: any) => r.resume_id === item.resumeId));
+        if (hit) {
+          row = {
+            id: hit.id,
+            resumeId: hit.resume_id,
+            candidateName: hit.candidate_name || item.candidateName,
+            email: hit.candidate_email || item.email,
+            jdId: item.jobId,
+            jobTitle: item.jobTitle,
+            jobCode: item.jobCode,
+            jobVersion: item.jobVersion,
+            matchStatus: hit.match_status,
+            overallRating10: hit.overall_rating_10,
+            resumeVersion: hit.resume_version || item.resumeVersion,
+            scoredDate: hit.created_at,
+          };
+        }
+      } catch {
+        /* fall through to the toast below */
+      }
+    }
+    if (!row) {
+      toast.error('Could not open this scoring result. Please try again.');
+      return;
+    }
+    // Hide the popup (the run itself is left alone) and open the result.
+    setShowProgressModal(false);
+    setSelectedHistoryItem(null);
+    setSelectedCandidateForView({ ...row, jdId: row.jdId || item.jobId, jobTitle: row.jobTitle || item.jobTitle });
+    setViewMode('candidateView');
+    router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}&score_id=${row.id}&view=job`, { scroll: false });
+  };
+
   const startCreateInviteTarget = () => {
     const t = createInviteTarget;
     if (!t) return;
@@ -2859,6 +2905,8 @@ export default function ResumeScoringPage({
         {showProgressModal && (
           <BulkScoringProgressModal
             progressData={progressData}
+            // View / a settled row: the scoring result in place, not a new tab.
+            onViewResult={openProgressResult}
             onClose={() => {
               setShowProgressModal(false);
               /* Every job, not just the settled ones. Clearing only finished
@@ -4526,6 +4574,8 @@ export default function ResumeScoringPage({
         {showProgressModal && (
           <BulkScoringProgressModal
             progressData={progressData}
+            // View / a settled row: the scoring result in place, not a new tab.
+            onViewResult={openProgressResult}
             onClose={() => {
               setShowProgressModal(false);
               /* Every job, not just the settled ones. Clearing only finished
@@ -5369,6 +5419,8 @@ export default function ResumeScoringPage({
       {showProgressModal && (
         <BulkScoringProgressModal
           progressData={progressData}
+          // View / a settled row: the scoring result in place, not a new tab.
+          onViewResult={openProgressResult}
           onClose={() => {
             setShowProgressModal(false);
             /* The corner widget is a second face of this same run — leaving it

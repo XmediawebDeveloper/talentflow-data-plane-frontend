@@ -8,8 +8,11 @@
  * 7.6-of-10. Marks and percentages are now shown exactly as scored, at one
  * decimal, everywhere.
  *
- * Math.round on a x10 value rather than truncation: float noise such as
- * 1.5999999999 must read 1.6, not 1.5.
+ * TRUNCATED, never rounded — the platform-wide scoring rule ("v3 policy:
+ * nothing in the scoring pipeline rounds"), the same one `truncate1` keeps in
+ * lib/utils/matchStatus.ts and app/utils/scoring_formula.py. 30/130 = 23.0769
+ * reads 23.0, not 23.1. Rounding here meant a mark could be shown HIGHER than
+ * the candidate earned, and could lift a 69.97 over a 70 pass mark.
  *
  * The backend counterpart is `fmt_mark` in
  * app/services/pdf_rendering/utils.py — keep the two in step.
@@ -19,12 +22,16 @@
 export function toOneDecimalScore(value: number | string | null | undefined): number {
   const numeric = Number(value ?? 0);
   if (!Number.isFinite(numeric)) return 0;
-  return Math.round(numeric * 10) / 10;
+  // The epsilon absorbs binary float noise only: 23.1 * 10 can evaluate to
+  // 230.99999999999997, which would truncate a genuine 23.1 down to 23.0. It is
+  // far too small to lift a value that is really below a tenth up over it.
+  const sign = numeric < 0 ? -1 : 1;
+  return (sign * Math.floor(Math.abs(numeric) * 10 + 1e-9)) / 10;
 }
 
 /**
  * One decimal, as text. A whole value keeps no decimal, so a round 76 reads
- * "76" and not "76.0", while 38.89 reads "38.9".
+ * "76" and not "76.0", while 38.89 reads "38.8".
  */
 export function formatScore(value: number | string | null | undefined): string {
   const score = toOneDecimalScore(value);
