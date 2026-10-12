@@ -3,6 +3,8 @@
 import { useMemo, useState, type RefObject } from 'react';
 import { Briefcase, CheckCircle, ChevronDown, ClipboardCheck, Eye, Info, Layers, Search, Send } from 'lucide-react';
 import ListPagination from '@/components/ListPagination';
+import ToolbarSelectAll from '@/components/ui/toolbar-select-all';
+import { SEGMENT_TOGGLE, segmentBtn } from '@/components/ui/filter-pills';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import AssessmentPreviewModal from '@/components/AssessmentPreviewModal';
 import AssessmentVersionHistoryPanel, {
@@ -66,6 +68,19 @@ const ROUND_CHIPS: { key: 'hr' | 'technical' | 'coding'; short: string; label: s
 /* The Ungrouped table's header cell — the AI Talent Match results table's,
    class for class (its background and rule come from the <thead>). */
 const PICKER_TH = 'px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle';
+
+/* Grouped: the shared version panel's tables, brought onto the same results
+   table's cells from here rather than in the panel (the Assessments page
+   keeps its own look) — px-4 py-3 cells, the white header row
+   `tf-table-shell` paints there (slate-500 headings in dark), the native
+   checkbox size the Ungrouped rows use, and its blue-50 selected row. The
+   panel's full-width expander cell (`p-0`) keeps its zero padding. */
+export const GROUPED_TABLE_TONE = [
+  '[&_th]:px-4 [&_th]:py-3 [&_th]:bg-white dark:[&_th]:bg-slate-900 dark:[&_th]:text-slate-500',
+  '[&_td:not(.p-0)]:px-4 [&_td:not(.p-0)]:py-3',
+  '[&_input[type=checkbox]]:w-auto [&_input[type=checkbox]]:h-auto',
+  '[&_tr[data-tf-assessment-selected=true]]:bg-blue-50 dark:[&_tr[data-tf-assessment-selected=true]]:bg-slate-800/50 [&_tr[data-tf-assessment-selected=true]]:ring-0',
+].join(' ');
 
 export default function AssessmentPicker({
   assessments,
@@ -235,14 +250,14 @@ export default function AssessmentPicker({
   /* The toolbar's Select All, over the assessments the search leaves listed. */
   const listedPickedCount = pickerRows.filter((a) => isPicked(a.id)).length;
   const allListedPicked = pickerRows.length > 0 && listedPickedCount === pickerRows.length;
-  const someListedPicked = listedPickedCount > 0 && !allListedPicked;
-  const toggleAllListed = () => {
-    if (allListedPicked) {
-      const listedIds = new Set(pickerRows.map((a) => a.id));
-      onSelectionChange?.(pickedAssessments().filter((a) => !listedIds.has(a.id)));
-    } else {
-      onSelectionChange?.([...pickedAssessments(), ...pickerRows.filter((a) => !isPicked(a.id))]);
-    }
+  /* Adds rows to the pick, keeping what is already picked. */
+  const addToPick = (rows: PickerAssessment[]) =>
+    onSelectionChange?.([...pickedAssessments(), ...rows.filter((a) => !isPicked(a.id))]);
+  /* Clear unticks just the listed assessments, so picks the search is hiding
+     stay picked (with no search, that is every pick). */
+  const clearListed = () => {
+    const listedIds = new Set(pickerRows.map((a) => a.id));
+    onSelectionChange?.(pickedAssessments().filter((a) => !listedIds.has(a.id)));
   };
   /* Grouped: the jobs holding a pick — one in single-select, any number in
      multi-select. */
@@ -254,91 +269,18 @@ export default function AssessmentPicker({
   const pageSlice = <T,>(list: T[]) => list.slice((safePage - 1) * pageSize, safePage * pageSize);
   const pagedRows = pageSlice(pickerRows);
   const pagedJobRows = pageSlice(jobRows);
+  /* "Select all on this page": the listed rows on it — in Grouped, every
+     listed assessment under the jobs on it. */
+  const pagedJobKeys = new Set(pagedJobRows.map(lineageKeyOf));
+  const pageListedRows = viewMode === 'ungrouped' ? pagedRows : pickerRows.filter((a) => pagedJobKeys.has(lineageKeyOf(a)));
 
   const statusLabel = (status?: string) => (status === 'published' ? 'Active' : status || '—');
 
   return (
     <>
-      {/* Search, with the Grouped/Ungrouped toggle on the SAME row (the AI
-          Interview picker's toggle): the search takes the spare width, the
-          toggle keeps its own, both centred on one line; below `sm` the toggle
-          drops under the search rather than squeezing it. Ungrouped: one row
-          per assessment. Grouped: one card per job, versions behind View
-          Versions. */}
-      <div className="mb-4">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-          {/* Select All — first on the row, before the search (the AI Talent
-              Match toolbar's order), in its native checkbox chrome. Covers the
-              assessments the search leaves listed, in either view: ticks them
-              all, or — once they all are — unticks just those, so picks the
-              search is hiding stay picked. Half-ticked while only some are.
-              Multi-select only; a single pick has nothing to select all of. */}
-          {multiple && (
-            <label className="inline-flex items-center gap-2 flex-shrink-0 text-sm font-medium text-gray-700 dark:text-slate-300 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={allListedPicked}
-                ref={(el) => {
-                  if (el) el.indeterminate = someListedPicked;
-                }}
-                onChange={toggleAllListed}
-                disabled={pickerRows.length === 0}
-                aria-label={allListedPicked ? 'Unselect all listed assessments' : 'Select all listed assessments'}
-                className="m-0 rounded border-gray-300 cursor-pointer disabled:cursor-not-allowed"
-              />
-              Select All
-            </label>
-          )}
-          <div className="relative flex-1 min-w-0">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
-            <input
-              id="assessment-picker-search"
-              /* No visible label — the placeholder says what it searches;
-                 `searchLabel` still names the field for screen readers. */
-              aria-label={searchLabel}
-              type="text"
-              autoFocus
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              placeholder={searchPlaceholder}
-              className="w-full pl-10 pr-4 py-2 text-sm text-black dark:text-slate-100 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
-            />
-          </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <span className="text-sm text-gray-600 dark:text-slate-400">View:</span>
-            <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-              {([
-                { key: 'ungrouped', label: 'Ungrouped' },
-                { key: 'grouped', label: 'Grouped' },
-              ] as const).map((mode) => {
-                const isActive = viewMode === mode.key;
-                return (
-                  <button
-                    key={mode.key}
-                    type="button"
-                    aria-pressed={isActive}
-                    /* The pick survives the switch: both views read the one
-                       selection the host holds, so what is ticked in one is
-                       ticked in the other. Only the paging restarts. */
-                    onClick={() => { setViewMode(mode.key); setPage(1); }}
-                    className={`px-2.5 sm:px-3 py-1.5 min-h-[32px] rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 whitespace-nowrap ${
-                      isActive
-                        ? 'bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/20 text-brand-blue'
-                        : 'text-gray-600 dark:text-slate-400 hover:text-brand-blue'
-                    }`}
-                  >
-                    {mode.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* How many can be picked — the AI Interview picker's note, in its
           banner style, worded for the mode. */}
-      <div className="mb-3 flex items-start gap-2 rounded-lg bg-brand-blue/[0.06] border border-brand-blue/20 px-3 py-2.5">
+      <div className="mb-4 flex items-start gap-2 rounded-lg bg-brand-blue/[0.06] border border-brand-blue/20 px-3 py-2.5">
         <Info className="w-4 h-4 text-brand-blue flex-shrink-0 mt-0.5" />
         <div className="min-w-0">
           {multiple ? (
@@ -359,6 +301,78 @@ export default function AssessmentPicker({
         </div>
       </div>
 
+      {/* Search, with the Grouped/Ungrouped toggle on the SAME row (the AI
+          Interview picker's toggle): the search takes the spare width, the
+          toggle keeps its own, both centred on one line; below `sm` the toggle
+          drops under the search rather than squeezing it. Ungrouped: one row
+          per assessment. Grouped: one card per job, versions behind View
+          Versions. */}
+      <div className="mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+          {/* Select All — first on the row, before the search: the Job
+              Details AI Talent Match Results tab's own ToolbarSelectAll pill
+              (this page / all / clear). Covers the assessments the search
+              leaves listed, in either view; Clear unticks just those.
+              Multi-select only; a single pick has nothing to select all of. */}
+          {multiple && (
+            <div className="flex-shrink-0 self-start sm:self-auto">
+              <ToolbarSelectAll
+                selectedCount={pickedCount}
+                allSelected={allListedPicked}
+                pageCount={pageListedRows.length}
+                onSelectPage={() => addToPick(pageListedRows)}
+                totalCount={pickerRows.length}
+                onSelectAll={() => addToPick(pickerRows)}
+                onClear={clearListed}
+                itemLabel="assessments"
+              />
+            </div>
+          )}
+          <div className="relative flex-1 min-w-0">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
+            <input
+              id="assessment-picker-search"
+              /* No visible label — the placeholder says what it searches;
+                 `searchLabel` still names the field for screen readers. */
+              aria-label={searchLabel}
+              type="text"
+              autoFocus
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              placeholder={searchPlaceholder}
+              className="w-full pl-10 pr-4 py-2 text-sm text-black dark:text-slate-100 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+            />
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <span className="text-sm text-gray-600 dark:text-slate-400">View:</span>
+            {/* The Job Openings page's All / AI Generated / Manual segmented
+                toggle: tinted track, the active option a white chip. */}
+            <div className={SEGMENT_TOGGLE}>
+              {([
+                { key: 'ungrouped', label: 'Ungrouped' },
+                { key: 'grouped', label: 'Grouped' },
+              ] as const).map((mode) => {
+                const isActive = viewMode === mode.key;
+                return (
+                  <button
+                    key={mode.key}
+                    type="button"
+                    aria-pressed={isActive}
+                    /* The pick survives the switch: both views read the one
+                       selection the host holds, so what is ticked in one is
+                       ticked in the other. Only the paging restarts. */
+                    onClick={() => { setViewMode(mode.key); setPage(1); }}
+                    className={`${segmentBtn(isActive)} whitespace-nowrap`}
+                  >
+                    {mode.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {viewMode === 'ungrouped' ? (
         pickerRows.length === 0 ? (
           <div className="text-center py-8 text-gray-500 dark:text-slate-400">
@@ -371,14 +385,18 @@ export default function AssessmentPicker({
              styling — its bordered card, gray-50 header with the rule on the
              cells, px-4 py-3 cells, gray-100 row rules, gray-50 hover and
              blue-50 selected tint, and its empty select header (Select All
-             sits in the line above). Columns stay this picker's own. */
+             sits in the line above). Columns stay this picker's own.
+             The scroller is its `tf-table-shell` too — one box owning both
+             axes, the header pinned (and painted solid) as rows scroll under
+             it, single-line cells and the overlay scrollbars — in the
+             dialog-sized `--compact` form, so the rows scroll inside the
+             table instead of stretching the dialog. */
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
-            <div className="overflow-x-auto scrollbar-visible">
+            <div className="tf-table-shell tf-table-shell--compact">
               <table className="w-full table-auto text-sm">
                 <thead className="sticky top-0 z-10 [&_th]:bg-gray-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                   <tr>
                     <th className="px-4 py-3 w-10 align-middle tf-sticky-col-left" aria-label="Select" />
-                    <th className={PICKER_TH}>Assessment ID</th>
                     <th className={PICKER_TH}>Job ID</th>
                     <th className={PICKER_TH}>Job Name</th>
                     <th className={PICKER_TH}>Job Version</th>
@@ -420,13 +438,6 @@ export default function AssessmentPicker({
                           />
                         </td>
                         <td className="px-4 py-3 align-middle whitespace-nowrap">
-                          {a.short_id ? (
-                            <span className="inline-flex items-center px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs font-mono font-medium">
-                              {a.short_id}
-                            </span>
-                          ) : <span className="text-xs text-gray-400">—</span>}
-                        </td>
-                        <td className="px-4 py-3 align-middle whitespace-nowrap">
                           {a.jd_short_id ? <JobIdBadge>{a.jd_short_id}</JobIdBadge> : <span className="text-xs text-gray-400">—</span>}
                         </td>
                         <td className="px-4 py-3 align-middle max-w-[16rem]">
@@ -466,11 +477,11 @@ export default function AssessmentPicker({
                           )}
                         </td>
                         <td className="px-4 py-3 align-middle whitespace-nowrap">
-                          <span className="tabular-nums text-gray-900 dark:text-slate-100">{a.duration_minutes || 0}</span>
+                          <span className="tabular-nums text-gray-600 dark:text-slate-400">{a.duration_minutes || 0}</span>
                           <span className="text-xs text-gray-400 ml-1">min</span>
                         </td>
                         <td className="px-4 py-3 align-middle whitespace-nowrap">
-                          <span className="tabular-nums text-gray-900 dark:text-slate-100">{(a.invitations_count ?? 0).toLocaleString()}</span>
+                          <span className="tabular-nums text-gray-600 dark:text-slate-400">{(a.invitations_count ?? 0).toLocaleString()}</span>
                           <span className="text-xs text-gray-400 ml-1">sent</span>
                         </td>
                         <td className="px-4 py-3 align-middle whitespace-nowrap text-gray-600 dark:text-slate-400 tabular-nums">
@@ -616,7 +627,7 @@ export default function AssessmentPicker({
                     dialog's single selection. */}
                 {expanded && jdId && (
                   <div
-                    className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700/60 cursor-default"
+                    className={`mt-3 pt-3 border-t border-gray-100 dark:border-slate-700/60 cursor-default ${GROUPED_TABLE_TONE}`}
                     onClick={(e) => e.stopPropagation()}
                   >
                     <AssessmentVersionHistoryPanel

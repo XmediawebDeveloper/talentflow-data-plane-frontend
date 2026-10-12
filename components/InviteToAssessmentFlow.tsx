@@ -212,7 +212,7 @@ export default function InviteToAssessmentFlow({
                   <button
                     type="button"
                     onClick={() => switchView(false)}
-                    className="mt-4 mb-1 inline-flex items-center gap-1 text-xs font-medium text-brand-blue hover:text-brand-blue-2 hover:underline underline-offset-2"
+                    className="mt-4 mb-4 inline-flex items-center gap-1 text-xs font-medium text-brand-blue hover:text-brand-blue-2 hover:underline underline-offset-2"
                   >
                     <ArrowLeft className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
                     Back to this job&apos;s assessment versions
@@ -232,7 +232,7 @@ export default function InviteToAssessmentFlow({
                   <button
                     type="button"
                     onClick={() => switchView(false)}
-                    className="mt-4 mb-1 inline-flex items-center gap-1 text-xs font-medium text-brand-blue hover:text-brand-blue-2 hover:underline underline-offset-2"
+                    className="mt-4 mb-4 inline-flex items-center gap-1 text-xs font-medium text-brand-blue hover:text-brand-blue-2 hover:underline underline-offset-2"
                   >
                     <ArrowLeft className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
                     Back to this job&apos;s assessment versions
