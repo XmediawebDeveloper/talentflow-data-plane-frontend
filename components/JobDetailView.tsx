@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowLeft, ChevronLeft, ChevronRight, MapPin, Calendar, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, BarChart3, MessageSquare, FileText, Search, SlidersHorizontal, Paperclip, Loader2, AlertCircle, Info, ArrowRight, ArrowUpDown, Zap, ClipboardList, Video, CheckSquare, Square } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, MapPin, Calendar, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, BarChart3, MessageSquare, FileText, Search, Paperclip, Loader2, AlertCircle, Info, ArrowRight, Zap, ClipboardList, Video } from 'lucide-react';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
@@ -15,8 +15,10 @@ import { formatJobVersionLabel, formatLastUpdated } from '@/lib/utils/jobOpening
 import SkillsList from '@/components/ui/SkillsList';
 import { Tooltip } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
-import { tabPill } from '@/components/ui/filter-pills';
 import ListToolbar from '@/components/ui/list-toolbar';
+import ToolbarSelectAll from '@/components/ui/toolbar-select-all';
+import ToolbarFilterSelect from '@/components/ui/toolbar-filter-select';
+import { SortByControl } from '@/components/ui/select-all-menu';
 import ListPagination from '@/components/ListPagination';
 import TabEmptyState from '@/components/ui/tab-empty-state';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
@@ -28,12 +30,10 @@ import { resumeService } from '@/lib/services/resumeService';
 import ResumeScoring from './ResumeScoring';
 import JobApplicants from './JobApplicants';
 import ScoredResumesTable, {
-  BulkInviteModal,
   useScoringActionPermissions,
   resolveInviteTargetState,
   renderInviteTargetItems,
   InviteTargetJob,
-  ScoredResume,
 } from './ScoredResumesTable';
 import {
   DropdownMenu,
@@ -52,7 +52,7 @@ import CandidateResultDetails from './CandidateResultDetails';
 import { Resume } from '@/lib/types/types';
 import { scoringService, normalizeScoringStatus } from '@/lib/services/scoringService';
 import { dispatchUnitsConsumed } from '@/lib/services/api';
-import { assessmentService } from '@/lib/services/assessmentService';
+import { assessmentService, type AssessmentResponse } from '@/lib/services/assessmentService';
 import { listAllAssessments, loadJobAssessmentHierarchy, MAX_ASSESSMENT_VERSIONS } from '@/lib/utils/jobAssessmentHierarchy';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import DraftAssessmentExistsModal, { type ExistingDraftAssessment } from '@/components/assessments/DraftAssessmentExistsModal';
@@ -62,6 +62,7 @@ import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
 import TrackInvitesModal from './TrackInvitesModal';
 import AIInterviewTrackInvitesModal from './AIInterviewTrackInvitesModal';
 import InviteToAIInterviewFlow from './InviteToAIInterviewFlow';
+import InviteToAssessmentFlow, { type AssessmentInviteCandidate } from './InviteToAssessmentFlow';
 import AIInterviewVersionHistoryModal from './ai-interview/AIInterviewVersionHistoryModal';
 import AssessmentVersionHistoryModal from './assessments/AssessmentVersionHistoryModal';
 import type { Resume as ResumeRecord } from '@/lib/types/types';
@@ -781,8 +782,16 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   const [pickerAssessments, setPickerAssessments] = useState<any[]>([]);
   const [pickerSelectedIds, setPickerSelectedIds] = useState<string[]>([]);
 
+  /* Candidates the share step opens pre-filled with — the AI Talent Match
+     tab's Invite to Assessment hands its ticked candidates over; the header's
+     Send Invite passes none and the recruiter adds them in the modal. */
+  const [shareAssessmentCandidates, setShareAssessmentCandidates] = useState<
+    { id: string; name: string; email: string; phone?: string; source?: 'database'; resumeId?: string }[] | null
+  >(null);
+
   // Open the share flow with a list of assessments already chosen.
-  const openShareWithAssessments = (items: any[]) => {
+  const openShareWithAssessments = (items: any[], candidates: typeof shareAssessmentCandidates = null) => {
+    setShareAssessmentCandidates(candidates);
     setShareAssessments(items);
     setShowShareAssessmentModal(true);
   };
@@ -983,11 +992,110 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   // a Scored Resumes row's candidate, listed first.
   const [aiInviteSeed, setAiInviteSeed] = useState<{ name: string; email: string; resumeId?: string }[] | null>(null);
   /* Bulk "Invite to Assessment" from the AI Talent Match tab's Actions menu —
-     the AI Interview counterpart (`aiInviteSeed` above) already has a shared
-     page-level dialog (`handleInviteAIInterview`); Assessment has no such
-     dialog yet, so this mounts `BulkInviteModal` (Scored Resumes' own) the
-     same way, scoped to this job. */
+     the AI Interview item's twin: it opens the shared Invite to Assessment
+     dialog (InviteToAssessmentFlow — the Invite to AI Interview dialog's
+     shell, with this job version's assessments as selectable cards, each
+     with its Preview), exactly as the AI Talent Match page's own Invite
+     Assessment does, then hands over to Share Assessment via Email.
+     null = closed; else the ticked candidates. */
   const [aiMatchAssessmentInviteSeed, setAiMatchAssessmentInviteSeed] = useState<MatchedCandidate[] | null>(null);
+  const [aiMatchInviteAssessments, setAiMatchInviteAssessments] = useState<AssessmentResponse[]>([]);
+  const [aiMatchInviteAssessmentsLoading, setAiMatchInviteAssessmentsLoading] = useState(false);
+  const [aiMatchPickedAssessments, setAiMatchPickedAssessments] = useState<AssessmentResponse[]>([]);
+  /* "Browse all assessments instead": every ACTIVE assessment across all jobs
+     (published, not archived, not revoked — the same offer rule as the
+     cards), not just this job version's. */
+  const [aiMatchBrowseAssessments, setAiMatchBrowseAssessments] = useState<AssessmentResponse[]>([]);
+  const [aiMatchBrowseAssessmentsLoading, setAiMatchBrowseAssessmentsLoading] = useState(false);
+  /** Which opening a reply belongs to — a late reply for a closed dialog is dropped. */
+  const aiMatchInviteRequest = useRef(0);
+
+  /* Read when the dialog OPENS, not from the list loaded with the page: an
+     assessment published since (in another tab, or from this page's Draft
+     prompt) must be offered too. THIS job version's own rows (`jd_id` is this
+     JD row), published and not archived; revoked ones stay out — a revoked
+     assessment is sealed against new invites (duplicate it for a fresh round),
+     the rule every invite picker follows. */
+  const openAiMatchAssessmentInvite = async (selected: MatchedCandidate[]) => {
+    const request = ++aiMatchInviteRequest.current;
+    setAiMatchPickedAssessments([]);
+    setAiMatchInviteAssessments([]);
+    setAiMatchAssessmentInviteSeed(selected);
+    setAiMatchInviteAssessmentsLoading(true);
+    /* The cross-job list for Browse all, fetched alongside — it never holds
+       up the cards. Every page (listAllAssessments), status-filtered. */
+    setAiMatchBrowseAssessments([]);
+    setAiMatchBrowseAssessmentsLoading(true);
+    listAllAssessments({ status: 'published' })
+      .then((all) => {
+        if (aiMatchInviteRequest.current !== request) return;
+        const revokedIds = getLocallyRevokedAssessmentIds();
+        const seen = new Set<string>();
+        setAiMatchBrowseAssessments(
+          all
+            .filter((a) => ['published', 'active'].includes(String(a.status || '').toLowerCase()))
+            .filter((a) => !(a as { is_archived?: boolean }).is_archived && !isAssessmentRevoked(a, revokedIds))
+            .filter((a) => (seen.has(a.id) ? false : (seen.add(a.id), true))),
+        );
+      })
+      .finally(() => {
+        if (aiMatchInviteRequest.current === request) setAiMatchBrowseAssessmentsLoading(false);
+      });
+    try {
+      const response = await assessmentService.list({ jd_id: job.id, page_size: 100 });
+      if (aiMatchInviteRequest.current !== request) return;
+      const revokedIds = getLocallyRevokedAssessmentIds();
+      const offered = (response.items || [])
+        .filter((a) => a.jd_id === job.id)
+        .filter((a) => ['published', 'active'].includes(String(a.status || '').toLowerCase()))
+        .filter((a) => !(a as { is_archived?: boolean }).is_archived && !isAssessmentRevoked(a, revokedIds))
+        .sort((a, b) => (b.version ?? 1) - (a.version ?? 1));
+      setAiMatchInviteAssessments(offered);
+      // One version on offer: pre-ticked, as the cards' "Latest" pick.
+      if (offered.length === 1) setAiMatchPickedAssessments(offered);
+    } catch (error) {
+      if (aiMatchInviteRequest.current !== request) return;
+      console.error('Failed to load assessments for the AI Talent Match invite:', error);
+      toast.error('Could not load this job’s assessments. Please try again.');
+      setAiMatchAssessmentInviteSeed(null);
+    } finally {
+      if (aiMatchInviteRequest.current === request) setAiMatchInviteAssessmentsLoading(false);
+    }
+  };
+  const closeAiMatchAssessmentInvite = () => {
+    aiMatchInviteRequest.current++;
+    setAiMatchAssessmentInviteSeed(null);
+    setAiMatchPickedAssessments([]);
+    setAiMatchInviteAssessmentsLoading(false);
+    setAiMatchBrowseAssessmentsLoading(false);
+  };
+  /* Send Invitations: the candidates still ticked in the dialog, with an
+     email, go to Share Assessment via Email pre-filled — the AI Talent Match
+     page's handleProceedToInvite, on this page's own share modal. */
+  const proceedAiMatchAssessmentInvite = (invitees: AssessmentInviteCandidate[]) => {
+    const picked = aiMatchPickedAssessments;
+    if (picked.length === 0) {
+      toast.error('Please select at least one assessment');
+      return;
+    }
+    const keep = new Set(invitees.map((i) => i.id));
+    const candidates = (aiMatchAssessmentInviteSeed ?? [])
+      .filter((c, i) => keep.has(c.resumeId || `seed-${i}`) && !!c.email)
+      .map((c) => ({
+        id: c.resumeId,
+        name: c.name,
+        email: c.email,
+        phone: c.phone,
+        source: 'database' as const,
+        resumeId: c.resumeId,
+      }));
+    if (candidates.length === 0) {
+      toast.error('Selected candidates must have email addresses');
+      return;
+    }
+    closeAiMatchAssessmentInvite();
+    openShareWithAssessments(picked, candidates);
+  };
   // AI Interview Version History dialog (history icon on the AI Interview heading).
   const [showAIVersionHistory, setShowAIVersionHistory] = useState(false);
   // Assessment Version History dialog (history icon on the Assessment heading).
@@ -2815,13 +2923,15 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                 )}
                 <span className="text-gray-300">•</span>
 
-                {/* Version Badge */}
+                {/* Version Badge — the deep brand orange (--brand-orange-deep,
+                    globals.css); white text on it reads clearly. Its menu's
+                    "Selected" chip is the same orange, tinted. */}
                 {job.versionNumber && job.versionNumber > 0 ? (
                   <div className="relative" ref={versionMenuRef}>
                     <button
                       type="button"
                       onClick={toggleVersionMenu}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-600 text-white rounded-full text-xs font-medium hover:bg-purple-700 transition-colors"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-brand-orange-deep text-white rounded-full text-xs font-medium hover:bg-brand-orange-deep/90 transition-colors"
                       aria-label={`Select job version, currently v${job.versionNumber}.0`}
                       aria-haspopup="menu"
                       aria-expanded={showVersionMenu}
@@ -2870,7 +2980,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                                       {version.status}
                                     </span>
                                     {isCurrentVersion ? (
-                                      <span className="text-2xs px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700">
+                                      <span className="text-2xs px-1.5 py-0.5 rounded-full bg-brand-orange/10 text-brand-orange-deep dark:bg-brand-orange/20 dark:text-brand-orange">
                                         Selected
                                       </span>
                                     ) : version.is_latest_version ? (
@@ -2892,7 +3002,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                     )}
                   </div>
                 ) : (
-                  <span className="inline-flex items-center px-2.5 py-1 bg-purple-600 text-white rounded-full text-xs font-medium">
+                  <span className="inline-flex items-center px-2.5 py-1 bg-brand-orange-deep text-white rounded-full text-xs font-medium">
                     v1.0
                   </span>
                 )}
@@ -4509,7 +4619,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           canInviteToAIInterview={canInviteToAIInterview}
           onCreateAssessment={handleCreateAssessment}
           onCreateAIInterview={handleCreateAIInterview}
-          onInviteAssessment={(selected) => setAiMatchAssessmentInviteSeed(selected)}
+          onInviteAssessment={(selected) => { void openAiMatchAssessmentInvite(selected); }}
           onInviteAIInterview={(selected) => handleInviteAIInterview(
             selected.map((c) => ({ name: c.name, email: c.email, resumeId: c.resumeId })),
           )}
@@ -4911,6 +5021,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           onClose={() => {
             setShowShareAssessmentModal(false);
             setShareAssessments([]);
+            setShareAssessmentCandidates(null);
           }}
           assessment={{
             id: shareAssessments[0].id,
@@ -4941,7 +5052,11 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             jd_title: job.title,
             jd_version: a.jd_version,
           }))}
-          inviteSource="JD"
+          /* From the AI Talent Match tab: its ticked candidates, pre-filled,
+             under the source that tab's Actions menu has always sent with
+             (gated on `scoring:invite`, like BulkInviteModal before it). */
+          prefilledCandidates={shareAssessmentCandidates ?? undefined}
+          inviteSource={shareAssessmentCandidates ? 'Resume Scoring' : 'JD'}
           onInviteSent={(count) => {
             const sentCount = Math.max(count, 1);
             setAssessmentInviteCount((prev) => prev + sentCount);
@@ -5166,26 +5281,27 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       />
 
       {/* Invite to Assessment — the AI Talent Match tab's bulk Actions menu,
-          Scored Resumes' own BulkInviteModal, scoped to this job. */}
-      {aiMatchAssessmentInviteSeed && aiMatchAssessmentInviteSeed.length > 0 && (
-        <BulkInviteModal
-          selectedResumes={aiMatchAssessmentInviteSeed.map((c): ScoredResume => ({
-            id: c.resumeId,
-            resumeId: c.resumeId,
-            candidateName: c.name,
-            email: c.email,
-            phone: c.phone,
-            matchStatus: c.matchScore >= 70 ? 'Exact Match' : c.matchScore >= 45 ? 'Partial Match' : 'No Match',
-            scorePercentage: c.matchScore,
-            scoredDate: c.uploadDate,
-            scoredBy: c.uploadedByName || c.uploadedBy || '',
-          }))}
-          jobId={job.id}
-          jobTitle={job.title}
-          onClose={() => setAiMatchAssessmentInviteSeed(null)}
-          onSuccess={() => setAiMatchAssessmentInviteSeed(null)}
-        />
-      )}
+          the shared dialog, scoped to this job version (see
+          `openAiMatchAssessmentInvite`). The Invite to AI Interview dialog
+          above is its twin. */}
+      <InviteToAssessmentFlow
+        open={aiMatchAssessmentInviteSeed !== null}
+        onClose={closeAiMatchAssessmentInvite}
+        assessments={aiMatchInviteAssessments}
+        loading={aiMatchInviteAssessmentsLoading}
+        multiple
+        selectedAssessments={aiMatchPickedAssessments}
+        onSelectedAssessmentsChange={setAiMatchPickedAssessments}
+        candidates={(aiMatchAssessmentInviteSeed ?? []).map((c, i) => ({ id: c.resumeId || `seed-${i}`, name: c.name, email: c.email }))}
+        resumes={(aiMatchAssessmentInviteSeed ?? []).map((c, i) => ({
+          id: c.resumeId || `seed-${i}`, name: c.name, email: c.email, phone: c.phone, title: c.title,
+        }) as unknown as ResumeRecord)}
+        onProceed={proceedAiMatchAssessmentInvite}
+        jobId={job.id}
+        jobVersionNumber={job.versionNumber && job.versionNumber > 0 ? job.versionNumber : undefined}
+        browseAssessments={aiMatchBrowseAssessments}
+        browseLoading={aiMatchBrowseAssessmentsLoading}
+      />
       </div>
       </div>
     </main>
@@ -5261,10 +5377,6 @@ function AIMatchTabContent({
      Openings master and the sibling tabs, rather than an always-expanded second
      row. */
   const [showMoreFilters, setShowMoreFilters] = useState(false);
-  /* Select All dropdown, mirroring the Job Openings toolbar: one "Select All"
-     pill (this page / all / clear). The Actions pill beside it (bulk Score /
-     Invite) is a Radix DropdownMenu now, which manages its own open state. */
-  const [showSelectMenu, setShowSelectMenu] = useState(false);
   const aiMatchActiveFilterCount =
     (filterPhone.trim() !== '' ? 1 : 0) +
     (filterLocation.trim() !== '' ? 1 : 0) +
@@ -5504,7 +5616,10 @@ function AIMatchTabContent({
   }
 
   return (
-    <div className="space-y-4">
+    /* mb-5: the same trailing gap the Assessments Results / AI Interview
+       Result tab bodies end with, so the table / pagination isn't pressed
+       against the page card's bottom edge. */
+    <div className="space-y-4 mb-5">
       {/* Search & Filters — the shared ListToolbar. When a portal slot is given
           (the tab-navigation card's toolbar row) it renders there, so the
           controls read as the second row of the tab card rather than a detached
@@ -5517,10 +5632,10 @@ function AIMatchTabContent({
           onSearchChange={setSearchQuery}
           searchDebounceMs={0}
           searchPlaceholder="Search candidates..."
-          /* No onToggleFilters → ListToolbar's built-in 38px More Filters button
-             is hidden; a local h-9 (36px) one is rendered in leadingActions below
-             so every control in the row is a uniform height. filtersOpen still
-             drives the filter panel. */
+          /* The built-in More Filters (and Reset) at the 36px band via
+             `compactButtons` — the same buttons the sibling result tabs use. */
+          onToggleFilters={() => setShowMoreFilters((open) => !open)}
+          compactButtons
           filtersOpen={showMoreFilters}
           activeFilterCount={aiMatchActiveFilterCount}
           filtersApplied={aiMatchActiveFilterCount > 0}
@@ -5529,60 +5644,17 @@ function AIMatchTabContent({
           trailing={<ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-9" />}
           beforeSearch={
             <>
-              {/* Select All — the Job Openings master's pill dropdown
-                  (this page / all / clear). */}
-              <div className="relative">
-                <button
-                  onClick={() => setShowSelectMenu((open) => !open)}
-                  aria-haspopup="menu"
-                  aria-expanded={showSelectMenu}
-                  /* h-9 so this pill matches the 36px toolbar band (search,
-                     All Matches, Sort) instead of tabPill's default 32px — the
-                     controls sit on one row here, unlike the master's separate
-                     pill row, so they need a single uniform height. */
-                  className={`${tabPill(selectedIds.size > 0)} h-9`}
-                >
-                  {allCandidatesSelected ? (
-                    <CheckSquare className="w-3.5 h-3.5" />
-                  ) : selectedIds.size > 0 ? (
-                    <span className="h-2 w-2 rounded-full bg-current" />
-                  ) : (
-                    <Square className="w-3.5 h-3.5" />
-                  )}
-                  <span>{selectedIds.size > 0 ? `${selectedIds.size} Selected` : 'Select All'}</span>
-                  <ChevronDown className="w-4 h-4" />
-                </button>
-                {showSelectMenu && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setShowSelectMenu(false)} />
-                    <div className="absolute top-full left-0 mt-2 w-60 max-w-[calc(100vw-2rem)] bg-white dark:bg-slate-900 rounded-lg shadow-lg border border-gray-200 dark:border-slate-700 py-2 z-50">
-                      <button
-                        onClick={() => { selectCurrentPage(); setShowSelectMenu(false); }}
-                        className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800"
-                      >
-                        <Square className="w-4 h-4 text-gray-500" />
-                        Select all on this page ({paginatedCandidates.length})
-                      </button>
-                      <button
-                        onClick={() => { selectAllCandidates(); setShowSelectMenu(false); }}
-                        className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800"
-                      >
-                        <CheckSquare className="w-4 h-4 text-brand-blue" />
-                        Select all candidates ({filteredCandidates.length})
-                      </button>
-                      <div className="border-t border-gray-200 dark:border-slate-700 my-1" />
-                      <button
-                        onClick={() => { clearSelection(); setShowSelectMenu(false); }}
-                        disabled={selectedIds.size === 0}
-                        className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <X className="w-4 h-4 text-gray-500" />
-                        Clear selection
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
+              {/* Select All — the shared ToolbarSelectAll (this page / all /
+                  clear), the same pill the sibling result tabs carry. */}
+              <ToolbarSelectAll
+                selectedCount={selectedIds.size}
+                allSelected={allCandidatesSelected}
+                pageCount={paginatedCandidates.length}
+                onSelectPage={selectCurrentPage}
+                totalCount={filteredCandidates.length}
+                onSelectAll={selectAllCandidates}
+                onClear={clearSelection}
+              />
 
               {/* Actions — appears once something is ticked; holds the bulk
                   operations: Score, plus Invite to Assessment / AI Interview
@@ -5610,7 +5682,9 @@ function AIMatchTabContent({
                       onSelect={() => onScoreSelected(selectedCandidates)}
                     >
                       <ClipboardList className="w-4 h-4 text-menu-icon-score" />
-                      <span>Score Selected ({selectedIds.size})</span>
+                      {/* No count here — the menu's "N selected" header and the
+                          Select All pill already carry it. */}
+                      <span>Score Selected</span>
                     </DropdownMenuItem>
                     {renderInviteTargetItems({
                       kind: 'assessment',
@@ -5647,91 +5721,35 @@ function AIMatchTabContent({
               )}
             </>
           }
-          /* All Matches, Sort AND the local More Filters button render together
-             here, giving the order: Select All → Search → All Matches → Sort →
-             More Filters → Grid/List (the "old" placement, More Filters after
-             Sort). All at a uniform h-9 (36px). */
+          /* Order: Select All → Search → All Matches → Sort → More Filters
+             (ListToolbar's own, right after these) → Grid/List. All h-9. */
           leadingActions={
             <>
-              {/* Match threshold + sort — styled to the Job Openings master's
-                  tinted "Sort by" control EXACTLY: a `bg-brand-blue/5` rounded
-                  pill wrapping an `appearance-none h-7` select with its own
-                  chevron, so these read identically to that page's Sort rather
-                  than as bordered boxes. (No asc/desc toggle — this tab's sort
-                  has no direction, so none is added; functionality unchanged.) */}
-              <div className="inline-flex items-center bg-brand-blue/5 dark:bg-brand-blue/10 rounded-lg p-1 transition-all">
-                <div className="relative">
-                  <select
-                    value={filterThreshold}
-                    onChange={(e) => setFilterThreshold(Number(e.target.value))}
-                    aria-label="Filter by match threshold"
-                    className="appearance-none h-7 pl-2.5 pr-8 bg-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 text-xs sm:text-sm text-gray-700 dark:text-slate-300 cursor-pointer"
-                  >
-                    <option value={0}>All Matches</option>
-                    <option value={50}>50%+ Match</option>
-                    <option value={70}>70%+ Match</option>
-                    <option value={85}>85%+ Match</option>
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500 dark:text-slate-400" />
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">Sort by</span>
-                <div className="inline-flex items-center bg-brand-blue/5 dark:bg-brand-blue/10 rounded-lg p-1 transition-all">
-                  <div className="relative">
-                    <select
-                      value={sortBy}
-                      onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-                      aria-label="Sort candidates"
-                      className="appearance-none h-7 pl-2.5 pr-8 bg-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 text-xs sm:text-sm text-gray-700 dark:text-slate-300 cursor-pointer"
-                    >
-                      <option value="rank">Rating</option>
-                      <option value="name">Name</option>
-                      <option value="score">Score</option>
-                      <option value="experience">Experience</option>
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500 dark:text-slate-400" />
-                  </div>
-                  {/* Direction toggle — the Job Openings master's exact button:
-                      white chip inside the tinted pill, ArrowUpDown that rotates
-                      180° on descending. */}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
-                    }}
-                    className="ml-0.5 h-7 w-7 flex items-center justify-center rounded-md bg-white dark:bg-slate-700 text-gray-700 dark:text-slate-200 hover:bg-brand-blue/10 hover:text-brand-blue dark:hover:bg-brand-blue/20 transition-colors cursor-pointer"
-                    title={sortOrder === 'asc' ? 'Sort Descending' : 'Sort Ascending'}
-                  >
-                    <ArrowUpDown className={`w-3.5 h-3.5 transition-transform ${sortOrder === 'asc' ? '' : 'rotate-180'}`} />
-                  </button>
-                </div>
-              </div>
-              {/* More Filters — a LOCAL button at h-9 (36px) so it matches every
-                  other control in this row (ListToolbar's built-in one is 38px).
-                  Same chrome/states as the master's filter button; toggles the
-                  same `showMoreFilters` panel the ListToolbar renders below. */}
-              <button
-                type="button"
-                onClick={() => setShowMoreFilters((open) => !open)}
-                className={`h-9 px-3 rounded-lg font-medium transition-all flex items-center gap-2 text-sm ${
-                  aiMatchActiveFilterCount > 0
-                    ? 'bg-brand-blue text-white border border-brand-blue shadow-sm shadow-brand-blue/25'
-                    : showMoreFilters
-                    ? 'bg-brand-blue/10 text-brand-blue border border-brand-blue/20'
-                    : 'bg-brand-blue/5 text-gray-700 dark:text-slate-300 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue'
-                }`}
+              {/* Match threshold + sort — the shared ToolbarFilterSelect /
+                  SortByControl, so these are the very controls the sibling
+                  result tabs render rather than hand-rolled copies. */}
+              <ToolbarFilterSelect
+                value={String(filterThreshold)}
+                onChange={(value) => setFilterThreshold(Number(value))}
+                ariaLabel="Filter by match threshold"
               >
-                <SlidersHorizontal className="w-4 h-4" />
-                <span className="hidden sm:inline">More Filters</span>
-                <span className="sm:hidden">Filters</span>
-                {aiMatchActiveFilterCount > 0 && (
-                  <span className="px-1.5 py-0.5 rounded text-xs bg-white text-brand-blue">
-                    {aiMatchActiveFilterCount}
-                  </span>
-                )}
-              </button>
+                <option value={0}>All Matches</option>
+                <option value={50}>50%+ Match</option>
+                <option value={70}>70%+ Match</option>
+                <option value={85}>85%+ Match</option>
+              </ToolbarFilterSelect>
+              <SortByControl<typeof sortBy>
+                value={sortBy}
+                order={sortOrder}
+                options={[
+                  { value: 'rank', label: 'Rating' },
+                  { value: 'name', label: 'Name' },
+                  { value: 'score', label: 'Score' },
+                  { value: 'experience', label: 'Experience' },
+                ]}
+                onChange={setSortBy}
+                onToggleOrder={() => setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
+              />
             </>
           }
           /* Run AI Match is intentionally NOT in the toolbar: once there are

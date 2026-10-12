@@ -1,6 +1,6 @@
 'use client';
 
-import { X, CheckCircle, Briefcase, Loader2 } from 'lucide-react';
+import { CheckCircle, Briefcase, Loader2 } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { Resume, Job } from '@/lib/types/types';
 import JobOpeningPickerList, { JobSelection } from '@/components/jobs/JobOpeningPickerList';
@@ -182,8 +182,10 @@ export default function ApplyToJobModal({
   return (
     <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
       {/* Wider than a plain picker: the rows carry the Job Openings list's own
-          fields, and the version history table underneath them needs the room. */}
-      <div className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-2xl md:max-w-4xl lg:max-w-6xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
+          fields, and the version history table underneath them needs the room.
+          With the job fixed (AI Talent Match's Score Selected) there is no job
+          list, only the candidates, so it is a step narrower. */}
+      <div className={`relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-2xl md:max-w-4xl ${fixedJob ? 'lg:max-w-4xl' : 'lg:max-w-6xl'} max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col`}>
         {/* Header */}
         <div className="flex-shrink-0 flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60">
           <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -209,15 +211,8 @@ export default function ApplyToJobModal({
               )}
             </div>
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={onClose}
-            className="px-2 flex-shrink-0"
-            aria-label="Close"
-          >
-            <X className="w-5 h-5" />
-          </Button>
+          {/* No X — the footer's Cancel closes, as in the Invite to
+              Assessment / AI Interview dialogs. */}
         </div>
 
         {/* Content */}
@@ -335,6 +330,11 @@ export default function ApplyToJobModal({
                 )}
           </div>
           <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
+            {/* Cancel — closes without scoring / applying anything, exactly
+                as the header X used to. */}
+            <Button variant="secondary" onClick={onClose} className="flex-1 sm:flex-none">
+              Cancel
+            </Button>
             <Button
               variant="primary"
               onClick={handleApply}

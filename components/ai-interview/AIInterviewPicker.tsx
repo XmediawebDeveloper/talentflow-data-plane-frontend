@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, type RefObject } from 'react';
-import { Briefcase, CheckCircle, Eye, Info, Search } from 'lucide-react';
+import { Briefcase, Eye, Info, Search } from 'lucide-react';
 import ListPagination from '@/components/ListPagination';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { formatIST } from '@/lib/utils/dateUtils';
@@ -109,7 +109,9 @@ export default function AIInterviewPicker({
       .includes(q),
   );
   const interviewVersionOf = (c: AIInterviewResponse) => ordinalById.get(c.id) ?? 1;
-  const PICKER_TH = 'px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 whitespace-nowrap bg-slate-50 dark:bg-slate-800';
+  /* Header cell — the AI Talent Match results table's, class for class (its
+     background and rule come from the <thead>), as in the assessment picker. */
+  const PICKER_TH = 'px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle';
 
   const pickerTotal = pickerRows.length;
   const pickerTotalPages = Math.max(1, Math.ceil(pickerTotal / invitePickerPageSize));
@@ -121,43 +123,23 @@ export default function AIInterviewPicker({
 
   return (
     <>
-      {/* Search */}
+      {/* Search — the assessment picker's toolbar row, without a visible label
+          (the placeholder says what it searches; `searchLabel` still names the
+          field for screen readers). No Select All beside it: one interview
+          per invite, so there is nothing to select all of. */}
       <div className="mb-4">
-        <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">{searchLabel}</label>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
           <input
             type="text"
             autoFocus
+            aria-label={searchLabel}
             value={invitePickerSearch}
             onChange={(e) => { setInvitePickerSearch(e.target.value); setInvitePickerPage(1); }}
             placeholder="Search by job title, Job ID or interview ID..."
             className="w-full pl-10 pr-4 py-2 text-sm text-black dark:text-slate-100 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
           />
         </div>
-      </div>
-
-      <div className="flex items-center justify-between gap-2 mb-3">
-        <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300">
-          Select an Interview
-          <span className="ml-2 font-normal text-gray-500 dark:text-slate-400">
-            {`${pickerRows.length} active interview${pickerRows.length !== 1 ? 's' : ''}`}
-          </span>
-        </label>
-        {invitePickerSelection && (
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
-              <CheckCircle className="w-3 h-3" />
-              1 selected
-            </span>
-            <button
-              onClick={() => setInvitePickerSelection(null)}
-              className="text-xs text-brand-blue hover:text-brand-blue-2 font-medium"
-            >
-              Clear Selection
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Why the pick is single — same banner style as the Score
@@ -179,12 +161,17 @@ export default function AIInterviewPicker({
           <p className="text-sm">{q ? 'Try a different job title or Job ID.' : 'Publish an AI interview to invite candidates to it.'}</p>
         </div>
       ) : (
-        <div className="rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden">
+        /* The AI Talent Match results table's card, header, row and radio
+           styling — as the assessment picker's Ungrouped table: bordered card,
+           gray-50 header with the rule on the cells, px-4 py-3 cells, gray-100
+           row rules, gray-50 hover, blue-50 selected tint, empty select header.
+           Columns stay this picker's own. */
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
           <div className="overflow-x-auto scrollbar-visible">
-            <table className="w-full text-sm border-collapse">
-              <thead className="sticky top-0 z-[6]">
-                <tr className="border-b border-gray-200 dark:border-slate-700">
-                  <th className={`${PICKER_TH} w-14 tf-sticky-col-left !bg-slate-50 dark:!bg-slate-800`}>Select</th>
+            <table className="w-full table-auto text-sm">
+              <thead className="sticky top-0 z-10 [&_th]:bg-gray-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
+                <tr>
+                  <th className="px-4 py-3 w-10 align-middle tf-sticky-col-left" aria-label="Select" />
                   <th className={PICKER_TH}>Job ID</th>
                   <th className={PICKER_TH}>Job Name</th>
                   <th className={PICKER_TH}>Job Version</th>
@@ -194,10 +181,10 @@ export default function AIInterviewPicker({
                   <th className={PICKER_TH}>Invitations Sent</th>
                   <th className={PICKER_TH}>Created On</th>
                   <th className={`${PICKER_TH} pr-6`}>Created By</th>
-                  <th className={`${PICKER_TH} !text-center tf-sticky-col !bg-slate-50 dark:!bg-slate-800`}>Preview</th>
+                  <th className={`${PICKER_TH} !text-center tf-sticky-col`}>Preview</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                 {pagedPickerRows.map((config) => {
                   const isSelected = invitePickerSelection?.interviewId === config.id;
                   const rounds = (config.rounds_config || []).filter((round) => round.enabled !== false);
@@ -210,11 +197,11 @@ export default function AIInterviewPicker({
                       onClick={pick}
                       aria-selected={isSelected}
                       data-row-selected={isSelected ? 'true' : undefined}
-                      className={`border-b border-gray-100 dark:border-slate-700/60 last:border-b-0 cursor-pointer transition-colors ${
-                        isSelected ? 'bg-brand-blue/[0.06] dark:bg-brand-blue/15' : 'hover:bg-brand-blue/5 dark:hover:bg-brand-blue/10'
+                      className={`hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors cursor-pointer ${
+                        isSelected ? 'bg-blue-50 dark:bg-slate-800/50' : ''
                       }`}
                     >
-                      <td className="px-3 py-2.5 align-middle tf-sticky-col-left">
+                      <td className="px-4 py-3 align-middle tf-sticky-col-left">
                         <input
                           type="radio"
                           name="ai-interview-invite-picker-selection"
@@ -222,34 +209,34 @@ export default function AIInterviewPicker({
                           onChange={pick}
                           onClick={(e) => e.stopPropagation()}
                           aria-label={`Select ${config.jd_title || config.position || 'interview'}`}
-                          className="w-4 h-4 accent-brand-blue cursor-pointer"
+                          className="border-gray-300 cursor-pointer"
                         />
                       </td>
-                      <td className="px-3 py-2.5 align-middle whitespace-nowrap">
+                      <td className="px-4 py-3 align-middle whitespace-nowrap">
                         {config.jd_short_id ? <JobIdBadge>{config.jd_short_id}</JobIdBadge> : <span className="text-xs text-gray-400">—</span>}
                       </td>
-                      <td className="px-3 py-2.5 align-middle max-w-[16rem]">
+                      <td className="px-4 py-3 align-middle max-w-[16rem]">
                         <span className="block truncate font-medium text-gray-900 dark:text-slate-50" title={config.jd_title || config.position || 'Untitled'}>
                           {config.jd_title || config.position || 'Untitled'}
                         </span>
                       </td>
-                      <td className="px-3 py-2.5 align-middle whitespace-nowrap">
+                      <td className="px-4 py-3 align-middle whitespace-nowrap">
                         <span className="inline-flex items-center justify-center min-w-[2.25rem] px-1.5 py-0.5 rounded-md text-xs font-semibold tabular-nums ring-1 text-brand-blue bg-brand-blue/10 ring-brand-blue/20">
                           V{config.jd_version ?? 1}
                         </span>
                       </td>
-                      <td className="px-3 py-2.5 align-middle whitespace-nowrap">
+                      <td className="px-4 py-3 align-middle whitespace-nowrap">
                         <span className="inline-flex items-center justify-center min-w-[2.25rem] px-1.5 py-0.5 rounded-md text-xs font-semibold tabular-nums ring-1 text-brand-cyan bg-brand-cyan/10 ring-brand-cyan/20">
                           V{interviewVersionOf(config)}
                         </span>
                       </td>
-                      <td className="px-3 py-2.5 align-middle whitespace-nowrap">
+                      <td className="px-4 py-3 align-middle whitespace-nowrap">
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ring-1 bg-success-subtle text-success ring-success-line">
                           <span className="w-1.5 h-1.5 rounded-full bg-current flex-shrink-0" />
                           Active
                         </span>
                       </td>
-                      <td className="px-3 py-2.5 align-middle whitespace-nowrap">
+                      <td className="px-4 py-3 align-middle whitespace-nowrap">
                         {rounds.length > 0 ? (
                           <div className="flex items-center gap-1.5 flex-nowrap">
                             {rounds.map((round, index) => (
@@ -266,17 +253,17 @@ export default function AIInterviewPicker({
                           <span className="text-xs text-gray-400">—</span>
                         )}
                       </td>
-                      <td className="px-3 py-2.5 align-middle whitespace-nowrap">
+                      <td className="px-4 py-3 align-middle whitespace-nowrap">
                         <span className="tabular-nums text-gray-900 dark:text-slate-100">{(config.invitations_count ?? 0).toLocaleString()}</span>
                         <span className="text-xs text-gray-400 ml-1">sent</span>
                       </td>
-                      <td className="px-3 py-2.5 align-middle whitespace-nowrap text-gray-600 dark:text-slate-400 tabular-nums">
+                      <td className="px-4 py-3 align-middle whitespace-nowrap text-gray-600 dark:text-slate-400 tabular-nums">
                         {config.created_at ? formatIST(config.created_at) : '—'}
                       </td>
-                      <td className="px-3 pr-6 py-2.5 align-middle whitespace-nowrap text-gray-600 dark:text-slate-400">
+                      <td className="px-4 pr-6 py-3 align-middle whitespace-nowrap text-gray-600 dark:text-slate-400">
                         {config.created_by_name || 'System'}
                       </td>
-                      <td className="px-3 py-2.5 align-middle text-center tf-sticky-col" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-4 py-3 align-middle text-center tf-sticky-col" onClick={(e) => e.stopPropagation()}>
                         <button
                           type="button"
                           onClick={() => setConfigurePreviewId(config.id)}

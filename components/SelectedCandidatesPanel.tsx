@@ -55,6 +55,12 @@ interface SelectedCandidatesPanelProps {
   onVersionChosen?: (resumeId: string, choice: VersionChoice) => void;
   /** Closing line under the list. Defaults to the version tip; null hides it. */
   tip?: ReactNode | null;
+  /** Draw the ticks as the AI Talent Match results table's plain native
+   *  checkbox (`rounded border-gray-300`) instead of this panel's own larger
+   *  brand-tinted one — for the Invite to Assessment / AI Interview dialogs,
+   *  which sit over that table. Off by default, so every other host is
+   *  unchanged. */
+  tableCheckboxes?: boolean;
 }
 
 export default function SelectedCandidatesPanel({
@@ -64,7 +70,11 @@ export default function SelectedCandidatesPanel({
   versionChoice = {},
   onVersionChosen,
   tip,
+  tableCheckboxes = false,
 }: SelectedCandidatesPanelProps) {
+  const checkboxClass = tableCheckboxes
+    ? 'rounded border-gray-300 cursor-pointer'
+    : 'w-4 h-4 text-brand-blue border-gray-300 dark:border-slate-700 rounded focus:ring-brand-blue/40 cursor-pointer';
   const [versionViewer, setVersionViewer] = useState<{ id: string; name: string; versions: any[] } | null>(null);
   const [loadingViewFor, setLoadingViewFor] = useState<string | null>(null);
   const [previewResume, setPreviewResume] = useState<{ id: string; title: string; subtitle?: string } | null>(null);
@@ -156,7 +166,7 @@ export default function SelectedCandidatesPanel({
                 if (el) el.indeterminate = someIncluded;
               }}
               onChange={toggleAll}
-              className="w-4 h-4 text-brand-blue border-gray-300 dark:border-slate-700 rounded focus:ring-brand-blue/40 cursor-pointer"
+              className={checkboxClass}
               aria-label={allIncluded ? 'Unselect all candidates' : 'Select all candidates'}
             />
             Select all
@@ -199,7 +209,7 @@ export default function SelectedCandidatesPanel({
                 type="checkbox"
                 checked={included}
                 onChange={() => onToggleCandidate(resume.id)}
-                className="w-4 h-4 flex-shrink-0 text-brand-blue border-gray-300 dark:border-slate-700 rounded focus:ring-brand-blue/40 cursor-pointer"
+                className={`flex-shrink-0 ${checkboxClass}`}
                 aria-label={`Include ${resume.name}`}
               />
               <div className="w-8 h-8 flex-shrink-0 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center text-xs font-semibold text-brand-blue">

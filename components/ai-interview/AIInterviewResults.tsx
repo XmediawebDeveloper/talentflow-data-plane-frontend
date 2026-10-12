@@ -13,6 +13,7 @@ import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggl
 import ToolbarFilterSelect from '@/components/ui/toolbar-filter-select';
 import ToolbarSelectAll from '@/components/ui/toolbar-select-all';
 import { SortByControl } from '@/components/ui/select-all-menu';
+import { FILTER_FIELD_CLASS, FILTER_FIELD_WIDE_CLASS, FILTER_LABEL_CLASS, FILTER_CONTROL_CLASS } from '@/components/ScoredResumesTable';
 import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
 import TimelineStamps from '@/components/ui/timeline-stamps';
 import { DateField } from '@/components/ui/date-field';
@@ -795,6 +796,9 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
      that card's slot). When so, the toolbar controls drop to the 36px height of
      the AI Talent Match reference; the standalone results page keeps 38px. */
   const portaled = !!toolbarPortal;
+  /* Embedded, the More Filters labels take the Scored Resumes panel's class;
+     standalone keeps its own. */
+  const filterLabelClass = portaled ? FILTER_LABEL_CLASS : 'block text-xs font-medium text-gray-600 mb-1.5';
   const body = (
     <>
       {/* Header — hidden when embedded as a tab (the details page already
@@ -882,19 +886,19 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                 }
                 onClear={() => setSelected(new Map())}
               />
-              {/* Actions — the AI Talent Match reference's pill: hidden until
-                  a row is ticked, holding only the selection-bound bulk ops
-                  (Revoke / Resend / Download PDF Reports). Customize Columns
-                  and Export work with nothing ticked too, so they stay their
-                  own buttons (see `leadingActions` / the toolbar's trailing
-                  children). */}
+              {/* Actions — the Scored Resumes / AI Talent Match pill: shown
+                  once a row is ticked (one, several or Select All) and gone
+                  again when nothing is. Holds Customize Columns and Export
+                  (the toolbar has no separate buttons for them in Job
+                  Details) plus the bulk ops — Revoke / Resend / Download PDF
+                  Reports. */}
               {selected.size > 0 && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
                       variant="secondary"
                       size="sm"
-                      className="rounded-full whitespace-nowrap !h-9 !text-sm"
+                      className="rounded-full h-9"
                       aria-label={`Actions for ${selected.size} selected`}
                     >
                       {isBulkWorking || downloadingPdfs ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
@@ -902,10 +906,24 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                       <ChevronDown className="w-4 h-4" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-60 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
+                  <DropdownMenuContent align="start" className="w-64 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
                     <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
                       {selected.size.toLocaleString()} selected
                     </div>
+                    <DropdownMenuItem
+                      className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer"
+                      onSelect={() => setShowColumnModal(true)}
+                    >
+                      <SlidersHorizontal className="w-4 h-4 text-menu-icon-view" />
+                      <span>Customize Columns</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer"
+                      onSelect={() => setShowExportModal(true)}
+                    >
+                      <FileDown className="w-4 h-4 text-menu-icon-download" />
+                      <span>Export ({selected.size})</span>
+                    </DropdownMenuItem>
                     {revocableSelected.length > 0 && (
                       <DropdownMenuItem
                         className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer text-destructive"
@@ -945,13 +963,17 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
           ) : undefined}
           // Six controls beside the search — lay out by the toolbar's own
           // width, since beside the details page's nav it's far narrower
-          // than the screen.
-          fitToContainer
+          // than the screen. In Job Details it takes the AI Talent Match
+          // row's own layout instead (List / Grid pinned right).
+          fitToContainer={!portaled}
+          trailing={portaled ? <ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-9" /> : undefined}
           onToggleFilters={() => setShowFilters((v) => !v)}
           filtersOpen={showFilters}
           activeFilterCount={search.activeFilterCount}
           filtersApplied={search.filtersApplied}
-          onClearFilters={search.reset}
+          /* Reset — standalone only; Job Details has none (the Scored
+             Resumes-style panel there carries no clear control either). */
+          onClearFilters={portaled ? undefined : search.reset}
           compactButtons={portaled}
           leadingActions={
             <>
@@ -1022,13 +1044,16 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
               />
             </>
           }
-          className="mb-0"
+          /* Embedded, the row keeps ListToolbar's own `mb-3` (the AI Talent
+             Match reference's gap) so it doesn't sit flush on the tab card's
+             bottom edge — the Job Details toolbar slot has no bottom padding. */
+          className={portaled ? undefined : 'mb-0'}
         >
           {/* Revoke / Resend / Download PDF — standalone only here; embedded
               in Job Details they moved into the Actions pill beside Select
               All (see `beforeSearch` above), selection-gated the same way.
-              Customize Columns and Export stay their own buttons below in
-              both modes, since they work with nothing ticked too. */}
+              Customize Columns and Export are their own buttons below on the
+              standalone page only; embedded, they are Actions items too. */}
           {!portaled && revocableSelected.length > 0 && (
             <Button
               variant="destructive"
@@ -1055,16 +1080,20 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
               {isBulkWorking ? 'Sending…' : `Resend (${resendableSelected.length})`}
             </Button>
           )}
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setShowColumnModal(true)}
-            icon={<SlidersHorizontal className="w-4 h-4" />}
-            className={`hidden sm:flex whitespace-nowrap ${portaled ? '!h-9' : '!h-[38px]'} !text-sm`}
-          >
-            <span className="hidden md:inline">Customize Columns</span>
-            <span className="md:hidden">Columns</span>
-          </Button>
+          {/* Customize Columns / Export — standalone only as buttons;
+              embedded in Job Details they are items in the Actions pill. */}
+          {!portaled && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setShowColumnModal(true)}
+              icon={<SlidersHorizontal className="w-4 h-4" />}
+              className="hidden sm:flex whitespace-nowrap !h-[38px] !text-sm"
+            >
+              <span className="hidden md:inline">Customize Columns</span>
+              <span className="md:hidden">Columns</span>
+            </Button>
+          )}
           {!portaled && (
             <Button
               variant="primary"
@@ -1080,16 +1109,18 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                 : <span><span className="hidden sm:inline">Download </span>PDF{selected.size > 0 ? ` (${selected.size})` : ''}</span>}
             </Button>
           )}
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => setShowExportModal(true)}
-            icon={<FileDown className="w-4 h-4" />}
-            className={`whitespace-nowrap ${portaled ? '!h-9' : '!h-[38px]'} !text-sm`}
-          >
-            Export{selected.size > 0 ? ` (${selected.size})` : ''}
-          </Button>
-          <ListViewToggle value={displayMode} onChange={setDisplayMode} className={portaled ? 'h-9' : ''} />
+          {!portaled && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setShowExportModal(true)}
+              icon={<FileDown className="w-4 h-4" />}
+              className="whitespace-nowrap !h-[38px] !text-sm"
+            >
+              Export{selected.size > 0 ? ` (${selected.size})` : ''}
+            </Button>
+          )}
+          {!portaled && <ListViewToggle value={displayMode} onChange={setDisplayMode} />}
         </ListToolbar>
 
         {/* Bulk Revoke / Resend confirmations — the Track popup's wording and
@@ -1118,10 +1149,15 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
         {/* Expanded filters — each field filters the list the moment it
             changes (no Done step); Reset in the toolbar clears them all. */}
         {showFilters && (
-          <div className="mt-4 sm:mt-5 pt-4 sm:pt-5 border-t border-brand-blue/10">
-          <div className="flex flex-wrap gap-x-6 gap-y-4">
-            <div className="flex-1 min-w-0 basis-[240px]">
-              <label className="block text-xs font-medium text-gray-600 mb-1.5">Score Range (%)</label>
+          /* pb-4 when embedded — the reference panel's bottom inset, off the
+             tab card's border. Embedded it is also the Scored Resumes tab's
+             panel: its wrapping row of flexing fields (one row on desktop,
+             wrapping on smaller screens) and neutral selects, no completion
+             dates. */
+          <div className={`mt-4 sm:mt-5 pt-4 sm:pt-5 border-t border-brand-blue/10${portaled ? ' pb-4' : ''}`}>
+          <div className={portaled ? 'flex flex-wrap gap-4' : 'flex flex-wrap gap-x-6 gap-y-4'}>
+            <div className={portaled ? FILTER_FIELD_WIDE_CLASS : 'flex-1 min-w-0 basis-[240px]'}>
+              <label className={filterLabelClass}>Score Range (%)</label>
               <div className="flex items-center gap-2">
                 <input
                   type="number"
@@ -1130,7 +1166,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                   max={100}
                   value={search.filters.scoreMin}
                   onChange={(e) => search.setFilter('scoreMin', e.target.value)}
-                  className="w-full min-w-0 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                  className={portaled ? `${FILTER_CONTROL_CLASS} min-w-0` : "w-full min-w-0 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"}
                 />
                 <span className="text-gray-400 text-sm">to</span>
                 <input
@@ -1140,51 +1176,53 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                   max={100}
                   value={search.filters.scoreMax}
                   onChange={(e) => search.setFilter('scoreMax', e.target.value)}
-                  className="w-full min-w-0 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                  className={portaled ? `${FILTER_CONTROL_CLASS} min-w-0` : "w-full min-w-0 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"}
                 />
               </div>
             </div>
-            <div className="flex-[1.4] min-w-0 basis-[320px]">
-              <label className="block text-xs font-medium text-gray-600 mb-1.5">Completion Date</label>
-              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                <DateField
-                  aria-label="Completion date from"
-                  value={search.filters.dateFrom}
-                  onChange={(v) => search.setFilter('dateFrom', v)}
-                  className="sm:flex-1 sm:min-w-0"
-                />
-                <span className="text-xs text-gray-400 text-center sm:text-left sm:flex-shrink-0">to</span>
-                <DateField
-                  aria-label="Completion date to"
-                  value={search.filters.dateTo}
-                  onChange={(v) => search.setFilter('dateTo', v)}
-                  className="sm:flex-1 sm:min-w-0"
-                />
+            {!portaled && (
+              <div className="flex-[1.4] min-w-0 basis-[320px]">
+                <label className={filterLabelClass}>Completion Date</label>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                  <DateField
+                    aria-label="Completion date from"
+                    value={search.filters.dateFrom}
+                    onChange={(v) => search.setFilter('dateFrom', v)}
+                    className="sm:flex-1 sm:min-w-0"
+                  />
+                  <span className="text-xs text-gray-400 text-center sm:text-left sm:flex-shrink-0">to</span>
+                  <DateField
+                    aria-label="Completion date to"
+                    value={search.filters.dateTo}
+                    onChange={(v) => search.setFilter('dateTo', v)}
+                    className="sm:flex-1 sm:min-w-0"
+                  />
+                </div>
               </div>
-            </div>
+            )}
             {!hideVersionDetails && (
             <>
             {!hideJobVersion && (
-            <div className="flex-1 min-w-0 basis-[180px]">
-              <label className="block text-xs font-medium text-gray-600 mb-1.5">Job Version</label>
+            <div className={portaled ? FILTER_FIELD_CLASS : 'flex-1 min-w-0 basis-[180px]'}>
+              <label className={filterLabelClass}>Job Version</label>
               <select
                 value={search.filters.jobVersion}
                 onChange={(e) => search.setFilter('jobVersion', e.target.value)}
                 aria-label="Job Version"
-                className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-black"
+                className={portaled ? FILTER_CONTROL_CLASS : "w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-black"}
               >
                 <option value="">All job versions</option>
                 {jobVersion != null && <option value={String(jobVersion)}>V{jobVersion}</option>}
               </select>
             </div>
             )}
-            <div className="flex-1 min-w-0 basis-[180px]">
-              <label className="block text-xs font-medium text-gray-600 mb-1.5">Interview Version</label>
+            <div className={portaled ? FILTER_FIELD_CLASS : 'flex-1 min-w-0 basis-[180px]'}>
+              <label className={filterLabelClass}>Interview Version</label>
               <select
                 value={search.filters.interviewVersion}
                 onChange={(e) => search.setFilter('interviewVersion', e.target.value)}
                 aria-label="Interview Version"
-                className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-black"
+                className={portaled ? FILTER_CONTROL_CLASS : "w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-black"}
               >
                 <option value="">All interview versions</option>
                 {interviewVersion != null && <option value={String(interviewVersion)}>V{interviewVersion}</option>}
@@ -1192,13 +1230,13 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             </div>
             </>
             )}
-            <div className="flex-1 min-w-0 basis-[180px]">
-              <label className="block text-xs font-medium text-gray-600 mb-1.5">Source</label>
+            <div className={portaled ? FILTER_FIELD_CLASS : 'flex-1 min-w-0 basis-[180px]'}>
+              <label className={filterLabelClass}>Source</label>
               <select
                 value={search.filters.inviteSource}
                 onChange={(e) => search.setFilter('inviteSource', e.target.value)}
                 aria-label="Source"
-                className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-black"
+                className={portaled ? FILTER_CONTROL_CLASS : "w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-black"}
               >
                 <option value="">All sources</option>
                 {INVITE_SOURCE_FILTER_OPTIONS.map((option) => (
@@ -1396,7 +1434,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                     wider tracking, dark mode. */}
                 <thead className="sticky top-0 z-10 [&_th]:bg-gray-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                   <tr>
-                    <th className="text-left px-4 py-3 w-12 align-middle tf-sticky-col-left">
+                    <th className="text-left px-4 py-3 w-10 align-middle tf-sticky-col-left">
                       {/* Embedded in Job Details, Select All already lives in
                           the toolbar above (the reference pattern) — this
                           header checkbox would duplicate it, so it's empty
@@ -1425,7 +1463,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                     <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle tf-sticky-col">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                   {paginatedSessions.map((session) => {
                     const risk = getProctoringRisk(session);
                     return (
@@ -1439,7 +1477,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                           selected.has(session.id) ? 'bg-blue-50 dark:bg-slate-800/50' : 'bg-white dark:bg-slate-900'
                         }`}
                       >
-                        <td className="px-4 py-3 w-12 align-middle tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
+                        <td className="px-4 py-3 w-10 align-middle tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
                           <input
                             type="checkbox"
                             checked={selected.has(session.id)}

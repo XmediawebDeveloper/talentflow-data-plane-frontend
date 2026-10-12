@@ -1,7 +1,8 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { CheckCircle, ClipboardCheck, Loader2, Mail, X } from 'lucide-react';
+import { ArrowLeft, CheckCircle, ClipboardCheck, Loader2, Mail } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import AssessmentPicker from '@/components/assessments/AssessmentPicker';
 import JobAssessmentVersionPicker from '@/components/assessments/JobAssessmentVersionPicker';
 import SelectedCandidatesPanel from '@/components/SelectedCandidatesPanel';
@@ -45,6 +46,16 @@ interface InviteToAssessmentFlowProps {
    *  the dialog opens on THAT job's assessment versions as cards — as the
    *  Invite to AI Interview dialog does — with a link to browse them all. */
   jobId?: string;
+  /** `jobId`'s own job version, when the host knows it (Job Details) — passed
+   *  to the version cards' heading and preview. */
+  jobVersionNumber?: number;
+  /** What "Browse all assessments instead" lists, when the host scopes
+   *  `assessments` to one job (Job Details hands this job version's rows to
+   *  the cards, and every active assessment across all jobs here). Omitted,
+   *  the full list is `assessments` itself, as before. */
+  browseAssessments?: InviteAssessment[];
+  /** Still loading `browseAssessments`. */
+  browseLoading?: boolean;
 }
 
 /**
@@ -71,6 +82,9 @@ export default function InviteToAssessmentFlow({
   resumes,
   onProceed,
   jobId,
+  jobVersionNumber,
+  browseAssessments,
+  browseLoading = false,
 }: InviteToAssessmentFlowProps) {
   const bodyScrollRef = useRef<HTMLDivElement | null>(null);
   /** Candidates unticked in the panel — listed, but not invited. */
@@ -80,6 +94,10 @@ export default function InviteToAssessmentFlow({
   /** Escape hatch from the job-scoped cards to the full list. */
   const [browseAll, setBrowseAll] = useState(false);
   const jobScoped = !!jobId && !browseAll;
+  /* The full list's rows and loading state — the host's cross-job list when
+     it gave one, else the same rows as ever. */
+  const listAssessments = browseAssessments ?? assessments;
+  const listLoading = browseAssessments ? browseLoading : loading;
   /* One picked version, in the job view: named on the footer and the button
      ("Send with V2"), as the AI Interview dialog names its interview. */
   const singlePickVersion = jobScoped && pickedCount === 1
@@ -116,6 +134,18 @@ export default function InviteToAssessmentFlow({
     setBrowseAll(all);
   };
 
+  const candidatesPanel = resumes && resumes.length > 0 ? (
+    <SelectedCandidatesPanel
+      resumes={resumes}
+      excludedIds={excludedIds}
+      onToggleCandidate={(id) =>
+        setExcludedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+      }
+      tip="Invitations go to each candidate's email address — untick anyone you want to leave out."
+      tableCheckboxes
+    />
+  ) : null;
+
   return (
     <>
       {/* Shell, header, body and footer are the Invite to AI Interview
@@ -125,7 +155,12 @@ export default function InviteToAssessmentFlow({
         onClick={close}
       />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
-        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-6xl xl:max-w-7xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+        {/* Opened for a job (AI Talent Match), ONE size whichever view is up:
+            narrower than the cross-job dialog, and a fixed height, so "Browse
+            all assessments instead" swaps the content inside the same box —
+            the list scrolls in the body (its wide table sideways in its own
+            shell) — rather than growing the dialog. */}
+        <div className={`bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl ${jobId ? 'lg:max-w-4xl xl:max-w-5xl h-[calc(100dvh-1.5rem)] sm:h-[min(46rem,calc(100dvh-3rem))]' : 'lg:max-w-6xl xl:max-w-7xl'} max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200`}>
           <div className="flex-shrink-0 flex items-center justify-between gap-2 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60">
             <div className="flex items-center gap-3 min-w-0 flex-1">
               <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
@@ -138,39 +173,27 @@ export default function InviteToAssessmentFlow({
                 <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">Select candidates to invite for an assessment</p>
               </div>
             </div>
-            <button
-              onClick={close}
-              className="p-1.5 text-gray-500 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-md transition-colors flex-shrink-0"
-              aria-label="Close"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            {/* No X — the footer's Cancel closes. */}
           </div>
 
-          {/* One scrolling body: panel, search, list. */}
+          {/* One scrolling body. Over the job's version cards, the cards come
+              first and the Candidates Selected panel follows; over the full
+              list, the panel leads as before (the list pages and searches). */}
           <div ref={bodyScrollRef} className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
-            {resumes && resumes.length > 0 && (
-              <SelectedCandidatesPanel
-                resumes={resumes}
-                excludedIds={excludedIds}
-                onToggleCandidate={(id) =>
-                  setExcludedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
-                }
-                tip="Invitations go to each candidate's email address — untick anyone you want to leave out."
-              />
-            )}
+            {!jobScoped && candidatesPanel}
 
-            {loading ? (
+            {(jobScoped ? loading : listLoading) ? (
               <div className="flex items-center justify-center py-12 tf-loader-center tf-loader-center--compact">
                 <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
               </div>
             ) : jobScoped ? (
-              <div className="mt-5">
+              <div>
                 {/* Opened from a job (AI Talent Match): only that job's
                     assessment versions, as selectable cards. */}
                 <JobAssessmentVersionPicker
                   assessments={assessments}
                   jobId={jobId as string}
+                  jobVersionNumber={jobVersionNumber}
                   multiple={multiple}
                   selectedIds={selectedAssessments.map((a) => a.id)}
                   onToggle={toggleFromCard}
@@ -189,13 +212,14 @@ export default function InviteToAssessmentFlow({
                   <button
                     type="button"
                     onClick={() => switchView(false)}
-                    className="mt-4 mb-1 text-xs font-medium text-brand-blue hover:text-brand-blue-2 hover:underline underline-offset-2"
+                    className="mt-4 mb-1 inline-flex items-center gap-1 text-xs font-medium text-brand-blue hover:text-brand-blue-2 hover:underline underline-offset-2"
                   >
-                    ← Back to this job&apos;s assessment versions
+                    <ArrowLeft className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
+                    Back to this job&apos;s assessment versions
                   </button>
                 )}
               <AssessmentPicker
-                assessments={assessments}
+                assessments={listAssessments}
                 multiple
                 selectedIds={selectedAssessments.map((a) => a.id)}
                 onSelectionChange={onSelectedAssessmentsChange}
@@ -208,19 +232,22 @@ export default function InviteToAssessmentFlow({
                   <button
                     type="button"
                     onClick={() => switchView(false)}
-                    className="mt-4 mb-1 text-xs font-medium text-brand-blue hover:text-brand-blue-2 hover:underline underline-offset-2"
+                    className="mt-4 mb-1 inline-flex items-center gap-1 text-xs font-medium text-brand-blue hover:text-brand-blue-2 hover:underline underline-offset-2"
                   >
-                    ← Back to this job&apos;s assessment versions
+                    <ArrowLeft className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
+                    Back to this job&apos;s assessment versions
                   </button>
                 )}
               <AssessmentPicker
-                assessments={assessments}
+                assessments={listAssessments}
                 selectedId={selectedAssessments[0]?.id ?? null}
                 onSelect={(a) => onSelectedAssessmentsChange(a ? [a] : [])}
                 scrollContainerRef={bodyScrollRef}
               />
               </>
             )}
+
+            {jobScoped && candidatesPanel && <div className="mt-5">{candidatesPanel}</div>}
           </div>
 
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 sm:p-6 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 shrink-0">
@@ -243,6 +270,12 @@ export default function InviteToAssessmentFlow({
                   )}
             </div>
             <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
+              {/* Cancel — closes without sending or touching the pick (the
+                  host keeps its selection; only this dialog's own unticks and
+                  view reset, as the X used to). */}
+              <Button variant="secondary" onClick={close} className="flex-1 sm:flex-none !h-9">
+                Cancel
+              </Button>
               <button
                 onClick={proceed}
                 disabled={pickedCount === 0 || invitees.length === 0}

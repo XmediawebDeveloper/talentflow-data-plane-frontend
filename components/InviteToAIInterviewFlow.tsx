@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Brain, CheckCircle, Loader2, Mail, X } from 'lucide-react';
+import { ArrowLeft, Brain, CheckCircle, Loader2, Mail } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { aiInterviewService, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import AIInterviewPicker, { type AIInterviewPickerSelection } from '@/components/ai-interview/AIInterviewPicker';
@@ -182,6 +183,20 @@ export default function InviteToAIInterviewFlow({
 
   if (!open) return null;
 
+  /* Same Candidates Selected panel as the Score Resume dialog, in the AI
+     Talent Match table's checkbox chrome. */
+  const candidatesPanel = resumes && resumes.length > 0 ? (
+    <SelectedCandidatesPanel
+      resumes={resumes}
+      excludedIds={excludedIds}
+      onToggleCandidate={(id) =>
+        setExcludedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+      }
+      tip="Invitations go to each candidate's email address — untick anyone you want to leave out."
+      tableCheckboxes
+    />
+  ) : null;
+
   return (
     <>
       {/* Shell, header, body and footer are the Apply to Job / Score Resume
@@ -192,7 +207,13 @@ export default function InviteToAIInterviewFlow({
         onClick={closePicker}
       />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
-        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-6xl xl:max-w-7xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+        {/* Opened for a job (AI Talent Match), ONE size whichever view is up —
+            the Invite to Assessment dialog's: narrower than the cross-job
+            dialog, and a fixed height, so "Browse all AI interviews instead"
+            swaps the content inside the same box (the list scrolls in the
+            body, its wide table sideways in its own shell) rather than growing
+            the dialog. */}
+        <div className={`bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl ${jobId ? 'lg:max-w-4xl xl:max-w-5xl h-[calc(100dvh-1.5rem)] sm:h-[min(46rem,calc(100dvh-3rem))]' : 'lg:max-w-6xl xl:max-w-7xl'} max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200`}>
           <div className="flex-shrink-0 flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60">
             <div className="flex items-center gap-3 min-w-0 flex-1">
               <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
@@ -205,28 +226,14 @@ export default function InviteToAIInterviewFlow({
                 <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">Select candidates to invite for an AI interview</p>
               </div>
             </div>
-            <button
-              onClick={closePicker}
-              className="p-1.5 text-gray-500 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-md transition-colors flex-shrink-0"
-              aria-label="Close"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            {/* No X — the footer's Cancel closes. */}
           </div>
 
-          {/* One scrolling body, as in the job dialog: panel, search, list. */}
+          {/* One scrolling body. Over the job's version cards, the cards come
+              first and the Candidates Selected panel follows; over the full
+              list, the panel leads as before (the list pages and searches). */}
           <div ref={bodyScrollRef} className="flex-1 overflow-y-auto p-4 sm:p-6">
-            {/* Same Candidates Selected panel as the Score Resume dialog. */}
-            {resumes && resumes.length > 0 && (
-              <SelectedCandidatesPanel
-                resumes={resumes}
-                excludedIds={excludedIds}
-                onToggleCandidate={(id) =>
-                  setExcludedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
-                }
-                tip="Invitations go to each candidate's email address — untick anyone you want to leave out."
-              />
-            )}
+            {!jobScoped && candidatesPanel}
 
             {/* The interview list — the same shared picker as the AI Interview
                 page's Send Invite popup: search, the
@@ -236,7 +243,7 @@ export default function InviteToAIInterviewFlow({
                 <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
               </div>
             ) : jobScoped ? (
-              <div className="mt-5">
+              <div>
                 {/* Opened from a job (AI Talent Match): only that job's
                     interview versions, as selectable cards. */}
                 <JobInterviewVersionPicker
@@ -259,9 +266,10 @@ export default function InviteToAIInterviewFlow({
                   <button
                     type="button"
                     onClick={() => { setSelection(null); setBrowseAll(false); }}
-                    className="mt-4 mb-1 text-xs font-medium text-brand-blue hover:text-brand-blue-2 hover:underline underline-offset-2"
+                    className="mt-4 mb-1 inline-flex items-center gap-1 text-xs font-medium text-brand-blue hover:text-brand-blue-2 hover:underline underline-offset-2"
                   >
-                    ← Back to this job&apos;s interview versions
+                    <ArrowLeft className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
+                    Back to this job&apos;s interview versions
                   </button>
                 )}
                 <AIInterviewPicker
@@ -273,6 +281,8 @@ export default function InviteToAIInterviewFlow({
                 />
               </>
             )}
+
+            {jobScoped && candidatesPanel && <div className="mt-5">{candidatesPanel}</div>}
           </div>
 
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 sm:p-6 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 shrink-0">
@@ -295,6 +305,11 @@ export default function InviteToAIInterviewFlow({
                   )}
             </div>
             <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
+              {/* Cancel — closes without sending or opening the share step,
+                  exactly as the X used to. */}
+              <Button variant="secondary" onClick={closePicker} className="flex-1 sm:flex-none !h-9">
+                Cancel
+              </Button>
               <button
                 onClick={proceedToShare}
                 disabled={!selectedConfig || (!noPresetCandidates && invitees.length === 0)}

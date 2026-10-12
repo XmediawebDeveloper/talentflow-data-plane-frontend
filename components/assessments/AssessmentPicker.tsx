@@ -63,7 +63,9 @@ const ROUND_CHIPS: { key: 'hr' | 'technical' | 'coding'; short: string; label: s
   { key: 'coding', short: 'CODE', label: 'Coding Round' },
 ];
 
-const PICKER_TH = 'px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 whitespace-nowrap bg-slate-50 dark:bg-slate-800';
+/* The Ungrouped table's header cell — the AI Talent Match results table's,
+   class for class (its background and rule come from the <thead>). */
+const PICKER_TH = 'px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle';
 
 export default function AssessmentPicker({
   assessments,
@@ -139,6 +141,31 @@ export default function AssessmentPicker({
     coding_enabled: a.coding_enabled,
     coding_percentage: a.coding_percentage,
   });
+  /* Grouped: which job versions each opened job card shows expanded. The
+     selectable rows (and their checkboxes / radios) live one level down,
+     inside a job version, so a card opening onto collapsed versions hid every
+     choice behind a second click — the Grouped view read as having no
+     selection at all. A card now opens with the job versions that hold an
+     offered assessment already expanded; the reader's own toggles take over
+     from there (kept per job, so reopening a card keeps them). */
+  const [jobVersionToggles, setJobVersionToggles] = useState<Record<string, number[]>>({});
+  const offeredJobVersionsOf = (jdId: string): number[] => {
+    const numberById = new Map((jdLineage.lineages[jdId] ?? []).map((v) => [v.id, v.version_number ?? 1] as const));
+    const numbers = new Set<number>();
+    for (const row of versionRowsFor(jdId)) {
+      const n = (row.jd_id ? numberById.get(row.jd_id) : undefined) ?? row.jd_version;
+      if (typeof n === 'number') numbers.add(n);
+    }
+    return [...numbers];
+  };
+  const expandedJobVersionsOf = (jdId: string) => jobVersionToggles[jdId] ?? offeredJobVersionsOf(jdId);
+  const toggleJobVersionOf = (jdId: string, jobVersion: number) => {
+    const current = expandedJobVersionsOf(jdId);
+    setJobVersionToggles((prev) => ({
+      ...prev,
+      [jdId]: current.includes(jobVersion) ? current.filter((n) => n !== jobVersion) : [...current, jobVersion],
+    }));
+  };
   const versionRowsFor = (jdId?: string): AssessmentVersionRow[] => {
     if (!jdId) return [];
     const lineage = jdLineage.lineages[jdId];
@@ -172,7 +199,6 @@ export default function AssessmentPicker({
   /* Filtered BEFORE the collapse so a job stays listed when the assessment
      that matched the search is not the one representing it. */
   const jobRows = collapse(pickerRows);
-  const jobCount = collapse(sorted).length;
   /* Each job card's figures, over the assessments offered here. */
   const jobTotals = new Map<string, { assessments: number; invitations: number; completed: number; maxJobVersion: number }>();
   for (const a of sorted) {
@@ -206,7 +232,18 @@ export default function AssessmentPicker({
       onSelect?.(isPicked(a.id) ? null : a);
     }
   };
-  const clearSelection = () => (multiple ? onSelectionChange?.([]) : onSelect?.(null));
+  /* The toolbar's Select All, over the assessments the search leaves listed. */
+  const listedPickedCount = pickerRows.filter((a) => isPicked(a.id)).length;
+  const allListedPicked = pickerRows.length > 0 && listedPickedCount === pickerRows.length;
+  const someListedPicked = listedPickedCount > 0 && !allListedPicked;
+  const toggleAllListed = () => {
+    if (allListedPicked) {
+      const listedIds = new Set(pickerRows.map((a) => a.id));
+      onSelectionChange?.(pickedAssessments().filter((a) => !listedIds.has(a.id)));
+    } else {
+      onSelectionChange?.([...pickedAssessments(), ...pickerRows.filter((a) => !isPicked(a.id))]);
+    }
+  };
   /* Grouped: the jobs holding a pick — one in single-select, any number in
      multi-select. */
   const pickedJobKeys = new Set(pickedAssessments().map(lineageKeyOf));
@@ -222,89 +259,81 @@ export default function AssessmentPicker({
 
   return (
     <>
-      {/* Search */}
-      <div className="mb-4">
-        <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">{searchLabel}</label>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
-          <input
-            type="text"
-            autoFocus
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            placeholder={searchPlaceholder}
-            className="w-full pl-10 pr-4 py-2 text-sm text-black dark:text-slate-100 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
-          />
-        </div>
-      </div>
-
-      {/* Grouped/Ungrouped — the AI Interview picker's toggle. Ungrouped: one
-          row per assessment. Grouped: one card per job, versions behind View
+      {/* Search, with the Grouped/Ungrouped toggle on the SAME row (the AI
+          Interview picker's toggle): the search takes the spare width, the
+          toggle keeps its own, both centred on one line; below `sm` the toggle
+          drops under the search rather than squeezing it. Ungrouped: one row
+          per assessment. Grouped: one card per job, versions behind View
           Versions. */}
-      <div className="flex items-center gap-2 mb-4">
-        <span className="text-sm text-gray-600 dark:text-slate-400">View:</span>
-        <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-          {([
-            { key: 'ungrouped', label: 'Ungrouped' },
-            { key: 'grouped', label: 'Grouped' },
-          ] as const).map((mode) => {
-            const isActive = viewMode === mode.key;
-            return (
-              <button
-                key={mode.key}
-                type="button"
-                aria-pressed={isActive}
-                onClick={() => { setViewMode(mode.key); clearSelection(); setPage(1); }}
-                className={`px-2.5 sm:px-3 py-1.5 min-h-[32px] rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 whitespace-nowrap ${
-                  isActive
-                    ? 'bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/20 text-brand-blue'
-                    : 'text-gray-600 dark:text-slate-400 hover:text-brand-blue'
-                }`}
-              >
-                {mode.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-        <label className="min-w-0 text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300">
-          {multiple ? 'Select Assessments' : 'Select an Assessment'}
-          <span className="ml-2 font-normal text-gray-500 dark:text-slate-400">
-            {viewMode === 'ungrouped'
-              ? `${pickerRows.length} active assessment${pickerRows.length !== 1 ? 's' : ''}`
-              : `${jobCount} job${jobCount !== 1 ? 's' : ''}`}
-          </span>
-        </label>
-        {(pickedCount > 0 || (multiple && pickerRows.length > 0)) && (
-          <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
-            {pickedCount > 0 && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
-                <CheckCircle className="w-3 h-3" />
-                {pickedCount} selected
-              </span>
-            )}
-            {/* Multi-select keeps the Select All the dialog always had, over
-                the assessments the search leaves listed. */}
-            {multiple && pickerRows.some((a) => !isPicked(a.id)) && (
-              <button
-                onClick={() => onSelectionChange?.([...pickedAssessments(), ...pickerRows.filter((a) => !isPicked(a.id))])}
-                className="text-xs text-brand-blue hover:text-brand-blue-2 font-medium"
-              >
-                Select All
-              </button>
-            )}
-            {pickedCount > 0 && (
-              <button
-                onClick={clearSelection}
-                className="text-xs text-brand-blue hover:text-brand-blue-2 font-medium"
-              >
-                {multiple ? 'Clear All' : 'Clear Selection'}
-              </button>
-            )}
+      <div className="mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+          {/* Select All — first on the row, before the search (the AI Talent
+              Match toolbar's order), in its native checkbox chrome. Covers the
+              assessments the search leaves listed, in either view: ticks them
+              all, or — once they all are — unticks just those, so picks the
+              search is hiding stay picked. Half-ticked while only some are.
+              Multi-select only; a single pick has nothing to select all of. */}
+          {multiple && (
+            <label className="inline-flex items-center gap-2 flex-shrink-0 text-sm font-medium text-gray-700 dark:text-slate-300 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={allListedPicked}
+                ref={(el) => {
+                  if (el) el.indeterminate = someListedPicked;
+                }}
+                onChange={toggleAllListed}
+                disabled={pickerRows.length === 0}
+                aria-label={allListedPicked ? 'Unselect all listed assessments' : 'Select all listed assessments'}
+                className="m-0 rounded border-gray-300 cursor-pointer disabled:cursor-not-allowed"
+              />
+              Select All
+            </label>
+          )}
+          <div className="relative flex-1 min-w-0">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
+            <input
+              id="assessment-picker-search"
+              /* No visible label — the placeholder says what it searches;
+                 `searchLabel` still names the field for screen readers. */
+              aria-label={searchLabel}
+              type="text"
+              autoFocus
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              placeholder={searchPlaceholder}
+              className="w-full pl-10 pr-4 py-2 text-sm text-black dark:text-slate-100 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+            />
           </div>
-        )}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <span className="text-sm text-gray-600 dark:text-slate-400">View:</span>
+            <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+              {([
+                { key: 'ungrouped', label: 'Ungrouped' },
+                { key: 'grouped', label: 'Grouped' },
+              ] as const).map((mode) => {
+                const isActive = viewMode === mode.key;
+                return (
+                  <button
+                    key={mode.key}
+                    type="button"
+                    aria-pressed={isActive}
+                    /* The pick survives the switch: both views read the one
+                       selection the host holds, so what is ticked in one is
+                       ticked in the other. Only the paging restarts. */
+                    onClick={() => { setViewMode(mode.key); setPage(1); }}
+                    className={`px-2.5 sm:px-3 py-1.5 min-h-[32px] rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 whitespace-nowrap ${
+                      isActive
+                        ? 'bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/20 text-brand-blue'
+                        : 'text-gray-600 dark:text-slate-400 hover:text-brand-blue'
+                    }`}
+                  >
+                    {mode.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* How many can be picked — the AI Interview picker's note, in its
@@ -338,12 +367,17 @@ export default function AssessmentPicker({
             <p className="text-sm">{q ? 'Try different search terms' : 'Create and publish an assessment first to send invitations'}</p>
           </div>
         ) : (
-          <div className="rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden">
+          /* The AI Talent Match results table's card, header, row and checkbox
+             styling — its bordered card, gray-50 header with the rule on the
+             cells, px-4 py-3 cells, gray-100 row rules, gray-50 hover and
+             blue-50 selected tint, and its empty select header (Select All
+             sits in the line above). Columns stay this picker's own. */
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
             <div className="overflow-x-auto scrollbar-visible">
-              <table className="w-full text-sm border-collapse">
-                <thead className="sticky top-0 z-[6]">
-                  <tr className="border-b border-gray-200 dark:border-slate-700">
-                    <th className={`${PICKER_TH} w-14 tf-sticky-col-left !bg-slate-50 dark:!bg-slate-800`}>Select</th>
+              <table className="w-full table-auto text-sm">
+                <thead className="sticky top-0 z-10 [&_th]:bg-gray-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
+                  <tr>
+                    <th className="px-4 py-3 w-10 align-middle tf-sticky-col-left" aria-label="Select" />
                     <th className={PICKER_TH}>Assessment ID</th>
                     <th className={PICKER_TH}>Job ID</th>
                     <th className={PICKER_TH}>Job Name</th>
@@ -355,10 +389,10 @@ export default function AssessmentPicker({
                     <th className={PICKER_TH}>Invitations Sent</th>
                     <th className={PICKER_TH}>Created On</th>
                     <th className={`${PICKER_TH} pr-6`}>Created By</th>
-                    <th className={`${PICKER_TH} !text-center tf-sticky-col !bg-slate-50 dark:!bg-slate-800`}>Preview</th>
+                    <th className={`${PICKER_TH} !text-center tf-sticky-col`}>Preview</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                   {pagedRows.map((a) => {
                     const isSelected = isPicked(a.id);
                     const version = versionOf(a);
@@ -370,11 +404,11 @@ export default function AssessmentPicker({
                         onClick={pick}
                         aria-selected={isSelected}
                         data-row-selected={isSelected ? 'true' : undefined}
-                        className={`border-b border-gray-100 dark:border-slate-700/60 last:border-b-0 cursor-pointer transition-colors ${
-                          isSelected ? 'bg-brand-blue/[0.06] dark:bg-brand-blue/15' : 'hover:bg-brand-blue/5 dark:hover:bg-brand-blue/10'
+                        className={`hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors cursor-pointer ${
+                          isSelected ? 'bg-blue-50 dark:bg-slate-800/50' : ''
                         }`}
                       >
-                        <td className="px-3 py-2.5 align-middle tf-sticky-col-left">
+                        <td className="px-4 py-3 align-middle tf-sticky-col-left">
                           <input
                             type={multiple ? 'checkbox' : 'radio'}
                             name="assessment-invite-picker-selection"
@@ -382,39 +416,39 @@ export default function AssessmentPicker({
                             onChange={pick}
                             onClick={(e) => e.stopPropagation()}
                             aria-label={`Select ${jobNameOf(a)}`}
-                            className="w-4 h-4 accent-brand-blue cursor-pointer"
+                            className={`${multiple ? 'rounded ' : ''}border-gray-300 cursor-pointer`}
                           />
                         </td>
-                        <td className="px-3 py-2.5 align-middle whitespace-nowrap">
+                        <td className="px-4 py-3 align-middle whitespace-nowrap">
                           {a.short_id ? (
                             <span className="inline-flex items-center px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs font-mono font-medium">
                               {a.short_id}
                             </span>
                           ) : <span className="text-xs text-gray-400">—</span>}
                         </td>
-                        <td className="px-3 py-2.5 align-middle whitespace-nowrap">
+                        <td className="px-4 py-3 align-middle whitespace-nowrap">
                           {a.jd_short_id ? <JobIdBadge>{a.jd_short_id}</JobIdBadge> : <span className="text-xs text-gray-400">—</span>}
                         </td>
-                        <td className="px-3 py-2.5 align-middle max-w-[16rem]">
+                        <td className="px-4 py-3 align-middle max-w-[16rem]">
                           {/* The job's name; the assessment's own title (version
                               suffix stripped) on hover. */}
                           <span className="block truncate font-medium text-gray-900 dark:text-slate-50" title={cleanTitleOf(a) || jobNameOf(a)}>
                             {jobNameOf(a)}
                           </span>
                         </td>
-                        <td className="px-3 py-2.5 align-middle whitespace-nowrap">
+                        <td className="px-4 py-3 align-middle whitespace-nowrap">
                           {a.jd_version ? <VersionPill kind="job" version={a.jd_version} /> : <span className="text-xs text-gray-400">—</span>}
                         </td>
-                        <td className="px-3 py-2.5 align-middle whitespace-nowrap">
+                        <td className="px-4 py-3 align-middle whitespace-nowrap">
                           {version ? <VersionPill kind="assessment" version={version} /> : <span className="text-xs text-gray-400">—</span>}
                         </td>
-                        <td className="px-3 py-2.5 align-middle whitespace-nowrap">
+                        <td className="px-4 py-3 align-middle whitespace-nowrap">
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ring-1 bg-success-subtle text-success ring-success-line">
                             <span className="w-1.5 h-1.5 rounded-full bg-current flex-shrink-0" />
                             {statusLabel(a.status)}
                           </span>
                         </td>
-                        <td className="px-3 py-2.5 align-middle whitespace-nowrap">
+                        <td className="px-4 py-3 align-middle whitespace-nowrap">
                           {rounds.length > 0 ? (
                             <div className="flex items-center gap-1.5 flex-nowrap">
                               {rounds.map((round) => (
@@ -431,21 +465,21 @@ export default function AssessmentPicker({
                             <span className="text-xs text-gray-400">—</span>
                           )}
                         </td>
-                        <td className="px-3 py-2.5 align-middle whitespace-nowrap">
+                        <td className="px-4 py-3 align-middle whitespace-nowrap">
                           <span className="tabular-nums text-gray-900 dark:text-slate-100">{a.duration_minutes || 0}</span>
                           <span className="text-xs text-gray-400 ml-1">min</span>
                         </td>
-                        <td className="px-3 py-2.5 align-middle whitespace-nowrap">
+                        <td className="px-4 py-3 align-middle whitespace-nowrap">
                           <span className="tabular-nums text-gray-900 dark:text-slate-100">{(a.invitations_count ?? 0).toLocaleString()}</span>
                           <span className="text-xs text-gray-400 ml-1">sent</span>
                         </td>
-                        <td className="px-3 py-2.5 align-middle whitespace-nowrap text-gray-600 dark:text-slate-400 tabular-nums">
+                        <td className="px-4 py-3 align-middle whitespace-nowrap text-gray-600 dark:text-slate-400 tabular-nums">
                           {a.created_at ? formatIST(a.created_at) : '—'}
                         </td>
-                        <td className="px-3 pr-6 py-2.5 align-middle whitespace-nowrap text-gray-600 dark:text-slate-400">
+                        <td className="px-4 pr-6 py-3 align-middle whitespace-nowrap text-gray-600 dark:text-slate-400">
                           {a.created_by_name || '—'}
                         </td>
-                        <td className="px-3 py-2.5 align-middle text-center tf-sticky-col" onClick={(e) => e.stopPropagation()}>
+                        <td className="px-4 py-3 align-middle text-center tf-sticky-col" onClick={(e) => e.stopPropagation()}>
                           <button
                             type="button"
                             onClick={() => setPreviewAssessment(a)}
@@ -593,6 +627,8 @@ export default function AssessmentPicker({
                       currentAssessmentId={a.id}
                       vocabulary={ASSESSMENT_VOCABULARY}
                       selectionGroupName="assessment-invite-picker-selection"
+                      expandedJobVersions={expandedJobVersionsOf(jdId)}
+                      onToggleJobVersion={(jobVersion) => toggleJobVersionOf(jdId, jobVersion)}
                       selectedAssessmentId={!multiple && ownsSelection ? selectedId : undefined}
                       selectedAssessmentIds={multiple ? pickedIds : undefined}
                       onSelectAssessment={(assessmentId) => {
