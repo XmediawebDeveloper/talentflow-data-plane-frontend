@@ -3,6 +3,7 @@
 // then hands it to the same PDF builder, so the file matches that page's
 // "Download Report (PDF)" exactly. List rows are compact, so the full
 // session (evaluation, transcript, special_instructions) is fetched first.
+import api from '@/lib/services/api';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import { buildDashboardData } from './adapter';
 import { exportEvalReportPDF } from './EvalReportCombined';
@@ -71,8 +72,42 @@ export async function downloadSessionReport(sessionId: string, save = true) {
     special_instructions: session.special_instructions,
   });
 
-  return exportEvalReportPDF(data, { evaluationId: session.display_id || null, sessionId: session.id, save });
+  // Identity photo for the report header — best-effort; the report still
+  // builds without it (no photo on file, fetch blocked, unsupported type).
+  let photoDataUrl: string | null = null;
+  if (session.identity_photo_path) {
+    try {
+      const res = await api.get(`/ai-interview/${session.id}/identity-photo`, { responseType: 'blob' });
+      photoDataUrl = await blobToDataUrl(res.data);
+    } catch { /* no photo */ }
+  }
+
+  return exportEvalReportPDF(data, {
+    evaluationId: session.display_id || null,
+    sessionId: session.id,
+    save,
+    details: {
+      candidateCid: session.candidate_cid || null,
+      startedAt: session.started_at || null,
+      completedAt: session.completed_at || null,
+      identityVerified: !!session.identity_verified,
+      photoDataUrl,
+      violations: session.proctoring_violations ?? [],
+      // Same route the results lists open for a candidate.
+      resultUrl: session.config_id && typeof window !== 'undefined'
+        ? `${window.location.origin}/recruitment/ai-interviews/${session.config_id}/results/details?session_id=${session.id}`
+        : null,
+    },
+  });
 }
+
+const blobToDataUrl = (blob: Blob): Promise<string | null> =>
+  new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : null);
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(blob);
+  });
 
 /**
  * The toolbar's Download PDFs: every given row that has a report. One report
