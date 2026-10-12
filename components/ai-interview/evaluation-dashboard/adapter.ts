@@ -1078,6 +1078,12 @@ function buildPerQuestionDetailsFromGroups(
       section,
       question: mainQ,
       answer: mainA,
+      // Without these an un-reached question (a selected HR question the
+      // candidate never got to — HR rows carry no assigned_skills, so this
+      // builder is the one picked) rendered as answered with "[NOT ASKED]".
+      responseType: String(g?.response_type || matched?.response_type || '').toLowerCase(),
+      skipSource: String(matched?.skip_source || '').toLowerCase(),
+      notDelivered: isUndeliveredHistoryRow(g) || isUndeliveredHistoryRow(matched) || !!matched?.not_delivered,
       skills: mainSkills,
       // Backend question score for this group (never recomputed here).
       questionScore: backendQuestionScore(g) ?? backendQuestionScore(matched) ?? 0,

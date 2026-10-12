@@ -61,6 +61,9 @@ interface SelectedCandidatesPanelProps {
    *  which sit over that table. Off by default, so every other host is
    *  unchanged. */
   tableCheckboxes?: boolean;
+  /** Opt-in: how a candidate's name is SHOWN in the list (Job Details' AI
+   *  interview invite: first name capitalised). Display only. */
+  formatName?: (name: string) => string;
 }
 
 export default function SelectedCandidatesPanel({
@@ -71,6 +74,7 @@ export default function SelectedCandidatesPanel({
   onVersionChosen,
   tip,
   tableCheckboxes = false,
+  formatName,
 }: SelectedCandidatesPanelProps) {
   const checkboxClass = tableCheckboxes
     ? 'rounded border-gray-300 cursor-pointer'
@@ -218,7 +222,7 @@ export default function SelectedCandidatesPanel({
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className={`text-sm truncate ${included ? 'text-gray-900 dark:text-slate-50' : 'text-gray-500 line-through'}`}>
-                    {resume.name}
+                    {formatName && resume.name ? formatName(resume.name) : resume.name}
                   </span>
                   {/* Read-only label of the version going forward — the eye is
                       where versions are opened and chosen. */}

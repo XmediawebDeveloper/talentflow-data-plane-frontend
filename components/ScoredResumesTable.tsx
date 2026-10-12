@@ -618,6 +618,7 @@ export default function ScoredResumesTable({
   toolbarPortal,
   hiddenColumnIds,
 }: ScoredResumesTableProps) {
+  const showName = (name: string) => (formatCandidateName ? formatCandidateName(name) : name);
   /* Embedded in the Job Details tabs (the toolbar portals into that card's
      slot). When so, the toolbar controls switch to the 36px / tinted-pill
      chrome of the AI Talent Match reference; the standalone Resume Scoring
@@ -1515,10 +1516,10 @@ Best regards`);
               onClick={() => onViewCandidate(resume)}
               className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors"
             >
-              {resume.candidateName}
+              {showName(resume.candidateName)}
             </button>
           ) : (
-            <div className="text-sm text-gray-900">{resume.candidateName}</div>
+            <div className="text-sm text-gray-900">{showName(resume.candidateName)}</div>
           )}
           {/* "Candidate" is name WITH mail — the email rides under the name
               instead of taking a column of its own. */}
@@ -2427,10 +2428,10 @@ Best regards`);
                               onClick={(e) => { e.stopPropagation(); onViewCandidate(resume); }}
                               className="block max-w-full truncate text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors"
                             >
-                              {resume.candidateName || 'Candidate'}
+                              {showName(resume.candidateName) || 'Candidate'}
                             </button>
                           ) : (
-                            <p className="text-sm font-medium text-gray-900 truncate">{resume.candidateName || 'Candidate'}</p>
+                            <p className="text-sm font-medium text-gray-900 truncate">{showName(resume.candidateName) || 'Candidate'}</p>
                           )}
                           <p className="text-xs text-gray-500 truncate" title={resume.email || undefined}>{resume.email || '—'}</p>
                         </div>
@@ -2462,7 +2463,7 @@ Best regards`);
                   {/* No initials avatar — there is no profile photo behind it. */}
                   <div className="flex items-start gap-2.5">
                     <div className="min-w-0 flex-1">
-                      <p className="font-medium text-gray-900 truncate">{resume.candidateName || 'Candidate'}</p>
+                      <p className="font-medium text-gray-900 truncate">{showName(resume.candidateName) || 'Candidate'}</p>
                       <p className="text-xs text-gray-500 truncate">{resume.email || '—'}</p>
                     </div>
                   </div>
@@ -3139,7 +3140,7 @@ Best regards`);
                   )}
                 </button>
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-gray-900 mb-1 break-words">{resume.candidateName}</h3>
+                  <h3 className="text-gray-900 mb-1 break-words">{showName(resume.candidateName)}</h3>
                   {/* Show job title in global view */}
                   {isGlobalView && resume.jobTitle && (
                     <div className="text-xs text-gray-500 mb-1 truncate">

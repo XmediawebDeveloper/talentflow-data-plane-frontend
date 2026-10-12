@@ -189,6 +189,8 @@ export const EVENT_META: Record<string, EventMeta> = {
   window_blur:     { category: 'attention', label: 'Clicked away from the window' },
   tab_switch:      { category: 'attention', label: 'Switched browser tab or app' },
   fullscreen_exit: { category: 'attention', label: 'Exited fullscreen' },
+  // Came back within the 10 s grace period (InterviewUI) — logged as minor.
+  fullscreen_exit_recovered: { category: 'attention', label: 'Returned to fullscreen quickly' },
 
   // Mobile environment verification
   environment_verification_flagged:         { category: 'environment', label: 'Environment check flagged something', confidence: 'possible' },
@@ -479,6 +481,12 @@ export function describeViolation(v: ViolationRecord): string {
     }
     case 'fullscreen_exit':
       return 'The candidate left fullscreen mode.';
+    case 'fullscreen_exit_recovered': {
+      const ms = typeof d.recovered_within_ms === 'number' ? d.recovered_within_ms : null;
+      return ms != null
+        ? `Returned to fullscreen after ${Math.max(1, Math.round(ms / 1000))}s, within the grace period.`
+        : 'Returned to fullscreen within the grace period.';
+    }
     case 'copy_attempt':
       return d.action === 'cut' ? 'Cut text from inside the interview.' : 'Copied text from inside the interview.';
     case 'paste_attempt':

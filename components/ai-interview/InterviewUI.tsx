@@ -448,7 +448,7 @@ const MessageRow = (({ msg, candidatePhotoUrl }: MessageRowProps) => {
               </span>
             )}
           </div>
-          <div className="px-3.5 py-2.5 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-900 dark:text-emerald-300 rounded-2xl rounded-tr-sm border border-emerald-200 dark:border-emerald-500/30 shadow-sm">
+          <div className="px-3 py-2 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-900 dark:text-emerald-300 rounded-2xl rounded-tr-sm border border-emerald-200 dark:border-emerald-500/30 shadow-sm">
             <p className="text-sm leading-relaxed">{msg.content}</p>
           </div>
           {msg.timestamp && (
@@ -470,7 +470,7 @@ const MessageRow = (({ msg, candidatePhotoUrl }: MessageRowProps) => {
         <div className="flex items-center gap-1.5 mb-0.5">
           <span className="text-2xs font-semibold text-purple-600 dark:text-purple-400">BINA</span>
         </div>
-        <div className="px-3.5 py-2.5 bg-violet-50 dark:bg-violet-500/10 text-violet-900 dark:text-violet-300 rounded-2xl rounded-tl-sm border border-violet-200 dark:border-violet-500/30 shadow-sm">
+        <div className="px-3 py-2 bg-violet-50 dark:bg-violet-500/10 text-violet-900 dark:text-violet-300 rounded-2xl rounded-tl-sm border border-violet-200 dark:border-violet-500/30 shadow-sm">
           {/* pre-line: keeps the committed opening warm-up (role summary +
               AII16 tips) laid out the same way it streamed. */}
           <p className="text-sm leading-relaxed whitespace-pre-line">{msg.content}</p>
@@ -510,7 +510,7 @@ const LiveAIBubble = (({ text }: LiveAIBubbleProps) => {
         <div className="flex items-center gap-1.5 mb-0.5">
           <span className="text-2xs font-semibold text-purple-600 dark:text-purple-400">BINA</span>
         </div>
-        <div className="px-3.5 py-2.5 bg-violet-50 dark:bg-violet-500/10 text-violet-900 dark:text-violet-300 rounded-2xl rounded-tl-sm border border-violet-200 dark:border-violet-500/30 shadow-sm">
+        <div className="px-3 py-2 bg-violet-50 dark:bg-violet-500/10 text-violet-900 dark:text-violet-300 rounded-2xl rounded-tl-sm border border-violet-200 dark:border-violet-500/30 shadow-sm">
           <div className="flex items-center gap-1 mb-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '0ms' }} />
             <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '150ms' }} />
@@ -10559,7 +10559,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           <div className="relative flex-1 flex flex-col min-h-0">
           <div
             ref={chatScrollRef}
-            className={`flex-1 overflow-y-auto px-4 pt-4 space-y-3 bg-gray-50 ${
+            className={`flex-1 overflow-y-auto px-3 pt-3 space-y-2 bg-gray-50 ${
               // Reserve bottom clearance EXACTLY when the turn banner is on
               // screen (bannerVisible = turnBanner !== null). Tying the padding
               // to the same value that renders the banner guarantees they never
@@ -10674,7 +10674,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 <YouAvatar photoUrl={candidatePhotoUrl} />
                 <div className="max-w-[80%]">
                   <span className="text-2xs font-semibold text-emerald-600 dark:text-emerald-400 mb-0.5 block text-right">Your Response</span>
-                  <div className="px-3.5 py-2.5 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-900 dark:text-emerald-300 rounded-2xl rounded-tr-sm border border-emerald-200 dark:border-emerald-500/30 shadow-sm">
+                  <div className="px-3 py-2 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-900 dark:text-emerald-300 rounded-2xl rounded-tr-sm border border-emerald-200 dark:border-emerald-500/30 shadow-sm">
                     {(isRecording || currentTranscript) ? (
                       <>
                         <div className="flex items-center gap-1 mb-1">
@@ -10801,7 +10801,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                   alt="Bina"
                   className="w-6 h-6 rounded-full object-cover shrink-0 shadow-sm mt-0.5"
                 />
-                <div className="px-3.5 py-2.5 bg-violet-50 dark:bg-violet-500/10 rounded-2xl rounded-tl-sm border border-violet-200 dark:border-violet-500/30 shadow-sm">
+                <div className="px-3 py-2 bg-violet-50 dark:bg-violet-500/10 rounded-2xl rounded-tl-sm border border-violet-200 dark:border-violet-500/30 shadow-sm">
                   <div className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-violet-300 animate-bounce" style={{ animationDelay: '0ms' }} />
                     <span className="w-2 h-2 rounded-full bg-violet-300 animate-bounce" style={{ animationDelay: '150ms' }} />

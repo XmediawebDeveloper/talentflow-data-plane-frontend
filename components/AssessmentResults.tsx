@@ -122,6 +122,10 @@ interface AssessmentResultsProps {
   embedded?: boolean;
   canDownloadPDF?: boolean;
   canBatchDownload?: boolean;
+  /** How a candidate's name is SHOWN in the table rows and mobile cards (Job
+   *  Details: first name capitalised). Display only — search, sort, filters,
+   *  exports and reports keep the name as it is; other hosts leave it unset. */
+  formatCandidateName?: (name: string) => string;
   prevId?: string | null;
   nextId?: string | null;
   currentIndex?: number;
@@ -231,7 +235,8 @@ interface QuestionResult {
 const resultOrderTime = (c: { completed_at?: string; created_at?: string }) =>
   new Date(c.completed_at || c.created_at || 0).getTime();
 
-export default function AssessmentResults({ onBack, assessmentId, assessmentTitle, assessmentVersion, jdTitle, jdId, jdShortId, jdVersion, jobVersionScope = null, assessmentVersionScope = null, embedded = false, openOnTotalCandidates = false, canDownloadPDF = false, canBatchDownload = false, prevId, nextId, currentIndex, totalCount, toolbarPortal }: AssessmentResultsProps) {
+export default function AssessmentResults({ onBack, assessmentId, assessmentTitle, assessmentVersion, jdTitle, jdId, jdShortId, jdVersion, jobVersionScope = null, assessmentVersionScope = null, embedded = false, openOnTotalCandidates = false, canDownloadPDF = false, canBatchDownload = false, prevId, nextId, currentIndex, totalCount, toolbarPortal, formatCandidateName }: AssessmentResultsProps) {
+  const showName = (name: string) => (formatCandidateName && name ? formatCandidateName(name) : name);
   const router = useRouter();
   /* Embedded in the Job Details "Assessments Results" tab (toolbar portals into
      that card's slot) → toolbar controls drop to the 36px AI Talent Match
@@ -2496,7 +2501,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               paginatedCandidates.map((candidate) => (
                 <CandidateResultCard
                   key={candidate.id}
-                  name={candidate.name}
+                  name={showName(candidate.name)}
                   email={candidate.email}
                   cid={candidate.candidateDisplayId}
                   jobShortId={jdShortId}
@@ -2797,7 +2802,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                                 shape the invite tracker uses, which is what
                                 let the separate Email column go. */}
                             <div className="min-w-0">
-                              <div className="truncate font-medium text-gray-900 dark:text-slate-50" title={candidate.name || 'Unknown'}>{candidate.name || 'Unknown'}</div>
+                              <div className="truncate font-medium text-gray-900 dark:text-slate-50" title={showName(candidate.name) || 'Unknown'}>{showName(candidate.name) || 'Unknown'}</div>
                               <div className="truncate text-xs text-gray-500 dark:text-slate-400" title={candidate.email || ''}>{candidate.email || '-'}</div>
                             </div>
                           </div>
