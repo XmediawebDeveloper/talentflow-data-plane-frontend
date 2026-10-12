@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronLeft, ChevronRight, User, UserX, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, Briefcase, AlertCircle, Info, Loader2, ShieldAlert, Eye, Clipboard, MousePointer, Volume2, Monitor, Maximize, Activity, Camera, Play } from 'lucide-react';
+import { ChevronLeft, ChevronRight, User, UserX, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, Briefcase, AlertCircle, Info, Loader2, ShieldAlert, Eye, Clipboard, MousePointer, Volume2, Monitor, Maximize, Activity, Camera, Play, Users, Cpu, Code, Video, Menu } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback, type ComponentType } from 'react';
 import { useRouter } from 'next/navigation';
 import { assessmentService, DetailedResultResponse, InvitationResponse, QuestionEvaluation, RoundScore } from '@/lib/services';
@@ -10,12 +10,12 @@ import { formatISTDate, formatISTTime, formatISTWithSeconds } from '@/lib/utils/
 import { toast } from 'sonner';
 import RecordPager from '@/components/RecordPager';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
-import ResumeDetailView from '@/components/ResumeDetailView';
+import ResumeTextPreviewModal from '@/components/ResumeTextPreviewModal';
+import LanguageLogo, { logoLabelForId } from '@/components/assessments/LanguageLogo';
 import ViewResumeButton from '@/components/ui/view-resume-button';
 import ResumeHoverPreview from '@/components/ResumeHoverPreview';
 import { RESUME_EMAIL_MISMATCH_MESSAGE, emailsMatch, normalizeEmail, pickResumeByEmail, resumeEmailOf, verifyResumeBelongsToInvite } from '@/lib/utils/resumeEmailMatch';
 import { Tooltip as HoverTooltip } from '@/components/ui/tooltip';
-import TabEmptyState, { TAB_EMPTY_ACTION_CLASS } from '@/components/ui/tab-empty-state';
 import { Button } from '@/components/ui/button';
 import { SEGMENT_TOGGLE, segmentBtn, tabPill } from '@/components/ui/filter-pills';
 import { Badge } from '@/components/ui/badge';
@@ -64,6 +64,8 @@ interface CandidateResultDetailsProps {
    * "Resume" crumb and to hang the way back off the candidate crumb — hence
    * the `closeResume` callback handed over on open.
    */
+  /** No longer called — View Resume now opens a preview popup over the
+   *  result instead of a full-page resume view. Kept so callers compile. */
   onResumeViewChange?: (viewing: boolean, closeResume?: () => void) => void;
 }
 
@@ -92,6 +94,27 @@ type CandidateDetailTab = {
   isQuestionTab?: boolean;
   danger?: boolean;
 };
+
+/** AI insight text → bullet points. Explicit lines / bullets win; otherwise
+ *  'sentences' splits prose at sentence ends and 'list' splits a
+ *  comma-separated list ("Writing clarity, detailed explanation, …"). */
+function toInsightPoints(text: string, mode: 'sentences' | 'list'): string[] {
+  const clean = (t: string) => t.replace(/^\s*(?:[-*•]|\d+[.)])\s+/, '').trim();
+  const lines = text.split(/\n+/).map(clean).filter(Boolean);
+  if (lines.length > 1) return lines;
+  const parts = mode === 'list'
+    ? text.split(/\s*[,;]\s*/)
+    : text.split(/(?<=[.!?])\s+(?=[A-Z0-9])/);
+  return parts.map(clean).filter(Boolean);
+}
+
+function InsightPoints({ text, mode, markerClass }: { text: string; mode: 'sentences' | 'list'; markerClass: string }) {
+  return (
+    <ul className={`list-disc pl-5 space-y-1.5 text-sm text-gray-700 dark:text-slate-300 ${markerClass}`}>
+      {toInsightPoints(text, mode).map((point, i) => <li key={i}>{point}</li>)}
+    </ul>
+  );
+}
 
 function getCodingEvaluationState(q: QuestionEvaluation) {
   const judged = q.candidate_test_results;
@@ -274,7 +297,6 @@ export default function CandidateResultDetails({
   showRecordPager = true,
   breadcrumbItems,
   onCandidateLoaded,
-  onResumeViewChange,
 }: CandidateResultDetailsProps) {
   const router = useRouter();
   const [detailedResult, setDetailedResult] = useState<DetailedResultResponse | null>(null);
@@ -306,17 +328,11 @@ export default function CandidateResultDetails({
     setEventsGoToPage(String(eventsPage));
   }, [eventsPage]);
 
-  // View Resume — same flow the resume-scoring candidate page uses
-  // (CandidateScoringDetailPage): pull the resume record, run it through
-  // convertApiResume because the API is snake_case, and hand it to
-  // ResumeDetailView. Shown as ResumeDetailView's own overlay rather than
-  // swapping the page body, so the result stays put underneath.
-  const [resumeId, setResumeId] = useState<string | null>(null);
-  const [resumeDetail, setResumeDetail] = useState<any>(null);
+  // View Resume opens the resume in a preview popup (ResumeTextPreviewModal)
+  // over the result — the same flow as the AI Interview candidate result page
+  // (CandidateResultsView) — instead of replacing the page with it.
   const [isLoadingResume, setIsLoadingResume] = useState(false);
-  const [showResume, setShowResume] = useState(false);
-  // Opened with no resume to show — renders the "Resume Not Available" page.
-  const [resumeUnavailable, setResumeUnavailable] = useState(false);
+  const [previewResumeId, setPreviewResumeId] = useState<string | null>(null);
   // Load-time availability check: undefined = still checking, null = none.
   const [resolvedResumeId, setResolvedResumeId] = useState<string | null | undefined>(undefined);
   // Whether the invitation itself was sent from a resume (it carries
@@ -380,11 +396,14 @@ export default function CandidateResultDetails({
   // Rounds come from the candidate's own result, so a Coding Round appears only
   // when this assessment has one.
   const showAnalysisTabs = !!detailedResult && detailedResult.scoring_status !== 'processing';
+  // One icon per round so the tabs tell apart at a glance; any other round
+  // type keeps the generic clipboard.
+  const ROUND_ICONS: Record<string, CandidateDetailTab['icon']> = { hr: Users, technical: Cpu, coding: Code };
   const roundTabs: CandidateDetailTab[] = showAnalysisTabs && detailedResult
     ? detailedResult.round_scores.map((round) => ({
         id: round.round_type,
         label: formatRoundTabLabel(round.round_type),
-        icon: Clipboard,
+        icon: ROUND_ICONS[round.round_type.toLowerCase()] ?? Clipboard,
         count: detailedResult.question_evaluations.filter(q => q.round_type === round.round_type).length,
         isQuestionTab: true,
       }))
@@ -394,7 +413,8 @@ export default function CandidateResultDetails({
         {
           id: 'recording',
           label: 'Recording',
-          icon: Camera,
+          // Same video icon as the AI Interview result page's Recording tab.
+          icon: Video,
           isQuestionTab: true,
         },
         {
@@ -730,24 +750,17 @@ export default function CandidateResultDetails({
     }
   };
 
-  const closeResume = useCallback(() => {
-    setShowResume(false);
-    onResumeViewChange?.(false);
-  }, [onResumeViewChange]);
-
-  const openResumeUnavailable = () => {
-    setResumeUnavailable(true);
-    setShowResume(true);
-    onResumeViewChange?.(true, closeResume);
+  // No resume (or a mismatched one) → the button turns disabled and its hover
+  // tooltip explains why, same as when the load-time lookup finds none.
+  const markResumeUnavailable = () => {
+    setResolvedResumeId(null);
+    toast.info('Resume not available for this candidate.');
   };
 
   // Prev/Next can re-render this same instance for another attempt, so the
   // cached resume belongs to the previous candidate and must be dropped.
   useEffect(() => {
-    setResumeId(null);
-    setResumeDetail(null);
-    setShowResume(false);
-    setResumeUnavailable(false);
+    setPreviewResumeId(null);
     setResolvedResumeId(undefined);
     setInvitedFromResume(false);
     setResumeEmailMismatch(false);
@@ -765,50 +778,30 @@ export default function CandidateResultDetails({
   }, [candidateId, detailLoaded]);
 
   const handleViewResume = async () => {
-    // Already fetched once — reopening shouldn't hit the API again.
-    if (resumeDetail) {
-      setShowResume(true);
-      onResumeViewChange?.(true, closeResume);
-      return;
-    }
-
     setIsLoadingResume(true);
-    setResumeUnavailable(false);
     try {
-      const id = resumeId || (resolvedResumeId !== undefined ? resolvedResumeId : await resolveResumeId());
+      const id = resolvedResumeId !== undefined ? resolvedResumeId : await resolveResumeId();
       if (!id) {
-        openResumeUnavailable();
+        markResumeUnavailable();
         return;
       }
-      setResumeId(id);
-
       const { resumeService } = await import('@/lib/services/resumeService');
-      const { convertApiResume } = await import('@/lib/utils/resumeMapper');
-      // The API record is snake_case — ResumeDetailView needs the mapped shape.
-      const [data, versions] = await Promise.all([
-        resumeService.get(id, true), // handleViewResume - a genuine user view
-        resumeService.getVersions(id).catch(() => []),
-      ]);
-      // Re-checked on the record actually shown, in case it changed since the
-      // load-time check — against the same invite address that check used.
+      // A genuine user view (logged), and the email is re-checked on the
+      // record actually shown, in case it changed since the load-time check —
+      // against the same invite address that check used.
+      const data = await resumeService.get(id, true);
       if (!emailsMatch(resumeEmailOf(data), inviteEmailRef.current || detailedResult?.candidate_email)) {
         setResumeEmailMismatch(true);
-        setResolvedResumeId(null);
-        openResumeUnavailable();
+        markResumeUnavailable();
         return;
       }
-      setResumeDetail(convertApiResume(data, versions || []));
-      setShowResume(true);
-      // Told to the parent rather than derived there: the page owns the
-      // breadcrumb on the standalone route, so it needs both the fact that the
-      // resume is open and a way to close it from the candidate crumb.
-      onResumeViewChange?.(true, closeResume);
+      setPreviewResumeId(id);
     } catch (err: any) {
       // A linked resume that has since been deleted 404s — that's "not
       // available", not a transient failure. resumeService rethrows a plain
       // Error carrying only the backend detail, so the message is what's left.
       if (err?.response?.status === 404 || /not found/i.test(err?.message || '')) {
-        openResumeUnavailable();
+        markResumeUnavailable();
       } else {
         console.error('[CandidateResultDetails] Failed to load resume:', err);
         toast.error('Could not load the resume. Please try again.');
@@ -1163,92 +1156,6 @@ export default function CandidateResultDetails({
     );
   }
 
-  // Resume view — a page of its own rather than an overlay, so it gets a real
-  // breadcrumb trail ending in "Resume". Returned early instead of wrapping the
-  // result body, which is a thousand lines of JSX further down.
-  //
-  // The breadcrumb is only rendered here when this component owns one (the
-  // embedded JobDetailView case). On the standalone route the page above owns
-  // it and is told about the resume view through onResumeViewChange.
-  if (showResume) {
-    const resumeBody = resumeUnavailable ? (
-      <TabEmptyState
-        icon={FileText}
-        title="Resume Not Available"
-        description={resumeEmailMismatch
-          ? RESUME_EMAIL_MISMATCH_MESSAGE
-          : invitedFromResume
-          ? 'No resume was found for this candidate.'
-          : 'This candidate was invited via direct email, so no resume is linked to this assessment.'}
-        action={
-          <button type="button" onClick={closeResume} className={TAB_EMPTY_ACTION_CLASS}>
-            <ChevronLeft className="w-4 h-4" /> Back to Results
-          </button>
-        }
-      />
-    ) : isLoadingResume || !resumeDetail ? (
-      /* Mirrors the ResumeDetailView document that replaces it: a header
-         (avatar + name/subtitle) then a stack of full-width content lines. */
-      <div className="space-y-6">
-        <div className="flex items-start gap-4">
-          <Skeleton className="w-16 h-16 rounded-full flex-shrink-0" />
-          <div className="flex-1 min-w-0 space-y-2">
-            <Skeleton className="h-6 w-2/3" />
-            <Skeleton className="h-4 w-1/2" />
-            <div className="flex gap-2">
-              <Skeleton className="h-5 w-20 rounded-full" />
-              <Skeleton className="h-5 w-24 rounded-full" />
-            </div>
-          </div>
-        </div>
-        {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="rounded-xl border border-gray-100 p-4 sm:p-6 space-y-3">
-            <Skeleton className="h-5 w-40" />
-            <Skeleton className="h-3.5 w-full" />
-            <Skeleton className="h-3.5 w-5/6" />
-            <Skeleton className="h-3.5 w-4/6" />
-          </div>
-        ))}
-      </div>
-    ) : (
-      <ResumeDetailView
-        embedded
-        resume={resumeDetail}
-        onClose={closeResume}
-      />
-    );
-
-    // Standalone route: the page above already supplies the centred
-    // max-w-[1400px] card, its p-4 md:p-8 and the breadcrumb, so the resume is
-    // returned bare. Wrapping it again is what previously double-padded it and
-    // painted a slate-50 block inside the white card.
-    if (!breadcrumbItems || breadcrumbItems.length === 0) return resumeBody;
-
-    // Embedded host (JobDetailView) renders this component as the whole page,
-    // so the shell has to come from here. Same measurements as the
-    // resume-scoring candidate page: max-w-[1400px], p-4 md:p-8, my-4 md:my-5,
-    // and mb-4 md:mb-6 under the breadcrumb.
-    return (
-      <main className="flex-1 overflow-x-clip bg-slate-50">
-        <div className="mx-auto w-full max-w-[1400px]">
-          <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 border border-gray-200 dark:border-slate-700">
-            <PageBreadcrumb
-              className="mb-4 md:mb-6"
-              items={[
-                ...breadcrumbItems.slice(0, -1),
-                // onClick, not href: the candidate crumb points at the route
-                // we're already on, which a link cannot re-trigger.
-                { ...breadcrumbItems[breadcrumbItems.length - 1], href: undefined, onClick: closeResume },
-                { label: 'Resume' },
-              ]}
-            />
-            {resumeBody}
-          </div>
-        </div>
-      </main>
-    );
-  }
-
 
   /* The Export PDF download's name: "JD-001 - Python Developer - John Doe -
      2026-09-28.pdf". Only the name is built here; the file is the backend's.
@@ -1383,6 +1290,14 @@ export default function CandidateResultDetails({
                 // Spinner while the load-time check runs, so the button doesn't
                 // look clickable and then flip to disabled.
                 <ViewResumeButton onClick={handleViewResume} loading />
+              )}
+              {previewResumeId && (
+                <ResumeTextPreviewModal
+                  resumeId={previewResumeId}
+                  title={detailedResult?.candidate_name || 'Resume'}
+                  subtitle={detailedResult?.candidate_email || undefined}
+                  onClose={() => setPreviewResumeId(null)}
+                />
               )}
               {/* Export (PDF) — the same single-candidate export that used to
                   sit in a bar of its own above, now next to View Resume so the
@@ -1573,13 +1488,15 @@ export default function CandidateResultDetails({
           </div>
         </div>
 
-        {/* Detail layout: a horizontal pill tab bar (was a vertical sidebar
-            rail) above the selected content. Shared `tabPill` chrome; danger
-            tabs flip to solid red when active. */}
-        <div className="space-y-3 sm:space-y-4">
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
-          <div className="p-2 sm:p-3">
-            <div className="flex flex-wrap items-center gap-2">
+        {/* Detail layout — the same as the AI Interview candidate result page
+            (CandidateResultsView): desktop (lg+) a sticky vertical rail on the
+            left with the content on the right; tablet/mobile a wrapping
+            horizontal pill bar above it. Shared `tabPill` chrome; danger tabs
+            flip to solid red when active. top-12 clears the sticky breadcrumb. */}
+        <div className="space-y-3 sm:space-y-4 lg:space-y-0 lg:grid lg:grid-cols-[210px_minmax(0,1fr)] lg:items-start lg:gap-6">
+          <div className="lg:sticky lg:top-12 lg:self-start bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+          <nav className="p-2 sm:p-3" aria-label="Candidate result sections">
+            <div className="flex flex-wrap items-center gap-2 lg:flex-col lg:flex-nowrap lg:items-stretch lg:gap-1.5">
               {detailTabs.map(tab => {
                 const isActive = currentDetailTab === tab.id;
                 return (
@@ -1587,7 +1504,7 @@ export default function CandidateResultDetails({
                     key={tab.id}
                     onClick={() => handleDetailTabClick(tab)}
                     aria-current={isActive ? 'page' : undefined}
-                    className={
+                    className={`${
                       tab.danger
                         ? `inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs sm:text-sm whitespace-nowrap transition-all ${
                             isActive
@@ -1595,16 +1512,26 @@ export default function CandidateResultDetails({
                               : 'bg-destructive-subtle/50 text-gray-600 dark:text-slate-300 hover:bg-destructive-subtle hover:text-destructive'
                           }`
                         : `${tabPill(isActive)} whitespace-nowrap`
-                    }
+                    } lg:flex lg:w-full lg:gap-2 lg:px-3 lg:py-2.5 lg:text-left lg:whitespace-normal lg:shadow-none ${
+                      isActive
+                        ? tab.danger
+                          ? 'lg:bg-destructive-subtle lg:text-destructive lg:font-medium lg:ring-1 lg:ring-destructive-line'
+                          : 'lg:bg-brand-blue/5 lg:text-brand-blue lg:font-medium lg:ring-1 lg:ring-brand-blue/20'
+                        : 'lg:bg-transparent lg:text-gray-600 lg:dark:text-slate-400 lg:hover:bg-brand-blue/5 lg:hover:text-brand-blue'
+                    }`}
                   >
-                    <span className="inline-flex items-center gap-1.5">
+                    <span className="inline-flex items-center gap-1.5 lg:gap-2 lg:min-w-0 lg:flex-1">
                       <tab.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
                       <span className="leading-snug">{tab.label}</span>
                     </span>
                     {typeof tab.count === 'number' && (
                       <span className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-medium ${
                         isActive
-                          ? 'bg-white/20 text-white'
+                          // Solid pill on tablet/mobile; the desktop rail's
+                          // active row is light, so the badge reverts there.
+                          ? tab.danger && tab.count > 0
+                            ? 'bg-white/20 text-white lg:bg-destructive-subtle lg:text-destructive lg:ring-1 lg:ring-destructive-line'
+                            : 'bg-white/20 text-white lg:bg-slate-100 lg:text-slate-500 lg:ring-1 lg:ring-slate-200'
                           : tab.danger && tab.count > 0
                             ? 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line'
                             : 'bg-slate-100 text-gray-600'
@@ -1616,7 +1543,7 @@ export default function CandidateResultDetails({
                 );
               })}
             </div>
-          </div>
+          </nav>
           </div>
 
           <div ref={detailContentRef} className="min-w-0 overflow-x-auto scroll-mt-24">
@@ -1773,14 +1700,12 @@ export default function CandidateResultDetails({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                 {/* Interview Strength */}
                 {detailedResult.candidate_insights.interview_strength && (
-                  <div className="bg-success-subtle rounded-xl p-4 border border-success-line ring-1 ring-success-line">
+                  <div className="bg-white dark:bg-slate-900 rounded-xl p-4 border border-gray-200 dark:border-slate-700">
                     <h3 className="text-success-strong font-medium mb-3 flex items-center gap-2">
                       <CheckCircle className="w-4 h-4" />
                       Interview Strength
                     </h3>
-                    <p className="text-sm text-success">
-                      {detailedResult.candidate_insights.interview_strength}
-                    </p>
+                    <InsightPoints text={detailedResult.candidate_insights.interview_strength} mode="sentences" markerClass="marker:text-success" />
                   </div>
                 )}
 
@@ -1791,9 +1716,7 @@ export default function CandidateResultDetails({
                       <AlertCircle className="w-4 h-4" />
                       Interview Weakness
                     </h3>
-                    <p className="text-sm text-gray-700">
-                      {detailedResult.candidate_insights.interview_weakness}
-                    </p>
+                    <InsightPoints text={detailedResult.candidate_insights.interview_weakness} mode="sentences" markerClass="marker:text-brand-orange-deep" />
                   </div>
                 )}
 
@@ -1804,9 +1727,7 @@ export default function CandidateResultDetails({
                       <FileText className="w-4 h-4" />
                       Interview Training Modules
                     </h3>
-                    <p className="text-sm text-gray-700">
-                      {detailedResult.candidate_insights.interview_training_modules}
-                    </p>
+                    <InsightPoints text={detailedResult.candidate_insights.interview_training_modules} mode="list" markerClass="marker:text-brand-blue" />
                   </div>
                 )}
 
@@ -1817,9 +1738,7 @@ export default function CandidateResultDetails({
                       <Briefcase className="w-4 h-4" />
                       Interview Training Suggestion
                     </h3>
-                    <p className="text-sm text-gray-700">
-                      {detailedResult.candidate_insights.interview_training_suggestion}
-                    </p>
+                    <InsightPoints text={detailedResult.candidate_insights.interview_training_suggestion} mode="list" markerClass="marker:text-brand-cyan" />
                   </div>
                 )}
               </div>
@@ -2217,6 +2136,22 @@ export default function CandidateResultDetails({
                               q => _textTypes.has(String(q.question_type || '').toLowerCase()),
                             ).length;
                             const showBreakdown = round.round_type !== 'coding';
+                            // Language the candidate coded in. The result type
+                            // doesn't declare one yet, so read the likely fields
+                            // off the coding answers, then the attempt's pick,
+                            // then an assessment configured with a single
+                            // language. Nothing found → no pill.
+                            const codingLanguage: string | null = round.round_type === 'coding' ? (() => {
+                              for (const q of questionsForRound as any[]) {
+                                const l = q.language ?? q.candidate_code_language ?? q.programming_language;
+                                if (typeof l === 'string' && l.trim()) return l.trim();
+                              }
+                              const chosen = (detailedResult as any)?.chosen_coding_language;
+                              if (typeof chosen === 'string' && chosen.trim()) return chosen.trim();
+                              const configured = assessmentMeta?.coding_languages;
+                              return Array.isArray(configured) && configured.length === 1 ? String(configured[0]) : null;
+                            })() : null;
+                            const codingLanguageLabel = codingLanguage ? logoLabelForId(codingLanguage) : null;
                             return (
                               <p className="text-sm text-gray-600 mt-1">
                                 {questionsForRound.length} question{questionsForRound.length !== 1 ? 's' : ''}
@@ -2231,6 +2166,15 @@ export default function CandidateResultDetails({
                                     </>
                                   )}
                                 </span>
+                                {codingLanguageLabel && (
+                                  <span
+                                    className="inline-flex items-center gap-1.5 ml-2 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-gray-700 ring-1 ring-slate-200 align-middle"
+                                    title="Language the candidate coded in"
+                                  >
+                                    <LanguageLogo language={codingLanguageLabel} size="sm" />
+                                    {codingLanguageLabel}
+                                  </span>
+                                )}
                               </p>
                             );
                           })()}
@@ -2536,7 +2480,7 @@ export default function CandidateResultDetails({
                                       <div>
                                         <div className="flex items-center gap-2 mb-3">
                                           <div className="w-8 h-8 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
-                                            <User className="w-4 h-4 text-brand-blue" />
+                                            <Menu className="w-4 h-4 text-brand-blue" />
                                           </div>
                                           <div className="text-sm font-medium text-gray-800">OPTIONS</div>
                                         </div>
@@ -2862,13 +2806,11 @@ export default function CandidateResultDetails({
                 {/* Recording Tab Content */}
                 {activeQuestionTab === 'recording' && (
                   <div className="space-y-4 sm:space-y-6">
-                    <div className="pb-3 sm:pb-4 border-b border-gray-100">
-                      <h2 className="text-base sm:text-lg font-semibold text-gray-900">Recording</h2>
-                      <p className="text-xs sm:text-sm text-gray-500">Webcam and entire-screen recordings captured during the assessment.</p>
-                    </div>
                     <RecordingPlayer
                       candidate={candidateRecording}
                       screen={screenRecording}
+                      // Same name as the AI Interview result page's toggle.
+                      screenLabel="Interview View"
                       recordId={candidateId}
                       recordedAt={detailedResult.started_at || detailedResult.completed_at}
                       dateLabel="Assessment Date"
