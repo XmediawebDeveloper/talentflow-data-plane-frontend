@@ -14,10 +14,10 @@
  * severity comes from the backend-recomputed `severity` on each record.
  */
 
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   ShieldAlert, ShieldCheck, Users, Eye, Camera, Clipboard,
-  Play, ChevronDown, ChevronRight, AudioLines, Smartphone, QrCode,
+  Play, ChevronDown, ChevronRight, ChevronUp, AudioLines, Smartphone, QrCode,
   X, Download,
 } from 'lucide-react';
 import api from '@/lib/services/api';
@@ -323,9 +323,9 @@ export default function IntegrityCheckTab({
         if (off == null) return null;
         const rs = recruiterSeverity(v);
         if (rs === 'advisory') return null;
-        return { pct: Math.min(98, Math.max(2, (off / durationSec) * 100)), tone: SEV_TONE[rs], off };
+        return { pct: Math.min(98, Math.max(2, (off / durationSec) * 100)), tone: SEV_TONE[rs], off, label: labelOfViolation(v) };
       })
-      .filter((m): m is { pct: number; tone: Tone; off: number } => m != null)
+      .filter((m): m is { pct: number; tone: Tone; off: number; label: string } => m != null)
       .sort((a, b) => a.pct - b.pct);
   }, [violations, startTs, durationSec]);
 
@@ -333,6 +333,13 @@ export default function IntegrityCheckTab({
 
   // Filter state for the event log
   const [filter, setFilter] = useState<'all' | CategoryKey>('all');
+  const eventLogRef = useRef<HTMLDivElement>(null);
+  // A "What we found" chip filters the Event log to its category and
+  // scrolls there.
+  const showInEventLog = (category: CategoryKey) => {
+    setFilter(category);
+    eventLogRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const toggle = (t: string) => setExpanded(prev => {
     const n = new Set(prev); n.has(t) ? n.delete(t) : n.add(t); return n;
@@ -346,6 +353,16 @@ export default function IntegrityCheckTab({
       .filter(c => c.count > 0),
   ];
   const shownGroups = filter === 'all' ? groups : groups.filter(g => g.category === filter);
+  // Event log layout: grouped by type (default) or every occurrence in time order.
+  const [logView, setLogView] = useState<'type' | 'time'>('type');
+  const chronoRows = useMemo(() => shownGroups
+    .flatMap(g => g.records.filter(r => r.timestamp).map(r => ({ g, r })))
+    .sort((a, b) => (a.r.timestamp ?? '').localeCompare(b.r.timestamp ?? '')),
+  [shownGroups]);
+  // Quality signals (advisory) don't count, so their card starts collapsed.
+  const [showAdvisory, setShowAdvisory] = useState(false);
+  // Expanded rows list at most this many occurrences.
+  const OCCURRENCE_LIMIT = 100;
 
   const seekOffset = (ts?: string) => {
     const off = offsetSeconds(ts, startTs);
@@ -428,16 +445,45 @@ export default function IntegrityCheckTab({
                     <div className="text-2xs uppercase tracking-wide text-gray-400 mt-1">{key === 'advisory' ? 'hints' : 'flags'}</div>
                   </div>
                 </div>
+                {key === 'advisory' && (
+                  <div className="flex justify-center -mt-2 pb-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowAdvisory(o => !o)}
+                      aria-expanded={showAdvisory}
+                      aria-label={showAdvisory ? 'Hide quality signals' : 'Show quality signals'}
+                      title={showAdvisory ? 'Hide' : 'Show'}
+                      className="p-1 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                    >
+                      {showAdvisory ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                    </button>
+                  </div>
+                )}
+                {(key !== 'advisory' || showAdvisory) && (
                 <div className="flex flex-wrap gap-2 px-4 pb-3.5 pl-16">
-                  {cg.map(g => (
+                  {cg.map(g => key === 'advisory' ? (
+                    // No Advisory filter in the Event log, so nothing to jump to.
                     <span key={g.key} className="inline-flex items-center gap-2 text-xs px-2.5 py-1.5 rounded-lg bg-slate-50 text-gray-600 ring-1 ring-gray-100">
                       <span className="font-semibold text-gray-800">{g.label}</span>
                       <span className="tabular-nums text-gray-500">{g.count}×</span>
                       <ConfidenceTag record={g.records[0]} />
                     </span>
+                  ) : (
+                    <button
+                      key={g.key}
+                      type="button"
+                      onClick={() => showInEventLog(key)}
+                      title={`Show ${CATEGORIES[key].title.toLowerCase()} in the event log`}
+                      className="inline-flex items-center gap-2 text-xs px-2.5 py-1.5 rounded-lg bg-slate-50 text-gray-600 ring-1 ring-gray-100 hover:ring-brand-blue/30 hover:bg-brand-blue/5 transition-colors cursor-pointer"
+                    >
+                      <span className="font-semibold text-gray-800">{g.label}</span>
+                      <span className="tabular-nums text-gray-500">{g.count}×</span>
+                      <ConfidenceTag record={g.records[0]} />
+                    </button>
                   ))}
                 </div>
-                {key === 'advisory' && (
+                )}
+                {key === 'advisory' && showAdvisory && (
                   <p className="px-4 pb-3.5 pl-16 text-2xs text-gray-400 italic">
                     Kept separate from the violation count so the number reflects real integrity flags.
                   </p>
@@ -461,13 +507,23 @@ export default function IntegrityCheckTab({
                   First serious flag
                 </div>
               )}
-              {timelineMarks.map((m, i) => (
-                <div key={i}
-                  className={`absolute top-9 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-white ${TONE_DOT[m.tone]} ${m.tone === 'critical' ? 'w-3 h-3' : 'w-2.5 h-2.5'}`}
-                  style={{ left: `${m.pct}%` }}
-                  title={`${SEV_LABEL[toneToSev(m.tone)]} · ${formatOffset(m.off)}`}
-                />
-              ))}
+              {timelineMarks.map((m, i) => {
+                const tip = `${m.label} · ${SEV_LABEL[toneToSev(m.tone)]} · ${formatOffset(m.off)}`;
+                const dot = `absolute top-9 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-white ${TONE_DOT[m.tone]} ${m.tone === 'critical' ? 'w-3 h-3' : 'w-2.5 h-2.5'}`;
+                // With a recording, a dot jumps to that moment (same as the
+                // Event log's time links).
+                return hasRecording ? (
+                  <button key={i} type="button"
+                    onClick={() => onJumpToRecording(m.off)}
+                    className={`${dot} cursor-pointer hover:scale-150 hover:z-10 transition-transform`}
+                    style={{ left: `${m.pct}%` }}
+                    title={`${tip} — click to watch`}
+                    aria-label={`Watch ${m.label} at ${formatOffset(m.off)}`}
+                  />
+                ) : (
+                  <div key={i} className={dot} style={{ left: `${m.pct}%` }} title={tip} />
+                );
+              })}
             </div>
             <div className="flex justify-between text-2xs text-gray-400 tabular-nums mx-1.5">
               <span>0:00</span>
@@ -483,9 +539,9 @@ export default function IntegrityCheckTab({
       )}
 
       {/* ── EVENT LOG ───────────────────────────────────────────────────── */}
-      <div>
+      <div ref={eventLogRef} className="scroll-mt-24">
         <h3 className="text-sm font-semibold text-gray-700 mb-3 tracking-tight">Event log</h3>
-        <div className="flex flex-wrap gap-2 mb-3">
+        <div className="flex flex-wrap items-center gap-2 mb-3">
           {filterChips.map(c => (
             <button key={c.key} onClick={() => setFilter(c.key)}
               className={`text-xs px-3 py-1.5 rounded-lg ring-1 transition-colors ${
@@ -496,6 +552,27 @@ export default function IntegrityCheckTab({
               {c.label} <span className="tabular-nums font-semibold">{c.count}</span>
             </button>
           ))}
+          <div className="relative inline-grid grid-cols-2 ml-auto bg-slate-100 rounded-lg p-0.5 ring-1 ring-slate-200">
+            <span
+              aria-hidden
+              className={`absolute top-0.5 bottom-0.5 left-0.5 w-[calc(50%-0.125rem)] rounded-md bg-white shadow-sm ring-1 ring-brand-blue/15 transition-transform duration-300 ease-out motion-reduce:transition-none ${
+                logView === 'time' ? 'translate-x-full' : 'translate-x-0'
+              }`}
+            />
+            {(['type', 'time'] as const).map(v => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setLogView(v)}
+                aria-pressed={logView === v}
+                className={`relative z-10 px-3 py-1 text-xs font-medium rounded-md transition-colors duration-300 ${
+                  logView === v ? 'text-brand-blue' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {v === 'type' ? 'By type' : 'By time'}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm overflow-x-auto tf-table-shell">
@@ -503,20 +580,60 @@ export default function IntegrityCheckTab({
               720px is above a phone's viewport, so the one empty cell centred
               across it put the message off-screen behind a scrollbar. */}
           <table className={`w-full text-sm ${shownGroups.length === 0 ? '' : 'min-w-[720px]'}`}>
-            {shownGroups.length > 0 && (
-            <thead className="bg-slate-50 border-b border-gray-100">
+            {(logView === 'type' ? shownGroups.length > 0 : chronoRows.length > 0) && (
+            <thead className="bg-brand-sky border-b border-gray-100">
               <tr>
                 <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide w-8"></th>
                 <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">What happened</th>
                 <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">What we saw</th>
                 <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">When</th>
                 <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Severity</th>
-                <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Times</th>
+                <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">{logView === 'type' ? 'Times' : ''}</th>
               </tr>
             </thead>
             )}
             <tbody className="divide-y divide-gray-100">
-              {shownGroups.map(g => {
+              {logView === 'time' && chronoRows.map(({ g, r }, i) => {
+                const sev = recruiterSeverity(r);
+                const tone = SEV_TONE[sev];
+                const off = offsetSeconds(r.timestamp, startTs);
+                const seek = off != null && hasRecording;
+                return (
+                  <tr key={`t-${g.key}-${i}`} className="hover:bg-brand-blue/[0.02] transition-colors">
+                    <td className="px-4 py-3 align-top text-2xs text-gray-400 tabular-nums">{i + 1}</td>
+                    <td className="px-4 py-3 align-top">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium ${SEV_PILL[tone]}`}>
+                          {CATEGORY_ICON[g.category]}
+                          {labelOfViolation(r)}
+                        </span>
+                        <ConfidenceTag record={r} />
+                      </div>
+                    </td>
+                    <td className="tf-wrap px-4 py-3 align-top text-xs text-gray-600 max-w-[34ch] whitespace-normal break-words">
+                      {describeViolation(r) || <span className="text-gray-300">—</span>}
+                      <EnvironmentVerificationDetail record={r} />
+                    </td>
+                    <td className="px-4 py-3 align-top">
+                      {seek ? (
+                        <button onClick={() => onJumpToRecording(off)}
+                          title="Jump to this moment in the recording"
+                          className="inline-flex items-center gap-1 text-brand-blue hover:underline underline-offset-2 text-xs font-mono">
+                          <Play className="w-3 h-3" />{formatOffset(off)}
+                        </button>
+                      ) : (
+                        <span className="text-xs font-mono text-gray-500">{formatOffset(off)}</span>
+                      )}
+                      <div className="text-2xs text-gray-400 font-mono mt-0.5">{formatClock(r.timestamp)}</div>
+                    </td>
+                    <td className="px-4 py-3 align-top">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${SEV_PILL[tone]}`}>{SEV_LABEL[sev]}</span>
+                    </td>
+                    <td className="px-4 py-3 align-top"></td>
+                  </tr>
+                );
+              })}
+              {logView === 'type' && shownGroups.map(g => {
                 const tone = SEV_TONE[g.severity];
                 const isOpen = expanded.has(g.key);
                 const firstOff = offsetSeconds(g.firstTs, startTs);
@@ -566,7 +683,7 @@ export default function IntegrityCheckTab({
                     {isOpen && g.records
                       .filter(r => r.timestamp)
                       .sort((a, b) => (a.timestamp ?? '').localeCompare(b.timestamp ?? ''))
-                      .slice(0, 100)
+                      .slice(0, OCCURRENCE_LIMIT)
                       .map((r, ri) => {
                         const off = offsetSeconds(r.timestamp, startTs);
                         const seek = off != null && hasRecording;
@@ -594,19 +711,32 @@ export default function IntegrityCheckTab({
                           </tr>
                         );
                       })}
+                    {isOpen && (() => {
+                      const hidden = g.records.filter(r => r.timestamp).length - OCCURRENCE_LIMIT;
+                      return hidden > 0 ? (
+                        <tr className="bg-slate-50/40">
+                          <td className="px-4 py-2"></td>
+                          <td colSpan={5} className="px-4 py-2 pl-10 text-xs text-gray-400 italic">
+                            +{hidden} more not listed — switch to “By time” to see every occurrence.
+                          </td>
+                        </tr>
+                      ) : null;
+                    })()}
                   </Fragment>
                 );
               })}
-              {shownGroups.length === 0 && (
+              {(logView === 'type' ? shownGroups.length === 0 : chronoRows.length === 0) && (
                 <tr><td colSpan={6} className="p-0"><div className={`${TABLE_EMPTY_PANEL_CLASS} text-sm text-gray-400`}>No events in this category.</div></td></tr>
               )}
             </tbody>
           </table>
         </div>
         <p className="text-2xs text-gray-400 mt-2.5">
-          Grouped by type. {hasRecording
-            ? 'Each time links to that moment in the recording; expand a row to see every occurrence.'
-            : 'Expand a row to see every occurrence.'}
+          {logView === 'type'
+            ? <>Grouped by type. {hasRecording
+                ? 'Each time links to that moment in the recording; expand a row to see every occurrence.'
+                : 'Expand a row to see every occurrence.'}</>
+            : <>Every occurrence in the order it happened.{hasRecording ? ' Each time links to that moment in the recording.' : ''}</>}
         </p>
       </div>
 
