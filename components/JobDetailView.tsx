@@ -34,7 +34,7 @@ import ScoredResumesTable, {
 } from './ScoredResumesTable';
 import VersionInviteDialog from './talent-match-invite/VersionInviteDialog';
 import AIInterviewShareQueue from './talent-match-invite/AIInterviewShareQueue';
-import type { InviteKind } from './talent-match-invite/inviteVersions';
+import type { InviteCandidate, InviteKind } from './talent-match-invite/inviteVersions';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -1000,7 +1000,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     configs: AIInterviewResponse[];
     candidates: { name: string; email: string; resumeId?: string }[];
   } | null>(null);
-  const [inviteDialog, setInviteDialog] = useState<{ kind: InviteKind; candidates: MatchedCandidate[] } | null>(null);
+  const [inviteDialog, setInviteDialog] = useState<{ kind: InviteKind; candidates: InviteCandidate[] } | null>(null);
   // AI Interview Version History dialog (history icon on the AI Interview heading).
   const [showAIVersionHistory, setShowAIVersionHistory] = useState(false);
   // Assessment Version History dialog (history icon on the Assessment heading).
@@ -4326,6 +4326,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               jobId={job.id}
               jobCode={job.job_id}
               availableUnits={15}
+              /* Actions ▸ AI Assessment / AI Interview Invite: the AI Talent
+                 Match tab's version popups, with the ticked candidates. */
+              onOpenInviteDialog={(kind, invitees) => setInviteDialog({ kind, candidates: invitees })}
               initialMatchStatus={scoredResumesMatchFilter}
               // Same gate and target as the Score Resumes quick action — opens
               // "Select Applicants to Score" in place on this page.
@@ -4392,6 +4395,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                 canDownloadPDF={isTenantAdmin || (user?.permissions?.canDownloadAssessmentPDF ?? false)}
                 canBatchDownload={isTenantAdmin || hasPermissionCode('assessments:batch_download')}
                 formatCandidateName={formatCandidateFirstName}
+                /* Actions ▸ Create / Send Assessment: the AI Talent Match
+                   tab's version popup, with the ticked candidates. */
+                onOpenInviteDialog={(invitees) => setInviteDialog({ kind: 'assessment', candidates: invitees })}
               />
             );
           })()}
@@ -4477,6 +4483,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               jdTitle={aiInterviewConfig.jd_title || ''}
               onBack={() => setActiveTab('overview')}
               onViewCandidate={handleAIInterviewCandidateClick}
+              /* Actions ▸ Create / Send AI Interview: the AI Talent Match
+                 tab's version popup, with the ticked candidates. */
+              onOpenInviteDialog={(invitees) => setInviteDialog({ kind: 'interview', candidates: invitees })}
             />
           ) : (
             /* No interview exists for this JD yet. Create has to stay reachable
@@ -4520,7 +4529,17 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             } catch { /* ignore */ }
             router.push(`/recruitment/resume-view/${candidate.resumeId}`);
           }}
-          onOpenInviteDrawer={(kind, selected) => setInviteDialog({ kind, candidates: selected })}
+          onOpenInviteDrawer={(kind, selected) => setInviteDialog({
+            kind,
+            candidates: selected.map((c) => ({
+              id: c.resumeId,
+              name: c.name,
+              email: c.email,
+              phone: c.phone,
+              rating: c.rank,
+              resumeId: c.resumeId,
+            })),
+          })}
         />
       )}
 
@@ -5174,14 +5193,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           jdCode={job.job_id}
           jdTitle={job.title}
           jobVersionNumber={job.versionNumber && job.versionNumber > 0 ? job.versionNumber : undefined}
-          candidates={inviteDialog.candidates.map((c) => ({
-            id: c.resumeId,
-            name: c.name,
-            email: c.email,
-            phone: c.phone,
-            rating: c.rank,
-            resumeId: c.resumeId,
-          }))}
+          candidates={inviteDialog.candidates}
           disabledReason={
             !(inviteDialog.kind === 'assessment' ? features.assessment : features.ai_interview)
               ? `${inviteDialog.kind === 'assessment' ? 'Assessments are' : 'AI Interviews are'} not enabled for your workspace.`
@@ -5682,10 +5694,21 @@ function AIMatchTabContent({
               />
             </>
           }
-          /* Run AI Match is intentionally NOT in the toolbar: once there are
-             match results, the recruiter shouldn't see a persistent "run" CTA.
-             It appears only in the empty state (candidates.length === 0, the
-             TabEmptyState above), i.e. when the results table is empty. */
+          /* Run Match — right beside More Filters, only while nothing is
+             ticked: a selection swaps it out for the Actions menu, and
+             clearing the selection brings it back. Same permission gate and
+             handler as the empty state's Run AI Match. */
+          afterFiltersActions={canRunAiMatch && selectedIds.size === 0 ? (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={onRunMatch}
+              icon={<Sparkles className="w-4 h-4" />}
+              className="h-9 whitespace-nowrap"
+            >
+              Run Match
+            </Button>
+          ) : undefined}
           /* No in-toolbar count label — the tab navigation's own badge already
              shows the candidate count, so a "18 candidates" pill here only
              duplicated it (and the siblings don't carry one). */
