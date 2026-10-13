@@ -663,13 +663,22 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
           // retried once visible), and degrade only after SLOW_WINDOWS_TO_DEGRADE
           // slow windows IN A ROW. A genuinely weak device still fails every
           // window and still falls back.
+          //
+          // 2026-10-13 — 3D vs 2D is decided ONCE, before the interview, by
+          // the device tier (deviceCapability.ts: cores / RAM / benchmark).
+          // This watchdog was overriding that decision mid-interview: it
+          // measures the WHOLE page's frame rate, and the live interview
+          // (face detection, recording relay, VAD) routinely pulls a capable
+          // machine under 20fps, so candidates saw 3D Bina turn into 2D a few
+          // seconds in. It is now only an emergency brake for a page that is
+          // effectively frozen, not a second "is 3D affordable" decision.
           (() => {
             const WARMUP_DELAY_MS = 4000;      // let interview start-up settle
             const SAMPLE_MS = 2000;            // one measurement window
             const RETRY_GAP_MS = 3000;         // pause before re-measuring after a slow window
             const WARMUP_FRAMES = 5;           // drop the first few frames of a window
-            const MIN_AVG_FPS = 20;            // below this the device is unviable for 3D
-            const SLOW_WINDOWS_TO_DEGRADE = 2; // consecutive slow windows before degrading
+            const MIN_AVG_FPS = 8;             // below this the page is close to frozen
+            const SLOW_WINDOWS_TO_DEGRADE = 3; // consecutive frozen windows before degrading
             let slowWindows = 0;
 
             const isVisible = () => typeof document === 'undefined' || document.visibilityState === 'visible';

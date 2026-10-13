@@ -147,6 +147,21 @@ const VOICE_BAND_MIN_RATIO = 0.35;
 // gap between backend polls never reads as "no longer speaking".
 const TRANSCRIPT_ACTIVITY_WINDOW_MS = 4000;
 
+// One speaking rate for EVERY line Bina says with the browser voice. Q1 used
+// 0.9 and Q2 0.95, so the two questions both sounded and streamed at visibly
+// different speeds.
+const BINA_TTS_RATE = 0.95;
+
+// Chrome silently stops a SpeechSynthesisUtterance after ~15s on its network
+// voices ("Google UK English Female" — our first pick) and then never fires
+// onend. The greeting + Q1 script is ~30s, so Bina went quiet mid-sentence,
+// the text froze, and the mic never opened — the practice looked hung. Short
+// per-sentence utterances stay well under that limit.
+function splitIntoSpeechChunks(text: string): string[] {
+  const parts = text.match(/[^.!?]+[.!?]+["'”’]?\s*|[^.!?]+$/g) ?? [text];
+  return parts.filter((p) => p.trim().length > 0);
+}
+
 // Format seconds → "M:SS" for the interview-style countdown timer.
 function fmtMMSS(totalSeconds: number): string {
   const s = Math.max(0, Math.floor(totalSeconds));
@@ -410,7 +425,7 @@ export default function StepSamplePractice({
   const panelRef = useRef<HTMLDivElement>(null);
   // Auto-scroll targets: the chat card (on Start), the control bar (while
   // answering / "Are you done?"), and the footer's Start Interview button
-  // (after "Review my practice first").
+  // (after the practice-complete popup is closed).
   const chatCardRef = useRef<HTMLDivElement>(null);
   const controlBarRef = useRef<HTMLDivElement>(null);
   const startInterviewRef = useRef<HTMLButtonElement>(null);
@@ -476,6 +491,18 @@ export default function StepSamplePractice({
   const streamRafRef = useRef<number | null>(null);
   const streamStartRef = useRef(0);
   const streamDurationRef = useRef(0);
+  // Furthest character the voice has actually reached (word-boundary events /
+  // finished sentences) — the reveal never trails it and re-paces to it.
+  const streamBoundaryRef = useRef(0);
+  const wordBoundarySeenRef = useRef(false);
+  const lastRevealedRef = useRef(0);
+  // Bumped on every new Bina line; callbacks from an older line are ignored.
+  const ttsGenRef = useRef(0);
+  // Per-take: did the mic hear anything voice-like? Gates Whisper so silence
+  // is never sent (Whisper invents text from silence — see whisperFilter.ts).
+  const speechHeardRef = useRef(false);
+  const speechHeardMsRef = useRef(0);
+  const cameraBoxRef = useRef<HTMLDivElement>(null);
   const periodicTranscriptionRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const periodicTranscriptionInFlightRef = useRef(false);
   const recordingStartTimeRef = useRef<number | null>(null);
@@ -550,6 +577,12 @@ export default function StepSamplePractice({
         analyserRef.current = analyser;
 
         const dataArray = new Uint8Array(analyser.fftSize);
+        // Only the small level bar needs this, but setAudioLevel on EVERY
+        // animation frame re-rendered this whole ~3000-line step 60x/second
+        // for the entire practice — on slower laptops the page froze. The ref
+        // stays per-frame (micLow reads it); React state is ~12fps, quantized.
+        let lastPushAt = 0;
+        let lastPushed = -1;
         const tick = () => {
           if (!analyserRef.current) return;
           analyserRef.current.getByteTimeDomainData(dataArray);
@@ -559,7 +592,15 @@ export default function StepSamplePractice({
             sum += v * v;
           }
           const rms = Math.sqrt(sum / dataArray.length);
-          setAudioLevel(Math.min(rms * 5, 1));
+          const level = Math.min(rms * 5, 1);
+          audioLevelRef.current = level;
+          const now = performance.now();
+          const q = Math.round(level * 20) / 20;
+          if (now - lastPushAt >= 80 && q !== lastPushed) {
+            lastPushAt = now;
+            lastPushed = q;
+            setAudioLevel(q);
+          }
           animationFrameRef.current = requestAnimationFrame(tick);
         };
         tick();
@@ -800,17 +841,43 @@ export default function StepSamplePractice({
   // stops — that snaps every bubble back to fully-shown, so a pace mismatch
   // (TTS running faster/slower than the estimate) never leaves text stuck
   // mid-word.
+  //
+  // The voice's real position (streamBoundaryRef — word boundaries / finished
+  // sentences) re-paces the clock and is a floor, so the text never runs
+  // backwards. Before, onboundary pushed the count forward and the next frame
+  // pulled it back to the estimate, so lines jittered — badly for the first
+  // line (uncalibrated estimate), barely for later ones: Q1 and Q2 streamed
+  // visibly differently.
   const startStreamingReveal = useCallback((text: string, durationMs: number) => {
     stopStreamingReveal();
     setStreaming({ full: text });
     setRevealedCount(0);
+    lastRevealedRef.current = 0;
+    streamBoundaryRef.current = 0;
     streamStartRef.current = performance.now();
     streamDurationRef.current = Math.max(300, durationMs);
+    wordBoundarySeenRef.current = false;
+    let pacedAt = 0;
     const tick = () => {
       const elapsed = performance.now() - streamStartRef.current;
+      const boundary = streamBoundaryRef.current;
+      // Re-anchor the clock to the voice's real speed each time it reports a
+      // new position (faster or slower than the estimate).
+      if (boundary > pacedAt && elapsed > 800) {
+        pacedAt = boundary;
+        streamDurationRef.current = Math.max(300, (elapsed * text.length) / boundary);
+      }
       const ratio = Math.min(1, elapsed / streamDurationRef.current);
-      setRevealedCount(Math.floor(text.length * ratio));
-      if (ratio < 1) streamRafRef.current = requestAnimationFrame(tick);
+      const linear = Math.floor(text.length * ratio);
+      // With word-level events the reveal may lead the voice by a few words
+      // only; voices that report just sentence ends rely on the clock.
+      const capped = wordBoundarySeenRef.current ? Math.min(linear, boundary + 24) : linear;
+      const next = Math.min(text.length, Math.max(lastRevealedRef.current, boundary, capped));
+      if (next !== lastRevealedRef.current) {
+        lastRevealedRef.current = next;
+        setRevealedCount(next);
+      }
+      if (next < text.length) streamRafRef.current = requestAnimationFrame(tick);
     };
     streamRafRef.current = requestAnimationFrame(tick);
   }, [stopStreamingReveal]);
@@ -840,6 +907,104 @@ export default function StepSamplePractice({
     }
     setStreaming(null);
   }, [stopStreamingReveal]);
+
+  // Chrome loads TTS voices asynchronously. Asking early means pickVoice()
+  // already has Bina's voice when Start is clicked, so Q1 isn't spoken in the
+  // system default voice while Q2 gets the preferred one.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    const warm = () => { window.speechSynthesis.getVoices(); };
+    warm();
+    window.speechSynthesis.addEventListener('voiceschanged', warm);
+    return () => window.speechSynthesis.removeEventListener('voiceschanged', warm);
+  }, []);
+
+  const activeTtsTextRef = useRef<string | null>(null);
+
+  /** Every browser-voice line Bina says goes through here, so all of them
+   *  share one voice, one rate and one streaming behaviour. Speaks sentence
+   *  by sentence (Chrome's ~15s cut-off), with a per-sentence watchdog so a
+   *  dropped onend can never leave the practice waiting forever. `onEnd`
+   *  runs exactly once — on finish, error or watchdog — unless a newer line
+   *  replaced this one. Must be called in the click's own task (Brave). */
+  const speakBina = useCallback((
+    text: string,
+    handlers: { onStart?: () => void; onEnd: () => void },
+  ) => {
+    const gen = ++ttsGenRef.current;
+    // A line cut off by this one still ends up fully shown.
+    if (activeTtsTextRef.current && activeTtsTextRef.current !== text) endStreamingReveal(activeTtsTextRef.current);
+    activeTtsTextRef.current = text;
+    const synth = typeof window !== 'undefined' ? window.speechSynthesis : undefined;
+    let finished = false;
+    let chunkTimer: ReturnType<typeof setTimeout> | null = null;
+    const finish = () => {
+      if (finished || gen !== ttsGenRef.current) return;
+      finished = true;
+      if (chunkTimer) clearTimeout(chunkTimer);
+      if (activeTtsTextRef.current === text) activeTtsTextRef.current = null;
+      noteSpeechEnd();
+      endStreamingReveal(text);
+      handlers.onEnd();
+    };
+    if (!synth) { finish(); return; }
+
+    stopBinaClip();
+    synth.cancel();
+    synth.resume();
+    const chunks = splitIntoSpeechChunks(text);
+    const offsets: number[] = [];
+    let pos = 0;
+    for (const c of chunks) {
+      const at = text.indexOf(c, pos);
+      offsets.push(at === -1 ? pos : at);
+      pos = (at === -1 ? pos : at) + c.length;
+    }
+    const voice = pickVoice();
+    let started = false;
+    let current = -1;
+
+    const speakChunk = (i: number) => {
+      if (finished || gen !== ttsGenRef.current) return;
+      if (i >= chunks.length) { finish(); return; }
+      current = i;
+      const u = new SpeechSynthesisUtterance(chunks[i]);
+      u.rate = BINA_TTS_RATE; u.pitch = 1.0; u.volume = 1.0;
+      if (voice) u.voice = voice;
+      const next = () => {
+        if (current !== i || gen !== ttsGenRef.current) return;
+        current = -1;
+        if (chunkTimer) clearTimeout(chunkTimer);
+        streamBoundaryRef.current = Math.max(streamBoundaryRef.current, offsets[i] + chunks[i].length);
+        speakChunk(i + 1);
+      };
+      u.onstart = () => {
+        if (gen !== ttsGenRef.current || started) return;
+        started = true;
+        noteSpeechStart(text, BINA_TTS_RATE);
+        startStreamingReveal(text, estimateSpeechMs(text, BINA_TTS_RATE));
+        handlers.onStart?.();
+      };
+      u.onboundary = (e) => {
+        if (gen !== ttsGenRef.current || typeof e.charIndex !== 'number') return;
+        if (e.name && e.name !== 'word') return;
+        wordBoundarySeenRef.current = true;
+        streamBoundaryRef.current = Math.max(streamBoundaryRef.current, offsets[i] + e.charIndex + (e.charLength || 0));
+      };
+      u.onend = next;
+      // Our own cancel() for a newer line is filtered by the gen check in next().
+      u.onerror = next;
+      utteranceRef.current = u;
+      synth.speak(u);
+      if (chunkTimer) clearTimeout(chunkTimer);
+      chunkTimer = setTimeout(() => {
+        if (current !== i) return;
+        synth.cancel();
+        next();
+      }, estimateSpeechMs(chunks[i], BINA_TTS_RATE) * 2.5 + 3000);
+    };
+    speakChunk(0);
+  }, [stopBinaClip, startStreamingReveal, endStreamingReveal, noteSpeechStart, noteSpeechEnd]);
 
   // How much of `text` to show right now:
   //  - never spoken yet → '' (hidden, until its line actually starts)
@@ -917,21 +1082,8 @@ export default function StepSamplePractice({
 
     // What happens when Bina finishes the question — shared by her recorded
     // voice and the browser voice.
-    const onQuestionStart = () => {
-      cancelPreTurnCountdown();
-      setAiSpeaking(true);
-      const clipEl = clipKey ? clipAudioRef.current[clipKey] : undefined;
-      const clipDurationSec = clipEl && clipReadyRef.current[clipKey as PracticeClipKey] && isFinite(clipEl.duration) && clipEl.duration > 0
-        ? clipEl.duration
-        : null;
-      // 0.9 matches the utterance.rate set in doSpeak below.
-      const durationMs = clipDurationSec ? clipDurationSec * 1000 : estimateSpeechMs(scriptToSpeak, 0.9);
-      if (!clipDurationSec) noteSpeechStart(scriptToSpeak, 0.9);
-      startStreamingReveal(scriptToSpeak, durationMs);
-    };
     const onQuestionEnd = () => {
       setAiSpeaking(false);
-      noteSpeechEnd();
       endStreamingReveal(scriptToSpeak);
       if (!practiceDoneRef.current) {
         // 3-2-1 "Get ready to answer" first, then open the mic (live parity).
@@ -940,7 +1092,13 @@ export default function StepSamplePractice({
     };
 
     if (clipKey && playBinaClip(clipKey, {
-      onStart: onQuestionStart,
+      onStart: () => {
+        cancelPreTurnCountdown();
+        setAiSpeaking(true);
+        const clipEl = clipAudioRef.current[clipKey];
+        const clipMs = clipEl && isFinite(clipEl.duration) && clipEl.duration > 0 ? clipEl.duration * 1000 : estimateSpeechMs(scriptToSpeak, BINA_TTS_RATE);
+        startStreamingReveal(scriptToSpeak, clipMs);
+      },
       onEnd: onQuestionEnd,
       // Refused (autoplay policy): for the opening line the existing
       // autoSpeakBlocked fallback opens the mic; for Repeat nothing played,
@@ -951,90 +1109,12 @@ export default function StepSamplePractice({
       return;
     }
 
-    if (!window.speechSynthesis) {
-      setTtsSupported(false);
-      endStreamingReveal(scriptToSpeak);
-      return;
-    }
-
-    // Cancel any ongoing speech first
-    stopBinaClip();
-    window.speechSynthesis.cancel();
-
-    const doSpeak = (voice: SpeechSynthesisVoice | null) => {
-      // Resume in case the synth engine was paused
-      window.speechSynthesis.resume();
-
-      const utterance = new SpeechSynthesisUtterance(scriptToSpeak);
-      utterance.rate = 0.9;
-      utterance.pitch = 1.0;
-      utterance.volume = 1.0;
-      if (voice) utterance.voice = voice;
-
-      utterance.onstart = onQuestionStart;
-      // When Bina finishes the question, AUTO-OPEN the mic (no manual Start
-      // button) — just like the real interview's "your turn, speak now". Guarded
-      // so the practice-complete sign-off never re-opens the mic.
-      utterance.onend = onQuestionEnd;
-      // Word-boundary events give a tighter sync than the duration estimate
-      // alone where the browser supports them (Chrome); harmless no-op where
-      // it doesn't (Safari/Firefox) — the estimate still drives the reveal.
-      utterance.onboundary = (e) => {
-        if (typeof e.charIndex === 'number') {
-          setRevealedCount((prev) => Math.max(prev, e.charIndex));
-        }
-      };
-      utterance.onerror = (e) => {
-        const err = (e as SpeechSynthesisErrorEvent).error;
-        // 'interrupted'/'canceled' are expected when cancel() is called — not real errors
-        if (err === 'interrupted' || err === 'canceled') return;
-        // 'not-allowed': browser blocked TTS (no user gesture — e.g. auto-speak in Brave)
-        // Don't disable the button; user can still click Play Question manually
-        setAiSpeaking(false);
-        endStreamingReveal(scriptToSpeak);
-      };
-
-      utteranceRef.current = utterance;
-      window.speechSynthesis.speak(utterance);
-    };
-
-    // IMPORTANT: speechSynthesis.speak() MUST be called in the same synchronous task as
-    // the user gesture in Brave. Any setTimeout or async boundary breaks user-gesture context
-    // and Brave rejects with 'not-allowed'.
-    //
-    // Brave fingerprint protection can return an empty getVoices() list — we must NOT wait
-    // for voiceschanged in that case. Instead, call speak() synchronously with null voice
-    // (system default), then upgrade to the preferred voice when voices load.
-    const voices = window.speechSynthesis.getVoices();
-    if (voices.length > 0) {
-      // Voices already available (Brave / most Chromium browsers): call synchronously
-      doSpeak(pickVoice());
-    } else {
-      // Voices not yet available — speak immediately with system default to preserve user-gesture context.
-      // This is critical for Brave where getVoices() may always return [] due to fingerprint protection.
-      doSpeak(null);
-
-      // Upgrade to preferred voice if voiceschanged fires while we're still speaking
-      let upgraded = false;
-      const onVoicesChanged = () => {
-        if (upgraded) return;
-        upgraded = true;
-        window.speechSynthesis.removeEventListener('voiceschanged', onVoicesChanged);
-        const preferred = pickVoice();
-        if (!preferred || !window.speechSynthesis.speaking) return;
-        // Re-speak with better voice (user gesture context no longer needed — TTS is already running)
-        window.speechSynthesis.cancel();
-        doSpeak(preferred);
-      };
-      window.speechSynthesis.addEventListener('voiceschanged', onVoicesChanged);
-      // Cleanup listener if voiceschanged never fires (no memory leak)
-      setTimeout(() => {
-        if (upgraded) return;
-        upgraded = true;
-        window.speechSynthesis.removeEventListener('voiceschanged', onVoicesChanged);
-      }, 3000);
-    }
-  }, [cancelPreTurnCountdown, runPreTurnCountdown, playBinaClip, stopBinaClip, startStreamingReveal, endStreamingReveal, noteSpeechStart, noteSpeechEnd]);
+    if (!window.speechSynthesis) setTtsSupported(false);
+    speakBina(scriptToSpeak, {
+      onStart: () => { cancelPreTurnCountdown(); setAiSpeaking(true); },
+      onEnd: onQuestionEnd,
+    });
+  }, [cancelPreTurnCountdown, runPreTurnCountdown, playBinaClip, speakBina, startStreamingReveal, endStreamingReveal]);
 
   // Keep ref in sync with liveTranscript state (avoids stale-closure issues in callbacks)
   useEffect(() => {
@@ -1073,6 +1153,8 @@ export default function StepSamplePractice({
     const chunks = audioChunksRef.current;
     // Send an earlier first sample so short practice answers still get live text.
     if (chunks.length < 2) return;
+    // Nothing voice-like heard yet → don't hand Whisper silence to "transcribe".
+    if (!speechHeardRef.current) return;
     if (mediaRecorderRef.current?.state !== 'recording') return;
 
     periodicTranscriptionInFlightRef.current = true;
@@ -1117,7 +1199,9 @@ export default function StepSamplePractice({
 
   // ── Live transcription (Web Speech API) ──────────────────────────────────
 
-  const startLiveTranscription = useCallback(() => {
+  // `resume` = continuing the same answer after a mid-answer Repeat: keep the
+  // text recognised so far instead of starting over.
+  const startLiveTranscription = useCallback((resume = false) => {
     // Brave blocks Google's cloud Speech API — skip directly to periodic transcription
     const isBrave = typeof navigator !== 'undefined' && 'brave' in navigator;
     const SpeechRecognition =
@@ -1129,12 +1213,16 @@ export default function StepSamplePractice({
       return;
     }
     setHasLiveTranscript(true);
-    // Some browsers expose SpeechRecognition but do not yield timely interim results.
-    // Keep backend near-live transcription running as a safety net.
-    startPeriodicTranscription();
+    // No Whisper polling alongside Web Speech any more: the live text isn't
+    // displayed while recording, yet it re-uploaded the whole growing answer
+    // every 2.5s, and on a silent mic Whisper's invented text was what the
+    // candidate saw as their "answer". Whisper still runs once on stop, and
+    // takes over here if Web Speech errors out (onerror below).
 
-    webSpeechFinalRef.current = '';
-    setLiveTranscript('');
+    if (!resume) {
+      webSpeechFinalRef.current = '';
+      setLiveTranscript('');
+    }
 
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
@@ -1180,8 +1268,10 @@ export default function StepSamplePractice({
     };
 
     recognition.onend = () => {
-      // Restart if still recording (recognition can time out after silence)
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      // Restart if still recording (recognition can time out after silence).
+      // Only the CURRENT recogniser — a stale one restarting alongside a newer
+      // take meant two recognisers feeding the same transcript.
+      if (recognitionRef.current === recognition && mediaRecorderRef.current?.state === 'recording') {
         try { recognition.start(); } catch { /* ignore */ }
       }
     };
@@ -1284,6 +1374,14 @@ export default function StepSamplePractice({
       return;
     }
 
+    // The mic never heard anything voice-like and the browser recogniser got
+    // nothing either: this take is silence/room noise. Whisper turns that into
+    // made-up sentences, so don't send it at all.
+    if (!speechHeardRef.current && !browserTranscript) {
+      setTranscribeError("We didn't hear you. Check your microphone and try speaking again.");
+      return;
+    }
+
     setIsTranscribing(true);
     setTranscribeError('');
 
@@ -1347,10 +1445,40 @@ export default function StepSamplePractice({
     videoChunksRef.current = [];
   }, [stopLiveTranscription]);
 
+  // Repeat Question mid-answer: Bina reads the question out of the speakers
+  // while the mic is open, and echoCancellation does not reliably cancel the
+  // browser's own speech voice — so her question was recorded and transcribed
+  // as the candidate's answer. Pause the take (audio, video, recogniser) while
+  // she speaks; startRecording resumes it afterwards.
+  const pauseRecordingForBina = useCallback(() => {
+    const mr = mediaRecorderRef.current;
+    if (!mr || mr.state !== 'recording') return;
+    try { mr.pause(); } catch { return; }
+    if (videoRecorderRef.current?.state === 'recording') {
+      try { videoRecorderRef.current.pause(); } catch { /* ignore */ }
+    }
+    if (webSpeechRestartRef.current) { clearInterval(webSpeechRestartRef.current); webSpeechRestartRef.current = null; }
+    const rec = recognitionRef.current;
+    recognitionRef.current = null;
+    if (rec) { try { rec.stop(); } catch { /* ignore */ } }
+  }, []);
+
   const startRecording = useCallback(() => {
     // Guard: don't start if already recording or TTS is still speaking
     if (mediaRecorderRef.current?.state === 'recording') return;
+    // Paused for a mid-answer Repeat (pauseRecordingForBina) → carry on with
+    // the SAME take instead of starting a new one.
+    if (mediaRecorderRef.current?.state === 'paused') {
+      try { mediaRecorderRef.current.resume(); } catch { /* ignore */ }
+      if (videoRecorderRef.current?.state === 'paused') {
+        try { videoRecorderRef.current.resume(); } catch { /* ignore */ }
+      }
+      startLiveTranscription(true);
+      return;
+    }
     if (!mediaStreamRef.current?.active) return;
+    speechHeardRef.current = false;
+    speechHeardMsRef.current = 0;
 
     // Audio-only stream for recording. The track must be LIVE, not merely
     // present: an unplugged mic leaves an 'ended' track sitting in the stream,
@@ -1459,63 +1587,32 @@ export default function StepSamplePractice({
     // event (see the matching note in speakQuestion) — keeps the "Ready"/
     // "Speaking…" badge honest during that startup gap.
     setAiSpeaking(true);
-    // The "start the interview" popup should appear only AFTER Bina finishes
-    // speaking the sign-off — not the instant practice ends. Show it from the
-    // utterance's onend/onerror, with a fallback timer for when TTS is
-    // unavailable/blocked (Brave, no voices) so the popup still appears.
-    const revealPopup = () => setShowStartPopup(true);
+    // The "start the interview" popup appears only AFTER Bina finishes the
+    // sign-off. Every "sign-off is over" path (end, failure, watchdog) funnels
+    // through showOnce, which also reveals the full closing text.
     let shown = false;
-    // Single funnel for every "the sign-off is over" path below (normal end,
-    // playback failure, error, and the safety-net timeouts) — always reveals
-    // the full closing text (nothing's left to stream once we're here) before
-    // showing the popup, so none of those paths can strand it mid-word.
     const showOnce = () => {
-      noteSpeechEnd();
+      setAiSpeaking(false);
       endStreamingReveal(PRACTICE_CLOSING_MESSAGE);
-      if (!shown) { shown = true; revealPopup(); }
-    };
-    const startClosingStream = () => {
-      const clipEl = clipAudioRef.current.closing;
-      const clipDurationSec = clipEl && clipReadyRef.current.closing && isFinite(clipEl.duration) && clipEl.duration > 0
-        ? clipEl.duration
-        : null;
-      // 0.95 matches the utterance.rate set below.
-      const durationMs = clipDurationSec ? clipDurationSec * 1000 : estimateSpeechMs(PRACTICE_CLOSING_MESSAGE, 0.95);
-      if (!clipDurationSec) noteSpeechStart(PRACTICE_CLOSING_MESSAGE, 0.95);
-      startStreamingReveal(PRACTICE_CLOSING_MESSAGE, durationMs);
+      if (!shown) { shown = true; setShowStartPopup(true); }
     };
     // Bina's real (recorded) voice first, when the clip is available.
     if (playBinaClip('closing', {
-      onStart: () => { setAiSpeaking(true); startClosingStream(); },
-      onEnd: () => { setAiSpeaking(false); showOnce(); },
-      onFail: () => { setAiSpeaking(false); showOnce(); },
+      onStart: () => {
+        setAiSpeaking(true);
+        const clipEl = clipAudioRef.current.closing;
+        const clipMs = clipEl && isFinite(clipEl.duration) && clipEl.duration > 0 ? clipEl.duration * 1000 : estimateSpeechMs(PRACTICE_CLOSING_MESSAGE, BINA_TTS_RATE);
+        startStreamingReveal(PRACTICE_CLOSING_MESSAGE, clipMs);
+      },
+      onEnd: showOnce,
+      onFail: showOnce,
     })) {
       // Safety net in case `ended` never arrives.
       window.setTimeout(showOnce, 20000);
       return;
     }
-    if (!window.speechSynthesis) {
-      window.setTimeout(showOnce, 1200);
-      return;
-    }
-    try {
-      stopBinaClip();
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.resume();
-      const u = new SpeechSynthesisUtterance(PRACTICE_CLOSING_MESSAGE);
-      u.rate = 0.95; u.pitch = 1.0; u.volume = 1.0;
-      const v = pickVoice(); if (v) u.voice = v;
-      u.onstart = () => { setAiSpeaking(true); startClosingStream(); };
-      u.onboundary = (e) => { if (typeof e.charIndex === 'number') setRevealedCount((prev) => Math.max(prev, e.charIndex)); };
-      u.onend = () => { setAiSpeaking(false); showOnce(); };
-      u.onerror = () => { setAiSpeaking(false); showOnce(); };
-      utteranceRef.current = u;
-      window.speechSynthesis.speak(u);
-      // Safety net: if onend never fires (some browsers drop it), reveal after a
-      // generous window so the candidate is never stuck without the popup.
-      window.setTimeout(showOnce, 9000);
-    } catch { showOnce(); }
-  }, [playBinaClip, stopBinaClip, startStreamingReveal, endStreamingReveal, noteSpeechStart, noteSpeechEnd]);
+    speakBina(PRACTICE_CLOSING_MESSAGE, { onStart: () => setAiSpeaking(true), onEnd: showOnce });
+  }, [playBinaClip, speakBina, startStreamingReveal, endStreamingReveal]);
 
   // Bina asks practice question 2 (Yes / No). Unlike speakQuestion it does NOT
   // open the mic afterwards — the candidate answers with the A / B / C card,
@@ -1525,42 +1622,15 @@ export default function StepSamplePractice({
     // event (see the matching note in speakQuestion).
     setAiSpeaking(true);
     setHrButtonsReady(false);
-    let ready = false;
-    const showChoices = () => {
-      if (ready) return;
-      ready = true;
-      setAiSpeaking(false);
-      noteSpeechEnd();
-      // Always reveal the full question — covers the normal end, the
-      // unsupported-TTS branch below, onerror, and the safety-net timeout,
-      // all of which funnel through here.
-      endStreamingReveal(PRACTICE_HR_QUESTION);
-      setTimedUp(false);
-      setHrButtonsReady(true);
-    };
-    if (typeof window === 'undefined' || !window.speechSynthesis) { showChoices(); return; }
-    try {
-      stopBinaClip();
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.resume();
-      const u = new SpeechSynthesisUtterance(PRACTICE_HR_QUESTION);
-      u.rate = 0.95; u.pitch = 1.0; u.volume = 1.0;
-      const v = pickVoice(); if (v) u.voice = v;
-      u.onstart = () => {
-        cancelPreTurnCountdown();
-        setAiSpeaking(true);
-        noteSpeechStart(PRACTICE_HR_QUESTION, 0.95);
-        startStreamingReveal(PRACTICE_HR_QUESTION, estimateSpeechMs(PRACTICE_HR_QUESTION, 0.95));
-      };
-      u.onboundary = (e) => { if (typeof e.charIndex === 'number') setRevealedCount((prev) => Math.max(prev, e.charIndex)); };
-      u.onend = showChoices;
-      u.onerror = showChoices;
-      utteranceRef.current = u;
-      window.speechSynthesis.speak(u);
-      // Safety net if onend never fires.
-      window.setTimeout(showChoices, 15000);
-    } catch { showChoices(); }
-  }, [stopBinaClip, cancelPreTurnCountdown, startStreamingReveal, endStreamingReveal, noteSpeechStart, noteSpeechEnd]);
+    speakBina(PRACTICE_HR_QUESTION, {
+      onStart: () => { cancelPreTurnCountdown(); setAiSpeaking(true); },
+      onEnd: () => {
+        setAiSpeaking(false);
+        setTimedUp(false);
+        setHrButtonsReady(true);
+      },
+    });
+  }, [speakBina, cancelPreTurnCountdown]);
 
   // Bina's "Are you there?" nudge — the live interview's handleNoResponse adds
   // this exact line as a real chat message (not just a toast) when the
@@ -1575,47 +1645,19 @@ export default function StepSamplePractice({
     cancelPreTurnCountdown();
     stopRecordingSilent();
     setAiSpeaking(true);
-
-    // Same double-fire guard as speakMoveOn's advance — the 9s safety-net
-    // timeout below must not re-run this after onend already did.
-    let reopened = false;
-    const reopenMic = () => {
-      if (reopened) return;
-      reopened = true;
-      setAiSpeaking(false);
-      noteSpeechEnd();
-      endStreamingReveal(PRACTICE_STILL_THERE_MSG);
-      if (!practiceDoneRef.current) {
-        runPreTurnCountdown(() => { if (!practiceDoneRef.current) startRecordingRef.current?.(); });
-      }
-    };
-    if (!window.speechSynthesis) { reopenMic(); return; }
-    try {
-      stopBinaClip();
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.resume();
-      const u = new SpeechSynthesisUtterance(PRACTICE_STILL_THERE_MSG);
-      u.rate = 0.95; u.pitch = 1.0; u.volume = 1.0;
-      const v = pickVoice(); if (v) u.voice = v;
-      u.onstart = () => {
-        noteSpeechStart(PRACTICE_STILL_THERE_MSG, 0.95);
-        startStreamingReveal(PRACTICE_STILL_THERE_MSG, estimateSpeechMs(PRACTICE_STILL_THERE_MSG, 0.95));
-      };
-      u.onboundary = (e) => { if (typeof e.charIndex === 'number') setRevealedCount((prev) => Math.max(prev, e.charIndex)); };
-      u.onend = reopenMic;
-      u.onerror = reopenMic;
-      utteranceRef.current = u;
-      window.speechSynthesis.speak(u);
-      window.setTimeout(reopenMic, 9000);
-    } catch { reopenMic(); }
-  }, [stopBinaClip, startStreamingReveal, endStreamingReveal, stopRecordingSilent, cancelPreTurnCountdown, runPreTurnCountdown, noteSpeechStart, noteSpeechEnd]);
+    speakBina(PRACTICE_STILL_THERE_MSG, {
+      onEnd: () => {
+        setAiSpeaking(false);
+        if (!practiceDoneRef.current) {
+          runPreTurnCountdown(() => { if (!practiceDoneRef.current) startRecordingRef.current?.(); });
+        }
+      },
+    });
+  }, [speakBina, stopRecordingSilent, cancelPreTurnCountdown, runPreTurnCountdown]);
 
   // Second escalation — the candidate STILL hasn't said anything even after
-  // the "Are you there?" nudge above. Live shows a "Microphone Issue?" popup
-  // (handleNoResponse's else-branch, :8714-8723) with the same two choices and
-  // the same 15s auto-timeout; "No" ends the session (live: the interview;
-  // here: just this practice, the equivalent scope) via speakClosing — Bina's
-  // normal sign-off, same as finishing normally.
+  // the "Are you there?" nudge above: Bina says she'll move on and the
+  // practice advances exactly like clicking Next.
   // Forward reference to handlePracticeNext (declared below) — same pattern
   // as startRecordingRef, needed because speakMoveOn is declared before it.
   const handlePracticeNextRef = useRef<() => void>(() => {});
@@ -1623,40 +1665,15 @@ export default function StepSamplePractice({
   const speakMoveOn = useCallback(() => {
     stopRecordingSilent();
     setAiSpeaking(true);
-    // Guards against the 9s safety-net timeout below ALSO firing after onend
-    // already fired normally (the message takes ~4s to speak, well under
-    // 9s) — without this, advancing to Q2 then firing a SECOND time (by now
-    // on Q2) ran the "finish practice" branch instead, ending practice right
-    // after Q2's question appeared with no chance to answer it.
-    let advanced = false;
-    const advance = () => {
-      if (advanced) return;
-      advanced = true;
-      setAiSpeaking(false);
-      noteSpeechEnd();
-      endStreamingReveal(PRACTICE_MOVE_ON_MSG);
-      handlePracticeNextRef.current?.();
-    };
-    if (!window.speechSynthesis) { advance(); return; }
-    try {
-      stopBinaClip();
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.resume();
-      const u = new SpeechSynthesisUtterance(PRACTICE_MOVE_ON_MSG);
-      u.rate = 0.95; u.pitch = 1.0; u.volume = 1.0;
-      const v = pickVoice(); if (v) u.voice = v;
-      u.onstart = () => {
-        noteSpeechStart(PRACTICE_MOVE_ON_MSG, 0.95);
-        startStreamingReveal(PRACTICE_MOVE_ON_MSG, estimateSpeechMs(PRACTICE_MOVE_ON_MSG, 0.95));
-      };
-      u.onboundary = (e) => { if (typeof e.charIndex === 'number') setRevealedCount((prev) => Math.max(prev, e.charIndex)); };
-      u.onend = advance;
-      u.onerror = advance;
-      utteranceRef.current = u;
-      window.speechSynthesis.speak(u);
-      window.setTimeout(advance, 9000);
-    } catch { advance(); }
-  }, [stopRecordingSilent, stopBinaClip, startStreamingReveal, endStreamingReveal, noteSpeechStart, noteSpeechEnd]);
+    // speakBina calls onEnd exactly once, so this can't advance twice (a
+    // second advance on Q2 used to end the practice before Q2 was answered).
+    speakBina(PRACTICE_MOVE_ON_MSG, {
+      onEnd: () => {
+        setAiSpeaking(false);
+        handlePracticeNextRef.current?.();
+      },
+    });
+  }, [stopRecordingSilent, speakBina]);
 
   // Called by the silence detector when a fresh total-silence window times
   // out: first time → speak the nudge; any time after → the candidate still
@@ -1737,7 +1754,6 @@ export default function StepSamplePractice({
   // ── Mic input low (live parity) ─────────────────────────────────────────
   // While the mic is open: 8s with the level never above a near-silent floor
   // → "Microphone input is low". A dead/muted/far-away mic, not a pause.
-  useEffect(() => { audioLevelRef.current = audioLevel; }, [audioLevel]);
   useEffect(() => {
     if (!isRecording) return;
     const openedAt = Date.now();
@@ -1851,7 +1867,8 @@ export default function StepSamplePractice({
     stillThereNudgeSpokenRef.current = false;
     const windowOpenedAt = Date.now();
     const analyser = analyserRef.current;
-    if (!analyser) return;
+    // No analyser → can't judge silence; never block transcription on it.
+    if (!analyser) { speechHeardRef.current = true; return; }
     const timeBuf = new Uint8Array(analyser.fftSize);
     const freqBuf = new Uint8Array(analyser.frequencyBinCount);
     const binHz = analyser.context.sampleRate / analyser.fftSize;
@@ -1892,6 +1909,15 @@ export default function StepSamplePractice({
       // of whether the raw-energy heuristic agrees — see transcriptActivityAtRef.
       const transcriptRecentlyActive = now - transcriptActivityAtRef.current < TRANSCRIPT_ACTIVITY_WINDOW_MS;
       const active = transcriptRecentlyActive || (voiceLike && rms > Math.max(MIN_SPEECH_RMS, ambient * 2.2));
+
+      // Gate for sending this take to Whisper: ~0.6s (cumulative) of
+      // voice-like sound. Deliberately looser than `active` so a quiet
+      // speaker still counts, and raw signal only — the transcript can't
+      // vouch for itself here.
+      if (!speechHeardRef.current && voiceLike && rms > Math.max(0.015, ambient * 2)) {
+        speechHeardMsRef.current += dt;
+        if (speechHeardMsRef.current >= 600) speechHeardRef.current = true;
+      }
 
       // Same streak rule as live: dips up to SPEECH_DIP_GRACE_MS keep it alive.
       if (active) {
@@ -1979,15 +2005,17 @@ export default function StepSamplePractice({
   useEffect(() => {
     if (isRecording || doneConfirm) revealAfterPaint(() => controlBarRef.current, 'nearest');
   }, [isRecording, doneConfirm]);
-  //  - "Review my practice first" closes the popup → the footer's Start
+  //  - the practice-complete popup closes → the footer's Start
   //    Interview button, so the way forward is visible.
   const startPopupWasOpen = useRef(false);
   useEffect(() => {
-    if (startPopupWasOpen.current && !showStartPopup) {
+    // Not when the candidate chose to watch the recording — that scrolls to
+    // the camera playback instead.
+    if (startPopupWasOpen.current && !showStartPopup && !showReplay) {
       revealAfterPaint(() => startInterviewRef.current, 'nearest');
     }
     startPopupWasOpen.current = showStartPopup;
-  }, [showStartPopup]);
+  }, [showStartPopup, showReplay]);
   // NOTE: the "start the interview" popup is NOT triggered here on practiceDone
   // (that showed it too early). It's revealed from speakClosing()'s onend so it
   // appears only after Bina finishes the sign-off. See speakClosing().
@@ -2187,7 +2215,7 @@ export default function StepSamplePractice({
                 You{candidateName?.trim() ? ` · ${candidateName.trim().toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())}` : ''}
               </span>
             </div>
-            <div className="relative bg-black rounded-xl overflow-hidden" style={{ aspectRatio: '16/9' }}>
+            <div ref={cameraBoxRef} className="relative bg-black rounded-xl overflow-hidden" style={{ aspectRatio: '16/9' }}>
               <video ref={videoRef} autoPlay playsInline muted className={`w-full h-full object-cover ${showReplay ? 'hidden' : ''}`} style={{ transform: 'scaleX(-1)' }} />
               {showReplay && recordedVideoUrl && (
                 <video ref={replayVideoRef} src={recordedVideoUrl} controls playsInline controlsList="nodownload nopictureinpicture" disablePictureInPicture onContextMenu={(e) => e.preventDefault()} className="w-full h-full object-cover" />
@@ -2446,6 +2474,7 @@ export default function StepSamplePractice({
                             if (wasFinished) setAnswerElapsed(0);
                             setAutoSpeakBlocked(false);
                             // Repeat plays ONLY the question — not the full greeting.
+                            pauseRecordingForBina();
                             speakQuestion(practiceQ === 2 ? PRACTICE_HR_QUESTION : PRACTICE_QUESTION);
                           }}
                           disabled={!started || aiSpeaking || practiceDone}
@@ -2648,6 +2677,7 @@ export default function StepSamplePractice({
                             if (wasFinished) setAnswerElapsed(0);
                             setAutoSpeakBlocked(false);
                             // Repeat plays ONLY the question — not the full greeting.
+                            pauseRecordingForBina();
                             speakQuestion(practiceQ === 2 ? PRACTICE_HR_QUESTION : PRACTICE_QUESTION);
                           }}
                           disabled={!started || aiSpeaking || practiceDone}
@@ -2881,14 +2911,24 @@ export default function StepSamplePractice({
                   <>Start Interview <ChevronRight className="w-4 h-4" /></>
                 )}
               </button>
-              <button
-                type="button"
-                onClick={() => setShowStartPopup(false)}
-                disabled={submitting}
-                className="min-h-10 py-2.5 text-xs font-medium text-gray-500 hover:text-gray-800 transition-colors disabled:opacity-50"
-              >
-                Review my practice first
-              </button>
+              {/* Only offered when there IS a recording to review — before,
+                  this just closed the popup and left the candidate looking
+                  for a playback that wasn't on screen. */}
+              {recordedVideoUrl && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowStartPopup(false);
+                    setShowReplay(true);
+                    revealAfterPaint(() => cameraBoxRef.current, 'center');
+                    window.setTimeout(() => { void replayVideoRef.current?.play().catch(() => {}); }, 400);
+                  }}
+                  disabled={submitting}
+                  className="inline-flex items-center justify-center gap-1.5 min-h-10 py-2.5 text-xs font-semibold text-brand-blue hover:text-brand-blue-2 transition-colors disabled:opacity-50"
+                >
+                  <Play className="w-3.5 h-3.5" /> Watch my practice recording
+                </button>
+              )}
             </div>
           </div>
         </div>
