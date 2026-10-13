@@ -1,6 +1,30 @@
 'use client';
 
+import { useCallback, useRef, useState } from 'react';
 import { CheckCircle } from 'lucide-react';
+
+/**
+ * The wizard pages pin both the breadcrumb and the step indicator. Hand the
+ * returned ref to <PageBreadcrumb barRef> and the height to the indicator's
+ * `topOffset`, so the indicator pins just below the breadcrumb's real height
+ * (measured, since the bar can wrap on narrow screens) instead of under it.
+ * A callback ref, so it still works when the breadcrumb mounts after a loader.
+ */
+export function useBreadcrumbOffset() {
+  const [height, setHeight] = useState(0);
+  const observerRef = useRef<ResizeObserver | null>(null);
+  const barRef = useCallback((el: HTMLElement | null) => {
+    observerRef.current?.disconnect();
+    observerRef.current = null;
+    if (!el) return;
+    const measure = () => setHeight(el.getBoundingClientRect().height);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    observerRef.current = ro;
+  }, []);
+  return [barRef, height] as const;
+}
 
 export const AI_INTERVIEW_STEPS = ['Select JD', 'Configure', 'Clusters', 'Preview & Publish'] as const;
 
@@ -9,6 +33,12 @@ export type AIInterviewStep = 1 | 2 | 3 | 4;
 interface Props {
   /** 1-indexed current step. 1 = Select JD, 4 = Preview & Publish. */
   currentStep: AIInterviewStep;
+  /**
+   * Pixels to pin below the top of the scroll container. Pass the sticky
+   * breadcrumb's measured height so the two layers stack instead of the
+   * breadcrumb (z-30) covering this band.
+   */
+  topOffset?: number;
 }
 
 /**
@@ -18,14 +48,14 @@ interface Props {
  * the unsaved-changes dialog). Sticky, so the recruiter always sees where in
  * the flow they are on the long Configure and Clusters pages.
  */
-export function AIInterviewStepIndicator({ currentStep }: Props) {
+export function AIInterviewStepIndicator({ currentStep, topOffset = 0 }: Props) {
   return (
     /* The negative margins are the page card's padding (p-4 md:p-8), so the
        band spans the card edge to edge and nothing scrolls past its sides.
        It must be a DIRECT child of that card: a sticky element can only
        travel inside its parent, and wrapped in a short header <div> it stuck
        for the height of that div — a few pixels — and then scrolled away. */
-    <div className="sticky top-0 z-20 -mx-4 md:-mx-8 px-4 md:px-8 pt-3 pb-3 sm:pb-4 mb-4 sm:mb-6 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60">
+    <div style={{ top: topOffset }} className="sticky z-20 -mx-4 md:-mx-8 px-4 md:px-8 pt-3 pb-3 sm:pb-4 mb-4 sm:mb-6 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60">
       {/* Same framed strip the JD wizard uses: soft gradient card with a
           rounded border, so both creation flows read as one component. */}
       <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-gradient-to-br from-slate-50 to-white dark:from-slate-900 dark:to-slate-900 px-3 py-3 sm:px-5 sm:py-4">
