@@ -13,7 +13,8 @@ import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggl
 import ToolbarFilterSelect from '@/components/ui/toolbar-filter-select';
 import ToolbarSelectAll from '@/components/ui/toolbar-select-all';
 import { SortByControl } from '@/components/ui/select-all-menu';
-import { FILTER_FIELD_CLASS, FILTER_FIELD_WIDE_CLASS, FILTER_LABEL_CLASS, FILTER_CONTROL_CLASS } from '@/components/ScoredResumesTable';
+import { FILTER_FIELD_CLASS, FILTER_FIELD_WIDE_CLASS, FILTER_LABEL_CLASS, FILTER_CONTROL_CLASS, useScoringActionPermissions } from '@/components/ScoredResumesTable';
+import type { InviteCandidate } from '@/components/talent-match-invite/inviteVersions';
 import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
 import TimelineStamps from '@/components/ui/timeline-stamps';
 import { DateField } from '@/components/ui/date-field';
@@ -26,7 +27,7 @@ import {
   ChevronLeft, ChevronRight, ChevronDown, Eye, Loader2,
   Users, CheckCircle, Clock, Mail, XCircle, AlertTriangle, CalendarDays,
   Ban, SlidersHorizontal, FileDown, FileText, FileSpreadsheet, Info, Download, X,
-  Play,
+  Play, Video,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -116,6 +117,10 @@ interface AIInterviewResultsProps {
    * it unset and the toolbar renders inline in its own card as before.
    */
   toolbarPortal?: HTMLElement | null;
+  /** Job Details: adds the AI Talent Match tab's "Create / Send AI Interview"
+   *  to the selection Actions menu, handing the ticked candidates to the
+   *  host's version popup (VersionInviteDialog). Other hosts leave it unset. */
+  onOpenInviteDialog?: (candidates: InviteCandidate[]) => void;
 }
 
 /* Toggleable table columns (Actions always shows). Same Customize Columns
@@ -259,7 +264,9 @@ const DEFAULT_RESULT_STATUS = 'all';
 const RESULT_STATUSES = new Set(['in_progress', 'completed', 'terminated']);
 const isResultStatus = (v: unknown) => RESULT_STATUS_OPTIONS.some((o) => o.value === v);
 
-export default function AIInterviewResults({ configId, configTitle, jdTitle, jdShortId, embedded = false, showStats, hideVersionDetails = false, hideJobVersion = false, onViewCandidate, breadcrumbItems, toolbarActions, emptyStateAction, jobVersion: jobVersionProp, interviewVersion: interviewVersionProp, toolbarPortal, formatCandidateName }: AIInterviewResultsProps) {
+export default function AIInterviewResults({ configId, configTitle, jdTitle, jdShortId, embedded = false, showStats, hideVersionDetails = false, hideJobVersion = false, onViewCandidate, breadcrumbItems, toolbarActions, emptyStateAction, jobVersion: jobVersionProp, interviewVersion: interviewVersionProp, toolbarPortal, formatCandidateName, onOpenInviteDialog }: AIInterviewResultsProps) {
+  /* Create / Send AI Interview's gate — the AI Talent Match tab's own. */
+  const { mayInviteAIInterview, aiInterviewDeniedReason } = useScoringActionPermissions(true);
   const showName = (name?: string | null) => (formatCandidateName && name ? formatCandidateName(name) : name);
   const router = useRouter();
   const [sessions, setSessions] = useState<AIInterviewResponse[]>([]);
@@ -961,6 +968,34 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                           : 'Download PDF Reports'}
                       </span>
                     </DropdownMenuItem>
+                    {/* Create / Send AI Interview — the AI Talent Match tab's
+                        item: the ticked candidates (once each, as a candidate
+                        can have several sessions) go to the host's version
+                        popup. */}
+                    {onOpenInviteDialog && (
+                      <DropdownMenuItem
+                        className={`flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer ${mayInviteAIInterview ? '' : 'text-gray-400 opacity-60'}`}
+                        onSelect={(e) => {
+                          if (!mayInviteAIInterview) {
+                            e.preventDefault();
+                            toast.error(aiInterviewDeniedReason);
+                            return;
+                          }
+                          const invitees = new Map<string, InviteCandidate>();
+                          selected.forEach((s) => {
+                            const email = s.candidate_email || '';
+                            const key = s.resume_id || email.trim().toLowerCase() || s.id;
+                            if (!invitees.has(key)) {
+                              invitees.set(key, { id: s.resume_id || s.id, name: s.candidate_name || '', email, resumeId: s.resume_id });
+                            }
+                          });
+                          onOpenInviteDialog(Array.from(invitees.values()));
+                        }}
+                      >
+                        <Video className="w-4 h-4 text-menu-icon-share" />
+                        <span>Create / Send AI Interview</span>
+                      </DropdownMenuItem>
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
               )}

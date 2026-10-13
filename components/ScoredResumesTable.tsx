@@ -36,6 +36,7 @@ import { useAllJobInviteTargets } from '@/lib/hooks/useAllJobInviteTargets';
 import { formatIST, formatISTDate, formatISTTime, parseIST } from '@/lib/utils/dateUtils';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import { downloadScorecardsZip as downloadScorecardsZipShared } from '@/lib/utils/scorecardDownload';
+import type { InviteCandidate } from '@/components/talent-match-invite/inviteVersions';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -397,6 +398,13 @@ interface ScoredResumesTableProps {
    */
   onCreateInviteTarget?: (kind: 'assessment' | 'interview', job: InviteTargetJob, rows: ScoredResume[]) => void;
   /**
+   * The selection Actions menu's AI Assessment / AI Interview Invite open the
+   * host's version popup (the AI Talent Match tab's VersionInviteDialog) with
+   * the ticked candidates, instead of this table's own invite flow. The popup
+   * handles a job with no version yet (pick one, or create the next).
+   */
+  onOpenInviteDialog?: (kind: 'assessment' | 'interview', candidates: InviteCandidate[]) => void;
+  /**
    * Embedded use — the rows of ONE job opened inline under its row in
    * Resume Scoring's "View by Job". Drops the card chrome and the whole
    * search / More Filters / view-toggle toolbar (the host's own controls
@@ -430,6 +438,10 @@ interface ScoredResumesTableProps {
    * score table, whose row above names the candidate and the job.
    */
   hiddenColumnIds?: string[];
+  /** Opt-in: how a candidate's name is SHOWN (Job Details: first name
+   *  capitalised). Display only — search, sort, filters and exports keep the
+   *  name as it is; other hosts leave it unset. */
+  formatCandidateName?: (name: string) => string;
 }
 
 /**
@@ -487,6 +499,7 @@ export function renderInviteTargetItems({
   extraDisabledReason,
   onInvite,
   onCreate,
+  label,
 }: {
   kind: 'assessment' | 'interview';
   target: InviteTargetState;
@@ -498,6 +511,9 @@ export function renderInviteTargetItems({
   extraDisabledReason?: string;
   onInvite: (e: Event) => void;
   onCreate?: (job: InviteTargetJob) => void;
+  /** Overrides the "{what} Invite" label (Job Details: the AI Talent Match
+   *  tab's "Create / Send …" names). */
+  label?: string;
 }) {
   const what = kind === 'assessment' ? 'AI Assessment' : 'AI Interview';
   const Icon = kind === 'assessment' ? FileText : Video;
@@ -511,7 +527,7 @@ export function renderInviteTargetItems({
         onSelect={onInvite}
       >
         <Icon className={`w-4 h-4 ${iconClass}`} />
-        <span className={MENU_ITEM_SCALE_CLASS}>{what} Invite</span>
+        <span className={MENU_ITEM_SCALE_CLASS}>{label ?? `${what} Invite`}</span>
       </DropdownMenuItem>
     );
   }
@@ -1927,18 +1943,6 @@ Best regards`);
         <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
           {(isGrouped ? new Set(effectiveSelectedRows.map(candidateGroupKey)).size : effectiveSelectedRows.length).toLocaleString()} selected
         </div>
-        {/* Score Resumes — opens the host's "Select Applicants to Score" modal.
-            Moved here from a standalone toolbar button so it matches the AI
-            Talent Match tab's selection Actions menu. */}
-        {onScoreResumes && (
-          <DropdownMenuItem
-            className={scoredResumesMenuItemClass}
-            onSelect={() => onScoreResumes()}
-          >
-            <ClipboardList className="w-4 h-4 text-menu-icon-score" />
-            <span className={MENU_ITEM_SCALE_CLASS}>Score Resumes</span>
-          </DropdownMenuItem>
-        )}
         {/* Export — the selection, columns chosen in its dialog. */}
         <DropdownMenuItem
           className={`${scoredResumesMenuItemClass} ${!canExport ? 'text-gray-400 opacity-60' : ''}`}
@@ -1980,6 +1984,52 @@ Best regards`);
           const rowOf = (jdId: string) => effectiveSelectedRows.find((r) => (r.jdId || jobId) === jdId) ?? effectiveSelectedRows[0];
           const assessmentTarget = resolveInviteTargetState('assessment', selectionJobs, (id) => resolveAssessmentConfigured(rowOf(id)));
           const interviewTarget = resolveInviteTargetState('interview', selectionJobs, (id) => resolveAIInterviewConfigured(rowOf(id)));
+          if (onOpenInviteDialog) {
+            /* The AI Talent Match tab's way: always offered (permission
+               aside), opening the host's version popup with the ticked rows. */
+            const invitees: InviteCandidate[] = effectiveSelectedRows.map((r) => ({
+              id: r.resumeId || r.id,
+              name: r.candidateName,
+              email: r.email,
+              phone: r.phone,
+              rating: Math.round(rowRating10(r) * 10) / 10,
+              resumeId: r.resumeId,
+            }));
+            return (
+              <>
+                {renderInviteTargetItems({
+                  kind: 'assessment',
+                  target: { state: 'ready' },
+                  label: 'Create / Send Assessment',
+                  itemClass: scoredResumesMenuItemClass,
+                  allowed: canCreateAssessments,
+                  onInvite: (e) => {
+                    if (!canCreateAssessments) {
+                      e.preventDefault();
+                      toast.error(assessmentDeniedReason);
+                      return;
+                    }
+                    onOpenInviteDialog('assessment', invitees);
+                  },
+                })}
+                {renderInviteTargetItems({
+                  kind: 'interview',
+                  target: { state: 'ready' },
+                  label: 'Create / Send AI Interview',
+                  itemClass: scoredResumesMenuItemClass,
+                  allowed: mayInviteAIInterview,
+                  onInvite: (e) => {
+                    if (!mayInviteAIInterview) {
+                      e.preventDefault();
+                      toast.error(aiInterviewDeniedReason);
+                      return;
+                    }
+                    onOpenInviteDialog('interview', invitees);
+                  },
+                })}
+              </>
+            );
+          }
           const create = onCreateInviteTarget
             ? (kind: 'assessment' | 'interview') => (job: InviteTargetJob) =>
                 onCreateInviteTarget(kind, job, effectiveSelectedRows.filter((r) => (r.jdId || jobId) === job.jdId))

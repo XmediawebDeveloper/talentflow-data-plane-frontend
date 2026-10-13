@@ -47,7 +47,8 @@ import ListViewToggle, { type ListDisplayMode } from '@/components/ui/list-view-
 import ToolbarFilterSelect from '@/components/ui/toolbar-filter-select';
 import ToolbarSelectAll from '@/components/ui/toolbar-select-all';
 import { SortByControl } from '@/components/ui/select-all-menu';
-import { FILTER_FIELD_CLASS, FILTER_LABEL_CLASS, FILTER_CONTROL_CLASS } from '@/components/ScoredResumesTable';
+import { FILTER_FIELD_CLASS, FILTER_LABEL_CLASS, FILTER_CONTROL_CLASS, useScoringActionPermissions } from '@/components/ScoredResumesTable';
+import type { InviteCandidate } from '@/components/talent-match-invite/inviteVersions';
 
 interface AssessmentResultsProps {
   /**
@@ -138,6 +139,10 @@ interface AssessmentResultsProps {
    * it unset and the toolbar renders inline in its own card as before.
    */
   toolbarPortal?: HTMLElement | null;
+  /** Job Details: adds the AI Talent Match tab's "Create / Send Assessment" to the
+   *  selection Actions menu, handing the ticked candidates to the host's
+   *  version popup (VersionInviteDialog). Other hosts leave it unset. */
+  onOpenInviteDialog?: (candidates: InviteCandidate[]) => void;
 }
 
 interface CandidateResult {
@@ -147,6 +152,8 @@ interface CandidateResult {
   name: string;
   email: string;
   phone?: string;
+  /** The resume the invite was sent from — unset for email invites. */
+  resumeId?: string;
   inviteSource?: 'resume' | 'email';
   avatar?: string;
   score: number;
@@ -235,7 +242,9 @@ interface QuestionResult {
 const resultOrderTime = (c: { completed_at?: string; created_at?: string }) =>
   new Date(c.completed_at || c.created_at || 0).getTime();
 
-export default function AssessmentResults({ onBack, assessmentId, assessmentTitle, assessmentVersion, jdTitle, jdId, jdShortId, jdVersion, jobVersionScope = null, assessmentVersionScope = null, embedded = false, openOnTotalCandidates = false, canDownloadPDF = false, canBatchDownload = false, prevId, nextId, currentIndex, totalCount, toolbarPortal, formatCandidateName }: AssessmentResultsProps) {
+export default function AssessmentResults({ onBack, assessmentId, assessmentTitle, assessmentVersion, jdTitle, jdId, jdShortId, jdVersion, jobVersionScope = null, assessmentVersionScope = null, embedded = false, openOnTotalCandidates = false, canDownloadPDF = false, canBatchDownload = false, prevId, nextId, currentIndex, totalCount, toolbarPortal, formatCandidateName, onOpenInviteDialog }: AssessmentResultsProps) {
+  /* Create / Send Assessment's gate — the AI Talent Match tab's own. */
+  const { canCreateAssessments, assessmentDeniedReason } = useScoringActionPermissions(true);
   const showName = (name: string) => (formatCandidateName && name ? formatCandidateName(name) : name);
   const router = useRouter();
   /* Embedded in the Job Details "Assessments Results" tab (toolbar portals into
@@ -1090,6 +1099,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               phone: item.candidate_phone || '',
               // How the candidate was actually invited — resume_id is stored
               // only for invites sent from a resume. See assessmentInviteSource.
+              resumeId: item.resume_id || undefined,
               inviteSource: item.resume_id ? 'resume' : 'email',
               score: scoringDone ? Number(item.overall_score) || 0 : 0,
               totalScore: 100,
@@ -2202,6 +2212,34 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                             <span className={MENU_ITEM_SCALE_CLASS}>
                               {downloadingBulkPDF ? 'Downloading...' : 'Download PDF Reports'}
                             </span>
+                          </DropdownMenuItem>
+                        )}
+                        {/* Create / Send Assessment — the AI Talent Match
+                            tab's item: the ticked candidates (once each, as a
+                            candidate can have several attempts) go to the
+                            host's version popup. */}
+                        {onOpenInviteDialog && (
+                          <DropdownMenuItem
+                            className={`flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer ${canCreateAssessments ? '' : 'text-gray-400 opacity-60'}`}
+                            onSelect={(e) => {
+                              if (!canCreateAssessments) {
+                                e.preventDefault();
+                                toast.error(assessmentDeniedReason);
+                                return;
+                              }
+                              const picked = new Set(selectedRows);
+                              const invitees = new Map<string, InviteCandidate>();
+                              candidateResults.filter((c) => picked.has(c.id)).forEach((c) => {
+                                const key = c.resumeId || c.email.trim().toLowerCase() || c.id;
+                                if (!invitees.has(key)) {
+                                  invitees.set(key, { id: c.resumeId || c.id, name: c.name, email: c.email, phone: c.phone, resumeId: c.resumeId });
+                                }
+                              });
+                              onOpenInviteDialog(Array.from(invitees.values()));
+                            }}
+                          >
+                            <FileText className="w-4 h-4 text-menu-icon-view" />
+                            <span className={MENU_ITEM_SCALE_CLASS}>Create / Send Assessment</span>
                           </DropdownMenuItem>
                         )}
                       </DropdownMenuContent>
