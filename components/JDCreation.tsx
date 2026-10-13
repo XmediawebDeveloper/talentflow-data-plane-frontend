@@ -818,6 +818,10 @@ interface JDCreationProps {
   isJDInUse?: boolean;  // Whether JD is used in scoring/assessment/AI match
   jdUsageMessage?: string;  // Message explaining why JD can't be edited
   breadcrumbItems?: BreadcrumbCrumb[];  // Optional breadcrumb shown above the header
+  /** Which workflow the host opened: Step 1 reads "Create JD" (a new job),
+   *  "Edit JD" (an existing job), "New Version" (a job version just created)
+   *  or "Edit New Version" (that version's draft, reopened). */
+  jdWorkflow?: 'create' | 'edit' | 'new-version' | 'edit-new-version';
   /**
    * Reports which of the FOUR displayed steps the recruiter is on (1-4), so the
    * host page can name its breadcrumb leaf after it.
@@ -1786,7 +1790,7 @@ function jdContentKey(title: string, aiPrompt: string, manualJD: string, generat
   return JSON.stringify([title.trim(), aiPrompt.trim(), manualJD.trim(), generatedJD.trim()]);
 }
 
-export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, isJDInUse = false, jdUsageMessage, breadcrumbItems, onStepChange, editingJDId, onClose, onSuccess, isEmbedded }: JDCreationProps = {}) {
+export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, isJDInUse = false, jdUsageMessage, breadcrumbItems, onStepChange, editingJDId, onClose, onSuccess, isEmbedded, jdWorkflow = 'create' }: JDCreationProps = {}) {
   const router = useRouter();
   const [mode, setMode] = useState<CreationMode>('ai');
   const [step, setStep] = useState<Step>(editingJD?.creation_stage || 'create');
@@ -7340,7 +7344,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
    */
   const renderStepIndicator = () => {
     const stepLabels = [
-      'Create JD',
+      jdWorkflow === 'new-version' ? 'New Version'
+        : jdWorkflow === 'edit-new-version' ? 'Edit New Version'
+          : jdWorkflow === 'edit' ? 'Edit JD' : 'Create JD',
       'Extract',
       'Review',
       // Kept from the original: editing a published JD publishes a new version.

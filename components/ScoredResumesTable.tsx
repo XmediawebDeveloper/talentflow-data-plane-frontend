@@ -2267,6 +2267,25 @@ Best regards`);
           trailing={embedded ? <ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-9" /> : undefined}
           /* 36px control band like the AI Talent Match tab (its More Filters is h-9). */
           compactButtons={!!toolbarPortal}
+          /* Score — right beside More Filters in Job Details, where the header's
+             Score Resumes button isn't shown: the same host action (its "Select
+             Applicants to Score" popup — My Resumes / Resume Database), styled
+             as the AI Talent Match tab's Run Match there. Only while nothing is
+             ticked: a selection brings the Actions menu instead, and clearing
+             it brings Score back. */
+          afterFiltersActions={embedded && onScoreResumes && effectiveSelectedRows.length === 0 ? (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={onScoreResumes}
+              disabled={scoreResumesDisabled}
+              title={scoreResumesDisabled ? 'You do not have permission to score resumes' : undefined}
+              icon={<ClipboardList className="w-4 h-4" />}
+              className="h-9 whitespace-nowrap"
+            >
+              Score
+            </Button>
+          ) : undefined}
           /* Standalone the gap comes from the block's space-y; in Job Details
              the row keeps ListToolbar's own `mb-3`, as on AI Talent Match. */
           className={toolbarPortal ? undefined : 'mb-0'}

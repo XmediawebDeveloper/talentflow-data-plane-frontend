@@ -972,9 +972,12 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
         ...(candidateCrumb
           ? [{ label: candidateCrumb.label, onClick: () => attemptStepChange(() => router.push(back)) }]
           : []),
+        /* Edit on an existing assessment (the draft-exists popup's Open Draft
+           keeps this origin), Create on a new one — as the Job Details trail
+           below decides it. */
         ...(step === 'publish' || step === 'preview'
           ? buildStepCrumbs()
-          : [{ label: 'Create AI Assessment' }]),
+          : [{ label: editAssessmentId && !urlCreatesVersion ? 'Edit AI Assessment' : 'Create AI Assessment' }]),
       ];
     }
     if (fromJobDetails && jdId) {
