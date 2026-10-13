@@ -146,7 +146,6 @@ export default function VersionInviteDialog({
   const [browseIds, setBrowseIds] = useState<string[]>([]);
   /* Send hands over to the host's share step rather than sending here. */
   const handsOff = kind === 'assessment' ? !!onShare : !!onShareInterviews;
-  const canBrowse = handsOff;
   const browseCount = kind === 'assessment' ? browsePicked.length : browseIds.length;
   const browseNoun = kind === 'assessment' ? 'assessment' : 'AI interview';
   /* Switching between this job's versions and the full list starts the pick
@@ -539,15 +538,6 @@ export default function VersionInviteDialog({
                     busyId={busyId}
                     onAction={handleAction}
                   />
-                  {canBrowse && (
-                    <button
-                      type="button"
-                      onClick={() => showBrowse(true)}
-                      className="mt-3 text-xs font-medium text-brand-blue hover:text-brand-blue-2 hover:underline underline-offset-2"
-                    >
-                      Browse all {kind === 'assessment' ? 'assessments' : 'AI interviews'} instead
-                    </button>
-                  )}
                 </section>
                 <section aria-label="Send to" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/30 p-3 sm:p-4">
                   <SendToPanel

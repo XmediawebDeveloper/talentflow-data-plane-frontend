@@ -41,8 +41,17 @@ interface HeaderProps {
   subscriptionExpired?: boolean;
 }
 
-export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpenSettings, onMenuClick, isMobileMenuOpen, subscriptionExpired }: HeaderProps) {
-  if (!user) return null;
+/* The "no user yet" check lives in this thin wrapper, NOT at the top of the
+   body below. As `if (!user) return null;` ahead of ~40 hooks it made the
+   hook count change the moment the user loaded (0 → 40), which React
+   rejects with "Rendered more hooks than during the previous render"
+   (minified error #310) — on every page, since the header is everywhere. */
+export default function Header(props: HeaderProps) {
+  if (!props.user) return null;
+  return <HeaderBody {...props} user={props.user} />;
+}
+
+function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpenSettings, onMenuClick, isMobileMenuOpen, subscriptionExpired }: HeaderProps & { user: UserType }) {
   const router = useRouter();
   const { refreshUser, isTenantAdmin, hasPermission } = useAuth();
   const { resolvedTheme, setTheme } = useTheme();
