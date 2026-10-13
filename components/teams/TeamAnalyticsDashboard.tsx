@@ -232,7 +232,7 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
         {/* Summary Cards Skeleton */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+            <div key={i} className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
               <Skeleton className="w-10 h-10 rounded-lg mb-3" />
               <Skeleton className="h-8 w-20 mb-1" />
               <Skeleton className="h-4 w-32" />
@@ -242,11 +242,11 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
 
         {/* Charts Skeleton */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-6 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+          <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-6 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
             <Skeleton className="h-5 w-32 mb-4" />
             <Skeleton className="h-[300px] w-full rounded-lg" />
           </div>
-          <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-6 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+          <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-6 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
             <Skeleton className="h-5 w-40 mb-4" />
             <Skeleton className="h-[300px] w-full rounded-lg" />
           </div>
@@ -275,7 +275,7 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
   return (
     <div className="space-y-6">
       {/* Header with Period Selector */}
-      <div className="flex flex-col gap-4 rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 p-5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-4 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 p-5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
             <TrendingUp className="w-5 h-5 text-brand-blue" />
@@ -288,22 +288,22 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
           </div>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+          <div className="flex items-center gap-2 min-w-0">
             <DateField
               aria-label="Analytics date from"
               value={fromDate}
               max={toDate}
               onChange={(v) => setFromDate(v)}
-              className="sm:flex-1 sm:min-w-0"
+              className="min-w-0 flex-1 sm:flex-none sm:w-[150px]"
             />
-            <span className="text-xs text-gray-400 text-center sm:text-left sm:flex-shrink-0">to</span>
+            <span className="shrink-0 text-xs font-medium text-gray-400 dark:text-slate-500">to</span>
             <DateField
               aria-label="Analytics date to"
               value={toDate}
               min={fromDate}
               max={new Date().toISOString().split('T')[0]}
               onChange={(v) => setToDate(v)}
-              className="sm:flex-1 sm:min-w-0"
+              className="min-w-0 flex-1 sm:flex-none sm:w-[150px]"
             />
           </div>
           {teamsUsage?.teams && teamsUsage.teams.length > 0 && (
@@ -343,10 +343,10 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
           { key: 'RS',        label: 'Resume Scoring',      value: Math.round(totals.RS),        sub: `${actionCounts.RS} actions`,    Icon: FileText,        iconBg: 'bg-brand-blue/10 ring-1 ring-brand-blue/15',     iconColor: 'text-brand-blue',     shadow: 'shadow-brand-blue/5' },
           { key: 'AS',        label: 'Assessment',          value: totals.AS.toFixed(1),         sub: `${actionCounts.AS} actions`,    Icon: ClipboardCheck,  iconBg: 'bg-brand-teal/10 ring-1 ring-brand-teal/15',     iconColor: 'text-brand-teal',     shadow: 'shadow-brand-teal/5' },
           { key: 'AIU',       label: 'AI Interview',        value: Math.round(totals.AIU),       sub: `${actionCounts.AIU} actions`,   Icon: Users,           iconBg: 'bg-brand-cyan/10 ring-1 ring-brand-cyan/15',     iconColor: 'text-brand-cyan',     shadow: 'shadow-brand-cyan/5' },
-          { key: 'RU',        label: 'Resume Storage',      value: Math.round(totals.RU),        sub: `${actionCounts.RU} actions`,    Icon: Upload,          iconBg: 'bg-orange-100',                                  iconColor: 'text-orange-600',     shadow: 'shadow-brand-orange/5' },
-          { key: 'JDS',       label: 'JDs Created',         value: creationCounts.jds,           sub: '',                              Icon: Briefcase,       iconBg: 'bg-indigo-100',                                  iconColor: 'text-indigo-600',     shadow: 'shadow-brand-blue/5' },
-          { key: 'ASSESSED',  label: 'Assessments Created', value: creationCounts.assessments,   sub: '',                              Icon: ClipboardCheck,  iconBg: 'bg-teal-100',                                    iconColor: 'text-teal-600',       shadow: 'shadow-brand-teal/5' },
-          { key: 'TOTAL',     label: 'Total Units Used',    value: totals.total.toFixed(1),      sub: `${actionCounts.total} total actions`, Icon: BarChart3, iconBg: 'bg-gray-800',                                    iconColor: 'text-white',          shadow: 'shadow-brand-blue/5' },
+          { key: 'RU',        label: 'Resume Storage',      value: Math.round(totals.RU),        sub: `${actionCounts.RU} actions`,    Icon: Upload,          iconBg: 'bg-brand-orange/10 ring-1 ring-brand-orange/15', iconColor: 'text-brand-orange-deep', shadow: 'shadow-brand-orange/5' },
+          { key: 'JDS',       label: 'JDs Created',         value: creationCounts.jds,           sub: '',                              Icon: Briefcase,       iconBg: 'bg-brand-blue-2/10 ring-1 ring-brand-blue-2/15', iconColor: 'text-brand-blue-2',   shadow: 'shadow-brand-blue/5' },
+          { key: 'ASSESSED',  label: 'Assessments Created', value: creationCounts.assessments,   sub: '',                              Icon: ClipboardCheck,  iconBg: 'bg-brand-teal/10 ring-1 ring-brand-teal/15',     iconColor: 'text-brand-teal',     shadow: 'shadow-brand-teal/5' },
+          { key: 'TOTAL',     label: 'Total Units Used',    value: totals.total.toFixed(1),      sub: `${actionCounts.total} total actions`, Icon: BarChart3, iconBg: 'bg-brand-blue ring-1 ring-brand-blue/15',        iconColor: 'text-white',          shadow: 'shadow-brand-blue/5' },
         ] as const).map(({ key, label, value, sub, Icon, iconBg, iconColor, shadow }) => {
           const isActive = pageView === 'list' && activeCard === key;
           return (
@@ -450,7 +450,7 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
               </ResponsiveContainer>
             </div>
             {/* Legend */}
-            <div className="flex justify-center gap-6 mt-4">
+            <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 mt-4">
               {unitDistributionData.map((item) => (
                 <div key={item.name} className="flex items-center gap-2">
                   <div
@@ -478,9 +478,9 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-brand-blue-2 to-brand-blue text-sm font-bold text-white">
                   {index + 1}
                 </div>
-                <div className="flex-1">
-                  <p className="font-medium text-gray-900 dark:text-slate-50">{team.name}</p>
-                  <div className="flex gap-4 mt-1">
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-gray-900 dark:text-slate-50 truncate">{team.name}</p>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
                     <span className="text-xs text-blue-600">RS: {Math.round(team.RS)}</span>
                     <span className="text-xs text-success">AS: {team.AS.toFixed(1)}</span>
                     <span className="text-xs text-purple-600">AIU: {Math.round(team.AIU)}</span>

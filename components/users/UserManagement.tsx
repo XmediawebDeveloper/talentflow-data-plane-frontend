@@ -1,6 +1,9 @@
 'use client';
 
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import { PageHeader } from '@/components/ui/page-header';
+import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
+import { SurfaceCard, SectionHeading } from '@/components/ui/section-container';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   CUSTOM_PERMISSION_CATEGORIES,
@@ -32,7 +35,6 @@ import { ArrowLeft,
   UserX,
   Sparkles,
   Info,
-  ArrowUpRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { handleUnauthorized } from '@/lib/services/api';
@@ -56,6 +58,13 @@ import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { formatISTDate, formatIST } from '@/lib/utils/dateUtils';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Tooltip } from '@/components/ui/tooltip';
 
 // Types
 interface UserPermissions {
@@ -756,12 +765,9 @@ export default function UserManagement() {
     // fetches straight from this tenant's own DB — so they fire immediately
     // instead of waiting on it. They're what the Users/Active/Inactive count
     // cards actually read; the sync result itself is never rendered anywhere.
-    loadUsers();
+    loadUsers(); // also refreshes userCounts (see loadUsers)
     loadRoles();
     loadAllPermissions();
-    userService.getUserCounts().then(setUserCounts).catch((error) => {
-      console.warn('Failed to load user counts:', error);
-    });
 
     // Reconciles this tenant's user count against the external Admin API
     // (two possible remote round trips, each up to 10s) and only ever
@@ -1228,6 +1234,15 @@ export default function UserManagement() {
 
   const loadUsers = async () => {
     setIsLoading(true);
+    // Keep the Active / Inactive / Total count cards in sync on every reload —
+    // mount, manual refresh, and after mutations (activate/deactivate/delete/
+    // create) that call loadUsers(). Previously userCounts loaded only once on
+    // mount, so toggling a user's status left the Inactive/Active cards stale
+    // until a manual page refresh. Fired in parallel and independent of the
+    // list fetch so it still updates even if the list request fails.
+    userService.getUserCounts().then(setUserCounts).catch((error) => {
+      console.warn('Failed to load user counts:', error);
+    });
     try {
       const response = await fetch(`${API_URL}/users`, {
         headers: {
@@ -2163,7 +2178,7 @@ export default function UserManagement() {
       key={key}
       aria-disabled="true"
       title={PLAN_LOCKED_MESSAGE}
-      className="flex items-center gap-2 p-2 sm:p-3 rounded-lg border border-gray-100 dark:border-slate-700/60 bg-slate-50/50 dark:bg-slate-800/50 opacity-60 cursor-not-allowed select-none"
+      className="flex items-center gap-2 p-2 sm:p-3 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-slate-50/50 dark:bg-slate-800/50 opacity-60 cursor-not-allowed select-none"
     >
       <Lock className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 flex-shrink-0" />
       <span className="text-sm font-medium text-gray-500 dark:text-slate-400 flex-1 min-w-0 truncate">{name}</span>
@@ -2192,37 +2207,36 @@ export default function UserManagement() {
   return (
     <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
       <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users' }]} />
 
       {/* Shared organization tab bar — Users is the first tab */}
       <OrganizationTabs />
 
+      {/* Active tab + its data enclosed together in one bordered panel that
+          connects to the tab bar's baseline (-mt-5 cancels the tab bar's mb-5). */}
+      <div className="-mt-5 rounded-b-xl border border-t-0 border-gray-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 p-4 sm:p-5">
       {/* Header */}
-      <div className="mb-6 sm:mb-8">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3 sm:gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10">
-              <UserCog className="w-6 h-6" />
-            </div>
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-slate-50 tracking-tight">User Management</h1>
-              <p className="text-sm text-gray-500 dark:text-slate-500 mt-0.5">Invite teammates, assign roles and fine-tune permissions</p>
-            </div>
-          </div>
+      <PageHeader
+        icon={<UserCog className="h-5 w-5" />}
+        title="User Management"
+        description="Invite teammates, assign roles and fine-tune permissions"
+        actions={
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             {/* RBAC07: Dependency Matrix button */}
-            <button
+            <Button
+              variant="secondary"
               onClick={() => setIsDependencyMatrixOpen(true)}
-              className="flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:border-brand-blue/40 hover:text-brand-blue hover:shadow-sm transition-all text-sm font-medium"
+              icon={<Link2 className="w-4 h-4" />}
               aria-label="View Feature Dependencies" title="View Feature Dependencies"
             >
-              <Link2 className="w-4 h-4" />
               Dependencies
-            </button>
+            </Button>
             {/* RBAC01: Check user limits before showing Add User button — also requires users:create */}
             {canCreateUser && (
-              <button
+              <Button
+                variant="primary"
+                icon={<Plus className="w-4 h-4" />}
                 onClick={() => {
                   if (isAtLimit) {
                     if (isTrial) {
@@ -2234,211 +2248,137 @@ export default function UserManagement() {
                   }
                   setIsCreateModalOpen(true);
                 }}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all shadow-md ring-1 ring-white/10 ${
-                  isAtLimit
-                    ? 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white shadow-red-500/25'
-                    : 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-brand-blue/25'
-                }`}
               >
-                <Plus className="w-4 h-4" />
                 {isAtLimit && !isTrial ? 'Buy More Seats' : 'Invite User'}
-              </button>
+              </Button>
             )}
           </div>
-        </div>
+        }
+      />
 
-        {/* Addon card - only shows when quota exhausted, hidden for trial users */}
-        {!isTrial && (
-          <div className="mt-4 sm:mt-6">
-            <SeatQuotaCard
-              onRefresh={() => { loadUsers(); refreshLimits(); }}
-              onDeactivateExcess={handleDeactivateExcessUsers}
-              compact
-              refreshTrigger={seatQuotaRefreshTrigger}
+      {/* Addon card - only shows when quota exhausted, hidden for trial users */}
+      {!isTrial && (
+        <div className="mb-5">
+          <SeatQuotaCard
+            onRefresh={() => { loadUsers(); refreshLimits(); }}
+            onDeactivateExcess={handleDeactivateExcessUsers}
+            compact
+            refreshTrigger={seatQuotaRefreshTrigger}
+          />
+        </div>
+      )}
+
+      {/* Stats Cards — clickable; clicking drills into the users list filtered by status.
+          Uniform neutral tone + identical structure so all three are the same height. */}
+      <StatsCardGrid columns={3}>
+        <StatsCard
+          label="Total Users"
+          value={
+            <span className="flex items-baseline gap-1">
+              {limits?.current_users ?? userCounts?.total_users ?? users.length}
+              <span className="text-sm font-normal text-gray-400 dark:text-slate-500">
+                / {limits?.max_users === -1 ? '∞' : (limits?.max_users ?? '—')}
+              </span>
+            </span>
+          }
+          icon={UsersIcon}
+          tone="neutral"
+          sparkVariant={0}
+          onClick={() => openListView('all')}
+          active={isOverviewCardActive('all')}
+          showClickArrow
+        />
+        <StatsCard
+          label="Active Users"
+          value={userCounts ? userCounts.active_users : users.filter(u => u.is_active).length}
+          icon={UserCheck}
+          tone="neutral"
+          sparkVariant={1}
+          onClick={() => openListView('active')}
+          active={isOverviewCardActive('active')}
+          showClickArrow
+        />
+        <StatsCard
+          label="Inactive Users"
+          value={userCounts ? userCounts.inactive_users : users.filter(u => !u.is_active).length}
+          icon={UserX}
+          tone="neutral"
+          sparkVariant={2}
+          onClick={() => openListView('inactive')}
+          active={isOverviewCardActive('inactive')}
+          showClickArrow
+        />
+      </StatsCardGrid>
+
+      {/* Seat quota detail — relocated out of the Total card so the three stat
+          cards stay uniform height; no data dropped. */}
+      {limits && limits.max_users > 0 && (
+        <div className="mb-5 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-sm font-medium text-gray-700 dark:text-slate-300">Seat usage</span>
+            <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">{Math.min(limits.usage_percentage, 100)}%</span>
+          </div>
+          <div className="w-full h-1.5 bg-gray-100 dark:bg-slate-800 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${
+                isAtLimit
+                  ? 'bg-destructive'
+                  : limits.approaching_limit
+                    ? 'bg-brand-orange'
+                    : 'bg-gradient-to-r from-brand-blue to-brand-cyan'
+              }`}
+              style={{ width: `${Math.min(limits.usage_percentage, 100)}%` }}
             />
           </div>
-        )}
-      </div>
-
-      {/* Stats Cards — clickable; clicking drills into the users list filtered by status */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5 sm:gap-3 mb-5">
-        {/* Total Users card with quota breakdown */}
-        <button
-          type="button"
-          onClick={() => openListView('all')}
-          className={`group relative flex flex-col items-stretch justify-start overflow-hidden text-left w-full bg-white dark:bg-slate-900 rounded-xl shadow-sm border p-3.5 sm:p-4 hover:shadow-md hover:border-brand-blue/30 transition-all ${isOverviewCardActive('all') ? 'border-brand-blue/55 bg-brand-blue/5 shadow-md shadow-brand-blue/10 ring-1 ring-brand-blue/20' : 'border-brand-blue/15 dark:border-brand-blue/25'}`}
-        >
-          <div>
-            <div className="pr-24">
-              <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-slate-500">Total Users</p>
-              <div className="flex items-baseline gap-1 mt-1">
-                <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 dark:text-slate-50">
-                  {limits?.current_users ?? userCounts?.total_users ?? users.length}
-                </p>
-                <span className="text-sm text-gray-400 dark:text-slate-500">
-                  / {limits?.max_users === -1 ? '∞' : (limits?.max_users ?? '—')}
+          <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2">
+            <div className="flex items-center gap-2 text-xs">
+              <span className="w-1.5 h-1.5 rounded-full bg-brand-blue flex-shrink-0" />
+              <span className="text-gray-500 dark:text-slate-500">Plan Limit</span>
+              <span className="font-semibold text-gray-700 dark:text-slate-300">
+                {(() => {
+                  const sl = quotaData?.quotas?.max_seats?.subscription?.limit;
+                  return sl === 'unlimited' || sl === -1 ? '∞' : (sl ?? limits.max_users);
+                })()}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-xs">
+              <span className="w-1.5 h-1.5 rounded-full bg-brand-cyan flex-shrink-0" />
+              <span className="text-gray-500 dark:text-slate-500">Add-ons</span>
+              {(quotaData?.quotas?.max_seats?.addon?.total_purchased ?? 0) > 0 ? (
+                <span className="font-semibold text-gray-700 dark:text-slate-300">
+                  {quotaData?.quotas?.max_seats?.addon?.total_purchased}
                 </span>
-              </div>
-            </div>
-            <div className="absolute right-3 top-3 flex items-center gap-2 sm:right-4 sm:top-4">
-              <div className={`flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl shadow-sm ring-1 ${
-                isOverviewCardActive('all')
-                  ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20'
-                  : 'bg-brand-blue/5 text-gray-700 ring-brand-blue/15 dark:bg-brand-blue/10 dark:text-slate-300 dark:ring-brand-blue/25'
-              }`}>
-                <UsersIcon className="w-4 h-4 sm:w-5 sm:h-5" />
-              </div>
-              <span
-                className={`flex h-7 w-7 items-center justify-center rounded-lg border transition-all duration-200 group-hover:translate-x-0.5 ${
-                  isOverviewCardActive('all')
-                    ? 'border-brand-blue/25 bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
-                    : 'border-brand-blue/15 bg-white text-gray-500 shadow-sm group-hover:border-brand-blue/30 group-hover:text-brand-blue dark:border-brand-blue/25 dark:bg-slate-900 dark:text-slate-400'
-                }`}
-                aria-hidden="true"
-              >
-                <ArrowUpRight className="h-3.5 w-3.5" />
-              </span>
+              ) : (
+                <span className="text-gray-400 dark:text-slate-500 italic">None purchased</span>
+              )}
             </div>
           </div>
-          {/* Progress bar */}
-          {limits && limits.max_users > 0 && (
-            <div className="mt-3">
-              <div className="w-full h-1.5 bg-gray-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all duration-500 ${
-                    isAtLimit
-                      ? 'bg-gradient-to-r from-red-400 to-red-600'
-                      : limits.approaching_limit
-                        ? 'bg-brand-orange'
-                        : 'bg-gradient-to-r from-brand-blue to-brand-cyan'
-                  }`}
-                  style={{ width: `${Math.min(limits.usage_percentage, 100)}%` }}
-                />
-              </div>
-              {/* Plan Limit / Add-ons breakdown */}
-              <div className="mt-2 space-y-1">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="flex items-center gap-1 text-gray-500 dark:text-slate-500">
-                    <span className="w-1.5 h-1.5 rounded-full bg-brand-blue flex-shrink-0" />
-                    Plan Limit
-                  </span>
-                  <span className="font-semibold text-gray-700 dark:text-slate-300">
-                    {(() => {
-                      const sl = quotaData?.quotas?.max_seats?.subscription?.limit;
-                      return sl === 'unlimited' || sl === -1 ? '∞' : (sl ?? limits.max_users);
-                    })()}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="flex items-center gap-1 text-gray-500 dark:text-slate-500">
-                    <span className="w-1.5 h-1.5 rounded-full bg-brand-cyan flex-shrink-0" />
-                    Add-ons
-                  </span>
-                  {(quotaData?.quotas?.max_seats?.addon?.total_purchased ?? 0) > 0 ? (
-                    <span className="font-semibold text-gray-700 dark:text-slate-300">
-                      {quotaData?.quotas?.max_seats?.addon?.total_purchased}
-                    </span>
-                  ) : (
-                    <span className="text-gray-400 dark:text-slate-500 italic text-2xs">None purchased</span>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-        </button>
-        <button
-          type="button"
-          onClick={() => openListView('active')}
-          className={`group relative flex flex-col items-stretch justify-start overflow-hidden text-left w-full bg-white dark:bg-slate-900 rounded-xl shadow-sm border p-3.5 sm:p-4 hover:shadow-md hover:border-brand-blue/30 transition-all ${isOverviewCardActive('active') ? 'border-brand-blue/55 bg-brand-blue/5 shadow-md shadow-brand-blue/10 ring-1 ring-brand-blue/20' : 'border-brand-blue/15 dark:border-brand-blue/25'}`}
-        >
-          <div>
-            <div className="pr-24">
-              <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-slate-500">Active Users</p>
-              <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 dark:text-slate-50 mt-1">
-                {userCounts ? userCounts.active_users : users.filter(u => u.is_active).length}
-              </p>
-            </div>
-            <div className="absolute right-3 top-3 flex items-center gap-2 sm:right-4 sm:top-4">
-              <div className={`flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl shadow-sm ring-1 ${
-                isOverviewCardActive('active')
-                  ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20'
-                  : 'bg-brand-blue/5 text-gray-700 ring-brand-blue/15 dark:bg-brand-blue/10 dark:text-slate-300 dark:ring-brand-blue/25'
-              }`}>
-                <UserCheck className="w-4 h-4 sm:w-5 sm:h-5" />
-              </div>
-              <span
-                className={`flex h-7 w-7 items-center justify-center rounded-lg border transition-all duration-200 group-hover:translate-x-0.5 ${
-                  isOverviewCardActive('active')
-                    ? 'border-brand-blue/25 bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
-                    : 'border-brand-blue/15 bg-white text-gray-500 shadow-sm group-hover:border-brand-blue/30 group-hover:text-brand-blue dark:border-brand-blue/25 dark:bg-slate-900 dark:text-slate-400'
-                }`}
-                aria-hidden="true"
-              >
-                <ArrowUpRight className="h-3.5 w-3.5" />
-              </span>
-            </div>
-          </div>
-        </button>
-        <button
-          type="button"
-          onClick={() => openListView('inactive')}
-          className={`group relative flex flex-col items-stretch justify-start overflow-hidden text-left w-full bg-white dark:bg-slate-900 rounded-xl shadow-sm border p-3.5 sm:p-4 hover:shadow-md hover:border-brand-blue/30 transition-all ${isOverviewCardActive('inactive') ? 'border-brand-blue/55 bg-brand-blue/5 shadow-md shadow-brand-blue/10 ring-1 ring-brand-blue/20' : 'border-brand-blue/15 dark:border-brand-blue/25'}`}
-        >
-          <div>
-            <div className="pr-24">
-              <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-slate-500">Inactive Users</p>
-              <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 dark:text-slate-50 mt-1">
-                {userCounts ? userCounts.inactive_users : users.filter(u => !u.is_active).length}
-              </p>
-            </div>
-            <div className="absolute right-3 top-3 flex items-center gap-2 sm:right-4 sm:top-4">
-              <div className={`flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl shadow-sm ring-1 ${
-                isOverviewCardActive('inactive')
-                  ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20'
-                  : 'bg-brand-blue/5 text-gray-700 ring-brand-blue/15 dark:bg-brand-blue/10 dark:text-slate-300 dark:ring-brand-blue/25'
-              }`}>
-                <UserX className="w-4 h-4 sm:w-5 sm:h-5" />
-              </div>
-              <span
-                className={`flex h-7 w-7 items-center justify-center rounded-lg border transition-all duration-200 group-hover:translate-x-0.5 ${
-                  isOverviewCardActive('inactive')
-                    ? 'border-brand-blue/25 bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
-                    : 'border-brand-blue/15 bg-white text-gray-500 shadow-sm group-hover:border-brand-blue/30 group-hover:text-brand-blue dark:border-brand-blue/25 dark:bg-slate-900 dark:text-slate-400'
-                }`}
-                aria-hidden="true"
-              >
-                <ArrowUpRight className="h-3.5 w-3.5" />
-              </span>
-            </div>
-          </div>
-        </button>
-      </div>
+        </div>
+      )}
 
       {pageView === 'list' && (
       <>
       <div ref={listSectionRef} className="scroll-mt-4" aria-hidden="true" />
-      <div className="mb-4 flex items-center justify-end gap-2">
-        <span className="text-xs text-gray-500 dark:text-slate-400">
-          {filteredUsers.length} {filteredUsers.length === 1 ? 'user' : 'users'}
-        </span>
-      </div>
 
-      {/* Search Bar */}
-      <div className="mb-4 sm:mb-6">
-        <div className="relative max-w-full sm:max-w-md">
+      {/* Toolbar — search left, result count right */}
+      <div className="mb-4 sm:mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative w-full sm:max-w-md">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-slate-500" />
-          <input
+          <Input
             type="text"
             placeholder="Search users by name or email..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue placeholder-gray-400 shadow-sm transition-all text-sm"
+            className="pl-10"
           />
         </div>
+        <span className="shrink-0 text-xs font-medium text-gray-500 dark:text-slate-400">
+          {filteredUsers.length} {filteredUsers.length === 1 ? 'user' : 'users'}
+        </span>
       </div>
 
       {/* Users Table */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 tf-round-edges">
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 tf-round-edges">
         {isLoading ? (
           /* Neutral skeleton matching the users table columns: User ID, User,
              Role, Permissions, Status, Created At, Last Login, Actions.
@@ -2489,7 +2429,7 @@ export default function UserManagement() {
         ) : (
           <div className="tf-table-shell">
             <table className="w-full">
-              <thead className="bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-800 dark:to-slate-800 border-b border-gray-200 dark:border-slate-700">
+              <thead className="bg-gray-50 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
                 <tr>
                   <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider hidden sm:table-cell whitespace-nowrap">
                     User ID
@@ -2584,7 +2524,7 @@ export default function UserManagement() {
                             onClick={() => handleToggleActive(user)}
                             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:ring-offset-2 ring-1 ring-inset ${
                               user.is_active
-                                ? 'bg-gradient-to-r from-emerald-500 to-green-600 ring-white/20 shadow-sm shadow-green-500/25'
+                                ? 'bg-success ring-success-line shadow-sm'
                                 : 'bg-gray-300 ring-black/5'
                             }`}
                             title={user.is_active ? 'Active - Click to deactivate' : 'Inactive - Click to activate'}
@@ -2600,13 +2540,9 @@ export default function UserManagement() {
                           </span>
                         </div>
                       ) : (
-                        <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ring-1 ${
-                          user.is_active
-                            ? 'bg-success-subtle text-success ring-success-line'
-                            : 'bg-destructive-subtle text-destructive ring-destructive-line'
-                        }`}>
+                        <Badge variant={user.is_active ? 'success' : 'destructive'}>
                           {user.is_active ? 'Active' : 'Inactive'}
-                        </span>
+                        </Badge>
                       )}
                     </td>
                     <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 hidden lg:table-cell">
@@ -2640,50 +2576,56 @@ export default function UserManagement() {
                             and reacts live to a permission change because canUpdateUser is
                             derived from currentUser?.permissions on every render. */}
                         {user.role.toLowerCase() !== 'tenant_admin' && user.id !== currentUserId && (
-                          <button
-                            onClick={() => canUpdateUser && user.is_active && openEditModal(user)}
-                            disabled={!canUpdateUser || !user.is_active}
-                            className={`p-2 rounded-lg transition-all ${
-                              canUpdateUser && user.is_active
-                                ? 'text-gray-500 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/10 cursor-pointer'
-                                : 'text-gray-300 dark:text-slate-500 cursor-not-allowed'
-                            }`}
-                            title={!canUpdateUser ? 'You do not have permission to edit users' : user.is_active ? 'Edit User' : 'Cannot edit inactive user'}
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </button>
+                          <Tooltip content={!canUpdateUser ? 'You do not have permission to edit users' : user.is_active ? 'Edit User' : 'Cannot edit inactive user'}>
+                            <button
+                              onClick={() => canUpdateUser && user.is_active && openEditModal(user)}
+                              disabled={!canUpdateUser || !user.is_active}
+                              aria-label="Edit user"
+                              className={`p-2 rounded-lg transition-all ${
+                                canUpdateUser && user.is_active
+                                  ? 'text-gray-500 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/10 cursor-pointer'
+                                  : 'text-gray-300 dark:text-slate-500 cursor-not-allowed'
+                              }`}
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                          </Tooltip>
                         )}
 
                         {/* Reset Password — requires users:reset_password. Icon stays visible; see Edit button above. */}
                         {user.role.toLowerCase() !== 'tenant_admin' && user.id !== currentUserId && (
-                          <button
-                            onClick={() => { if (canResetPassword && user.is_active) { setResetPwMode('choose'); setResetPwUser(user); } }}
-                            disabled={!canResetPassword || !user.is_active}
-                            className={`p-2 rounded-lg transition-all ${
-                              canResetPassword && user.is_active
-                                ? 'text-gray-500 dark:text-slate-500 hover:text-warning hover:bg-warning-subtle cursor-pointer'
-                                : 'text-gray-300 dark:text-slate-500 cursor-not-allowed'
-                            }`}
-                            title={!canResetPassword ? 'You do not have permission to reset passwords' : user.is_active ? 'Reset Password' : 'Cannot reset password for inactive user'}
-                          >
-                            <KeyRound className="w-4 h-4" />
-                          </button>
+                          <Tooltip content={!canResetPassword ? 'You do not have permission to reset passwords' : user.is_active ? 'Reset Password' : 'Cannot reset password for inactive user'}>
+                            <button
+                              onClick={() => { if (canResetPassword && user.is_active) { setResetPwMode('choose'); setResetPwUser(user); } }}
+                              disabled={!canResetPassword || !user.is_active}
+                              aria-label="Reset password"
+                              className={`p-2 rounded-lg transition-all ${
+                                canResetPassword && user.is_active
+                                  ? 'text-gray-500 dark:text-slate-500 hover:text-warning hover:bg-warning-subtle cursor-pointer'
+                                  : 'text-gray-300 dark:text-slate-500 cursor-not-allowed'
+                              }`}
+                            >
+                              <KeyRound className="w-4 h-4" />
+                            </button>
+                          </Tooltip>
                         )}
 
                         {/* Force Password Change — requires users:force_password_change. Icon stays visible; see Edit button above. */}
                         {user.role.toLowerCase() !== 'tenant_admin' && user.id !== currentUserId && (
-                          <button
-                            onClick={() => canForcePwChange && user.is_active && handleForcePasswordChange(user)}
-                            disabled={!canForcePwChange || !user.is_active}
-                            className={`p-2 rounded-lg transition-all ${
-                              canForcePwChange && user.is_active
-                                ? 'text-gray-500 dark:text-slate-500 hover:text-orange-600 hover:bg-orange-50 cursor-pointer'
-                                : 'text-gray-300 dark:text-slate-500 cursor-not-allowed'
-                            }`}
-                            title={!canForcePwChange ? 'You do not have permission to force a password change' : user.is_active ? 'Force password change on next login' : 'Cannot update inactive user'}
-                          >
-                            <Lock className="w-4 h-4" />
-                          </button>
+                          <Tooltip content={!canForcePwChange ? 'You do not have permission to force a password change' : user.is_active ? 'Force password change on next login' : 'Cannot update inactive user'}>
+                            <button
+                              onClick={() => canForcePwChange && user.is_active && handleForcePasswordChange(user)}
+                              disabled={!canForcePwChange || !user.is_active}
+                              aria-label="Force password change"
+                              className={`p-2 rounded-lg transition-all ${
+                                canForcePwChange && user.is_active
+                                  ? 'text-gray-500 dark:text-slate-500 hover:text-brand-orange hover:bg-brand-orange/10 cursor-pointer'
+                                  : 'text-gray-300 dark:text-slate-500 cursor-not-allowed'
+                              }`}
+                            >
+                              <Lock className="w-4 h-4" />
+                            </button>
+                          </Tooltip>
                         )}
                       </div>
                     </td>
@@ -2695,13 +2637,11 @@ export default function UserManagement() {
         )}
 
         {!isLoading && filteredUsers.length === 0 && (
-          <div className="text-center py-10 sm:py-14 px-4">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/20 mb-4">
-              <UserCog className="w-7 h-7 text-brand-blue" />
-            </div>
-            <p className="text-base font-semibold text-gray-900 dark:text-slate-50">No users found</p>
-            <p className="text-sm text-gray-500 dark:text-slate-500 mt-1">Try adjusting your search, or invite a new teammate to get started.</p>
-          </div>
+          <EmptyState
+            icon={UserCog}
+            title="No users found"
+            description="Try adjusting your search, or invite a new teammate to get started."
+          />
         )}
       </div>
 
@@ -2718,49 +2658,53 @@ export default function UserManagement() {
       )}
       </>
       )}
+      </div>
 
       {/* Create User Modal */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
           <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-[95vw] sm:max-w-2xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col tf-round-edges">
             {/* Header strip */}
-            <div className="bg-brand-blue px-5 sm:px-6 py-4 flex items-center justify-between gap-3 shrink-0">
+            <div className="bg-brand-blue px-4 sm:px-6 py-4 flex items-center justify-between gap-3 shrink-0">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25 backdrop-blur-sm flex-shrink-0">
                   <Plus className="w-5 h-5 text-white" />
                 </div>
                 <div className="min-w-0">
                   <h2 className="text-base sm:text-lg font-bold text-white truncate">Invite New User</h2>
-                  <p className="text-xs text-blue-100 mt-0.5 truncate">Create an account and send an invite email</p>
+                  <p className="text-xs text-white/80 mt-0.5 truncate">Create an account and send an invite email</p>
                 </div>
               </div>
-              <button
+              <Button
+                variant="secondary"
+                tone="onColor"
+                size="sm"
                 onClick={resetCreateModal}
-                className="p-1.5 rounded-lg bg-white/15 hover:bg-white/25 ring-1 ring-white/25 text-white transition-colors flex-shrink-0"
-               aria-label="Close">
+                className="px-2 flex-shrink-0"
+                aria-label="Close"
+              >
                 <X className="w-5 h-5" />
-              </button>
+              </Button>
             </div>
 
-            <div className="space-y-4 p-5 sm:p-6 overflow-y-auto flex-1">
+            <div className="space-y-4 px-4 sm:px-6 py-4 sm:py-5 overflow-y-auto flex-1">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                <Label className="mb-1.5">
                   Full Name <span className="text-destructive">*</span>
-                </label>
-                <input
+                </Label>
+                <Input
                   type="text"
                   value={newUser.name}
                   onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
                   placeholder="Enter full name"
-                  className="w-full px-4 py-2.5 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue shadow-sm transition-all"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                <Label className="mb-1.5">
                   Email <span className="text-destructive">*</span>
-                </label>
+                </Label>
 
-                <input
+                <Input
                   type="email"
                   value={newUser.email}
                   onChange={(e) => {
@@ -2769,7 +2713,6 @@ export default function UserManagement() {
                     checkEmailAvailability(value);
                   }}
                   placeholder="user@example.com"
-                  className="w-full px-4 py-2.5 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue shadow-sm transition-all"
                 />
 
                 {/* Email validation feedback */}
@@ -2799,9 +2742,9 @@ export default function UserManagement() {
                 <span className="text-xs sm:text-sm">A temporary password will be auto-generated and emailed to the user. They will be asked to set a new password on first login.</span>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                <Label className="mb-2">
                   Role <span className="text-destructive">*</span>
-                </label>
+                </Label>
                 {/* Role Selection Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {availableRoles.map(role => {
@@ -2945,15 +2888,15 @@ export default function UserManagement() {
               )}
             </div>
 
-            <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 px-5 sm:px-6 py-4 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50/50 dark:bg-slate-800/50 shrink-0">
-              <button
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50/50 dark:bg-slate-800/50 shrink-0">
+              <Button
+                variant="primary"
                 onClick={handleCreateUser}
                 disabled={isSaving || !emailCheckResult.available || isCheckingEmail}
-                className="px-5 py-2 sm:py-2.5 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                icon={isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
               >
-                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                 Create User
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -2971,15 +2914,19 @@ export default function UserManagement() {
                 </div>
                 <div className="min-w-0">
                   <h2 className="text-base sm:text-lg font-bold text-white truncate">Edit User</h2>
-                  <p className="text-xs text-blue-100 mt-0.5 truncate">{editingUser.email}</p>
+                  <p className="text-xs text-white/80 mt-0.5 truncate">{editingUser.email}</p>
                 </div>
               </div>
-              <button
+              <Button
+                variant="secondary"
+                tone="onColor"
+                size="sm"
                 onClick={resetEditModal}
-                className="p-1.5 rounded-lg bg-white/15 hover:bg-white/25 ring-1 ring-white/25 text-white transition-colors flex-shrink-0"
-               aria-label="Close">
+                className="px-2 flex-shrink-0"
+                aria-label="Close"
+              >
                 <X className="w-5 h-5" />
-              </button>
+              </Button>
             </div>
 
             {/* Body - Scrollable */}
@@ -2988,21 +2935,19 @@ export default function UserManagement() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">Name</label>
-                  <input
+                  <Input
                     type="text"
                     value={editingUser.name}
                     onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue shadow-sm transition-all"
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">Email</label>
-                  <input
+                  <Input
                     type="email"
                     value={editingUser.email}
                     onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })}
                     placeholder="user@example.com"
-                    className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue shadow-sm transition-all"
                   />
                 </div>
               </div>
@@ -3059,7 +3004,7 @@ export default function UserManagement() {
                   {isLoadingPermissions ? (
                     <div className="space-y-4">
                       {Array.from({ length: 3 }).map((_, ci) => (
-                        <div key={ci} className="border border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden bg-white dark:bg-slate-900 shadow-sm">
+                        <div key={ci} className="border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-sm">
                           {/* Module Header */}
                           <div className="px-3 sm:px-4 py-2.5 border-b border-gray-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 flex items-center justify-between">
                             <div className="flex items-center gap-3">
@@ -3071,8 +3016,8 @@ export default function UserManagement() {
                           {/* Permission Cards Grid */}
                           <div className="p-2 sm:p-4 grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
                             {Array.from({ length: 4 }).map((_, pi) => (
-                              <div key={pi} className="flex items-center gap-2.5 p-2.5 rounded-lg border border-gray-100 dark:border-slate-800">
-                                <Skeleton className="w-6 h-6 rounded flex-shrink-0" />
+                              <div key={pi} className="flex items-start gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border border-gray-100 dark:border-slate-800">
+                                <Skeleton className="w-6 h-6 sm:w-8 sm:h-8 rounded flex-shrink-0" />
                                 <Skeleton className="h-4 flex-1" />
                               </div>
                             ))}
@@ -3201,11 +3146,11 @@ export default function UserManagement() {
                         // Badge color + letter derived from permission code action segment
                         const getActionBadge = (code: string) => {
                           const action = code.split(':').pop() || '';
-                          if (action === 'read') return { cls: 'bg-blue-100 text-blue-600', letter: 'R' };
+                          if (action === 'read') return { cls: 'bg-brand-blue/10 text-brand-blue', letter: 'R' };
                           if (action === 'create') return { cls: 'bg-success-subtle text-success', letter: 'C' };
                           if (action === 'update') return { cls: 'bg-warning-subtle text-warning', letter: 'U' };
                           if (action === 'delete') return { cls: 'bg-destructive-subtle text-destructive', letter: 'D' };
-                          return { cls: 'bg-purple-100 text-purple-600', letter: (action[0] || 'A').toUpperCase() };
+                          return { cls: 'bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-300', letter: (action[0] || 'A').toUpperCase() };
                         };
 
                         const allCodes = [
@@ -3219,7 +3164,7 @@ export default function UserManagement() {
                         const selectedCount = allCodes.filter(c => editSelectedPermissionCodes.has(c)).length;
 
                         return (
-                          <div key={category.id} className="border border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden bg-white dark:bg-slate-900 shadow-sm">
+                          <div key={category.id} className="border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-sm">
                             {/* Module Header */}
                             <div
                               className={`px-3 sm:px-4 py-2.5 border-b flex items-center justify-between select-none transition-colors ${
@@ -3502,14 +3447,14 @@ export default function UserManagement() {
                 ) : ''}
               </span>
               <div className="flex gap-2">
-                <button
+                <Button
+                  variant="primary"
                   onClick={handleUpdateUser}
                   disabled={isSaving}
-                  className="px-4 sm:px-5 py-1.5 sm:py-2 bg-brand-blue hover:bg-brand-blue-2 text-white text-xs sm:text-sm font-medium rounded-lg transition-all flex items-center gap-2 disabled:opacity-50 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                  icon={isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : undefined}
                 >
-                  {isSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                   Save Changes
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -3532,7 +3477,7 @@ export default function UserManagement() {
       {resetPwUser && (
         <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4 sm:p-6">
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-md ring-1 ring-black/5 max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
-            <div className="flex-shrink-0 flex items-center justify-between gap-3 px-5 py-4 bg-gradient-to-r from-amber-500 to-orange-600 text-white">
+            <div className="flex-shrink-0 flex items-center justify-between gap-3 px-4 sm:px-6 py-4 bg-brand-orange text-white">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25 backdrop-blur-sm flex-shrink-0">
                   <KeyRound className="w-5 h-5" />
@@ -3542,12 +3487,12 @@ export default function UserManagement() {
                   <p className="text-xs text-white/80 truncate">{resetPwUser.email}</p>
                 </div>
               </div>
-              <button onClick={closeResetPwModal} className="p-1.5 rounded-lg hover:bg-white/15 transition-colors" aria-label="Close">
+              <Button variant="secondary" tone="onColor" size="sm" onClick={closeResetPwModal} className="px-2 flex-shrink-0" aria-label="Close">
                 <X className="w-4 h-4" />
-              </button>
+              </Button>
             </div>
 
-            <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
+            <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-4 sm:py-5 space-y-4">
               {resetPwMode === 'choose' ? (
                 <>
                   <button
@@ -3583,12 +3528,12 @@ export default function UserManagement() {
                   <div>
                     <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">New password</label>
                     <div className="relative">
-                      <input
+                      <Input
                         type={directPwShow ? 'text' : 'password'}
                         value={directPw}
                         onChange={(e) => setDirectPw(e.target.value)}
                         autoComplete="new-password"
-                        className="w-full px-3 py-2 pr-10 text-sm rounded-lg ring-1 ring-gray-300 dark:ring-slate-600 dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-blue/50"
+                        className="pr-10"
                         placeholder="Min 8 chars, upper, lower, number, special"
                       />
                       <button type="button" onClick={() => setDirectPwShow(s => !s)} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600" aria-label="Toggle visibility">
@@ -3598,41 +3543,42 @@ export default function UserManagement() {
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Confirm password</label>
-                    <input
+                    <Input
                       type={directPwShow ? 'text' : 'password'}
                       value={directPwConfirm}
                       onChange={(e) => setDirectPwConfirm(e.target.value)}
                       autoComplete="new-password"
-                      className="w-full px-3 py-2 text-sm rounded-lg ring-1 ring-gray-300 dark:ring-slate-600 dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-blue/50"
                       placeholder="Re-enter password"
                     />
                   </div>
                   <label className="flex items-start gap-2 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={directPwForceChange}
-                      onChange={(e) => setDirectPwForceChange(e.target.checked)}
-                      className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
+                      onCheckedChange={(v) => setDirectPwForceChange(!!v)}
+                      className="mt-0.5"
                     />
                     <span className="text-xs text-gray-600 dark:text-slate-400">Require the user to change this password on next login</span>
                   </label>
                   <div className="flex items-center gap-2 pt-1">
-                    <button
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       onClick={() => setResetPwMode('choose')}
                       disabled={resetPwSubmitting}
-                      className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg ring-1 ring-gray-300 dark:ring-slate-600 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-60"
+                      icon={<ArrowLeft className="w-4 h-4" />}
                     >
-                      <ArrowLeft className="w-4 h-4" />
                       Back
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      variant="primary"
+                      size="sm"
                       onClick={() => handleSetPasswordDirect(resetPwUser)}
                       disabled={resetPwSubmitting}
-                      className="flex-1 px-3 py-2 text-sm font-medium rounded-lg bg-brand-blue text-white hover:bg-brand-blue/90 transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+                      className="flex-1"
+                      icon={resetPwSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : undefined}
                     >
-                      {resetPwSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
                       Set Password
-                    </button>
+                    </Button>
                   </div>
                 </>
               )}
@@ -3674,15 +3620,19 @@ export default function UserManagement() {
                 </div>
                 <div className="min-w-0">
                   <h2 className="text-base sm:text-xl font-bold text-white truncate">{viewingRolePopup.name}</h2>
-                  <p className="text-blue-100 text-xs sm:text-sm truncate">{viewingRolePopup.description}</p>
+                  <p className="text-white/80 text-xs sm:text-sm truncate">{viewingRolePopup.description}</p>
                 </div>
               </div>
-              <button
+              <Button
+                variant="secondary"
+                tone="onColor"
+                size="sm"
                 onClick={() => { setViewingRolePopup(null); setViewingRolePopupPermissions([]); }}
-                className="p-1.5 sm:p-2 rounded-lg bg-white/15 hover:bg-white/25 ring-1 ring-white/25 transition-colors flex-shrink-0"
-               aria-label="Close">
-                <X className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-              </button>
+                className="px-2 flex-shrink-0"
+                aria-label="Close"
+              >
+                <X className="w-4 h-4 sm:w-5 sm:h-5" />
+              </Button>
             </div>
 
             {/* Body */}
@@ -3710,7 +3660,7 @@ export default function UserManagement() {
               {isViewingRolePopupLoading ? (
                 <div className="space-y-4 sm:space-y-6">
                   {Array.from({ length: 2 }).map((_, mi) => (
-                    <div key={mi} className="border border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden bg-white dark:bg-slate-900 shadow-sm">
+                    <div key={mi} className="border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-sm">
                       <div className="bg-slate-50 dark:bg-slate-800/50 px-3 sm:px-4 py-2.5 border-b border-gray-200 dark:border-slate-700">
                         <Skeleton className="h-4 w-28" />
                       </div>
@@ -3742,7 +3692,7 @@ export default function UserManagement() {
                       return acc;
                     }, {} as Record<string, Permission[]>)
                   ).map(([module, perms]) => (
-                    <div key={module} className="border border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden bg-white dark:bg-slate-900 shadow-sm">
+                    <div key={module} className="border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-sm">
                       <div className="bg-gradient-to-r from-brand-blue/5 to-brand-cyan/5 px-3 sm:px-4 py-2.5 border-b border-brand-blue/15">
                         <h4 className="font-semibold text-brand-blue capitalize text-xs sm:text-sm">
                           {module.replace(/_/g, ' ')} ({perms.length})
@@ -3755,11 +3705,11 @@ export default function UserManagement() {
                             className="flex items-start gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-slate-700 hover:border-brand-blue/30 hover:bg-brand-blue/5 transition-all"
                           >
                             <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded flex items-center justify-center flex-shrink-0 ${
-                              perm.action === 'read'   ? 'bg-blue-100 text-blue-600' :
+                              perm.action === 'read'   ? 'bg-brand-blue/10 text-brand-blue' :
                               perm.action === 'create' ? 'bg-success-subtle text-success' :
                               perm.action === 'update' ? 'bg-warning-subtle text-warning' :
                               perm.action === 'delete' ? 'bg-destructive-subtle text-destructive' :
-                              'bg-purple-100 text-purple-600'
+                              'bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-300'
                             }`}>
                               <span className="text-2xs sm:text-xs font-bold uppercase">{perm.action[0]}</span>
                             </div>

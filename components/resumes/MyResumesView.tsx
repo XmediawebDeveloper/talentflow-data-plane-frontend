@@ -1821,11 +1821,14 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
         if (currentFilters.noticePeriod) {
           searchParams.notice_period = currentFilters.noticePeriod;
         }
-        if (currentFilters.uploadDateFrom) {
-          searchParams.upload_date_from = currentFilters.uploadDateFrom;
+        if (currentFilters.uploadDateRange?.start) {
+          searchParams.upload_date_from = currentFilters.uploadDateRange.start;
         }
-        if (currentFilters.uploadDateTo) {
-          searchParams.upload_date_to = currentFilters.uploadDateTo;
+        if (currentFilters.uploadDateRange?.end) {
+          searchParams.upload_date_to = currentFilters.uploadDateRange.end;
+        }
+        if (currentFilters.uploadedBy) {
+          searchParams.uploaded_by_name = currentFilters.uploadedBy;
         }
         if (currentFilters.sourceType) {
           searchParams.source_type = currentFilters.sourceType;
@@ -4271,7 +4274,6 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   onUnarchiveDisabled={!canArchiveMyResumes}
                   onUnarchiveDisabledReason="You do not have permission to unarchive resumes"
                   canShare={canShareMyResumes}
-                  canTag={canUpdateMyResumes}
                   disablePagination={true}
                   isArchivedFolder={
                     folders.some(f => f.name === 'Archived Resumes' && !f.parentId && f.id === selectedFolder)
@@ -4801,7 +4803,6 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                             onArchive={canArchiveMyResumes ? (resumeId) => handleArchiveResumes([resumeId]) : undefined}
                             onUnarchive={canArchiveMyResumes ? (resumeId) => handleUnarchiveResumes([resumeId]) : undefined}
                             canShare={canShareMyResumes}
-                            canTag={canUpdateMyResumes}
                             disablePagination={true}
                             isArchivedFolder={
                               folders.some(f => f.name === 'Archived Resumes' && !f.parentId && f.id === cardViewFolder)

@@ -37,13 +37,9 @@ import {
   ICON_TILE,
   ICON,
   ICON_INLINE,
-  TILE_ACCENT,
 } from '@/lib/constants/candidateLayout';
 import { AssessmentInfo } from '@/lib/services/candidateService';
 import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
-/* This screen is reached before the HR round is known, so its stepper shows
-   four steps rather than five — the same list it already displayed. */
-const CONSENT_STEPS = ['Terms & Consent', 'Assessment Details', 'System Check', 'Assessment'] as const;
 
 
 interface ConsentModalProps {
@@ -102,15 +98,15 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
   ];
 
   const importantInstructions = [
-    { icon: Clock, text: 'If a genuine network or client failure occurs, your session can recover and resume from the saved server state.' },
-    { icon: RefreshCcw, text: 'You cannot return to previous sections once submitted.' },
-    { icon: Wifi, text: 'Ensure you have a stable internet connection throughout the test.' },
-    { icon: AlertCircle, text: 'Do not refresh the page or navigate away during the assessment.' },
-    { icon: AlertCircle, text: IS_PRODUCTION_ENV
+    { icon: Clock, title: 'Auto-recovery', text: 'If a genuine network or client failure occurs, your session can recover and resume from the saved server state.' },
+    { icon: RefreshCcw, title: 'No going back', text: 'You cannot return to previous sections once submitted.' },
+    { icon: Wifi, title: 'Stable internet', text: 'Ensure you have a stable internet connection throughout the test.' },
+    { icon: AlertCircle, title: "Don't refresh", text: 'Do not refresh the page or navigate away during the assessment.' },
+    { icon: AlertCircle, critical: true, title: 'Stay on this tab', text: IS_PRODUCTION_ENV
         ? 'Switching to another tab, minimising the window, Alt+Tab, the Windows/⌘ key, Esc or F11, or opening a Picture-in-Picture video ends the assessment immediately. There is no resume.'
         : 'Switching to another tab, minimising the window, Alt+Tab, the Windows/⌘ key, Esc or F11, or opening a Picture-in-Picture video is recorded as a violation for the recruiter.' },
-    { icon: Monitor, text: 'You will be asked to share your ENTIRE screen. Your screen and webcam are recorded for the whole assessment and stored with your result.' },
-    { icon: Coffee, text: 'Complete the assessment in one sitting without interruption.' }
+    { icon: Monitor, critical: true, title: 'Share your entire screen', text: 'You will be asked to share your ENTIRE screen. Your screen and webcam are recorded for the whole assessment and stored with your result.' },
+    { icon: Coffee, title: 'One sitting', text: 'Complete the assessment in one sitting without interruption.' }
   ];
 
   const proctoringFeatures = [
@@ -130,7 +126,7 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
           moved to the next screen. */}
       <div className="sticky top-0 z-50">
         <CandidateHeader />
-        <CandidateStepper current={1} steps={CONSENT_STEPS} />
+        <CandidateStepper current={1} />
       </div>
 
       {/* The recruiter page shell. */}
@@ -165,54 +161,58 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
               </div>
             </div>
 
-            {/* Instructions + proctoring, as two cards in the page card. */}
-            <div className="mb-5">
-              <div className="grid lg:grid-cols-2 gap-3">
-              {/* Important Instructions */}
-              <div className="rounded-xl border border-warning-line bg-warning-subtle p-4 sm:p-5">
-                <div className="flex items-center gap-3 mb-5">
-                  <div className={`${ICON_TILE} bg-warning-subtle text-warning`}>
-                    <AlertCircle className={ICON} />
-                  </div>
-                  <h3 className={T_SECTION}>Important Instructions</h3>
-                </div>
-                <ul className="space-y-4">
-                  {importantInstructions.map((instruction, index) => (
-                    <li key={index} className="flex items-start gap-3">
-                      <instruction.icon className={`${ICON_INLINE} text-warning mt-1`} />
-                      <span className={T_BODY}>{instruction.text}</span>
+            {/* Instructions + proctoring — no big cards. Two compact
+                sections: the rules as a grid of small tiles (short title + the
+                rule; the two that can end or flag the attempt tinted red), and
+                what is monitored as one row of five small tiles. */}
+            <section className="mb-5" aria-labelledby="instructions-heading">
+              <div className="flex items-center gap-2 mb-2.5">
+                <AlertCircle className="w-4 h-4 text-warning" />
+                <h3 id="instructions-heading" className={T_SECTION}>Key rules</h3>
+              </div>
+              <ul className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5">
+                {importantInstructions.map((instruction, index) => {
+                  const critical = 'critical' in instruction && instruction.critical;
+                  return (
+                    <li
+                      key={index}
+                      className={`rounded-lg border px-3 py-2.5 ${
+                        critical ? 'border-destructive-line bg-destructive-subtle/50' : 'border-gray-200 bg-white'
+                      }`}
+                    >
+                      <p className={`flex items-center gap-1.5 text-sm font-semibold ${critical ? 'text-destructive-strong' : 'text-gray-900'}`}>
+                        <instruction.icon className={`w-3.5 h-3.5 shrink-0 ${critical ? 'text-destructive' : 'text-warning'}`} />
+                        {instruction.title}
+                      </p>
+                      <p className="mt-1 text-xs leading-relaxed text-gray-600">{instruction.text}</p>
                     </li>
-                  ))}
-                </ul>
-              </div>
+                  );
+                })}
+              </ul>
+            </section>
 
-              {/* AI Proctoring */}
-              {/* The accent tone, not purple — purple-50/100/200/600/700 appears in
-                  no token and carries no dark-mode value. */}
-              <div className="rounded-xl border border-brand-cyan/20 bg-brand-cyan/5 p-4 sm:p-5">
-                <div className="flex items-center gap-3 mb-5">
-                  <div className={`${ICON_TILE} ${TILE_ACCENT}`}>
-                    <Monitor className={ICON} />
-                  </div>
-                  <h3 className={T_SECTION}>AI Proctoring &amp; Monitoring</h3>
-                </div>
-                <p className={`${T_BODY} mb-4`}>
-                  This assessment uses AI-powered proctoring to ensure fairness:
-                </p>
-                <div className="space-y-4">
-                  {proctoringFeatures.map((feature, index) => (
-                    <div key={index} className="flex items-start gap-3">
-                      <feature.icon className={`${ICON_INLINE} text-brand-cyan mt-1`} />
-                      <div className="min-w-0">
-                        <p className={T_CARD_TITLE}>{feature.label}</p>
-                        <p className={T_HELP}>{feature.description}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+            {/* What is monitored — the accent tone, not purple (purple appears
+                in no token and carries no dark-mode value). */}
+            <section className="mb-5" aria-labelledby="proctoring-heading">
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 mb-2.5">
+                <h3 id="proctoring-heading" className={`${T_SECTION} flex items-center gap-2 self-center`}>
+                  <Shield className="w-4 h-4 text-brand-cyan" />
+                  AI proctoring
+                </h3>
+                <span className="text-xs text-gray-500">— this assessment is monitored to keep it fair</span>
               </div>
-              </div>
-            </div>
+              <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
+                {proctoringFeatures.map((feature, index) => (
+                  <li key={index} className="rounded-lg bg-brand-cyan/5 ring-1 ring-brand-cyan/15 px-3 py-2.5">
+                    <p className="flex items-center gap-1.5 text-sm font-semibold text-gray-900">
+                      <feature.icon className="w-3.5 h-3.5 shrink-0 text-brand-cyan" />
+                      {feature.label}
+                    </p>
+                    <p className="mt-1 text-xs leading-relaxed text-gray-600">{feature.description}</p>
+                  </li>
+                ))}
+              </ul>
+            </section>
 
             {/* Terms & Conditions */}
             <div className="mb-5">

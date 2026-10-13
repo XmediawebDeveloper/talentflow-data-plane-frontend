@@ -3,7 +3,7 @@
 // `Folder` is already taken by the type imported below, so the icon comes in
 // under an alias.
 import { RESUME_EMAIL_SHARE_ENABLED } from '@/lib/constants/featureFlags';
-import { Eye, Briefcase, Download, MoreVertical, Paperclip, Upload, Zap, FileSearch, Edit3, FolderOpen, Folder as FolderIcon, Trash2, Copy, Share2, Mail, Send, Star, Tag, Archive, ArchiveRestore, Clock, GripVertical, FileText, Loader2, X } from 'lucide-react';
+import { Eye, Briefcase, Download, MoreVertical, Paperclip, Upload, Zap, FileSearch, Edit3, FolderOpen, Folder as FolderIcon, Trash2, Copy, Share2, Mail, Send, Star, Archive, ArchiveRestore, Clock, GripVertical, FileText, Loader2, X } from 'lucide-react';
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
@@ -248,7 +248,6 @@ interface ResumeTableProps {
   isArchivedFolder?: boolean;
   archivedFolderId?: string;
   canShare?: boolean;
-  canTag?: boolean;
   canDownload?: boolean;
   draggable?: boolean;
   /** Lets rows be dragged into a custom order. Needs `draggable`. */
@@ -335,7 +334,6 @@ export default function ResumeTable({
   isArchivedFolder = false,
   archivedFolderId,
   canShare = false,
-  canTag = false,
   canDownload = true,
   draggable = true,
   enableRowReorder = false,
@@ -380,7 +378,6 @@ export default function ResumeTable({
   const [showShareModal, setShowShareModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showArchiveModal, setShowArchiveModal] = useState(false);
-  const [showAddTagsModal, setShowAddTagsModal] = useState(false);
   const [selectedResumeForAction, setSelectedResumeForAction] = useState<Resume | null>(null);
 
   const closeActionMenu = useCallback(() => {
@@ -1048,25 +1045,6 @@ export default function ResumeTable({
                               <span className={MENU_ITEM_SCALE_CLASS}>Share Resume</span>
                             </button>
                             )}
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (!canTag) {
-                                  toast.error('You do not have permission to tag resumes');
-                                  closeActionMenu();
-                                  return;
-                                }
-                                setSelectedResumeForAction(resume);
-                                setShowAddTagsModal(true);
-                                closeActionMenu();
-                              }}
-                              aria-disabled={!canTag}
-                              title={!canTag ? 'You do not have permission to tag resumes' : ''}
-                              className={!canTag ? `${resumeActionMenuItemClass} !text-gray-400 cursor-not-allowed` : resumeActionMenuItemClass}
-                            >
-                              <Tag className="w-4 h-4 text-menu-icon-edit" />
-                              <span className={MENU_ITEM_SCALE_CLASS}>Add Tags</span>
-                            </button>
                             {(isArchivedFolder || resume.isArchived) ? (onUnarchive && (
                               <button
                                 onClick={(e) => {
@@ -1376,77 +1354,6 @@ export default function ResumeTable({
         <ShareResumeModal resume={selectedResumeForAction} onClose={closeShareModal} />
       )}
 
-      {/* Add Tags Modal */}
-      {showAddTagsModal && selectedResumeForAction && (
-        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-md w-full max-h-[90dvh] flex flex-col">
-            <div className="p-6 border-b border-gray-200 shrink-0 flex items-start justify-between">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="w-10 h-10 bg-brand-cyan rounded-xl flex items-center justify-center shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10">
-                    <Tag className="w-5 h-5 text-white" />
-                  </div>
-                  <h2 className="text-gray-900">Add Tags</h2>
-                </div>
-                <p className="text-sm text-gray-600">
-                  Add tags to {selectedResumeForAction.name}'s resume
-                </p>
-              </div>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => {
-                  setShowAddTagsModal(false);
-                  setSelectedResumeForAction(null);
-                }}
-                className="px-2 flex-shrink-0 ml-2"
-                aria-label="Close"
-              >
-                <X className="w-5 h-5" />
-              </Button>
-            </div>
-            <div className="p-6 overflow-y-auto flex-1">
-              <div className="mb-6">
-                <label className="block text-sm text-gray-700 mb-2">Tags</label>
-                <input
-                  type="text"
-                  placeholder="Enter tags (comma separated)"
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
-                />
-                <p className="text-xs text-gray-500 mt-1">Example: high-priority, senior-level, remote</p>
-              </div>
-              <div className="mb-6">
-                <p className="text-sm text-gray-700 mb-2">Suggested Tags</p>
-                <div className="flex flex-wrap gap-2">
-                  {['High Priority', 'Remote', 'Senior Level', 'Immediate Start', 'Contract'].map((tag) => (
-                    <button
-                      key={tag}
-                      className="px-3 py-1 bg-brand-blue/5 text-brand-blue rounded-full text-xs hover:bg-brand-blue/10 transition-colors ring-1 ring-brand-blue/20"
-                    >
-                      + {tag}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div className="flex gap-3 p-6 border-t border-gray-200 shrink-0">
-              <Button
-                variant="primary"
-                size="md"
-                onClick={() => {
-                  toast.success('Tags added successfully');
-                  setShowAddTagsModal(false);
-                  setSelectedResumeForAction(null);
-                }}
-                icon={<Tag className="w-4 h-4" />}
-                className="flex-1"
-              >
-                Add Tags
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Archive Resume Modal */}
       {showArchiveModal && selectedResumeForAction && (

@@ -1,6 +1,7 @@
 'use client';
 
-import { Check } from 'lucide-react';
+import { createContext, useContext } from 'react';
+import { CheckCircle } from 'lucide-react';
 import { RECRUITER_BAR_ROW } from '@/lib/constants/candidateLayout';
 
 /**
@@ -18,7 +19,26 @@ import { RECRUITER_BAR_ROW } from '@/lib/constants/candidateLayout';
  * the screen you are going to. Colours are the flow's tokens — `brand-blue`
  * for the step you are on, `success` for the ones behind you, grey ahead —
  * rather than raw palette steps.
+ *
+ * Styled like the recruiter's AI Interview step indicator
+ * (components/ai-interview/AIInterviewStepIndicator.tsx): completed steps are
+ * solid brand blue with a white tick, the current step a brand-blue gradient
+ * with a soft glow and pulse, and the connectors turn blue behind you.
  */
+
+const DOT_COMPLETED = 'bg-brand-blue text-white shadow-sm';
+const DOT_CURRENT = 'bg-gradient-to-br from-brand-blue to-brand-blue-2 text-white shadow-lg shadow-brand-blue/40 ring-2 ring-brand-blue/10';
+const DOT_UPCOMING = 'bg-gray-100 text-gray-400 ring-1 ring-gray-200';
+
+/** The current step's pulse, the same keyframes the AI interview uses. */
+function CurrentPulse() {
+  return (
+    <span
+      aria-hidden
+      className="pointer-events-none absolute inset-0 rounded-full bg-brand-blue/25 tf-step-pulse"
+    />
+  );
+}
 
 export const ASSESSMENT_STEPS = [
   'Terms & Consent',
@@ -28,19 +48,43 @@ export const ASSESSMENT_STEPS = [
   'Assessment',
 ] as const;
 
+/**
+ * Whether this attempt has an HR Questions step. Provided ONCE by the portal
+ * (CandidateAssessmentPortal) from the same check that decides whether the HR
+ * screen is shown at all, so every screen draws the same list. Before this,
+ * Terms & Consent hard-coded a four-step list without HR while every later
+ * screen drew all five — "Assessment" was step 4 on the first screen and
+ * jumped to step 5 when HR Questions suddenly appeared. Defaults to true so a
+ * stepper rendered outside the portal keeps the full list.
+ */
+const CandidateHrStepContext = createContext<boolean>(true);
+export const CandidateHrStepProvider = CandidateHrStepContext.Provider;
+
 interface CandidateStepperProps {
-  /** 1-based index of the step the candidate is on. */
+  /**
+   * 1-based position of the step the candidate is on, counted in the FULL
+   * five-step list (1 = Terms & Consent … 5 = Assessment). When the attempt
+   * has no HR step the stepper drops it and renumbers, so callers never need
+   * to know whether HR is on.
+   */
   current: number;
   /**
-   * Steps to show. Defaults to all five; a flow without an HR round passes a
-   * shorter list, and the numbering follows the list rather than being fixed.
+   * An explicit list, for a flow that is not the assessment's five steps.
+   * When given, `current` indexes this list as-is and the HR context is not
+   * consulted.
    */
   steps?: readonly string[];
   /** Bottom rule. Step 5 turns it off: the card under it does the separating. */
   bordered?: boolean;
 }
 
-export default function CandidateStepper({ current, steps = ASSESSMENT_STEPS, bordered = true }: CandidateStepperProps) {
+export default function CandidateStepper({ current: currentProp, steps: stepsProp, bordered = true }: CandidateStepperProps) {
+  const hasHrStep = useContext(CandidateHrStepContext);
+  const steps: readonly string[] = stepsProp
+    ?? (hasHrStep ? ASSESSMENT_STEPS : ASSESSMENT_STEPS.filter((step) => step !== 'HR Questions'));
+  const current = stepsProp
+    ? currentProp
+    : steps.indexOf(ASSESSMENT_STEPS[currentProp - 1]) + 1;
   return (
     <div className={`w-full bg-white ${bordered ? 'border-b border-gray-200' : ''}`}>
       <div className={`${RECRUITER_BAR_ROW} py-3 sm:py-4`}>
@@ -74,24 +118,23 @@ export default function CandidateStepper({ current, steps = ASSESSMENT_STEPS, bo
                 {index > 0 && (
                   <span
                     aria-hidden="true"
-                    className={`absolute top-4 right-1/2 w-full h-0.5 -translate-y-1/2 ${stepNumber <= current ? 'bg-success' : 'bg-gray-200'}`}
+                    className={`absolute top-4 right-1/2 w-full h-0.5 -translate-y-1/2 ${stepNumber <= current ? 'bg-brand-blue' : 'bg-gray-200'}`}
                   />
                 )}
-                <div
-                  aria-current={isCurrent ? 'step' : undefined}
-                  className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium shrink-0 ${
-                    isCompleted
-                      ? 'bg-success text-white'
-                      : isCurrent
-                        ? 'bg-brand-blue text-white ring-4 ring-brand-blue/15'
-                        : 'bg-gray-200 text-gray-500'
-                  }`}
-                >
-                  {isCompleted ? <Check className="w-4 h-4" /> : stepNumber}
+                <div className="relative z-10 shrink-0">
+                  <div
+                    aria-current={isCurrent ? 'step' : undefined}
+                    className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-all duration-300 ${
+                      isCompleted ? DOT_COMPLETED : isCurrent ? DOT_CURRENT : DOT_UPCOMING
+                    }`}
+                  >
+                    {isCompleted ? <CheckCircle className="w-4 h-4" /> : <span className="tabular-nums">{stepNumber}</span>}
+                  </div>
+                  {isCurrent && <CurrentPulse />}
                 </div>
                 <span
                   className={`mt-1.5 text-2xs sm:text-xs leading-tight line-clamp-2 break-words ${
-                    isCurrent ? 'font-semibold text-gray-900' : isCompleted ? 'font-medium text-success' : 'font-medium text-gray-500'
+                    isCurrent ? 'font-semibold text-brand-blue' : isCompleted ? 'font-medium text-gray-700' : 'font-medium text-gray-400'
                   }`}
                 >
                   {label}
@@ -111,21 +154,20 @@ export default function CandidateStepper({ current, steps = ASSESSMENT_STEPS, bo
             return (
               <div key={label} className="flex items-center">
                 <div className="flex items-center gap-2">
-                  <div
-                    aria-current={isCurrent ? 'step' : undefined}
-                    className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all shrink-0 ${
-                      isCompleted
-                        ? 'bg-success text-white'
-                        : isCurrent
-                          ? 'bg-brand-blue text-white'
-                          : 'bg-gray-200 text-gray-500'
-                    }`}
-                  >
-                    {isCompleted ? <Check className="w-4 h-4" /> : stepNumber}
+                  <div className="relative shrink-0">
+                    <div
+                      aria-current={isCurrent ? 'step' : undefined}
+                      className={`relative z-10 w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold transition-all duration-300 ${
+                        isCompleted ? DOT_COMPLETED : isCurrent ? DOT_CURRENT : DOT_UPCOMING
+                      }`}
+                    >
+                      {isCompleted ? <CheckCircle className="w-5 h-5" /> : <span className="tabular-nums">{stepNumber}</span>}
+                    </div>
+                    {isCurrent && <CurrentPulse />}
                   </div>
                   <span
                     className={`text-sm font-medium ${
-                      isCurrent ? 'text-gray-900' : isCompleted ? 'text-success' : 'text-gray-500'
+                      isCurrent ? 'text-brand-blue font-semibold' : isCompleted ? 'text-gray-700' : 'text-gray-400'
                     }`}
                   >
                     {label}
@@ -134,7 +176,7 @@ export default function CandidateStepper({ current, steps = ASSESSMENT_STEPS, bo
 
                 {index < steps.length - 1 && (
                   <div
-                    className={`w-6 sm:w-12 h-0.5 mx-2 shrink-0 ${isCompleted ? 'bg-success' : 'bg-gray-200'}`}
+                    className={`w-6 sm:w-12 h-0.5 mx-2 shrink-0 ${isCompleted ? 'bg-brand-blue' : 'bg-gray-200'}`}
                   />
                 )}
               </div>

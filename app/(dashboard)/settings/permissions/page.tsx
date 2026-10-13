@@ -1,13 +1,14 @@
 'use client';
 
 import PageBreadcrumb from '@/components/PageBreadcrumb';
-import { Shield, Users, Check, X, Edit2, Save, Plus, Loader2, AlertCircle, RefreshCw, Sparkles } from 'lucide-react';
+import { Shield, Users, Check, X, Edit2, Save, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/ui/page-header';
 import { useScrollRestoration } from '@/lib/hooks/useListViewPersistence';
 
 // Neutral-gray skeleton mirroring the Permissions & Roles layout:
@@ -16,20 +17,17 @@ function PermissionsSkeleton() {
   return (
     <main className="flex-1 overflow-x-clip bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
           <Skeleton className="h-4 w-64 mb-4 md:mb-6" />
 
-          {/* Hero */}
-          <section className="mb-6 rounded-xl border border-gray-100 bg-gray-50 p-5 sm:p-6">
-            <div className="flex items-start gap-3">
-              <Skeleton className="h-9 w-9 shrink-0 rounded-lg" />
-              <div className="flex-1 space-y-2">
-                <Skeleton className="h-5 w-28 rounded-full" />
-                <Skeleton className="h-6 w-52" />
-                <Skeleton className="h-4 w-full max-w-md" />
-              </div>
+          {/* Header — mirrors PageHeader (icon tile + title/description) */}
+          <div className="mb-5 flex items-start gap-3">
+            <Skeleton className="h-10 w-10 shrink-0 rounded-xl" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-6 w-52" />
+              <Skeleton className="h-4 w-full max-w-md" />
             </div>
-          </section>
+          </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
             {/* Roles list */}
@@ -316,31 +314,19 @@ export default function PermissionsPage() {
   return (
     <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Profile Settings', href: '/settings/general-settings' }, { label: 'Permissions & Roles' }]} />
 
-        {/* SaaS Hero Header */}
-        <section className="relative mb-6 overflow-hidden rounded-xl bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-5 sm:p-6">
-          <div className="relative flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-            <div className="flex items-start gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
-                <Shield className="h-5 w-5 text-brand-blue" />
-              </div>
-              <div>
-                <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-brand-orange/5 ring-1 ring-brand-orange/20 px-2.5 py-0.5 text-2xs font-semibold text-brand-orange-deep">
-                  <Sparkles className="h-3 w-3 text-brand-orange-deep" />
-                  Access control
-                </div>
-                <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">Permissions & Roles</h1>
-                <p className="mt-2 max-w-2xl text-sm text-gray-600 dark:text-slate-400 sm:text-base">Configure what each role can see and do across the platform.</p>
-              </div>
-            </div>
-            <Button variant="secondary" onClick={fetchData}>
-              <RefreshCw className="w-4 h-4" />
+        <PageHeader
+          title="Permissions & Roles"
+          description="Configure what each role can see and do across the platform."
+          icon={<Shield className="h-5 w-5" />}
+          actions={
+            <Button variant="secondary" icon={<RefreshCw className="w-4 h-4" />} onClick={fetchData}>
               Refresh
             </Button>
-          </div>
-        </section>
+          }
+        />
 
         {/* Error Message */}
         {error && (

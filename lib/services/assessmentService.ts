@@ -355,6 +355,7 @@ export interface DetailedResultResponse {
   round_scores: RoundScore[];
   question_evaluations: QuestionEvaluation[];
   candidate_insights?: Record<string, any>;
+  summary?: string;
   hiring_recommendation?: string;
   proctoring_stats?: ProctoringStats;
   ai_generation_audit?: {

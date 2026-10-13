@@ -5,15 +5,16 @@ import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   Shield,
-  Loader2,
   Check,
-  Layers3,
   Sparkles,
   ArrowUpRight,
+  Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import rbacService from '@/lib/services/rbacService';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import { PageHeader } from '@/components/ui/page-header';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Permission,
@@ -119,13 +120,13 @@ const hasAnyActionSelected = (selectedCodes: Set<string>, category: CustomPermis
 };
 
 const fieldClassName =
-  'w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10';
+  'w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10';
 
 // Same field, in its invalid state — a full replacement rather than extra classes
 // appended to `fieldClassName`, so the red border/ring can't lose a Tailwind
 // specificity tie against the gray/blue ones it replaces.
 const fieldErrorClassName =
-  'w-full rounded-xl border border-destructive-line bg-white px-4 py-3 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-destructive-line focus:ring-4 focus:ring-destructive-line';
+  'w-full rounded-lg border border-destructive-line bg-white px-4 py-3 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-destructive-line focus:ring-4 focus:ring-destructive-line';
 
 const getErrorDetail = (error: unknown): string | undefined => {
   if (typeof error !== 'object' || error === null || !('response' in error)) {
@@ -392,7 +393,7 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
       key={code}
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-all ${
+      className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-all ${
         isSelected
           ? 'border-brand-blue bg-brand-blue text-white shadow-md shadow-brand-blue/20'
           : 'border-gray-200 bg-white text-gray-700 hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue'
@@ -414,7 +415,7 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
 
     return (
       <div className="space-y-4">
-        <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 ring-1 ring-black/[0.02]">
+        <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 ring-1 ring-black/[0.02]">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h3 className="text-sm font-semibold text-gray-900">Permission Library</h3>
@@ -425,7 +426,7 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
             <button
               type="button"
               onClick={handleSelectAll}
-              className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-all ${
+              className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-all ${
                 allSelected
                   ? 'border-brand-blue bg-brand-blue text-white shadow-md shadow-brand-blue/20'
                   : someSelected
@@ -450,7 +451,7 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
           return (
             <section
               key={category.id}
-              className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm ring-1 ring-black/[0.02]"
+              className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm ring-1 ring-black/[0.02]"
             >
               <div className="flex flex-col gap-3 border-b border-gray-100 bg-gray-50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
                 <div className="flex items-start gap-3">
@@ -525,7 +526,7 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
                 {category.subCategories && (
                   <div className="space-y-4">
                     {category.subCategories.map((subCategory) => (
-                      <div key={subCategory.name} className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4">
+                      <div key={subCategory.name} className="rounded-xl border border-gray-100 bg-gray-50/70 p-4">
                         <div className="mb-3 flex flex-wrap items-center gap-2">
                           <span className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
                             {subCategory.name}
@@ -577,12 +578,12 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
           );
         })}
 
-        <div className="rounded-2xl border border-brand-blue/15 bg-brand-blue/[0.04] p-4 text-sm text-gray-600">
+        <div className="rounded-xl border border-brand-blue/15 bg-brand-blue/[0.04] p-4 text-sm text-gray-600">
           <span className="font-semibold text-gray-900">View permission</span> is automatically enabled when any action in the same category is selected.
         </div>
 
         {selectedPermissionCodes.size > 0 && (
-          <div className="rounded-2xl border border-brand-teal/15 bg-brand-teal/[0.06] p-4">
+          <div className="rounded-xl border border-brand-teal/15 bg-brand-teal/[0.06] p-4">
             <div className="mb-3 text-sm font-semibold text-gray-900">
               Selected permissions ({selectedPermissionCodes.size})
             </div>
@@ -611,18 +612,16 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
     return (
       <main className={embedded ? '' : 'flex-1 overflow-x-clip bg-slate-50'}>
         <div className={embedded ? 'w-full' : 'mx-auto w-full max-w-[1400px]'}>
-          <div className={embedded ? 'w-full' : 'p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl'}>
-            <div className="mb-6 rounded-2xl border border-gray-100 bg-white p-5 sm:p-6 lg:p-7">
-              <div className="flex items-start gap-3">
-                <Skeleton className="h-12 w-12 rounded-xl" />
-                <div className="space-y-2">
-                  <Skeleton className="h-7 w-56" />
-                  <Skeleton className="h-4 w-80 max-w-full" />
-                </div>
+          <div className={embedded ? 'w-full' : 'p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl'}>
+            <div className="mb-5 flex items-start gap-3">
+              <Skeleton className="h-10 w-10 rounded-xl" />
+              <div className="space-y-2">
+                <Skeleton className="h-7 w-56" />
+                <Skeleton className="h-4 w-80 max-w-full" />
               </div>
             </div>
             <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
-              <div className="rounded-2xl border border-gray-100 bg-white">
+              <div className="rounded-xl border border-gray-100 bg-white">
                 <div className="border-b border-gray-100 bg-gray-50 px-5 py-4 space-y-2">
                   <Skeleton className="h-5 w-32" />
                   <Skeleton className="h-3.5 w-72 max-w-full" />
@@ -630,22 +629,22 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
                 <div className="space-y-6 p-5 sm:p-6">
                   <div className="grid gap-5 md:grid-cols-2">
                     {Array.from({ length: 2 }).map((_, i) => (
-                      <div key={i} className="space-y-2"><Skeleton className="h-3.5 w-24" /><Skeleton className="h-11 w-full rounded-xl" /></div>
+                      <div key={i} className="space-y-2"><Skeleton className="h-3.5 w-24" /><Skeleton className="h-11 w-full rounded-lg" /></div>
                     ))}
                   </div>
-                  <div className="space-y-2"><Skeleton className="h-3.5 w-24" /><Skeleton className="h-24 w-full rounded-xl" /></div>
+                  <div className="space-y-2"><Skeleton className="h-3.5 w-24" /><Skeleton className="h-24 w-full rounded-lg" /></div>
                   <div className="grid gap-5 md:grid-cols-2">
                     {Array.from({ length: 2 }).map((_, i) => (
-                      <div key={i} className="space-y-2"><Skeleton className="h-3.5 w-24" /><Skeleton className="h-11 w-full rounded-xl" /></div>
+                      <div key={i} className="space-y-2"><Skeleton className="h-3.5 w-24" /><Skeleton className="h-11 w-full rounded-lg" /></div>
                     ))}
                   </div>
                   <div className="space-y-3">
                     <Skeleton className="h-5 w-32" />
-                    {Array.from({ length: 3 }).map((_, i) => (<Skeleton key={i} className="h-16 w-full rounded-2xl" />))}
+                    {Array.from({ length: 3 }).map((_, i) => (<Skeleton key={i} className="h-16 w-full rounded-xl" />))}
                   </div>
                 </div>
               </div>
-              <div className="rounded-2xl border border-gray-100 bg-white p-5 space-y-4 xl:sticky xl:top-6 xl:self-start">
+              <div className="rounded-xl border border-gray-100 bg-white p-5 space-y-4 xl:sticky xl:top-6 xl:self-start">
                 <Skeleton className="h-5 w-32" />
                 {Array.from({ length: 4 }).map((_, i) => (<Skeleton key={i} className="h-14 w-full rounded-xl" />))}
               </div>
@@ -659,7 +658,7 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
   return (
     <main className={embedded ? '' : 'flex-1 overflow-x-clip bg-slate-50'}>
       <div className={embedded ? 'w-full' : 'mx-auto w-full max-w-[1400px]'}>
-      <div className={embedded ? 'w-full' : 'p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl'}>
+      <div className={embedded ? 'w-full' : 'p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl'}>
         {!embedded && (
           <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Role Management', href: '/organization/role-management' }, { label: 'Create Role' }]} />
         )}
@@ -673,45 +672,26 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
           </button>
         )}
 
-        <section className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
-          <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />
-          <div className="pointer-events-none absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
-
-          <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl">
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
-                <Layers3 className="h-3.5 w-3.5 text-brand-orange" />
-                New access profile
+        <PageHeader
+          icon={<Shield className="h-5 w-5" />}
+          title="Create New Role"
+          description="Define a role that fits your dashboard's access model, including inheritance, operational priority, and detailed feature permissions."
+          actions={
+            <div className="grid grid-cols-2 gap-2 sm:min-w-[260px]">
+              <div className="rounded-xl border border-gray-100 bg-white px-3 py-2">
+                <div className="text-xs text-gray-500">Available roles</div>
+                <div className="mt-1 text-sm font-semibold text-gray-900">{roles.length}</div>
               </div>
-              <div className="flex items-start gap-3">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15 backdrop-blur-sm">
-                  <Shield className="h-6 w-6 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Create New Role</h1>
-                  <p className="mt-2 max-w-2xl text-sm text-white/80 sm:text-base">
-                    Define a role that fits your dashboard’s access model, including inheritance, operational priority, and detailed feature permissions.
-                  </p>
-                </div>
+              <div className="rounded-xl border border-gray-100 bg-white px-3 py-2">
+                <div className="text-xs text-gray-500">Selected permissions</div>
+                <div className="mt-1 text-sm font-semibold text-gray-900">{selectedPermissionCodes.size}</div>
               </div>
             </div>
-
-            <div className="grid grid-cols-2 gap-2 text-sm text-white/85 sm:min-w-[260px]">
-              <div className="rounded-xl bg-white/10 px-3 py-2 ring-1 ring-white/10 backdrop-blur-sm">
-                <div className="text-xs text-white/65">Available roles</div>
-                <div className="mt-1 font-semibold">{roles.length}</div>
-              </div>
-              <div className="rounded-xl bg-white/10 px-3 py-2 ring-1 ring-white/10 backdrop-blur-sm">
-                <div className="text-xs text-white/65">Selected permissions</div>
-                <div className="mt-1 font-semibold">{selectedPermissionCodes.size}</div>
-              </div>
-            </div>
-          </div>
-        </section>
+          }
+        />
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
-          <section className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+          <section className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
             <div className="border-b border-gray-100 bg-gray-50 px-5 py-4 sm:px-6">
               <h2 className="text-lg font-semibold text-gray-900">Role Details</h2>
               <p className="text-sm text-gray-500">Start with the role identity, then configure the access surface below.</p>
@@ -809,26 +789,22 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
             </div>
 
             <div className="flex flex-col gap-3 border-t border-gray-100 px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
-              <button
-                onClick={handleClose}
-                className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-all hover:border-gray-300 hover:bg-gray-50"
-                disabled={isSaving}
-              >
+              <Button variant="secondary" onClick={handleClose} disabled={isSaving}>
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="primary"
                 onClick={handleSubmit}
                 disabled={isSaving}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:opacity-70"
+                icon={isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUpRight className="h-4 w-4" />}
               >
-                {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUpRight className="h-4 w-4" />}
                 Create Role
-              </button>
+              </Button>
             </div>
           </section>
 
           <aside className="space-y-6 xl:sticky xl:top-6 xl:self-start">
-            <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+            <section className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
               <div className="flex items-start gap-3">
                 <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/15 shadow-sm shadow-brand-orange/10">
                   <Sparkles className="h-5 w-5 text-brand-orange-deep" />

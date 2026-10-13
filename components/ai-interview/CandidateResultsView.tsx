@@ -2164,32 +2164,9 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
           );
         })()}
 
-        {/* Multiple speakers / voice-identity malpractice — prominent red banner.
-            The server voice-ID check flags when a SECOND voice is heard in one
-            answer (multiple_voices) or the speaker changes (voice_identity_changed).
-            Surface it up front as a strong malpractice signal; the individual
-            turns' answers are still preserved in the transcript below. */}
-        {(() => {
-          const voiceHits = violations.filter(v =>
-            v.event_type === 'multiple_voices' || v.event_type === 'voice_identity_changed'
-          );
-          if (voiceHits.length === 0) return null;
-          const first = voiceHits[0];
-          return (
-            <div className="mb-4 flex items-start gap-2 px-4 py-3 bg-destructive-subtle border border-destructive-line ring-1 ring-destructive-line rounded-xl text-sm text-destructive-strong shadow-sm">
-              <ShieldAlert className="w-4 h-4 flex-shrink-0 mt-0.5" />
-              <div>
-                <div className="font-semibold">Multiple speakers detected — possible malpractice</div>
-                <div className="text-destructive/90 mt-0.5">
-                  A voice other than the enrolled candidate was heard during the interview
-                  {voiceHits.length > 1 ? <> ({voiceHits.length} times)</> : null}
-                  {first.timestamp ? <>, first at <b>{formatTs(first.timestamp)}</b></> : null}.
-                  The affected answers are kept in the transcript (marked, not scored) for your review.
-                </div>
-              </div>
-            </div>
-          );
-        })()}
+        {/* The "Multiple speakers detected" banner was removed: it claimed the
+            affected answers were "marked, not scored", but nothing marks or
+            skips them. The events still appear in the Violations tab. */}
 
         {/* Partial warning banner — only for a GENUINELY cut-short / stuck-partial
             interview. Suppressed while the full evaluation is still being produced

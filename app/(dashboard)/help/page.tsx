@@ -65,7 +65,7 @@ const Tip = ({ type = 'tip', children }: { type?: 'tip' | 'warning' | 'info'; ch
 // Feature list item
 const FeatureItem = ({ children }: { children: React.ReactNode }) => (
   <li className="flex items-start gap-3 py-2">
-    <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+    <CheckCircle2 className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
     <span className="text-gray-700">{children}</span>
   </li>
 );
@@ -99,7 +99,7 @@ const helpArticles: Record<string, {
       <>
         <section className="mb-10">
           <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <Zap className="w-5 h-5 text-amber-500" />
+            <Zap className="w-5 h-5 text-brand-orange" />
             Welcome to TalentFlow
           </h2>
           <p className="text-gray-600 leading-relaxed mb-4">
@@ -326,28 +326,28 @@ const helpArticles: Record<string, {
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Best Practices</h2>
           <div className="grid gap-3">
             <div className="flex items-start gap-3 p-4 bg-gray-50 rounded-lg">
-              <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+              <CheckCircle2 className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
               <div>
                 <div className="font-medium text-gray-900">Use clear, inclusive language</div>
                 <div className="text-sm text-gray-600">Avoid jargon and gendered terms</div>
               </div>
             </div>
             <div className="flex items-start gap-3 p-4 bg-gray-50 rounded-lg">
-              <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+              <CheckCircle2 className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
               <div>
                 <div className="font-medium text-gray-900">Include salary range</div>
                 <div className="text-sm text-gray-600">Increases application quality by 30%</div>
               </div>
             </div>
             <div className="flex items-start gap-3 p-4 bg-gray-50 rounded-lg">
-              <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+              <CheckCircle2 className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
               <div>
                 <div className="font-medium text-gray-900">Highlight growth opportunities</div>
                 <div className="text-sm text-gray-600">Mention career paths and learning</div>
               </div>
             </div>
             <div className="flex items-start gap-3 p-4 bg-gray-50 rounded-lg">
-              <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+              <CheckCircle2 className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
               <div>
                 <div className="font-medium text-gray-900">Describe your team</div>
                 <div className="text-sm text-gray-600">Team size, reporting structure, collaboration style</div>
@@ -564,8 +564,8 @@ const helpArticles: Record<string, {
             <div className="flex items-center justify-center">
               <ArrowRight className="w-6 h-6 text-gray-400 rotate-90 md:rotate-0" />
             </div>
-            <div className="flex-1 text-center p-6 bg-green-50 rounded-xl border-2 border-green-200">
-              <div className="w-12 h-12 bg-green-600 text-white rounded-full flex items-center justify-center mx-auto mb-3 text-lg font-bold">4</div>
+            <div className="flex-1 text-center p-6 bg-success-subtle rounded-xl ring-1 ring-success-line">
+              <div className="w-12 h-12 bg-success-strong text-white rounded-full flex items-center justify-center mx-auto mb-3 text-lg font-bold">4</div>
               <div className="font-medium text-gray-900">Get Scores</div>
               <div className="text-sm text-gray-600 mt-1">View ranked results</div>
             </div>
@@ -577,11 +577,11 @@ const helpArticles: Record<string, {
           <p className="text-gray-600 mb-4">Scores range from 0-100 based on match quality:</p>
 
           <div className="space-y-3">
-            <div className="flex items-center gap-4 p-4 bg-green-50 rounded-lg border border-green-200">
-              <div className="text-2xl font-bold text-green-600">90-100</div>
+            <div className="flex items-center gap-4 p-4 bg-success-subtle rounded-lg ring-1 ring-success-line">
+              <div className="text-2xl font-bold text-success-strong">90-100</div>
               <div>
-                <div className="font-medium text-green-800">Excellent Match</div>
-                <div className="text-sm text-green-700">Top candidate - prioritize for interview</div>
+                <div className="font-medium text-success-strong">Excellent Match</div>
+                <div className="text-sm text-success-strong">Top candidate - prioritize for interview</div>
               </div>
             </div>
             <div className="flex items-center gap-4 p-4 bg-brand-blue/5 rounded-lg ring-1 ring-brand-blue/15">
@@ -591,11 +591,11 @@ const helpArticles: Record<string, {
                 <div className="text-sm text-brand-blue/80">Good fit - consider for interview</div>
               </div>
             </div>
-            <div className="flex items-center gap-4 p-4 bg-amber-50 rounded-lg border border-amber-200">
-              <div className="text-2xl font-bold text-amber-600">60-74</div>
+            <div className="flex items-center gap-4 p-4 bg-warning-subtle rounded-lg ring-1 ring-warning-line">
+              <div className="text-2xl font-bold text-warning-strong">60-74</div>
               <div>
-                <div className="font-medium text-amber-800">Moderate Match</div>
-                <div className="text-sm text-amber-700">Potential fit - review manually</div>
+                <div className="font-medium text-warning-strong">Moderate Match</div>
+                <div className="text-sm text-warning-strong">Potential fit - review manually</div>
               </div>
             </div>
             <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
@@ -911,7 +911,7 @@ const helpArticles: Record<string, {
                 <tr className="bg-gray-50">
                   <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 border border-gray-200">Feature</th>
                   <th className="px-4 py-3 text-center text-sm font-semibold text-gray-900 border border-gray-200">Starter</th>
-                  <th className="px-4 py-3 text-center text-sm font-semibold text-gray-900 border border-gray-200 bg-gray-800 text-white">Professional</th>
+                  <th className="px-4 py-3 text-center text-sm font-semibold border border-gray-200 bg-slate-800 text-white">Professional</th>
                   <th className="px-4 py-3 text-center text-sm font-semibold text-gray-900 border border-gray-200">Enterprise</th>
                 </tr>
               </thead>
@@ -998,7 +998,7 @@ const helpArticles: Record<string, {
 
         <section>
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Need Billing Help?</h2>
-          <div className="bg-gray-800 text-white rounded-xl p-6">
+          <div className="bg-slate-800 text-white rounded-xl p-6">
             <p className="mb-3">Contact our billing support team:</p>
             <div className="space-y-2 text-sm">
               <div>Email: <span className="text-gray-300">billing@talentflow.com</span></div>
@@ -1062,8 +1062,8 @@ const helpArticles: Record<string, {
 
           <div className="space-y-4">
             <div className="flex items-start gap-4 p-4 bg-gray-50 rounded-lg">
-              <div className="w-16 h-16 bg-green-100 rounded-lg flex items-center justify-center">
-                <span className="text-2xl font-bold text-green-600">85</span>
+              <div className="w-16 h-16 bg-success-subtle rounded-lg flex items-center justify-center">
+                <span className="text-2xl font-bold text-success-strong">85</span>
               </div>
               <div>
                 <div className="font-medium text-gray-900">Match Score</div>
@@ -1175,7 +1175,7 @@ export default function HelpCenterPage() {
           </div>
 
           {/* Article content */}
-          <div className="bg-white rounded-xl sm:rounded-2xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-5 sm:p-8 md:p-10">
+          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-5 sm:p-8 md:p-10">
             {selectedArticle.content}
           </div>
 
@@ -1262,7 +1262,7 @@ export default function HelpCenterPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 mb-6 sm:mb-10">
           <button
             onClick={() => router.push('/help?article=getting-started')}
-            className="p-4 sm:p-6 bg-brand-blue text-white rounded-xl sm:rounded-2xl shadow-md shadow-brand-blue/25 ring-1 ring-white/10 hover:bg-brand-blue-2 hover:shadow-xl transition-all text-left"
+            className="p-4 sm:p-6 bg-brand-blue text-white rounded-xl shadow-md shadow-brand-blue/25 ring-1 ring-white/10 hover:bg-brand-blue-2 hover:shadow-xl transition-all text-left"
           >
             <Lightbulb className="w-6 h-6 sm:w-8 sm:h-8 mb-2 sm:mb-3" />
             <div className="text-base sm:text-lg font-semibold">Quick Start Guide</div>
@@ -1270,7 +1270,7 @@ export default function HelpCenterPage() {
           </button>
           <button
             onClick={() => router.push('/support-tickets')}
-            className="p-4 sm:p-6 bg-white border border-gray-100 ring-1 ring-black/[0.02] rounded-xl sm:rounded-2xl hover:border-brand-blue/30 hover:shadow-md shadow-sm shadow-brand-blue/5 transition-all text-left"
+            className="p-4 sm:p-6 bg-white border border-gray-100 ring-1 ring-black/[0.02] rounded-xl hover:border-brand-blue/30 hover:shadow-md shadow-sm shadow-brand-blue/5 transition-all text-left"
           >
             <MessageCircle className="w-6 h-6 sm:w-8 sm:h-8 mb-2 sm:mb-3 text-brand-blue" />
             <div className="text-base sm:text-lg font-semibold text-gray-900">Contact Support</div>
@@ -1278,7 +1278,7 @@ export default function HelpCenterPage() {
           </button>
           <button
             onClick={() => router.push('/settings/general-settings')}
-            className="p-4 sm:p-6 bg-white border border-gray-100 ring-1 ring-black/[0.02] rounded-xl sm:rounded-2xl hover:border-brand-blue/30 hover:shadow-md shadow-sm shadow-brand-blue/5 transition-all text-left"
+            className="p-4 sm:p-6 bg-white border border-gray-100 ring-1 ring-black/[0.02] rounded-xl hover:border-brand-blue/30 hover:shadow-md shadow-sm shadow-brand-blue/5 transition-all text-left"
           >
             <Settings className="w-6 h-6 sm:w-8 sm:h-8 mb-2 sm:mb-3 text-brand-blue" />
             <div className="text-base sm:text-lg font-semibold text-gray-900">Settings</div>
@@ -1304,7 +1304,7 @@ export default function HelpCenterPage() {
                 <button
                   key={article.id}
                   onClick={() => router.push(`/help?article=${article.id}`)}
-                  className="p-4 sm:p-5 lg:p-6 bg-white border border-gray-100 ring-1 ring-black/[0.02] rounded-xl sm:rounded-2xl hover:border-brand-blue/30 hover:shadow-md shadow-sm shadow-brand-blue/5 transition-all text-left group"
+                  className="p-4 sm:p-5 lg:p-6 bg-white border border-gray-100 ring-1 ring-black/[0.02] rounded-xl hover:border-brand-blue/30 hover:shadow-md shadow-sm shadow-brand-blue/5 transition-all text-left group"
                 >
                   <div className="flex items-start gap-3 sm:gap-4">
                     <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
@@ -1328,7 +1328,7 @@ export default function HelpCenterPage() {
         </div>
 
         {/* Contact Section */}
-        <div className="mt-12 bg-white rounded-2xl p-8 border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+        <div className="mt-12 bg-white rounded-xl p-8 border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
           <h2 className="text-xl font-semibold text-gray-900 mb-6">Still need help?</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <a
