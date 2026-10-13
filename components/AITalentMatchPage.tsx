@@ -90,12 +90,13 @@ import { useListSearch } from '@/lib/hooks/useListSearch';
    Score Resume / Invite Assessment / Invite AI Interview). */
 const actionsMenuItemClass = 'group !rounded-none !px-4 !py-2.5 text-sm text-gray-700';
 
-/* Same layout switches as Resume Scoring's (see its SHOW_STAT_CARDS): the
-   four stat cards are OFF — their counts ride the rating pills — and the
+/* Layout switches. The four stat cards are ON again (as on Job Openings),
+   sitting above the list rather than as a separate 'cards' step; they
+   share their counts and filter with the rating pills. The
    flat "All Resumes" view and the job row's inline "View Versions" panel
    are out of the UI (the History icon still opens every run). Hidden, not
    deleted: flip a flag to bring one back. */
-const SHOW_STAT_CARDS = false;
+const SHOW_STAT_CARDS = true;
 const SHOW_ALL_RESUMES_VIEW = false;
 const SHOW_VERSIONS_PANEL = false;
 
@@ -921,9 +922,9 @@ export default function AITalentMatchPage({
   const [historyItemsPerPage, setHistoryItemsPerPage] = useState(10);
   // Two-step view: 'cards' shows just the stats cards; clicking one reveals the
   // job list ('list') or the candidate-centric roll-up ('candidates').
-  // With the stat cards off (SHOW_STAT_CARDS) there is no 'cards' step —
-  // the page opens straight onto View by Job.
-  const [historyPageView, setHistoryPageView] = useState<'cards' | 'list' | 'candidates' | 'resumes'>(SHOW_STAT_CARDS ? 'cards' : 'list');
+  // There is no 'cards' step any more — the stat cards sit above the list,
+  // so the page opens straight onto View by Job.
+  const [historyPageView, setHistoryPageView] = useState<'cards' | 'list' | 'candidates' | 'resumes'>('list');
   const historyListSectionRef = useRef<HTMLDivElement | null>(null);
   const [historyListScrollRequest, setHistoryListScrollRequest] = useState(0);
   // The rating pills (All / Rating 10 / 9 – 7 / Below 7) — Resume Scoring's
@@ -1708,7 +1709,7 @@ export default function AITalentMatchPage({
       const restoreViewOnReload = isFirstMountAfterReload();
       const restoreView = (pageView: unknown, band: unknown) => {
         // A view that is switched off lands on its nearest one still shown.
-        if (pageView === 'cards') setHistoryPageView(SHOW_STAT_CARDS ? 'cards' : 'list');
+        if (pageView === 'cards') setHistoryPageView('list');
         else if (pageView === 'resumes') setHistoryPageView(SHOW_ALL_RESUMES_VIEW ? 'resumes' : 'candidates');
         else if (pageView === 'list' || pageView === 'candidates') setHistoryPageView(pageView);
         if (band === 'exact' || band === 'partial' || band === 'no_match' || band === null) {
@@ -3564,7 +3565,7 @@ export default function AITalentMatchPage({
       { key: 'matchedBy', header: 'Matched By' },
     ];
     /** Export `exportRows` — each row's match record, from its session. */
-    const handleExportRows = async (format: 'csv' | 'xlsx') => {
+    const handleExportRows = async (format: 'csv' | 'xlsx', picked?: string[]) => {
       const rows = (exportRows ?? []).flatMap(r => {
         const item = matchHistory.find(h => h.id === r.historyId);
         const c = (historyCandidatesById[r.historyId] ?? []).find(x => `${r.historyId}::${x.id}` === r.key);
@@ -3584,7 +3585,8 @@ export default function AITalentMatchPage({
         }];
       });
       const dateStamp = new Date().toISOString().slice(0, 10);
-      await exportData(format, rows, jobExportColumns, `AI_Talent_Match_${dateStamp}`, {
+      const cols = picked ? jobExportColumns.filter(c => picked.includes(c.header)) : jobExportColumns;
+      await exportData(format, rows, cols, `AI_Talent_Match_${dateStamp}`, {
         sheetName: 'AI Talent Match',
         title: 'AI Talent Match - Matched Candidates',
       });
@@ -3712,6 +3714,11 @@ export default function AITalentMatchPage({
         .map(jdId => inviteTargetJobOf(jdId, itemFor(jdId)?.jobTitle));
       const create = (kind: InviteHandoffKind) => (job: InviteTargetJob) =>
         setCreateInviteTarget({ kind, job, rows: rows.filter(r => r.jobId === job.jdId), view });
+      /* Score Resumes and both invites run per job here, so with candidates
+         from several jobs ticked all three are greyed with the reason —
+         not just the assessment one (the shared resolver lets an AI
+         Interview span jobs, which this page's invite cannot). */
+      const multiJob = targets.length > 1;
       return (
         <div className="mt-3 flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
           <DropdownMenu>
@@ -3737,6 +3744,15 @@ export default function AITalentMatchPage({
               </div>
               {/* Score Resumes — the ticked candidates not yet scored against
                   their job (scoring runs per job). */}
+              {multiJob && canRunScoring ? (
+                <DropdownMenuItem className={`${actionsMenuItemClass} !items-start text-gray-400`} disabled>
+                  <ClipboardList className="w-4 h-4 text-gray-400 mt-0.5" />
+                  <span className="min-w-0">
+                    <span className="block">Score Resumes</span>
+                    <span className="block text-2xs text-gray-400 normal-case">Select candidates from one job to score them</span>
+                  </span>
+                </DropdownMenuItem>
+              ) : (
               <DropdownMenuItem
                 className={`${actionsMenuItemClass} ${!canRunScoring ? 'text-gray-400 opacity-60' : ''}`}
                 onSelect={(e) => {
@@ -3771,6 +3787,7 @@ export default function AITalentMatchPage({
                 <ClipboardList className="w-4 h-4 text-menu-icon-score" />
                 <span className={MENU_ITEM_SCALE_CLASS}>Score Resumes</span>
               </DropdownMenuItem>
+              )}
               <DropdownMenuItem
                 className={`${actionsMenuItemClass} ${!canExport ? 'text-gray-400 opacity-60' : ''}`}
                 onSelect={(e) => {
@@ -3813,7 +3830,9 @@ export default function AITalentMatchPage({
               })}
               {renderInviteTargetItems({
                 kind: 'interview',
-                target: resolveInviteTargetState('interview', targets, id => inviteTargets.hasAIInterview(id)),
+                target: multiJob
+                  ? { state: 'multi' }
+                  : resolveInviteTargetState('interview', targets, id => inviteTargets.hasAIInterview(id)),
                 itemClass: actionsMenuItemClass,
                 allowed: canCreateAIInterviews,
                 onInvite: (e) => {
@@ -4016,74 +4035,107 @@ export default function AITalentMatchPage({
         {/* Stats Cards */}
         {/* Default 4-column grid (same as /recruitment/job-openings) keeps the
             cards at the standard width instead of stretching them to half-page. */}
-        {/* Stats cards — switched OFF (SHOW_STAT_CARDS): their counts now ride
-            the rating pills in the view row below. Kept intact so they can be
-            turned back on as they were. */}
-        {SHOW_STAT_CARDS && (
-        <StatsCardGrid className="mb-5">
+        {/* Stats cards (SHOW_STAT_CARDS) — the Job Descriptions / Resume
+            Scoring StatsCards (icon, count, a small chip under it,
+            highlighted when selected). One rule on every card: the big
+            number is what the title says, the chip is always "N candidates"
+            — the different people behind it. All Matches / Rating 10 /
+            Rating 9-7 are the same counts as the pills below. Matched Jobs /
+            All Matches switch the View by toggle; the rating cards are the
+            same filter as the pills. */}
+        {SHOW_STAT_CARDS && (() => {
+          const statLoading = (
+            <span className="inline-block h-6 w-8 bg-gray-100 dark:bg-slate-800 rounded animate-pulse align-middle" aria-label="Loading" />
+          );
+          const pickBand = (band: RatingBand) => {
+            setCandidateRatingBand(prev => (prev === band ? null : band));
+            setHistoryCurrentPage(1);
+            setCandidateCurrentPage(1);
+            setResumeCurrentPage(1);
+          };
+          const onCandidates = historyPageView === 'candidates' || historyPageView === 'resumes';
+          /* The chip under each count, as the JD cards carry "N versions" and
+             Resume Scoring's "N candidates". */
+          const StatChip = ({ count, unit, units = `${unit}s` }: { count: number; unit: string; units?: string }) => (
+            <span className="mt-1.5 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700">
+              {count.toLocaleString()} {count === 1 ? unit : units}
+            </span>
+          );
+          // Distinct candidates holding a match in the band — only once the
+          // candidate roll-up is in, so the chip never shows a false 0.
+          const rowsLoaded = !loadingCandidateRows && candidateRows.length > 0;
+          const peopleInBand = (band: RatingBand) =>
+            candidateRows.filter(row => row.jobs.some(job => matchBandForRating(toMatchRating(job.score)) === band)).length;
+          return (
+        <div className="mb-4 sm:mb-5">
+        <StatsCardGrid className="mb-0">
           <StatsCard
             tone="neutral"
-            active={historyPageView === 'list'}
+            active={!onCandidates}
             showClickArrow
             icon={History}
             label="Matched Jobs"
-            value={matchHistory.length}
+            value={matchHistory.length.toLocaleString()}
             sparkline={false}
-            onClick={() => { setCandidateRatingBand(null); openHistoryListView(); }}
-          />
+            title={`${matchHistory.length.toLocaleString()} jobs have AI Talent Match results`
+              + (totalMatchedCandidatesReady ? `, matching ${totalMatchedCandidates.toLocaleString()} different candidates` : '')
+              + '. Click to view by job.'}
+            onClick={() => openHistoryListView()}
+          >
+            {totalMatchedCandidatesReady && <StatChip count={totalMatchedCandidates} unit="candidate" />}
+          </StatsCard>
           <StatsCard
             tone="neutral"
-            active={historyPageView === 'candidates'}
+            active={onCandidates}
             showClickArrow
             icon={User}
-            label="Match by Candidate"
-            value={totalMatchedCandidatesReady ? totalMatchedCandidates : (
-              <span className="inline-block h-6 w-8 bg-gray-100 dark:bg-slate-800 rounded animate-pulse align-middle" aria-label="Loading" />
-            )}
+            label="All Matches"
+            value={pillCounts.all === null ? statLoading : pillCounts.all.toLocaleString()}
             sparkline={false}
-            onClick={() => { setCandidateRatingBand(null); void openCandidatesView(); }}
-          />
+            title={pillCounts.all === null ? undefined
+              : `${pillCounts.all.toLocaleString()} candidate–job matches`
+                + (totalMatchedCandidatesReady ? `, from ${totalMatchedCandidates.toLocaleString()} different candidates` : '')
+                + ' (one candidate matched to 3 jobs counts as 3). Click to view by candidate.'}
+            onClick={() => { void openCandidatesView(); }}
+          >
+            {totalMatchedCandidatesReady && <StatChip count={totalMatchedCandidates} unit="candidate" />}
+          </StatsCard>
           <StatsCard
             tone="neutral"
-            active={historyPageView === 'resumes' && candidateRatingBand === 'exact'}
+            active={candidateRatingBand === 'exact'}
             showClickArrow
             icon={CheckCircle2}
             label="Match Rating (10)"
-            // Renders straight from the server-computed `ratingBandCounts` prop
-            // (available from the same fast session-list call as the other two
-            // cards); only falls back to the slower per-session tally + its
-            // "wait for every session" gate (`statsReady`) if that prop is
-            // unavailable, so the skeleton is no longer the common case.
-            value={statsReady ? displayedExactCount : (
-              <span className="inline-block h-6 w-8 bg-gray-100 dark:bg-slate-800 rounded animate-pulse align-middle" aria-label="Loading" />
-            )}
+            value={pillCounts.exact === null ? statLoading : pillCounts.exact.toLocaleString()}
             sparkline={false}
-            // Drills into the real scored resumes holding this rating — same
-            // "All Resumes" view + rating-band filter the pills below use, so
-            // there is exactly one filtering mechanism, not a second one.
-            onClick={() => {
-              setCandidateRatingBand('exact');
-              void openAllResumesView();
-            }}
-          />
+            title={pillCounts.exact === null ? undefined
+              : `${pillCounts.exact.toLocaleString()} matches rated 10`
+                + (rowsLoaded ? `, from ${peopleInBand('exact').toLocaleString()} different candidates` : '')
+                + '. Click to show only these; click again to clear.'}
+            onClick={() => pickBand('exact')}
+          >
+            {rowsLoaded && <StatChip count={peopleInBand('exact')} unit="candidate" />}
+          </StatsCard>
           <StatsCard
             tone="neutral"
-            active={historyPageView === 'resumes' && candidateRatingBand === 'partial'}
+            active={candidateRatingBand === 'partial'}
             showClickArrow
             icon={PieChart}
             label="Match Rating (9-7)"
-            // Same server-computed-prop-first rule as the 10-band card above.
-            value={statsReady ? displayedPartialCount : (
-              <span className="inline-block h-6 w-8 bg-gray-100 dark:bg-slate-800 rounded animate-pulse align-middle" aria-label="Loading" />
-            )}
+            value={pillCounts.partial === null ? statLoading : pillCounts.partial.toLocaleString()}
             sparkline={false}
-            onClick={() => {
-              setCandidateRatingBand('partial');
-              void openAllResumesView();
-            }}
-          />
+            title={pillCounts.partial === null ? undefined
+              : `${pillCounts.partial.toLocaleString()} matches rated 9 to 7`
+                + (rowsLoaded ? `, from ${peopleInBand('partial').toLocaleString()} different candidates` : '')
+                + '. Click to show only these; click again to clear.'}
+            onClick={() => pickBand('partial')}
+          >
+            {rowsLoaded && <StatChip count={peopleInBand('partial')} unit="candidate" />}
+          </StatsCard>
         </StatsCardGrid>
-        )}
+        </div>
+          );
+        })()}
 
         {/* ── Match by Candidate (in-page) ───────────────────────────────── */}
         {historyPageView === 'candidates' && (
@@ -7145,6 +7197,9 @@ export default function AITalentMatchPage({
         recordCount={exportRows?.length ?? 0}
         selected
         columns={jobExportColumns.map(c => c.header)}
+        // Resume Scoring's export: tick the columns, remembered for next time.
+        columnPrefsKey="aiTalentMatchExportColumns"
+        defaultOffColumns={['Phone', 'Location', 'Experience']}
         onExport={handleExportRows}
       />
       </>
@@ -7286,7 +7341,7 @@ export default function AITalentMatchPage({
       { key: 'attachments', header: 'Attachments' },
       { key: 'scoredStatus', header: 'Scored Status' },
     ];
-    const handleExportCandidates = async (format: 'csv' | 'xlsx') => {
+    const handleExportCandidates = async (format: 'csv' | 'xlsx', picked?: string[]) => {
       const jobTitle = resultsJobTitle || 'Candidates';
       const jobVersion = resultsVersionNumber ? `v${resultsVersionNumber}` : '-';
       const rows = candidatesToExport.map(c => ({
@@ -7307,7 +7362,8 @@ export default function AITalentMatchPage({
       }));
       const filenameSafeTitle = jobTitle.replace(/\s+/g, '_');
       const dateStamp = new Date().toISOString().slice(0, 10);
-      await exportData(format, rows, candidateExportColumns, `AI_Talent_Match_${filenameSafeTitle}_${dateStamp}`, {
+      const cols = picked ? candidateExportColumns.filter(c => picked.includes(c.header)) : candidateExportColumns;
+      await exportData(format, rows, cols, `AI_Talent_Match_${filenameSafeTitle}_${dateStamp}`, {
         sheetName: 'AI Talent Match',
         title: `${jobTitle} - AI Talent Match`,
       });
@@ -7334,6 +7390,8 @@ export default function AITalentMatchPage({
         recordCount={candidatesToExport.length}
         selected={selectedCandidates.length > 0}
         columns={candidateExportColumns.map(c => c.header)}
+        columnPrefsKey="aiTalentMatchResultsExportColumns"
+        defaultOffColumns={['Phone', 'Location', 'Skills', 'Attachments']}
         onExport={handleExportCandidates}
       />
       {/* Opened straight onto the version on screen; Go to JD inside it

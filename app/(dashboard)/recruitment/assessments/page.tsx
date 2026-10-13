@@ -154,7 +154,7 @@ export default function AssessmentsRoute() {
               </div>
             </div>
 
-            {/* Stats row — Total Jobs / Total Assessments / Active / Draft / Candidates Assessed */}
+            {/* Stats row — Total Jobs / Total Assessments / Active / Draft / Total Assessed */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 mb-4 sm:mb-6">
               {Array.from({ length: 5 }).map((_, i) => (
                 <div key={i} className="rounded-xl border border-gray-100 p-3 sm:p-4 space-y-2">

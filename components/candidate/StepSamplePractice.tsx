@@ -90,6 +90,27 @@ const PRACTICE_VOICE_CLIPS: Record<PracticeClipKey, string> = {
 const PRACTICE_CLOSING_MESSAGE =
   "Great — that's the idea! You're all set and ready to begin the real interview. Take a breath, relax, and do your best. All the best!";
 
+// Bina's actual spoken/chat "Are you there?" nudge — the real interview adds
+// this exact line as a new assistant chat message (handleNoResponse in
+// InterviewUI.tsx) when the candidate hasn't started speaking for a while, on
+// top of its own floating "Are you still there?" banner. Practice already had
+// the floating banner; this is the message it was missing.
+const PRACTICE_STILL_THERE_MSG =
+  "Are you there? Take your time — share whatever comes to mind.";
+
+// Spoken when the candidate STILL hasn't said anything even after the nudge
+// above — the real interview's actual behavior on continued silence (seen in
+// a real candidate's interview transcript: an auto-skip, not a mic-check
+// popup). Then practice auto-advances exactly like clicking Next.
+const PRACTICE_MOVE_ON_MSG =
+  "I didn't get any response from you, so let's move on to the next question.";
+
+// Every one of Bina's practice lines, fully shown once. Used only to find
+// which of these a finished script covered (see endStreamingReveal) — never
+// compared against arbitrary text. Module-level (not component state) since
+// it only references the module-level script constants above.
+const BINA_SCRIPT_TEXTS = [PRACTICE_GREETING, PRACTICE_QUESTION, PRACTICE_HR_QUESTION, PRACTICE_CLOSING_MESSAGE, PRACTICE_STILL_THERE_MSG, PRACTICE_MOVE_ON_MSG];
+
 // Per-question answer window in the REAL interview (timed mode) is 2 minutes.
 // The practice mock mirrors it so the candidate sees the exact same countdown.
 const PRACTICE_LIMIT_SECONDS = 120;
@@ -106,10 +127,12 @@ const PRE_TURN_TICK_MS = 1250;
 // ends the answer by itself. Practice has its own lightweight detector (RMS +
 // voice-band share of the mic analyser) because it has no live VAD pipeline.
 const DONE_CONFIRM_SILENCE_MS = 15000;
-// "Are you still there?" — the mic is open but the candidate hasn't started
-// speaking for this long. (Live raises the same banner when the server
-// reports silence; practice has no server, so it uses its own detector.)
-const STILL_THERE_SILENCE_MS = 10000;
+// Two-stage silence ladder, per the user's direct observation of the live
+// interview: 20s of total silence from the start of the turn → "Are you
+// there?" nudge. If there's STILL no speech after that (recording reopens,
+// then another 10s of silence) → "let's move on to the next question".
+const STILL_THERE_FIRST_SILENCE_MS = 20000;
+const STILL_THERE_SECOND_SILENCE_MS = 10000;
 const SPEECH_SUSTAIN_MS = 3000;
 const SPEECH_DIP_GRACE_MS = 400;
 const SPEECH_RESUME_CONFIRM_MS = 3000;
@@ -117,6 +140,12 @@ const VAD_POLL_MS = 100;
 const MIN_SPEECH_RMS = 0.03;      // byte time-domain RMS; quiet room ≈ 0.005–0.01
 const AMBIENT_LEARN_CAP = 0.04;   // never learn louder than this as "room noise"
 const VOICE_BAND_MIN_RATIO = 0.35;
+// How recently the transcript must have grown with new text to count as proof
+// of speech on its own (see transcriptActivityAtRef) — covers a noisy room or
+// a quiet mic that the RMS/frequency heuristic alone misreads as silence.
+// Wider than the periodic Whisper-fallback poll interval (2.5s) so a normal
+// gap between backend polls never reads as "no longer speaking".
+const TRANSCRIPT_ACTIVITY_WINDOW_MS = 4000;
 
 // Format seconds → "M:SS" for the interview-style countdown timer.
 function fmtMMSS(totalSeconds: number): string {
@@ -288,6 +317,13 @@ export default function StepSamplePractice({
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [liveTranscript, setLiveTranscript] = useState('');
+  // Bina's own chat bubbles stream in ("typewriter") roughly in sync with her
+  // voice, instead of appearing as one static block — see startStreamingReveal.
+  // `streaming` names the exact script currently being spoken (so multiple
+  // bubbles sharing one combined script, e.g. greeting + question, reveal in
+  // sequence); `revealedCount` is how many of its characters are shown so far.
+  const [streaming, setStreaming] = useState<{ full: string } | null>(null);
+  const [revealedCount, setRevealedCount] = useState(0);
   const [typedAnswer, setTypedAnswer] = useState('');
   const [inputMode, setInputMode] = useState<'none' | 'voice' | 'typing'>('none');
   const [audioLevel, setAudioLevel] = useState(0);
@@ -333,7 +369,22 @@ export default function StepSamplePractice({
   const [doneConfirm, setDoneConfirm] = useState(false);
   // "Are you still there?" banner + whether the candidate closed it this turn.
   const [stillThere, setStillThere] = useState(false);
+  // Chronological log of silence-ladder events ("Are you there?" / "let's move
+  // on"), tagged with which question they happened during. Rendered at the
+  // position of THAT question, not a single fixed spot — the ladder can fire
+  // again during Q2 after already firing during Q1, and a fixed position
+  // showed Q1's events underneath Q2's content, out of chronological order.
+  const [silenceLog, setSilenceLog] = useState<Array<{ slot: 1 | 2; kind: 'stillThere' | 'moveOn' }>>([]);
   const stillThereDismissedRef = useRef(false);
+  // Guards the spoken "Are you there?" nudge (speakStillThere) to once per
+  // answer window — matches the real interview's noResponseRetryRef gate.
+  const stillThereNudgeSpokenRef = useRef(false);
+  // Tracks retries across windows for THIS question (unlike the two guards
+  // above, which reset every window): 0 → next total-silence timeout speaks
+  // the "Are you there?" nudge; 1+ → the candidate still hasn't said a word
+  // even after that, so it escalates to the mic-check popup instead — same
+  // two-stage ladder as the real interview's noResponseRetryRef/handleNoResponse.
+  const stillThereRetryRef = useRef(0);
   const practiceDoneRef = useRef(false);
   // Accumulated seconds the candidate has spent ANSWERING (excludes time while
   // Bina is speaking) — drives the 2-min countdown and survives Repeat.
@@ -380,6 +431,16 @@ export default function StepSamplePractice({
   // after ~60s of continuous use) — same policy as the live interview.
   const webSpeechRestartRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const liveTranscriptRef = useRef('');
+  // Timestamp of the last time the transcript (Web Speech or the Whisper
+  // fallback) actually grew with new text. The "are you done?"/"are you still
+  // there?" VAD below reads raw mic energy + frequency band, which can
+  // misjudge real speech as silence in a noisy room (AC hum, fan) or on a mic
+  // whose level sits under the hardcoded floor even with noiseSuppression on
+  // — the candidate IS being heard (the transcript proves it) but the local
+  // heuristic alone says otherwise. Treating "transcript grew recently" as
+  // its own evidence of speech cross-checks the heuristic against a signal
+  // that's actually tuned to recognize human speech, not raw energy.
+  const transcriptActivityAtRef = useRef(0);
   const audioMimeTypeUsedRef = useRef('');
   const hasAutoSpokeRef = useRef(false);
   const startRecordingRef = useRef<() => void>(() => {});
@@ -410,6 +471,11 @@ export default function StepSamplePractice({
   useEffect(() => () => {
     if (preTurnTimerRef.current) clearInterval(preTurnTimerRef.current);
   }, []);
+  // Drives the typewriter reveal above: a single rAF loop paced to an
+  // estimated (or, for Bina's recorded clips, actual) speaking duration.
+  const streamRafRef = useRef<number | null>(null);
+  const streamStartRef = useRef(0);
+  const streamDurationRef = useRef(0);
   const periodicTranscriptionRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const periodicTranscriptionInFlightRef = useRef(false);
   const recordingStartTimeRef = useRef<number | null>(null);
@@ -434,7 +500,20 @@ export default function StepSamplePractice({
           catch { return null; }
         };
         const camStream = await openOne({ video: true });
-        const micStream = await openOne({ audio: true });
+        // Bina plays out of the candidate's speakers (no headset assumed),
+        // so echoCancellation MUST be requested explicitly — the same
+        // constraint the real interview uses (Webcam.tsx / CandidateAIInterviewPortal.tsx)
+        // for exactly this reason. Without it, her own greeting/question was
+        // bleeding back into the mic and landing in the candidate's "Your
+        // Response" transcript as if they'd said it. autoGainControl stays
+        // OFF — it distorts quiet speech levels for ASR (see pcmEnroll.ts).
+        // noiseSuppression stays OFF too — practice's pause/silence detector
+        // (below) is a simple fixed-threshold RMS + frequency-band check on
+        // the raw signal, unlike the real interview's server-side detection;
+        // noiseSuppression's processing attenuated real speech enough to read
+        // as silence, so the candidate's actual answer tripped the "Are you
+        // there?" → mic-popup escalation instead of ever being detected.
+        const micStream = await openOne({ audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: false } });
         if (cancelled) {
           camStream?.getTracks().forEach((t) => t.stop());
           micStream?.getTracks().forEach((t) => t.stop());
@@ -678,40 +757,203 @@ export default function StepSamplePractice({
     return true;
   }, [stopBinaClip]);
 
+  // Starting guess for reading-aloud pace at utterance rate 1.0 (chars/sec
+  // incl. spaces) — only ever used for the very FIRST line Bina speaks with
+  // browser TTS this session. `utterance.onboundary` is meant to correct the
+  // pace in real time, but it doesn't fire reliably (or at all) for many
+  // system TTS voices — Linux's in particular — so instead of guessing a
+  // fixed constant for every voice/machine, measuredCharsPerSecondRef below
+  // self-calibrates from the actual wall-clock time each line took to speak,
+  // and every line AFTER the first uses that measured, voice-accurate pace.
+  const measuredCharsPerSecondRef = useRef(18);
+  const estimateSpeechMs = (text: string, rate: number) => (text.length / (measuredCharsPerSecondRef.current * rate)) * 1000;
+  // {text, rate, startedAt} for whichever line is currently being spoken via
+  // browser TTS — set in each onstart, consumed in the matching onend to
+  // compute that line's real chars/sec and fold it into the running estimate.
+  const speakingNowRef = useRef<{ length: number; rate: number; startedAt: number } | null>(null);
+  const noteSpeechStart = useCallback((text: string, rate: number) => {
+    speakingNowRef.current = { length: text.length, rate, startedAt: performance.now() };
+  }, []);
+  const noteSpeechEnd = useCallback(() => {
+    const s = speakingNowRef.current;
+    speakingNowRef.current = null;
+    if (!s) return;
+    const elapsedSec = (performance.now() - s.startedAt) / 1000;
+    // Too short to be a trustworthy measurement (cut off, errored immediately, etc.).
+    if (elapsedSec < 0.5) return;
+    const measuredAtRate1 = s.length / (elapsedSec * s.rate);
+    // Average with the running value rather than overwrite — one unusually
+    // short/long line (TTS engines pause oddly on punctuation) shouldn't swing
+    // the estimate for every later line.
+    measuredCharsPerSecondRef.current = (measuredCharsPerSecondRef.current + measuredAtRate1) / 2;
+  }, []);
+
+  const stopStreamingReveal = useCallback(() => {
+    if (streamRafRef.current != null) {
+      cancelAnimationFrame(streamRafRef.current);
+      streamRafRef.current = null;
+    }
+  }, []);
+
+  // Starts (or restarts) the typewriter reveal for `text`, timed to finish in
+  // roughly `durationMs`. Call `endStreamingReveal` when the voice actually
+  // stops — that snaps every bubble back to fully-shown, so a pace mismatch
+  // (TTS running faster/slower than the estimate) never leaves text stuck
+  // mid-word.
+  const startStreamingReveal = useCallback((text: string, durationMs: number) => {
+    stopStreamingReveal();
+    setStreaming({ full: text });
+    setRevealedCount(0);
+    streamStartRef.current = performance.now();
+    streamDurationRef.current = Math.max(300, durationMs);
+    const tick = () => {
+      const elapsed = performance.now() - streamStartRef.current;
+      const ratio = Math.min(1, elapsed / streamDurationRef.current);
+      setRevealedCount(Math.floor(text.length * ratio));
+      if (ratio < 1) streamRafRef.current = requestAnimationFrame(tick);
+    };
+    streamRafRef.current = requestAnimationFrame(tick);
+  }, [stopStreamingReveal]);
+
+  // Lines that have finished being spoken at least once — shown in full from
+  // then on. Without this, "streaming === null" would be ambiguous between
+  // "never spoken yet" and "done speaking", and a bubble would flash its full
+  // text for one render (whenever it mounts before the voice has actually
+  // started — the gap between a clip/utterance being requested and its
+  // start/playing event actually firing) before snapping back down to
+  // streaming from empty — exactly the flash-then-shrink bug this avoids.
+  // Real state (not a ref) so reading it during render stays safe/reactive.
+  const [completedTexts, setCompletedTexts] = useState<Record<string, boolean>>({});
+
+  // `completedText` is the exact script that just finished (it may cover
+  // several bubbles at once, e.g. greeting + question spoken together) — every
+  // known line it contains is marked done so each of their bubbles switches
+  // to "fully shown" rather than restarting empty next render.
+  const endStreamingReveal = useCallback((completedText?: string) => {
+    stopStreamingReveal();
+    if (completedText) {
+      setCompletedTexts((prev) => {
+        const next = { ...prev, [completedText]: true };
+        BINA_SCRIPT_TEXTS.forEach((t) => { if (completedText.includes(t)) next[t] = true; });
+        return next;
+      });
+    }
+    setStreaming(null);
+  }, [stopStreamingReveal]);
+
+  // How much of `text` to show right now:
+  //  - never spoken yet → '' (hidden, until its line actually starts)
+  //  - currently being spoken → the partial reveal so far (indexOf finds this
+  //    bubble's own slice when several bubbles share one combined script)
+  //  - finished at least once → the full text, permanently
+  const revealFor = useCallback((text: string): string => {
+    if (completedTexts[text]) return text;
+    if (!streaming) return '';
+    const idx = streaming.full.indexOf(text);
+    if (idx === -1) return '';
+    const local = Math.max(0, Math.min(text.length, revealedCount - idx));
+    return text.slice(0, local);
+  }, [streaming, revealedCount, completedTexts]);
+
+  // Whether `text`'s bubble should be mounted at all yet. Two bubbles can
+  // share one combined script (greeting, then question, spoken back-to-back);
+  // without this the LATER bubble would render immediately too — empty, with
+  // its own blinking cursor — before Bina has actually reached it, showing
+  // two "she's speaking" bubbles at once. A bubble whose text starts later in
+  // the combined script stays unmounted until the reveal catches up to it.
+  const hasStartedRevealing = useCallback((text: string): boolean => {
+    if (completedTexts[text]) return true;
+    if (!streaming) return false;
+    const idx = streaming.full.indexOf(text);
+    if (idx === -1) return false;
+    return revealedCount >= idx;
+  }, [streaming, revealedCount, completedTexts]);
+
+  // One silenceLog entry → one Bina chat bubble, rendered wherever the caller
+  // places it (once at Q1's position, once at Q2's) so each event shows up
+  // chronologically next to the question it actually happened during.
+  const renderLadderBubble = (entry: { slot: 1 | 2; kind: 'stillThere' | 'moveOn' }, key: string) => {
+    const text = entry.kind === 'stillThere' ? PRACTICE_STILL_THERE_MSG : PRACTICE_MOVE_ON_MSG;
+    const revealed = revealFor(text);
+    return (
+      <div className="flex gap-2" key={key}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/linda-avatar.webp" onError={(e) => { const t = e.currentTarget; if (!t.src.endsWith('/linda-3.png')) t.src = '/linda-3.png'; }} alt="Bina" className="w-6 h-6 rounded-full object-cover shrink-0 shadow-sm mt-0.5" />
+        <div className="max-w-[80%]">
+          <span className="text-2xs font-semibold text-purple-600 mb-0.5 block">BINA</span>
+          <div className="px-3.5 py-2.5 bg-violet-50 text-violet-900 rounded-2xl rounded-tl-sm border border-violet-200 shadow-sm">
+            <p className="text-sm leading-relaxed">
+              {revealed}
+              {streaming && revealed.length < text.length && (
+                <span className="tf-blink inline-block w-1.5 h-3.5 ml-0.5 -mb-0.5 bg-violet-600 align-middle" aria-hidden="true" />
+              )}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  useEffect(() => () => stopStreamingReveal(), [stopStreamingReveal]);
+
   // scriptOverride lets Repeat speak ONLY the question (no greeting). The initial
   // auto-speak passes nothing → full greeting + question.
   const speakQuestion = useCallback((scriptOverride?: string) => {
     const scriptToSpeak = scriptOverride ?? PRACTICE_SPOKEN_SCRIPT;
 
-    // What happens when Bina finishes the question — shared by her recorded
-    // voice and the browser voice.
-    const onQuestionStart = () => { cancelPreTurnCountdown(); setAiSpeaking(true); };
-    const onQuestionEnd = () => {
-      setAiSpeaking(false);
-      if (!practiceDoneRef.current) {
-        // 3-2-1 "Get ready to answer" first, then open the mic (live parity).
-        runPreTurnCountdown(() => { if (!practiceDoneRef.current) startRecordingRef.current?.(); });
-      }
-    };
+    // Mark her as speaking THE MOMENT we commit to this line, not when the
+    // clip/utterance's start event actually fires — that event lags behind
+    // (audio buffering, TTS engine startup), and in that gap "Your Response"
+    // would already show a premature "Getting ready…" next to a still-empty
+    // Bina bubble (aiSpeaking was still false, so the !aiSpeaking gate on
+    // that card let it through early).
+    setAiSpeaking(true);
 
     // Bina's real (recorded) voice first, when this line has a clip.
     const clipKey: PracticeClipKey | null =
       scriptToSpeak === PRACTICE_SPOKEN_SCRIPT ? 'full'
       : scriptToSpeak === PRACTICE_QUESTION ? 'question'
       : null;
+
+    // What happens when Bina finishes the question — shared by her recorded
+    // voice and the browser voice.
+    const onQuestionStart = () => {
+      cancelPreTurnCountdown();
+      setAiSpeaking(true);
+      const clipEl = clipKey ? clipAudioRef.current[clipKey] : undefined;
+      const clipDurationSec = clipEl && clipReadyRef.current[clipKey as PracticeClipKey] && isFinite(clipEl.duration) && clipEl.duration > 0
+        ? clipEl.duration
+        : null;
+      // 0.9 matches the utterance.rate set in doSpeak below.
+      const durationMs = clipDurationSec ? clipDurationSec * 1000 : estimateSpeechMs(scriptToSpeak, 0.9);
+      if (!clipDurationSec) noteSpeechStart(scriptToSpeak, 0.9);
+      startStreamingReveal(scriptToSpeak, durationMs);
+    };
+    const onQuestionEnd = () => {
+      setAiSpeaking(false);
+      noteSpeechEnd();
+      endStreamingReveal(scriptToSpeak);
+      if (!practiceDoneRef.current) {
+        // 3-2-1 "Get ready to answer" first, then open the mic (live parity).
+        runPreTurnCountdown(() => { if (!practiceDoneRef.current) startRecordingRef.current?.(); });
+      }
+    };
+
     if (clipKey && playBinaClip(clipKey, {
       onStart: onQuestionStart,
       onEnd: onQuestionEnd,
       // Refused (autoplay policy): for the opening line the existing
       // autoSpeakBlocked fallback opens the mic; for Repeat nothing played,
-      // so the candidate can press it again.
-      onFail: () => setAiSpeaking(false),
+      // so the candidate can press it again. Still reveal the text in full —
+      // nothing will read it aloud now, so there's nothing left to stream.
+      onFail: () => { setAiSpeaking(false); endStreamingReveal(scriptToSpeak); },
     })) {
       return;
     }
 
     if (!window.speechSynthesis) {
       setTtsSupported(false);
+      endStreamingReveal(scriptToSpeak);
       return;
     }
 
@@ -734,6 +976,14 @@ export default function StepSamplePractice({
       // button) — just like the real interview's "your turn, speak now". Guarded
       // so the practice-complete sign-off never re-opens the mic.
       utterance.onend = onQuestionEnd;
+      // Word-boundary events give a tighter sync than the duration estimate
+      // alone where the browser supports them (Chrome); harmless no-op where
+      // it doesn't (Safari/Firefox) — the estimate still drives the reveal.
+      utterance.onboundary = (e) => {
+        if (typeof e.charIndex === 'number') {
+          setRevealedCount((prev) => Math.max(prev, e.charIndex));
+        }
+      };
       utterance.onerror = (e) => {
         const err = (e as SpeechSynthesisErrorEvent).error;
         // 'interrupted'/'canceled' are expected when cancel() is called — not real errors
@@ -741,6 +991,7 @@ export default function StepSamplePractice({
         // 'not-allowed': browser blocked TTS (no user gesture — e.g. auto-speak in Brave)
         // Don't disable the button; user can still click Play Question manually
         setAiSpeaking(false);
+        endStreamingReveal(scriptToSpeak);
       };
 
       utteranceRef.current = utterance;
@@ -783,10 +1034,13 @@ export default function StepSamplePractice({
         window.speechSynthesis.removeEventListener('voiceschanged', onVoicesChanged);
       }, 3000);
     }
-  }, [cancelPreTurnCountdown, runPreTurnCountdown, playBinaClip, stopBinaClip]);
+  }, [cancelPreTurnCountdown, runPreTurnCountdown, playBinaClip, stopBinaClip, startStreamingReveal, endStreamingReveal, noteSpeechStart, noteSpeechEnd]);
 
   // Keep ref in sync with liveTranscript state (avoids stale-closure issues in callbacks)
-  useEffect(() => { liveTranscriptRef.current = liveTranscript; }, [liveTranscript]);
+  useEffect(() => {
+    liveTranscriptRef.current = liveTranscript;
+    if (liveTranscript.trim()) transcriptActivityAtRef.current = Date.now();
+  }, [liveTranscript]);
 
   // Bina does NOT auto-speak on entry — the candidate starts the practice via
   // the "Start Practice" button (handleStartPractice), which speaks in the
@@ -1067,6 +1321,32 @@ export default function StepSamplePractice({
     }
   }, [token, stopLiveTranscription]);
 
+  // Stops recording WITHOUT transcribing — same split the live interview
+  // makes (stopRecordingSilent vs. its normal stop). Used only when we know
+  // there's nothing worth sending: the candidate hasn't said a word this
+  // whole window (the "Are you there?" nudge, the mic-check escalation).
+  // stopRecordingAndTranscribe would still fire a real Whisper call on that
+  // silence/room-noise and briefly show "Your Response · enhancing…" right
+  // next to Bina's own nudge — exactly the premature-card bug fixed earlier,
+  // just via a different path.
+  const stopRecordingSilent = useCallback(() => {
+    if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') return;
+    setIsRecording(false);
+    recordingStartTimeRef.current = null;
+    if (elapsedIntervalRef.current) { clearInterval(elapsedIntervalRef.current); elapsedIntervalRef.current = null; }
+    setRecordingElapsed(0);
+    stopLiveTranscription();
+    setLiveTranscript('');
+    try { mediaRecorderRef.current.stop(); } catch { /* ignore */ }
+    mediaRecorderRef.current = null;
+    audioChunksRef.current = [];
+    if (videoRecorderRef.current && videoRecorderRef.current.state !== 'inactive') {
+      try { videoRecorderRef.current.stop(); } catch { /* ignore */ }
+    }
+    videoRecorderRef.current = null;
+    videoChunksRef.current = [];
+  }, [stopLiveTranscription]);
+
   const startRecording = useCallback(() => {
     // Guard: don't start if already recording or TTS is still speaking
     if (mediaRecorderRef.current?.state === 'recording') return;
@@ -1151,6 +1431,7 @@ export default function StepSamplePractice({
     setInputMode('none');
     setTranscribeError('');
     setLiveTranscript('');
+    transcriptActivityAtRef.current = 0;
     setRecordedDurationSeconds(null);
 
     // Track recording start time for duration calculation
@@ -1174,16 +1455,38 @@ export default function StepSamplePractice({
   // the Next-button click (user gesture → Brave-safe). A plain utterance so it
   // doesn't trip the auto-record-on-end path (that only lives on speakQuestion).
   const speakClosing = useCallback(() => {
+    // Speaking from the moment we commit, not from the clip/utterance's start
+    // event (see the matching note in speakQuestion) — keeps the "Ready"/
+    // "Speaking…" badge honest during that startup gap.
+    setAiSpeaking(true);
     // The "start the interview" popup should appear only AFTER Bina finishes
     // speaking the sign-off — not the instant practice ends. Show it from the
     // utterance's onend/onerror, with a fallback timer for when TTS is
     // unavailable/blocked (Brave, no voices) so the popup still appears.
     const revealPopup = () => setShowStartPopup(true);
     let shown = false;
-    const showOnce = () => { if (!shown) { shown = true; revealPopup(); } };
+    // Single funnel for every "the sign-off is over" path below (normal end,
+    // playback failure, error, and the safety-net timeouts) — always reveals
+    // the full closing text (nothing's left to stream once we're here) before
+    // showing the popup, so none of those paths can strand it mid-word.
+    const showOnce = () => {
+      noteSpeechEnd();
+      endStreamingReveal(PRACTICE_CLOSING_MESSAGE);
+      if (!shown) { shown = true; revealPopup(); }
+    };
+    const startClosingStream = () => {
+      const clipEl = clipAudioRef.current.closing;
+      const clipDurationSec = clipEl && clipReadyRef.current.closing && isFinite(clipEl.duration) && clipEl.duration > 0
+        ? clipEl.duration
+        : null;
+      // 0.95 matches the utterance.rate set below.
+      const durationMs = clipDurationSec ? clipDurationSec * 1000 : estimateSpeechMs(PRACTICE_CLOSING_MESSAGE, 0.95);
+      if (!clipDurationSec) noteSpeechStart(PRACTICE_CLOSING_MESSAGE, 0.95);
+      startStreamingReveal(PRACTICE_CLOSING_MESSAGE, durationMs);
+    };
     // Bina's real (recorded) voice first, when the clip is available.
     if (playBinaClip('closing', {
-      onStart: () => setAiSpeaking(true),
+      onStart: () => { setAiSpeaking(true); startClosingStream(); },
       onEnd: () => { setAiSpeaking(false); showOnce(); },
       onFail: () => { setAiSpeaking(false); showOnce(); },
     })) {
@@ -1192,7 +1495,7 @@ export default function StepSamplePractice({
       return;
     }
     if (!window.speechSynthesis) {
-      window.setTimeout(revealPopup, 1200);
+      window.setTimeout(showOnce, 1200);
       return;
     }
     try {
@@ -1202,7 +1505,8 @@ export default function StepSamplePractice({
       const u = new SpeechSynthesisUtterance(PRACTICE_CLOSING_MESSAGE);
       u.rate = 0.95; u.pitch = 1.0; u.volume = 1.0;
       const v = pickVoice(); if (v) u.voice = v;
-      u.onstart = () => setAiSpeaking(true);
+      u.onstart = () => { setAiSpeaking(true); startClosingStream(); };
+      u.onboundary = (e) => { if (typeof e.charIndex === 'number') setRevealedCount((prev) => Math.max(prev, e.charIndex)); };
       u.onend = () => { setAiSpeaking(false); showOnce(); };
       u.onerror = () => { setAiSpeaking(false); showOnce(); };
       utteranceRef.current = u;
@@ -1211,18 +1515,26 @@ export default function StepSamplePractice({
       // generous window so the candidate is never stuck without the popup.
       window.setTimeout(showOnce, 9000);
     } catch { showOnce(); }
-  }, [playBinaClip, stopBinaClip]);
+  }, [playBinaClip, stopBinaClip, startStreamingReveal, endStreamingReveal, noteSpeechStart, noteSpeechEnd]);
 
   // Bina asks practice question 2 (Yes / No). Unlike speakQuestion it does NOT
   // open the mic afterwards — the candidate answers with the A / B / C card,
   // and only "Need to Explain More" opens the mic (as in the live interview).
   const speakHrQuestion = useCallback(() => {
+    // Speaking from the moment we commit, not from the utterance's start
+    // event (see the matching note in speakQuestion).
+    setAiSpeaking(true);
     setHrButtonsReady(false);
     let ready = false;
     const showChoices = () => {
       if (ready) return;
       ready = true;
       setAiSpeaking(false);
+      noteSpeechEnd();
+      // Always reveal the full question — covers the normal end, the
+      // unsupported-TTS branch below, onerror, and the safety-net timeout,
+      // all of which funnel through here.
+      endStreamingReveal(PRACTICE_HR_QUESTION);
       setTimedUp(false);
       setHrButtonsReady(true);
     };
@@ -1234,7 +1546,13 @@ export default function StepSamplePractice({
       const u = new SpeechSynthesisUtterance(PRACTICE_HR_QUESTION);
       u.rate = 0.95; u.pitch = 1.0; u.volume = 1.0;
       const v = pickVoice(); if (v) u.voice = v;
-      u.onstart = () => { cancelPreTurnCountdown(); setAiSpeaking(true); };
+      u.onstart = () => {
+        cancelPreTurnCountdown();
+        setAiSpeaking(true);
+        noteSpeechStart(PRACTICE_HR_QUESTION, 0.95);
+        startStreamingReveal(PRACTICE_HR_QUESTION, estimateSpeechMs(PRACTICE_HR_QUESTION, 0.95));
+      };
+      u.onboundary = (e) => { if (typeof e.charIndex === 'number') setRevealedCount((prev) => Math.max(prev, e.charIndex)); };
       u.onend = showChoices;
       u.onerror = showChoices;
       utteranceRef.current = u;
@@ -1242,7 +1560,121 @@ export default function StepSamplePractice({
       // Safety net if onend never fires.
       window.setTimeout(showChoices, 15000);
     } catch { showChoices(); }
-  }, [stopBinaClip, cancelPreTurnCountdown]);
+  }, [stopBinaClip, cancelPreTurnCountdown, startStreamingReveal, endStreamingReveal, noteSpeechStart, noteSpeechEnd]);
+
+  // Bina's "Are you there?" nudge — the live interview's handleNoResponse adds
+  // this exact line as a real chat message (not just a toast) when the
+  // candidate hasn't started speaking at all. Live STOPS recording, speaks it,
+  // then reopens the mic ~400ms later (handleNoResponse / :8688-8712) — practice
+  // mirrors that exactly (via the same pre-turn countdown it already uses
+  // everywhere else it reopens the mic), which also naturally re-arms a fresh
+  // silence window for the second-timeout escalation below.
+  const speakStillThere = useCallback(() => {
+    if (stillThereNudgeSpokenRef.current) return;
+    stillThereNudgeSpokenRef.current = true;
+    cancelPreTurnCountdown();
+    stopRecordingSilent();
+    setAiSpeaking(true);
+
+    // Same double-fire guard as speakMoveOn's advance — the 9s safety-net
+    // timeout below must not re-run this after onend already did.
+    let reopened = false;
+    const reopenMic = () => {
+      if (reopened) return;
+      reopened = true;
+      setAiSpeaking(false);
+      noteSpeechEnd();
+      endStreamingReveal(PRACTICE_STILL_THERE_MSG);
+      if (!practiceDoneRef.current) {
+        runPreTurnCountdown(() => { if (!practiceDoneRef.current) startRecordingRef.current?.(); });
+      }
+    };
+    if (!window.speechSynthesis) { reopenMic(); return; }
+    try {
+      stopBinaClip();
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.resume();
+      const u = new SpeechSynthesisUtterance(PRACTICE_STILL_THERE_MSG);
+      u.rate = 0.95; u.pitch = 1.0; u.volume = 1.0;
+      const v = pickVoice(); if (v) u.voice = v;
+      u.onstart = () => {
+        noteSpeechStart(PRACTICE_STILL_THERE_MSG, 0.95);
+        startStreamingReveal(PRACTICE_STILL_THERE_MSG, estimateSpeechMs(PRACTICE_STILL_THERE_MSG, 0.95));
+      };
+      u.onboundary = (e) => { if (typeof e.charIndex === 'number') setRevealedCount((prev) => Math.max(prev, e.charIndex)); };
+      u.onend = reopenMic;
+      u.onerror = reopenMic;
+      utteranceRef.current = u;
+      window.speechSynthesis.speak(u);
+      window.setTimeout(reopenMic, 9000);
+    } catch { reopenMic(); }
+  }, [stopBinaClip, startStreamingReveal, endStreamingReveal, stopRecordingSilent, cancelPreTurnCountdown, runPreTurnCountdown, noteSpeechStart, noteSpeechEnd]);
+
+  // Second escalation — the candidate STILL hasn't said anything even after
+  // the "Are you there?" nudge above. Live shows a "Microphone Issue?" popup
+  // (handleNoResponse's else-branch, :8714-8723) with the same two choices and
+  // the same 15s auto-timeout; "No" ends the session (live: the interview;
+  // here: just this practice, the equivalent scope) via speakClosing — Bina's
+  // normal sign-off, same as finishing normally.
+  // Forward reference to handlePracticeNext (declared below) — same pattern
+  // as startRecordingRef, needed because speakMoveOn is declared before it.
+  const handlePracticeNextRef = useRef<() => void>(() => {});
+
+  const speakMoveOn = useCallback(() => {
+    stopRecordingSilent();
+    setAiSpeaking(true);
+    // Guards against the 9s safety-net timeout below ALSO firing after onend
+    // already fired normally (the message takes ~4s to speak, well under
+    // 9s) — without this, advancing to Q2 then firing a SECOND time (by now
+    // on Q2) ran the "finish practice" branch instead, ending practice right
+    // after Q2's question appeared with no chance to answer it.
+    let advanced = false;
+    const advance = () => {
+      if (advanced) return;
+      advanced = true;
+      setAiSpeaking(false);
+      noteSpeechEnd();
+      endStreamingReveal(PRACTICE_MOVE_ON_MSG);
+      handlePracticeNextRef.current?.();
+    };
+    if (!window.speechSynthesis) { advance(); return; }
+    try {
+      stopBinaClip();
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.resume();
+      const u = new SpeechSynthesisUtterance(PRACTICE_MOVE_ON_MSG);
+      u.rate = 0.95; u.pitch = 1.0; u.volume = 1.0;
+      const v = pickVoice(); if (v) u.voice = v;
+      u.onstart = () => {
+        noteSpeechStart(PRACTICE_MOVE_ON_MSG, 0.95);
+        startStreamingReveal(PRACTICE_MOVE_ON_MSG, estimateSpeechMs(PRACTICE_MOVE_ON_MSG, 0.95));
+      };
+      u.onboundary = (e) => { if (typeof e.charIndex === 'number') setRevealedCount((prev) => Math.max(prev, e.charIndex)); };
+      u.onend = advance;
+      u.onerror = advance;
+      utteranceRef.current = u;
+      window.speechSynthesis.speak(u);
+      window.setTimeout(advance, 9000);
+    } catch { advance(); }
+  }, [stopRecordingSilent, stopBinaClip, startStreamingReveal, endStreamingReveal, noteSpeechStart, noteSpeechEnd]);
+
+  // Called by the silence detector when a fresh total-silence window times
+  // out: first time → speak the nudge; any time after → the candidate still
+  // hasn't said anything, so (matching a real candidate's interview
+  // transcript) Bina gives up on this question and moves on automatically.
+  const handleStillSilent = useCallback(() => {
+    const slot = practiceQRef.current;
+    if (stillThereRetryRef.current === 0) {
+      stillThereRetryRef.current = 1;
+      setStillThere(true);
+      setSilenceLog((prev) => [...prev, { slot, kind: 'stillThere' }]);
+      speakStillThere();
+    } else {
+      setStillThere(false);
+      setSilenceLog((prev) => [...prev, { slot, kind: 'moveOn' }]);
+      speakMoveOn();
+    }
+  }, [speakStillThere, speakMoveOn]);
 
   // Next — like the real interview's "Next Question". From question 1 it moves
   // on to the Yes / No question; from question 2 it wraps up the answer and
@@ -1255,6 +1687,7 @@ export default function StepSamplePractice({
       setPracticeQ(2);
       if (isRecording) stopRecordingAndTranscribe();
       setAnswerElapsed(0);
+      stillThereRetryRef.current = 0; // fresh silence ladder for the new question
       speakHrQuestion();
       return;
     }
@@ -1263,6 +1696,7 @@ export default function StepSamplePractice({
     if (isRecording) stopRecordingAndTranscribe();
     speakClosing();
   }, [isRecording, stopRecordingAndTranscribe, speakClosing, speakHrQuestion, cancelPreTurnCountdown]);
+  useEffect(() => { handlePracticeNextRef.current = handlePracticeNext; }, [handlePracticeNext]);
 
   // Question 2 answered with Yes / No → finish, as Next does.
   const answerHrChoice = useCallback((choice: 'Yes' | 'No') => {
@@ -1379,16 +1813,21 @@ export default function StepSamplePractice({
     if (typeof document !== 'undefined' && document.fullscreenElement) void document.exitFullscreen().catch(() => {});
   }, []);
 
-  // Countdown ticks ONLY while the answer window is open AND Bina is NOT
-  // speaking. So Repeat (Bina re-speaks → aiSpeaking) PAUSES the timer, and it
-  // RESUMES from where it left when she finishes — it never resets.
+  // Countdown ticks whenever the answer window is open AND Bina is NOT
+  // speaking — the real interview's per-question timer starts the instant the
+  // question is asked and runs through the whole answer window (including a
+  // Yes/No question's button-choice phase), not just while actively recording.
+  // So besides an active recording, Q2's Yes/No/Need-to-Explain-More buttons
+  // being up (hrButtonsReady, not yet answered) also counts as "open". Repeat
+  // (Bina re-speaks → aiSpeaking) still PAUSES it, resuming from where it left.
   useEffect(() => {
-    if (!isRecording || aiSpeaking || practiceDone) return;
+    const answerWindowOpen = isRecording || (practiceQ === 2 && hrButtonsReady && !hrAnswer && !hrExplainMore);
+    if (!answerWindowOpen || aiSpeaking || practiceDone) return;
     const iv = setInterval(() => {
       setAnswerElapsed((s) => Math.min(PRACTICE_LIMIT_SECONDS, s + 1));
     }, 1000);
     return () => clearInterval(iv);
-  }, [isRecording, aiSpeaking, practiceDone]);
+  }, [isRecording, aiSpeaking, practiceDone, practiceQ, hrButtonsReady, hrAnswer, hrExplainMore]);
 
   // Auto-finish at the 2-minute budget — mirrors the real per-question timeout:
   // show "Time's up", stop the answer, and have Bina play the sign-off (exactly
@@ -1409,6 +1848,7 @@ export default function StepSamplePractice({
       return;
     }
     stillThereDismissedRef.current = false;   // a new answer window
+    stillThereNudgeSpokenRef.current = false;
     const windowOpenedAt = Date.now();
     const analyser = analyserRef.current;
     if (!analyser) return;
@@ -1447,7 +1887,11 @@ export default function StepSamplePractice({
         if (i >= lowBin && i <= highBin) band += freqBuf[i];
       }
       const voiceLike = total > 12 ? band / total >= VOICE_BAND_MIN_RATIO : false;
-      const active = voiceLike && rms > Math.max(MIN_SPEECH_RMS, ambient * 2.2);
+      // The transcript (Web Speech / Whisper fallback) growing within the last
+      // few seconds is direct proof the candidate is being heard, independent
+      // of whether the raw-energy heuristic agrees — see transcriptActivityAtRef.
+      const transcriptRecentlyActive = now - transcriptActivityAtRef.current < TRANSCRIPT_ACTIVITY_WINDOW_MS;
+      const active = transcriptRecentlyActive || (voiceLike && rms > Math.max(MIN_SPEECH_RMS, ambient * 2.2));
 
       // Same streak rule as live: dips up to SPEECH_DIP_GRACE_MS keep it alive.
       if (active) {
@@ -1469,8 +1913,15 @@ export default function StepSamplePractice({
           speechStarted = true;
           silenceSince = now;
           setStillThere(false);
-        } else if (now - windowOpenedAt >= STILL_THERE_SILENCE_MS && !stillThereDismissedRef.current) {
-          setStillThere(true);
+          stillThereRetryRef.current = 0; // they spoke — ladder resets for next time
+        } else {
+          // First time through this window (never nudged yet) waits the full
+          // 20s; after the nudge has already fired once, THIS window is the
+          // "still nothing?" recheck, which only waits 10s before escalating.
+          const threshold = stillThereRetryRef.current === 0 ? STILL_THERE_FIRST_SILENCE_MS : STILL_THERE_SECOND_SILENCE_MS;
+          if (now - windowOpenedAt >= threshold && !stillThereDismissedRef.current) {
+            handleStillSilent();
+          }
         }
         return;
       }
@@ -1504,7 +1955,7 @@ export default function StepSamplePractice({
       setDoneConfirm(false);
       setStillThere(false);
     };
-  }, [isRecording, aiSpeaking, practiceDone]);
+  }, [isRecording, aiSpeaking, practiceDone, handleStillSilent]);
 
   // Keep the chat thread pinned to the bottom as new content appears — Bina
   // speaking, "Your turn", the transcript, and the sign-off — so the latest
@@ -1514,7 +1965,7 @@ export default function StepSamplePractice({
     if (!el) return;
     const id = requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
     return () => cancelAnimationFrame(id);
-  }, [started, isRecording, isTranscribing, aiSpeaking, transcript, typedAnswer, timedUp, practiceDone, transcribeError]);
+  }, [started, isRecording, isTranscribing, aiSpeaking, transcript, typedAnswer, timedUp, practiceDone, transcribeError, revealedCount, liveTranscript]);
 
   // Page-level auto-scrolls (each only moves the page if the target is
   // hidden — on phones/tablets the panel stacks taller than the screen, and
@@ -1892,29 +2343,50 @@ export default function StepSamplePractice({
               <div className="max-w-[80%]">
                 <span className="text-2xs font-semibold text-purple-600 mb-0.5 block">BINA</span>
                 <div className="px-3.5 py-2.5 bg-violet-50 text-violet-900 rounded-2xl rounded-tl-sm border border-violet-200 shadow-sm">
-                  <p className="text-sm leading-relaxed">{PRACTICE_GREETING}</p>
+                  <p className="text-sm leading-relaxed">
+                    {revealFor(PRACTICE_GREETING)}
+                    {streaming && revealFor(PRACTICE_GREETING).length < PRACTICE_GREETING.length && (
+                      <span className="tf-blink inline-block w-1.5 h-3.5 ml-0.5 -mb-0.5 bg-violet-600 align-middle" aria-hidden="true" />
+                    )}
+                  </p>
                 </div>
               </div>
             </div>
-            {/* Bina practice question */}
-            <div className="flex gap-2">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/linda-avatar.webp" onError={(e) => { const t = e.currentTarget; if (!t.src.endsWith('/linda-3.png')) t.src = '/linda-3.png'; }} alt="Bina" className="w-6 h-6 rounded-full object-cover shrink-0 shadow-sm mt-0.5" />
-              <div className="max-w-[80%]">
-                <span className="text-2xs font-semibold text-purple-600 mb-0.5 block">BINA</span>
-                <div className="px-3.5 py-2.5 bg-violet-50 text-violet-900 rounded-2xl rounded-tl-sm border border-violet-200 shadow-sm">
-                  <p className="text-2xs text-violet-500 font-medium uppercase tracking-wide mb-1">Practice question</p>
-                  <p className="text-sm leading-relaxed font-medium">&ldquo;{PRACTICE_QUESTION}&rdquo;</p>
+            {/* Bina practice question — withheld until the greeting has
+                actually finished being spoken/revealed (hasStartedRevealing),
+                so it never sits there empty-with-cursor next to a greeting
+                that's still mid-sentence. */}
+            {hasStartedRevealing(PRACTICE_QUESTION) && (
+              <div className="flex gap-2">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/linda-avatar.webp" onError={(e) => { const t = e.currentTarget; if (!t.src.endsWith('/linda-3.png')) t.src = '/linda-3.png'; }} alt="Bina" className="w-6 h-6 rounded-full object-cover shrink-0 shadow-sm mt-0.5" />
+                <div className="max-w-[80%]">
+                  <span className="text-2xs font-semibold text-purple-600 mb-0.5 block">BINA</span>
+                  <div className="px-3.5 py-2.5 bg-violet-50 text-violet-900 rounded-2xl rounded-tl-sm border border-violet-200 shadow-sm">
+                    <p className="text-2xs text-violet-500 font-medium uppercase tracking-wide mb-1">Practice question</p>
+                    <p className="text-sm leading-relaxed font-medium">
+                      &ldquo;{revealFor(PRACTICE_QUESTION)}
+                      {streaming && revealFor(PRACTICE_QUESTION).length < PRACTICE_QUESTION.length && (
+                        <span className="tf-blink inline-block w-1.5 h-3.5 ml-0.5 -mb-0.5 bg-violet-600 align-middle" aria-hidden="true" />
+                      )}
+                      {revealFor(PRACTICE_QUESTION).length >= PRACTICE_QUESTION.length && <>&rdquo;</>}
+                    </p>
+                  </div>
+                  {/* Play/Replay-question button removed — Repeat Question in the
+                      response bubble does the same thing (replays only the question). */}
                 </div>
-                {/* Play/Replay-question button removed — Repeat Question in the
-                    response bubble does the same thing (replays only the question). */}
               </div>
-            </div>
+            )}
             {/* Your Response — like the live interview, the waveform and the
                 Repeat Question / Next buttons live INSIDE this bubble. It stays
                 up from the start (waiting state) so the guided tour can point
                 at it. Without a mic, the typed-answer bar below is used instead. */}
-            {!(practiceQ === 2 && hrExplainMore) && (micReady || isRecording || isTranscribing || (displayAnswer && displayAnswer.trim()) || (typedAnswer && typedAnswer.trim())) && (
+            {/* Withheld while Bina is still speaking and nothing has been
+                recorded yet — like the real interview, "Your Response" only
+                appears once it's actually the candidate's turn, not next to
+                a mid-sentence question. Once recording/an answer exists it
+                stays up regardless (e.g. through a mid-answer Repeat). */}
+            {!(practiceQ === 2 && hrExplainMore) && ((micReady && !aiSpeaking) || isRecording || isTranscribing || (displayAnswer && displayAnswer.trim()) || (typedAnswer && typedAnswer.trim())) && (
               <div ref={micReady ? controlBarRef : undefined} className="flex gap-2 flex-row-reverse">
                 <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0 mt-0.5 text-white text-[9px] font-bold shadow-sm">You</div>
                 <div className="max-w-[80%] min-w-0">
@@ -1923,8 +2395,13 @@ export default function StepSamplePractice({
                   </span>
                   <div className="px-3.5 py-2.5 bg-emerald-50 text-emerald-900 rounded-2xl rounded-tr-sm border border-emerald-200 shadow-sm">
                     {isRecording ? (
-                      // Same as the live interview: no live transcript — a
-                      // recording status + waveform; the transcript shows after.
+                      // Same as the live interview (and production): no live
+                      // transcript while recording — just the waveform + a
+                      // recording indicator. The transcript only appears once
+                      // the candidate stops, exactly like InterviewUI.tsx.
+                      // (liveTranscript is still captured under the hood for
+                      // the final-transcript fallback in stopRecordingAndTranscribe —
+                      // it's just not rendered live here any more.)
                       <>
                         <div className="flex items-center gap-1 mb-1">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -1998,6 +2475,10 @@ export default function StepSamplePractice({
                 </div>
               </div>
             )}
+            {/* Silence-ladder events that happened during Q1 — rendered here,
+                right after Q1's own response, so they stay in chronological
+                order instead of appearing underneath Q2's content. */}
+            {silenceLog.filter((e) => e.slot === 1).map((e, i) => renderLadderBubble(e, `silence-q1-${i}`))}
             {/* Question 1's answer, kept once a voice answer to question 2 starts. */}
             {practiceQ === 2 && hrExplainMore && (
               <div className="flex gap-2 flex-row-reverse">
@@ -2020,7 +2501,13 @@ export default function StepSamplePractice({
                   <span className="text-2xs font-semibold text-purple-600 mb-0.5 block">BINA</span>
                   <div className="px-3.5 py-2.5 bg-violet-50 text-violet-900 rounded-2xl rounded-tl-sm border border-violet-200 shadow-sm">
                     <p className="text-2xs text-violet-500 font-medium uppercase tracking-wide mb-1">Practice question 2 · Yes / No</p>
-                    <p className="text-sm leading-relaxed font-medium">&ldquo;{PRACTICE_HR_QUESTION}&rdquo;</p>
+                    <p className="text-sm leading-relaxed font-medium">
+                      &ldquo;{revealFor(PRACTICE_HR_QUESTION)}
+                      {streaming && revealFor(PRACTICE_HR_QUESTION).length < PRACTICE_HR_QUESTION.length && (
+                        <span className="tf-blink inline-block w-1.5 h-3.5 ml-0.5 -mb-0.5 bg-violet-600 align-middle" aria-hidden="true" />
+                      )}
+                      {revealFor(PRACTICE_HR_QUESTION).length >= PRACTICE_HR_QUESTION.length && <>&rdquo;</>}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -2063,9 +2550,18 @@ export default function StepSamplePractice({
                       <button
                         type="button"
                         onClick={() => {
-                          // Voice answer: keep Q1's answer on screen, then open
-                          // the mic exactly as for any question (3-2-1 first).
+                          // Voice answer: keep Q1's answer on screen (q1Answer),
+                          // then open the mic exactly as for any question (3-2-1
+                          // first). Must also clear transcript/typedAnswer/inputMode
+                          // here, not just rely on startRecording's reset — displayAnswer
+                          // reads `transcript` whenever inputMode is 'voice', and that
+                          // still held Q1's answer during the 3-2-1 gap before
+                          // recording actually starts, so Q2's response bubble
+                          // briefly showed Q1's old answer before the waveform appeared.
                           setQ1Answer((displayAnswer || typedAnswer || '').trim() || null);
+                          setTranscript('');
+                          setTypedAnswer('');
+                          setInputMode('none');
                           setHrExplainMore(true);
                           setHrButtonsReady(false);
                           setAnswerElapsed(0);
@@ -2092,7 +2588,7 @@ export default function StepSamplePractice({
                 Repeat Question / Next buttons live INSIDE this bubble. It stays
                 up from the start (waiting state) so the guided tour can point
                 at it. Without a mic, the typed-answer bar below is used instead. */}
-            {practiceQ === 2 && hrExplainMore && (micReady || isRecording || isTranscribing || (displayAnswer && displayAnswer.trim()) || (typedAnswer && typedAnswer.trim())) && (
+            {practiceQ === 2 && hrExplainMore && ((micReady && !aiSpeaking) || isRecording || isTranscribing || (displayAnswer && displayAnswer.trim()) || (typedAnswer && typedAnswer.trim())) && (
               <div ref={micReady ? controlBarRef : undefined} className="flex gap-2 flex-row-reverse">
                 <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0 mt-0.5 text-white text-[9px] font-bold shadow-sm">You</div>
                 <div className="max-w-[80%] min-w-0">
@@ -2101,8 +2597,13 @@ export default function StepSamplePractice({
                   </span>
                   <div className="px-3.5 py-2.5 bg-emerald-50 text-emerald-900 rounded-2xl rounded-tr-sm border border-emerald-200 shadow-sm">
                     {isRecording ? (
-                      // Same as the live interview: no live transcript — a
-                      // recording status + waveform; the transcript shows after.
+                      // Same as the live interview (and production): no live
+                      // transcript while recording — just the waveform + a
+                      // recording indicator. The transcript only appears once
+                      // the candidate stops, exactly like InterviewUI.tsx.
+                      // (liveTranscript is still captured under the hood for
+                      // the final-transcript fallback in stopRecordingAndTranscribe —
+                      // it's just not rendered live here any more.)
                       <>
                         <div className="flex items-center gap-1 mb-1">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -2176,6 +2677,9 @@ export default function StepSamplePractice({
                 </div>
               </div>
             )}
+            {/* Silence-ladder events that happened during Q2 — same
+                chronological-position idea as the Q1 instance above. */}
+            {silenceLog.filter((e) => e.slot === 2).map((e, i) => renderLadderBubble(e, `silence-q2-${i}`))}
             {/* Time's-up notice when the 2 minutes elapsed (not a manual Next). */}
             {timedUp && (
               <div className="flex justify-center py-1">
@@ -2192,7 +2696,12 @@ export default function StepSamplePractice({
                 <div className="max-w-[80%]">
                   <span className="text-2xs font-semibold text-purple-600 mb-0.5 block">BINA</span>
                   <div className="px-3.5 py-2.5 bg-violet-50 text-violet-900 rounded-2xl rounded-tl-sm border border-violet-200 shadow-sm">
-                    <p className="text-sm leading-relaxed">{PRACTICE_CLOSING_MESSAGE}</p>
+                    <p className="text-sm leading-relaxed">
+                      {revealFor(PRACTICE_CLOSING_MESSAGE)}
+                      {streaming && revealFor(PRACTICE_CLOSING_MESSAGE).length < PRACTICE_CLOSING_MESSAGE.length && (
+                        <span className="tf-blink inline-block w-1.5 h-3.5 ml-0.5 -mb-0.5 bg-violet-600 align-middle" aria-hidden="true" />
+                      )}
+                    </p>
                   </div>
                   <p className="mt-2 text-2xs text-emerald-600">You can now click <span className="font-semibold">Start Interview</span> below.</p>
                 </div>

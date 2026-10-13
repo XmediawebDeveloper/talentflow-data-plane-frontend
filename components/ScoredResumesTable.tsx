@@ -438,17 +438,26 @@ interface ScoredResumesTableProps {
    */
   toolbarPortal?: HTMLElement | null;
   /**
-   * How a candidate's name is displayed (e.g. Job Details shows first names
-   * only — `formatCandidateFirstName`). Omitted: the name as stored. Same
-   * optional prop AssessmentResults / AIInterviewResults take.
-   */
-  formatCandidateName?: (name: string) => string;
-  /**
    * Table column ids to leave out (see TABLE_COLUMNS) — for a host that
    * already shows them around the table, e.g. AI Talent Match's per-candidate
    * score table, whose row above names the candidate and the job.
    */
   hiddenColumnIds?: string[];
+  /**
+   * View by Candidates under a verdict filter: the host hands the FILTERED
+   * rows as `resumes` (who is listed) and every row here (what each one's
+   * Exact / Partial / No Match counts read). Without it the counts came from
+   * the filtered rows, so under "No Match" every candidate read Exact 0 /
+   * Partial 0 whatever they really had — unlike View by Job, whose badges
+   * count every score and grey the verdicts outside the filter.
+   */
+  verdictCountRows?: ScoredResume[];
+  /** The verdict filter in force: the other two counts are shown muted. */
+  activeVerdict?: 'Exact Match' | 'Partial Match' | 'No Match' | null;
+  /** Opt-in: how a candidate's name is SHOWN (Job Details: first name
+   *  capitalised). Display only — search, sort, filters and exports keep the
+   *  name as it is; other hosts leave it unset. */
+  formatCandidateName?: (name: string) => string;
 }
 
 /**
@@ -648,6 +657,8 @@ export default function ScoredResumesTable({
   hiddenColumnIds,
   formatCandidateName,
   onOpenInviteDialog,
+  verdictCountRows,
+  activeVerdict = null,
 }: ScoredResumesTableProps) {
   const showName = (name: string) => (formatCandidateName ? formatCandidateName(name) : name);
   /* Embedded in the Job Details tabs (the toolbar portals into that card's
@@ -1095,8 +1106,27 @@ Best regards`);
       },
       { exact: 0, partial: 0, none: 0 },
     );
+  /* A candidate's counts across ALL their scores (verdictCountRows), keyed
+     like the groups; falls back to the listed rows when the host gives none. */
+  const fullTallyByCandidate = useMemo(() => {
+    if (!verdictCountRows) return null;
+    const byKey = new Map<string, ScoredResume[]>();
+    verdictCountRows.forEach((r) => {
+      const k = candidateGroupKey(r);
+      const list = byKey.get(k);
+      if (list) list.push(r);
+      else byKey.set(k, [r]);
+    });
+    return new Map(Array.from(byKey.entries()).map(([k, rows]) => [k, tallyVerdicts(rows)]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [verdictCountRows]);
+  const groupTally = (rows: ScoredResume[]) =>
+    (rows.length > 0 && fullTallyByCandidate?.get(candidateGroupKey(rows[0]))) || tallyVerdicts(rows);
+  const VERDICT_OF_KIND = { exact: 'Exact Match', partial: 'Partial Match', none: 'No Match' } as const;
   /* One count, in its verdict's colours (the same chips View by Job's rows
-     use). A zero is shown muted rather than hidden, so the columns line up. */
+     use). A zero is shown muted rather than hidden, so the columns line up;
+     under a verdict filter the OTHER verdicts are muted too (count kept),
+     as View by Job's badges are. */
   const VERDICT_COUNT_CLASS = {
     exact: 'bg-success-subtle text-success border-success/20',
     partial: 'bg-warning-subtle text-warning border-warning/20',
@@ -1105,7 +1135,9 @@ Best regards`);
   const renderVerdictCount = (kind: keyof typeof VERDICT_COUNT_CLASS, count: number, label?: string) => (
     <span
       className={`inline-flex items-center justify-center gap-1 min-w-[2rem] px-2 py-0.5 rounded-full text-xs font-semibold tabular-nums border ${
-        count > 0 ? VERDICT_COUNT_CLASS[kind] : 'bg-gray-50 text-gray-400 border-gray-200'
+        activeVerdict && VERDICT_OF_KIND[kind] !== activeVerdict
+          ? 'bg-gray-50 text-gray-400 border-gray-200 opacity-60'
+          : count > 0 ? VERDICT_COUNT_CLASS[kind] : 'bg-gray-50 text-gray-400 border-gray-200'
       }`}
     >
       {label && <span className="font-medium">{label}</span>}
@@ -1199,9 +1231,9 @@ Best regards`);
       switch (sortBy) {
         case 'name': return (rows[0].candidateName || '').toLowerCase();
         case 'versions': return rows.length;
-        case 'exact': return tallyVerdicts(rows).exact;
-        case 'partial': return tallyVerdicts(rows).partial;
-        case 'none': return tallyVerdicts(rows).none;
+        case 'exact': return groupTally(rows).exact;
+        case 'partial': return groupTally(rows).partial;
+        case 'none': return groupTally(rows).none;
         default: return dateOf(rows[0]);
       }
     };
@@ -2512,7 +2544,7 @@ Best regards`);
                         </div>
 
                         {(() => {
-                          const t = tallyVerdicts(groupRows);
+                          const t = groupTally(groupRows);
                           return (
                             <div className="flex flex-wrap items-center gap-1.5">
                               {renderVerdictCount('exact', t.exact, 'Exact Match')}
@@ -2778,7 +2810,7 @@ Best regards`);
                           {renderJobTitles(distinctTitles)}
                         </td>
                         {(() => {
-                          const t = tallyVerdicts(rows);
+                          const t = groupTally(rows);
                           return (
                             <>
                               <td className="px-4 py-3 align-middle text-center">{renderVerdictCount('exact', t.exact)}</td>
@@ -2951,7 +2983,7 @@ Best regards`);
                   </div>
 
                   {(() => {
-                    const t = tallyVerdicts(rows);
+                    const t = groupTally(rows);
                     return (
                       <div className="mt-3 flex flex-wrap items-center gap-1.5">
                         {renderVerdictCount('exact', t.exact, 'Exact Match')}

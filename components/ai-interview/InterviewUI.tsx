@@ -632,6 +632,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // (silence_duration_ms, ~8s) of the candidate's turn — after that it disables.
   const [canRepeat, setCanRepeat] = useState(false);
   const repeatWindowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Absolute performance.now() deadline for the repeat window, and the instant
+  // it was last paused (null when running / not armed). Mirrors
+  // questionTimerPausedAtRef below: whenever Bina speaks mid-turn (a silence
+  // nudge, a clarification, a repeat re-speak, a device-outage freeze) the
+  // window is paused instead of silently ticking down, so a candidate who
+  // stays quiet until "Are you there?" still gets a true REPEAT_WINDOW_MS of
+  // USABLE button time — not REPEAT_WINDOW_MS of wall-clock with a gap in the
+  // middle where the button was hidden.
+  const repeatWindowDeadlineAtRef = useRef<number | null>(null);
+  const repeatWindowPausedSinceRef = useRef<number | null>(null);
   // repeatFreeze: from a Repeat click until Bina finishes re-speaking, the
   // per-question answer timer is FROZEN (doesn't count down). We snapshot the
   // remaining seconds at click time and resume from it after the re-speak, so
@@ -3416,6 +3426,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     ) {
       questionTimerPausedAtRef.current = performance.now();
     }
+    // Pause the Repeat-Question window too, for the same reason: while Bina
+    // is speaking the candidate cannot click it anyway (it's hidden), so that
+    // time must not count against the one-shot REPEAT_WINDOW_MS budget —
+    // otherwise a silence nudge alone can burn through most/all of it before
+    // the candidate ever gets a usable chance to click Repeat.
+    if (repeatWindowTimerRef.current && repeatWindowPausedSinceRef.current === null) {
+      clearTimeout(repeatWindowTimerRef.current);
+      repeatWindowTimerRef.current = null;
+      repeatWindowPausedSinceRef.current = performance.now();
+    }
   }, []);
 
   // Resume the per-question clock when "Your Turn" opens — folds the elapsed
@@ -3424,6 +3444,26 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     if (questionTimerPausedAtRef.current !== null) {
       questionTimerPausedMsRef.current += performance.now() - questionTimerPausedAtRef.current;
       questionTimerPausedAtRef.current = null;
+    }
+    // Resume the Repeat-Question window: push its deadline forward by exactly
+    // how long it was paused, then re-arm a timeout for whatever's left.
+    if (repeatWindowPausedSinceRef.current !== null) {
+      const pausedForMs = performance.now() - repeatWindowPausedSinceRef.current;
+      repeatWindowPausedSinceRef.current = null;
+      if (repeatWindowDeadlineAtRef.current !== null) {
+        repeatWindowDeadlineAtRef.current += pausedForMs;
+        const remainingMs = repeatWindowDeadlineAtRef.current - performance.now();
+        if (remainingMs > 0) {
+          repeatWindowTimerRef.current = setTimeout(() => {
+            setCanRepeat(false);
+            repeatWindowTimerRef.current = null;
+            repeatWindowDeadlineAtRef.current = null;
+          }, remainingMs);
+        } else {
+          setCanRepeat(false);
+          repeatWindowDeadlineAtRef.current = null;
+        }
+      }
     }
   }, []);
 
@@ -3456,11 +3496,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     // (repeatFreezeRef path) does NOT re-arm — one repeat per turn. Skipped for
     // follow-ups/clarifications (same slot continuing, not a fresh window).
     if (repeatWindowTimerRef.current) { clearTimeout(repeatWindowTimerRef.current); repeatWindowTimerRef.current = null; }
+    repeatWindowDeadlineAtRef.current = null;
+    repeatWindowPausedSinceRef.current = null;
     if (!repeatUsedThisTurnRef.current && !repeatFreezeRef.current && !isFollowUpRef.current && !isClarificationRef.current) {
       setCanRepeat(true);
+      repeatWindowDeadlineAtRef.current = performance.now() + REPEAT_WINDOW_MS;
       repeatWindowTimerRef.current = setTimeout(() => {
         setCanRepeat(false);
         repeatWindowTimerRef.current = null;
+        repeatWindowDeadlineAtRef.current = null;
       }, REPEAT_WINDOW_MS);
     }
   }, [ensureQuestionTimerRunning]);
@@ -9756,6 +9800,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     repeatUsedThisTurnRef.current = true;
     setCanRepeat(false);
     if (repeatWindowTimerRef.current) { clearTimeout(repeatWindowTimerRef.current); repeatWindowTimerRef.current = null; }
+    repeatWindowDeadlineAtRef.current = null;
+    repeatWindowPausedSinceRef.current = null;
 
     // CRITICAL: stop the mic SILENTLY right now (no end_turn), exactly like the
     // Next button does. The mic is still live at this moment, and if we leave it
