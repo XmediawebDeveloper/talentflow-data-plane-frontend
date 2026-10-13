@@ -76,6 +76,18 @@ const DUTY_CYCLE_DIVISOR = 3;
 const MAX_DETECT_INTERVAL = 20000;
 
 /**
+ * GPU budget. A WebGPU inference is one GPU submission that Windows can't
+ * preempt, so a multi-second frame stalls the desktop compositor and the
+ * WHOLE machine freezes until it finishes (prod log 2026-10-13: "First
+ * inference 13649 ms → cadence 20000 ms" — the candidate's PC froze for ~14s
+ * every 20s, and entering/leaving fullscreen hung behind it). Above these the
+ * detector is shut down for the session and reported unavailable instead.
+ * The first frame gets more room (shader compilation / warm-up).
+ */
+const MAX_FIRST_INFERENCE_MS = 8000;
+const MAX_INFERENCE_MS = 5000;
+
+/**
  * How often to ask the worker for its top raw scores (any class, allowlist and
  * thresholds ignored). Left ON in production deliberately: this feature has
  * already shipped broken twice in ways only a production log could reveal, and
@@ -392,8 +404,25 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
           );
         }
         if (typeof msg.inferenceMs === "number") {
+          const isFirst = !loggedTimingRef.current;
+          const budget = isFirst ? MAX_FIRST_INFERENCE_MS : MAX_INFERENCE_MS;
+          if (msg.inferenceMs > budget) {
+            // Too slow for this GPU — stop before it freezes the machine again.
+            if (timerRef.current !== null) {
+              clearTimeout(timerRef.current);
+              timerRef.current = null;
+            }
+            try { worker.postMessage({ type: "dispose" }); worker.terminate(); } catch {}
+            workerRef.current = null;
+            isReadyRef.current = false;
+            markUnavailable(
+              `GPU too slow for object detection: ${Math.round(msg.inferenceMs)} ms per frame ` +
+              `(budget ${budget} ms) — disabled for this session to keep the interview responsive.`,
+            );
+            return;
+          }
           lastInferenceMsRef.current = msg.inferenceMs;
-          if (!loggedTimingRef.current) {
+          if (isFirst) {
             loggedTimingRef.current = true;
             console.log(
               `[INTERVIEW_OBJECT_DETECTION] First inference ${Math.round(msg.inferenceMs)} ms ` +
@@ -459,7 +488,8 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
       let lastDetect = 0;
 
       const tick = async () => {
-        if (!mounted) return;
+        // Unavailable (e.g. shut down by the GPU budget) → stop polling too.
+        if (!mounted || isUnavailableRef.current) return;
         const now = performance.now();
         const video = videoRef.current;
 

@@ -48,6 +48,23 @@ async function isPdfBlob(blob: Blob): Promise<boolean> {
   }
 }
 
+/** A blob is a real Word file if it starts with the ZIP header ("PK", modern
+ *  .docx/.pptx) or the OLE compound-file header (legacy .doc) — the two
+ *  formats docx-preview can actually render. Anything else the preview/
+ *  download endpoints return (e.g. a plain .txt upload, which the backend
+ *  serves as-is when it isn't a PDF or Word file) is not renderable through
+ *  docx-preview and must not be routed there, or it will always fail. */
+async function isWordBlob(blob: Blob): Promise<boolean> {
+  try {
+    const bytes = new Uint8Array(await blob.slice(0, 4).arrayBuffer());
+    const isZip = bytes[0] === 0x50 && bytes[1] === 0x4b; // 'P' 'K'
+    const isOle = bytes[0] === 0xd0 && bytes[1] === 0xcf && bytes[2] === 0x11 && bytes[3] === 0xe0;
+    return isZip || isOle;
+  } catch {
+    return false;
+  }
+}
+
 /** Lines treated as résumé section headings, so the preview keeps its shape. */
 const SECTION_HEADERS = [
   'experience', 'work experience', 'employment', 'professional experience',
@@ -98,6 +115,10 @@ export default function ResumeTextPreviewModal({
   const isStoredResumeOnly = !text && !documentUrl && !localFile && !!resumeId;
   const [resolvedPdfUrl, setResolvedPdfUrl] = useState<string | null>(null);
   const [resolvedDocxBlob, setResolvedDocxBlob] = useState<Blob | null>(null);
+  // Set when the fetched file turned out to be plain text (e.g. a .txt
+  // upload) and its content was read directly — skips the extracted_text
+  // fallback fetch below, which would otherwise overwrite it.
+  const [resolvedAsText, setResolvedAsText] = useState(false);
   const [documentFetchDone, setDocumentFetchDone] = useState(false);
   const effectiveDocumentUrl = documentUrl || resolvedPdfUrl;
   /* A caller-supplied `documentUrl` (a local file already identified as a
@@ -119,10 +140,20 @@ export default function ResumeTextPreviewModal({
         objectUrl = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
         if (cancelled) return false;
         setResolvedPdfUrl(objectUrl);
-      } else {
+        return true;
+      }
+      if (await isWordBlob(blob)) {
         if (cancelled) return false;
         setResolvedDocxBlob(blob);
+        return true;
       }
+      // Neither PDF nor Word — plain text (e.g. a .txt upload). The blob IS
+      // the content, so render it directly instead of making a second request
+      // for the resume's stored extracted_text.
+      const asText = await blob.text();
+      if (cancelled) return false;
+      setContent(asText);
+      setResolvedAsText(true);
       return true;
     };
 
@@ -152,7 +183,7 @@ export default function ResumeTextPreviewModal({
   }, [isStoredResumeOnly, resumeId]);
 
   useEffect(() => {
-    if (text || documentMode || !resumeId) {
+    if (text || documentMode || resolvedAsText || !resumeId) {
       if (text) setContent(text);
       return;
     }
@@ -176,7 +207,7 @@ export default function ResumeTextPreviewModal({
     return () => {
       cancelled = true;
     };
-  }, [resumeId, text, documentMode, isStoredResumeOnly, documentFetchDone]);
+  }, [resumeId, text, documentMode, resolvedAsText, isStoredResumeOnly, documentFetchDone]);
 
   /* docx-preview is imported inside this handler, not at the top of the file.
      It reaches for the DOM as it loads, which is why every other component that

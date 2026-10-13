@@ -46,6 +46,14 @@ const BENCH_SLOW_MS = 12;
 // get accurate neural turn detection. Above this many ms = too slow → fall
 // back to the lightweight amplitude VAD.
 const BENCH_NEURAL_VAD_MAX_MS = 35;
+// A ≤4-core machine is demoted to 'low' (2D Bina, no noise suppression) only
+// when the benchmark is CLEARLY slow, not merely over the 'high' line.
+// Prod log 2026-10-13: "tier=low cores=4 ram=16GB bench=13.8ms" — 13.8 vs the
+// old 12ms cut-off is run-to-run noise (system check is still busy with face
+// detection and the model prefetch), so the same PC got 3D Bina on one visit
+// and 2D on the next.
+const BENCH_LOW_TIER_MS = 25;
+const BENCH_RUNS = 3;
 const NEURAL_VAD_MIN_CORES = 4;
 
 /**
@@ -81,7 +89,15 @@ export function detectDeviceCapability(opts: { runBenchmark?: boolean } = {}): D
       ? (navigator as { deviceMemory?: number }).deviceMemory ?? null
       : null;
 
-  const benchmarkMs = runBenchmark ? runCpuMicroBenchmark() : null;
+  // Best of a few short runs: a background spike only ever makes a run SLOWER,
+  // so the fastest run is the truest reading of the CPU.
+  let benchmarkMs: number | null = null;
+  if (runBenchmark) {
+    for (let i = 0; i < BENCH_RUNS; i++) {
+      const ms = runCpuMicroBenchmark();
+      benchmarkMs = benchmarkMs === null ? ms : Math.min(benchmarkMs, ms);
+    }
+  }
 
   // ── Tier decision ─────────────────────────────────────────────────────────
   // Start optimistic from cores+memory, then DOWNGRADE on any weak signal so a
@@ -102,13 +118,14 @@ export function detectDeviceCapability(opts: { runBenchmark?: boolean } = {}): D
   // capable machine into lite mode. New rule:
   //   • genuinely weak hardware (≤2 cores OR ≤2GB)        → low
   //   • strong hardware (≥8 cores AND ≥8GB) + fast bench  → high
-  //   • borderline hardware (≤4 cores) AND slow bench     → low
+  //   • borderline hardware (≤4 cores) AND CLEARLY slow bench (>BENCH_LOW_TIER_MS) → low
   //   • everything else                                   → mid
+  const benchVerySlow = benchmarkMs !== null && benchmarkMs > BENCH_LOW_TIER_MS;
   if (coreLow || memLow) {
     tier = 'low';
   } else if (coreHigh && memHigh && !benchSlow) {
     tier = 'high';
-  } else if (benchSlow && cores <= 4) {
+  } else if (benchVerySlow && cores <= 4) {
     tier = 'low';
   } else {
     tier = 'mid';
