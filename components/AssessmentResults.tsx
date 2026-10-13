@@ -1,4 +1,4 @@
-import { ArrowLeft, User, Clock, Timer, Award, XCircle, ChevronUp, ChevronDown, FileText, TrendingUp, AlertCircle, Info, Filter, Layers, ArrowUpDown, Loader2, BarChart3, SlidersHorizontal, Columns3, Trash2, Users, Download, X, Play, CheckSquare, Eye, ArrowUp, ArrowDown, MoreVertical } from 'lucide-react';
+import { User, Clock, Timer, Award, XCircle, ChevronUp, ChevronDown, FileText, FileSpreadsheet, TrendingUp, AlertCircle, Filter, ArrowUpDown, Loader2, BarChart3, SlidersHorizontal, Columns3, Trash2, Users, Download, X, Play, Eye, ArrowUp, ArrowDown, MoreVertical, Video } from 'lucide-react';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
@@ -17,6 +17,8 @@ import {
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import CandidateResultCard, { CANDIDATE_RESULT_CARD_ICON_ACTION_CLASS } from '@/components/assessments/CandidateResultCard';
 import { toast } from 'sonner';
+import ColumnCustomizationModal from '@/components/ColumnCustomizationModal';
+import ExportColumnsModal from '@/components/ExportColumnsModal';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import {
   calculateFinalResult,
@@ -38,7 +40,8 @@ import ListToolbar from '@/components/ui/list-toolbar';
 import ListFilterPanel from '@/components/ui/list-filter-panel';
 import { DateField } from '@/components/ui/date-field';
 import { InviteSourceValue } from '@/components/AIInterviewInviteTable';
-import { timelineEvents } from '@/components/AssessmentInviteActions';
+import { timelineEvents, hasMoreTimelineHistory, loadInvitationHistory } from '@/components/AssessmentInviteActions';
+import { RESULTS_TIMELINE_LIMIT, TimelineHistoryDialog, ViewHistoryButton } from '@/components/ui/timeline-history-dialog';
 import { toOneDecimalScore, SCORE_CELL_TEXT } from '@/lib/utils/score';
 import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
 import ListPagination from '@/components/ListPagination';
@@ -47,7 +50,7 @@ import ListViewToggle, { type ListDisplayMode } from '@/components/ui/list-view-
 import ToolbarFilterSelect from '@/components/ui/toolbar-filter-select';
 import ToolbarSelectAll from '@/components/ui/toolbar-select-all';
 import { SortByControl } from '@/components/ui/select-all-menu';
-import { FILTER_FIELD_CLASS, FILTER_LABEL_CLASS, FILTER_CONTROL_CLASS, useScoringActionPermissions } from '@/components/ScoredResumesTable';
+import { JOB_TAB_FILTER_GRID_CLASS, JOB_TAB_FILTER_FIELD_CLASS, JOB_TAB_FILTER_LABEL_CLASS, JOB_TAB_FILTER_CONTROL_CLASS, useScoringActionPermissions } from '@/components/ScoredResumesTable';
 import type { InviteCandidate } from '@/components/talent-match-invite/inviteVersions';
 
 interface AssessmentResultsProps {
@@ -139,10 +142,11 @@ interface AssessmentResultsProps {
    * it unset and the toolbar renders inline in its own card as before.
    */
   toolbarPortal?: HTMLElement | null;
-  /** Job Details: adds the AI Talent Match tab's "Create / Send Assessment" to the
-   *  selection Actions menu, handing the ticked candidates to the host's
-   *  version popup (VersionInviteDialog). Other hosts leave it unset. */
-  onOpenInviteDialog?: (candidates: InviteCandidate[]) => void;
+  /** Job Details: adds the AI Talent Match tab's "Create / Send Assessment"
+   *  and "Create / Send AI Interview" to the selection Actions menu, handing
+   *  the ticked candidates to the host's version popup of that type
+   *  (VersionInviteDialog). Other hosts leave it unset. */
+  onOpenInviteDialog?: (kind: 'assessment' | 'interview', candidates: InviteCandidate[]) => void;
 }
 
 interface CandidateResult {
@@ -243,8 +247,8 @@ const resultOrderTime = (c: { completed_at?: string; created_at?: string }) =>
   new Date(c.completed_at || c.created_at || 0).getTime();
 
 export default function AssessmentResults({ onBack, assessmentId, assessmentTitle, assessmentVersion, jdTitle, jdId, jdShortId, jdVersion, jobVersionScope = null, assessmentVersionScope = null, embedded = false, openOnTotalCandidates = false, canDownloadPDF = false, canBatchDownload = false, prevId, nextId, currentIndex, totalCount, toolbarPortal, formatCandidateName, onOpenInviteDialog }: AssessmentResultsProps) {
-  /* Create / Send Assessment's gate — the AI Talent Match tab's own. */
-  const { canCreateAssessments, assessmentDeniedReason } = useScoringActionPermissions(true);
+  /* Create / Send Assessment | AI Interview's gates — the AI Talent Match tab's own. */
+  const { canCreateAssessments, assessmentDeniedReason, mayInviteAIInterview, aiInterviewDeniedReason } = useScoringActionPermissions(true);
   const showName = (name: string) => (formatCandidateName && name ? formatCandidateName(name) : name);
   const router = useRouter();
   /* Embedded in the Job Details "Assessments Results" tab (toolbar portals into
@@ -317,7 +321,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
   // Export format modal state
   const [showExportModal, setShowExportModal] = useState(false);
-  const [exportStep, setExportStep] = useState<'format' | 'scope'>('format');
+  /** The row whose Timeline "View History" is open. */
+  const [historyFor, setHistoryFor] = useState<CandidateResult | null>(null);
   const [selectedFormat, setSelectedFormat] = useState<'csv' | 'excel'>('excel');
   // In-flight feedback so the recruiter sees a spinner while a large
   // server-side export streams down. Toast.loading is used to surface a
@@ -408,12 +413,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     }
   }, [columns]);
 
-  const handleToggleColumn = (columnId: string) => {
-    setColumns(columns.map(col =>
-      col.id === columnId ? { ...col, enabled: !col.enabled } : col
-    ));
-  };
-
   const isColumnEnabled = (columnId: string) => {
     return columns.find(c => c.id === columnId)?.enabled ?? true;
   };
@@ -452,13 +451,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       CHECKBOX_PX + ACTIONS_PX,
     );
   })();
-
-  // Check if columns are customized (different from default)
-  const areColumnsCustomized = () => {
-    if (columns.length === 0) return false;
-    // Check if any column is disabled
-    return columns.some(col => !col.enabled);
-  };
 
   // Fetch assessment details to determine enabled rounds
   useEffect(() => {
@@ -873,9 +865,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     (appliedDateFrom || appliedDateTo ? 1 : 0);
   /* Embedded in Job Details the More Filters fields take the Scored Resumes
      panel's field / label / select classes; standalone keeps its own. */
-  const filterFieldClass = portaled ? FILTER_FIELD_CLASS : undefined;
+  const filterFieldClass = portaled ? JOB_TAB_FILTER_FIELD_CLASS : undefined;
   const filterLabelClass = portaled
-    ? FILTER_LABEL_CLASS
+    ? JOB_TAB_FILTER_LABEL_CLASS
     : 'block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5';
   /* What the panel's Clear All resets — the same set, and the same handler,
      the filter row's Clear button always had (search included), plus the three
@@ -1393,29 +1385,12 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     }
   };
 
-  // Handle format selection - move to scope selection
-  const handleFormatSelect = (format: 'csv' | 'excel') => {
-    setSelectedFormat(format);
-    setExportStep('scope');
-  };
-
   /** The server-side filters an export carries, as the endpoint takes them. */
   type ExportFilters = {
     search?: string;
     status_filter?: string;
     passed?: boolean;
     result_ids?: string[];
-  };
-
-  /** The rows of an export, grouped by the assessment each came from. */
-  const groupRowsByAssessment = (rows: CandidateResult[]) => {
-    const groups = new Map<string, string[]>();
-    for (const row of rows) {
-      const ids = groups.get(row.assessmentId) ?? [];
-      ids.push(row.id);
-      groups.set(row.assessmentId, ids);
-    }
-    return groups;
   };
 
   /**
@@ -1434,16 +1409,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     groups: Map<string, string[] | null>,
     baseFilters: ExportFilters,
     fileLabel: string,
+    /** The Export popup's ticked columns, in its order. */
+    enabledColumnIds: string[],
   ) => {
-    /* The table no longer has an Email or a Completed COLUMN (email moved
-       under the candidate name; the completion time is in the Timeline), but
-       both are still wanted in an exported file — so they ride along
-       regardless of the picker (2026-09-30). */
-    const enabledColumnIds = [
-      ...columns.filter(col => col.enabled).map(col => col.id),
-      'email',
-      'completed',
-    ];
     const sorting = { sort_by: sortField, sort_order: sortDirection };
     console.log('[EXPORT] Exporting columns:', enabledColumnIds, 'from assessments:', [...groups.keys()]);
     const extension = selectedFormat === 'csv' ? 'csv' : 'xlsx';
@@ -1475,44 +1443,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     }
   };
 
-  // Export current page only
-  const handleExportCurrentPage = async () => {
-    if (isExporting) return;
-    setIsExporting(true);
-    const _toastId = toast.loading('Preparing export… this may take a moment for large datasets.');
-    try {
-      // Get current page candidates
-      const currentPageCandidates = paginatedCandidates;
-
-      // Build filters object (same as all filtered)
-      const filters: ExportFilters = {};
-      if (searchQuery.trim()) filters.search = searchQuery.trim();
-      if (statusFilter !== 'all') filters.status_filter = statusFilter.toLowerCase().replace(' ', '_');
-      if (passFailFilter === 'pass') filters.passed = true;
-      else if (passFailFilter === 'fail') filters.passed = false;
-
-      /* Pinned to the rows on screen: paging is client-side now, so the page
-         the recruiter is looking at is something only the client can name. */
-      await downloadScopedExport(
-        groupRowsByAssessment(currentPageCandidates),
-        filters,
-        'CurrentPage'
-      );
-
-      const formatName = selectedFormat === 'csv' ? 'CSV' : 'Excel';
-      toast.success(`Current page exported to ${formatName} successfully! (${currentPageCandidates.length} results)`, { id: _toastId });
-      setShowExportModal(false);
-      setExportStep('format');
-    } catch (error) {
-      console.error('Failed to export current page:', error);
-      toast.error('Failed to export results. Please try again.', { id: _toastId });
-    } finally {
-      setIsExporting(false);
-    }
-  };
 
   // Export all filtered results
-  const handleExportAllFiltered = async () => {
+  const handleExportAllFiltered = async (columnIds: string[]) => {
     if (isExporting) return;
     setIsExporting(true);
     const _toastId = toast.loading('Preparing export of all filtered results…');
@@ -1532,41 +1465,15 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       await downloadScopedExport(
         new Map(scopedAssessmentIds.map(id => [id, null])),
         filters,
-        'AllResults'
+        'AllResults',
+        columnIds
       );
 
       const formatName = selectedFormat === 'csv' ? 'CSV' : 'Excel';
       toast.success(`All filtered results exported to ${formatName} successfully! (${filteredCandidates.length} results including in-progress)`, { id: _toastId });
       setShowExportModal(false);
-      setExportStep('format');
     } catch (error) {
       console.error('Failed to export all results:', error);
-      toast.error('Failed to export results. Please try again.', { id: _toastId });
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
-  // Export only the selected candidates
-  const handleExportSelected = async () => {
-    if (isExporting) return;
-    setIsExporting(true);
-    const _toastId = toast.loading('Preparing export of selected results…');
-    try {
-      /* The selected rows, asked of the assessments they actually belong to —
-         a selection can span the job's versions. */
-      await downloadScopedExport(
-        groupRowsByAssessment(candidateResults.filter(c => selectedRows.includes(c.id))),
-        {},
-        'Selected'
-      );
-
-      const formatName = selectedFormat === 'csv' ? 'CSV' : 'Excel';
-      toast.success(`${selectedRows.length} selected candidate${selectedRows.length > 1 ? 's' : ''} exported to ${formatName} successfully!`, { id: _toastId });
-      setShowExportModal(false);
-      setExportStep('format');
-    } catch (error) {
-      console.error('Failed to export selected candidates:', error);
       toast.error('Failed to export results. Please try again.', { id: _toastId });
     } finally {
       setIsExporting(false);
@@ -1914,44 +1821,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             slot), the whole block portals there with its card chrome dropped so
             it reads as the tab card's second row; otherwise inline as before. */}
         {(() => {
-        /* The column picker's popover, shared by both anchor points below:
-           its own button when standalone, the Actions menu's "Customize
-           Columns" item when embedded in Job Details. */
-        const columnSelectorPanel = showColumnSelector && (
-          <>
-            <div
-              className="fixed inset-0 z-10"
-              onClick={() => setShowColumnSelector(false)}
-            ></div>
-            <div
-              id="assessment-results-column-selector"
-              role="dialog"
-              aria-label="Select visible result columns"
-              className="absolute left-0 top-full mt-2 w-56 sm:w-64 max-w-[calc(100vw-1.5rem)] bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-2 z-20 max-h-80 sm:max-h-96 overflow-y-auto"
-            >
-              <div className="px-3 sm:px-4 py-2 border-b border-gray-100">
-                <div className="text-xs sm:text-sm font-medium text-gray-900">Select Columns</div>
-                <div className="text-xs text-gray-500 mt-0.5">
-                  {enabledColumnsCount} of {columns.length} selected
-                </div>
-              </div>
-              {columns.map((column) => (
-                <label
-                  key={column.id}
-                  className="flex items-center gap-2.5 sm:gap-3 px-3 sm:px-4 py-2 sm:py-2.5 hover:bg-brand-blue/5 hover:text-brand-blue transition-colors cursor-pointer"
-                >
-                  <input
-                    type="checkbox"
-                    checked={column.enabled}
-                    onChange={() => handleToggleColumn(column.id)}
-                    className="w-4 h-4 text-brand-blue rounded border-gray-300 focus:ring-brand-blue/40"
-                  />
-                  <span className="text-xs sm:text-sm text-gray-700">{column.label}</span>
-                </label>
-              ))}
-            </div>
-          </>
-        );
         /* The More Filters fields — every applicable one in its usual order.
            Embedded in Job Details the Status select (the toolbar's status
            dropdown already is it) and the date range are dropped, and the rest
@@ -1971,7 +1840,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   setSelectedRows([]);
                 }}
                 disabled={!jobVersionsLoaded}
-                className={portaled ? FILTER_CONTROL_CLASS : "w-full min-w-0 h-[38px] px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"}
+                className={portaled ? JOB_TAB_FILTER_CONTROL_CLASS : "w-full min-w-0 h-[38px] px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"}
               >
                 <option value="all">All Versions</option>
                 {jobVersionScopes.map(scope => (
@@ -1995,7 +1864,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   setSelectedRows([]);
                 }}
                 disabled={!jobVersionsLoaded}
-                className={portaled ? FILTER_CONTROL_CLASS : "w-full min-w-0 h-[38px] px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed truncate"}
+                className={portaled ? JOB_TAB_FILTER_CONTROL_CLASS : "w-full min-w-0 h-[38px] px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed truncate"}
               >
                 <option value="all">All Assessments</option>
                 {assessmentOptions.map(option => (
@@ -2019,7 +1888,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   setSelectedRows([]);
                 }}
                 disabled={!jobVersionsLoaded}
-                className={portaled ? FILTER_CONTROL_CLASS : "w-full min-w-0 h-[38px] px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"}
+                className={portaled ? JOB_TAB_FILTER_CONTROL_CLASS : "w-full min-w-0 h-[38px] px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"}
               >
                 <option value="all">All Assessment Versions</option>
                 {assessmentVersionOptions.map(version => (
@@ -2040,7 +1909,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   setStatusFilter(e.target.value as 'all' | 'Completed' | 'In Progress' | 'Terminated' | 'Pending');
                   setCurrentPage(1);
                 }}
-                className={portaled ? FILTER_CONTROL_CLASS : "w-full min-w-0 h-[38px] px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"}
+                className={portaled ? JOB_TAB_FILTER_CONTROL_CLASS : "w-full min-w-0 h-[38px] px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"}
               >
                 <option value="all">All</option>
                 <option value="Completed">Completed</option>
@@ -2060,7 +1929,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   setPassFailFilter(e.target.value as 'all' | 'pass' | 'fail');
                   setCurrentPage(1);
                 }}
-                className={portaled ? FILTER_CONTROL_CLASS : "w-full min-w-0 h-[38px] px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"}
+                className={portaled ? JOB_TAB_FILTER_CONTROL_CLASS : "w-full min-w-0 h-[38px] px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"}
               >
                 <option value="all">All</option>
                 <option value="pass">Pass</option>
@@ -2079,7 +1948,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   setRoundFilters(prev => value === 'all' ? { ...prev, technical: undefined } : { ...prev, technical: value });
                   setCurrentPage(1);
                 }}
-                className={portaled ? FILTER_CONTROL_CLASS : "w-full min-w-0 h-[38px] px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"}
+                className={portaled ? JOB_TAB_FILTER_CONTROL_CLASS : "w-full min-w-0 h-[38px] px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"}
               >
                 <option value="all">All</option>
                 <option value="50-70">50-70%</option>
@@ -2099,7 +1968,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   setRoundFilters(prev => value === 'all' ? { ...prev, coding: undefined } : { ...prev, coding: value });
                   setCurrentPage(1);
                 }}
-                className={portaled ? FILTER_CONTROL_CLASS : "w-full min-w-0 h-[38px] px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"}
+                className={portaled ? JOB_TAB_FILTER_CONTROL_CLASS : "w-full min-w-0 h-[38px] px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"}
               >
                 <option value="all">All</option>
                 <option value="50-70">50-70%</option>
@@ -2167,8 +2036,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     once a row is ticked (one, several or Select All) and gone
                     again when nothing is. Holds Customize Columns and Export
                     (the toolbar has no separate buttons for them in Job
-                    Details) plus the selection-bound Download PDF Reports. The
-                    wrapper anchors the column picker (`columnSelectorPanel`). */}
+                    Details) plus the selection-bound Download PDF Reports. */}
                 {selectedRows.length > 0 && (
                   <div className="relative">
                     <DropdownMenu>
@@ -2193,7 +2061,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           onSelect={() => setShowColumnSelector(true)}
                         >
                           <Columns3 className="w-4 h-4 text-menu-icon-view" />
-                          <span className={MENU_ITEM_SCALE_CLASS}>Customize Columns ({enabledColumnsCount})</span>
+                          <span className={MENU_ITEM_SCALE_CLASS}>Customize Columns</span>
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer"
@@ -2214,37 +2082,49 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                             </span>
                           </DropdownMenuItem>
                         )}
-                        {/* Create / Send Assessment — the AI Talent Match
-                            tab's item: the ticked candidates (once each, as a
-                            candidate can have several attempts) go to the
-                            host's version popup. */}
-                        {onOpenInviteDialog && (
-                          <DropdownMenuItem
-                            className={`flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer ${canCreateAssessments ? '' : 'text-gray-400 opacity-60'}`}
-                            onSelect={(e) => {
-                              if (!canCreateAssessments) {
-                                e.preventDefault();
-                                toast.error(assessmentDeniedReason);
-                                return;
+                        {/* Create / Send Assessment | AI Interview — the AI
+                            Talent Match tab's items: the ticked candidates
+                            (once each, as a candidate can have several
+                            attempts) go to the host's version popup of that
+                            type. */}
+                        {onOpenInviteDialog && (() => {
+                          const openInvite = (kind: 'assessment' | 'interview', allowed: boolean, deniedReason: string) => (e: Event) => {
+                            if (!allowed) {
+                              e.preventDefault();
+                              toast.error(deniedReason);
+                              return;
+                            }
+                            const picked = new Set(selectedRows);
+                            const invitees = new Map<string, InviteCandidate>();
+                            candidateResults.filter((c) => picked.has(c.id)).forEach((c) => {
+                              const key = c.resumeId || c.email.trim().toLowerCase() || c.id;
+                              if (!invitees.has(key)) {
+                                invitees.set(key, { id: c.resumeId || c.id, name: c.name, email: c.email, phone: c.phone, resumeId: c.resumeId });
                               }
-                              const picked = new Set(selectedRows);
-                              const invitees = new Map<string, InviteCandidate>();
-                              candidateResults.filter((c) => picked.has(c.id)).forEach((c) => {
-                                const key = c.resumeId || c.email.trim().toLowerCase() || c.id;
-                                if (!invitees.has(key)) {
-                                  invitees.set(key, { id: c.resumeId || c.id, name: c.name, email: c.email, phone: c.phone, resumeId: c.resumeId });
-                                }
-                              });
-                              onOpenInviteDialog(Array.from(invitees.values()));
-                            }}
-                          >
-                            <FileText className="w-4 h-4 text-menu-icon-view" />
-                            <span className={MENU_ITEM_SCALE_CLASS}>Create / Send Assessment</span>
-                          </DropdownMenuItem>
-                        )}
+                            });
+                            onOpenInviteDialog(kind, Array.from(invitees.values()));
+                          };
+                          return (
+                            <>
+                              <DropdownMenuItem
+                                className={`flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer ${canCreateAssessments ? '' : 'text-gray-400 opacity-60'}`}
+                                onSelect={openInvite('assessment', canCreateAssessments, assessmentDeniedReason)}
+                              >
+                                <FileText className="w-4 h-4 text-menu-icon-view" />
+                                <span className={MENU_ITEM_SCALE_CLASS}>Create / Send Assessment</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className={`flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer ${mayInviteAIInterview ? '' : 'text-gray-400 opacity-60'}`}
+                                onSelect={openInvite('interview', mayInviteAIInterview, aiInterviewDeniedReason)}
+                              >
+                                <Video className="w-4 h-4 text-menu-icon-share" />
+                                <span className={MENU_ITEM_SCALE_CLASS}>Create / Send AI Interview</span>
+                              </DropdownMenuItem>
+                            </>
+                          );
+                        })()}
                       </DropdownMenuContent>
                     </DropdownMenu>
-                    {columnSelectorPanel}
                   </div>
                 )}
               </>
@@ -2258,14 +2138,12 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                wrap as a group under it.
                Now ONE LINE at every width: search flexes, the controls keep
                their width, and a row too wide for the screen scrolls sideways
-               (scrollbar hidden) rather than wrapping. The scroll is dropped
-               while the Columns picker is open so the row cannot clip it.
+               (scrollbar hidden) rather than wrapping.
                Embedded in Job Details it takes the AI Talent Match row's own
                layout instead (search and controls on one row from `sm`, the
                controls wrapping as a group, List / Grid pinned right) — no
                sideways scroll hiding controls off the edge on a phone. */
             singleLine={!portaled}
-            overflowVisible={showColumnSelector}
             compactButtons={portaled}
             /* Status — what the four stat cards used to switch between, now a
                dropdown at the head of the controls, beside More Filters. Same
@@ -2282,21 +2160,16 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                  page; embedded in Job Details it is an item in the Actions
                  pill beside Select All (see `beforeSearch` above). */}
               {!portaled && (
-                <div className="relative">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setShowColumnSelector(!showColumnSelector)}
-                    aria-expanded={showColumnSelector}
-                    aria-haspopup="dialog"
-                    aria-controls="assessment-results-column-selector"
-                    icon={<Columns3 className="w-4 h-4" />}
-                    className="whitespace-nowrap !h-[38px] !text-sm"
-                  >
-                    Customize Columns ({enabledColumnsCount})
-                  </Button>
-                  {columnSelectorPanel}
-                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setShowColumnSelector(true)}
+                  aria-haspopup="dialog"
+                  icon={<Columns3 className="w-4 h-4" />}
+                  className="whitespace-nowrap !h-[38px] !text-sm"
+                >
+                  Customize Columns ({enabledColumnsCount})
+                </Button>
               )}
               {/* Embedded in Job Details this takes the AI Talent Match
                   reference's tinted "All Matches" pill chrome; standalone keeps
@@ -2425,14 +2298,13 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             {!portaled && <ListViewToggle value={displayMode} onChange={setDisplayMode} />}
           </ListToolbar>
 
-          {/* More Filters. Embedded in Job Details: the Scored Resumes tab's
-              panel — its plain top divider, its wrapping row of flexing
-              fields (one row on desktop, wrapping on smaller screens) and its
-              neutral selects; no footer buttons. Standalone keeps its own
+          {/* More Filters. Embedded in Job Details: the AI Talent Match tab's
+              panel (JOB_TAB_FILTER_*) — its plain top divider, its 1 / 2 /
+              4-column grid, labels and 36px inputs; no footer buttons. Standalone keeps its own
               card with Clear All / Done. */}
           {showMoreFilters && (portaled ? (
             <div className="mt-4 sm:mt-5 pt-4 sm:pt-5 pb-4 border-t border-brand-blue/10">
-              <div className="flex flex-wrap gap-4">
+              <div className={JOB_TAB_FILTER_GRID_CLASS}>
                 {filterFields}
               </div>
             </div>
@@ -2853,13 +2725,13 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           <div className="flex min-w-0 flex-col gap-1 overflow-hidden" title={getTimelineSummary(candidate)}>
                             {/* Same trail as Track Invites (Invited / System Check /
                                 Started / Completed …), from the shared builder. */}
-                            {timelineEvents(candidate.timelineSource).map(({ label, at, Icon, tone }, i) => (
+                            {timelineEvents(candidate.timelineSource, RESULTS_TIMELINE_LIMIT).map(({ label, at, Icon, tone }, i) => (
                               <div key={`${label}-${i}`} className="flex min-w-0 items-center gap-2">
                                 <Icon className={`w-3 h-3 shrink-0 ${tone}`} />
                                 <span className="truncate">{label}: {formatTimelineDate(at)}</span>
                               </div>
                             ))}
-                            {timelineEvents(candidate.timelineSource).length === 0 && (
+                            {timelineEvents(candidate.timelineSource, RESULTS_TIMELINE_LIMIT).length === 0 && (
                               <div className="flex min-w-0 items-center gap-2">
                                 <Clock className="w-3 h-3 shrink-0 text-gray-400" />
                                 <span className="truncate">-</span>
@@ -2872,6 +2744,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                                 <Timer className="w-3 h-3 shrink-0 text-gray-400" />
                                 <span className="truncate"><span className="text-gray-400 dark:text-slate-500">Duration:</span> {candidate.duration}</span>
                               </div>
+                            )}
+                            {/* The two latest events above; the whole trail
+                                behind View History. */}
+                            {hasMoreTimelineHistory(candidate.timelineSource, RESULTS_TIMELINE_LIMIT) && (
+                              <ViewHistoryButton onClick={() => setHistoryFor(candidate)} />
                             )}
                           </div>
                         </td>
@@ -3041,191 +2918,48 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
         )}
       </div>
 
-      {/* Export Format & Scope Selection Modal */}
+      {historyFor && (
+        <TimelineHistoryDialog
+          candidateName={showName(historyFor.name)}
+          candidateEmail={historyFor.email}
+          load={() => loadInvitationHistory(historyFor.timelineSource, historyFor.assessmentId, historyFor.invitation_id || historyFor.id)}
+          onClose={() => setHistoryFor(null)}
+        />
+      )}
+
+      {/* Customize Columns — the AI Interview Result tab's popup (the shared
+          ColumnCustomizationModal), for both anchor points: the standalone
+          page's button and the Job Details Actions item. */}
+      {showColumnSelector && (
+        <ColumnCustomizationModal
+          columns={columns}
+          onClose={() => setShowColumnSelector(false)}
+          onApply={(ids) => setColumns((prev) => prev.map((c) => ({ ...c, enabled: ids.includes(c.id) })))}
+        />
+      )}
+
+      {/* Export — the Score Resume tab's popup: format, then the columns to
+          include (starting from Customize Columns), then Cancel / Export.
+          Export takes every result the current filters match. */}
       {showExportModal && (
-        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
-          <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
-            {/* Step 1: Format Selection */}
-            {exportStep === 'format' && (
-              <>
-                <div className="shrink-0 flex items-center justify-between gap-3 p-4 sm:p-5 border-b border-gray-100 bg-gray-50">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div className="w-10 h-10 shrink-0 rounded-xl bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center">
-                      <FileText className="w-5 h-5 text-white" />
-                    </div>
-                    <div className="min-w-0">
-                      <h3 className="text-base sm:text-lg font-medium text-gray-900 tracking-tight">Export Assessment Results</h3>
-                      <p className="text-xs sm:text-sm text-gray-500 mt-1">Step 1 of 2: Choose format</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setShowExportModal(false);
-                      setExportStep('format');
-                    }}
-                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center text-gray-400 hover:text-brand-blue rounded-md hover:bg-brand-blue/5 transition-colors"
-                   aria-label="Close">
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-
-                <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5">
-                  <p className="text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4">Choose export format:</p>
-
-                  <div className="space-y-2.5 sm:space-y-3">
-                    <button
-                      onClick={() => handleFormatSelect('csv')}
-                      className="w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 border border-gray-200 rounded-xl hover:bg-brand-blue/5 hover:border-brand-blue/30 transition-all group"
-                    >
-                      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-green-100 to-green-50 ring-1 ring-success-line flex items-center justify-center transition-colors flex-shrink-0">
-                        <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-success" />
-                      </div>
-                      <div className="text-left flex-1 min-w-0">
-                        <div className="text-sm sm:text-base font-medium text-gray-900">CSV Format</div>
-                        <div className="text-xs sm:text-sm text-gray-500">Compatible with Excel, Google Sheets</div>
-                      </div>
-                    </button>
-
-                    <button
-                      onClick={() => handleFormatSelect('excel')}
-                      className="w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 border border-gray-200 rounded-xl hover:bg-brand-blue/5 hover:border-brand-blue/30 transition-all group"
-                    >
-                      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center transition-colors flex-shrink-0">
-                        <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue" />
-                      </div>
-                      <div className="text-left flex-1 min-w-0">
-                        <div className="text-sm sm:text-base font-medium text-gray-900">Excel Format (XLSX)</div>
-                        <div className="text-xs sm:text-sm text-gray-500">Native Excel format with better formatting</div>
-                      </div>
-                    </button>
-                  </div>
-                </div>
-
-                <div className="shrink-0 flex flex-wrap items-center justify-end gap-2 p-4 sm:p-5 border-t border-gray-100">
-                </div>
-              </>
-            )}
-
-            {/* Step 2: Scope Selection */}
-            {exportStep === 'scope' && (
-              <>
-                <div className="shrink-0 flex items-center justify-between gap-3 p-4 sm:p-5 border-b border-gray-100 bg-gray-50">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div className="w-10 h-10 shrink-0 rounded-xl bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center">
-                      <Layers className="w-5 h-5 text-white" />
-                    </div>
-                    <div className="min-w-0">
-                      <h3 className="text-base sm:text-lg font-medium text-gray-900 tracking-tight">Export Scope</h3>
-                      <p className="text-xs sm:text-sm text-gray-500 mt-1">
-                        Step 2 of 2: Choose what to export ({selectedFormat === 'csv' ? 'CSV' : 'Excel'})
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setShowExportModal(false);
-                      setExportStep('format');
-                    }}
-                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center text-gray-400 hover:text-brand-blue rounded-md hover:bg-brand-blue/5 transition-colors"
-                   aria-label="Close">
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-
-                <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5">
-                  <p className="text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4">
-                    {areColumnsCustomized()
-                      ? 'Export scope (with selected columns):'
-                      : 'Select export scope:'}
-                  </p>
-
-                  <div className="space-y-2.5 sm:space-y-3">
-                    {/* Show "Selected Candidates" option when rows are selected */}
-                    {selectedRows.length > 0 && (
-                      <button
-                        onClick={handleExportSelected}
-                        disabled={isExporting}
-                        className="w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 border-2 border-success-line rounded-xl hover:bg-success-subtle transition-all group disabled:opacity-60 disabled:cursor-not-allowed"
-                      >
-                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-green-100 to-green-50 ring-1 ring-success-line flex items-center justify-center transition-colors flex-shrink-0">
-                          {isExporting ? (
-                            <Loader2 className="w-4 h-4 text-success animate-spin" />
-                          ) : (
-                            <CheckSquare className="w-5 h-5 sm:w-6 sm:h-6 text-success" />
-                          )}
-                        </div>
-                        <div className="text-left flex-1 min-w-0">
-                          <div className="text-sm sm:text-base font-medium text-gray-900">{isExporting ? 'Generating…' : 'Selected Candidates'}</div>
-                          <div className="text-xs sm:text-sm text-gray-500">
-                            Export only the {selectedRows.length} selected candidate{selectedRows.length > 1 ? 's' : ''}
-                          </div>
-                        </div>
-                      </button>
-                    )}
-
-                    {/* Show "All Filtered Results" if columns are customized */}
-                    {areColumnsCustomized() ? (
-                      <button
-                        onClick={handleExportAllFiltered}
-                        disabled={isExporting}
-                        className="w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 border-2 border-brand-blue/40 rounded-xl hover:bg-brand-blue/5 transition-all group disabled:opacity-60 disabled:cursor-not-allowed"
-                      >
-                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center transition-colors flex-shrink-0">
-                          {isExporting ? (
-                            <Loader2 className="w-4 h-4 text-brand-blue animate-spin" />
-                          ) : (
-                            <Users className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue" />
-                          )}
-                        </div>
-                        <div className="text-left flex-1 min-w-0">
-                          <div className="text-sm sm:text-base font-medium text-gray-900">{isExporting ? 'Generating…' : 'All Filtered Results'}</div>
-                          <div className="text-xs sm:text-sm text-gray-500">
-                            Export all {filteredCandidates.length} results with {enabledColumnsCount} selected columns
-                            <div className="text-xs text-brand-blue mt-1">
-                              (includes completed, in-progress, and not started)
-                            </div>
-                          </div>
-                        </div>
-                      </button>
-                    ) : (
-                      /* Show "Current Page" if columns are NOT customized */
-                      <button
-                        onClick={handleExportCurrentPage}
-                        disabled={isExporting}
-                        className="w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 border-2 border-brand-cyan/40 rounded-xl hover:bg-brand-cyan/5 transition-all group disabled:opacity-60 disabled:cursor-not-allowed"
-                      >
-                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/20 flex items-center justify-center transition-colors flex-shrink-0">
-                          {isExporting ? (
-                            <Loader2 className="w-4 h-4 text-brand-cyan animate-spin" />
-                          ) : (
-                            <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-brand-cyan" />
-                          )}
-                        </div>
-                        <div className="text-left flex-1 min-w-0">
-                          <div className="text-sm sm:text-base font-medium text-gray-900">{isExporting ? 'Generating…' : 'Current Page'}</div>
-                          <div className="text-xs sm:text-sm text-gray-500">
-                            Export {paginatedCandidates.length} results visible on this page
-                          </div>
-                        </div>
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                <div className="shrink-0 flex flex-wrap items-center justify-between gap-2 p-4 sm:p-5 border-t border-gray-100">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setExportStep('format')}
-                    icon={<ArrowLeft className="w-4 h-4" />}
-                  >
-                    Back
-                  </Button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
+        <ExportColumnsModal<'csv' | 'excel'>
+          title="Export Assessment Results"
+          recordCount={filteredCandidates.length}
+          formats={[
+            { key: 'csv', title: 'CSV Format', description: 'Compatible with Excel, Google Sheets, and most spreadsheet apps.', Icon: FileText, iconWrap: 'bg-success-subtle', iconColor: 'text-success' },
+            { key: 'excel', title: 'Excel Format (.xlsx)', description: 'Native Excel format with formatting and styling.', Icon: FileSpreadsheet, iconWrap: 'bg-blue-100', iconColor: 'text-blue-700' },
+          ]}
+          format={selectedFormat}
+          onFormatChange={setSelectedFormat}
+          /* The table's columns, then Email and Completed — not table columns
+             (email sits under the name, completion in the Timeline) but
+             exportable, and ticked by default as they always rode along. */
+          columns={[...columns, { id: 'email', label: 'Email' }, { id: 'completed', label: 'Completed' }]}
+          initialColumnIds={[...columns.filter(col => col.enabled).map(col => col.id), 'email', 'completed']}
+          exporting={isExporting}
+          onExport={(ids) => void handleExportAllFiltered(ids)}
+          onClose={() => setShowExportModal(false)}
+        />
       )}
         </div>
       </div>

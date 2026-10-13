@@ -110,6 +110,17 @@ export const FILTER_LABEL_CLASS = 'block text-sm text-gray-700 mb-1 truncate';
 export const FILTER_CONTROL_CLASS =
   'w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white';
 
+/* Job Details' More Filters panel — the AI Talent Match tab's own layout,
+   copied class for class, which the Score Resume, Assessment Result and AI
+   Interview Result tabs use when embedded there: a 1 / 2 / 4-column grid
+   (each field one cell), medium labels and 36px brand-blue inputs. Standalone
+   pages keep the FILTER_* row above. */
+export const JOB_TAB_FILTER_GRID_CLASS = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 [&>div]:min-w-0';
+export const JOB_TAB_FILTER_FIELD_CLASS = 'min-w-0';
+export const JOB_TAB_FILTER_LABEL_CLASS = 'block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium';
+export const JOB_TAB_FILTER_CONTROL_CLASS =
+  'w-full h-9 px-3 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue hover:border-brand-blue/40 transition-colors text-sm text-black dark:text-slate-50 placeholder:text-gray-400 dark:placeholder:text-slate-500 bg-white dark:bg-slate-900';
+
 /* The table's columns — FIXED, in this order (Actions follows as its own
    sticky column). No per-user customization: every recruiter sees the same
    table. "Candidate" carries the email under the name rather than spending a
@@ -2299,18 +2310,18 @@ Best regards`);
                 fit on a row — and `grow` shares out whatever the row has left,
                 so a row is always filled edge to edge. `max-w` keeps a short
                 final row from stretching two fields across the whole panel. */}
-            <div className="flex flex-wrap gap-4">
+            <div className={embedded ? JOB_TAB_FILTER_GRID_CLASS : 'flex flex-wrap gap-4'}>
               {/* 1. Match Status — dropped when the list is already one
                   verdict; see `hideMatchStatusFilter`. The only conditional
                   field in this panel, and it turns on a host's explicit
                   statement about its own rows rather than on the data. */}
               {!hideMatchStatusFilter && (
-                <div className={FILTER_FIELD_CLASS}>
-                  <label className={FILTER_LABEL_CLASS}>Match Status</label>
+                <div className={embedded ? JOB_TAB_FILTER_FIELD_CLASS : FILTER_FIELD_CLASS}>
+                  <label className={embedded ? JOB_TAB_FILTER_LABEL_CLASS : FILTER_LABEL_CLASS}>Match Status</label>
                   <select
                     value={filterMatchStatus}
                     onChange={(e) => search.setFilter('matchStatus', e.target.value as typeof filterMatchStatus)}
-                    className={FILTER_CONTROL_CLASS}
+                    className={embedded ? JOB_TAB_FILTER_CONTROL_CLASS : FILTER_CONTROL_CLASS}
                   >
                     <option value="all">All Statuses</option>
                     <option value="Exact Match">Exact Match</option>
@@ -2323,8 +2334,8 @@ Best regards`);
               {/* 2. Score Range — two inputs sharing ONE field, so the pair
                   reads as a single filter rather than two. Widened to take up
                   the first row's leftover space; see FILTER_FIELD_WIDE_CLASS. */}
-              <div className={FILTER_FIELD_WIDE_CLASS}>
-                <label className={FILTER_LABEL_CLASS}>Score Range (0.0 – 10.0)</label>
+              <div className={embedded ? JOB_TAB_FILTER_FIELD_CLASS : FILTER_FIELD_WIDE_CLASS}>
+                <label className={embedded ? JOB_TAB_FILTER_LABEL_CLASS : FILTER_LABEL_CLASS}>Score Range (0.0 – 10.0)</label>
                 {/* The 0.0–10.0 scale the Score column prints, not the 0–100
                     percentage underneath it. */}
                 <div className="flex gap-2">
@@ -2336,14 +2347,14 @@ Best regards`);
                     /* min-w-0 so a flex child can shrink below its intrinsic
                        width — a number input's default is wider than half of
                        this field, and without it the pair overflows. */
-                    className={`${FILTER_CONTROL_CLASS} min-w-0`}
+                    className={`${embedded ? JOB_TAB_FILTER_CONTROL_CLASS : FILTER_CONTROL_CLASS} min-w-0`}
                   />
                   <ScoreBoundInput
                     value={filterScoreMax}
                     onChange={(v) => search.setFilter('scoreMax', v)}
                     placeholder="10.0"
                     ariaLabel="Maximum score"
-                    className={`${FILTER_CONTROL_CLASS} min-w-0`}
+                    className={`${embedded ? JOB_TAB_FILTER_CONTROL_CLASS : FILTER_CONTROL_CLASS} min-w-0`}
                   />
                 </div>
               </div>
@@ -2360,8 +2371,8 @@ Best regards`);
                   cannot learn, and it left a hole in the row beside a Job Title
                   that did render. `Scored By` has always shown even with a
                   single recruiter; these now match it. */}
-              <div className={FILTER_FIELD_CLASS}>
-                <label className={FILTER_LABEL_CLASS}>Job ID</label>
+              <div className={embedded ? JOB_TAB_FILTER_FIELD_CLASS : FILTER_FIELD_CLASS}>
+                <label className={embedded ? JOB_TAB_FILTER_LABEL_CLASS : FILTER_LABEL_CLASS}>Job ID</label>
                 <SearchableSelect
                   value={filterJdId === 'all' ? '' : filterJdId}
                   onChange={(v) => search.setFilter('jdId', v || 'all')}
@@ -2373,12 +2384,12 @@ Best regards`);
                 />
               </div>
 
-              <div className={FILTER_FIELD_CLASS}>
-                <label className={FILTER_LABEL_CLASS}>Job Version</label>
+              <div className={embedded ? JOB_TAB_FILTER_FIELD_CLASS : FILTER_FIELD_CLASS}>
+                <label className={embedded ? JOB_TAB_FILTER_LABEL_CLASS : FILTER_LABEL_CLASS}>Job Version</label>
                 <select
                   value={filterJobVersion}
                   onChange={(e) => search.setFilter('jobVersion', e.target.value)}
-                  className={FILTER_CONTROL_CLASS}
+                  className={embedded ? JOB_TAB_FILTER_CONTROL_CLASS : FILTER_CONTROL_CLASS}
                 >
                   <option value="all">All Versions</option>
                   {uniqueJobVersions.map(version => (
@@ -3939,9 +3950,6 @@ export function BulkActionConfirmModal({
               <p className="text-sm text-gray-500 mt-1">{rows.length} selected</p>
             </div>
           </div>
-          <Button variant="secondary" size="sm" onClick={onCancel} className="px-2 flex-shrink-0" aria-label="Close">
-            <X className="w-5 h-5" />
-          </Button>
         </div>
 
         <div className="p-5 overflow-y-auto flex-1 space-y-4">
@@ -3998,11 +4006,11 @@ export function BulkActionConfirmModal({
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-3 p-5 border-t border-gray-200 shrink-0">
+        <div className="flex flex-wrap items-center justify-between gap-3 p-5 border-t border-gray-200 shrink-0">
           <p className="text-sm text-gray-600">
             <span className="font-semibold text-gray-900">{chosen.length}</span> of {rows.length} will be included
           </p>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3 ml-auto">
             <Button variant="secondary" size="md" onClick={onCancel}>Cancel</Button>
             <Button
               variant="primary"

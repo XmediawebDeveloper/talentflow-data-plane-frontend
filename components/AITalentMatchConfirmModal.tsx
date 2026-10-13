@@ -1,6 +1,6 @@
 'use client';
 
-import { FileText, FileSearch, Briefcase, Sparkle, Plus, Loader2, X } from 'lucide-react';
+import { FileText, FileSearch, Briefcase, Sparkle, Plus, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import type { Job } from '@/lib/types/types';
@@ -29,21 +29,9 @@ export default function AITalentMatchConfirmModal({
   return (
     <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
       <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-2xl w-full animate-in zoom-in-95 fade-in duration-200 max-h-[calc(100dvh-2rem)] flex flex-col tf-round-edges">
-        {/* Close button */}
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={onCancel}
-          disabled={isLoading}
-          aria-label="Close"
-          className="absolute top-4 right-4 px-2"
-        >
-          <X className="w-5 h-5" />
-        </Button>
-
         <div className="px-6 sm:px-8 pt-8 pb-6 overflow-y-auto">
           {/* Header: small icon + title */}
-          <div className="flex items-start gap-4 mb-6 pr-8">
+          <div className="flex items-start gap-4 mb-6">
             <div className="w-11 h-11 shrink-0 bg-brand-blue/10 rounded-full flex items-center justify-center">
               <FileText className="w-5 h-5 text-brand-blue" />
             </div>
@@ -111,13 +99,19 @@ export default function AITalentMatchConfirmModal({
           </div>
         </div>
 
-        {/* Footer — the one action; the close button above is the way out. */}
-        <div className="px-6 sm:px-8 py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col-reverse sm:flex-row gap-3 shrink-0">
+        {/* Footer — Cancel, then the action, bottom-right at their own width. */}
+        <div className="px-6 sm:px-8 py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-wrap items-center justify-end gap-3 shrink-0">
+          <Button
+            variant="secondary"
+            onClick={onCancel}
+            disabled={isLoading}
+          >
+            Cancel
+          </Button>
           <Button
             variant="primary"
             onClick={onConfirm}
             disabled={isLoading}
-            className="flex-1"
           >
             {isLoading ? (
               <span className="flex items-center justify-center gap-2">

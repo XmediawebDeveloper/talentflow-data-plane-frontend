@@ -1027,6 +1027,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                             <QuestionDistributionPopover
                               specialInstructions={(config as any)?.special_instructions}
                               clusters={[...mthClusters, ...nthClusters]}
+                              hrQuestions={(hrRound?.hr_questions as AIInterviewHRQuestion[] | undefined) ?? []}
                               fallback={() => ({
                                 mth: distribute(mthClusters, timedAllocation.mthQuestions ?? 0, mthJdPool),
                                 nth: nthEnabled
