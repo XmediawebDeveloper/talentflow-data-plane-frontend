@@ -8,6 +8,8 @@ interface ViewResumeButtonProps {
   loading?: boolean;
   disabled?: boolean;
   className?: string;
+  /** `bordered` is the outline with a full-strength brand-blue border; `outline` (default) is the canonical look. */
+  variant?: 'outline' | 'bordered';
 }
 
 /**
@@ -24,12 +26,16 @@ export default function ViewResumeButton({
   loading = false,
   disabled = false,
   className = '',
+  variant = 'outline',
 }: ViewResumeButtonProps) {
+  const look = variant === 'bordered'
+    ? 'text-brand-blue bg-white border border-brand-blue hover:bg-brand-blue/5 justify-center'
+    : 'text-brand-blue bg-white border border-brand-blue/40 hover:bg-brand-blue/5';
   return (
     <button
       onClick={onClick}
       disabled={disabled || loading}
-      className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-brand-blue bg-white border border-brand-blue/40 rounded-lg hover:bg-brand-blue/5 transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed${className ? ` ${className}` : ''}`}
+      className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium ${look} rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed${className ? ` ${className}` : ''}`}
     >
       {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
       View Resume

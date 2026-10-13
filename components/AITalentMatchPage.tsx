@@ -90,12 +90,13 @@ import { useListSearch } from '@/lib/hooks/useListSearch';
    Score Resume / Invite Assessment / Invite AI Interview). */
 const actionsMenuItemClass = 'group !rounded-none !px-4 !py-2.5 text-sm text-gray-700';
 
-/* Same layout switches as Resume Scoring's (see its SHOW_STAT_CARDS): the
-   four stat cards are OFF — their counts ride the rating pills — and the
+/* Layout switches. The four stat cards are ON again (as on Job Openings),
+   sitting above the list rather than as a separate 'cards' step; they
+   share their counts and filter with the rating pills. The
    flat "All Resumes" view and the job row's inline "View Versions" panel
    are out of the UI (the History icon still opens every run). Hidden, not
    deleted: flip a flag to bring one back. */
-const SHOW_STAT_CARDS = false;
+const SHOW_STAT_CARDS = true;
 const SHOW_ALL_RESUMES_VIEW = false;
 const SHOW_VERSIONS_PANEL = false;
 
@@ -921,9 +922,9 @@ export default function AITalentMatchPage({
   const [historyItemsPerPage, setHistoryItemsPerPage] = useState(10);
   // Two-step view: 'cards' shows just the stats cards; clicking one reveals the
   // job list ('list') or the candidate-centric roll-up ('candidates').
-  // With the stat cards off (SHOW_STAT_CARDS) there is no 'cards' step —
-  // the page opens straight onto View by Job.
-  const [historyPageView, setHistoryPageView] = useState<'cards' | 'list' | 'candidates' | 'resumes'>(SHOW_STAT_CARDS ? 'cards' : 'list');
+  // There is no 'cards' step any more — the stat cards sit above the list,
+  // so the page opens straight onto View by Job.
+  const [historyPageView, setHistoryPageView] = useState<'cards' | 'list' | 'candidates' | 'resumes'>('list');
   const historyListSectionRef = useRef<HTMLDivElement | null>(null);
   const [historyListScrollRequest, setHistoryListScrollRequest] = useState(0);
   // The rating pills (All / Rating 10 / 9 – 7 / Below 7) — Resume Scoring's
@@ -1708,7 +1709,7 @@ export default function AITalentMatchPage({
       const restoreViewOnReload = isFirstMountAfterReload();
       const restoreView = (pageView: unknown, band: unknown) => {
         // A view that is switched off lands on its nearest one still shown.
-        if (pageView === 'cards') setHistoryPageView(SHOW_STAT_CARDS ? 'cards' : 'list');
+        if (pageView === 'cards') setHistoryPageView('list');
         else if (pageView === 'resumes') setHistoryPageView(SHOW_ALL_RESUMES_VIEW ? 'resumes' : 'candidates');
         else if (pageView === 'list' || pageView === 'candidates') setHistoryPageView(pageView);
         if (band === 'exact' || band === 'partial' || band === 'no_match' || band === null) {
@@ -4016,74 +4017,90 @@ export default function AITalentMatchPage({
         {/* Stats Cards */}
         {/* Default 4-column grid (same as /recruitment/job-openings) keeps the
             cards at the standard width instead of stretching them to half-page. */}
-        {/* Stats cards — switched OFF (SHOW_STAT_CARDS): their counts now ride
-            the rating pills in the view row below. Kept intact so they can be
-            turned back on as they were. */}
-        {SHOW_STAT_CARDS && (
-        <StatsCardGrid className="mb-5">
+        {/* Stats cards (SHOW_STAT_CARDS) — the Job Descriptions / Resume
+            Scoring StatsCards (icon, count, a small chip under it,
+            highlighted when selected). Matched Jobs / Match by Candidate
+            switch the View by toggle; the two rating cards are the same
+            filter, and the same counts, as the rating pills below. */}
+        {SHOW_STAT_CARDS && (() => {
+          const statLoading = (
+            <span className="inline-block h-6 w-8 bg-gray-100 dark:bg-slate-800 rounded animate-pulse align-middle" aria-label="Loading" />
+          );
+          const pickBand = (band: RatingBand) => {
+            setCandidateRatingBand(prev => (prev === band ? null : band));
+            setHistoryCurrentPage(1);
+            setCandidateCurrentPage(1);
+            setResumeCurrentPage(1);
+          };
+          const onCandidates = historyPageView === 'candidates' || historyPageView === 'resumes';
+          /* The chip under each count, as the JD cards carry "N versions" and
+             Resume Scoring's "N candidates". */
+          const StatChip = ({ count, unit }: { count: number; unit: string }) => (
+            <span className="mt-1.5 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700">
+              {count.toLocaleString()} {count === 1 ? unit : `${unit}s`}
+            </span>
+          );
+          const runsCount = Object.values(matchSessionCounts).reduce((sum, n) => sum + (n || 0), 0);
+          // Distinct candidates holding a match in the band — only once the
+          // candidate roll-up is in, so the chip never shows a false 0.
+          const rowsLoaded = !loadingCandidateRows && candidateRows.length > 0;
+          const peopleInBand = (band: RatingBand) =>
+            candidateRows.filter(row => row.jobs.some(job => matchBandForRating(toMatchRating(job.score)) === band)).length;
+          return (
+        <div className="mb-4 sm:mb-5">
+        <StatsCardGrid className="mb-0">
           <StatsCard
             tone="neutral"
-            active={historyPageView === 'list'}
+            active={!onCandidates}
             showClickArrow
             icon={History}
             label="Matched Jobs"
-            value={matchHistory.length}
+            value={matchHistory.length.toLocaleString()}
             sparkline={false}
-            onClick={() => { setCandidateRatingBand(null); openHistoryListView(); }}
-          />
+            onClick={() => openHistoryListView()}
+          >
+            {runsCount > 0 && <StatChip count={runsCount} unit="run" />}
+          </StatsCard>
           <StatsCard
             tone="neutral"
-            active={historyPageView === 'candidates'}
+            active={onCandidates}
             showClickArrow
             icon={User}
             label="Match by Candidate"
-            value={totalMatchedCandidatesReady ? totalMatchedCandidates : (
-              <span className="inline-block h-6 w-8 bg-gray-100 dark:bg-slate-800 rounded animate-pulse align-middle" aria-label="Loading" />
-            )}
+            value={totalMatchedCandidatesReady ? totalMatchedCandidates.toLocaleString() : statLoading}
             sparkline={false}
-            onClick={() => { setCandidateRatingBand(null); void openCandidatesView(); }}
-          />
+            onClick={() => { void openCandidatesView(); }}
+          >
+            {pillCounts.all !== null && <StatChip count={pillCounts.all} unit="match" />}
+          </StatsCard>
           <StatsCard
             tone="neutral"
-            active={historyPageView === 'resumes' && candidateRatingBand === 'exact'}
+            active={candidateRatingBand === 'exact'}
             showClickArrow
             icon={CheckCircle2}
             label="Match Rating (10)"
-            // Renders straight from the server-computed `ratingBandCounts` prop
-            // (available from the same fast session-list call as the other two
-            // cards); only falls back to the slower per-session tally + its
-            // "wait for every session" gate (`statsReady`) if that prop is
-            // unavailable, so the skeleton is no longer the common case.
-            value={statsReady ? displayedExactCount : (
-              <span className="inline-block h-6 w-8 bg-gray-100 dark:bg-slate-800 rounded animate-pulse align-middle" aria-label="Loading" />
-            )}
+            value={pillCounts.exact === null ? statLoading : pillCounts.exact.toLocaleString()}
             sparkline={false}
-            // Drills into the real scored resumes holding this rating — same
-            // "All Resumes" view + rating-band filter the pills below use, so
-            // there is exactly one filtering mechanism, not a second one.
-            onClick={() => {
-              setCandidateRatingBand('exact');
-              void openAllResumesView();
-            }}
-          />
+            onClick={() => pickBand('exact')}
+          >
+            {rowsLoaded && <StatChip count={peopleInBand('exact')} unit="candidate" />}
+          </StatsCard>
           <StatsCard
             tone="neutral"
-            active={historyPageView === 'resumes' && candidateRatingBand === 'partial'}
+            active={candidateRatingBand === 'partial'}
             showClickArrow
             icon={PieChart}
             label="Match Rating (9-7)"
-            // Same server-computed-prop-first rule as the 10-band card above.
-            value={statsReady ? displayedPartialCount : (
-              <span className="inline-block h-6 w-8 bg-gray-100 dark:bg-slate-800 rounded animate-pulse align-middle" aria-label="Loading" />
-            )}
+            value={pillCounts.partial === null ? statLoading : pillCounts.partial.toLocaleString()}
             sparkline={false}
-            onClick={() => {
-              setCandidateRatingBand('partial');
-              void openAllResumesView();
-            }}
-          />
+            onClick={() => pickBand('partial')}
+          >
+            {rowsLoaded && <StatChip count={peopleInBand('partial')} unit="candidate" />}
+          </StatsCard>
         </StatsCardGrid>
-        )}
+        </div>
+          );
+        })()}
 
         {/* ── Match by Candidate (in-page) ───────────────────────────────── */}
         {historyPageView === 'candidates' && (

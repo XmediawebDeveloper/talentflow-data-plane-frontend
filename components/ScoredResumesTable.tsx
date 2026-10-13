@@ -36,6 +36,7 @@ import { useAllJobInviteTargets } from '@/lib/hooks/useAllJobInviteTargets';
 import { formatIST, formatISTDate, formatISTTime, parseIST } from '@/lib/utils/dateUtils';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import { downloadScorecardsZip as downloadScorecardsZipShared } from '@/lib/utils/scorecardDownload';
+import type { InviteCandidate } from '@/components/talent-match-invite/inviteVersions';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -397,6 +398,13 @@ interface ScoredResumesTableProps {
    */
   onCreateInviteTarget?: (kind: 'assessment' | 'interview', job: InviteTargetJob, rows: ScoredResume[]) => void;
   /**
+   * The selection Actions menu's AI Assessment / AI Interview Invite open the
+   * host's version popup (the AI Talent Match tab's VersionInviteDialog) with
+   * the ticked candidates, instead of this table's own invite flow. The popup
+   * handles a job with no version yet (pick one, or create the next).
+   */
+  onOpenInviteDialog?: (kind: 'assessment' | 'interview', candidates: InviteCandidate[]) => void;
+  /**
    * Embedded use — the rows of ONE job opened inline under its row in
    * Resume Scoring's "View by Job". Drops the card chrome and the whole
    * search / More Filters / view-toggle toolbar (the host's own controls
@@ -419,17 +427,26 @@ interface ScoredResumesTableProps {
    */
   toolbarPortal?: HTMLElement | null;
   /**
-   * How a candidate's name is displayed (e.g. Job Details shows first names
-   * only — `formatCandidateFirstName`). Omitted: the name as stored. Same
-   * optional prop AssessmentResults / AIInterviewResults take.
-   */
-  formatCandidateName?: (name: string) => string;
-  /**
    * Table column ids to leave out (see TABLE_COLUMNS) — for a host that
    * already shows them around the table, e.g. AI Talent Match's per-candidate
    * score table, whose row above names the candidate and the job.
    */
   hiddenColumnIds?: string[];
+  /**
+   * View by Candidates under a verdict filter: the host hands the FILTERED
+   * rows as `resumes` (who is listed) and every row here (what each one's
+   * Exact / Partial / No Match counts read). Without it the counts came from
+   * the filtered rows, so under "No Match" every candidate read Exact 0 /
+   * Partial 0 whatever they really had — unlike View by Job, whose badges
+   * count every score and grey the verdicts outside the filter.
+   */
+  verdictCountRows?: ScoredResume[];
+  /** The verdict filter in force: the other two counts are shown muted. */
+  activeVerdict?: 'Exact Match' | 'Partial Match' | 'No Match' | null;
+  /** Opt-in: how a candidate's name is SHOWN (Job Details: first name
+   *  capitalised). Display only — search, sort, filters and exports keep the
+   *  name as it is; other hosts leave it unset. */
+  formatCandidateName?: (name: string) => string;
 }
 
 /**
@@ -487,6 +504,7 @@ export function renderInviteTargetItems({
   extraDisabledReason,
   onInvite,
   onCreate,
+  label,
 }: {
   kind: 'assessment' | 'interview';
   target: InviteTargetState;
@@ -498,6 +516,9 @@ export function renderInviteTargetItems({
   extraDisabledReason?: string;
   onInvite: (e: Event) => void;
   onCreate?: (job: InviteTargetJob) => void;
+  /** Overrides the "{what} Invite" label (Job Details: the AI Talent Match
+   *  tab's "Create / Send …" names). */
+  label?: string;
 }) {
   const what = kind === 'assessment' ? 'AI Assessment' : 'AI Interview';
   const Icon = kind === 'assessment' ? FileText : Video;
@@ -511,7 +532,7 @@ export function renderInviteTargetItems({
         onSelect={onInvite}
       >
         <Icon className={`w-4 h-4 ${iconClass}`} />
-        <span className={MENU_ITEM_SCALE_CLASS}>{what} Invite</span>
+        <span className={MENU_ITEM_SCALE_CLASS}>{label ?? `${what} Invite`}</span>
       </DropdownMenuItem>
     );
   }
@@ -624,6 +645,9 @@ export default function ScoredResumesTable({
   toolbarPortal,
   hiddenColumnIds,
   formatCandidateName,
+  onOpenInviteDialog,
+  verdictCountRows,
+  activeVerdict = null,
 }: ScoredResumesTableProps) {
   const showName = (name: string) => (formatCandidateName ? formatCandidateName(name) : name);
   /* Embedded in the Job Details tabs (the toolbar portals into that card's
@@ -1071,8 +1095,27 @@ Best regards`);
       },
       { exact: 0, partial: 0, none: 0 },
     );
+  /* A candidate's counts across ALL their scores (verdictCountRows), keyed
+     like the groups; falls back to the listed rows when the host gives none. */
+  const fullTallyByCandidate = useMemo(() => {
+    if (!verdictCountRows) return null;
+    const byKey = new Map<string, ScoredResume[]>();
+    verdictCountRows.forEach((r) => {
+      const k = candidateGroupKey(r);
+      const list = byKey.get(k);
+      if (list) list.push(r);
+      else byKey.set(k, [r]);
+    });
+    return new Map(Array.from(byKey.entries()).map(([k, rows]) => [k, tallyVerdicts(rows)]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [verdictCountRows]);
+  const groupTally = (rows: ScoredResume[]) =>
+    (rows.length > 0 && fullTallyByCandidate?.get(candidateGroupKey(rows[0]))) || tallyVerdicts(rows);
+  const VERDICT_OF_KIND = { exact: 'Exact Match', partial: 'Partial Match', none: 'No Match' } as const;
   /* One count, in its verdict's colours (the same chips View by Job's rows
-     use). A zero is shown muted rather than hidden, so the columns line up. */
+     use). A zero is shown muted rather than hidden, so the columns line up;
+     under a verdict filter the OTHER verdicts are muted too (count kept),
+     as View by Job's badges are. */
   const VERDICT_COUNT_CLASS = {
     exact: 'bg-success-subtle text-success border-success/20',
     partial: 'bg-warning-subtle text-warning border-warning/20',
@@ -1081,7 +1124,9 @@ Best regards`);
   const renderVerdictCount = (kind: keyof typeof VERDICT_COUNT_CLASS, count: number, label?: string) => (
     <span
       className={`inline-flex items-center justify-center gap-1 min-w-[2rem] px-2 py-0.5 rounded-full text-xs font-semibold tabular-nums border ${
-        count > 0 ? VERDICT_COUNT_CLASS[kind] : 'bg-gray-50 text-gray-400 border-gray-200'
+        activeVerdict && VERDICT_OF_KIND[kind] !== activeVerdict
+          ? 'bg-gray-50 text-gray-400 border-gray-200 opacity-60'
+          : count > 0 ? VERDICT_COUNT_CLASS[kind] : 'bg-gray-50 text-gray-400 border-gray-200'
       }`}
     >
       {label && <span className="font-medium">{label}</span>}
@@ -1175,9 +1220,9 @@ Best regards`);
       switch (sortBy) {
         case 'name': return (rows[0].candidateName || '').toLowerCase();
         case 'versions': return rows.length;
-        case 'exact': return tallyVerdicts(rows).exact;
-        case 'partial': return tallyVerdicts(rows).partial;
-        case 'none': return tallyVerdicts(rows).none;
+        case 'exact': return groupTally(rows).exact;
+        case 'partial': return groupTally(rows).partial;
+        case 'none': return groupTally(rows).none;
         default: return dateOf(rows[0]);
       }
     };
@@ -1927,18 +1972,6 @@ Best regards`);
         <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
           {(isGrouped ? new Set(effectiveSelectedRows.map(candidateGroupKey)).size : effectiveSelectedRows.length).toLocaleString()} selected
         </div>
-        {/* Score Resumes — opens the host's "Select Applicants to Score" modal.
-            Moved here from a standalone toolbar button so it matches the AI
-            Talent Match tab's selection Actions menu. */}
-        {onScoreResumes && (
-          <DropdownMenuItem
-            className={scoredResumesMenuItemClass}
-            onSelect={() => onScoreResumes()}
-          >
-            <ClipboardList className="w-4 h-4 text-menu-icon-score" />
-            <span className={MENU_ITEM_SCALE_CLASS}>Score Resumes</span>
-          </DropdownMenuItem>
-        )}
         {/* Export — the selection, columns chosen in its dialog. */}
         <DropdownMenuItem
           className={`${scoredResumesMenuItemClass} ${!canExport ? 'text-gray-400 opacity-60' : ''}`}
@@ -1980,6 +2013,52 @@ Best regards`);
           const rowOf = (jdId: string) => effectiveSelectedRows.find((r) => (r.jdId || jobId) === jdId) ?? effectiveSelectedRows[0];
           const assessmentTarget = resolveInviteTargetState('assessment', selectionJobs, (id) => resolveAssessmentConfigured(rowOf(id)));
           const interviewTarget = resolveInviteTargetState('interview', selectionJobs, (id) => resolveAIInterviewConfigured(rowOf(id)));
+          if (onOpenInviteDialog) {
+            /* The AI Talent Match tab's way: always offered (permission
+               aside), opening the host's version popup with the ticked rows. */
+            const invitees: InviteCandidate[] = effectiveSelectedRows.map((r) => ({
+              id: r.resumeId || r.id,
+              name: r.candidateName,
+              email: r.email,
+              phone: r.phone,
+              rating: Math.round(rowRating10(r) * 10) / 10,
+              resumeId: r.resumeId,
+            }));
+            return (
+              <>
+                {renderInviteTargetItems({
+                  kind: 'assessment',
+                  target: { state: 'ready' },
+                  label: 'Create / Send Assessment',
+                  itemClass: scoredResumesMenuItemClass,
+                  allowed: canCreateAssessments,
+                  onInvite: (e) => {
+                    if (!canCreateAssessments) {
+                      e.preventDefault();
+                      toast.error(assessmentDeniedReason);
+                      return;
+                    }
+                    onOpenInviteDialog('assessment', invitees);
+                  },
+                })}
+                {renderInviteTargetItems({
+                  kind: 'interview',
+                  target: { state: 'ready' },
+                  label: 'Create / Send AI Interview',
+                  itemClass: scoredResumesMenuItemClass,
+                  allowed: mayInviteAIInterview,
+                  onInvite: (e) => {
+                    if (!mayInviteAIInterview) {
+                      e.preventDefault();
+                      toast.error(aiInterviewDeniedReason);
+                      return;
+                    }
+                    onOpenInviteDialog('interview', invitees);
+                  },
+                })}
+              </>
+            );
+          }
           const create = onCreateInviteTarget
             ? (kind: 'assessment' | 'interview') => (job: InviteTargetJob) =>
                 onCreateInviteTarget(kind, job, effectiveSelectedRows.filter((r) => (r.jdId || jobId) === job.jdId))
@@ -2454,7 +2533,7 @@ Best regards`);
                         </div>
 
                         {(() => {
-                          const t = tallyVerdicts(groupRows);
+                          const t = groupTally(groupRows);
                           return (
                             <div className="flex flex-wrap items-center gap-1.5">
                               {renderVerdictCount('exact', t.exact, 'Exact Match')}
@@ -2720,7 +2799,7 @@ Best regards`);
                           {renderJobTitles(distinctTitles)}
                         </td>
                         {(() => {
-                          const t = tallyVerdicts(rows);
+                          const t = groupTally(rows);
                           return (
                             <>
                               <td className="px-4 py-3 align-middle text-center">{renderVerdictCount('exact', t.exact)}</td>
@@ -2893,7 +2972,7 @@ Best regards`);
                   </div>
 
                   {(() => {
-                    const t = tallyVerdicts(rows);
+                    const t = groupTally(rows);
                     return (
                       <div className="mt-3 flex flex-wrap items-center gap-1.5">
                         {renderVerdictCount('exact', t.exact, 'Exact Match')}

@@ -2080,13 +2080,13 @@ export default function AssessmentDetailsView({
           (`overflow-x-auto scrollbar-hide`), so with six tabs the last of them
           was off-screen and undiscoverable at anything under a wide desktop.
           Stacked vertically they are all visible at once. */}
-      <div {...draftLockProps} className={`space-y-3 sm:space-y-4 ${draftLockProps.className}`}>
-        {/* Horizontal pill tab bar (was a vertical sidebar rail): the same
-            `tabPill` chrome the Job Openings list uses, wrapping onto a second
-            row when needed so every tab stays visible. */}
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+      <div {...draftLockProps} className={`space-y-3 sm:space-y-4 lg:space-y-0 lg:grid lg:grid-cols-[210px_minmax(0,1fr)] lg:items-start lg:gap-6 ${draftLockProps.className}`}>
+        {/* Desktop (lg+): a sticky vertical rail on the left, content on the
+            right — the AI Interview / AI Assessment candidate result pages'
+            layout. Tablet/mobile: the wrapping horizontal `tabPill` bar. */}
+        <div className="lg:sticky lg:top-12 lg:self-start bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
           <nav className="p-2 sm:p-3" aria-label="Assessment details sections">
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 lg:flex-col lg:flex-nowrap lg:items-stretch lg:gap-1.5">
               {detailTabs.map((tab) => {
                 const isActive = activeTab === tab.id;
                 return (
@@ -2107,7 +2107,11 @@ export default function AssessmentDetailsView({
                       }
                     }}
                     aria-current={isActive ? 'page' : undefined}
-                    className={`${tabPill(isActive)} whitespace-nowrap`}
+                    className={`${tabPill(isActive)} whitespace-nowrap lg:flex lg:w-full lg:gap-2 lg:px-3 lg:py-2.5 lg:text-left lg:whitespace-normal lg:shadow-none ${
+                      isActive
+                        ? 'lg:bg-brand-blue/5 lg:text-brand-blue lg:font-medium lg:ring-1 lg:ring-brand-blue/20'
+                        : 'lg:bg-transparent lg:text-gray-600 lg:dark:text-slate-400 lg:hover:bg-brand-blue/5 lg:hover:text-brand-blue'
+                    }`}
                   >
                     <tab.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
                     <span className="leading-snug">{tab.label}</span>
@@ -2117,7 +2121,7 @@ export default function AssessmentDetailsView({
               {/* Go to JD — leaves the page rather than switching a section, so
                   it sits after a divider at the end of the pill row. */}
               {assessment.jd_id && (
-                <div className="flex items-center border-l border-gray-200 dark:border-slate-700/60 pl-2 ml-1">
+                <div className="flex items-center border-l border-gray-200 dark:border-slate-700/60 pl-2 ml-1 lg:border-l-0 lg:border-t lg:pl-0 lg:ml-0 lg:pt-1.5 lg:mt-0.5">
                   <button
                     type="button"
                     onClick={() => {
@@ -2129,7 +2133,7 @@ export default function AssessmentDetailsView({
                       });
                       router.push(`/recruitment/job-details?${params.toString()}`);
                     }}
-                    className={`${tabPill(false)} whitespace-nowrap`}
+                    className={`${tabPill(false)} whitespace-nowrap lg:flex lg:w-full lg:gap-2 lg:px-3 lg:py-2.5 lg:text-left lg:shadow-none lg:bg-transparent lg:text-gray-600 lg:dark:text-slate-400 lg:hover:bg-brand-blue/5 lg:hover:text-brand-blue`}
                   >
                     <Briefcase className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
                     <span className="leading-snug">Go to JD</span>
@@ -2146,7 +2150,7 @@ export default function AssessmentDetailsView({
         {/* Content — `min-w-0` so a wide table inside a tab scrolls in its own
             box instead of stretching the grid column and pushing the nav off
             the page. */}
-        <div className="min-w-0 overflow-x-auto scroll-mt-24 py-3 sm:py-4 lg:py-6 w-full bg-white dark:bg-slate-900">
+        <div className="min-w-0 overflow-x-auto scroll-mt-24 py-3 sm:py-4 lg:pt-0 lg:pb-6 w-full bg-white dark:bg-slate-900">
 
         {/* Overview Tab */}
         {activeTab === 'overview' && (
