@@ -17,6 +17,10 @@ export default function AIInterviewShareQueue({
   interviewVersions,
   onClose,
   onInvited,
+  onBack,
+  inPopupStep,
+  footerTarget,
+  jobVersions,
 }: {
   configs: AIInterviewResponse[];
   candidates: { name: string; email: string; resumeId?: string }[];
@@ -25,6 +29,14 @@ export default function AIInterviewShareQueue({
   onClose: () => void;
   /** At least one invitation went out — reported once. */
   onInvited?: () => void;
+  /** Back to the popup the queue was opened from. */
+  onBack?: () => void;
+  /** Each interview's step renders inside the host popup (ShareAIInterviewModal
+   *  `inPopupStep`), its footer in `footerTarget`. */
+  inPopupStep?: boolean;
+  footerTarget?: HTMLElement | null;
+  /** Job version per config id, when the host knows it. */
+  jobVersions?: Record<string, number>;
 }) {
   const [index, setIndex] = useState(0);
   /* The share step calls onInviteSent THEN onClose: `advancingRef` tells that
@@ -53,6 +65,10 @@ export default function AIInterviewShareQueue({
       config={config}
       interviewVersion={interviewVersions?.[config.id]}
       initialCandidates={candidates.length > 0 ? candidates : undefined}
+      onBack={onBack}
+      inPopupStep={inPopupStep}
+      footerTarget={footerTarget}
+      jobVersion={jobVersions?.[config.id]}
       onClose={() => {
         if (advancingRef.current) {
           advancingRef.current = false;

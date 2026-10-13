@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Download, FileDown, FileSpreadsheet, FileText, Info, X } from 'lucide-react';
+import { Download, FileDown, FileSpreadsheet, FileText, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatOverallScoreValue } from '@/lib/utils/matchStatus';
 import { formatIST } from '@/lib/utils/dateUtils';
@@ -251,15 +251,6 @@ export default function ScoredResumesExportModal({
               </p>
             </div>
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={onClose}
-            className="px-2 flex-shrink-0"
-            aria-label="Close"
-          >
-            <X className="w-5 h-5" />
-          </Button>
         </div>
 
         <div className="p-5 overflow-y-auto flex-1">
@@ -345,7 +336,8 @@ export default function ScoredResumesExportModal({
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-3 p-5 border-t border-gray-200 shrink-0">
+        <div className="flex flex-wrap items-center justify-end gap-3 p-5 border-t border-gray-200 shrink-0">
+          <Button variant="secondary" size="md" onClick={onClose}>Cancel</Button>
           <Button
             variant="primary"
             size="md"

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Archive, ArchiveRestore, Calendar, ChevronDown, Clock, Copy, Eye, Layers, ListChecks, Loader2, Mail, MoreHorizontal, Pencil, Plus, RefreshCw, Send, Star, Timer, User } from 'lucide-react';
+import { Archive, ArchiveRestore, Calendar, ChevronDown, Clock, Copy, Eye, Layers, ListChecks, Loader2, Mail, MoreVertical, Pencil, Plus, RefreshCw, Send, Star, Timer, User } from 'lucide-react';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { Button } from '@/components/ui/button';
 import {
@@ -243,7 +243,7 @@ export default function VersionList({
                       aria-label={`Actions for ${v.name} v${v.version}`}
                       className="shrink-0 w-8 h-8 inline-flex items-center justify-center rounded-lg border border-gray-200 dark:border-slate-700 text-gray-500 hover:text-brand-blue hover:border-brand-blue/30 hover:bg-brand-blue/5 disabled:opacity-50"
                     >
-                      {busyId === v.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <MoreHorizontal className="w-4 h-4" />}
+                      {busyId === v.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <MoreVertical className="w-4 h-4" />}
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-56">
