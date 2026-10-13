@@ -20,11 +20,20 @@ interface ExportFormatModalProps {
   /** Column headers in the file — listed in the "Columns included" note. */
   columns?: string[];
   /**
+   * Opt-in: make "Columns included" a checkbox picker (Resume Scoring's
+   * export) instead of a plain list. The picks are remembered in
+   * localStorage under this key, and handed to `onExport`.
+   */
+  columnPrefsKey?: string;
+  /** With `columnPrefsKey`: the columns left unticked until the user picks. */
+  defaultOffColumns?: string[];
+  /**
    * Writes the file in the picked format. May be async; the modal shows a
    * spinner meanwhile and closes once it resolves. A thrown error keeps the
    * modal open and toasts, so the caller doesn't need its own try/catch.
+   * `pickedColumns` (with `columnPrefsKey`) is the ticked headers, in order.
    */
-  onExport: (format: ExportFileFormat) => void | Promise<void>;
+  onExport: (format: ExportFileFormat, pickedColumns?: string[]) => void | Promise<void>;
   defaultFormat?: ExportFileFormat;
 }
 
@@ -58,11 +67,35 @@ export default function ExportFormatModal({
   recordCount,
   selected = false,
   columns,
+  columnPrefsKey,
+  defaultOffColumns,
   onExport,
   defaultFormat = 'csv',
 }: ExportFormatModalProps) {
   const [format, setFormat] = useState<ExportFileFormat>(defaultFormat);
   const [exporting, setExporting] = useState(false);
+  const pickable = !!columnPrefsKey && !!columns && columns.length > 0;
+  // Header -> ticked. Read from the remembered picks on every open.
+  const [picks, setPicks] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (!open || !pickable) return;
+    let saved: Record<string, boolean> = {};
+    try {
+      const raw = localStorage.getItem(columnPrefsKey!);
+      if (raw) saved = JSON.parse(raw) as Record<string, boolean>;
+    } catch { /* ignore */ }
+    const off = new Set(defaultOffColumns ?? []);
+    setPicks(Object.fromEntries(columns!.map(c => [c, saved[c] !== undefined ? saved[c] : !off.has(c)])));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, pickable, columnPrefsKey]);
+
+  const updatePicks = (next: Record<string, boolean>) => {
+    setPicks(next);
+    try { localStorage.setItem(columnPrefsKey!, JSON.stringify(next)); } catch { /* ignore */ }
+  };
+  const pickedColumns = pickable ? columns!.filter(c => picks[c]) : columns ?? [];
+  const allPicked = pickable && pickedColumns.length === columns!.length;
 
   // Fresh choice on every open.
   useEffect(() => {
@@ -85,7 +118,7 @@ export default function ExportFormatModal({
   const handleExport = async () => {
     setExporting(true);
     try {
-      await onExport(format);
+      await onExport(format, pickable ? pickedColumns : undefined);
       onClose();
     } catch (error) {
       console.error('Export failed:', error);
@@ -118,7 +151,7 @@ export default function ExportFormatModal({
                 <p className="text-sm text-gray-500 dark:text-slate-400 mt-1 flex items-center gap-1.5">
                   {recordCount !== undefined && `${recordCount}${selected ? ' selected' : ''} record${recordCount === 1 ? '' : 's'}`}
                   {recordCount !== undefined && columns && columns.length > 0 && <span className="w-1 h-1 rounded-full bg-blue-500" />}
-                  {columns && columns.length > 0 && `${columns.length} columns`}
+                  {columns && columns.length > 0 && `${pickedColumns.length} columns`}
                 </p>
               )}
             </div>
@@ -158,7 +191,42 @@ export default function ExportFormatModal({
             })}
           </div>
 
-          {columns && columns.length > 0 && (
+          {pickable && (
+            /* Columns included — picked here, per export. Remembered for next time. */
+            <div className="mt-4 p-4 bg-blue-50/60 dark:bg-blue-500/10 rounded-xl">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <span className="flex items-center gap-2 text-sm font-bold text-blue-700 dark:text-blue-300">
+                  <Info className="w-4 h-4 text-blue-600 dark:text-blue-300 flex-shrink-0" />
+                  Columns included
+                </span>
+                <button
+                  type="button"
+                  onClick={() => updatePicks(Object.fromEntries(columns!.map(c => [c, !allPicked])))}
+                  className="text-xs font-medium text-blue-700 dark:text-blue-300 hover:text-blue-900 hover:underline"
+                >
+                  {allPicked ? 'Clear all' : 'Select all'}
+                </button>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
+                {columns!.map(col => (
+                  <label key={col} className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300 cursor-pointer min-w-0">
+                    <input
+                      type="checkbox"
+                      checked={!!picks[col]}
+                      onChange={() => updatePicks({ ...picks, [col]: !picks[col] })}
+                      className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 shrink-0"
+                    />
+                    <span className="truncate">{col}</span>
+                  </label>
+                ))}
+              </div>
+              {pickedColumns.length === 0 && (
+                <p className="mt-2 text-xs text-red-600">Select at least one column to export.</p>
+              )}
+            </div>
+          )}
+
+          {!pickable && columns && columns.length > 0 && (
             <div className="mt-4 p-4 bg-blue-50/60 dark:bg-blue-500/10 rounded-xl flex items-start gap-3">
               <Info className="w-4 h-4 text-blue-600 dark:text-blue-300 flex-shrink-0 mt-0.5" />
               <p className="text-sm text-gray-600 dark:text-slate-300">
@@ -182,7 +250,7 @@ export default function ExportFormatModal({
             variant="primary"
             size="md"
             onClick={() => void handleExport()}
-            disabled={exporting}
+            disabled={exporting || (pickable && pickedColumns.length === 0)}
             icon={exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
           >
             {exporting ? 'Exporting...' : 'Export'}
