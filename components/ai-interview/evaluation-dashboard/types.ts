@@ -154,6 +154,13 @@ export interface PerQuestionFollowUp {
 
 export interface PerQuestionDetail {
   qNum: number;                          // 1-based display index (matches Q&A tab)
+  /** 1-based position in the whole interview, in the order the questions were
+   *  asked (an Opening HR round comes before MHS, a Closing one after NHS).
+   *  Un-reached (not delivered) questions follow every asked one. `qNum` is
+   *  section-local; this is the interview-wide number. */
+  askedNum?: number;
+  /** Chronological sort key the adapter ranks into `askedNum` (internal). */
+  askedOrder?: number;
   section: 'mth' | 'nth' | 'hr';
   question: string;
   /** Candidate's transcribed response (ASR-corrected when available).
