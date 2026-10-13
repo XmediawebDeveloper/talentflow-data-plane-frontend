@@ -1,8 +1,9 @@
 'use client';
 
-import { ChevronLeft, ChevronRight, User, UserX, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, Briefcase, AlertCircle, Info, Loader2, ShieldAlert, Eye, Clipboard, MousePointer, Volume2, Monitor, Maximize, Activity, Camera, Play, Users, Cpu, Code, Video, Menu } from 'lucide-react';
+import { ChevronLeft, ChevronRight, User, UserX, Clock, Award, CheckCircle, ChevronDown, ChevronUp, FileText, Briefcase, AlertCircle, Info, Loader2, ShieldAlert, Eye, Clipboard, MousePointer, Volume2, Monitor, Maximize, Activity, Camera, Play, Users, Cpu, Code, Video, Menu, Download, ArrowUpRight, Timer } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback, type ComponentType } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { assessmentService, DetailedResultResponse, InvitationResponse, QuestionEvaluation, RoundScore } from '@/lib/services';
 import { proctoringService, ProctoringEvent } from '@/lib/services/proctoringService';
 import { RecordingPlayer, EMPTY_RECORDING_SOURCE, type RecordingSource } from '@/components/recording/RecordingPlayer';
@@ -203,60 +204,6 @@ function getDisplaySectionPercentage(questions: QuestionEvaluation[]) {
   return toOneDecimalMark((totalDisplayedEarned / totalPossible) * 100);
 }
 
-/* ── The summary card at the top of the result ──────────────────────────
-   Icon tile, muted label, bold value: the same three parts eight times over,
-   so they are one component rather than eight copies that drift.
-
-   `tone` names WHAT the row is about, not a colour — the tile is the only
-   coloured thing in a row, and keeping the pairs here is what stops the card
-   turning back into the patchwork it was. */
-const INFO_ROW_TONES = {
-  blue: 'bg-brand-blue/10 text-brand-blue',
-  cyan: 'bg-brand-cyan/10 text-brand-cyan',
-  green: 'bg-green-50 text-green-600 dark:bg-green-500/10 dark:text-green-400',
-  orange: 'bg-brand-orange/10 text-brand-orange-deep',
-} as const;
-
-function ResultInfoRow({
-  icon: Icon,
-  tone,
-  label,
-  value,
-  badge,
-}: {
-  icon: ComponentType<{ className?: string }>;
-  tone: keyof typeof INFO_ROW_TONES;
-  label: string;
-  value: string;
-  /** The version chip the reference sets beside a title. */
-  badge?: string;
-}) {
-  return (
-    <div className="flex items-center gap-3">
-      <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${INFO_ROW_TONES[tone]}`}>
-        <Icon className="h-5 w-5" />
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="text-xs text-gray-500 dark:text-slate-400">{label}</div>
-        <div className="flex flex-wrap items-center gap-2">
-          <span title={value} className="min-w-0 max-w-full truncate text-sm font-semibold text-gray-900 dark:text-slate-50 sm:text-sm">
-            {value}
-          </span>
-          {badge && (
-            <span className="inline-flex shrink-0 items-center rounded-md bg-brand-blue/10 px-1.5 py-0.5 text-2xs font-bold text-brand-blue">
-              {badge}
-            </span>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/** The mark a round reads as passed at — the same 70 `getScoreColor` below
- *  already turns green on, named so the card and that colour cannot disagree. */
-const ROUND_PASS_MARK = 70;
-
 /** "HR Score" / "Code Score" / "Technical Score", from the round's own type. */
 const roundScoreLabel = (roundType: string) => {
   const key = roundType.toLowerCase();
@@ -289,7 +236,6 @@ export default function CandidateResultDetails({
   jdId,
   jdTitle,
   jdVersion,
-  assessmentVersion,
   currentIndex,
   totalCount,
   onPrev,
@@ -1228,21 +1174,22 @@ export default function CandidateResultDetails({
           />
         </div>
       )}
-      {/* Header */}
-      <div className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
-        <div className="px-3 sm:px-4 py-4 sm:py-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-            <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-              <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-brand-blue flex items-center justify-center text-white text-base sm:text-xl flex-shrink-0 font-semibold">
+      {/* Header — one card, as on the AI Interview candidate result page
+          (CandidateResultsView): who the candidate is, what they sat and when,
+          the two document actions on the right, and the round scores along
+          the bottom. It absorbs the info card that used to sit under it;
+          every value is one that card showed. */}
+      <div className="pt-4 sm:pt-6 bg-white">
+        <div className="rounded-xl bg-brand-blue/5 border border-brand-blue/15 ring-1 ring-brand-blue/10 shadow-sm shadow-brand-blue/10 p-4 sm:p-5">
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+            <div className="flex items-start gap-3 sm:gap-4 min-w-0">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl ring-1 ring-brand-blue/15 bg-brand-blue/10 shadow-sm flex items-center justify-center text-brand-blue text-xl sm:text-2xl font-bold flex-shrink-0">
                 {(candidateData?.name || 'U').split(' ').map(n => n[0]).join('')}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 mb-0.5 sm:mb-1 min-w-0">
-                  <h1 className="min-w-0 text-sm md:text-base text-gray-900 truncate tracking-tight font-semibold">{candidateData?.name || 'Unknown'}</h1>
-                  {/* Status Badge — beside the name it describes, on the same
-                      line; moved from the end of the action buttons, same
-                      badge. `shrink-0` so a long name truncates, not the
-                      badge. */}
+                <div className="flex items-center gap-2 flex-wrap min-w-0">
+                  <h1 className="min-w-0 text-lg sm:text-xl text-gray-900 truncate tracking-tight font-semibold">{candidateData?.name || 'Unknown'}</h1>
+                  {/* `shrink-0` so a long name truncates, not the badge. */}
                   {(() => {
                     const displayStatus = resultStatusOf(detailedResult)
                       || candidateData?.status
@@ -1254,240 +1201,207 @@ export default function CandidateResultDetails({
                     );
                   })()}
                 </div>
-                <p className="text-xs sm:text-sm text-gray-600 truncate" title={candidateData?.email}>{candidateData?.email}</p>
-                <span className="inline-flex items-center px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs font-mono font-medium mt-0.5">
-                  {candidateDisplayId || detailedResult?.candidate_display_id || `CID-${candidateId}`}
-                </span>
+                {/* CID | email | Job ↗ — the job opens its Job Details page
+                    when the assessment knows its JD row. */}
+                {(() => {
+                  const cid = candidateDisplayId || detailedResult?.candidate_display_id || `CID-${candidateId}`;
+                  const email = candidateData?.email;
+                  const jobName = [jdId, jdTitle].filter(Boolean).join(' - ');
+                  const jdRowId: string | undefined = assessmentMeta?.jd_id;
+                  const jobLabel = (
+                    <>
+                      {jobName}
+                      {jdVersion != null && (
+                        <span className="px-1.5 py-0.5 rounded bg-brand-blue/10 text-brand-blue text-2xs font-semibold">V{jdVersion}</span>
+                      )}
+                    </>
+                  );
+                  const parts: React.ReactNode[] = [];
+                  if (cid) parts.push(<span key="cid">{cid}</span>);
+                  if (email) parts.push(<span key="email" className="truncate" title={email}>{email}</span>);
+                  if (jobName) parts.push(jdRowId ? (
+                    <Link
+                      key="job"
+                      href={`/recruitment/job-details?id=${encodeURIComponent(jdRowId)}`}
+                      title="Open this job"
+                      className="group inline-flex items-center gap-1.5 text-gray-700 hover:text-brand-blue hover:underline underline-offset-2 transition-colors"
+                    >
+                      {jobLabel}
+                      <ArrowUpRight className="w-3.5 h-3.5 shrink-0 text-gray-400 group-hover:text-brand-blue" aria-hidden />
+                    </Link>
+                  ) : <span key="job" className="inline-flex items-center gap-1.5 text-gray-700">{jobLabel}</span>);
+                  return (
+                    <div className="flex items-center gap-2 flex-wrap mt-1 text-sm text-gray-500 min-w-0">
+                      {parts.map((part, i) => (
+                        <span key={i} className="inline-flex items-center gap-2 min-w-0">
+                          {i > 0 && <span className="text-gray-300" aria-hidden>|</span>}
+                          {part}
+                        </span>
+                      ))}
+                    </div>
+                  );
+                })()}
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500 mt-2">
+                  <span className="flex items-center gap-1" title="Start time">
+                    <Clock className="w-3.5 h-3.5" />
+                    Started {detailedResult?.started_at ? formatISTWithSeconds(detailedResult.started_at) : 'N/A'}
+                  </span>
+                  <span className="flex items-center gap-1" title="Submission time">
+                    <CheckCircle className="w-3.5 h-3.5" />
+                    Submitted {detailedResult?.completed_at ? formatISTWithSeconds(detailedResult.completed_at) : 'N/A'}
+                  </span>
+                  <span className="flex items-center gap-1" title="Time taken">
+                    <Timer className="w-3.5 h-3.5" />
+                    Time taken: {candidateData?.duration || 'N/A'}
+                  </span>
+                </div>
               </div>
             </div>
-            {/* The candidate's two document actions. The status badge that
-                used to end this row now sits beside the candidate's name.
-                `flex-wrap` so a narrow phone wraps rather than overflows. */}
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3 self-start sm:self-auto sm:shrink-0">
-              {/* View Resume — always rendered. With a resume, hovering shows
-                  a preview of it and clicking opens it in full. Without one
-                  it's disabled and hovering explains why; a disabled button
-                  swallows mouse events in some browsers, so it's made
-                  pointer-transparent and the wrapping span takes the hover. */}
-              {resolvedResumeId === null ? (
-                <HoverTooltip
-                  position="bottom"
-                  content={resumeEmailMismatch
-                    ? RESUME_EMAIL_MISMATCH_MESSAGE
-                    : invitedFromResume
-                    ? 'Resume not available'
-                    : 'Resume is not available because the candidate was invited via Direct Email.'}
+              {/* The candidate's two document actions. The status badge that
+                  used to end this row now sits beside the candidate's name.
+                  `flex-wrap` so a narrow phone wraps rather than overflows. */}
+              <div className="flex flex-col items-stretch gap-2 self-start sm:self-auto sm:shrink-0">
+                {/* View Resume — always rendered. With a resume, hovering shows
+                    a preview of it and clicking opens it in full. Without one
+                    it's disabled and hovering explains why; a disabled button
+                    swallows mouse events in some browsers, so it's made
+                    pointer-transparent and the wrapping span takes the hover. */}
+                {resolvedResumeId === null ? (
+                  <HoverTooltip
+                    position="bottom"
+                    content={resumeEmailMismatch
+                      ? RESUME_EMAIL_MISMATCH_MESSAGE
+                      : invitedFromResume
+                      ? 'Resume not available'
+                      : 'Resume is not available because the candidate was invited via Direct Email.'}
+                  >
+                    <span className="flex cursor-not-allowed flex-shrink-0">
+                      <ViewResumeButton onClick={handleViewResume} disabled variant="bordered" className="pointer-events-none w-full" />
+                    </span>
+                  </HoverTooltip>
+                ) : resolvedResumeId ? (
+                  <ResumeHoverPreview resumeId={resolvedResumeId}>
+                    <ViewResumeButton onClick={handleViewResume} loading={isLoadingResume} variant="bordered" className="w-full" />
+                  </ResumeHoverPreview>
+                ) : (
+                  // Spinner while the load-time check runs, so the button doesn't
+                  // look clickable and then flip to disabled.
+                  <ViewResumeButton onClick={handleViewResume} loading variant="bordered" className="w-full" />
+                )}
+                {previewResumeId && (
+                  <ResumeTextPreviewModal
+                    resumeId={previewResumeId}
+                    title={detailedResult?.candidate_name || 'Resume'}
+                    subtitle={detailedResult?.candidate_email || undefined}
+                    onClose={() => setPreviewResumeId(null)}
+                  />
+                )}
+                {/* Export (PDF) — the same single-candidate export that used to
+                    sit in a bar of its own above, now next to View Resume so the
+                    page's two document actions read as one pair. Its chrome is
+                    `ViewResumeButton`'s, class for class (padding, type scale,
+                    border weight, icon size, gap), which is what makes the two
+                    line up rather than merely sit beside each other. */}
+                <button
+                  onClick={async () => {
+                    // Single-candidate export — emit a PDF report for this
+                    // attempt only. The previous Excel export pulled the whole
+                    // assessment's roster which wasn't useful from a single
+                    // candidate's detail page; recruiters wanted a printable
+                    // summary they could share. exportPDF accepts the
+                    // attempt_id and the backend scopes the report to that
+                    // candidate.
+                    try {
+                      const blob = await assessmentService.exportPDF(assessmentId, candidateId);
+                      const url = window.URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = buildResultPdfFilename();
+                      document.body.appendChild(a);
+                      a.click();
+                      window.URL.revokeObjectURL(url);
+                      document.body.removeChild(a);
+                    } catch (error) {
+                      console.error('Failed to export result PDF:', error);
+                      toast.error('Failed to export result PDF. Please try again.');
+                    }
+                  }}
+                  className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-brand-blue border border-brand-blue rounded-lg hover:bg-brand-blue-2 transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap"
                 >
-                  <span className="inline-flex cursor-not-allowed flex-shrink-0">
-                    <ViewResumeButton onClick={handleViewResume} disabled className="pointer-events-none" />
-                  </span>
-                </HoverTooltip>
-              ) : resolvedResumeId ? (
-                <ResumeHoverPreview resumeId={resolvedResumeId}>
-                  <ViewResumeButton onClick={handleViewResume} loading={isLoadingResume} />
-                </ResumeHoverPreview>
-              ) : (
-                // Spinner while the load-time check runs, so the button doesn't
-                // look clickable and then flip to disabled.
-                <ViewResumeButton onClick={handleViewResume} loading />
-              )}
-              {previewResumeId && (
-                <ResumeTextPreviewModal
-                  resumeId={previewResumeId}
-                  title={detailedResult?.candidate_name || 'Resume'}
-                  subtitle={detailedResult?.candidate_email || undefined}
-                  onClose={() => setPreviewResumeId(null)}
-                />
-              )}
-              {/* Export (PDF) — the same single-candidate export that used to
-                  sit in a bar of its own above, now next to View Resume so the
-                  page's two document actions read as one pair. Its chrome is
-                  `ViewResumeButton`'s, class for class (padding, type scale,
-                  border weight, icon size, gap), which is what makes the two
-                  line up rather than merely sit beside each other. */}
-              <button
-                onClick={async () => {
-                  // Single-candidate export — emit a PDF report for this
-                  // attempt only. The previous Excel export pulled the whole
-                  // assessment's roster which wasn't useful from a single
-                  // candidate's detail page; recruiters wanted a printable
-                  // summary they could share. exportPDF accepts the
-                  // attempt_id and the backend scopes the report to that
-                  // candidate.
-                  try {
-                    const blob = await assessmentService.exportPDF(assessmentId, candidateId);
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = buildResultPdfFilename();
-                    document.body.appendChild(a);
-                    a.click();
-                    window.URL.revokeObjectURL(url);
-                    document.body.removeChild(a);
-                  } catch (error) {
-                    console.error('Failed to export result PDF:', error);
-                    toast.error('Failed to export result PDF. Please try again.');
-                  }
-                }}
-                className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-brand-blue bg-white dark:bg-slate-900 border border-brand-blue/40 rounded-lg hover:bg-brand-blue/5 transition-colors flex items-center gap-1.5 whitespace-nowrap"
-              >
-                <FileText className="w-4 h-4" />
-                <span className="hidden sm:inline">Export Result PDF</span>
-                <span className="sm:hidden">PDF</span>
-              </button>
-            </div>
+                  <Download className="w-4 h-4" />
+                  <span>Report</span>
+                </button>
+              </div>
           </div>
+          {/* Score cards — the result at a glance along the bottom of the
+              header: one card per scored round, then questions answered and
+              violations. Plain figures, no bars; they wait for scoring to
+              finish rather than showing a 0% that is not a score yet. */}
+          {detailedResult?.scoring_status === 'completed' && (() => {
+            const rounds = detailedResult.round_scores.filter(
+              (round) => !SUMMARY_HIDDEN_ROUND_TYPES.has(round.round_type.toLowerCase()),
+            );
+            // Answered = actually submitted something, the same test the
+            // Section-wise Performance counts use.
+            const questions = detailedResult.question_evaluations;
+            const answered = questions.filter(q =>
+              q.question_type === 'coding'
+                ? !!q.candidate_code_submission?.trim()
+                : (q.candidate_selected_options?.length ?? 0) > 0 || !!q.candidate_answer_text?.trim(),
+            ).length;
+            const violations = detailedResult.proctoring_stats?.total_violations || 0;
+            // Each round passes or fails on its own: a score at or above the
+            // assessment's pass mark, 70% when it sets none — the same rule the
+            // Assessments module's version history counts Pass / Fail by.
+            const passMark = Number(assessmentMeta?.passing_threshold) || 70;
+            const cards: { key: string; label: string; value: string; sub?: string; passed?: boolean; icon: CandidateDetailTab['icon']; tone: string }[] = [
+              ...rounds.map(round => {
+                const score = toOneDecimalMark(round.raw_score ?? 0);
+                return {
+                  key: round.round_type,
+                  label: roundScoreLabel(round.round_type),
+                  value: `${score}%`,
+                  sub: `${round.questions_correct ?? 0}/${round.questions_total ?? 0} correct`,
+                  passed: score >= passMark,
+                  icon: ROUND_ICONS[round.round_type.toLowerCase()] ?? Clipboard,
+                  tone: 'bg-brand-blue/10 text-brand-blue',
+                };
+              }),
+              { key: 'answered', label: 'Questions Answered', value: `${answered} / ${questions.length}`, icon: Play, tone: 'bg-brand-blue/10 text-brand-blue' },
+              { key: 'violations', label: 'Violations', value: String(violations), icon: ShieldAlert, tone: violations > 0 ? 'bg-destructive-subtle text-destructive' : 'bg-slate-100 text-slate-500' },
+            ];
+            return (
+              <div className="mt-4 pt-4 border-t border-brand-blue/10 flex flex-wrap gap-2 sm:gap-3">
+                {cards.map(card => (
+                  <div key={card.key} className="flex min-w-[9rem] items-center gap-2.5 rounded-lg border border-gray-200/80 bg-white px-3 py-2">
+                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${card.tone}`}>
+                      <card.icon className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-base font-bold leading-tight text-gray-900">{card.value}</span>
+                        {card.passed !== undefined && (
+                          <span className={`rounded px-1.5 py-0.5 text-2xs font-semibold ${
+                            card.passed ? 'bg-success-subtle text-success' : 'bg-destructive-subtle text-destructive'
+                          }`}>
+                            {card.passed ? 'Pass' : 'Fail'}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-2xs text-gray-500 truncate">
+                        {card.label}{card.sub ? ` · ${card.sub}` : ''}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
         </div>
       </div>
 
       {/* Content */}
       <div className="py-4 sm:py-6 bg-white">
-        {/* Assessment Info — three groups divided by a rule: what was
-            assessed, when it ran, and how it went. Every value below is the one
-            this card already carried; only the arrangement changed.
-            The divider is a left border from `lg` up and a top border below it,
-            so the groups read as columns on a desktop and as stacked blocks on
-            a phone without a stray line at either end. */}
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-4 sm:p-6 mb-4 sm:mb-6">
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-3 lg:gap-0">
-            {/* What was assessed. The version moves into a chip beside the
-                assessment it versions, which is what it describes — it was a
-                cell of its own reading "v1" next to nothing. */}
-            <div className="space-y-4 lg:pr-6">
-              {/* The job: its id and its title on one line, the way the
-                  reference reads them ("JD-014 Java developer"), with the JOB's
-                  own version as the chip. Either half can be missing — an
-                  assessment with no linked JD, or a JD whose title did not come
-                  back — so the value is joined from whichever parts exist
-                  rather than printing a bare separator. */}
-              <ResultInfoRow
-                icon={Briefcase}
-                tone="blue"
-                label="Job Title"
-                value={[jdId, jdTitle].filter(Boolean).join(' - ') || 'N/A'}
-                badge={jdVersion != null ? `V${jdVersion}` : undefined}
-              />
-              <ResultInfoRow
-                icon={FileText}
-                tone="blue"
-                label="Assessment"
-                value={assessmentTitle}
-                badge={assessmentVersion != null ? `V${assessmentVersion}` : undefined}
-              />
-            </div>
-
-            {/* When it ran. */}
-            <div className="space-y-4 border-t border-gray-200 pt-5 dark:border-slate-700 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-6">
-              <ResultInfoRow
-                icon={Clock}
-                tone="cyan"
-                label="Start Time"
-                value={detailedResult?.started_at ? formatISTWithSeconds(detailedResult.started_at) : 'N/A'}
-              />
-              <ResultInfoRow
-                icon={CheckCircle}
-                tone="green"
-                label="Submission Time"
-                value={detailedResult?.completed_at ? formatISTWithSeconds(detailedResult.completed_at) : 'N/A'}
-              />
-            </div>
-
-            {/* How it went. */}
-            <div className="space-y-4 border-t border-gray-200 pt-5 dark:border-slate-700 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-6">
-              <ResultInfoRow
-                icon={Clock}
-                tone="orange"
-                label="Time Taken"
-                value={candidateData?.duration || 'N/A'}
-              />
-              {/* One tile per round the result actually has — never a fixed HR
-                  and Coding pair, since which rounds an assessment runs is the
-                  assessment's own configuration. Absent entirely while scoring
-                  is still processing, rather than showing a 0% that is not a
-                  score yet. */}
-              {(() => {
-                const summaryRounds = (detailedResult?.round_scores ?? []).filter(
-                  (round) => !SUMMARY_HIDDEN_ROUND_TYPES.has(round.round_type.toLowerCase()),
-                );
-                if (summaryRounds.length === 0) return null;
-                return (
-                <div
-                  className={`grid items-stretch gap-3 ${
-                    /* Equal columns, and `items-stretch` (the grid default,
-                       spelled out) plus `h-full` on each cell is what makes the
-                       two the same HEIGHT as well as the same width — a longer
-                       round name wrapping in one would otherwise leave the
-                       other short. A lone score spans the column instead of
-                       leaving half the row empty. */
-                    summaryRounds.length > 1
-                      ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2'
-                      : 'grid-cols-1'
-                  }`}
-                >
-                  {summaryRounds.map((round) => {
-                    const score = toOneDecimalMark(round.raw_score ?? 0);
-                    const passed = score >= ROUND_PASS_MARK;
-                    return (
-                      <div
-                        key={round.round_type}
-                        className="flex h-full flex-col justify-between gap-2.5 rounded-xl border border-gray-200 p-3 dark:border-slate-700"
-                      >
-                        {/* Label on the left, verdict and score on the right.
-                            `items-center`, not `items-baseline`: the verdict is
-                            a padded chip, and baseline-aligning a chip against
-                            plain text sits it low against the number. */}
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="min-w-0 truncate text-xs text-gray-500 dark:text-slate-400">
-                            {roundScoreLabel(round.round_type)}
-                          </span>
-                          <span className="flex shrink-0 items-center gap-2">
-                            {/* Read from the score itself — the same `passed`
-                                the bar is coloured by, so the chip and the fill
-                                can never tell different stories. */}
-                            <span
-                              className={`rounded-md px-1.5 py-0.5 text-2xs font-semibold ${
-                                passed
-                                  ? 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-300'
-                                  : 'bg-red-100 text-red-600 dark:bg-red-500/20 dark:text-red-300'
-                              }`}
-                            >
-                              {passed ? 'Pass' : 'Fail'}
-                            </span>
-                            <span className="text-base font-bold text-gray-900 dark:text-slate-50">
-                              {score}%
-                            </span>
-                          </span>
-                        </div>
-                        {/* The track and its fill. `aria-*` because a bar with
-                            no text of its own says nothing to a screen reader;
-                            the percentage beside it is what sighted users read.
-                            The width is the score itself — clamped to 0–100 so
-                            a stray value cannot overflow the track. */}
-                        <div
-                          role="progressbar"
-                          aria-valuenow={score}
-                          aria-valuemin={0}
-                          aria-valuemax={100}
-                          aria-label={roundScoreLabel(round.round_type)}
-                          className="h-2 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-slate-800"
-                        >
-                          <div
-                            className={`h-full rounded-full transition-[width] ${
-                              passed ? 'bg-green-500' : 'bg-red-500'
-                            }`}
-                            style={{ width: `${Math.min(100, Math.max(0, score))}%` }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                );
-              })()}
-            </div>
-          </div>
-        </div>
-
         {/* Detail layout — the same as the AI Interview candidate result page
             (CandidateResultsView): desktop (lg+) a sticky vertical rail on the
             left with the content on the right; tablet/mobile a wrapping
@@ -2573,7 +2487,7 @@ export default function CandidateResultDetails({
                                         <div className="w-8 h-8 rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/15 flex items-center justify-center flex-shrink-0">
                                           <FileText className="w-4 h-4 text-brand-orange-deep" />
                                         </div>
-                                        <div className="text-sm font-medium text-gray-800">CODE INPUT</div>
+                                        <div className="text-sm font-medium text-gray-800">INPUT</div>
                                       </div>
                                       <div className="bg-slate-900 rounded-lg p-4 text-brand-orange font-mono text-sm overflow-x-auto ring-1 ring-black/20">
                                         <pre className="whitespace-pre-wrap">{getCandidateCodingInput(q)}</pre>
@@ -2585,7 +2499,7 @@ export default function CandidateResultDetails({
                                         <div className="w-8 h-8 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center flex-shrink-0">
                                           <FileText className="w-4 h-4 text-brand-cyan" />
                                         </div>
-                                        <div className="text-sm font-medium text-gray-800">CANDIDATE OUTPUT</div>
+                                        <div className="text-sm font-medium text-gray-800">OUTPUT</div>
                                       </div>
                                     <div className="rounded-lg p-4 font-mono text-sm overflow-x-auto bg-slate-900 text-brand-cyan ring-1 ring-black/20">
                                       <pre className="whitespace-pre-wrap">

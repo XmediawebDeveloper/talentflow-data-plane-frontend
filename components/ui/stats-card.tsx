@@ -153,8 +153,8 @@ export function StatsCard({
             <Icon className="h-4.5 w-4.5" />
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-medium text-slate-700 dark:text-slate-300">{label}</p>
-            <div className="mt-0.5 text-2xl sm:text-[1.75rem] font-semibold tracking-tight text-slate-950 dark:text-slate-50">
+            <p className="text-sm sm:text-xs lg:text-sm font-medium text-slate-700 dark:text-slate-300">{label}</p>
+            <div className="mt-0.5 text-2xl sm:text-xl lg:text-[1.75rem] font-semibold tracking-tight text-slate-950 dark:text-slate-50">
               {value}
             </div>
             {children}
