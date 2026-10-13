@@ -52,10 +52,10 @@ interface StepSamplePracticeProps {
 
 // Spoken/shown greeting that plays BEFORE the practice question. It sets
 // expectations clearly: this is only a practice/test run for the candidate to
-// confirm their mic + video work, the recording can be replayed, and nothing
-// here is stored in our database.
+// confirm their mic + video work, and nothing here is stored in our database.
+// (No recording playback any more — the Live/Replay toggle was removed.)
 const PRACTICE_GREETING =
-  "Hi, this is Bina. Welcome — this is just a practice session. Before the real interview begins, let's make sure everything is working correctly, especially your microphone and camera. Go ahead and record a short answer, then play it back to check that you can be seen and heard clearly. Don't worry — this practice recording is only for you to test yourself and is not stored in our database.";
+  "Hi, this is Bina. Welcome — this is just a practice session. Before the real interview begins, let's make sure everything is working correctly, especially your microphone and camera. Go ahead and answer the practice question, and check that you can be seen and heard clearly. Don't worry — this practice is only for you to test yourself and nothing is stored in our database.";
 
 // The actual practice question, asked AFTER the greeting.
 const PRACTICE_QUESTION =
@@ -374,8 +374,6 @@ export default function StepSamplePractice({
   const [practiceMicLabel, setPracticeMicLabel] = useState('');
   const [ttsSupported, setTtsSupported] = useState(true);
   const [transcribeError, setTranscribeError] = useState('');
-  const [recordedVideoUrl, setRecordedVideoUrl] = useState<string | null>(null);
-  const [showReplay, setShowReplay] = useState(false);
   // false in Brave (blocks Google Speech API) and Firefox — backend transcription used instead
   // Web Speech still captures the answer under the hood (for the final
   // transcript revealed after finishing), but — like the real Live interview
@@ -434,7 +432,6 @@ export default function StepSamplePractice({
   // appears (Bina speaks → Your turn → transcript → sign-off).
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const replayVideoRef = useRef<HTMLVideoElement>(null);
   // Scopes the coach-mark tour spotlight to the mock panel (not the browser).
   const panelRef = useRef<HTMLDivElement>(null);
   // Auto-scroll targets: the chat card (on Start), the control bar (while
@@ -451,8 +448,6 @@ export default function StepSamplePractice({
   // Ensures the voice-identity practice top-up capture runs at most once.
   const voiceTopUpDoneRef = useRef(false);
   const audioChunksRef = useRef<Blob[]>([]);
-  const videoRecorderRef = useRef<MediaRecorder | null>(null);
-  const videoChunksRef = useRef<Blob[]>([]);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const recognitionRef = useRef<any>(null);
   const webSpeechFinalRef = useRef('');
@@ -643,7 +638,6 @@ export default function StepSamplePractice({
     const healIfDead = async () => {
       if (cancelled || healInFlight) return;
       if (mediaRecorderRef.current?.state === 'recording') return;
-      if (videoRecorderRef.current?.state === 'recording') return;
       const s = mediaStreamRef.current;
       const camLive = !!s?.getVideoTracks().some(t => t.readyState === 'live');
       const micLive = !!s?.getAudioTracks().some(t => t.readyState === 'live');
@@ -711,10 +705,6 @@ export default function StepSamplePractice({
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
         try { mediaRecorderRef.current.stop(); } catch { /* ignore */ }
         mediaRecorderRef.current = null;
-      }
-      if (videoRecorderRef.current && videoRecorderRef.current.state !== 'inactive') {
-        try { videoRecorderRef.current.stop(); } catch { /* ignore */ }
-        videoRecorderRef.current = null;
       }
       if (webSpeechRestartRef.current) {
         clearInterval(webSpeechRestartRef.current);
@@ -1360,24 +1350,6 @@ export default function StepSamplePractice({
     audioChunksRef.current = [];
     mediaRecorderRef.current = null;
 
-    // Stop video recorder and create replay URL
-    if (videoRecorderRef.current && videoRecorderRef.current.state !== 'inactive') {
-      await new Promise<void>((resolve) => {
-        const vr = videoRecorderRef.current!;
-        vr.onstop = () => resolve();
-        try { vr.stop(); } catch { resolve(); }
-      });
-    }
-    const videoChunks = videoChunksRef.current;
-    videoChunksRef.current = [];
-    videoRecorderRef.current = null;
-    if (videoChunks.length > 0) {
-      const vMime = videoChunks[0].type || 'video/webm';
-      const videoBlob = new Blob(videoChunks, { type: vMime });
-      setRecordedVideoUrl(prev => { if (prev) URL.revokeObjectURL(prev); return URL.createObjectURL(videoBlob); });
-      setShowReplay(true); // auto-show playback after recording stops
-    }
-
     // If we already have a browser transcript, show it immediately while
     // the backend call runs in the background for a more accurate result.
     if (browserTranscript) {
@@ -1457,25 +1429,17 @@ export default function StepSamplePractice({
     try { mediaRecorderRef.current.stop(); } catch { /* ignore */ }
     mediaRecorderRef.current = null;
     audioChunksRef.current = [];
-    if (videoRecorderRef.current && videoRecorderRef.current.state !== 'inactive') {
-      try { videoRecorderRef.current.stop(); } catch { /* ignore */ }
-    }
-    videoRecorderRef.current = null;
-    videoChunksRef.current = [];
   }, [stopLiveTranscription]);
 
   // Repeat Question mid-answer: Bina reads the question out of the speakers
   // while the mic is open, and echoCancellation does not reliably cancel the
   // browser's own speech voice — so her question was recorded and transcribed
-  // as the candidate's answer. Pause the take (audio, video, recogniser) while
+  // as the candidate's answer. Pause the take (audio + recogniser) while
   // she speaks; startRecording resumes it afterwards.
   const pauseRecordingForBina = useCallback(() => {
     const mr = mediaRecorderRef.current;
     if (!mr || mr.state !== 'recording') return;
     try { mr.pause(); } catch { return; }
-    if (videoRecorderRef.current?.state === 'recording') {
-      try { videoRecorderRef.current.pause(); } catch { /* ignore */ }
-    }
     if (webSpeechRestartRef.current) { clearInterval(webSpeechRestartRef.current); webSpeechRestartRef.current = null; }
     const rec = recognitionRef.current;
     recognitionRef.current = null;
@@ -1489,9 +1453,6 @@ export default function StepSamplePractice({
     // the SAME take instead of starting a new one.
     if (mediaRecorderRef.current?.state === 'paused') {
       try { mediaRecorderRef.current.resume(); } catch { /* ignore */ }
-      if (videoRecorderRef.current?.state === 'paused') {
-        try { videoRecorderRef.current.resume(); } catch { /* ignore */ }
-      }
       startLiveTranscription(true);
       return;
     }
@@ -1553,27 +1514,8 @@ export default function StepSamplePractice({
         .catch(() => { /* best-effort */ });
     }
 
-    // Video+audio recorder for replay
-    if (recordedVideoUrl) { URL.revokeObjectURL(recordedVideoUrl); setRecordedVideoUrl(null); }
-    setShowReplay(false);
-    videoChunksRef.current = [];
-    // VP8 FIRST, not VP9: this is a throwaway local replay, and Chrome encodes
-    // VP9 in software at several times VP8's CPU cost — on a 4-core laptop it
-    // alone pushed Task Manager to ~100% for the whole answer. Bitrate capped
-    // for the same reason (the clip never leaves the browser).
-    const videoMimeType = [
-      'video/webm;codecs=vp8,opus',
-      'video/webm',
-      'video/mp4;codecs=avc1.42E01E,mp4a.40.2',  // Safari H.264/AAC
-      'video/mp4',
-    ].find((m) => { try { return MediaRecorder.isTypeSupported(m); } catch { return false; } }) || '';
-    const vr = new MediaRecorder(mediaStreamRef.current!, {
-      ...(videoMimeType ? { mimeType: videoMimeType } : {}),
-      videoBitsPerSecond: 600_000,
-    });
-    vr.ondataavailable = (e) => { if (e.data.size > 0) videoChunksRef.current.push(e.data); };
-    videoRecorderRef.current = vr;
-    vr.start(500);
+    // No video recorder: the practice replay (and its Live/Replay toggle) was
+    // removed, and encoding the camera was the biggest CPU cost of practice.
 
     setIsRecording(true);
     setTranscript('');
@@ -2045,13 +1987,11 @@ export default function StepSamplePractice({
   //    Interview button, so the way forward is visible.
   const startPopupWasOpen = useRef(false);
   useEffect(() => {
-    // Not when the candidate chose to watch the recording — that scrolls to
-    // the camera playback instead.
-    if (startPopupWasOpen.current && !showStartPopup && !showReplay) {
+    if (startPopupWasOpen.current && !showStartPopup) {
       revealAfterPaint(() => startInterviewRef.current, 'nearest');
     }
     startPopupWasOpen.current = showStartPopup;
-  }, [showStartPopup, showReplay]);
+  }, [showStartPopup]);
   // NOTE: the "start the interview" popup is NOT triggered here on practiceDone
   // (that showed it too early). It's revealed from speakClosing()'s onend so it
   // appears only after Bina finishes the sign-off. See speakClosing().
@@ -2252,12 +2192,9 @@ export default function StepSamplePractice({
               </span>
             </div>
             <div className="relative bg-black rounded-xl overflow-hidden" style={{ aspectRatio: '16/9' }}>
-              <video ref={videoRef} autoPlay playsInline muted className={`w-full h-full object-cover ${showReplay ? 'hidden' : ''}`} style={{ transform: 'scaleX(-1)' }} />
-              {showReplay && recordedVideoUrl && (
-                <video ref={replayVideoRef} src={recordedVideoUrl} controls playsInline controlsList="nodownload nopictureinpicture" disablePictureInPicture onContextMenu={(e) => e.preventDefault()} className="w-full h-full object-cover" />
-              )}
+              <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" style={{ transform: 'scaleX(-1)' }} />
               {/* Microphone + network cards — as on the live interview's camera. */}
-              {!showReplay && (() => {
+              {(() => {
                 const rtt = isOffline ? -1 : practiceRttMs;
                 const pct = rtt === null || rtt < 0 ? null : Math.round(Math.min(100, Math.max(10, 100 - ((rtt - 100) / 900) * 90)));
                 const level = rtt === -1 ? 'offline' : rtt === null ? 'checking' : rtt < 250 ? 'good' : rtt < 600 ? 'moderate' : 'poor';
@@ -2296,18 +2233,9 @@ export default function StepSamplePractice({
                   </div>
                 );
               })()}
-              {!showReplay && (isRecording || isTranscribing) && (
+              {(isRecording || isTranscribing) && (
                 <div className={`absolute top-2 left-2 flex items-center rounded-full text-white ${isRecording ? 'tf-blink gap-1.5 text-xs font-bold px-2.5 py-1 bg-red-500 shadow-lg shadow-red-500/40 ring-2 ring-red-300/50 dark:ring-red-500/40' : 'gap-1.5 text-xs font-medium px-2.5 py-1 bg-blue-600/90'}`}>
                   {isRecording ? (<><span className="w-2 h-2 bg-white rounded-full animate-ping" />{`REC · ${recordingElapsed}s`}</>) : (<><Loader2 className="w-3 h-3 animate-spin" /> Transcribing…</>)}
-                </div>
-              )}
-              {showReplay && (
-                <div className="absolute top-2 left-2 flex items-center gap-1.5 bg-blue-600/90 text-white text-xs font-medium px-2.5 py-1 rounded-full"><Play className="w-3 h-3" /> Playback</div>
-              )}
-              {recordedVideoUrl && !isRecording && !isTranscribing && (
-                <div className="absolute top-2 right-2 flex items-center bg-black/80 rounded-full p-0.5 gap-0.5">
-                  <button type="button" onClick={() => setShowReplay(false)} className={`min-h-8 px-3 py-1.5 rounded-full text-2xs font-semibold transition-colors ${!showReplay ? 'bg-white text-gray-900' : 'text-gray-400 hover:text-white'}`}>Live</button>
-                  <button type="button" onClick={() => setShowReplay(true)} className={`min-h-8 px-3 py-1.5 rounded-full text-2xs font-semibold transition-colors ${showReplay ? 'bg-white text-gray-900' : 'text-gray-400 hover:text-white'}`}>Replay</button>
                 </div>
               )}
             </div>
