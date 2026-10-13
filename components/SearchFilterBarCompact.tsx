@@ -46,9 +46,17 @@ export default function SearchFilterBarCompact({
   // Close filter panel on outside click
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (filterPanelRef.current && !filterPanelRef.current.contains(event.target as Node)) {
-        setShowAdvancedFilters(false);
+      const target = event.target as Node;
+      if (filterPanelRef.current && filterPanelRef.current.contains(target)) return;
+      // The date-range picker (DateField) renders its calendar through a Radix
+      // portal attached to document.body, so it's outside filterPanelRef in the
+      // real DOM even though it's logically part of this panel. Without this
+      // check, mousedown-ing a calendar day reads as an outside click and closes
+      // the whole filter panel before the date selection can register.
+      if (target instanceof Element && target.closest('[data-radix-popper-content-wrapper]')) {
+        return;
       }
+      setShowAdvancedFilters(false);
     };
 
     if (showAdvancedFilters) {

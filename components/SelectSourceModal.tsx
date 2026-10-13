@@ -1375,7 +1375,6 @@ export default function SelectSourceModal({
                       : undefined
                   }
                   canShare={activeTab === 'my-resumes' && canShareMyResumes}
-                  canTag={activeTab === 'my-resumes' && canUpdateMyResumes}
                   archivedFolderId={activeTab === 'my-resumes' ? folders.find(f => f.name === 'Archived Resumes' && !f.parent_id)?.id : undefined}
                   /* Internal Database has no folder concept — the whole
                      tab is one flat, unfiltered list. */

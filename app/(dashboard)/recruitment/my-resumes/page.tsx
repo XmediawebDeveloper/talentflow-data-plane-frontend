@@ -4225,7 +4225,6 @@ export default function MyResumesPage() {
                   onArchive={canArchiveMyResumes ? (resumeId) => handleArchiveResumes([resumeId]) : undefined}
                   onUnarchive={canArchiveMyResumes ? (resumeId) => handleUnarchiveResumes([resumeId]) : undefined}
                   canShare={canShareMyResumes}
-                  canTag={canUpdateMyResumes}
                   disablePagination={true}
                   isArchivedFolder={
                     folders.some(f => f.name === 'Archived Resumes' && !f.parentId && f.id === selectedFolder)
@@ -4753,7 +4752,6 @@ export default function MyResumesPage() {
                             onArchive={canArchiveMyResumes ? (resumeId) => handleArchiveResumes([resumeId]) : undefined}
                             onUnarchive={canArchiveMyResumes ? (resumeId) => handleUnarchiveResumes([resumeId]) : undefined}
                             canShare={canShareMyResumes}
-                            canTag={canUpdateMyResumes}
                             disablePagination={true}
                             isArchivedFolder={
                               folders.some(f => f.name === 'Archived Resumes' && !f.parentId && f.id === cardViewFolder)
