@@ -4,6 +4,24 @@
 
 import api, { handleApiError, dispatchUnitsConsumed } from './api';
 
+/* Fired after any write that changes how many resumes a folder or pool holds
+   — archive, unarchive, move, delete. Count badges live in several places
+   (the Resume Database tab strip, the folder tree, All Resumes) and only some
+   of them belong to the component that made the change, so they listen for
+   this instead of each caller having to know about all of them. Bulk actions
+   call the service once per resume; the timer folds that burst into one
+   event so listeners refetch once. */
+export const RESUMES_CHANGED_EVENT = 'resumes-changed';
+let resumesChangedTimer: ReturnType<typeof setTimeout> | null = null;
+export function dispatchResumesChanged() {
+  if (typeof window === 'undefined') return;
+  if (resumesChangedTimer) clearTimeout(resumesChangedTimer);
+  resumesChangedTimer = setTimeout(() => {
+    resumesChangedTimer = null;
+    window.dispatchEvent(new CustomEvent(RESUMES_CHANGED_EVENT));
+  }, 250);
+}
+
 /** GET /resumes/{id}/activity — see app/services/resume_activity.py. */
 export interface ResumeActivitySection<T> {
   allowed: boolean;
@@ -331,6 +349,7 @@ export interface ResumeSearchParams {
   current_company?: string;
   previous_company?: string;
   notice_period?: string;
+  uploaded_by_name?: string;
   upload_date_from?: string;
   upload_date_to?: string;
   source_type?: string;
@@ -519,6 +538,7 @@ export const resumeService = {
       });
       // Dispatch event to refresh header quota display
       dispatchUnitsConsumed();
+      dispatchResumesChanged();
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));
@@ -670,6 +690,9 @@ export const resumeService = {
   async move(resumeId: string, folderId?: string, skipAudit = false): Promise<void> {
     try {
       await api.put(`/resumes/${resumeId}/move`, { folder_id: folderId, skip_audit: skipAudit });
+      // A move into or out of Archived Resumes also flips the archived flag
+      // server-side, so pool totals can change, not just folder badges.
+      dispatchResumesChanged();
     } catch (error) {
       throw new Error(handleApiError(error));
     }
@@ -682,6 +705,7 @@ export const resumeService = {
     try {
       await api.delete(`/resumes/${id}`);
       dispatchUnitsConsumed();
+      dispatchResumesChanged();
     } catch (error) {
       throw new Error(handleApiError(error));
     }

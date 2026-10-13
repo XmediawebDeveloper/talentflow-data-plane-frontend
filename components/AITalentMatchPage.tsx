@@ -225,6 +225,9 @@ interface Job {
   experience?: string;
   jobId?: string;
   currentVersion?: number;
+  /** Republish counter — ONLY for the "Published" vs "Republished" label;
+   *  `currentVersion` above is the job version (v1, v2, ...). */
+  publishCount?: number;
   /* Carried so the job rows can show what the Resume Scoring job rows show.
      All four already exist on the JD record; they were simply never mapped. */
   industryType?: string;
@@ -926,6 +929,16 @@ export default function AITalentMatchPage({
   // so the page opens straight onto View by Job.
   const [historyPageView, setHistoryPageView] = useState<'cards' | 'list' | 'candidates' | 'resumes'>('list');
   const historyListSectionRef = useRef<HTMLDivElement | null>(null);
+  /* One List / Grid choice for the whole module: picking Grid on the job
+     list, View by Candidates or a job's results page switches all three,
+     so opening a job's detail (or coming back from it) keeps the layout
+     the user picked instead of falling back to List. Each view still keeps
+     its own state (all restored by useListStatePersistence). */
+  const setDisplayModeEverywhere = (mode: ListDisplayMode) => {
+    setJobListDisplayMode(mode);
+    setMatchDisplayMode(mode);
+    setResultsDisplayMode(mode);
+  };
   const [historyListScrollRequest, setHistoryListScrollRequest] = useState(0);
   // The rating pills (All / Rating 10 / 9 – 7 / Below 7) — Resume Scoring's
   // Exact / Partial / No Match pills: a filter of their own, independent of
@@ -1480,6 +1493,10 @@ export default function AITalentMatchPage({
   } | null>(null);
   // App-wide scoring progress popup — scoring started here is tracked there.
   const scoringProgress = useScoringProgress();
+  // Batches started from this page, until they settle — then the Scored
+  // status is reloaded in place (the effect after the scored-ids fetch).
+  const myScoringBatches = useRef<Set<string>>(new Set());
+  const [scoredRefreshTick, setScoredRefreshTick] = useState(0);
 
   // Version selection for scoring (single candidate)
   const [showVersionSelectForScoring, setShowVersionSelectForScoring] = useState(false);
@@ -1878,7 +1895,32 @@ export default function AITalentMatchPage({
       }
     };
     fetchScored();
-  }, [selectedHistoryItem, selectedJob, viewMode]);
+  }, [selectedHistoryItem, selectedJob, viewMode, scoredRefreshTick]);
+
+  /* Scoring started here no longer leaves the page, so once a batch it
+     started settles (or is dismissed from the popup), reload every "Scored"
+     source — the per-job map behind View by Job's Scored Status / "N of M
+     scored", the tenant-wide set, the open job's set and the cached
+     scorecards — so the rows flip to Scored in place. */
+  useEffect(() => {
+    if (myScoringBatches.current.size === 0) return;
+    const jobsById = new Map(scoringProgress.activeScoringJobs.map(j => [j.jobId, j]));
+    const settled = Array.from(myScoringBatches.current).filter(id => {
+      const job = jobsById.get(id);
+      return !job || (job.queued === 0 && job.processing === 0);
+    });
+    if (settled.length === 0) return;
+    settled.forEach(id => myScoringBatches.current.delete(id));
+    void (async () => {
+      const scored = await loadAllScoredResumeIds();
+      setAllScoredResumeIds(scored.ids);
+      setScoredResumeIdsByJd(scored.byJd);
+    })();
+    scoreDetailRequests.current.clear();
+    setScoreDetailsByJd({});
+    setScoredRefreshTick(t => t + 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scoringProgress.activeScoringJobs]);
 
   useEffect(() => {
     const hydrateSelectedHistory = async () => {
@@ -2223,9 +2265,10 @@ export default function AITalentMatchPage({
         candidateName: c.name || 'Unknown',
       }));
 
-      // Scoring lands on the JOB's own page (its Scored Resumes tab), not on
-      // Resume Scoring. Progress rides the app-wide scoring popup, which
-      // follows the user there.
+      // The recruiter STAYS on AI Talent Match: progress rides the app-wide
+      // scoring popup, and the rows' Scored status refreshes when the batch
+      // settles (see `myScoringBatches`). The job's Scored Resumes tab is
+      // only the popup's "view results" target.
       const jobScoredResumesUrl = `/recruitment/job-details?id=${encodeURIComponent(jobId)}&tab=scored-resumes`;
 
       if (newResumeIds.length === 0) {
@@ -2233,7 +2276,6 @@ export default function AITalentMatchPage({
         toast.info(
           `${alreadyScoredItems.length === 1 ? 'This resume is' : `All ${alreadyScoredItems.length} resumes are`} already scored for "${jobTitle}".`,
         );
-        router.push(jobScoredResumesUrl);
         return;
       }
 
@@ -2247,11 +2289,11 @@ export default function AITalentMatchPage({
         items: resumeItems,
         returnUrl: jobScoredResumesUrl,
       });
+      myScoringBatches.current.add(response.batch_id);
       toast.success(
         `Scoring started for ${newResumeIds.length} resume${newResumeIds.length === 1 ? '' : 's'}` +
         (alreadyScoredItems.length > 0 ? ` (${alreadyScoredItems.length} already scored)` : '') + '.',
       );
-      router.push(jobScoredResumesUrl);
     } catch (error: any) {
       console.error('Failed to start scoring:', error);
       toast.error(error.message || 'Failed to start scoring');
@@ -2583,6 +2625,8 @@ export default function AITalentMatchPage({
     if (!params.has(RESUME_INVITE_PARAM)) return;
     const h = readInviteHandoff();
     if (h && h.source !== 'ai-talent-match') return;
+    // One candidate's resume page started it — that page finishes it.
+    if (h && h.origin === 'detail') return;
     // Drop the marker so a reload doesn't run this again.
     params.delete(RESUME_INVITE_PARAM);
     const q = params.toString();
@@ -3594,6 +3638,68 @@ export default function AITalentMatchPage({
     };
 
     /* ---- View by Candidates selection (Resume Scoring's) ---- */
+    /** One matched job's ⋮ items under a candidate — Preview Resume, Score
+     *  Resume / View Scorecard, the invites. Shared by the List view's inner
+     *  table and the Grid view's opened card, so both offer the same. */
+    const candJobMenuItems = (
+      row: CandidateMatchRow,
+      job: CandidateMatchRow['jobs'][number],
+      jobScoreId: string | undefined,
+      candScoreNav: ScoreRef[],
+    ) => (
+      <>
+        <DropdownMenuItem
+          className={actionsMenuItemClass}
+          disabled={!job.resumeId}
+          onSelect={() => job.resumeId && setPreviewResume({ id: job.resumeId, name: row.name || 'Resume' })}
+        >
+          <Eye className="w-4 h-4 text-menu-icon-view" />
+          <span className={MENU_ITEM_SCALE_CLASS}>Preview Resume</span>
+        </DropdownMenuItem>
+        {jobScoreId ? (
+          /* Already scored for this job — open that scorecard. */
+          <DropdownMenuItem
+            className={actionsMenuItemClass}
+            onSelect={() => openScoreDetail(job.jobId, job.jobTitle, jobScoreId, candScoreNav)}
+          >
+            <FileText className="w-4 h-4 text-menu-icon-score" />
+            <span className={MENU_ITEM_SCALE_CLASS}>View Scorecard</span>
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem
+            className={`${actionsMenuItemClass} ${!canRunScoring ? 'opacity-50' : ''}`}
+            disabled={!job.resumeId}
+            title={!canRunScoring ? 'You do not have permission to score resumes' : undefined}
+            onSelect={() => {
+              if (!canRunScoring) {
+                toast.error('You do not have permission to score resumes');
+                return;
+              }
+              void scoreJobMatchCandidate(job);
+            }}
+          >
+            <ClipboardList className="w-4 h-4 text-menu-icon-score" />
+            <span className={MENU_ITEM_SCALE_CLASS}>Score Resume</span>
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuSeparator className="my-1 bg-gray-100" />
+        {renderRowInviteItems(
+          {
+            key: `${job.historyId}::${job.candidateId ?? ''}`,
+            historyId: job.historyId,
+            jobId: job.jobId,
+            name: row.name || 'Candidate',
+            email: row.email,
+            phone: row.phone,
+            title: row.title,
+            resumeId: job.resumeId,
+          },
+          'candidates',
+          job.jobTitle,
+        )}
+      </>
+    );
+
     const candRowsOf = (row: CandidateMatchRow, only?: Set<string>): MatchInviteRow[] =>
       bandJobsOf(row.jobs)
         .filter(j => !only || only.has(j.historyId))
@@ -4200,7 +4306,7 @@ export default function AITalentMatchPage({
                 />
                 <ListViewToggle
                   value={matchDisplayMode}
-                  onChange={setMatchDisplayMode}
+                  onChange={setDisplayModeEverywhere}
                   className="h-[38px] !border-brand-blue/10"
                 />
               </ListToolbar>
@@ -4668,55 +4774,7 @@ export default function AITalentMatchPage({
                                                       </button>
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent align="end" className="w-60 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
-                                                      <DropdownMenuItem
-                                                        className={actionsMenuItemClass}
-                                                        disabled={!job.resumeId}
-                                                        onSelect={() => job.resumeId && setPreviewResume({ id: job.resumeId, name: row.name || 'Resume' })}
-                                                      >
-                                                        <Eye className="w-4 h-4 text-menu-icon-view" />
-                                                        <span className={MENU_ITEM_SCALE_CLASS}>Preview Resume</span>
-                                                      </DropdownMenuItem>
-                                                      {jobScoreId ? (
-                                                        /* Already scored for this job — open that scorecard. */
-                                                        <DropdownMenuItem
-                                                          className={actionsMenuItemClass}
-                                                          onSelect={() => openScoreDetail(job.jobId, job.jobTitle, jobScoreId, candScoreNav)}
-                                                        >
-                                                          <FileText className="w-4 h-4 text-menu-icon-score" />
-                                                          <span className={MENU_ITEM_SCALE_CLASS}>View Scorecard</span>
-                                                        </DropdownMenuItem>
-                                                      ) : (
-                                                        <DropdownMenuItem
-                                                          className={`${actionsMenuItemClass} ${!canRunScoring ? 'opacity-50' : ''}`}
-                                                          disabled={!job.resumeId}
-                                                          title={!canRunScoring ? 'You do not have permission to score resumes' : undefined}
-                                                          onSelect={() => {
-                                                            if (!canRunScoring) {
-                                                              toast.error('You do not have permission to score resumes');
-                                                              return;
-                                                            }
-                                                            void scoreJobMatchCandidate(job);
-                                                          }}
-                                                        >
-                                                          <ClipboardList className="w-4 h-4 text-menu-icon-score" />
-                                                          <span className={MENU_ITEM_SCALE_CLASS}>Score Resume</span>
-                                                        </DropdownMenuItem>
-                                                      )}
-                                                      <DropdownMenuSeparator className="my-1 bg-gray-100" />
-                                                      {renderRowInviteItems(
-                                                        {
-                                                          key: `${job.historyId}::${job.candidateId ?? ''}`,
-                                                          historyId: job.historyId,
-                                                          jobId: job.jobId,
-                                                          name: row.name || 'Candidate',
-                                                          email: row.email,
-                                                          phone: row.phone,
-                                                          title: row.title,
-                                                          resumeId: job.resumeId,
-                                                        },
-                                                        'candidates',
-                                                        job.jobTitle,
-                                                      )}
+                                                      {candJobMenuItems(row, job, jobScoreId, candScoreNav)}
                                                     </DropdownMenuContent>
                                                   </DropdownMenu>
                                                   {jobScoreId ? (
@@ -4819,18 +4877,6 @@ export default function AITalentMatchPage({
                             </button>
                             {row.email && <div className="text-xs text-gray-500 dark:text-slate-500 truncate">{row.email}</div>}
                           </div>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); toggleCandidateGroupExpanded(row.key); }}
-                            aria-label={isExpanded ? 'Collapse' : 'Expand'}
-                            title={isExpanded ? 'Collapse' : 'Expand'}
-                            className={`inline-flex items-center justify-center w-9 h-9 rounded-lg border transition-colors flex-shrink-0 ${
-                              isExpanded
-                                ? 'border-brand-blue/40 bg-brand-blue/5 text-brand-blue'
-                                : 'border-gray-200 dark:border-slate-700 text-gray-400 hover:border-brand-blue/30 hover:text-brand-blue'
-                            }`}
-                          >
-                            <ChevronRight className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
-                          </button>
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2 mb-2">
@@ -4851,54 +4897,136 @@ export default function AITalentMatchPage({
                           {renderJobTitlesCell(row)}
                         </div>
 
-                        <div className="text-xs text-gray-500 dark:text-slate-500 mb-2">
-                          Latest Matched: {formatISTDate(latestJob.matchedAt.toISOString())} · {formatISTTime(latestJob.matchedAt.toISOString())}
+                        {/* Footer (Resume Scoring's grid card): Latest Matched on the
+                            left, ▾ (open this candidate's jobs) and ⋮ on the right. */}
+                        <div className="mt-1 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex-1 min-w-0 text-xs text-gray-500 dark:text-slate-500">
+                            <div className="text-gray-400 uppercase tracking-wide text-2xs">Latest Matched</div>
+                            <div className="truncate">
+                              <span className="text-gray-700 dark:text-slate-300">{formatISTDate(latestJob.matchedAt.toISOString())}</span>{' '}
+                              <span className="text-gray-400">{formatISTTime(latestJob.matchedAt.toISOString())}</span>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => toggleCandidateGroupExpanded(row.key)}
+                            aria-expanded={isExpanded}
+                            aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                            title={isExpanded ? 'Collapse' : 'Expand'}
+                            className={isExpanded ? ROW_ACTION_BUTTON_ACTIVE_CLASS : ROW_ACTION_BUTTON_CLASS}
+                          >
+                            <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                          </button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button type="button" aria-label="Actions" title="Actions" className={ROW_ACTION_BUTTON_CLASS}>
+                                <MoreVertical className="w-4 h-4" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-52 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
+                              <DropdownMenuItem className={actionsMenuItemClass} onSelect={() => openCandidateResume(row, sortedCandidateRows)}>
+                                <Eye className="w-4 h-4 text-menu-icon-view" />
+                                <span className={MENU_ITEM_SCALE_CLASS}>View Resume</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem className={actionsMenuItemClass} onSelect={() => handleAttachmentsClick(row.best)}>
+                                <Paperclip className="w-4 h-4 text-menu-icon-download" />
+                                <span className={MENU_ITEM_SCALE_CLASS}>Attachments</span>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
 
-                        <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => openCandidateResume(row, sortedCandidateRows)}
-                            title="View Resume"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                            View
-                          </Button>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => handleAttachmentsClick(row.best)}
-                            title="Attachments"
-                          >
-                            <Paperclip className="w-3.5 h-3.5" />
-                            Attachments
-                          </Button>
-                        </div>
-
-                        {isExpanded && (
-                          <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-800 space-y-2 cursor-default" onClick={(e) => e.stopPropagation()}>
-                            {pageCandidateJobs(row.key, innerJobsOf(row.key, sortedJobs)).map(job => (
-                              <div key={job.historyId} className="flex items-center justify-between gap-2">
-                                <div className="min-w-0">
-                                  <div className="text-sm text-gray-700 dark:text-slate-300 truncate">{job.jobTitle}</div>
-                                  <div className="flex items-center gap-2 mt-0.5">
-                                    <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold border ${candidateScoreBadgeClass(job.score)}`}>
-                                      {toMatchRating(job.score)}
-                                    </span>
-                                    <span className="text-xs text-gray-500 dark:text-slate-500">
-                                      {job.matchedByName || 'System'} · {formatISTDate(job.matchedAt.toISOString())}
-                                    </span>
+                        {/* The candidate's matched jobs, opened in place — the grid
+                            counterpart of the list's inner table: one card per job,
+                            each with its tick and its own ⋮ (Preview, Score /
+                            View Scorecard, invites). */}
+                        {isExpanded && (() => {
+                          const gridCandSelected = selectedCandKeys.has(row.key);
+                          const gridAllJobIds = bandJobsOf(row.jobs).map(j => j.historyId);
+                          const gridTickedJobIds = gridCandSelected ? gridAllJobIds : (partialCandJobs[row.key] ?? []);
+                          const candScoreNav: ScoreRef[] = innerJobsOf(row.key, sortedJobs)
+                            .map(j => ({ jdId: j.jobId, scoreId: scoreIdFor(j.jobId, j.resumeId) || '' }))
+                            .filter(r => r.scoreId);
+                          return (
+                          <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-800 cursor-default" onClick={(e) => e.stopPropagation()}>
+                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+                              {pageCandidateJobs(row.key, innerJobsOf(row.key, sortedJobs)).map(job => {
+                                const jobRecord = jobs.find(j => j.id === job.jobId);
+                                const jobScoreId = scoreIdFor(job.jobId, job.resumeId);
+                                const ticked = gridTickedJobIds.includes(job.historyId);
+                                return (
+                                  <div
+                                    key={job.historyId}
+                                    onClick={() => (jobScoreId ? openScoreDetail(job.jobId, job.jobTitle, jobScoreId, candScoreNav) : openCandidateMatch(job.historyId))}
+                                    title={jobScoreId ? 'View Scorecard' : 'Open Match'}
+                                    className={`rounded-lg border p-3 cursor-pointer transition-colors ${
+                                      ticked ? 'border-brand-blue/40 bg-brand-blue/[0.06]' : 'border-gray-200 dark:border-slate-700 bg-gray-50/60 dark:bg-slate-800/30 hover:border-brand-blue/30 hover:bg-white dark:hover:bg-slate-900'
+                                    }`}
+                                  >
+                                    <div className="flex items-start gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          const next = ticked
+                                            ? gridTickedJobIds.filter(id => id !== job.historyId)
+                                            : [...gridTickedJobIds, job.historyId];
+                                          setCandJobSelection(row.key, next, gridAllJobIds);
+                                        }}
+                                        aria-pressed={ticked}
+                                        aria-label={ticked ? 'Deselect this job match' : 'Select this job match'}
+                                        className="inline-flex p-0.5 mt-0.5 hover:bg-gray-100 dark:hover:bg-slate-800 rounded flex-shrink-0"
+                                      >
+                                        {ticked ? <CheckSquare className="w-4 h-4 text-brand-blue" /> : <Square className="w-4 h-4 text-gray-400" />}
+                                      </button>
+                                      <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                          {jobRecord?.jobId && <JobIdBadge>{jobRecord.jobId}</JobIdBadge>}
+                                          <span className="text-sm font-medium text-gray-800 dark:text-slate-200 truncate" title={job.jobTitle}>{job.jobTitle}</span>
+                                          <span className="inline-flex px-1.5 py-0.5 rounded-full text-2xs border bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-500/30 shrink-0">
+                                            v{jobRecord?.currentVersion ?? 1}
+                                          </span>
+                                        </div>
+                                        <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                                          <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold border ${candidateScoreBadgeClass(job.score)}`}>
+                                            {toMatchRating(job.score)}
+                                          </span>
+                                          {jobScoreId ? (
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-success-subtle text-success border border-success/20">
+                                              <CheckCircle2 className="w-3 h-3" />
+                                              Scored
+                                            </span>
+                                          ) : (
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700">
+                                              <XCircle className="w-3 h-3" />
+                                              Not Scored
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="mt-1 flex items-center gap-1 text-xs text-gray-500 dark:text-slate-500">
+                                          <Calendar className="w-3 h-3" />
+                                          <span className="truncate">{job.matchedByName || 'System'} · {formatISTDate(job.matchedAt.toISOString())} <span className="text-gray-400">{formatISTTime(job.matchedAt.toISOString())}</span></span>
+                                        </div>
+                                      </div>
+                                      {/* Stops clicks here, as the list's Actions cell does — the
+                                          menu's portal clicks still bubble through React. */}
+                                      <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+                                        <DropdownMenu>
+                                          <DropdownMenuTrigger asChild>
+                                            <button type="button" aria-label="Actions" title="Actions" className={ROW_ACTION_BUTTON_CLASS}>
+                                              <MoreVertical className="w-4 h-4" />
+                                            </button>
+                                          </DropdownMenuTrigger>
+                                          <DropdownMenuContent align="end" className="w-60 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
+                                            {candJobMenuItems(row, job, jobScoreId, candScoreNav)}
+                                          </DropdownMenuContent>
+                                        </DropdownMenu>
+                                      </div>
+                                    </div>
                                   </div>
-                                </div>
-                                <button
-                                  onClick={() => openCandidateMatch(job.historyId)}
-                                  className="flex-shrink-0 text-sm font-medium text-brand-blue hover:text-brand-blue-2 hover:underline"
-                                >
-                                  Open Match
-                                </button>
-                              </div>
-                            ))}
+                                );
+                              })}
+                            </div>
                             <ListPagination
                               compact
                               currentPage={candidateJobsPageOf(row.key).page}
@@ -4909,7 +5037,8 @@ export default function AITalentMatchPage({
                               itemLabel="matched jobs"
                             />
                           </div>
-                        )}
+                          );
+                        })()}
                       </div>
                     );
                   })}
@@ -5102,7 +5231,7 @@ export default function AITalentMatchPage({
                   </div>
                 )}
 
-                <ListViewToggle value={matchDisplayMode} onChange={setMatchDisplayMode} className="ml-auto" />
+                <ListViewToggle value={matchDisplayMode} onChange={setDisplayModeEverywhere} className="ml-auto" />
               </div>
 
               {/* Same filter panel as "View by Candidates" — one filter set
@@ -5485,7 +5614,7 @@ export default function AITalentMatchPage({
                           <td className="text-center py-3 px-4 align-middle whitespace-nowrap">
                             {(() => {
                               const jobVersion = jobs.find(j => j.id === job.jobId)?.currentVersion
-                                ?? allMatchSessions.find(s => s.id === job.historyId)?.jd_current_version;
+                                ?? allMatchSessions.find(s => s.id === job.historyId)?.jd_version_number;
                               return jobVersion
                                 ? (
                                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs border bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-500/30">
@@ -5726,7 +5855,7 @@ export default function AITalentMatchPage({
             )}
             <ListViewToggle
               value={jobListDisplayMode}
-              onChange={setJobListDisplayMode}
+              onChange={setDisplayModeEverywhere}
               className="h-[38px] !border-brand-blue/10"
             />
           </ListToolbar>
@@ -6003,6 +6132,102 @@ export default function AITalentMatchPage({
                 toggleJobExpanded(jobKey);
               };
 
+              /* One candidate's state in this job's panel — shared by the
+                 table rows and the Grid cards. */
+              const candRowInfo = (c: (typeof pagedCandidates)[number]) => {
+                const ticked = tickedIds.includes(c.id);
+                const inviteRow = toInviteRow(item.id, item.jobId, c);
+                // Scored against THIS job — not merely scored for some job.
+                const scoreId = scoreIdFor(item.jobId, c.resumeId);
+                const scored = !!scoreId;
+                const summaryOpen = scored && expandedScoreKeys.has(`${item.jobId}::${scoreId}`);
+                // Prev / Next on the scorecard: this job's scored candidates, in table order.
+                const jobScoreNav: ScoreRef[] = panelCandidates
+                  .map(x => ({ jdId: item.jobId, scoreId: scoreIdFor(item.jobId, x.resumeId) || '' }))
+                  .filter(r => r.scoreId);
+                return { ticked, inviteRow, scoreId, scored, summaryOpen, jobScoreNav };
+              };
+              const toggleCandTick = (c: (typeof pagedCandidates)[number]) => {
+                const next = tickedIds.includes(c.id) ? tickedIds.filter(id => id !== c.id) : [...tickedIds, c.id];
+                setJobRowSelection(jobKey, next, allIds);
+              };
+              /* ⋮ (Preview / Score or View Scorecard / Invite) and ▾ (the score,
+                 inline) — the row's Actions cell and the card's footer. */
+              const renderCandActions = (c: (typeof pagedCandidates)[number]) => {
+                const { inviteRow, scoreId, scored, summaryOpen, jobScoreNav } = candRowInfo(c);
+                return (
+                <div className="inline-flex items-center gap-1.5">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label="Actions"
+                      title="Actions"
+                      className={ROW_ACTION_BUTTON_CLASS}
+                    >
+                      <MoreVertical className="w-4 h-4" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-60 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
+                    <DropdownMenuItem
+                      className={actionsMenuItemClass}
+                      disabled={!c.resumeId}
+                      onSelect={() => c.resumeId && setPreviewResume({ id: c.resumeId, name: c.name || 'Resume' })}
+                    >
+                      <Eye className="w-4 h-4 text-menu-icon-view" />
+                      <span className={MENU_ITEM_SCALE_CLASS}>Preview Resume</span>
+                    </DropdownMenuItem>
+                    {scored ? (
+                      /* Already scored against this job — open
+                         that scorecard instead of scoring again. */
+                      <DropdownMenuItem
+                        className={actionsMenuItemClass}
+                        onSelect={() => openScoreDetail(item.jobId, item.jobTitle, scoreId!, jobScoreNav)}
+                      >
+                        <FileText className="w-4 h-4 text-menu-icon-score" />
+                        <span className={MENU_ITEM_SCALE_CLASS}>View Scorecard</span>
+                      </DropdownMenuItem>
+                    ) : (
+                      <DropdownMenuItem
+                        className={`${actionsMenuItemClass} ${!canRunScoring ? 'opacity-50' : ''}`}
+                        disabled={!c.resumeId}
+                        title={!canRunScoring ? 'You do not have permission to score resumes' : undefined}
+                        onSelect={() => {
+                          if (!canRunScoring) {
+                            toast.error('You do not have permission to score resumes');
+                            return;
+                          }
+                          void scoreJobMatchCandidate({ historyId: item.id, jobId: item.jobId, resumeId: c.resumeId });
+                        }}
+                      >
+                        <ClipboardList className="w-4 h-4 text-menu-icon-score" />
+                        <span className={MENU_ITEM_SCALE_CLASS}>Score Resume</span>
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuSeparator className="my-1 bg-gray-100" />
+                    {renderRowInviteItems(inviteRow, 'job', item.jobTitle)}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                {/* ▾ — the score, inline (scored candidates only). */}
+                {scored ? (
+                  <button
+                    type="button"
+                    onClick={() => toggleScoreSummary(item.jobId, item.jobTitle, scoreId!)}
+                    aria-expanded={summaryOpen}
+                    aria-label={summaryOpen ? 'Hide score' : 'Show score'}
+                    title={summaryOpen ? 'Hide score' : 'Show score'}
+                    className={summaryOpen ? ROW_ACTION_BUTTON_ACTIVE_CLASS : ROW_ACTION_BUTTON_CLASS}
+                  >
+                    <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${summaryOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                ) : (
+                  <span /* unscored: an invisible ▾-sized slot, so ⋮ sits in one column on every row */ aria-hidden="true" className={`${ROW_ACTION_BUTTON_CLASS} invisible pointer-events-none`}>
+                    <ChevronDown className="w-4 h-4" />
+                  </span>
+                )}
+                </div>
+                );
+              };
               const inlineCandidatesPanel = isJobExpanded ? (
                 <div
                   onClick={(e) => e.stopPropagation()}
@@ -6019,6 +6244,108 @@ export default function AITalentMatchPage({
                     </p>
                   ) : (
                     <>
+                      {jobListDisplayMode === 'grid' ? (
+                        /* Grid: the page's List / Grid toggle reaches the opened
+                           job too — one card per candidate, the table row's
+                           content. A scored card opens / closes its score below
+                           it (spanning the row), as the table row does. */
+                        <div className="space-y-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const next = allPageTicked
+                                ? tickedIds.filter(id => !pageIds.includes(id))
+                                : Array.from(new Set([...tickedIds, ...pageIds]));
+                              setJobRowSelection(jobKey, next, allIds);
+                            }}
+                            aria-label={allPageTicked ? 'Deselect these candidates' : 'Select these candidates'}
+                            className="inline-flex items-center gap-1.5 px-1 py-0.5 text-xs font-medium text-gray-600 dark:text-slate-400 hover:text-brand-blue rounded"
+                          >
+                            {allPageTicked
+                              ? <CheckSquare className="w-4 h-4 text-brand-blue" />
+                              : <Square className="w-4 h-4 text-gray-400" />}
+                            Select all
+                          </button>
+                          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 items-start">
+                            {pagedCandidates.map(c => {
+                              const { ticked, scoreId, scored, summaryOpen, jobScoreNav } = candRowInfo(c);
+                              return (
+                                <div
+                                  key={c.id}
+                                  onClick={() => { if (scoreId) toggleScoreSummary(item.jobId, item.jobTitle, scoreId); }}
+                                  title={scored ? (summaryOpen ? 'Hide score' : 'Show score') : undefined}
+                                  className={`rounded-xl border p-3 flex flex-col gap-2.5 transition-colors ${scored ? 'cursor-pointer' : ''} ${
+                                    summaryOpen ? 'md:col-span-2 xl:col-span-3' : ''
+                                  } ${ticked || summaryOpen ? 'border-brand-blue/40 bg-brand-blue/[0.04]' : 'border-gray-200 dark:border-slate-700/60 bg-white dark:bg-slate-900 hover:border-brand-blue/30'}`}
+                                >
+                                  <div className="flex items-start gap-2.5">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => { e.stopPropagation(); toggleCandTick(c); }}
+                                      aria-pressed={ticked}
+                                      aria-label={ticked ? 'Deselect candidate' : 'Select candidate'}
+                                      className="inline-flex p-1 -ml-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded flex-shrink-0"
+                                    >
+                                      {ticked ? <CheckSquare className="w-4 h-4 text-brand-blue" /> : <Square className="w-4 h-4 text-gray-400" />}
+                                    </button>
+                                    <div className="min-w-0 flex-1">
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          openJobCandidateResume(item.jobId, item.jobTitle, c.resumeId, panelCandidates.map(x => x.resumeId));
+                                        }}
+                                        className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block truncate max-w-full"
+                                        title={c.name}
+                                      >
+                                        {c.name || 'Candidate'}
+                                      </button>
+                                      {c.email && <div className="text-xs text-gray-500 dark:text-slate-500 truncate">{c.email}</div>}
+                                    </div>
+                                    <span
+                                      title="Rating"
+                                      className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold border flex-shrink-0 ${candidateScoreBadgeClass(c.matchScore ?? 0)}`}
+                                    >
+                                      {toMatchRating(c.matchScore ?? 0)}
+                                    </span>
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-gray-500 dark:text-slate-400">
+                                    <span>Experience: <span className="text-gray-700 dark:text-slate-300">{c.experience || '-'}</span></span>
+                                    <span className="inline-flex items-center gap-1">
+                                      Resume
+                                      <span className="inline-flex px-1.5 py-0.5 rounded-full text-2xs border bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700">
+                                        v{c.resumeVersion ?? 1}
+                                      </span>
+                                    </span>
+                                  </div>
+                                  {/* Footer: Scored status left, ⋮ / ▾ right. Stops
+                                      clicks — the menu renders in a portal but React
+                                      still bubbles its clicks to the card. */}
+                                  <div className="mt-auto flex items-center justify-between gap-2" onClick={(e) => e.stopPropagation()}>
+                                    {scored ? (
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-success-subtle text-success border border-success/20">
+                                        <CheckCircle2 className="w-3 h-3" />
+                                        Scored
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700">
+                                        <XCircle className="w-3 h-3" />
+                                        Not Scored
+                                      </span>
+                                    )}
+                                    {renderCandActions(c)}
+                                  </div>
+                                  {summaryOpen && (
+                                    <div className="pt-3 border-t border-gray-100 dark:border-slate-700/60 cursor-default" onClick={(e) => e.stopPropagation()}>
+                                      {renderScoreSummary(item.jobId, item.jobTitle, scoreId!, jobScoreNav)}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : (
                       <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 overflow-hidden">
                         {/* The rows scroll inside this box; the header row stays put. */}
                         <div className="max-h-[360px] overflow-auto">
@@ -6052,16 +6379,7 @@ export default function AITalentMatchPage({
                             </thead>
                             <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
                               {pagedCandidates.map(c => {
-                                const ticked = tickedIds.includes(c.id);
-                                const inviteRow = toInviteRow(item.id, item.jobId, c);
-                                // Scored against THIS job — not merely scored for some job.
-                                const scoreId = scoreIdFor(item.jobId, c.resumeId);
-                                const scored = !!scoreId;
-                                const summaryOpen = scored && expandedScoreKeys.has(`${item.jobId}::${scoreId}`);
-                                // Prev / Next on the scorecard: this job's scored candidates, in table order.
-                                const jobScoreNav: ScoreRef[] = panelCandidates
-                                  .map(x => ({ jdId: item.jobId, scoreId: scoreIdFor(item.jobId, x.resumeId) || '' }))
-                                  .filter(r => r.scoreId);
+                                const { ticked, scoreId, scored, summaryOpen, jobScoreNav } = candRowInfo(c);
                                 return (
                                   <Fragment key={c.id}>
                                   <tr
@@ -6128,76 +6446,7 @@ export default function AITalentMatchPage({
                                       )}
                                     </td>
                                     <td className="px-3 py-2.5 align-middle text-right tf-sticky-col" onClick={(e) => e.stopPropagation()}>
-                                      <div className="inline-flex items-center gap-1.5">
-                                      <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                          <button
-                                            type="button"
-                                            aria-label="Actions"
-                                            title="Actions"
-                                            className={ROW_ACTION_BUTTON_CLASS}
-                                          >
-                                            <MoreVertical className="w-4 h-4" />
-                                          </button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end" className="w-60 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
-                                          <DropdownMenuItem
-                                            className={actionsMenuItemClass}
-                                            disabled={!c.resumeId}
-                                            onSelect={() => c.resumeId && setPreviewResume({ id: c.resumeId, name: c.name || 'Resume' })}
-                                          >
-                                            <Eye className="w-4 h-4 text-menu-icon-view" />
-                                            <span className={MENU_ITEM_SCALE_CLASS}>Preview Resume</span>
-                                          </DropdownMenuItem>
-                                          {scored ? (
-                                            /* Already scored against this job — open
-                                               that scorecard instead of scoring again. */
-                                            <DropdownMenuItem
-                                              className={actionsMenuItemClass}
-                                              onSelect={() => openScoreDetail(item.jobId, item.jobTitle, scoreId!, jobScoreNav)}
-                                            >
-                                              <FileText className="w-4 h-4 text-menu-icon-score" />
-                                              <span className={MENU_ITEM_SCALE_CLASS}>View Scorecard</span>
-                                            </DropdownMenuItem>
-                                          ) : (
-                                            <DropdownMenuItem
-                                              className={`${actionsMenuItemClass} ${!canRunScoring ? 'opacity-50' : ''}`}
-                                              disabled={!c.resumeId}
-                                              title={!canRunScoring ? 'You do not have permission to score resumes' : undefined}
-                                              onSelect={() => {
-                                                if (!canRunScoring) {
-                                                  toast.error('You do not have permission to score resumes');
-                                                  return;
-                                                }
-                                                void scoreJobMatchCandidate({ historyId: item.id, jobId: item.jobId, resumeId: c.resumeId });
-                                              }}
-                                            >
-                                              <ClipboardList className="w-4 h-4 text-menu-icon-score" />
-                                              <span className={MENU_ITEM_SCALE_CLASS}>Score Resume</span>
-                                            </DropdownMenuItem>
-                                          )}
-                                          <DropdownMenuSeparator className="my-1 bg-gray-100" />
-                                          {renderRowInviteItems(inviteRow, 'job', item.jobTitle)}
-                                        </DropdownMenuContent>
-                                      </DropdownMenu>
-                                      {/* ▾ — the score, inline (scored candidates only). */}
-                                      {scored ? (
-                                        <button
-                                          type="button"
-                                          onClick={() => toggleScoreSummary(item.jobId, item.jobTitle, scoreId!)}
-                                          aria-expanded={summaryOpen}
-                                          aria-label={summaryOpen ? 'Hide score' : 'Show score'}
-                                          title={summaryOpen ? 'Hide score' : 'Show score'}
-                                          className={summaryOpen ? ROW_ACTION_BUTTON_ACTIVE_CLASS : ROW_ACTION_BUTTON_CLASS}
-                                        >
-                                          <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${summaryOpen ? 'rotate-180' : ''}`} />
-                                        </button>
-                                      ) : (
-                                        <span /* unscored: an invisible ▾-sized slot, so ⋮ sits in one column on every row */ aria-hidden="true" className={`${ROW_ACTION_BUTTON_CLASS} invisible pointer-events-none`}>
-                                          <ChevronDown className="w-4 h-4" />
-                                        </span>
-                                      )}
-                                      </div>
+                                      {renderCandActions(c)}
                                     </td>
                                   </tr>
                                   {summaryOpen && (
@@ -6214,6 +6463,7 @@ export default function AITalentMatchPage({
                           </table>
                         </div>
                       </div>
+                      )}
                       <ListPagination
                         compact
                         currentPage={candidateJobsPageOf(pagingKey).page}
@@ -6300,7 +6550,7 @@ export default function AITalentMatchPage({
                           const raw = jobData.status || 'published';
                           const label = getDisplayStatus(
                             raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase(),
-                            jobData.currentVersion,
+                            jobData.publishCount,
                           );
                           if (label === 'Published' || label === 'Republished') return null;
                           const tone = getStatusConfig(label);
@@ -6477,7 +6727,8 @@ export default function AITalentMatchPage({
                           const j = jobs.find(x => x.id === (session.jd_id || item.jobId));
                           return j ? {
                             status: j.status,
-                            currentVersion: j.currentVersion,
+                            // The status label's republish counter, not the job version.
+                            currentVersion: j.publishCount,
                             experience: j.experience,
                             industryType: j.industryType,
                             location: j.location,
@@ -7253,16 +7504,23 @@ export default function AITalentMatchPage({
     // Each version's JD status in the app's shared vocabulary and colours
     // (Published / Republished / Draft / Disabled / Archived…), from the
     // lineage, else the job list for a version the lineage hasn't covered.
-    const versionStatusLabel = (jdId: string, number: number): string | undefined => {
-      const raw = resultsLineage.find(l => l.id === jdId)?.status || jobs.find(j => j.id === jdId)?.status;
+    // "Republished" comes from that version's republish counter, not its
+    // version number — a forked v2 is "Published" until it is republished.
+    const versionStatusLabel = (jdId: string): string | undefined => {
+      const lineageEntry = resultsLineage.find(l => l.id === jdId);
+      const jobEntry = jobs.find(j => j.id === jdId);
+      const raw = lineageEntry?.status || jobEntry?.status;
       if (!raw) return undefined;
-      return getDisplayStatus(raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase(), number);
+      return getDisplayStatus(
+        raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase(),
+        lineageEntry?.current_version ?? jobEntry?.publishCount,
+      );
     };
     const versionDropdownOptions = [
       ...matchedVersionOptions.map(o => ({ ...o, matched: true as const })),
       ...unmatchedVersionOptions.map(o => ({ ...o, matched: false as const })),
     ]
-      .map(o => ({ ...o, statusLabel: versionStatusLabel(o.jdId, o.number) }))
+      .map(o => ({ ...o, statusLabel: versionStatusLabel(o.jdId) }))
       .sort((a, b) => b.number - a.number);
 
     // Reset what belongs to the previous list — selection, search, filters —
@@ -7830,7 +8088,7 @@ export default function AITalentMatchPage({
               >
                 Export
               </Button>
-              <ListViewToggle value={resultsDisplayMode} onChange={setResultsDisplayMode} />
+              <ListViewToggle value={resultsDisplayMode} onChange={setDisplayModeEverywhere} />
             </ListToolbar>
 
             {selectedCandidates.length > 0 && availableUnits !== null && selectedCandidates.length > availableUnits && (

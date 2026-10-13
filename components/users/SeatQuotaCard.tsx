@@ -16,6 +16,8 @@ import {
 } from 'lucide-react';
 import { useQuota } from '@/contexts/QuotaContext';
 import AddSeatsModal from './AddSeatsModal';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -136,15 +138,15 @@ export default function SeatQuotaCard({ onRefresh, onDeactivateExcess, compact =
   if (isInvalidData) {
     const usersToDeactivate = seatData.used - seatData.limit;
     return (
-      <div className={`rounded-xl border border-destructive-line bg-white shadow-sm ring-1 ring-destructive-line ${compact ? 'p-3 sm:p-4' : 'p-3 sm:p-4 lg:p-5'}`}>
+      <div className={`rounded-xl border border-destructive-line bg-white shadow-sm ring-1 ring-destructive-line ${compact ? 'p-4' : 'p-4 sm:p-5'}`}>
         <div className="flex items-start gap-2 sm:gap-3">
-          <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center bg-gradient-to-br from-red-500 to-red-600 shadow-md shadow-red-500/25 ring-1 ring-white/10 flex-shrink-0">
+          <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center bg-destructive shadow-md shadow-red-500/25 ring-1 ring-white/10 flex-shrink-0">
             <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="text-sm sm:text-base font-semibold text-gray-900">User Limit Exceeded</h3>
-              <span className="px-2 py-0.5 rounded-full text-xs font-medium ring-1 ring-destructive-line bg-destructive-subtle text-destructive">Action required</span>
+              <Badge variant="destructive">Action required</Badge>
             </div>
             <p className="text-xs sm:text-sm text-gray-600 mt-1">
               You have {seatData.used} active users, but your plan allows only {seatData.limit}.
@@ -155,20 +157,22 @@ export default function SeatQuotaCard({ onRefresh, onDeactivateExcess, compact =
             </p>
             {onDeactivateExcess && (
               <div className="mt-2 sm:mt-3 flex flex-wrap gap-2">
-                <button
+                <Button
+                  variant="destructive"
+                  size="sm"
                   onClick={() => onDeactivateExcess(usersToDeactivate)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white text-xs font-medium rounded-lg transition-all shadow-md shadow-red-500/25 ring-1 ring-white/10"
+                  icon={<UserMinus className="w-3.5 h-3.5" />}
                 >
-                  <UserMinus className="w-3.5 h-3.5" />
                   Deactivate {usersToDeactivate} Excess User{usersToDeactivate > 1 ? 's' : ''}
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={() => window.location.href = '/subscription/current-plan'}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-brand-blue/30 text-xs font-medium rounded-lg transition-all"
+                  icon={<TrendingUp className="w-3.5 h-3.5" />}
                 >
-                  <TrendingUp className="w-3.5 h-3.5" />
                   Upgrade Plan
-                </button>
+                </Button>
               </div>
             )}
           </div>
@@ -179,7 +183,7 @@ export default function SeatQuotaCard({ onRefresh, onDeactivateExcess, compact =
 
   return (
     <>
-      <div className={`rounded-xl border border-gray-200 bg-white shadow-sm hover:shadow-md hover:border-brand-blue/30 transition-all ${compact ? 'p-3 sm:p-4' : 'p-3 sm:p-4 lg:p-5'}`}>
+      <div className={`rounded-xl border border-gray-200 bg-white shadow-sm hover:shadow-md hover:border-brand-blue/30 transition-all ${compact ? 'p-4' : 'p-4 sm:p-5'}`}>
         {/* Header */}
         <div className="flex items-start justify-between mb-3 sm:mb-4">
           <div className="flex items-center gap-2 sm:gap-3">
@@ -189,7 +193,7 @@ export default function SeatQuotaCard({ onRefresh, onDeactivateExcess, compact =
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-sm sm:text-base font-semibold text-gray-900">User Seats</h3>
-                <span className="px-2 py-0.5 rounded-full text-xs font-medium ring-1 ring-destructive-line bg-destructive-subtle text-destructive">At limit</span>
+                <Badge variant="destructive">At limit</Badge>
               </div>
               <p className="text-xs sm:text-sm text-gray-500 mt-0.5">{planName}</p>
             </div>
@@ -213,7 +217,7 @@ export default function SeatQuotaCard({ onRefresh, onDeactivateExcess, compact =
             <span className="font-semibold text-destructive">100%</span>
           </div>
           <div className="h-2 sm:h-2.5 bg-gray-100 rounded-full overflow-hidden ring-1 ring-gray-200/60">
-            <div className="h-full bg-gradient-to-r from-red-500 to-red-600 transition-all duration-300 w-full" />
+            <div className="h-full bg-destructive transition-all duration-300 w-full" />
           </div>
         </div>
 
@@ -231,8 +235,8 @@ export default function SeatQuotaCard({ onRefresh, onDeactivateExcess, compact =
 
         {/* Exhausted Warning - always show since card only appears when at limit */}
         <div className="mb-3 sm:mb-4 p-3 bg-destructive-subtle border border-destructive-line rounded-xl ring-1 ring-destructive-line">
-          <div className="flex items-start gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center flex-shrink-0 shadow-sm shadow-red-500/25">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-lg bg-destructive flex items-center justify-center flex-shrink-0 shadow-sm shadow-red-500/25">
               <AlertTriangle className="w-4 h-4 text-white" />
             </div>
             <div className="flex-1">
@@ -247,7 +251,7 @@ export default function SeatQuotaCard({ onRefresh, onDeactivateExcess, compact =
 
         {/* Action Buttons */}
         {isTrial ? (
-          <div className="flex items-start gap-2 p-3 bg-brand-orange/5 border border-brand-orange/20 rounded-xl ring-1 ring-brand-orange/10">
+          <div className="flex items-start gap-3 p-3 bg-brand-orange/5 border border-brand-orange/20 rounded-xl ring-1 ring-brand-orange/10">
             <div className="w-8 h-8 rounded-lg bg-brand-orange flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-orange/25">
               <AlertTriangle className="w-4 h-4 text-white" />
             </div>
@@ -267,20 +271,22 @@ export default function SeatQuotaCard({ onRefresh, onDeactivateExcess, compact =
           </div>
         ) : (
           <div className="flex flex-wrap gap-2">
-            <button
+            <Button
+              variant="primary"
+              size="sm"
               onClick={() => setShowAddonModal(true)}
-              className="inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg font-medium text-xs sm:text-sm transition-all bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+              icon={<Plus className="w-3 h-3 sm:w-3.5 sm:h-3.5" />}
             >
-              <Plus className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
               Add Seats
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => window.location.href = '/subscription/current-plan'}
-              className="px-3 sm:px-4 py-1.5 sm:py-2 border border-gray-200 text-gray-700 rounded-lg font-medium text-xs sm:text-sm hover:bg-gray-50 hover:border-brand-blue/30 hover:text-brand-blue transition-all flex items-center gap-1.5"
+              icon={<TrendingUp className="w-3 h-3 sm:w-3.5 sm:h-3.5" />}
             >
-              <TrendingUp className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
               Upgrade
-            </button>
+            </Button>
           </div>
         )}
       </div>

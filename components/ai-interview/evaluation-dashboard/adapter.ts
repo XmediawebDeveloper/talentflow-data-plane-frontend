@@ -1599,6 +1599,9 @@ function buildPerQuestionDetailsFromHistory(
       // origQ is the backend's authoritative slot counter — stable regardless
       // of how many rows were filtered from the raw history array.
       qNum: origQ,
+      // Chronological position in question_history — the true ask order
+      // across sections (ranked into askedNum after section bucketing).
+      askedOrder: displayQ,
       section,
       question: String(q?.question || ''),
       answer: String(q?.answer || ''),
@@ -2665,8 +2668,20 @@ export function buildDashboardData(params: {
     // displayed slot numbers should mirror the plan slot numbers.
     // This also makes Analysis Q5 = Question Distribution slot 5,
     // so the recruiter cross-references map 1:1.
+    //
+    // Interview-wide ask order (askedNum) is ranked BEFORE the renumber, from
+    // the history position when the builder stamped one, else the builder's
+    // chronological qNum. Un-reached rows rank after every asked row.
+    const ranked = [...buckets.mth, ...buckets.nth, ...buckets.hr]
+      .map((row, i) => ({ row, i }))
+      .sort((a, b) =>
+        Number(!!a.row.notDelivered) - Number(!!b.row.notDelivered)
+        || (a.row.askedOrder ?? a.row.qNum) - (b.row.askedOrder ?? b.row.qNum)
+        || a.i - b.i);
+    const askedNumOf = new Map<PerQuestionDetail, number>();
+    ranked.forEach(({ row }, rank) => askedNumOf.set(row, rank + 1));
     for (const key of ['mth', 'nth', 'hr'] as const) {
-      buckets[key] = buckets[key].map((row, idx) => ({ ...row, qNum: idx + 1 }));
+      buckets[key] = buckets[key].map((row, idx) => ({ ...row, qNum: idx + 1, askedNum: askedNumOf.get(row) }));
     }
 
     return [...buckets.mth, ...buckets.nth, ...buckets.hr];

@@ -5,6 +5,10 @@ import OrganizationTabs from '@/components/organization/OrganizationTabs';
 import CreateRoleForm from './CreateRoleForm';
 import EditRoleForm from './EditRoleForm';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { PageHeader } from '@/components/ui/page-header';
+import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
@@ -19,9 +23,7 @@ import {
   Lock,
   Eye,
   X,
-  Layers3,
   Sparkles,
-  ArrowUpRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
@@ -366,73 +368,38 @@ export default function RoleManagement() {
   return (
     <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Roles & Permissions' }]} />
         <OrganizationTabs />
-        <section className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
-          <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />
-          <div className="pointer-events-none absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
+        <div className="-mt-5 rounded-b-xl border border-t-0 border-gray-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 p-4 sm:p-5">
+        <PageHeader
+          icon={<Shield className="h-5 w-5" />}
+          title="Role Management"
+          description="Manage role structure, permission coverage, and access activity with the same operational guardrails used across the dashboard."
+          actions={
+            <Button
+              variant="primary"
+              onClick={() => {
+                if (!canManageRoles) {
+                  toast.error('You do not have permission to manage roles');
+                  return;
+                }
+                setCreateOpen(true);
+              }}
+              aria-disabled={!canManageRoles}
+              title={!canManageRoles ? 'You do not have permission to manage roles' : ''}
+              icon={<Plus className="h-4 w-4" />}
+            >
+              Create Role
+            </Button>
+          }
+        />
 
-          <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl">
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
-                <Layers3 className="h-3.5 w-3.5 text-brand-orange" />
-                Organization access control
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15 backdrop-blur-sm">
-                  <Shield className="h-6 w-6 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Role Management</h1>
-                  <p className="mt-2 max-w-2xl text-sm text-white/80 sm:text-base">
-                    Manage role structure, permission coverage, and access activity with the same operational guardrails used across the dashboard.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <div className="grid grid-cols-2 gap-2 text-sm text-white/85 sm:min-w-[240px]">
-                <div className="rounded-xl bg-white/10 px-3 py-2 ring-1 ring-white/10 backdrop-blur-sm">
-                  <div className="text-xs text-white/65">Roles</div>
-                  <div className="mt-1 font-semibold">{roles.length}</div>
-                </div>
-                <div className="rounded-xl bg-white/10 px-3 py-2 ring-1 ring-white/10 backdrop-blur-sm">
-                  <div className="text-xs text-white/65">Permissions</div>
-                  <div className="mt-1 font-semibold">{managedPermissionsCount}</div>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  if (!canManageRoles) {
-                    toast.error('You do not have permission to manage roles');
-                    return;
-                  }
-                  setCreateOpen(true);
-                }}
-                aria-disabled={!canManageRoles}
-                title={!canManageRoles ? 'You do not have permission to manage roles' : ''}
-                className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium shadow-md transition-all ${
-                  canManageRoles
-                    ? 'bg-white text-brand-blue hover:-translate-y-0.5 hover:shadow-lg'
-                    : 'bg-white/60 text-brand-blue/50 cursor-not-allowed'
-                }`}
-              >
-                <Plus className="h-4 w-4" />
-                Create Role
-                <ArrowUpRight className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-        </section>
-
-        <div className="mb-6 rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-2 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+        <div className="mb-5 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-2 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
           <div className="grid gap-2 sm:grid-cols-2">
             <button
               onClick={() => setActiveTab('roles')}
-              className={`flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-medium transition-all ${
+              className={`flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-medium transition-all ${
                 activeTab === 'roles'
                   ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25'
                   : 'text-gray-600 dark:text-slate-400 hover:bg-brand-blue/[0.04] hover:text-brand-blue'
@@ -443,7 +410,7 @@ export default function RoleManagement() {
             </button>
             <button
               onClick={() => setActiveTab('audit')}
-              className={`flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-medium transition-all ${
+              className={`flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-medium transition-all ${
                 activeTab === 'audit'
                   ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25'
                   : 'text-gray-600 dark:text-slate-400 hover:bg-brand-blue/[0.04] hover:text-brand-blue'
@@ -459,85 +426,54 @@ export default function RoleManagement() {
           <>
             {/* Stats Cards — clicking any card drills into the roles list below.
                 System Roles also pre-filters by type. */}
-            <section className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <button
-                type="button"
+            <StatsCardGrid columns={4}>
+              <StatsCard
+                label="Total Roles"
+                value={roles.length}
+                icon={Shield}
+                tone="neutral"
+                sparkVariant={0}
                 onClick={() => openListView('roles-all')}
-                className={`text-left rounded-2xl border bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:shadow-md hover:-translate-y-0.5 ${pageView === 'list' && listView === 'roles-all' ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60'}`}
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-sm text-gray-500 dark:text-slate-500">Total Roles</p>
-                    <p className="mt-2 text-3xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">{roles.length}</p>
-                  </div>
-                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
-                    <Shield className="h-5 w-5 text-brand-blue" />
-                  </span>
-                </div>
-              </button>
-              <button
-                type="button"
+                active={pageView === 'list' && listView === 'roles-all'}
+                showClickArrow
+              />
+              <StatsCard
+                label="System Roles"
+                value={systemRolesCount}
+                icon={Lock}
+                tone="neutral"
+                sparkVariant={1}
                 onClick={() => openListView('roles-system')}
-                className={`text-left rounded-2xl border bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-cyan/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:shadow-md hover:-translate-y-0.5 ${pageView === 'list' && listView === 'roles-system' ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60'}`}
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-sm text-gray-500 dark:text-slate-500">System Roles</p>
-                    <p className="mt-2 text-3xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">{systemRolesCount}</p>
-                  </div>
-                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 shadow-sm shadow-brand-cyan/10">
-                    <Lock className="h-5 w-5 text-brand-cyan" />
-                  </span>
-                </div>
-              </button>
-              <button
-                type="button"
+                active={pageView === 'list' && listView === 'roles-system'}
+                showClickArrow
+              />
+              <StatsCard
+                label="Assigned Users"
+                value={assignedUsersCount}
+                icon={Users}
+                tone="neutral"
+                sparkVariant={2}
                 onClick={() => openListView('users')}
-                className={`text-left rounded-2xl border bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-teal/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:shadow-md hover:-translate-y-0.5 ${pageView === 'list' && listView === 'users' ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60'}`}
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-sm text-gray-500 dark:text-slate-500">Assigned Users</p>
-                    <p className="mt-2 text-3xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">{assignedUsersCount}</p>
-                  </div>
-                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-teal/10 ring-1 ring-brand-teal/15 shadow-sm shadow-brand-teal/10">
-                    <Users className="h-5 w-5 text-brand-teal" />
-                  </span>
-                </div>
-              </button>
-              <button
-                type="button"
+                active={pageView === 'list' && listView === 'users'}
+                showClickArrow
+              />
+              <StatsCard
+                label="Permissions Catalog"
+                value={managedPermissionsCount}
+                icon={Sparkles}
+                tone="neutral"
+                sparkVariant={3}
                 onClick={() => openListView('permissions')}
-                className={`text-left rounded-2xl border bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-orange/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:shadow-md hover:-translate-y-0.5 ${pageView === 'list' && listView === 'permissions' ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60'}`}
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-sm text-gray-500 dark:text-slate-500">Permissions Catalog</p>
-                    <p className="mt-2 text-3xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">{managedPermissionsCount}</p>
-                  </div>
-                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/15 shadow-sm shadow-brand-orange/10">
-                    <Sparkles className="h-5 w-5 text-brand-orange-deep" />
-                  </span>
-                </div>
-              </button>
-            </section>
+                active={pageView === 'list' && listView === 'permissions'}
+                showClickArrow
+              />
+            </StatsCardGrid>
 
             {pageView === 'list' && (
             <>
-            {/* Header tally adapts to the active view. justify-end, not
-                justify-between: the Back to overview button that used to hold
-                the left slot is gone. */}
-            <div className="mb-4 flex items-center justify-end gap-2">
-              <span className="text-xs text-gray-500 dark:text-slate-400">
-                {listView === 'permissions'
-                  ? `${filteredPermissions.length} ${filteredPermissions.length === 1 ? 'permission' : 'permissions'}`
-                  : listView === 'users'
-                    ? `${userAssignmentRoles.length} ${userAssignmentRoles.length === 1 ? 'role with users' : 'roles with users'}`
-                    : `${filteredRoles.length} ${filteredRoles.length === 1 ? 'role' : 'roles'}`}
-              </span>
-            </div>
-
-            <section className="mb-6 rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-5">
+            {/* Count lives only in the filter chips below (was also duplicated
+                in a top-right tally — removed to show it in one place). */}
+            <section className="mb-5 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-5">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div className="relative w-full lg:max-w-md">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
@@ -547,7 +483,7 @@ export default function RoleManagement() {
                     placeholder={listView === 'permissions' ? 'Search by permission code, name or module' : 'Search by role name or code'}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-3 pl-10 pr-4 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                    className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-3 pl-10 pr-4 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                   />
                 </div>
 
@@ -588,7 +524,7 @@ export default function RoleManagement() {
             </section>
 
             {isRolesView && (
-            <section className="overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+            <section className="mb-5 overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
               <div className="flex items-center justify-between gap-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-4 sm:px-6">
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50">Roles Directory</h2>
@@ -602,7 +538,7 @@ export default function RoleManagement() {
                 </div>
               ) : filteredRoles.length === 0 ? (
                 <div className="px-6 py-16 text-center">
-                  <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
+                  <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
                     <Shield className="h-6 w-6 text-brand-blue" />
                   </div>
                   <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">No roles found</h3>
@@ -631,32 +567,32 @@ export default function RoleManagement() {
                                 <span className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
                                   <Shield className="h-5 w-5 text-brand-blue" />
                                 </span>
-                                <div className="min-w-0">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">{role.name}</p>
+                                <div className="w-[260px] min-w-0">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <p className="min-w-0 truncate text-sm font-semibold text-gray-900 dark:text-slate-50">{role.name}</p>
                                     {role.is_default && (
-                                      <span className="inline-flex items-center rounded-full bg-brand-orange/10 px-2.5 py-1 text-2xs font-medium text-brand-orange-deep ring-1 ring-brand-orange/15">
+                                      <span className="shrink-0 inline-flex items-center rounded-full bg-brand-orange/10 px-2.5 py-1 text-2xs font-medium text-brand-orange-deep ring-1 ring-brand-orange/15">
                                         Default
                                       </span>
                                     )}
                                   </div>
-                                  <p className="mt-1 text-xs font-medium uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">{role.code}</p>
-                                  <p className="mt-2 max-w-md text-sm text-gray-500 dark:text-slate-500">{role.description || 'No description provided.'}</p>
+                                  <p className="mt-1 truncate text-xs font-medium uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">{role.code}</p>
+                                  <p className="mt-2 line-clamp-2 break-words text-sm text-gray-500 dark:text-slate-500">{role.description || 'No description provided.'}</p>
                                 </div>
                               </div>
                             </td>
                             <td className="px-6 py-5">
-                              <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${role.is_system ? 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-1 ring-gray-200 dark:ring-slate-700' : 'bg-brand-cyan/10 text-brand-blue ring-1 ring-brand-cyan/20'}`}>
+                              <Badge variant={role.is_system ? 'muted' : 'secondary'}>
                                 {role.is_system ? 'System role' : 'Custom role'}
-                              </span>
+                              </Badge>
                             </td>
                             <td className="px-6 py-5 text-sm text-gray-600 dark:text-slate-400">
                               {role.parent_role_name ? role.parent_role_name : <span className="text-gray-400 dark:text-slate-500">Independent</span>}
                             </td>
                             <td className="px-6 py-5">
-                              <span className="inline-flex items-center rounded-full bg-brand-blue/[0.06] px-3 py-1 text-sm font-medium text-brand-blue ring-1 ring-brand-blue/10">
+                              <Badge variant="info">
                                 {role.permission_count} permissions
-                              </span>
+                              </Badge>
                             </td>
                             <td className="px-6 py-5">
                               <div className="inline-flex items-center gap-2 rounded-full bg-gray-50 dark:bg-slate-800/50 px-3 py-1.5 ring-1 ring-gray-200 dark:ring-slate-700">
@@ -1167,6 +1103,7 @@ export default function RoleManagement() {
           </div>
         </div>
       )}
+      </div>
 
       {/* Create Role — inline side panel (CRUD is not a full-page redirect) */}
       <Sheet open={createOpen} onOpenChange={setCreateOpen}>

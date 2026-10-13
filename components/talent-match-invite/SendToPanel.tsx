@@ -1,6 +1,7 @@
 'use client';
 
-import type { DeliveryMethod, InviteCandidate, InviteKind } from './inviteVersions';
+import { Lightbulb } from 'lucide-react';
+import { CANDIDATE_SOURCE_LABEL, type DeliveryMethod, type InviteCandidate, type InviteCandidateSource, type InviteKind } from './inviteVersions';
 import { formatCandidateFirstName } from '@/lib/utils/candidateNameDisplay';
 
 /* The share modals' Link expiry options. */
@@ -22,6 +23,7 @@ const ratingTone = (rank: number) =>
 
 const SECTION = 'text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500';
 
+
 /**
  * The split panel's right column: who it goes to (the candidates ticked on
  * the page — untick to leave someone out; no email, no invite), then the
@@ -39,6 +41,8 @@ export default function SendToPanel({
   expiryDays,
   onExpiry,
   candidatesOnly = false,
+  chooseLater = false,
+  onChooseLater,
 }: {
   kind: InviteKind;
   candidates: InviteCandidate[];
@@ -53,7 +57,20 @@ export default function SendToPanel({
   /** Just the candidate list — the Browse all view, whose Send hands over to
    *  Share Assessment via Email (it has its own message and expiry). */
   candidatesOnly?: boolean;
+  /** "Choose candidates in the next step": Next goes on even with nobody
+   *  ticked — the next step has Manual, Upload Excel and the Resume Database. */
+  chooseLater?: boolean;
+  /** Given, the panel offers that checkbox. */
+  onChooseLater?: (on: boolean) => void;
 }) {
+  /* The list, under the heading of where its candidates came from (the tab
+     that opened the popup). */
+  const groups: { source?: InviteCandidateSource; items: InviteCandidate[] }[] = [];
+  for (const c of candidates) {
+    const group = groups.find((g) => g.source === c.source);
+    if (group) group.items.push(c);
+    else groups.push({ source: c.source, items: [c] });
+  }
   const eligible = candidates.filter((c) => c.email);
   const picked = eligible.filter((c) => selectedIds.includes(c.id)).length;
   const all = eligible.length > 0 && picked === eligible.length;
@@ -69,8 +86,9 @@ export default function SendToPanel({
   return (
     <div className="space-y-4">
       <section aria-labelledby="send-to-heading">
-        <div className="flex items-center justify-between gap-2 mb-1.5">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
           <h3 id="send-to-heading" className={SECTION}>Candidates · {picked} of {candidates.length}</h3>
+          <div className="flex flex-wrap items-center gap-2">
           {eligible.length > 0 && (
             <label className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-700 dark:text-slate-300 cursor-pointer">
               <input
@@ -83,6 +101,7 @@ export default function SendToPanel({
               Select all
             </label>
           )}
+          </div>
         </div>
         {candidates.length === 0 ? (
           <p className="rounded-lg border border-dashed border-gray-200 dark:border-slate-700 px-3 py-4 text-center text-sm text-gray-600 dark:text-slate-400">
@@ -90,7 +109,14 @@ export default function SendToPanel({
           </p>
         ) : (
           <ul className="rounded-lg border border-gray-200 dark:border-slate-700 divide-y divide-gray-100 dark:divide-slate-700/60 max-h-64 overflow-y-auto">
-            {candidates.map((c) => {
+            {groups.flatMap((g) => [
+              ...(g.source ? [(
+                <li key={`group-${g.source}`} className="sticky top-0 z-[1] flex items-center justify-between gap-2 px-3 py-1.5 bg-slate-50 dark:bg-slate-800 text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400">
+                  <span className="truncate">{CANDIDATE_SOURCE_LABEL[g.source]}</span>
+                  <span className="shrink-0 tabular-nums">{g.items.length}</span>
+                </li>
+              )] : []),
+              ...g.items.map((c) => {
               const hasEmail = !!c.email;
               const on = hasEmail && selectedIds.includes(c.id);
               return (
@@ -120,8 +146,31 @@ export default function SendToPanel({
                   </label>
                 </li>
               );
-            })}
+            }),
+            ])}
           </ul>
+        )}
+        {/* The app's tip card (Upload Resumes, My Resumes, JD Creation…):
+            brand-orange wash and border, lightbulb, "Tip:" lead — here with
+            the checkbox it explains. */}
+        {onChooseLater && (
+          <div className="mt-3 rounded-xl bg-brand-orange/[0.08] border border-brand-orange/20 px-3 py-2.5">
+            <label className="flex items-start gap-2.5 text-sm font-medium text-gray-900 dark:text-slate-50 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={chooseLater}
+                onChange={(e) => onChooseLater(e.target.checked)}
+                className="mt-0.5 w-4 h-4 shrink-0 rounded border-gray-300 cursor-pointer"
+              />
+              Choose candidates in the next step
+            </label>
+            <p className="mt-1.5 flex items-start gap-2.5 text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+              <Lightbulb className="w-4 h-4 text-brand-orange flex-shrink-0 mt-0.5" aria-hidden="true" />
+              <span className="min-w-0">
+                <span className="font-semibold">Tip:</span> Add them there manually, upload an Excel file, or pick them from the Resume Database.
+              </span>
+            </p>
+          </div>
         )}
       </section>
 

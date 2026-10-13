@@ -10,6 +10,16 @@ import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useLi
 import { userSettingsApi, UserSettings, UserProfile, UserSettingsUpdate, UserProfileUpdate } from '@/lib/services/settingsService';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 export default function Settings() {
   const { user, logout, hasPermission, hasPermissionCode, isTenantAdmin } = useAuth();
@@ -431,25 +441,19 @@ export default function Settings() {
                 <fieldset disabled={!canEditSettings} className={!canEditSettings ? 'opacity-60' : ''}>
                   {/* Profile Picture */}
                   <div className="mb-8 pb-8 border-b border-gray-200 dark:border-slate-700">
-                    <label className="block text-sm font-semibold text-gray-900 dark:text-slate-50 mb-3">Profile Picture</label>
+                    <Label className="mb-3">Profile Picture</Label>
                     <div className="flex flex-col sm:flex-row items-center gap-4">
                       <div className="w-20 h-20 rounded-full bg-brand-blue text-white flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/10 text-2xl flex-shrink-0">
                         {profileData.full_name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U'}
                       </div>
                       <div className="text-center sm:text-left">
                         <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
-                          <button
-                            type="button"
-                            className="px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
+                          <Button type="button" variant="primary" size="sm">
                             Upload New
-                          </button>
-                          <button
-                            type="button"
-                            className="px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
+                          </Button>
+                          <Button type="button" variant="secondary" size="sm">
                             Remove
-                          </button>
+                          </Button>
                         </div>
                         <p className="text-xs text-gray-500 dark:text-slate-500 mt-2">JPG, PNG or GIF. Max size 5MB.</p>
                       </div>
@@ -460,21 +464,19 @@ export default function Settings() {
                   <div className="space-y-6">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                       <div>
-                        <label className="block text-sm font-semibold text-gray-900 dark:text-slate-50 mb-2">Full Name</label>
-                        <input
+                        <Label className="mb-1.5">Full Name</Label>
+                        <Input
                           type="text"
                           value={profileData.full_name || ''}
                           onChange={(e) => setProfileData({ ...profileData, full_name: e.target.value })}
-                          className="w-full px-4 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-semibold text-gray-900 dark:text-slate-50 mb-2">Email Address</label>
-                        <input
+                        <Label className="mb-1.5">Email Address</Label>
+                        <Input
                           type="email"
                           value={profileData.email || ''}
                           disabled
-                          className="w-full px-4 py-2 border border-gray-200 dark:border-slate-700 rounded-lg bg-gray-50 dark:bg-slate-800/50 text-gray-500 dark:text-slate-500 cursor-not-allowed"
                         />
                         <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">Email cannot be changed</p>
                       </div>
@@ -483,26 +485,26 @@ export default function Settings() {
                     <div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                         <div>
-                          <label className="block text-sm font-semibold text-gray-900 dark:text-slate-50 mb-2">Phone Number</label>
+                          <Label className="mb-1.5">Phone Number</Label>
                           <div className="relative">
-                            <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-slate-500" />
-                            <input
+                            <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-slate-500 z-10 pointer-events-none" />
+                            <Input
                               type="tel"
                               value={profileData.phone || ''}
                               onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
-                              className="w-full pl-10 pr-4 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                              className="pl-10"
                             />
                           </div>
                         </div>
                         <div>
-                          <label className="block text-sm font-semibold text-gray-900 dark:text-slate-50 mb-2">Job Title</label>
+                          <Label className="mb-1.5">Job Title</Label>
                           <div className="relative">
-                            <Briefcase className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-slate-500" />
-                            <input
+                            <Briefcase className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-slate-500 z-10 pointer-events-none" />
+                            <Input
                               type="text"
                               value={profileData.job_title || ''}
                               onChange={(e) => setProfileData({ ...profileData, job_title: e.target.value })}
-                              className="w-full pl-10 pr-4 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                              className="pl-10"
                             />
                           </div>
                         </div>
@@ -510,12 +512,11 @@ export default function Settings() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-semibold text-gray-900 dark:text-slate-50 mb-2">Department</label>
-                      <input
+                      <Label className="mb-1.5">Department</Label>
+                      <Input
                         type="text"
                         value={profileData.department || ''}
                         onChange={(e) => setProfileData({ ...profileData, department: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                       />
                     </div>
                   </div>
@@ -657,40 +658,43 @@ export default function Settings() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-semibold text-gray-900 dark:text-slate-50 mb-2">Default Job Type</label>
-                      <select
+                      <Label className="mb-1.5">Default Job Type</Label>
+                      <Select
                         value={settings.default_job_type || 'Full-time'}
-                        onChange={(e) => setSettings({ ...settings, default_job_type: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-900"
+                        onValueChange={(value) => setSettings({ ...settings, default_job_type: value })}
                       >
-                        <option>Full-time</option>
-                        <option>Part-time</option>
-                        <option>Contract</option>
-                        <option>Internship</option>
-                        <option>Temporary</option>
-                      </select>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Full-time">Full-time</SelectItem>
+                          <SelectItem value="Part-time">Part-time</SelectItem>
+                          <SelectItem value="Contract">Contract</SelectItem>
+                          <SelectItem value="Internship">Internship</SelectItem>
+                          <SelectItem value="Temporary">Temporary</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
 
                     <div>
-                      <label className="block text-sm font-semibold text-gray-900 dark:text-slate-50 mb-2">Default Location</label>
-                      <select
+                      <Label className="mb-1.5">Default Location</Label>
+                      <Select
                         value={settings.default_location || 'Remote'}
-                        onChange={(e) => setSettings({ ...settings, default_location: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-900"
+                        onValueChange={(value) => setSettings({ ...settings, default_location: value })}
                       >
-                        <option>Remote</option>
-                        <option>Hybrid</option>
-                        <option>On-site</option>
-                      </select>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Remote">Remote</SelectItem>
+                          <SelectItem value="Hybrid">Hybrid</SelectItem>
+                          <SelectItem value="On-site">On-site</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
 
                     <div>
-                      <label className="block text-sm font-semibold text-gray-900 dark:text-slate-50 mb-2">Default Job Expiry (Days)</label>
-                      <input
+                      <Label className="mb-1.5">Default Job Expiry (Days)</Label>
+                      <Input
                         type="number"
                         value={settings.default_expiry_days || 30}
                         onChange={(e) => setSettings({ ...settings, default_expiry_days: parseInt(e.target.value) || 30 })}
-                        className="w-full px-4 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                         min="1"
                         max="90"
                       />
@@ -767,18 +771,20 @@ export default function Settings() {
 
                     <div>
                       <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-4">Default Sort Order</h3>
-                      <select
+                      <Select
                         value={settings.default_sort_order || 'latest'}
-                        onChange={(e) => setSettings({ ...settings, default_sort_order: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-900"
+                        onValueChange={(value) => setSettings({ ...settings, default_sort_order: value })}
                       >
-                        <option value="latest">Latest First</option>
-                        <option value="name-asc">Name (A-Z)</option>
-                        <option value="name-desc">Name (Z-A)</option>
-                        <option value="experience-high">Experience (High to Low)</option>
-                        <option value="experience-low">Experience (Low to High)</option>
-                        <option value="lastUpdated">Last Updated</option>
-                      </select>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="latest">Latest First</SelectItem>
+                          <SelectItem value="name-asc">Name (A-Z)</SelectItem>
+                          <SelectItem value="name-desc">Name (Z-A)</SelectItem>
+                          <SelectItem value="experience-high">Experience (High to Low)</SelectItem>
+                          <SelectItem value="experience-low">Experience (Low to High)</SelectItem>
+                          <SelectItem value="lastUpdated">Last Updated</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                 </fieldset>
@@ -805,15 +811,17 @@ export default function Settings() {
                       </h3>
                       <div className="space-y-4">
                         <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-slate-700">
-                          <label className="block text-sm font-semibold text-gray-900 dark:text-slate-50 mb-2">Profile Visibility</label>
-                          <select
+                          <Label className="mb-1.5">Profile Visibility</Label>
+                          <Select
                             value={settings.profile_visibility || 'team'}
-                            onChange={(e) => setSettings({ ...settings, profile_visibility: e.target.value })}
-                            className="w-full px-4 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-900"
+                            onValueChange={(value) => setSettings({ ...settings, profile_visibility: value })}
                           >
-                            <option value="team">Team Only - Visible to team members</option>
-                            <option value="private">Private - Only visible to me</option>
-                          </select>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="team">Team Only - Visible to team members</SelectItem>
+                              <SelectItem value="private">Private - Only visible to me</SelectItem>
+                            </SelectContent>
+                          </Select>
                           <p className="text-xs text-gray-500 dark:text-slate-500 mt-2">Controls who can see your recruiter profile</p>
                         </div>
 
@@ -844,7 +852,7 @@ export default function Settings() {
                   {/* Security Settings */}
                   <div className="pt-6 border-t border-gray-200 dark:border-slate-700">
                     <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-4 flex items-center gap-2">
-                      <Lock className="w-5 h-5 text-red-600" />
+                      <Lock className="w-5 h-5 text-destructive" />
                       Security Settings
                     </h3>
                     <p className="text-sm text-gray-600 dark:text-slate-400 mb-4">
@@ -871,7 +879,7 @@ export default function Settings() {
                 <div className="space-y-6">
                   {/* Theme */}
                   <div>
-                    <label className="block text-sm font-semibold text-gray-900 dark:text-slate-50 mb-3">Theme</label>
+                    <Label className="mb-3">Theme</Label>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                       {[
                         { value: 'light', label: 'Light', desc: 'Classic bright theme' },
@@ -904,60 +912,68 @@ export default function Settings() {
 
                   {/* Language */}
                   <div>
-                    <label className="block text-sm font-semibold text-gray-900 dark:text-slate-50 mb-2">Language</label>
-                    <select
+                    <Label className="mb-1.5">Language</Label>
+                    <Select
                       value={settings.language || 'en'}
-                      onChange={(e) => setSettings({ ...settings, language: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-900"
+                      onValueChange={(value) => setSettings({ ...settings, language: value })}
                     >
-                      <option value="en">English (US)</option>
-                      <option value="es">Español</option>
-                      <option value="fr">Français</option>
-                      <option value="de">Deutsch</option>
-                      <option value="ja">日本語</option>
-                    </select>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="en">English (US)</SelectItem>
+                        <SelectItem value="es">Español</SelectItem>
+                        <SelectItem value="fr">Français</SelectItem>
+                        <SelectItem value="de">Deutsch</SelectItem>
+                        <SelectItem value="ja">日本語</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   {/* Date Format */}
                   <div>
-                    <label className="block text-sm font-semibold text-gray-900 dark:text-slate-50 mb-2">Date Format</label>
-                    <select
+                    <Label className="mb-1.5">Date Format</Label>
+                    <Select
                       value={settings.date_format || 'MM/DD/YYYY'}
-                      onChange={(e) => setSettings({ ...settings, date_format: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-900"
+                      onValueChange={(value) => setSettings({ ...settings, date_format: value })}
                     >
-                      <option value="MM/DD/YYYY">MM/DD/YYYY (12/31/2024)</option>
-                      <option value="DD/MM/YYYY">DD/MM/YYYY (31/12/2024)</option>
-                      <option value="YYYY-MM-DD">YYYY-MM-DD (2024-12-31)</option>
-                    </select>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="MM/DD/YYYY">MM/DD/YYYY (12/31/2024)</SelectItem>
+                        <SelectItem value="DD/MM/YYYY">DD/MM/YYYY (31/12/2024)</SelectItem>
+                        <SelectItem value="YYYY-MM-DD">YYYY-MM-DD (2024-12-31)</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   {/* Time Format */}
                   <div>
-                    <label className="block text-sm font-semibold text-gray-900 dark:text-slate-50 mb-2">Time Format</label>
-                    <select
+                    <Label className="mb-1.5">Time Format</Label>
+                    <Select
                       value={settings.time_format || '12h'}
-                      onChange={(e) => setSettings({ ...settings, time_format: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-900"
+                      onValueChange={(value) => setSettings({ ...settings, time_format: value })}
                     >
-                      <option value="12h">12-hour (3:30 PM)</option>
-                      <option value="24h">24-hour (15:30)</option>
-                    </select>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="12h">12-hour (3:30 PM)</SelectItem>
+                        <SelectItem value="24h">24-hour (15:30)</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   {/* Default Landing Page */}
                   <div>
-                    <label className="block text-sm font-semibold text-gray-900 dark:text-slate-50 mb-2">Default Landing Page</label>
-                    <select
+                    <Label className="mb-1.5">Default Landing Page</Label>
+                    <Select
                       value={settings.default_view || 'dashboard'}
-                      onChange={(e) => setSettings({ ...settings, default_view: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-900"
+                      onValueChange={(value) => setSettings({ ...settings, default_view: value })}
                     >
-                      <option value="dashboard">Dashboard</option>
-                      <option value="jobs">Jobs Listing</option>
-                      <option value="my-resumes">My Resumes</option>
-                      <option value="internal-db">Shared Database</option>
-                    </select>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="dashboard">Dashboard</SelectItem>
+                        <SelectItem value="jobs">Jobs Listing</SelectItem>
+                        <SelectItem value="my-resumes">My Resumes</SelectItem>
+                        <SelectItem value="internal-db">Shared Database</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">The page you'll see first when you log in</p>
                   </div>
                 </div>
@@ -978,20 +994,21 @@ export default function Settings() {
                 <form onSubmit={handleChangePassword} className="space-y-5 max-w-md">
                   {/* Current Password */}
                   <div>
-                    <label className="block text-sm font-semibold text-gray-900 dark:text-slate-50 mb-2">Current Password</label>
+                    <Label className="mb-1.5">Current Password</Label>
                     <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-slate-500" />
-                      <input
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-slate-500 z-10 pointer-events-none" />
+                      <Input
                         type={showCurrentPassword ? 'text' : 'password'}
                         value={currentPassword}
                         onChange={(e) => setCurrentPassword(e.target.value)}
                         required
-                        className="w-full pl-10 pr-10 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                        className="pl-10 pr-10"
                         placeholder="Enter current password"
                       />
                       <button
                         type="button"
                         onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                        aria-label={showCurrentPassword ? 'Hide current password' : 'Show current password'}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500 hover:text-brand-blue"
                       >
                         {showCurrentPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
@@ -1001,15 +1018,15 @@ export default function Settings() {
 
                   {/* New Password */}
                   <div>
-                    <label className="block text-sm font-semibold text-gray-900 dark:text-slate-50 mb-2">New Password</label>
+                    <Label className="mb-1.5">New Password</Label>
                     <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-slate-500" />
-                      <input
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-slate-500 z-10 pointer-events-none" />
+                      <Input
                         type={showNewPassword ? 'text' : 'password'}
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
                         required
-                        className="w-full pl-10 pr-10 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                        className="pl-10 pr-10"
                         placeholder="Enter new password"
                       />
                       <button
@@ -1021,21 +1038,21 @@ export default function Settings() {
                       </button>
                     </div>
                     {newPassword.length > 0 && newPassword.length < 6 && (
-                      <p className="text-xs text-red-500 mt-1">Password must be at least 6 characters</p>
+                      <p className="text-xs text-destructive mt-1">Password must be at least 6 characters</p>
                     )}
                   </div>
 
                   {/* Confirm Password */}
                   <div>
-                    <label className="block text-sm font-semibold text-gray-900 dark:text-slate-50 mb-2">Confirm New Password</label>
+                    <Label className="mb-1.5">Confirm New Password</Label>
                     <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-slate-500" />
-                      <input
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-slate-500 z-10 pointer-events-none" />
+                      <Input
                         type={showConfirmPassword ? 'text' : 'password'}
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
                         required
-                        className="w-full pl-10 pr-10 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                        className="pl-10 pr-10"
                         placeholder="Confirm new password"
                       />
                       <button
@@ -1047,7 +1064,7 @@ export default function Settings() {
                       </button>
                     </div>
                     {confirmPassword.length > 0 && newPassword !== confirmPassword && (
-                      <p className="text-xs text-red-500 mt-1">Passwords do not match</p>
+                      <p className="text-xs text-destructive mt-1">Passwords do not match</p>
                     )}
                     {confirmPassword.length > 0 && newPassword === confirmPassword && newPassword.length >= 6 && (
                       <p className="text-xs text-brand-cyan mt-1 flex items-center gap-1 font-semibold">
@@ -1056,28 +1073,20 @@ export default function Settings() {
                     )}
                   </div>
 
-                  <button
+                  <Button
                     type="submit"
+                    variant="primary"
                     disabled={
                       isChangingPassword ||
                       !currentPassword ||
                       newPassword.length < 6 ||
                       newPassword !== confirmPassword
                     }
-                    className="w-full sm:w-auto px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center justify-center gap-2 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full sm:w-auto"
+                    icon={isChangingPassword ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
                   >
-                    {isChangingPassword ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Changing...
-                      </>
-                    ) : (
-                      <>
-                        <KeyRound className="w-4 h-4" />
-                        Change Password
-                      </>
-                    )}
-                  </button>
+                    {isChangingPassword ? 'Changing...' : 'Change Password'}
+                  </Button>
                 </form>
               </div>
             )}
@@ -1093,23 +1102,15 @@ export default function Settings() {
                   </div>
                 )}
               </div>
-              <button
+              <Button
                 onClick={handleSave}
                 disabled={isSaving}
-                className="w-full sm:w-auto px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center justify-center gap-2 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                variant="primary"
+                className="w-full sm:w-auto"
+                icon={isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               >
-                {isSaving ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save className="w-4 h-4" />
-                    Save Changes
-                  </>
-                )}
-              </button>
+                {isSaving ? 'Saving...' : 'Save Changes'}
+              </Button>
             </div>
             )}
           </div>

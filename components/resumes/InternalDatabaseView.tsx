@@ -52,6 +52,7 @@ interface SearchFilters {
   previousCompany?: string;
   noticePeriod?: string;
   uploadDateRange?: { start?: string; end?: string };
+  uploadedBy?: string;
   sourceType?: string;
 }
 
@@ -181,6 +182,11 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
     // Add notice period
     if (filters.noticePeriod) {
       params.notice_period = filters.noticePeriod;
+    }
+
+    // Add uploaded by (uploader name, partial match)
+    if (filters.uploadedBy) {
+      params.uploaded_by_name = filters.uploadedBy;
     }
 
     // Add upload date range

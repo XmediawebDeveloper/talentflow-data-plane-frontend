@@ -9,6 +9,7 @@ import QuickActions from './QuickActions';
 import GlobalSearch from './GlobalSearch';
 // FIX-010: Import Tooltip for icon buttons
 import { Tooltip } from '@/components/ui/tooltip';
+import { Button } from '@/components/ui/button';
 import brandLogo from '@/assets/brand/talent-flow-logo-header.webp';
 import { useQuota } from '@/contexts/QuotaContext';
 import notificationService, { Notification } from '@/lib/services/notificationService';
@@ -473,29 +474,29 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
       case 'success':
         return {
           icon: CheckCircle,
-          bgColor: 'bg-green-100',
-          iconColor: 'text-green-600',
-          borderColor: 'border-green-500',
-          labelColor: 'text-green-600',
-          bgTint: 'bg-green-50/30',
+          bgColor: 'bg-success-subtle',
+          iconColor: 'text-success-strong',
+          borderColor: 'border-success',
+          labelColor: 'text-success-strong',
+          bgTint: 'bg-success-subtle/30',
         };
       case 'warning':
         return {
           icon: AlertCircle,
-          bgColor: 'bg-orange-100',
-          iconColor: 'text-orange-600',
-          borderColor: 'border-orange-500',
-          labelColor: 'text-orange-600',
-          bgTint: 'bg-orange-50/30',
+          bgColor: 'bg-warning-subtle',
+          iconColor: 'text-warning-strong',
+          borderColor: 'border-warning',
+          labelColor: 'text-warning-strong',
+          bgTint: 'bg-warning-subtle/30',
         };
       case 'error':
         return {
           icon: AlertCircle,
-          bgColor: 'bg-red-100',
-          iconColor: 'text-red-600',
-          borderColor: 'border-red-500',
-          labelColor: 'text-red-600',
-          bgTint: 'bg-red-50/30',
+          bgColor: 'bg-destructive-subtle',
+          iconColor: 'text-destructive-strong',
+          borderColor: 'border-destructive',
+          labelColor: 'text-destructive-strong',
+          bgTint: 'bg-destructive-subtle/30',
         };
       default:
         return {
@@ -761,14 +762,16 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
 
         {/* Quick Tour Button - Hidden on mobile and tablet */}
         {onOpenTour && (
-          <button
+          <Button
+            variant="primary"
+            size="sm"
             onClick={onOpenTour}
-            className="hidden lg:flex px-3 py-2 bg-brand-blue text-white rounded-lg hover:bg-brand-blue-2 transition-colors duration-200 items-center gap-2 group"
+            icon={<Zap className="w-4 h-4" />}
+            className="hidden lg:inline-flex"
             aria-label="Take a quick tour" title="Take a quick tour"
           >
-            <Zap className="w-4 h-4 group-hover:animate-pulse" />
-            <span className="text-sm font-medium">Quick Tour</span>
-          </button>
+            Quick Tour
+          </Button>
         )}
 
         {/* Plan & Unit Balance Display - Clickable to show breakdown dropdown */}
@@ -782,7 +785,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
               }}
               className="liquid-glass-card group flex min-h-[36px] sm:min-h-[44px] items-center gap-1.5 lg:gap-2 rounded-lg px-1.5 py-1 sm:px-2 sm:py-1.5 lg:px-2.5 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/25"
             >
-              <div className="w-6 h-6 rounded-md border border-brand-blue/10 bg-brand-blue/[0.07] shadow-sm shadow-brand-blue/5 flex items-center justify-center">
+              <div className="w-6 h-6 rounded-lg border border-brand-blue/10 bg-brand-blue/[0.07] shadow-sm shadow-brand-blue/5 flex items-center justify-center">
                 <CreditCard className="w-3.5 h-3.5 text-brand-blue" strokeWidth={2.15} />
               </div>
               {/* Name + units hide on the smallest screens — the pill collapses
@@ -798,7 +801,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                   </div>
                 )}
                 {isPendingStatus && (
-                  <span className="text-2xs lg:text-2xs text-orange-600 font-medium">
+                  <span className="text-2xs lg:text-2xs text-warning-strong font-medium">
                     {tenantStatus}
                   </span>
                 )}
@@ -807,7 +810,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                 <div className="hidden sm:block w-10 lg:w-12 h-1.5 rounded-full bg-slate-200/80 dark:bg-slate-700/80 overflow-hidden">
                   <div
                     className={`h-full rounded-full transition-all ${
-                      usagePercentage > 90 ? 'bg-red-500' :
+                      usagePercentage > 90 ? 'bg-destructive' :
                       usagePercentage > 70 ? 'bg-brand-orange' : 'bg-brand-blue'
                     }`}
                     style={{ width: `${Math.min(usagePercentage, 100)}%` }}
@@ -839,7 +842,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                   {/* No flex-wrap here: the meta line wraps INSIDE the left
                       block, so the Upgrade button stays pinned to the right
                       corner instead of dropping below the plan name. */}
-                  <div className="px-2.5 py-2 sm:px-3.5 sm:py-2.5 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 border-b border-gray-100">
+                  <div className="px-2.5 py-2 sm:px-3 sm:py-2.5 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 border-b border-gray-100">
                     <div className="flex items-center gap-2 min-w-0 flex-1">
                       <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-brand-blue text-white ring-1 ring-white/10 shadow-sm shadow-brand-blue/25 flex items-center justify-center flex-shrink-0">
                         <Coins className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -865,22 +868,24 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                           {planDaysLeft != null && (
                             <>
                               {(planPeriodLabel || renewalLabel) && <span className="text-gray-300">•</span>}
-                              <span className="text-green-600 font-medium">{planDaysLeft} days left</span>
+                              <span className="text-success-strong font-medium">{planDaysLeft} days left</span>
                             </>
                           )}
                         </div>
                       </div>
                     </div>
-                    <button
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       onClick={() => {
                         setShowPlanMenu(false);
                         router.push('/subscription/current-plan');
                       }}
-                      className="w-full sm:w-auto flex items-center justify-center gap-1 px-2 py-1 text-2xs sm:text-2xs font-semibold text-brand-blue bg-white border border-brand-blue/40 rounded-md hover:bg-brand-blue/5 hover:border-brand-blue/60 transition-colors flex-shrink-0 whitespace-nowrap"
+                      className="w-full sm:w-auto flex-shrink-0"
                     >
                       Upgrade plan
                       <ArrowUpRight className="w-3 h-3" />
-                    </button>
+                    </Button>
                   </div>
 
                   {/* Unit balance breakdown */}
@@ -918,7 +923,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                             )}
                           </div>
                           {isUnlimited ? (
-                            <span className="text-2xs sm:text-xs font-semibold text-green-600">Unlimited</span>
+                            <span className="text-2xs sm:text-xs font-semibold text-success-strong">Unlimited</span>
                           ) : (
                             <>
                               <span className="text-2xs sm:text-xs text-gray-600 tabular-nums whitespace-nowrap min-w-[50px] sm:min-w-[56px] text-right">
@@ -953,7 +958,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                             <div className="text-xs sm:text-sm font-semibold text-gray-900">Users</div>
                           </div>
                           {isUnlimited ? (
-                            <span className="text-2xs sm:text-xs font-semibold text-green-600">Unlimited</span>
+                            <span className="text-2xs sm:text-xs font-semibold text-success-strong">Unlimited</span>
                           ) : (
                             <>
                               <span className="text-2xs sm:text-xs text-gray-600 tabular-nums whitespace-nowrap min-w-[50px] sm:min-w-[56px] text-right">
@@ -977,16 +982,18 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                       <Info className="w-3.5 h-3.5" />
                     </div>
                     <span className="flex-1 min-w-0 text-xs sm:text-sm font-medium text-gray-900">Need extra units right away?</span>
-                    <button
+                    <Button
+                      variant="primary"
+                      size="sm"
                       onClick={() => {
                         setShowPlanMenu(false);
                         router.push('/subscription/current-plan?section=usage-quotas');
                       }}
-                      className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-2xs sm:text-xs font-semibold bg-brand-blue text-white rounded-lg hover:bg-brand-blue-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex-shrink-0"
+                      className="w-full sm:w-auto flex-shrink-0"
                     >
                       Purchase Add-ons
                       <ShoppingCart className="w-3.5 h-3.5" />
-                    </button>
+                    </Button>
                   </div>
                 </div>
               </>
@@ -1020,11 +1027,11 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                       legible, and nothing shifts the header's layout. Dropped
                       entirely for anyone who asked for less motion. */}
                   <span
-                    className="absolute inset-0 rounded-full bg-red-500/60 animate-ping motion-reduce:hidden"
+                    className="absolute inset-0 rounded-full bg-destructive/60 animate-ping motion-reduce:hidden"
                     aria-hidden="true"
                   />
                   <span
-                    className="relative flex items-center justify-center min-w-[0.875rem] sm:min-w-[1rem] h-3.5 sm:h-4 px-0.5 sm:px-1 bg-red-500 text-white rounded-full ring-1 ring-white font-semibold text-2xs sm:text-2xs leading-none tabular-nums"
+                    className="relative flex items-center justify-center min-w-[0.875rem] sm:min-w-[1rem] h-3.5 sm:h-4 px-0.5 sm:px-1 bg-destructive text-white rounded-full ring-1 ring-white font-semibold text-2xs sm:text-2xs leading-none tabular-nums"
                     aria-hidden="true"
                   >
                     {unreadCount > MAX_BADGE_COUNT ? `${MAX_BADGE_COUNT}+` : unreadCount}
@@ -1046,7 +1053,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                     <h3 className="font-medium flex items-center gap-2">
                       {/* Real-time connection indicator */}
                       <Tooltip content={wsConnected ? 'Real-time connected' : 'Using polling'} position="bottom">
-                        <span className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-green-400' : 'bg-yellow-400'}`}></span>
+                        <span className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-success' : 'bg-warning'}`}></span>
                       </Tooltip>
                       <Bell className="w-5 h-5" />
                       Notifications
@@ -1145,22 +1152,26 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
 
                 {/* Footer Actions */}
                 <div className="border-t border-gray-200 p-3 bg-gray-50 flex gap-2">
-                  <button
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     onClick={handleMarkAllAsRead}
                     disabled={unreadCount === 0}
-                    className="flex-1 px-4 py-2 text-sm text-gray-700 bg-white border border-gray-200 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1"
                   >
                     Mark All Read
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
                     onClick={() => {
                       setShowNotifications(false);
                       router.push('/notifications');
                     }}
-                    className="flex-1 px-4 py-2 bg-brand-blue text-white rounded-lg hover:bg-brand-blue-2 transition-colors text-sm font-medium"
+                    className="flex-1"
                   >
                     View All
-                  </button>
+                  </Button>
                 </div>
               </div>
             </>
@@ -1230,7 +1241,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                       {/* Presence dot, ringed in the banner's own blue rather
                           than white, so it reads as cut out of the avatar
                           instead of floating over it. */}
-                      <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full bg-green-500 ring-2 ring-brand-blue" />
+                      <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full bg-success ring-2 ring-brand-blue" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-white font-semibold truncate">{user.name || 'User'}</p>
@@ -1340,14 +1351,14 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                       setShowUserMenu(false);
                       onLogout();
                     }}
-                    className="w-full flex items-center gap-2.5 rounded-lg border border-red-200 bg-red-50/70 px-2.5 py-2 text-left transition-colors hover:bg-red-50 hover:border-red-300"
+                    className="w-full flex items-center gap-2.5 rounded-lg border border-destructive-line bg-destructive-subtle/70 px-2.5 py-2 text-left transition-colors hover:bg-destructive-subtle hover:border-destructive/40"
                   >
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-red-600">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-destructive">
                       <LogOut className="w-4 h-4" />
                     </span>
                     <span className="min-w-0">
-                      <span className="block text-sm font-medium text-red-600">Sign Out</span>
-                      <span className="block text-2xs leading-tight text-red-500/80">You will be signed out of your account</span>
+                      <span className="block text-sm font-medium text-destructive">Sign Out</span>
+                      <span className="block text-2xs leading-tight text-destructive/80">You will be signed out of your account</span>
                     </span>
                   </button>
                 </div>

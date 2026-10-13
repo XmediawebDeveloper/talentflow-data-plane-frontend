@@ -39,7 +39,7 @@ import { useListSearch } from '@/lib/hooks/useListSearch';
 import { isAssessmentRevoked, getLocallyRevokedAssessmentIds } from '@/lib/utils/assessmentUtils';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { Resume, Folder as FolderType, Job } from '@/lib/types/types';
-import { resumeService, folderService } from '@/lib/services/resumeService';
+import { resumeService, folderService, RESUMES_CHANGED_EVENT } from '@/lib/services/resumeService';
 import { Resume as ApiResume, Folder as ApiFolder, FolderDeletionInfo } from '@/lib/services/resumeService';
 import { convertApiResumeToRow, convertApiFolderToTree } from '@/lib/utils/resumeMappers';
 import { jdService } from '@/lib/services/jdService';
@@ -1821,11 +1821,14 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
         if (currentFilters.noticePeriod) {
           searchParams.notice_period = currentFilters.noticePeriod;
         }
-        if (currentFilters.uploadDateFrom) {
-          searchParams.upload_date_from = currentFilters.uploadDateFrom;
+        if (currentFilters.uploadDateRange?.start) {
+          searchParams.upload_date_from = currentFilters.uploadDateRange.start;
         }
-        if (currentFilters.uploadDateTo) {
-          searchParams.upload_date_to = currentFilters.uploadDateTo;
+        if (currentFilters.uploadDateRange?.end) {
+          searchParams.upload_date_to = currentFilters.uploadDateRange.end;
+        }
+        if (currentFilters.uploadedBy) {
+          searchParams.uploaded_by_name = currentFilters.uploadedBy;
         }
         if (currentFilters.sourceType) {
           searchParams.source_type = currentFilters.sourceType;
@@ -2279,6 +2282,26 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       toast.error('Failed to move resumes');
     }
   };
+
+  /* Archive, unarchive, move and delete all end in RESUMES_CHANGED_EVENT
+     (fired by resumeService once the burst of per-resume calls settles). The
+     handlers below patch counts optimistically, but some paths had no server
+     re-read at all — a "Move to folder" into or out of Archived Resumes flips
+     the archived flag server-side, yet the All Resumes badge was left alone
+     and, from the All Resumes view, the moved row stayed listed. Re-read the
+     global total and the current view (folder tree included) from the server
+     so every badge lands on the real number. A ref keeps the listener on the
+     latest folder/search/filters without re-subscribing every render. */
+  const onResumesChangedRef = useRef<() => void>(() => {});
+  onResumesChangedRef.current = () => {
+    refreshAllResumesTotal();
+    fetchData(appliedSearchQuery, filters, selectedFolder, true);
+  };
+  useEffect(() => {
+    const handler = () => onResumesChangedRef.current();
+    window.addEventListener(RESUMES_CHANGED_EVENT, handler);
+    return () => window.removeEventListener(RESUMES_CHANGED_EVENT, handler);
+  }, []);
 
   // Handle archive resumes - sets is_archived AND moves to Archived Resumes folder
   const handleArchiveResumes = async (resumeIds: string[]) => {
@@ -4251,7 +4274,6 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   onUnarchiveDisabled={!canArchiveMyResumes}
                   onUnarchiveDisabledReason="You do not have permission to unarchive resumes"
                   canShare={canShareMyResumes}
-                  canTag={canUpdateMyResumes}
                   disablePagination={true}
                   isArchivedFolder={
                     folders.some(f => f.name === 'Archived Resumes' && !f.parentId && f.id === selectedFolder)
@@ -4781,7 +4803,6 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                             onArchive={canArchiveMyResumes ? (resumeId) => handleArchiveResumes([resumeId]) : undefined}
                             onUnarchive={canArchiveMyResumes ? (resumeId) => handleUnarchiveResumes([resumeId]) : undefined}
                             canShare={canShareMyResumes}
-                            canTag={canUpdateMyResumes}
                             disablePagination={true}
                             isArchivedFolder={
                               folders.some(f => f.name === 'Archived Resumes' && !f.parentId && f.id === cardViewFolder)

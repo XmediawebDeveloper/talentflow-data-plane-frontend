@@ -1,7 +1,7 @@
 'use client';
 
 import { CurrentQuestion } from '@/lib/services/candidateService';
-import { CheckCircle, Circle, FileText, Lock } from 'lucide-react';
+import { CheckCircle, Circle, Lock } from 'lucide-react';
 
 interface TechnicalQuestionViewProps {
   question: CurrentQuestion;
@@ -112,7 +112,7 @@ export function TechnicalQuestionView({ question, answer, onAnswerChange, isLock
             </div>
             <div>
               <div className="text-xs sm:text-sm font-semibold tracking-wide text-gray-600 mb-1">Question</div>
-              <div className="whitespace-pre-wrap break-words font-sans text-base sm:text-lg leading-7 text-gray-900 m-0">
+              <div className="whitespace-pre-wrap break-words font-sans text-sm sm:text-base leading-relaxed italic text-gray-900 m-0">
                 {questionBody}
               </div>
             </div>
@@ -121,7 +121,7 @@ export function TechnicalQuestionView({ question, answer, onAnswerChange, isLock
       }
     }
     return (
-      <div className="whitespace-pre-wrap break-words font-sans text-base sm:text-lg leading-7 text-gray-900 m-0">
+      <div className="whitespace-pre-wrap break-words font-sans text-sm sm:text-base leading-relaxed italic text-gray-900 m-0">
         {text}
       </div>
     );
@@ -129,8 +129,11 @@ export function TechnicalQuestionView({ question, answer, onAnswerChange, isLock
 
   // Render Text/Short Answer Question
   if (isTextQuestion || !isMCQ) {
+    /* `flex-1 flex flex-col` all the way down to the textarea, so the box
+       grows into whatever height the question card has spare instead of
+       leaving an empty gap under it. Its old fixed height is the minimum. */
     return (
-      <div className="space-y-6">
+      <div className="flex-1 flex flex-col gap-6">
         {/* Question Text — explicitly NOT wrapped in `prose`. The typography
             plugin re-skins raw <pre> tags with a dark code-block background,
             which collided with our explicit text-gray-900 and rendered the
@@ -147,14 +150,8 @@ export function TechnicalQuestionView({ question, answer, onAnswerChange, isLock
           </div>
         )}
 
-        {/* Instructions */}
-        <div className="flex items-center gap-2 text-sm text-gray-500">
-          <FileText className="w-4 h-4" />
-          <span>Provide a detailed answer in the text area below</span>
-        </div>
-
         {/* Text Area */}
-        <div className="space-y-2">
+        <div className="flex-1 flex flex-col gap-2">
           <textarea
             value={textResponse}
             onChange={handleTextChange}
@@ -162,10 +159,10 @@ export function TechnicalQuestionView({ question, answer, onAnswerChange, isLock
             maxLength={3000}
             disabled={isLocked}
             readOnly={isLocked}
-            className={`w-full h-40 sm:h-48 p-3 sm:p-4 border-2 rounded-xl text-gray-800 placeholder-gray-400 resize-none transition-colors ${
+            className={`w-full flex-1 min-h-40 sm:min-h-48 p-3 sm:p-4 border-2 rounded-xl text-gray-800 placeholder-gray-400 resize-none transition-colors ${
               isLocked
                 ? 'bg-gray-50 border-gray-200 cursor-not-allowed'
-                : 'border-gray-200 focus:border-gray-800 focus:outline-none'
+                : 'border-gray-200 focus:!outline-none focus-visible:!outline-none focus:border-brand-blue/50 focus:ring-2 focus:ring-brand-blue/15'
             }`}
           />
           <div className="flex justify-between items-center text-sm text-gray-500">
@@ -201,13 +198,6 @@ export function TechnicalQuestionView({ question, answer, onAnswerChange, isLock
         </div>
       )}
 
-      {/* Instructions */}
-      <p className="text-sm text-gray-500">
-        {isMultipleChoice
-          ? 'Select all correct options'
-          : 'Select the correct option'}
-      </p>
-
       {/* Options */}
       <div className="space-y-3">
         {question.options?.map((option, index) => {
@@ -228,18 +218,20 @@ export function TechnicalQuestionView({ question, answer, onAnswerChange, isLock
               key={option.id}
               onClick={() => handleOptionClick(option.id)}
               disabled={isLocked}
-              className={`w-full flex items-start gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl border-2 transition-all text-left focus-visible:!outline-brand-blue ${
+              /* One row — radio, letter tile, option text — as in the
+                 assessment dashboard reference. */
+              className={`w-full flex items-center gap-3 sm:gap-4 px-3 sm:px-5 py-3 sm:py-4 rounded-xl border transition-all text-left focus-visible:!outline-brand-blue ${
                 state === 'submitted'
                   ? 'border-success bg-success-subtle cursor-not-allowed'
                   : isLocked
                     ? 'border-gray-200 bg-gray-50 cursor-not-allowed opacity-60'
                     : state === 'selected'
-                      ? 'border-brand-blue bg-brand-blue/5'
-                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                      ? 'border-brand-blue/50 bg-brand-blue/5 ring-1 ring-brand-blue/20'
+                      : 'border-gray-200 hover:border-brand-blue/30 hover:bg-brand-blue/[0.02]'
               }`}
             >
               {/* Selection Indicator */}
-              <div className={`flex-shrink-0 mt-0.5 ${
+              <div className={`flex-shrink-0 ${
                 state === 'submitted' ? 'text-success' : state === 'selected' ? 'text-brand-blue' : 'text-gray-400'
               }`}>
                 {isMultipleChoice ? (
@@ -273,49 +265,24 @@ export function TechnicalQuestionView({ question, answer, onAnswerChange, isLock
                 )}
               </div>
 
-              {/* Option Content */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-sm font-medium ${
-                    state === 'submitted'
-                      ? 'bg-success text-white'
-                      : state === 'selected'
-                        ? 'bg-brand-blue text-white'
-                        : 'bg-gray-100 text-gray-600'
-                  }`}>
-                    {optionLetter}
-                  </span>
-                </div>
-                <p className={`text-base break-words ${selected ? 'text-gray-800' : 'text-gray-700'}`}>
-                  {option.text}
-                </p>
-              </div>
+              {/* Letter tile */}
+              <span className={`w-9 h-9 sm:w-10 sm:h-10 shrink-0 rounded-lg flex items-center justify-center text-sm sm:text-base font-semibold ${
+                state === 'submitted'
+                  ? 'bg-success text-white'
+                  : 'bg-brand-blue/10 text-brand-blue'
+              }`}>
+                {optionLetter}
+              </span>
+
+              {/* Option text */}
+              <p className={`flex-1 min-w-0 text-sm sm:text-base break-words ${
+                state === 'selected' ? 'text-brand-blue font-medium' : 'text-gray-800'
+              }`}>
+                {option.text}
+              </p>
             </button>
           );
         })}
-      </div>
-
-      {/* Selection Summary */}
-      <div className="p-4 bg-gray-50 rounded-xl">
-        <p className="text-sm text-gray-600">
-          {selectedOptions.length === 0 ? (
-            <span className="text-gray-400">No option selected</span>
-          ) : (
-            <>
-              Selected: {selectedOptions.map((id, idx) => {
-                const option = question.options?.find(o => o.id === id);
-                const optionIndex = question.options?.findIndex(o => o.id === id) || 0;
-                const letter = String.fromCharCode(65 + optionIndex);
-                return (
-                  <span key={id}>
-                    {idx > 0 && ', '}
-                    <strong>{letter}</strong>
-                  </span>
-                );
-              })}
-            </>
-          )}
-        </p>
       </div>
     </div>
   );

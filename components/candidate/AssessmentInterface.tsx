@@ -10,19 +10,18 @@ import {
   CheckCircle,
   Video,
   FileText,
-  Cpu,
+  Settings,
   CodeXml,
   Users,
   Camera,
   Mic,
   ShieldAlert,
-  X,
   Check,
   HelpCircle,
   Lock,
-  Save,
   Monitor,
   Loader2,
+  User,
   WifiOff,
   Wifi,
   RefreshCw,
@@ -45,7 +44,20 @@ import { getFullscreenChangeEvent, isFullscreen as getIsFullscreen, exitFullscre
 import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
 import CandidateHeader from './CandidateHeader';
 import CandidateStepper from './CandidateStepper';
-import { CANDIDATE_PAGE, CARD, RECRUITER_BAR_ROW, RECRUITER_SHELL, T_EYEBROW, T_SECTION } from '@/lib/constants/candidateLayout';
+import { CANDIDATE_PAGE, RECRUITER_BAR_ROW, RECRUITER_SHELL } from '@/lib/constants/candidateLayout';
+
+/* The right-column cards on the question screen (candidate, camera, timer,
+   progress) and the question navigator — a softer, roomier card than the
+   shared CARD, to match the assessment dashboard layout. */
+/* The technical round's gear is drawn slightly tilted, so it reads as a
+   cog in motion rather than a static settings button. */
+const ROUND_ICON_TILT = 'rotate-[20deg]';
+
+/* One heading style for every card title on this screen — the round name
+   and Question Progress — bold and the same size. */
+const HEADING = 'text-sm sm:text-base font-bold text-gray-900 tracking-tight';
+
+const SIDE_CARD = 'bg-white rounded-2xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-5';
 
 interface Round {
   round_type: string;
@@ -1673,7 +1685,10 @@ export function AssessmentInterface({
       case 'hr':
         return Users;
       case 'technical':
-        return Cpu;
+        /* A gear, not a CPU chip: the technical round runs for every job
+           (nursing, mechanical, …), where a computer chip read oddly. Drawn
+           tilted — see ROUND_ICON_TILT. */
+        return Settings;
       case 'coding':
         return CodeXml;
       default:
@@ -1707,7 +1722,6 @@ export function AssessmentInterface({
   const isFullscreenInvalid = isFullscreenRequired && !isFullscreen;
   const isAssessmentAccessBlocked = isFullscreenInvalid || isDeviceDisabled;
 
-  const jobRole = assessmentInfo.jd_title;
   const candidateName = assessmentInfo.candidate_name;
 
   return (
@@ -1880,7 +1894,10 @@ export function AssessmentInterface({
             timers and progress moved out of it (see the aside in Main
             Content): at 72px the bar cannot hold a preview large enough to see
             a face. */}
-        <CandidateHeader showHelp={false}>
+        {/* "Need help?" as an in-page popover, not the mailto link the
+            other steps use: opening a mail client mid-test takes focus from
+            the proctored fullscreen window. */}
+        <CandidateHeader helpPopover>
             {/* Right side - auto-save warnings. The candidate / job / version
                 details sit in the context row below the stepper, and the
                 timers and progress under the camera, so nothing is shown twice. */}
@@ -1921,334 +1938,337 @@ export function AssessmentInterface({
         <CandidateStepper current={5} bordered={false} />
       </div>
 
-      {/* Main Content */}
+      {/* Main Content — laid out like the assessment dashboard reference:
+          the question card on the left; the candidate, camera, timer and
+          question progress stacked in a column on the right; and a
+          full-width question navigator under both. On smaller screens the
+          right column comes first (DOM order + `lg:flex-row-reverse`) so the
+          proctoring camera stays on screen. The one <video> stays mounted at
+          every size for proctoring. */}
       <main className={RECRUITER_SHELL}>
         <div className={`${RECRUITER_BAR_ROW} py-4 md:py-5`}>
-          {/* Round tabs - above the question, same items as before. */}
-          <div className="mb-4 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-center sm:gap-3">
-            {rounds.map((round, idx) => {
-              const Icon = getRoundIcon(round.round_type);
-              const isActive = round.round_type === currentQuestion.round_type;
-              return (
-                <div
-                  key={`${round.round_type}-${idx}`}
-                  className={`flex min-w-0 items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 rounded-lg ${
-                    isActive ? 'bg-white shadow-sm border border-gray-200' : ''
-                  }`}
-                >
-                  <div className={`w-6 h-6 shrink-0 rounded ${getRoundColor(round.round_type)} flex items-center justify-center`}>
-                    <Icon className="w-4 h-4 text-white" />
+          {(() => {
+            /* One status per question, read from `answerStatuses` — the same
+               source the old grid and the submit dialog use, so the counts,
+               the navigator and the dialog always agree. */
+            let submittedCount = 0;
+            let draftCount = 0;
+            for (let n = 1; n <= currentQuestion.total_questions; n++) {
+              const st = answerStatuses.get(`question_${n}`);
+              if (st?.isLocked) submittedCount++;
+              else if (st?.hasDraft) draftCount++;
+            }
+            const unansweredCount = currentQuestion.total_questions - submittedCount - draftCount;
+            const legend = [
+              { label: 'Submitted', count: submittedCount, dot: 'bg-success' },
+              { label: 'Draft', count: draftCount, dot: 'bg-warning' },
+              { label: 'Unanswered', count: unansweredCount, dot: 'bg-gray-300' },
+            ];
+            const totalH = Math.floor(durationMinutes / 60);
+            const totalM = durationMinutes % 60;
+            const totalLabel = totalH > 0 ? `${totalH}h ${totalM}m` : `${totalM}m`;
+            const timerTone = globalTimeRemaining < 300
+              ? 'text-destructive'
+              : globalTimeRemaining < 600
+                ? 'text-warning'
+                : 'text-brand-blue';
+            const RoundIcon = getRoundIcon(currentQuestion.round_type);
+
+            return (
+              <>
+                <div className="flex flex-col lg:flex-row-reverse lg:items-stretch gap-4 lg:gap-5">
+                  {/* ── Right column ── */}
+                  <aside className="lg:w-80 shrink-0 flex flex-col gap-4 lg:sticky lg:top-40 lg:self-start">
+                    {/* Camera, then the candidate's details. Side by side on a
+                        tablet; stacked on a phone and in the desktop column. */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:flex lg:flex-col">
+                      {/* A fixed 16:9 preview at every size; the card keeps
+                          its natural height so there is no empty frame around it. */}
+                      <div className={`${SIDE_CARD} !p-3`}>
+                        <div className="w-full aspect-video bg-gray-900 rounded-xl overflow-hidden relative">
+                          <video
+                            ref={videoRef}
+                            autoPlay
+                            playsInline
+                            muted
+                            className="w-full h-full object-cover"
+                            style={{ transform: 'scaleX(-1)' }}
+                          />
+                          <span className="absolute top-2 right-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-black/55 backdrop-blur-sm text-2xs font-bold tracking-wider text-white" aria-label="Recording">
+                            <span className="w-1.5 h-1.5 rounded-full bg-destructive animate-pulse" />
+                            REC
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Candidate — icon tile beside the name, with the
+                          email on the line below. */}
+                      {/* Natural height (no flex-1): the camera and the
+                          timer card take the column's spare height instead. */}
+                      <div className={`${SIDE_CARD} !py-3 sm:!py-3.5 flex items-center gap-3`}>
+                        <span className="w-10 h-10 shrink-0 rounded-xl bg-brand-blue/10 text-brand-blue flex items-center justify-center">
+                          <User className="w-5 h-5" />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-sm sm:text-base font-semibold text-gray-900 truncate" title={candidateName || undefined}>
+                            {candidateName || '-'}
+                          </p>
+                          {assessmentInfo.candidate_email && (
+                            <p className="mt-0.5 text-sm text-gray-600 truncate" title={assessmentInfo.candidate_email}>
+                              {assessmentInfo.candidate_email}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Time + question progress — one card, split by a rule. */}
+                    <div className={SIDE_CARD}>
+                      <div className="flex items-center gap-3">
+                        <span className="w-11 h-11 shrink-0 rounded-xl bg-brand-blue/10 flex items-center justify-center">
+                          <Clock className={`w-5 h-5 ${timerTone}`} />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs sm:text-sm text-gray-600">Time Remaining</p>
+                          <p className={`text-2xl sm:text-3xl font-bold tabular-nums leading-tight ${timerTone} ${globalTimeRemaining < 300 ? 'animate-pulse' : ''}`}>
+                            {formatTime(globalTimeRemaining)}
+                          </p>
+                        </div>
+                        <span className="shrink-0 px-2.5 py-1 rounded-lg bg-brand-blue/5 text-xs sm:text-sm font-semibold text-brand-blue tabular-nums whitespace-nowrap" title="Total duration">
+                          {totalLabel} total
+                        </span>
+                      </div>
+                      {timeRemaining !== null && (
+                        <div className={`mt-2.5 flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg text-xs ${
+                          timeRemaining < 30 ? 'bg-destructive-subtle text-destructive' : 'bg-gray-50 text-gray-600'
+                        }`}>
+                          <span>This question</span>
+                          <span className="font-semibold tabular-nums">{formatTime(timeRemaining)}</span>
+                        </div>
+                      )}
+
+                      <div className="my-3.5 border-t border-gray-100" />
+
+                      <div className="flex items-center justify-between gap-2">
+                        <p className={HEADING}>Question Progress</p>
+                        <span className="text-sm text-gray-700 tabular-nums whitespace-nowrap">
+                          {currentQuestion.question_number} of {currentQuestion.total_questions}
+                        </span>
+                      </div>
+                      <div className="mt-2.5 h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-brand-blue rounded-full transition-all duration-300"
+                          style={{ width: `${(currentQuestion.question_number / currentQuestion.total_questions) * 100}%` }}
+                        />
+                      </div>
+                      <div className="mt-3.5 grid grid-cols-3 divide-x divide-gray-100">
+                        {legend.map((item) => (
+                          <div key={item.label} className="min-w-0 px-1 text-center">
+                            <p className="flex items-center justify-center gap-1.5 text-xs text-gray-600 whitespace-nowrap">
+                              <span className={`w-2 h-2 rounded-full shrink-0 ${item.dot}`} />
+                              {item.label}
+                            </p>
+                            <p className="mt-1 text-base sm:text-lg font-bold text-gray-900 tabular-nums">{item.count}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </aside>
+
+                  {/* ── Question ── */}
+                  <div className="min-w-0 flex-1 flex flex-col">
+                    {/* Review Mode Banner — informational only; Submit & Confirm
+                        on the question card is the sole submission path. */}
+                    {allQuestionsAnswered && (
+                      <div className="mb-3 sm:mb-4 bg-success-subtle border border-success-line rounded-xl p-3 sm:p-4 flex items-center gap-3">
+                        <div className="w-9 h-9 sm:w-10 sm:h-10 bg-success-subtle rounded-full flex items-center justify-center flex-shrink-0">
+                          <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-success" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-success-strong text-sm sm:text-base">All questions answered!</p>
+                          <p className="text-xs sm:text-sm text-success">You can review and edit your answers before submitting.</p>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex-1 flex flex-col bg-white rounded-2xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
+                      {/* Round header */}
+                      <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`w-10 h-10 sm:w-11 sm:h-11 shrink-0 rounded-xl ${getRoundColor(currentQuestion.round_type)} flex items-center justify-center shadow-sm`}>
+                            <RoundIcon className={`w-5 h-5 sm:w-6 sm:h-6 text-white ${currentQuestion.round_type === 'technical' ? ROUND_ICON_TILT : ''}`} />
+                          </div>
+                          <p className={`${HEADING} truncate`}>{currentQuestion.round_name}</p>
+                        </div>
+                        {currentQuestion.tags.length > 0 && (
+                          <div className="flex items-center gap-1 sm:gap-2 flex-wrap justify-end">
+                            {currentQuestion.tags.map((tag, idx) => (
+                              <span key={`${tag}-${idx}`} className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Question Content - Technical + Coding only (HR handled in Step 4) */}
+                      <div className="flex-1 flex flex-col px-4 sm:px-5 pt-4 sm:pt-5 pb-2">
+                        {currentQuestion.round_type === 'technical' && (
+                          <TechnicalQuestionView
+                            key={currentQuestion.question_id}
+                            question={currentQuestion}
+                            answer={answer}
+                            onAnswerChange={setAnswer}
+                            isLocked={isCurrentAnswerLocked}
+                          />
+                        )}
+
+                        {currentQuestion.round_type === 'coding' && (
+                          <CodingQuestionView
+                            key={currentQuestion.question_id}
+                            question={currentQuestion}
+                            answer={answer}
+                            onAnswerChange={setAnswer}
+                            allowLanguageChange={false}
+                            isLocked={isCurrentAnswerLocked}
+                            attemptId={assessmentInfo.attempt_id || ''}
+                            copyPasteBlocking={copyPasteBlocking}
+                          />
+                        )}
+                      </div>
+
+                      {/* Actions — inside the card, under the options. */}
+                      <div className="px-4 sm:px-5 py-4 sm:py-5 flex items-center justify-between gap-2 flex-wrap">
+                        <div>
+                          {currentQuestion.question_number > 1 && (
+                            <Button
+                              variant="outline"
+                              onClick={handlePrevious}
+                              disabled={isNavigating || isSubmitting}
+                            >
+                              <ChevronLeft className="w-4 h-4" />
+                              Previous
+                            </Button>
+                          )}
+                        </div>
+
+                        {/* Wraps on a narrow phone rather than pushing a
+                            button past the screen edge. */}
+                        <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
+                          {/* Submit - locks the answer (optional for candidate) */}
+                          {!isCurrentAnswerLocked && isAnswerValid() && (
+                            <Button
+                              variant="outline"
+                              onClick={handleSubmitAndLock}
+                              loading={isSubmitting}
+                              disabled={isSubmitting || isNavigating}
+                              title="Submit and lock this answer (cannot be edited after)"
+                              className="border-success text-success hover:bg-success-subtle"
+                            >
+                              <Lock className="w-4 h-4" />
+                              Submit
+                            </Button>
+                          )}
+
+                          {isCurrentAnswerLocked && (
+                            <span className="flex items-center gap-2 px-3 py-2 bg-success-subtle text-success rounded-lg text-sm">
+                              <Lock className="w-4 h-4" />
+                              Answer Submitted
+                            </span>
+                          )}
+
+                          {!isLastQuestion ? (
+                            /* Next - auto-saves draft and moves on */
+                            <Button
+                              variant="primary"
+                              onClick={handleNext}
+                              loading={isNavigating}
+                              disabled={isNavigating || isSubmitting}
+                            >
+                              Next Question
+                              <ChevronRight className="w-4 h-4" />
+                            </Button>
+                          ) : (
+                            /* Submit & Confirm - shown on the last question */
+                            <Button
+                              variant="primary"
+                              onClick={handleFinalSubmit}
+                              loading={isSubmitting}
+                              disabled={isSubmitting || isNavigating}
+                            >
+                              <Send className="w-4 h-4" />
+                              Submit & Confirm
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <span className={`min-w-0 truncate text-xs sm:text-sm ${isActive ? 'text-gray-900' : 'text-gray-500'}`}>
-                    {round.round_name}
-                  </span>
                 </div>
-              );
-            })}
-          </div>
 
-          {/* Recording panel on the right on desktop, above the question on
-              smaller screens - first in the DOM, so `lg:flex-row-reverse` puts
-              it on the right. The camera with the timer and question progress
-              under it, then the candidate details card directly below. The one
-              <video> stays mounted at every size for proctoring. */}
-          <div className="flex flex-col lg:flex-row-reverse lg:items-start gap-4 lg:gap-6">
-          <aside className="lg:w-72 shrink-0 lg:sticky lg:top-40 flex flex-col gap-4">
-            <div className={`${CARD} flex items-center gap-3 lg:flex-col lg:items-stretch`}>
-              <div className="w-1/2 sm:w-44 md:w-60 lg:w-full aspect-video bg-gray-900 rounded-lg overflow-hidden relative shrink-0">
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className="w-full h-full object-cover"
-                  style={{ transform: 'scaleX(-1)' }}
-                />
-                <div className="absolute bottom-1.5 right-1.5 w-2.5 h-2.5 bg-destructive rounded-full animate-pulse" />
-              </div>
-              <div className="flex-1 min-w-0 flex flex-col gap-2 lg:gap-3">
-                {/* Global Assessment Timer */}
-                <div className={`flex items-center justify-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg ${
-                    globalTimeRemaining < 300 ? 'bg-destructive-subtle text-destructive animate-pulse' :
-                    globalTimeRemaining < 600 ? 'bg-warning-subtle text-warning' : 'bg-success-subtle text-success'
-                  }`}>
-                  <Clock className="w-4 h-4 shrink-0" />
-                  <div className="flex flex-col items-center">
-                    <span className="font-semibold tabular-nums text-base sm:text-lg">{formatTime(globalTimeRemaining)}</span>
-                    <span className="text-2xs uppercase tracking-wide opacity-75">Total Time</span>
+                {/* ── Question navigator — full width under both columns.
+                    Click a number to jump; tinted by status with the global
+                    tokens (success = submitted, warning = draft), brand blue
+                    for the current question. ── */}
+                {/* One compact row, as in the reference: every number in a
+                    single line (scrolling sideways rather than wrapping when
+                    there are more than fit), a short tip at the end behind a
+                    divider. On a phone the tip drops under the numbers. */}
+                <div className="mt-4 bg-white rounded-2xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 px-3 sm:px-4 py-2.5 flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
+                  <div className="min-w-0 flex-1 overflow-x-auto scrollbar-auto-hide -my-1 py-1 px-0.5">
+                    <div className="flex flex-nowrap gap-1.5 w-max">
+                      {Array.from({ length: currentQuestion.total_questions }, (_, i) => {
+                        const num = i + 1;
+                        const isCurrent = num === currentQuestion.question_number;
+                        const questionStatus = answerStatuses.get(`question_${num}`);
+                        const isLocked = questionStatus?.isLocked || false;
+                        const hasDraft = questionStatus?.hasDraft || false;
+
+                        let colorClass = 'bg-brand-blue/5 text-gray-700 hover:bg-brand-blue/10';
+                        let titleText = `Question ${num} - Unanswered`;
+                        if (isCurrent) {
+                          colorClass = 'bg-brand-blue text-white shadow-sm shadow-brand-blue/30';
+                          titleText = 'Current question';
+                        } else if (isLocked) {
+                          colorClass = 'bg-success-subtle text-success-strong ring-1 ring-success-line';
+                          titleText = `Question ${num} - Submitted`;
+                        } else if (hasDraft) {
+                          colorClass = 'bg-warning-subtle text-warning-strong ring-1 ring-warning-line';
+                          titleText = `Question ${num} - Draft (not submitted)`;
+                        }
+
+                        return (
+                          <button
+                            key={num}
+                            type="button"
+                            disabled={isCurrent || isNavigating || isSubmitting}
+                            onClick={() => {
+                              if (!isCurrent && !isNavigating && !isSubmitting) {
+                                void handleJumpToQuestion(num);
+                              }
+                            }}
+                            className={`w-9 h-9 shrink-0 rounded-lg text-sm font-semibold tabular-nums flex items-center justify-center transition-colors ${colorClass} ${
+                              isCurrent ? '' : 'cursor-pointer'
+                            } disabled:cursor-default`}
+                            title={titleText}
+                            aria-current={isCurrent ? 'step' : undefined}
+                          >
+                            {num}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
+                  {/* A short tip instead of a legend — the Question Progress
+                      card already explains the colours. */}
+                  <p className="flex items-center gap-1.5 shrink-0 md:pl-4 md:border-l md:border-gray-200 text-xs text-gray-500">
+                    <Info className="w-3.5 h-3.5 shrink-0 text-brand-blue" />
+                    Click a number to jump — your answer is saved as you go.
+                  </p>
                 </div>
-
-                {/* Question Timer */}
-                {timeRemaining !== null && (
-                  <div className={`flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg ${
-                    timeRemaining < 30 ? 'bg-destructive-subtle text-destructive' : 'bg-gray-100 text-gray-700'
-                  }`}>
-                    <span className="text-xs text-gray-500">Q:</span>
-                    <span className="font-medium tabular-nums text-sm">{formatTime(timeRemaining)}</span>
-                  </div>
-                )}
-
-                {/* Overall Progress */}
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-500 whitespace-nowrap tabular-nums">
-                    {currentQuestion.question_number} / {currentQuestion.total_questions}
-                  </span>
-                  <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-brand-blue transition-all duration-300"
-                      style={{ width: `${(currentQuestion.question_number / currentQuestion.total_questions) * 100}%` }}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Candidate details - the only place this step shows them. */}
-            <div className={CARD}>
-              <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3 sm:gap-4">
-                <div className="min-w-0">
-                  <dt className={T_EYEBROW}>Candidate Name</dt>
-                  <dd className={`mt-1 ${T_SECTION} truncate`} title={candidateName || undefined}>
-                    {candidateName || '-'}
-                  </dd>
-                </div>
-                <div className="min-w-0">
-                  <dt className={T_EYEBROW}>Candidate Role</dt>
-                  <dd className={`mt-1 ${T_SECTION} truncate`} title={jobRole || undefined}>
-                    {jobRole || '-'}
-                  </dd>
-                </div>
-              </dl>
-            </div>
-          </aside>
-
-          <div className="min-w-0 flex-1">
-          {/* Review Mode Banner — informational only; Submit & Confirm at the
-              bottom of the question card is the sole submission path. */}
-          {allQuestionsAnswered && (
-            <div className="mb-3 sm:mb-4 bg-success-subtle border border-success-line rounded-lg p-3 sm:p-4 flex items-center gap-3">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 bg-success-subtle rounded-full flex items-center justify-center flex-shrink-0">
-                <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-success" />
-              </div>
-              <div>
-                <p className="font-medium text-success-strong text-sm sm:text-base">All questions answered!</p>
-                <p className="text-xs sm:text-sm text-success">You can review and edit your answers before submitting.</p>
-              </div>
-            </div>
-          )}
-
-          {/* Question Card */}
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-            {/* Question Header */}
-            <div className="px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-100 bg-gray-50/50">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-lg ${getRoundColor(currentQuestion.round_type)} flex items-center justify-center`}>
-                    {(() => {
-                      const Icon = getRoundIcon(currentQuestion.round_type);
-                      return <Icon className="w-5 h-5 text-white" />;
-                    })()}
-                  </div>
-                  <div>
-                    <p className={T_SECTION}>
-                      {currentQuestion.round_name}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1 sm:gap-2 flex-wrap justify-end">
-                  {currentQuestion.tags.map((tag, idx) => (
-                    <span
-                      key={`${tag}-${idx}`}
-                      className="px-2 py-1 bg-gray-200 text-gray-600 text-xs rounded-full"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Question Content - Technical + Coding only (HR handled in Step 4) */}
-            <div className="p-3 sm:p-6">
-              {currentQuestion.round_type === 'technical' && (
-                <TechnicalQuestionView
-                  key={currentQuestion.question_id}
-                  question={currentQuestion}
-                  answer={answer}
-                  onAnswerChange={setAnswer}
-                  isLocked={isCurrentAnswerLocked}
-                />
-              )}
-
-              {currentQuestion.round_type === 'coding' && (
-                <CodingQuestionView
-                  key={currentQuestion.question_id}
-                  question={currentQuestion}
-                  answer={answer}
-                  onAnswerChange={setAnswer}
-                  allowLanguageChange={false}
-                  isLocked={isCurrentAnswerLocked}
-                  attemptId={assessmentInfo.attempt_id || ''}
-                  copyPasteBlocking={copyPasteBlocking}
-                />
-              )}
-            </div>
-
-            {/* Actions */}
-            <div className="px-3 sm:px-6 py-3 sm:py-4 border-t border-gray-100 bg-gray-50/50 flex items-center justify-between gap-2 flex-wrap">
-              {/* Left side - Previous button */}
-              <div>
-                {currentQuestion.question_number > 1 && (
-                  <Button
-                    variant="outline"
-                    onClick={handlePrevious}
-                    disabled={isNavigating || isSubmitting}
-                  >
-                    <ChevronLeft className="w-4 h-4 mr-1" />
-                    Previous
-                  </Button>
-                )}
-              </div>
-
-              {/* Right side - Submit and Next buttons. Wraps on a narrow phone
-                  rather than pushing a button past the screen edge. */}
-              <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
-                {/* Submit button - locks the answer (optional for candidate) */}
-                {!isCurrentAnswerLocked && isAnswerValid() && (
-                  <Button
-                    variant="outline"
-                    onClick={handleSubmitAndLock}
-                    loading={isSubmitting}
-                    disabled={isSubmitting || isNavigating}
-                    title="Submit and lock this answer (cannot be edited after)"
-                    className="border-success text-success hover:bg-success-subtle"
-                  >
-                    <Lock className="w-4 h-4 mr-2" />
-                    Submit
-                  </Button>
-                )}
-
-                {/* Show locked indicator if answer is already submitted */}
-                {isCurrentAnswerLocked && (
-                  <span className="flex items-center gap-2 px-3 py-2 bg-success-subtle text-success rounded-lg text-sm">
-                    <Lock className="w-4 h-4" />
-                    Answer Submitted
-                  </span>
-                )}
-
-                {/* Next button - auto-saves draft and moves to next */}
-                {!isLastQuestion ? (
-                  <Button
-                    variant="primary"
-                    onClick={handleNext}
-                    loading={isNavigating}
-                    disabled={isNavigating || isSubmitting}
-                  >
-                    Next
-                    <ChevronRight className="w-4 h-4 ml-1" />
-                  </Button>
-                ) : (
-                  /* Submit & Confirm button - shown on last question */
-                  <Button
-                    variant="primary"
-                    onClick={handleFinalSubmit}
-                    loading={isSubmitting}
-                    disabled={isSubmitting || isNavigating}
-                  >
-                    <Send className="w-4 h-4 mr-2" />
-                    Submit & Confirm
-                  </Button>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Progress Indicator - Click to Navigate.
-              Colours are the global status tokens (globals.css): neutral
-              muted for not answered, warning for answered-not-submitted,
-              success for submitted, brand blue for the current question. The
-              counts read the same `answerStatuses` the grid colours from. */}
-          <div className="mt-3 sm:mt-4 bg-white rounded-lg border border-gray-200 shadow-sm p-3 sm:p-4">
-            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-              <p className={T_SECTION}>Progress</p>
-              {(() => {
-                let submittedCount = 0;
-                let answeredCount = 0;
-                for (let n = 1; n <= currentQuestion.total_questions; n++) {
-                  const st = answerStatuses.get(`question_${n}`);
-                  if (st?.isLocked) submittedCount++;
-                  else if (st?.hasDraft) answeredCount++;
-                }
-                const notAnsweredCount = currentQuestion.total_questions - submittedCount - answeredCount;
-                const legend = [
-                  { label: 'Not answered', count: notAnsweredCount, tone: 'bg-muted text-muted-foreground ring-border' },
-                  { label: 'Draft', count: answeredCount, tone: 'bg-warning-subtle text-warning-strong ring-warning-line' },
-                  { label: 'Submitted', count: submittedCount, tone: 'bg-success-subtle text-success-strong ring-success-line' },
-                ];
-                return (
-                  <div className="flex items-center gap-2 text-xs flex-wrap">
-                    {legend.map((item) => (
-                      <span key={item.label} className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-medium ring-1 ${item.tone}`}>
-                        {item.label}
-                        <span className="font-semibold tabular-nums">{item.count}</span>
-                      </span>
-                    ))}
-                  </div>
-                );
-              })()}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {Array.from({ length: currentQuestion.total_questions }, (_, i) => {
-                const num = i + 1;
-                const isCurrent = num === currentQuestion.question_number;
-
-                const questionStatus = answerStatuses.get(`question_${num}`);
-                const isLocked = questionStatus?.isLocked || false;
-                const hasDraft = questionStatus?.hasDraft || false;
-                let colorClass = 'bg-muted text-muted-foreground ring-1 ring-border'; // Not answered
-                let icon = null;
-                let titleText = `Question ${num} - Not answered`;
-
-                if (isCurrent) {
-                  colorClass = 'bg-brand-blue text-primary-foreground ring-2 ring-brand-blue ring-offset-2';
-                  titleText = 'Current question';
-                } else if (isLocked) {
-                  colorClass = 'bg-success-subtle text-success-strong ring-1 ring-success-line';
-                  icon = <Lock className="w-4 h-4" />;
-                  titleText = `Question ${num} - Submitted`;
-                } else if (hasDraft) {
-                  colorClass = 'bg-warning-subtle text-warning-strong ring-1 ring-warning-line'; // Answered, not yet submitted
-                  icon = <Save className="w-4 h-4" />;
-                  titleText = `Question ${num} - Draft (not submitted)`;
-                }
-
-                return (
-                  <button
-                    key={num}
-                    type="button"
-                    disabled={isCurrent || isNavigating || isSubmitting}
-                    onClick={() => {
-                      if (!isCurrent && !isNavigating && !isSubmitting) {
-                        void handleJumpToQuestion(num);
-                      }
-                    }}
-                    className={`w-10 h-10 rounded-lg text-sm font-medium tabular-nums flex items-center justify-center transition-transform ${colorClass} ${
-                      isCurrent ? '' : 'cursor-pointer hover:scale-110 hover:shadow-md'
-                    } disabled:cursor-default disabled:hover:scale-100 disabled:hover:shadow-none`}
-                    title={titleText}
-                  >
-                    {icon || num}
-                  </button>
-                );
-              })}
-            </div>
-            <p className="text-xs text-gray-500 mt-2 tabular-nums">
-              Question {currentQuestion.question_number} of {currentQuestion.total_questions}
-            </p>
-          </div>
-          </div>
-          </div>
+              </>
+            );
+          })()}
         </div>
       </main>
 
@@ -2303,16 +2323,7 @@ export function AssessmentInterface({
           <div className="bg-white rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-xl w-full max-h-[calc(100dvh-2rem)] flex flex-col overflow-hidden">
             {/* Sticky header */}
             <div className="relative z-10 shrink-0 px-5 sm:px-6 pt-5 sm:pt-6 pb-4 border-b border-border shadow-sm">
-            {/* Close Button */}
-            <button
-              onClick={() => setShowCompleteConfirm(false)}
-              className="absolute top-4 right-4 p-1 rounded-full hover:bg-gray-100 transition-colors"
-              aria-label="Close"
-            >
-              <X className="w-5 h-5 text-gray-500" />
-            </button>
-
-            <div className="flex items-center gap-3 sm:gap-4 pr-8">
+            <div className="flex items-center gap-3 sm:gap-4">
               <div className={`w-12 h-12 shrink-0 ${unansweredCount > 0 ? 'bg-warning-subtle' : 'bg-success-subtle'} rounded-full flex items-center justify-center`}>
                 {unansweredCount > 0 ? (
                   <AlertCircle className="w-6 h-6 text-warning" />
@@ -2401,11 +2412,17 @@ export function AssessmentInterface({
 
             </div>
 
-            {/* Sticky footer */}
-            <div className="relative z-10 shrink-0 flex items-center justify-center px-5 sm:px-6 py-4 border-t border-border shadow-[0_-1px_2px_0_rgb(0_0_0_/_0.05)]">
+            {/* Sticky footer — Cancel + Submit, auto width, bottom-right. */}
+            <div className="relative z-10 shrink-0 flex items-center justify-end gap-2 sm:gap-3 px-5 sm:px-6 py-4 border-t border-border shadow-[0_-1px_2px_0_rgb(0_0_0_/_0.05)]">
+              <Button
+                variant="outline"
+                onClick={() => setShowCompleteConfirm(false)}
+                disabled={isCompleting}
+              >
+                Cancel
+              </Button>
               <Button
                 variant="primary"
-                className="w-full"
                 onClick={handleCompleteAssessment}
                 loading={isCompleting}
                 disabled={isCompleting}

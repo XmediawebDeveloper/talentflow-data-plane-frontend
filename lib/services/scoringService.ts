@@ -56,7 +56,8 @@ export interface ScoringResponse {
   jd_status?: string;
   jd_job_id?: string;
   jd_creation_method?: 'manual' | 'ai_generated' | string;
-  jd_current_version?: number;
+  jd_current_version?: number;  // republish counter — status only
+  jd_version_number?: number;   // job version (v1, v2, ...)
   jd_department?: string;
   jd_industry_type?: string;
   jd_employment_type?: string;

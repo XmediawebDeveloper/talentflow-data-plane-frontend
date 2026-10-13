@@ -96,6 +96,10 @@ interface BulkScoringProgressModalProps {
    * resume document in a new tab, which is not where a finished run leads.
    */
   onViewResult?: (item: ScoringProgressItem) => void;
+  /** Opens a candidate's resume. Unset: a new tab (the page-owned popups,
+   *  whose progress lives in the page). The app-wide popup passes a
+   *  same-tab navigation — its progress lives in context and survives it. */
+  onOpenResume?: (resumeId: string) => void;
 }
 
 export default function BulkScoringProgressModal({
@@ -111,6 +115,7 @@ export default function BulkScoringProgressModal({
   onRefresh,
   minimized = false,
   onViewResult,
+  onOpenResume,
 }: BulkScoringProgressModalProps) {
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
@@ -376,6 +381,7 @@ export default function BulkScoringProgressModal({
      treatment the resume lists elsewhere use. */
   const openResume = (resumeId?: string) => {
     if (!resumeId) return;
+    if (onOpenResume) { onOpenResume(resumeId); return; }
     window.open(`/recruitment/resume-view/${resumeId}`, '_blank', 'noopener,noreferrer');
   };
   // Only a row with a result can open one; the rest keep the plain resume link.
