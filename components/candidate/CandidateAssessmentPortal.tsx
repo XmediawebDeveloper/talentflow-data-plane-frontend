@@ -31,7 +31,7 @@ import {
   T_PAGE_SUBTITLE,
 } from '@/lib/constants/candidateLayout';
 import CandidateHeader from './CandidateHeader';
-import CandidateStepper from './CandidateStepper';
+import CandidateStepper, { CandidateHrStepProvider } from './CandidateStepper';
 import { ErrorScreen } from './ErrorScreen';
 import { CompletedScreen } from './CompletedScreen';
 import InterviewFeedbackModal, { ASSESSMENT_RATING_HINTS, ASSESSMENT_RATING_PROMPTS } from './InterviewFeedbackModal';
@@ -41,7 +41,7 @@ import { useAssessmentFaceBaseline } from '@/hooks/useAssessmentFaceBaseline';
 import { useRefreshPrevention } from '@/hooks/useRefreshPrevention';
 import { useProctoringMonitor } from '@/hooks/useProctoringMonitor';
 import { ProctoringWarningModal } from './ProctoringWarningModal';
-import { Monitor, Loader2, AlertCircle, Maximize2, ClipboardList } from 'lucide-react';
+import { Monitor, Loader2, AlertCircle, Maximize2, ClipboardList, Shield, ShieldCheck, Eye, Focus, Webcam, Mic, Scan, Lock, Check, Wifi, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getUserMedia, getErrorMessage, detectBrowser, requestFullscreen, isFullscreen, getFullscreenChangeEvent, exitFullscreen, playVideo, shouldUseAdaptiveAssessmentMode, lockKeyboardShortcuts, unlockKeyboardShortcuts } from '@/lib/utils/browserCompat';
 import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
@@ -64,9 +64,12 @@ interface FullscreenPromptScreenProps {
   /** Runs on the click BEFORE requestFullscreen (screen-share picker). Return false to stay on this screen. */
   beforeFullscreen?: () => Promise<boolean>;
   notice?: string | null;
+  /** Whether this assessment records the screen — picks the screen-sharing
+   *  tiles, so the prompt never asks for a share that will not happen. */
+  screenShareRequired?: boolean;
 }
 
-function FullscreenPromptScreen({ onFullscreenReady, beforeFullscreen, notice }: FullscreenPromptScreenProps) {
+function FullscreenPromptScreen({ onFullscreenReady, beforeFullscreen, notice, screenShareRequired = false }: FullscreenPromptScreenProps) {
   const [isEnteringFullscreen, setIsEnteringFullscreen] = useState(false);
 
   // This handler is directly attached to a button onClick — guaranteed user gesture context.
@@ -87,74 +90,147 @@ function FullscreenPromptScreen({ onFullscreenReady, beforeFullscreen, notice }:
     onFullscreenReady();
   };
 
+  /* Two panels, after the AI interview's fullscreen prompt: on the left what
+     this is (badges, illustration, title, privacy note); on the right what to
+     do as a 2×2 grid of tiles, what is not allowed as one red strip, and the
+     button. Stacks into one column below `lg`. No close button: there is
+     nothing behind this screen to go back to. */
+  const todo = screenShareRequired
+    ? [
+        { Icon: Monitor, title: 'Share Entire Screen', text: 'Share your entire screen only. Window or Current Tab is not allowed.' },
+        { Icon: Shield, title: 'Keep Screen Sharing Active', text: 'Screen sharing is required to prevent malpractice.' },
+        { Icon: Eye, title: 'Stay in Fullscreen Mode', text: 'Browser navigation will be hidden while you are in the assessment.' },
+        { Icon: Focus, title: 'Keep this Window in Focus', text: 'Stay in fullscreen and keep this window in focus for the entire assessment.' },
+      ]
+    : [
+        { Icon: Eye, title: 'Stay in Fullscreen Mode', text: 'Browser navigation will be hidden while you are in the assessment.' },
+        { Icon: Focus, title: 'Keep this Window in Focus', text: 'Stay in fullscreen and keep this window in focus for the entire assessment.' },
+        { Icon: Wifi, title: 'Stable Connection', text: 'Keep a steady internet connection until you submit.' },
+        { Icon: Clock, title: 'One Sitting', text: 'The timer keeps running, so finish the assessment without a break.' },
+      ];
+
   return (
-    <div className="min-h-[100dvh] bg-gray-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-5 sm:p-8 md:p-12">
-        <div className="w-16 h-16 bg-brand-blue/10 text-brand-blue rounded-full flex items-center justify-center mx-auto mb-5">
-          <Monitor className="w-8 h-8" />
-        </div>
-
-        <h1 className="text-xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-3 sm:mb-4 text-center">
-          Enter Fullscreen Mode
-        </h1>
-        {notice && (
-          <div className="rounded-lg border border-destructive/30 bg-destructive-subtle text-destructive text-sm p-3 mb-5 text-center" role="alert">
-            {notice}
+    <div className="min-h-[100dvh] bg-gray-50 flex items-center justify-center p-3 sm:p-4">
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-xl shadow-brand-blue/5 w-full max-w-[880px] grid grid-cols-1 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.35fr)] gap-3 sm:gap-4 p-3 sm:p-4">
+        {/* ═══ LEFT: what this is ═══ */}
+        <div className="rounded-2xl bg-gradient-to-b from-brand-blue/10 to-brand-blue/[0.03] p-4 flex flex-col min-w-0">
+          <div className="flex items-center justify-center lg:justify-start gap-2 flex-wrap">
+            <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-gray-900">
+              <ShieldCheck className="w-5 h-5 text-brand-blue" />
+              Assessment
+            </span>
+            <span className="text-xs font-medium text-brand-blue bg-white/80 px-2.5 py-1 rounded-full">
+              Secure &amp; Proctored
+            </span>
           </div>
-        )}
 
-        <p className="text-lg text-gray-600 mb-8 text-center">
-          This assessment requires fullscreen mode to prevent distractions and ensure a fair testing environment.
-          Click the button below to enter fullscreen and begin your assessment.
-        </p>
-
-        <div className="rounded-xl border border-brand-blue/20 bg-brand-blue/5 p-4 sm:p-5 mb-6">
-          <p className="text-sm sm:text-base font-semibold text-brand-blue mb-3">Fullscreen Assessment Rules:</p>
-          <ul className="space-y-2 text-sm sm:text-base text-gray-700">
-            <li className="flex items-start gap-2">
-              <span className="text-brand-blue mt-1">✓</span>
-              <span>Browser tabs &amp; navigation will be hidden</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-brand-blue mt-1">✓</span>
-              <span>Exiting fullscreen will be recorded as a violation</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-brand-blue mt-1">✓</span>
-              <span>Keep the window focused throughout the assessment</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-destructive mt-1">!</span>
-              <span>
-                {IS_PRODUCTION_ENV
-                  ? 'Switching tabs, minimising the window, Alt+Tab, pressing Esc or F11, the Windows/⌘ key, or opening Picture-in-Picture ends the assessment immediately with no resume.'
-                  : 'Switching tabs, minimising the window, Alt+Tab, pressing Esc or F11 or opening Picture-in-Picture is recorded as a violation for the recruiter.'}
+          {/* Illustration — monitor with the fullscreen mark, flanked by the
+              camera, microphone and proctoring badges. */}
+          <div aria-hidden className="relative mx-auto my-3 sm:my-4 w-full max-w-[180px] sm:max-w-[200px] aspect-[4/3]">
+            <div className="absolute inset-[4%] rounded-full bg-brand-blue/[0.07]" />
+            <div className="absolute inset-[16%] rounded-full bg-brand-blue/[0.07]" />
+            <div className="absolute left-[16%] right-[16%] top-[18%] h-[50%] rounded-lg border-[4px] border-brand-blue/70 bg-white shadow-md flex items-center justify-center">
+              <span className="w-9 h-9 rounded-lg bg-brand-blue text-white flex items-center justify-center shadow-lg shadow-brand-blue/30">
+                <Scan className="w-5 h-5" />
               </span>
-            </li>
-          </ul>
+            </div>
+            <div className="absolute left-1/2 -translate-x-1/2 top-[68%] w-4 h-[9%] bg-brand-blue/60" />
+            <div className="absolute left-1/2 -translate-x-1/2 top-[76%] w-16 h-1.5 rounded-full bg-brand-blue/70" />
+            <span className="absolute left-[2%] top-[6%] w-9 h-9 rounded-full bg-white shadow-md flex items-center justify-center text-brand-blue">
+              <Webcam className="w-4 h-4" />
+            </span>
+            <span className="absolute right-[2%] top-[6%] w-9 h-9 rounded-full bg-white shadow-md flex items-center justify-center text-brand-blue">
+              <Mic className="w-4 h-4" />
+            </span>
+            <span className="absolute right-[6%] top-[52%] w-9 h-9 rounded-full bg-white shadow-md flex items-center justify-center text-success">
+              <ShieldCheck className="w-4 h-4" />
+            </span>
+          </div>
+
+          <h1 className="text-xl md:text-2xl font-bold text-gray-900 text-center lg:text-left">Start Assessment</h1>
+          <p className="mt-1.5 text-xs md:text-sm text-gray-600 text-center lg:text-left leading-relaxed">
+            This assessment runs in fullscreen{screenShareRequired ? ' with entire screen sharing' : ''} and active
+            proctoring, to ensure a focused, fair and secure testing experience.
+          </p>
+
+          <div className="mt-4 lg:mt-auto lg:pt-4">
+            <div className="flex items-start gap-3 rounded-xl border border-brand-blue/10 bg-white/70 p-3">
+              <span className="w-8 h-8 rounded-lg bg-brand-blue/10 text-brand-blue flex items-center justify-center flex-shrink-0">
+                <Lock className="w-4 h-4" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-brand-blue">Your Privacy is Protected</p>
+                <p className="text-2xs text-gray-600 mt-0.5 leading-relaxed">
+                  Your {screenShareRequired ? 'screen, ' : ''}camera and audio are used only for this assessment&apos;s proctoring.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <Button
-          onClick={enterFullscreenAndStart}
-          disabled={isEnteringFullscreen}
-          /* The house primary Button, rather than a hand-painted blue-600 block
-             at `py-6 text-xl` — the largest control anywhere in the flow. */
-          variant="primary"
-          size="lg"
-          className="w-full"
-        >
-          {isEnteringFullscreen ? (
-            <>
-              <Loader2 className="w-6 h-6 mr-3 animate-spin" />
-              Entering Fullscreen...
-            </>
-          ) : (
-            <>
-              <Maximize2 className="w-6 h-6 mr-3" />
-              Enter Fullscreen &amp; Start Assessment
-            </>
+        {/* ═══ RIGHT: what to do, what's not allowed, the button ═══ */}
+        <div className="flex flex-col gap-3 min-w-0">
+          <div className="flex items-center gap-3">
+            <span className="w-9 h-9 rounded-full bg-success text-white flex items-center justify-center flex-shrink-0">
+              <Check className="w-5 h-5" strokeWidth={3} />
+            </span>
+            <div className="min-w-0">
+              <h2 className="text-base font-bold text-gray-900 leading-tight">What you need to do</h2>
+              <p className="text-xs text-gray-500">Please follow the guidelines below to continue.</p>
+            </div>
+          </div>
+
+          {notice && (
+            <div className="rounded-lg border border-destructive/30 bg-destructive-subtle text-destructive text-sm px-3 py-2" role="alert">
+              {notice}
+            </div>
           )}
-        </Button>
+
+          <ul className="grid grid-cols-1 min-[400px]:grid-cols-2 gap-2.5">
+            {todo.map(({ Icon, title, text }) => (
+              <li key={title} className="rounded-xl bg-white border border-gray-100 shadow-sm px-3 py-3 text-center">
+                <span className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-brand-blue/10 text-brand-blue flex items-center justify-center mx-auto">
+                  <Icon className="w-5 h-5" />
+                </span>
+                <p className="mt-2 text-xs sm:text-sm font-semibold text-gray-900 leading-snug">{title}</p>
+                <p className="mt-1 text-2xs sm:text-xs text-gray-500 leading-relaxed">{text}</p>
+              </li>
+            ))}
+          </ul>
+
+          <div className="flex items-start gap-3 rounded-xl bg-destructive-subtle ring-1 ring-destructive-line px-3 py-2.5">
+            <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-destructive" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-destructive">Actions not allowed</p>
+              <p className="mt-0.5 text-2xs sm:text-xs leading-relaxed text-gray-700">
+                {IS_PRODUCTION_ENV
+                  ? 'Switching tabs, minimising the window, Alt+Tab, Windows key, Esc or F11, or opening a Picture-in-Picture video ends the assessment immediately, with no resume.'
+                  : 'Switching tabs, minimising the window, Alt+Tab, Windows key, Esc or F11, or opening a Picture-in-Picture video will be recorded as a violation.'}
+              </p>
+            </div>
+          </div>
+
+          <Button
+            onClick={enterFullscreenAndStart}
+            disabled={isEnteringFullscreen}
+            variant="primary"
+            size="md"
+            className="w-full lg:mt-auto"
+          >
+            {isEnteringFullscreen ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Entering Fullscreen...
+              </>
+            ) : (
+              <>
+                <Maximize2 className="w-4 h-4" />
+                <span className="sm:hidden">Enter Fullscreen &amp; Start</span>
+                <span className="hidden sm:inline">Enter Fullscreen &amp; Start Assessment</span>
+              </>
+            )}
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -2491,13 +2567,9 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
               "HR Questions" title with no logo at all, so the product name
               vanished in the middle of the flow, and its own stepper used 24px
               dots and a literal "checkmark" character where every other screen
-              used 32px dots and the Check glyph. The "No Timer" badge moves
-              into the header's slot beside the help link. */}
-          <CandidateHeader>
-            <span className="text-xs font-medium text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 px-2 py-1 rounded whitespace-nowrap">
-              No Timer
-            </span>
-          </CandidateHeader>
+              used 32px dots and the Check glyph. No "No Timer" badge in the
+              header: the page subtitle already says the questions are not timed. */}
+          <CandidateHeader />
           <CandidateStepper current={4} />
 
           {/* The recruiter page shell. */}
@@ -2528,14 +2600,9 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
                   return (
                   <div key={idx} className="border border-gray-200 rounded-lg p-4">
                     <div className="flex items-start gap-3">
-                      <span className="w-6 h-6 flex items-center justify-center bg-gray-800 text-white rounded text-xs font-medium flex-shrink-0 mt-0.5">{idx + 1}</span>
+                      <span className="w-6 h-6 flex items-center justify-center bg-brand-blue text-white rounded text-xs font-semibold flex-shrink-0 mt-0.5">{idx + 1}</span>
                       <div className="flex-1">
-                        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                          <p className="text-sm font-medium text-gray-900">{q.text}</p>
-                          <span className="px-2 py-0.5 rounded text-2xs font-medium flex-shrink-0 ml-2 bg-gray-100 text-gray-500">
-                            {isYesNo ? 'Yes/No' : 'Text'}
-                          </span>
-                        </div>
+                        <p className="mb-2 text-sm font-medium text-gray-900">{q.text}</p>
                         {isYesNo ? (
                           <div className="flex flex-wrap gap-2">
                             {['Yes', 'No'].map((option) => (
@@ -2571,7 +2638,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
                                 [q.key]: value
                               }));
                             }}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 text-black"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-black transition-colors focus:!outline-none focus-visible:!outline-none focus:border-brand-blue/50 focus:ring-2 focus:ring-brand-blue/15"
                           />
                         )}
                       </div>
@@ -2606,6 +2673,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
           onFullscreenReady={screenRecordingRequired ? () => { setShareBarError(null); setStepSafe('hide_share_bar'); } : handleFullscreenReady}
           beforeFullscreen={handleBeforeFullscreen}
           notice={screenShareNotice}
+          screenShareRequired={screenRecordingRequired}
         />
       );
 
@@ -2770,9 +2838,15 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     }
   };
 
+  /* One answer to "is there an HR step?" for every screen's stepper — the
+     same test the flow uses to route to the HR screen (handleSystemCheckComplete). */
+  const hasHrStep = !!(assessmentInfo?.hr_topics && assessmentInfo.hr_topics.length > 0);
+
   return (
     <>
-      {renderContent()}
+      <CandidateHrStepProvider value={hasHrStep}>
+        {renderContent()}
+      </CandidateHrStepProvider>
       {/* Fullscreen exit overlay — mirrors AI Interview enforcement */}
       {step === 'assessment' && !useAdaptiveAssessmentMode && fullscreenStateSampled && !isFullscreenActive && (
         <div className="fixed inset-0 z-[99] bg-black/90 flex items-center justify-center backdrop-blur-sm p-4">

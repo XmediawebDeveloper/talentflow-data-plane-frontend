@@ -2787,8 +2787,15 @@ export default function AIInterview() {
         </div>
         </div>{/* closes toolbar card */}
 
-        {/* Main Content */}
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+        {/* Main Content. Like the Job Descriptions and Assessments pages, the
+            lists and tables sit straight on the page with their own borders —
+            no outer box — and `[&>div]:p-0` drops the inset padding each tab's
+            wrapper kept for that box, so the rows line up with the toolbar
+            card above. Settings is a form, not a list, so it alone keeps the
+            card. */}
+        <div className={activeTab === 'settings'
+          ? 'bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5'
+          : '[&>div]:p-0'}>
           {/* All Interviews — flat, one row per interview config/version,
               the same shape as the Assessments page's "All Assessments"
               table, as opposed to the Total Jobs tab's one-card-per-job
