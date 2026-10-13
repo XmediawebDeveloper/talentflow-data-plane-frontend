@@ -291,6 +291,10 @@ export default function CandidateResultDetails({
   // when found), so opening the resume re-checks against the same one.
   const inviteEmailRef = useRef('');
   const detailContentRef = useRef<HTMLDivElement>(null);
+  // A marker at the violations banner's bottom edge, when it is shown. Tab
+  // scrolls bring this to the breadcrumb's bottom (top-12), so the banner
+  // goes fully out of view instead of being left half hidden behind it.
+  const violationBannerEndRef = useRef<HTMLDivElement>(null);
 
   // One tab row now owns both summary panels and detailed question panels.
   // The visible panel — and the lazy fetches for Recording and Violations —
@@ -398,7 +402,7 @@ export default function CandidateResultDetails({
   const activeQuestionTab = isQuestionAnalysisTab ? currentDetailTab : activeTab;
   const scrollDetailContentToTop = useCallback(() => {
     window.requestAnimationFrame(() => {
-      detailContentRef.current?.scrollIntoView({
+      (violationBannerEndRef.current ?? detailContentRef.current)?.scrollIntoView({
         behavior: 'smooth',
         block: 'start',
         inline: 'nearest',
@@ -1150,7 +1154,7 @@ export default function CandidateResultDetails({
               standalone route passes showRecordPager={false} and puts the pager
               in its own breadcrumb instead. */}
           <PageBreadcrumb
-            className="mb-0"
+            className="mb-3"
             sticky={false}
             items={breadcrumbItems}
             actions={showRecordPager && totalCount != null && totalCount > 0 ? (
@@ -1179,7 +1183,7 @@ export default function CandidateResultDetails({
           the two document actions on the right, and the round scores along
           the bottom. It absorbs the info card that used to sit under it;
           every value is one that card showed. */}
-      <div className="pt-4 sm:pt-6 bg-white">
+      <div className="bg-white">
         <div className="rounded-xl bg-brand-blue/5 border border-brand-blue/15 ring-1 ring-brand-blue/10 shadow-sm shadow-brand-blue/10 p-4 sm:p-5">
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
             <div className="flex items-start gap-3 sm:gap-4 min-w-0">
@@ -1398,6 +1402,54 @@ export default function CandidateResultDetails({
             );
           })()}
         </div>
+
+        {/* Violations — prominent red banner under the header, as on the AI
+            Interview candidate result page (CandidateResultsView). Built from
+            the proctoring summary that comes with the result, so it needs no
+            extra request; the per-event log stays on the Violations tab. */}
+        {(() => {
+          const stats = detailedResult?.proctoring_stats;
+          const total = stats?.total_violations || 0;
+          if (!stats || total === 0) return null;
+          const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+          const parts = [
+            [stats.tab_switch_count, 'tab switch', 'tab switches'],
+            [stats.window_blur_count, 'window focus loss', 'window focus losses'],
+            [stats.fullscreen_exit_count, 'fullscreen exit', 'fullscreen exits'],
+            [stats.copy_count, 'copy', 'copies'],
+            [stats.paste_count, 'paste', 'pastes'],
+            [stats.multiple_faces_count, 'multiple-faces alert', 'multiple-faces alerts'],
+            [stats.face_not_visible_count, 'face-not-visible alert', 'face-not-visible alerts'],
+            [stats.camera_obstructed_count, 'camera obstruction', 'camera obstructions'],
+            [stats.voice_violation_count, 'voice alert', 'voice alerts'],
+            [stats.screen_capture_count, 'screen capture attempt', 'screen capture attempts'],
+          ] as const;
+          const summary = parts
+            .filter(([n]) => (n || 0) > 0)
+            .map(([n, one, many]) => plural(n || 0, one, many));
+          const terminated = resultStatusOf(detailedResult) === 'Terminated';
+          const title = terminated
+            ? 'Assessment terminated — proctoring violations'
+            : stats.integrity_status === 'clean'
+            ? 'Proctoring violations recorded'
+            : 'Proctoring violations detected — possible malpractice';
+          return (
+            <>
+            <div className="mt-4 flex items-start gap-2 px-4 py-3 bg-destructive-subtle border border-destructive-line ring-1 ring-destructive-line rounded-xl text-sm text-destructive-strong shadow-sm">
+              <ShieldAlert className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <div className="min-w-0 flex-1">
+                <div className="font-semibold">{title}</div>
+                <div className="text-destructive/90 mt-0.5">
+                  {plural(total, 'violation was', 'violations were')} recorded during the assessment
+                  {summary.length > 0 ? <>: <b>{summary.join(', ')}</b></> : null}.
+                  {' '}Review the Violations tab for the full log with timestamps.
+                </div>
+              </div>
+            </div>
+            <div ref={violationBannerEndRef} aria-hidden className="scroll-mt-12" />
+            </>
+          );
+        })()}
       </div>
 
       {/* Content */}
