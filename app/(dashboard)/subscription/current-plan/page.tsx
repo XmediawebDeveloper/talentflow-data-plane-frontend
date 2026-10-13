@@ -7,12 +7,18 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import api, { handleUnauthorized } from '@/lib/services/api';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Tooltip } from '@/components/ui/tooltip';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { decodePlanId } from '@/lib/utils/planEncoder';
 import { toast } from 'sonner';
 import { useQuota } from '@/contexts/QuotaContext';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { Skeleton } from '@/components/ui/skeleton';
+import { PageHeader } from '@/components/ui/page-header';
 import DowngradeWarningModal from '@/components/subscription/DowngradeWarningModal';
 import { getPreviousPlan } from '@/lib/services/subscriptionService';
 import { useRazorpay } from '@/lib/hooks/useRazorpay';
@@ -565,7 +571,7 @@ export function CurrentPlanLoadingSkeleton() {
       <div className="mx-auto w-full max-w-[1400px]">
         <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
           {/* Hero header */}
-          <section className="mb-5 rounded-2xl border border-gray-100 bg-gray-50 p-4 sm:p-5 lg:p-6">
+          <section className="mb-5 rounded-xl border border-gray-100 bg-gray-50 p-4 sm:p-5 lg:p-6">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
               <div className="flex items-start gap-3">
                 <Skeleton className="h-9 w-9 shrink-0 rounded-lg" />
@@ -614,7 +620,7 @@ export function CurrentPlanLoadingSkeleton() {
           {/* Plans grid */}
           <div className="grid grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-3">
             {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="rounded-2xl border border-gray-100 bg-white p-5 sm:p-6">
+              <div key={i} className="rounded-xl border border-gray-100 bg-white p-5 sm:p-6">
                 <div className="mb-4 flex items-center gap-3">
                   <Skeleton className="h-10 w-10 rounded-xl" />
                   <div className="flex-1 space-y-2">
@@ -2081,29 +2087,15 @@ function CurrentPlanContent() {
 
     return (
       <main className="flex-1 overflow-x-clip bg-slate-50 p-4 md:p-8">
-        <div className="mx-auto w-full max-w-[1400px] bg-white dark:bg-slate-900 rounded-2xl p-4 md:p-8">
-          {/* SaaS Hero Header */}
-          <section className="relative mb-5 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-4 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-5 lg:p-6">
-            <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
-            <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />
-            <div className="pointer-events-none absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
-            <div className="relative flex items-start gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/12 ring-1 ring-white/15 backdrop-blur-sm">
-                <CreditCard className="h-4 w-4 text-white" />
-              </div>
-              <div>
-                <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-2xs font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
-                  <Sparkles className="h-3 w-3 text-brand-orange" />
-                  Subscription
-                </div>
-                <h1 className="text-lg sm:text-xl font-semibold tracking-tight">Current Plan</h1>
-                <p className="mt-1 text-sm text-white/80 sm:text-base">Manage your subscription and billing</p>
-              </div>
-            </div>
-          </section>
+        <div className="mx-auto w-full max-w-[1400px] bg-white dark:bg-slate-900 rounded-2xl p-4 md:p-8 my-4 md:my-5 shadow-2xl">
+          <PageHeader
+            icon={<CreditCard className="h-5 w-5" />}
+            title="Current Plan"
+            description="Manage your subscription and billing"
+          />
 
           {/* Account Status Banner */}
-          <div className={`${colors.bg} border-2 ${colors.border} rounded-2xl p-4 sm:p-6 lg:p-8 mb-4 sm:mb-6 lg:mb-8`}>
+          <div className={`${colors.bg} border-2 ${colors.border} rounded-xl p-4 sm:p-6 lg:p-8 mb-4 sm:mb-6 lg:mb-8`}>
             <div className="flex items-start gap-3 sm:gap-4">
               <div className={`w-10 h-10 sm:w-12 sm:h-12 ${colors.bg} rounded-full flex items-center justify-center flex-shrink-0`}>
                 <Clock className={`w-5 h-5 sm:w-6 sm:h-6 ${colors.icon}`} />
@@ -2136,13 +2128,13 @@ function CurrentPlanContent() {
                   )}
                 </div>
                 <div className="mt-4 flex flex-col gap-2 sm:mt-6 sm:flex-row sm:gap-3">
-                  <button
+                  <Button
+                    variant="secondary"
                     onClick={() => fetchData()}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 transition-all hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue"
+                    icon={<Loader2 className="h-4 w-4" />}
                   >
-                    <Loader2 className="h-4 w-4" />
                     Refresh Status
-                  </button>
+                  </Button>
                   <a
                     href="mailto:support@talentflow.com"
                     className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg"
@@ -2162,46 +2154,26 @@ function CurrentPlanContent() {
   return (
     <main className="flex-1 overflow-x-clip bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Current Plan' }]} />
 
-        {/* SaaS Hero Header */}
-        <section className="relative mb-5 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-4 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-5 lg:p-6">
-          <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />
-          <div className="pointer-events-none absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
-          <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl">
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
-                <Sparkles className="h-3.5 w-3.5 text-brand-orange" />
-                Subscription workspace
+        <PageHeader
+          icon={<CreditCard className="h-5 w-5" />}
+          title="Current Plan"
+          description="Review your active subscription, manage billing, and explore plan upgrades from one place."
+          actions={selectedPlan && (
+            <div className="grid grid-cols-2 gap-2 text-sm sm:min-w-[260px]">
+              <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
+                <div className="text-xs text-gray-500 dark:text-slate-400">Active plan</div>
+                <div className="mt-1 truncate font-semibold text-gray-900 dark:text-slate-50">{selectedPlan.name}</div>
               </div>
-              <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/12 ring-1 ring-white/15 backdrop-blur-sm">
-                  <CreditCard className="h-4 w-4 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-lg sm:text-xl font-semibold tracking-tight">Current Plan</h1>
-                  <p className="mt-2 max-w-2xl text-sm text-white/80 sm:text-base">
-                    Review your active subscription, manage billing, and explore plan upgrades from one place.
-                  </p>
-                </div>
+              <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
+                <div className="text-xs text-gray-500 dark:text-slate-400">Status</div>
+                <div className="mt-1 truncate font-semibold text-gray-900 dark:text-slate-50">{statusBadge.label}</div>
               </div>
             </div>
-            {selectedPlan && (
-              <div className="grid grid-cols-2 gap-2 text-sm text-white/85 sm:min-w-[260px]">
-                <div className="rounded-xl bg-white/10 px-3 py-2 ring-1 ring-white/10 backdrop-blur-sm">
-                  <div className="text-xs text-white/65">Active plan</div>
-                  <div className="mt-1 truncate font-semibold">{selectedPlan.name}</div>
-                </div>
-                <div className="rounded-xl bg-white/10 px-3 py-2 ring-1 ring-white/10 backdrop-blur-sm">
-                  <div className="text-xs text-white/65">Status</div>
-                  <div className="mt-1 truncate font-semibold">{statusBadge.label}</div>
-                </div>
-              </div>
-            )}
-          </div>
-        </section>
+          )}
+        />
 
         {/* Subscription navigation tabs */}
         {billingLinks.length > 0 && (
@@ -2264,7 +2236,7 @@ function CurrentPlanContent() {
         )}
 
         {error && (
-          <div className="mb-6 flex items-center gap-3 rounded-2xl border border-destructive-line bg-destructive-subtle/80 p-4 ring-1 ring-destructive-line">
+          <div className="mb-6 flex items-center gap-3 rounded-xl border border-destructive-line bg-destructive-subtle/80 p-4 ring-1 ring-destructive-line">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-destructive-subtle text-destructive">
               <AlertCircle className="h-5 w-5" />
             </span>
@@ -2273,7 +2245,7 @@ function CurrentPlanContent() {
         )}
 
         {successMessage && (
-          <div className="mb-6 flex items-center gap-3 rounded-2xl border border-brand-teal/20 bg-brand-teal/[0.06] p-4 ring-1 ring-brand-teal/10">
+          <div className="mb-6 flex items-center gap-3 rounded-xl border border-brand-teal/20 bg-brand-teal/[0.06] p-4 ring-1 ring-brand-teal/10">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-teal/15 text-brand-teal">
               <CheckCircle className="h-5 w-5" />
             </span>
@@ -2282,7 +2254,7 @@ function CurrentPlanContent() {
         )}
 
         {hasPendingChanges && currentChange && (
-          <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-brand-orange/20 bg-brand-orange/[0.06] p-4 ring-1 ring-brand-orange/10 sm:flex-row sm:items-center">
+          <div className="mb-6 flex flex-col gap-3 rounded-xl border border-brand-orange/20 bg-brand-orange/[0.06] p-4 ring-1 ring-brand-orange/10 sm:flex-row sm:items-center">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-orange/15 text-brand-orange-deep">
               <AlertCircle className="h-5 w-5" />
             </span>
@@ -2322,13 +2294,13 @@ function CurrentPlanContent() {
 
         {/* Pending Payment Card */}
         {isPendingPayment && selectedPlan && (
-          <div className="bg-orange-50 border-2 border-orange-300 rounded-xl p-4 sm:p-5 lg:p-6 mb-4 sm:mb-6 lg:mb-8">
+          <div className="bg-warning-subtle border-2 border-warning-line rounded-xl p-4 sm:p-5 lg:p-6 mb-4 sm:mb-6 lg:mb-8">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-3 sm:mb-4 gap-2">
               <div className="flex items-start sm:items-center gap-2 sm:gap-3">
-                <Clock className="w-6 h-6 sm:w-8 sm:h-8 text-orange-500 flex-shrink-0" />
+                <Clock className="w-6 h-6 sm:w-8 sm:h-8 text-warning flex-shrink-0" />
                 <div>
-                  <h3 className="text-sm sm:text-base lg:text-lg font-semibold text-orange-700">Payment Pending</h3>
-                  <p className="text-orange-600 text-xs sm:text-sm">
+                  <h3 className="text-sm sm:text-base lg:text-lg font-semibold text-warning-strong">Payment Pending</h3>
+                  <p className="text-warning text-xs sm:text-sm">
                     Complete payment for <strong>{selectedPlan.name}</strong> - {formatCurrency(selectedPlan.price || 0, selectedPlan.currency)}
                   </p>
                 </div>
@@ -2461,7 +2433,9 @@ function CurrentPlanContent() {
                         </div>
                       </div>
                       {currentPlan && (
-                        <button
+                        <Button
+                          variant="destructive"
+                          className="w-full sm:w-auto flex-shrink-0"
                           onClick={() => {
                             setSelectedPlanForPayment(currentPlan);
                             setModalStep('isolation');
@@ -2472,11 +2446,10 @@ function CurrentPlanContent() {
                             setError(null);
                             setShowPaymentModal(true);
                           }}
-                          className="px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg font-medium transition-colors flex items-center gap-2 bg-destructive hover:bg-destructive text-white text-xs sm:text-sm w-full sm:w-auto justify-center flex-shrink-0"
+                          icon={<ArrowRight className="w-4 h-4" />}
                         >
-                          <ArrowRight className="w-4 h-4" />
                           Renew Current Plan
-                        </button>
+                        </Button>
                       )}
                     </div>
                   </div>
@@ -2888,7 +2861,7 @@ function CurrentPlanContent() {
                   <Card
                     className={`relative p-4 sm:p-6 lg:p-8 flex flex-col w-full transition-all duration-300 ease-out ${
                       isSelectedPending
-                        ? "border-2 border-orange-500 shadow-xl"
+                        ? "border-2 border-warning-line shadow-xl"
                         : isCurrentForToggle
                           ? "border-2 border-gray-600 shadow-xl"
                           : isHovered
@@ -2900,7 +2873,7 @@ function CurrentPlanContent() {
                   >
                     {isSelectedPending && (
                       <div className="absolute -top-4 left-1/2 -translate-x-1/2">
-                        <Badge className="bg-gradient-to-r from-orange-500 to-orange-600 text-white px-4 py-1">
+                        <Badge className="bg-warning text-white px-4 py-1">
                           Selected - Pending Payment
                         </Badge>
                       </div>
@@ -3513,7 +3486,7 @@ function CurrentPlanContent() {
                       </div>
                     </div>
 
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700">
+                    <div className="bg-brand-blue/[0.06] border border-brand-blue/20 rounded-lg p-3 text-sm text-brand-blue">
                       <p>{transactionResult.message
                         ? transactionResult.message.replace(/\b(upgrade|downgrade)\b/gi, (m: string) =>
                             isDowngradePayment ? (m.toLowerCase() === 'upgrade' ? 'downgrade' : 'Downgrade') : m
@@ -3522,17 +3495,18 @@ function CurrentPlanContent() {
                       }</p>
                     </div>
 
-                    <button
+                    <Button
+                      variant="primary"
+                      className="w-full"
                       onClick={async () => {
                         setShowPaymentModal(false);
                         setModalStep('isolation');
                         await fetchData();
                         await fetchQueuedUpgrades();
                       }}
-                      className="w-full rounded-lg bg-brand-blue px-4 py-2.5 font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg"
                     >
                       Got it
-                    </button>
+                    </Button>
                   </>
                 ) : (
                   /* Immediate Upgrade Result */
@@ -3567,9 +3541,9 @@ function CurrentPlanContent() {
                     )}
 
                     {/* PS02 Fix: Email Confirmation Message */}
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-start gap-2">
-                      <Mail className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                      <p className="text-sm text-blue-800">
+                    <div className="bg-brand-blue/[0.06] border border-brand-blue/20 rounded-lg p-3 flex items-start gap-2">
+                      <Mail className="w-5 h-5 text-brand-blue flex-shrink-0 mt-0.5" />
+                      <p className="text-sm text-brand-blue">
                         A confirmation email has been sent to your registered email address.
                       </p>
                     </div>
@@ -3659,17 +3633,18 @@ function CurrentPlanContent() {
                       </div>
                     </div>
 
-                    <button
+                    <Button
+                      variant="primary"
+                      className="w-full"
                       onClick={async () => {
                         setShowPaymentModal(false);
                         setModalStep('isolation');
                         // Refresh data to show updated plan
                         await fetchData();
                       }}
-                      className="w-full rounded-lg bg-brand-blue px-4 py-2.5 font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg"
                     >
                       Done
-                    </button>
+                    </Button>
                   </>
                 )}
               </div>
@@ -3912,33 +3887,26 @@ function CurrentPlanContent() {
 
               {/* Action Buttons */}
               <div className="flex gap-3">
-                <button
+                <Button
+                  variant="secondary"
+                  className="flex-1"
                   onClick={() => {
                     setShowCancelModal(false);
                     setSelectedQueuedUpgrade(null);
                     setCancelReason('');
                   }}
-                  className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-slate-700 text-gray-700 dark:text-slate-300 rounded-lg font-medium hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
                 >
                   Keep {changeLabel}
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="destructive"
+                  className="flex-1"
                   onClick={handleCancelUpgrade}
                   disabled={isCancellingUpgrade}
-                  className="flex-1 px-4 py-2.5 bg-destructive text-white rounded-lg font-medium hover:bg-destructive transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  icon={isCancellingUpgrade ? <Loader2 className="w-5 h-5 animate-spin" /> : <XCircle className="w-5 h-5" />}
                 >
-                  {isCancellingUpgrade ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      Cancelling...
-                    </>
-                  ) : (
-                    <>
-                      <XCircle className="w-5 h-5" />
-                      Cancel {changeLabel}
-                    </>
-                  )}
-                </button>
+                  {isCancellingUpgrade ? 'Cancelling...' : `Cancel ${changeLabel}`}
+                </Button>
               </div>
             </div>
           </div>

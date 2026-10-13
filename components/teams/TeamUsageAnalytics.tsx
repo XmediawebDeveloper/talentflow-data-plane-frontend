@@ -651,30 +651,38 @@ export default function TeamUsageAnalytics() {
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-5">
-        <div className="flex items-center gap-2">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50">Team Usage</h2>
-          <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${isTenantAdmin ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400'}`}>
-            {isTenantAdmin ? 'All Teams' : 'Your Teams'}
-          </span>
-        </div>
+      <div className="mb-5 flex flex-col gap-4 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 p-5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
+            <BarChart3 className="w-5 h-5 text-brand-blue" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50">Team Usage</h2>
+              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${isTenantAdmin ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400'}`}>
+                {isTenantAdmin ? 'All Teams' : 'Your Teams'}
+              </span>
+            </div>
+            <p className="text-sm text-gray-600 dark:text-slate-400">Consumption across teams and members for the selected period.</p>
+          </div>
+        </div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-2 min-w-0">
             <DateField
               aria-label="From date"
               value={fromDate}
               max={toDate}
               onChange={setFromDate}
-              className="w-auto"
+              className="min-w-0 flex-1 sm:flex-none sm:w-[150px]"
             />
-            <span className="text-sm text-gray-500 dark:text-slate-500">to</span>
+            <span className="shrink-0 text-xs font-medium text-gray-400 dark:text-slate-500">to</span>
             <DateField
               aria-label="To date"
               value={toDate}
               min={fromDate}
               max={new Date().toISOString().split('T')[0]}
               onChange={setToDate}
-              className="w-auto"
+              className="min-w-0 flex-1 sm:flex-none sm:w-[150px]"
             />
           </div>
           <div className="relative" ref={exportMenuRef}>
@@ -731,7 +739,7 @@ export default function TeamUsageAnalytics() {
       </div>
 
       {/* Summary stats */}
-      <div className="grid grid-cols-5 gap-3 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
         <StatCard label="Resume Scoring"  value={totals.rs}  dot="bg-blue-500"   loading={loading} onClick={() => openList('rs')}  active={pageView === 'list' && activeCard === 'rs'} />
         <StatCard label="Assessments"     value={totals.as_} dot="bg-purple-500" loading={loading} onClick={() => openList('as')}  active={pageView === 'list' && activeCard === 'as'} />
         <StatCard label="AI Interviews"   value={totals.aiu} dot="bg-success"  loading={loading} onClick={() => openList('aiu')} active={pageView === 'list' && activeCard === 'aiu'} />

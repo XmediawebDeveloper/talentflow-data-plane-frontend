@@ -20,7 +20,6 @@ import {
   X,
   Lock,
   Globe,
-  Sparkles,
   ArrowUpRight,
   LogOut,
   Trash2,
@@ -37,6 +36,7 @@ import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { useSearchParams } from 'next/navigation';
 import { formatISTTime, formatISTDate } from '@/lib/utils/dateUtils';
 import { PageSkeleton, Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 
 const quickEmojis = ['👍', '❤️', '😄', '🎉', '👀', '✅'];
 
@@ -520,33 +520,25 @@ export default function TeamChatPage() {
         <PageBreadcrumb className="mb-4" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Chat' }]} />
         <OrganizationTabs />
       </div>
-      <div className="flex flex-1 min-h-0 gap-3 md:gap-4">
+      <div className="flex flex-1 min-h-0 gap-3 md:gap-4 -mt-5 rounded-b-xl border border-t-0 border-gray-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 p-4 sm:p-5">
         {/* Left Sidebar - Channels List */}
         <aside className="hidden md:flex md:w-72 lg:w-80 flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
-          <div className="relative overflow-hidden bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal px-4 py-4 text-white">
-            <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-brand-cyan/25 blur-3xl" />
-            <div className="pointer-events-none absolute -bottom-12 -left-6 h-28 w-28 rounded-full bg-brand-orange/20 blur-3xl" />
-            <div className="relative">
-              <div className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-2xs font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
-                <Sparkles className="h-3 w-3 text-brand-orange" />
-                Real-time workspace
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15 backdrop-blur-sm">
-                    <MessageCircle className="h-5 w-5" />
-                  </span>
-                  <div>
-                    <h1 className="text-base font-semibold tracking-tight">Team Chat</h1>
-                    <p className="text-2xs text-white/70">{channels.length + directMessages.length} conversations</p>
-                  </div>
+          <div className="border-b border-gray-100 bg-gray-50 px-4 py-4">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
+                  <MessageCircle className="h-5 w-5" />
+                </span>
+                <div>
+                  <h1 className="text-base font-semibold tracking-tight text-gray-900">Team Chat</h1>
+                  <p className="text-2xs text-gray-500">{channels.length + directMessages.length} conversations</p>
                 </div>
-                {totalUnread > 0 && (
-                  <span className="inline-flex items-center rounded-full bg-brand-orange px-2.5 py-1 text-2xs font-semibold text-white shadow-sm">
-                    {totalUnread} unread
-                  </span>
-                )}
               </div>
+              {totalUnread > 0 && (
+                <span className="inline-flex items-center rounded-full bg-brand-orange px-2.5 py-1 text-2xs font-semibold text-white shadow-sm">
+                  {totalUnread} unread
+                </span>
+              )}
             </div>
           </div>
 
@@ -974,7 +966,7 @@ export default function TeamChatPage() {
                                   ? `overflow-hidden ${bubbleRadius} ${isSender ? 'ring-1 ring-brand-blue/20' : 'ring-1 ring-gray-100'}`
                                   : `px-4 py-2.5 ${bubbleRadius} ${
                                       isSender
-                                        ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/20'
+                                        ? 'bg-brand-blue/5 text-gray-900 ring-1 ring-brand-blue/20'
                                         : 'bg-slate-100 text-gray-900 ring-1 ring-gray-100'
                                     }`
                               }
@@ -988,7 +980,7 @@ export default function TeamChatPage() {
                                   />
                                 </a>
                               ) : (
-                                <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                                <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
                                   {message.is_deleted ? '[Message deleted]' : message.content}
                                 </p>
                               )}
@@ -1110,18 +1102,15 @@ export default function TeamChatPage() {
                   >
                     <Smile className="h-4 w-4" />
                   </button>
-                  <button
+                  <Button
                     onClick={handleSendMessage}
                     disabled={!messageInput.trim()}
-                    className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-all ${
-                      messageInput.trim()
-                        ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 hover:-translate-y-0.5 hover:shadow-md'
-                        : 'cursor-not-allowed bg-slate-100 text-gray-400'
-                    }`}
+                    size="sm"
+                    icon={<Send className="h-3.5 w-3.5" />}
+                    className="h-9"
                   >
-                    <Send className="h-3.5 w-3.5" />
                     Send
-                  </button>
+                  </Button>
                 </div>
                 <p className="mt-2 px-2 text-2xs text-gray-400">
                   Press Enter to send · Shift + Enter for a new line · Use @name to mention someone

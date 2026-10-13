@@ -6,7 +6,6 @@ import {
   Users,
   UserCheck,
   Plus,
-  Info,
   BarChart3,
   Search,
   ChevronLeft,
@@ -14,8 +13,6 @@ import {
   Filter,
   TrendingUp,
   History,
-  Layers3,
-  ArrowUpRight,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -39,6 +36,10 @@ import {
 import TeamHistory from '@/components/teams/TeamHistory';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { PageHeader } from '@/components/ui/page-header';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 
 const ITEMS_PER_PAGE = 6;
 
@@ -405,24 +406,20 @@ export default function TeamManagementPage() {
   if (isLoading) {
     return (
       <main className="flex-1 overflow-x-clip bg-slate-50">
-        <div className="w-full max-w-[1400px] mx-auto p-4 md:p-8">
-          <div className="w-full">
-            <section className="relative mb-5 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-4 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-5 lg:p-6">
-              <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
-              <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />
-              <div className="pointer-events-none absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
-              <div className="relative">
-                <div className="mb-4 h-6 w-36 animate-pulse rounded-full bg-white/20" />
-                <div className="mb-3 h-9 w-64 animate-pulse rounded bg-white/20" />
-                <div className="h-5 w-72 animate-pulse rounded bg-white/15" />
+        <div className="mx-auto w-full max-w-[1400px]">
+          <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+            <div className="w-full">
+              <div className="mb-5">
+                <div className="mb-3 h-9 w-64 animate-pulse rounded bg-gray-100 dark:bg-slate-800" />
+                <div className="h-5 w-72 animate-pulse rounded bg-gray-100 dark:bg-slate-800" />
               </div>
-            </section>
 
-            <TeamStatsCards stats={EMPTY_TEAM_STATS} isLoading={true} />
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {[1, 2, 3, 4].map((index) => (
-                <TeamCardSkeleton key={index} />
-              ))}
+              <TeamStatsCards stats={EMPTY_TEAM_STATS} isLoading={true} />
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {[1, 2, 3, 4].map((index) => (
+                  <TeamCardSkeleton key={index} />
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -434,46 +431,28 @@ export default function TeamManagementPage() {
     <FeatureGate feature="teams">
       <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
         <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
           <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Teams' }]} />
           <OrganizationTabs />
-          <div className="w-full">
-            <section className="relative mb-5 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-4 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-5 lg:p-6">
-              <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
-              <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />
-              <div className="pointer-events-none absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
-
-              <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-                <div className="max-w-3xl">
-                  <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
-                    <Layers3 className="h-3.5 w-3.5 text-brand-orange" />
-                    Team operations workspace
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/12 ring-1 ring-white/15 backdrop-blur-sm">
-                      <Users className="h-4 w-4 text-white" />
-                    </div>
-                    <div>
-                      <h1 className="text-lg sm:text-xl font-semibold tracking-tight">Team Management</h1>
-                      <p className="mt-1 max-w-2xl text-xs sm:text-sm text-white/80">
-                        Organize departments, assign leads, and monitor team usage with the same polished dashboard language used across the platform.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
+          <div className="w-full -mt-5 rounded-b-xl border border-t-0 border-gray-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 p-4 sm:p-5">
+            <PageHeader
+              icon={<Users className="h-5 w-5" />}
+              title="Team Management"
+              description="Organize departments, assign leads, and monitor team usage with the same polished dashboard language used across the platform."
+              actions={
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                  <div className="grid grid-cols-2 gap-2 text-sm text-white/85 sm:min-w-[260px]">
-                    <div className="rounded-xl bg-white/10 px-3 py-2 ring-1 ring-white/10 backdrop-blur-sm">
-                      <div className="text-xs text-white/65">Teams</div>
-                      <div className="mt-1 font-semibold">{stats.total_teams}</div>
+                  <div className="grid grid-cols-2 gap-2 sm:min-w-[240px]">
+                    <div className="flex h-10 items-center justify-between gap-1.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3">
+                      <span className="text-xs text-gray-500 dark:text-slate-400">Teams</span>
+                      <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">{stats.total_teams}</span>
                     </div>
-                    <div className="rounded-xl bg-white/10 px-3 py-2 ring-1 ring-white/10 backdrop-blur-sm">
-                      <div className="text-xs text-white/65">Members</div>
-                      <div className="mt-1 font-semibold">{stats.total_members}</div>
+                    <div className="flex h-10 items-center justify-between gap-1.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3">
+                      <span className="text-xs text-gray-500 dark:text-slate-400">Members</span>
+                      <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">{stats.total_members}</span>
                     </div>
                   </div>
-                  <button
+                  <Button
+                    variant="primary"
                     onClick={() => {
                       if (!canCreateTeams) {
                         toast.error('You do not have permission to create teams');
@@ -483,34 +462,37 @@ export default function TeamManagementPage() {
                     }}
                     aria-disabled={!canCreateTeams}
                     title={!canCreateTeams ? 'You do not have permission to create teams' : ''}
-                    className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
-                      canCreateTeams
-                        ? 'bg-white text-brand-blue shadow-md hover:-translate-y-0.5 hover:shadow-lg'
-                        : 'bg-white/40 text-white/60 cursor-not-allowed'
-                    }`}
+                    icon={<Plus className="h-4 w-4" />}
                   >
-                    <Plus className="h-4 w-4" />
                     Create Team
-                    <ArrowUpRight className="h-4 w-4" />
-                  </button>
+                  </Button>
                 </div>
-              </div>
-            </section>
+              }
+            />
 
-            <div className="mb-6 rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-2 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-              <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+            <div className="mb-6 overflow-hidden rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+              <div
+                role="tablist"
+                aria-label="Team management views"
+                className="flex overflow-x-auto scrollbar-hide border-b border-gray-200 dark:border-slate-700 bg-gray-50/60 dark:bg-slate-800/40 px-2 sm:px-3"
+              >
                 <button
+                  role="tab"
+                  aria-selected={activeTab === 'teams'}
                   onClick={() => setActiveTab('teams')}
-                  className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all whitespace-nowrap ${
+                  className={`inline-flex items-center justify-center gap-1.5 whitespace-nowrap border-b-2 px-3.5 py-3 text-sm font-medium transition-all ${
                     activeTab === 'teams'
-                      ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25'
-                      : 'text-gray-600 dark:text-slate-400 hover:bg-brand-blue/[0.04] hover:text-brand-blue'
+                      ? 'border-brand-blue text-brand-blue'
+                      : 'border-transparent text-gray-600 dark:text-slate-400 hover:text-brand-blue'
                   }`}
                 >
                   <Users className="w-4 h-4" />
                   Teams
                 </button>
+                <span aria-hidden="true" className={`h-5 w-px shrink-0 self-center ${activeTab === 'teams' || activeTab === 'usage' ? 'bg-transparent' : 'bg-gray-200 dark:bg-slate-700'}`} />
                 <button
+                  role="tab"
+                  aria-selected={activeTab === 'usage'}
                   onClick={() => {
                     if (!canViewUsageTab) {
                       toast.error('You do not have permission to view team usage');
@@ -520,18 +502,21 @@ export default function TeamManagementPage() {
                   }}
                   aria-disabled={!canViewUsageTab}
                   title={!canViewUsageTab ? 'You do not have permission to view team usage' : ''}
-                  className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all whitespace-nowrap ${
+                  className={`inline-flex items-center justify-center gap-1.5 whitespace-nowrap border-b-2 px-3.5 py-3 text-sm font-medium transition-all ${
                     !canViewUsageTab
-                      ? 'text-gray-300 dark:text-slate-600 cursor-not-allowed opacity-60'
+                      ? 'border-transparent text-gray-300 dark:text-slate-600 cursor-not-allowed opacity-60'
                       : activeTab === 'usage'
-                        ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25'
-                        : 'text-gray-600 dark:text-slate-400 hover:bg-brand-blue/[0.04] hover:text-brand-blue'
+                        ? 'border-brand-blue text-brand-blue'
+                        : 'border-transparent text-gray-600 dark:text-slate-400 hover:text-brand-blue'
                   }`}
                 >
                   <BarChart3 className="w-4 h-4" />
                   Team Usage
                 </button>
+                <span aria-hidden="true" className={`h-5 w-px shrink-0 self-center ${activeTab === 'usage' || activeTab === 'analytics' ? 'bg-transparent' : 'bg-gray-200 dark:bg-slate-700'}`} />
                 <button
+                  role="tab"
+                  aria-selected={activeTab === 'analytics'}
                   onClick={() => {
                     if (!canViewAnalyticsTab) {
                       toast.error('You do not have permission to view team analytics');
@@ -541,45 +526,106 @@ export default function TeamManagementPage() {
                   }}
                   aria-disabled={!canViewAnalyticsTab}
                   title={!canViewAnalyticsTab ? 'You do not have permission to view team analytics' : ''}
-                  className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all whitespace-nowrap ${
+                  className={`inline-flex items-center justify-center gap-1.5 whitespace-nowrap border-b-2 px-3.5 py-3 text-sm font-medium transition-all ${
                     !canViewAnalyticsTab
-                      ? 'text-gray-300 dark:text-slate-600 cursor-not-allowed opacity-60'
+                      ? 'border-transparent text-gray-300 dark:text-slate-600 cursor-not-allowed opacity-60'
                       : activeTab === 'analytics'
-                        ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25'
-                        : 'text-gray-600 dark:text-slate-400 hover:bg-brand-blue/[0.04] hover:text-brand-blue'
+                        ? 'border-brand-blue text-brand-blue'
+                        : 'border-transparent text-gray-600 dark:text-slate-400 hover:text-brand-blue'
                   }`}
                 >
                   <TrendingUp className="w-4 h-4" />
                   Analytics
                 </button>
                 {isTenantAdmin && (
+                  <>
+                  <span aria-hidden="true" className={`h-5 w-px shrink-0 self-center ${activeTab === 'analytics' || activeTab === 'history' ? 'bg-transparent' : 'bg-gray-200 dark:bg-slate-700'}`} />
                   <button
+                    role="tab"
+                    aria-selected={activeTab === 'history'}
                     onClick={() => setActiveTab('history')}
-                    className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all whitespace-nowrap ${
+                    className={`inline-flex items-center justify-center gap-1.5 whitespace-nowrap border-b-2 px-3.5 py-3 text-sm font-medium transition-all ${
                       activeTab === 'history'
-                        ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25'
-                        : 'text-gray-600 dark:text-slate-400 hover:bg-brand-blue/[0.04] hover:text-brand-blue'
+                        ? 'border-brand-blue text-brand-blue'
+                        : 'border-transparent text-gray-600 dark:text-slate-400 hover:text-brand-blue'
                     }`}
                   >
                     <History className="w-4 h-4" />
                     Teams History
                   </button>
+                  </>
                 )}
               </div>
-            </div>
 
+              <div className="p-4 sm:p-5">
             {activeTab === 'usage' ? (
-              <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-6">
-                <TeamUsageAnalytics />
-              </div>
+              <TeamUsageAnalytics />
             ) : activeTab === 'analytics' ? (
-              <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-6">
-                <TeamAnalyticsDashboard userRole={currentUser?.role || 'standard_user'} />
-              </div>
+              <TeamAnalyticsDashboard userRole={currentUser?.role || 'standard_user'} />
             ) : activeTab === 'history' ? (
               <TeamHistory />
             ) : (
               <>
+                {pageView === 'list' && (
+                <div className="mb-6 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-5">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
+                    <div className="lg:flex-[7] flex items-start gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
+                        <Users className="w-5 h-5 text-brand-blue" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-50">
+                          {listView === 'members'
+                            ? 'Team Members'
+                            : listView === 'teams-by-size'
+                              ? 'Teams by Size'
+                              : 'Team Organization'}
+                        </h3>
+                        <p className="mt-0.5 text-sm leading-relaxed text-gray-600 dark:text-slate-400">
+                          {listView === 'members'
+                            ? 'Every user assigned to a team, along with the team they belong to and whether they lead it.'
+                            : listView === 'teams-by-size'
+                              ? `Teams sorted by member count. Organization average is ${stats.avg_members_per_team.toFixed(1)} members per team.`
+                              : 'Teams help organize users by department, project, or function. Assign team leads to manage workflows and track performance metrics like active jobs and resume counts.'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {teams.length > 0 && (
+                      <div className="lg:flex-[3] w-full flex flex-col gap-3">
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
+                          <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder={listView === 'members' ? 'Search members by name, email, or team...' : 'Search teams by name or description...'}
+                            className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-3 pl-10 pr-4 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                          />
+                        </div>
+                        {listView !== 'members' && teamLeads.length > 0 && (
+                          <div className="relative">
+                            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
+                            <select
+                              value={filterTeamLead}
+                              onChange={(e) => setFilterTeamLead(e.target.value)}
+                              className="w-full appearance-none rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-3 pl-10 pr-8 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                            >
+                              <option value="">All Team Leads</option>
+                              {teamLeads.map((lead) => (
+                                <option key={lead.id} value={lead.id}>
+                                  {lead.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                )}
+
                 <TeamStatsCards
                   stats={stats}
                   onCardClick={openListView}
@@ -596,74 +642,6 @@ export default function TeamManagementPage() {
 
                 {pageView === 'list' && (
                 <>
-                {/* Header tally adapts to the active view. justify-end, not
-                    justify-between: the Back to overview button that used to
-                    hold the left slot is gone. */}
-                <div className="mb-4 flex items-center justify-end gap-2">
-                  <span className="text-xs text-gray-500 dark:text-slate-400">
-                    {listView === 'members'
-                      ? `${flattenedMembers.length} ${flattenedMembers.length === 1 ? 'member' : 'members'}`
-                      : `${filteredTeams.length} ${filteredTeams.length === 1 ? 'team' : 'teams'}`}
-                  </span>
-                </div>
-
-                <div className="mb-6 rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-5 lg:p-6">
-                  <div className="flex gap-3 sm:gap-4">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/15 shadow-sm shadow-brand-orange/10">
-                      <Info className="w-5 h-5 text-brand-orange-deep" />
-                    </div>
-                    <div>
-                      <h3 className="mb-1 text-base font-semibold text-gray-900 dark:text-slate-50 sm:mb-2 lg:text-lg">
-                        {listView === 'members'
-                          ? 'Team Members'
-                          : listView === 'teams-by-size'
-                            ? 'Teams by Size'
-                            : 'Team Organization'}
-                      </h3>
-                      <p className="text-sm leading-relaxed text-gray-600 dark:text-slate-400">
-                        {listView === 'members'
-                          ? 'Every user assigned to a team, along with the team they belong to and whether they lead it.'
-                          : listView === 'teams-by-size'
-                            ? `Teams sorted by member count. Organization average is ${stats.avg_members_per_team.toFixed(1)} members per team.`
-                            : 'Teams help organize users by department, project, or function. Assign team leads to manage workflows and track performance metrics like active jobs and resume counts.'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {teams.length > 0 && (
-                  <div className="mb-6 rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-5">
-                    <div className="flex flex-col gap-4 sm:flex-row">
-                      <div className="relative flex-1">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
-                        <input
-                          type="text"
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
-                          placeholder={listView === 'members' ? 'Search members by name, email, or team...' : 'Search teams by name or description...'}
-                          className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-3 pl-10 pr-4 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
-                        />
-                      </div>
-                      {listView !== 'members' && teamLeads.length > 0 && (
-                        <div className="relative">
-                          <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
-                          <select
-                            value={filterTeamLead}
-                            onChange={(e) => setFilterTeamLead(e.target.value)}
-                            className="min-w-[220px] appearance-none rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-3 pl-10 pr-8 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
-                          >
-                            <option value="">All Team Leads</option>
-                            {teamLeads.map((lead) => (
-                              <option key={lead.id} value={lead.id}>
-                                {lead.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
 
                 {listView !== 'members' && (
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -686,8 +664,8 @@ export default function TeamManagementPage() {
                   )}
 
                   {teams.length > 0 && filteredTeams.length === 0 && (
-                    <div className="col-span-full rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-12 text-center shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-                      <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
+                    <div className="col-span-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-12 text-center shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+                      <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
                         <Search className="h-6 w-6 text-brand-blue" />
                       </div>
                       <h3 className="mb-2 text-lg font-semibold text-gray-900 dark:text-slate-50">No teams found</h3>
@@ -708,10 +686,10 @@ export default function TeamManagementPage() {
 
                 {/* Team Members view — flat list of every assigned member across all teams. */}
                 {listView === 'members' && (
-                  <section className="overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-cyan/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+                  <section className="overflow-hidden rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm shadow-brand-cyan/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
                     {flattenedMembers.length === 0 ? (
                       <div className="px-6 py-16 text-center">
-                        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15">
+                        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15">
                           <UserCheck className="h-6 w-6 text-brand-cyan" />
                         </div>
                         <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">No members found</h3>
@@ -769,7 +747,7 @@ export default function TeamManagementPage() {
                 )}
 
                 {listView !== 'members' && totalPages > 1 && (
-                  <div className="mt-8 flex flex-col gap-4 rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 px-4 py-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:flex-row sm:items-center sm:justify-between">
+                  <div className="mt-8 flex flex-col gap-4 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:flex-row sm:items-center sm:justify-between">
                     <p className="text-sm text-gray-600 dark:text-slate-400">
                       Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, filteredTeams.length)} of {filteredTeams.length} teams
                     </p>
@@ -819,6 +797,8 @@ export default function TeamManagementPage() {
                 )}
               </>
             )}
+              </div>
+            </div>
           </div>
         </div>
         </div>

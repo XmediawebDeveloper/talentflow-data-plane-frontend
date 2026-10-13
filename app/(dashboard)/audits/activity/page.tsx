@@ -22,7 +22,6 @@ import {
   Timer,
   AlertTriangle,
   CheckCircle2,
-  Sparkles,
   type LucideIcon,
 } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
@@ -38,6 +37,11 @@ import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import AuditTrailPage from '@/app/(dashboard)/audits/trail/page';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Tooltip } from '@/components/ui/tooltip';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -95,7 +99,7 @@ const actionColors: Record<string, string> = {
   logout: 'bg-gradient-to-br from-gray-400 to-gray-500',
   create: 'bg-brand-teal',
   update: 'bg-brand-blue',
-  delete: 'bg-gradient-to-br from-red-500 to-brand-orange-deep',
+  delete: 'bg-gradient-to-br from-destructive to-brand-orange-deep',
   upload: 'bg-brand-cyan',
   publish: 'bg-brand-orange',
   default: 'bg-gradient-to-br from-brand-blue/70 to-brand-blue-2/70',
@@ -217,49 +221,39 @@ export default function ActivityLogsPage() {
   return (
     <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5">
+      <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: activeTab === 'audit' ? 'Audit Logs' : 'Activity Logs' }]} />
-        {/* SaaS Hero Header */}
-        <section className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
-          <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />
-          <div className="pointer-events-none absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
-          <div className="relative flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-            <div className="flex items-start gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/12 ring-1 ring-white/15 backdrop-blur-sm">
-                <Activity className="h-6 w-6 text-white" />
-              </div>
-              <div>
-                <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-2xs font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
-                  <Sparkles className="h-3 w-3 text-brand-orange" />
-                  Live timeline
-                </div>
-                <h1 className="text-lg sm:text-xl font-semibold tracking-tight">{activeTab === 'audit' ? 'Audit Logs' : 'Activity Logs'}</h1>
-                <p className="mt-2 max-w-2xl text-sm text-white/80 sm:text-base">{activeTab === 'audit' ? 'A detailed record of audited actions across your organization.' : 'A real-time view of recent system activity across your organization.'}</p>
-              </div>
-            </div>
-            {activeTab === 'activity' && (
-              <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
+        <PageHeader
+          icon={<Activity className="h-5 w-5" />}
+          title={activeTab === 'audit' ? 'Audit Logs' : 'Activity Logs'}
+          description={activeTab === 'audit' ? 'A detailed record of audited actions across your organization.' : 'A real-time view of recent system activity across your organization.'}
+          actions={
+            activeTab === 'activity' ? (
+              <div className="flex items-center gap-2 w-full sm:w-auto">
                 <select
                   value={limit}
                   onChange={(e) => setLimit(parseInt(e.target.value))}
-                  className="flex-1 sm:flex-none h-10 px-3 sm:px-4 text-sm rounded-xl bg-white/10 ring-1 ring-white/20 text-white backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-white/40 [&>option]:text-gray-900"
+                  className="h-10 px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
                 >
                   <option value="25">Last 25</option>
                   <option value="50">Last 50</option>
                   <option value="100">Last 100</option>
                 </select>
-                <button
-                  onClick={fetchRecentActivity}
-                  className="inline-flex items-center justify-center gap-1.5 sm:gap-2 h-10 px-3 sm:px-4 rounded-xl bg-white text-brand-blue text-sm font-medium shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg"
-                >
-                  <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                  <span className="hidden sm:inline">Refresh</span>
-                </button>
+                <Tooltip content="Refresh activity">
+                  <Button
+                    variant="primary"
+                    onClick={fetchRecentActivity}
+                    aria-label="Refresh activity"
+                    icon={<RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />}
+                    className="px-3 sm:px-4"
+                  >
+                    <span className="hidden sm:inline">Refresh</span>
+                  </Button>
+                </Tooltip>
               </div>
-            )}
-          </div>
-        </section>
+            ) : undefined
+          }
+        />
 
         {/* Tab navigation */}
         <section className="mb-5">
@@ -320,7 +314,7 @@ export default function ActivityLogsPage() {
         {activeTab === 'activity' && (
         <>
 
-        <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] overflow-hidden">
+        <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] overflow-hidden">
           {loading ? (
             <div>
               {/* Date header */}
@@ -352,20 +346,20 @@ export default function ActivityLogsPage() {
           ) : error ? (
             <div className="p-12 text-center">
               <p className="text-destructive">{error}</p>
-              <button
+              <Button
+                variant="primary"
                 onClick={fetchRecentActivity}
-                className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl bg-brand-blue px-4 py-2 text-sm font-medium text-white shadow-md ring-1 ring-white/10 transition-all hover:-translate-y-0.5 hover:shadow-lg"
+                className="mt-4"
               >
                 Retry
-              </button>
+              </Button>
             </div>
           ) : logs.length === 0 ? (
-            <div className="p-12 text-center">
-              <span className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
-                <Activity className="w-6 h-6 text-brand-blue" />
-              </span>
-              <p className="font-medium text-gray-600 dark:text-slate-400">No recent activity</p>
-            </div>
+            <EmptyState
+              icon={Activity}
+              title="No recent activity"
+              description="There is no recent system activity to show yet."
+            />
           ) : (
             <div className="divide-y divide-gray-100 dark:divide-slate-700/60">
               {Object.entries(groupedLogs).map(([date, dayLogs]) => (
@@ -448,10 +442,10 @@ export default function ActivityLogsPage() {
                                 {(log.total_session_duration != null || log.error_origin || log.refund_flag === 'YES') && (
                                   <div className="mt-1.5 flex items-center gap-2 flex-wrap">
                                     {log.total_session_duration != null && (
-                                      <span className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-slate-500 bg-gray-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
+                                      <Badge variant="muted">
                                         <Timer className="w-3 h-3" />
                                         {formatSessionDuration(log.total_session_duration)}
-                                      </span>
+                                      </Badge>
                                     )}
                                     {log.error_origin && log.error_origin !== 'NONE' && (
                                       <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${ERROR_ORIGIN_COLORS[log.error_origin as ErrorOrigin]}`}>
@@ -460,10 +454,10 @@ export default function ActivityLogsPage() {
                                       </span>
                                     )}
                                     {log.refund_flag === 'YES' && (
-                                      <span className="inline-flex items-center gap-1 text-xs text-success bg-success-subtle px-2 py-0.5 rounded-full">
+                                      <Badge variant="success">
                                         <CheckCircle2 className="w-3 h-3" />
                                         Refunded
-                                      </span>
+                                      </Badge>
                                     )}
                                   </div>
                                 )}
@@ -488,12 +482,12 @@ export default function ActivityLogsPage() {
         {/* Load More */}
         {logs.length >= limit && (
           <div className="mt-6 text-center">
-            <button
+            <Button
+              variant="secondary"
               onClick={() => setLimit(l => l + 50)}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-6 py-2 text-sm font-semibold text-brand-blue shadow-sm transition-[border-color,box-shadow,color,background-color] hover:border-brand-blue/30 hover:shadow-md"
             >
               Load More
-            </button>
+            </Button>
           </div>
         )}
         </>

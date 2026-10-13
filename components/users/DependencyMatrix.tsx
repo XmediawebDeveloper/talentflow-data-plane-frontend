@@ -23,6 +23,8 @@ import {
 import { toast } from 'sonner';
 import { featurePermissionService, DependencyMatrixResponse } from '@/lib/services/featurePermissionService';
 import { FEATURE_METADATA, PERMISSION_DEPENDENCIES } from '@/lib/types/tenant';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 interface DependencyMatrixProps {
   isOpen: boolean;
@@ -156,12 +158,13 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
                 Matrix
               </button>
             </div>
-            <button
+            <Button
+              variant="secondary"
               onClick={onClose}
-              className="p-1.5 sm:p-2 text-gray-400 hover:text-brand-blue rounded-lg hover:bg-brand-blue/10 transition-colors"
+              className="px-2"
              aria-label="Close">
               <X className="w-4 h-4 sm:w-5 sm:h-5" />
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -178,7 +181,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
                 {/* Root features (no dependencies) */}
                 <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 sm:p-5">
                   <h3 className="text-xs sm:text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-sm">
+                    <div className="w-7 h-7 rounded-lg bg-success flex items-center justify-center shadow-sm">
                       <CheckCircle className="w-4 h-4 text-white" />
                     </div>
                     Base Features (No Dependencies)
@@ -278,9 +281,9 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
                               </React.Fragment>
                             ))}
                             <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-brand-cyan mx-1 flex-shrink-0" />
-                            <span className="text-2xs sm:text-xs px-2 py-0.5 sm:py-1 rounded-full font-medium ring-1 ring-brand-blue/30 bg-brand-blue/10 text-brand-blue">
+                            <Badge variant="info" className="text-2xs sm:text-xs">
                               {node.name}
-                            </span>
+                            </Badge>
                           </div>
                         </div>
                       ))}
@@ -381,12 +384,12 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
 
               {/* Legend */}
               <div className="mt-4 flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 text-xs sm:text-sm">
-                <span className="px-2.5 py-1 rounded-full text-xs font-medium ring-1 ring-brand-blue/30 bg-brand-blue/10 text-brand-blue inline-flex items-center gap-1.5">
+                <Badge variant="info" className="px-2.5 py-1 gap-1.5">
                   <ArrowRight className="w-3 h-3" /> Depends on
-                </span>
-                <span className="px-2.5 py-1 rounded-full text-xs font-medium ring-1 ring-success-line bg-success-subtle text-success inline-flex items-center gap-1.5">
+                </Badge>
+                <Badge variant="success" className="px-2.5 py-1 gap-1.5">
                   <ArrowRight className="w-3 h-3 rotate-180" /> Required by
-                </span>
+                </Badge>
               </div>
             </div>
           )}
@@ -404,9 +407,9 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
               {selectedFeatureInfo.dependencies.length > 0 && (
                 <div className="mb-4">
                   <h4 className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
-                    <span className="px-2 py-0.5 rounded-full text-2xs font-medium ring-1 ring-brand-blue/30 bg-brand-blue/10 text-brand-blue inline-flex items-center gap-1">
+                    <Badge variant="info" className="text-2xs">
                       <ArrowRight className="w-3 h-3" /> Requires {selectedFeatureInfo.dependencies.length}
-                    </span>
+                    </Badge>
                   </h4>
                   <ul className="space-y-1.5">
                     {selectedFeatureInfo.dependencies.map(dep => (
@@ -425,9 +428,9 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
               {selectedFeatureInfo.dependents.length > 0 && (
                 <div>
                   <h4 className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
-                    <span className="px-2 py-0.5 rounded-full text-2xs font-medium ring-1 ring-brand-cyan/30 bg-brand-cyan/10 text-brand-cyan inline-flex items-center gap-1">
+                    <Badge variant="secondary" className="text-2xs">
                       <ArrowRight className="w-3 h-3 rotate-180" /> Required by {selectedFeatureInfo.dependents.length}
-                    </span>
+                    </Badge>
                   </h4>
                   <ul className="space-y-1.5">
                     {selectedFeatureInfo.dependents.map(dep => (
@@ -456,12 +459,12 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
         {/* Footer */}
         <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 bg-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 shrink-0">
           <div className="text-xs sm:text-sm text-gray-600 flex items-center gap-2 flex-wrap">
-            <span className="px-2 py-0.5 rounded-full text-xs font-medium ring-1 ring-brand-blue/20 bg-brand-blue/10 text-brand-blue">
+            <Badge variant="info">
               {(matrix?.features || Object.keys(matrix?.feature_names || {})).length || 0} features
-            </span>
-            <span className="px-2 py-0.5 rounded-full text-xs font-medium ring-1 ring-brand-cyan/30 bg-brand-cyan/10 text-brand-cyan">
+            </Badge>
+            <Badge variant="secondary">
               {Object.keys(matrix?.dependencies || {}).length} with dependencies
-            </span>
+            </Badge>
           </div>
         </div>
       </div>

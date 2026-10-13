@@ -24,6 +24,8 @@ import {
 import { toast } from 'sonner';
 import { useRazorpay } from '@/lib/hooks/useRazorpay';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -291,12 +293,17 @@ export default function AddSeatsModal({
               <p className="text-xs sm:text-sm text-white/80">Add seats to your team capacity</p>
             </div>
           </div>
-          <button
+          <Button
+            variant="secondary"
+            tone="onColor"
+            size="sm"
             onClick={onClose}
-            className="absolute top-4 right-4 p-1.5 rounded-lg bg-white/15 hover:bg-white/25 ring-1 ring-white/25 backdrop-blur-sm transition-colors"
-           aria-label="Close">
-            <X className="w-5 h-5 text-white" />
-          </button>
+            aria-label="Close"
+            className="absolute top-4 right-4 px-2"
+            icon={<X className="w-5 h-5 text-white" />}
+          >
+            <span className="sr-only">Close</span>
+          </Button>
         </div>
 
         {/* Scrollable Body */}
@@ -337,7 +344,7 @@ export default function AddSeatsModal({
                 {/* Order Summary skeleton */}
                 <div className="border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-sm">
                   <div className="px-5 py-3 bg-gradient-to-r from-gray-50 to-white border-b border-gray-200 dark:border-slate-700 flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
+                    <div className="flex items-center gap-2">
                       <Skeleton className="w-8 h-8 rounded-lg" />
                       <Skeleton className="h-4 w-28" />
                     </div>
@@ -365,7 +372,7 @@ export default function AddSeatsModal({
                 {/* Success */}
                 {purchaseSuccess && (
                   <div className="p-4 bg-success-subtle border border-success-line rounded-xl ring-1 ring-success-line flex items-start gap-3 animate-in slide-in-from-top duration-200">
-                    <div className="w-9 h-9 bg-gradient-to-br from-green-500 to-green-600 rounded-lg flex items-center justify-center flex-shrink-0 shadow-md shadow-green-500/25 ring-1 ring-white/10">
+                    <div className="w-9 h-9 bg-success rounded-lg flex items-center justify-center flex-shrink-0 shadow-md shadow-success/25 ring-1 ring-white/10">
                       <CheckCircle2 className="w-4 h-4 text-white" />
                     </div>
                     <div className="min-w-0">
@@ -378,7 +385,7 @@ export default function AddSeatsModal({
                 {/* Error */}
                 {error && (
                   <div className="p-4 bg-destructive-subtle border border-destructive-line rounded-xl ring-1 ring-destructive-line flex items-start gap-3 animate-in slide-in-from-top duration-200">
-                    <div className="w-9 h-9 bg-gradient-to-br from-red-500 to-red-600 rounded-lg flex items-center justify-center flex-shrink-0 shadow-md shadow-red-500/25 ring-1 ring-white/10">
+                    <div className="w-9 h-9 bg-destructive rounded-lg flex items-center justify-center flex-shrink-0 shadow-md shadow-destructive/25 ring-1 ring-white/10">
                       <AlertCircle className="w-4 h-4 text-white" />
                     </div>
                     <div className="min-w-0">
@@ -417,12 +424,13 @@ export default function AddSeatsModal({
                   <div>
                     <div className="flex items-center justify-between mb-3">
                       <label className="text-sm font-semibold text-gray-800 dark:text-slate-100">Select Quantity</label>
-                      <span className="px-2 py-0.5 rounded-full text-xs font-medium ring-1 ring-gray-200 bg-gray-50 dark:bg-slate-800/50 text-gray-600 dark:text-slate-400">Max {maxPacks} packs</span>
+                      <Badge variant="muted">Max {maxPacks} packs</Badge>
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="flex items-center bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-1 gap-1 shadow-sm focus-within:ring-2 focus-within:ring-brand-blue/40 focus-within:border-brand-blue transition-all">
                         <button
                           onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                          aria-label="Decrease quantity"
                           className="w-10 h-10 sm:w-11 sm:h-11 bg-brand-blue rounded-lg flex items-center justify-center hover:bg-brand-blue-2 active:scale-95 transition-all font-bold text-lg text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
                         >
                           −
@@ -437,6 +445,7 @@ export default function AddSeatsModal({
                         />
                         <button
                           onClick={() => setQuantity(Math.min(maxPacks, quantity + 1))}
+                          aria-label="Increase quantity"
                           className="w-10 h-10 sm:w-11 sm:h-11 bg-brand-blue rounded-lg flex items-center justify-center hover:bg-brand-blue-2 active:scale-95 transition-all font-bold text-lg text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
                         >
                           +
@@ -458,13 +467,13 @@ export default function AddSeatsModal({
                 {pricing && (
                   <div className="border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-sm">
                     <div className="px-5 py-3 bg-gradient-to-r from-gray-50 to-white border-b border-gray-200 dark:border-slate-700 flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
+                      <div className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-cyan to-brand-blue flex items-center justify-center shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10">
                           <Receipt className="w-4 h-4 text-white" />
                         </div>
                         <h4 className="font-semibold text-gray-800 dark:text-slate-100 text-sm">Order Summary</h4>
                       </div>
-                      <span className="px-2 py-0.5 rounded-full text-xs font-medium ring-1 ring-brand-cyan/30 bg-brand-cyan/10 text-brand-cyan">{quantity} pack{quantity > 1 ? 's' : ''}</span>
+                      <Badge variant="secondary">{quantity} pack{quantity > 1 ? 's' : ''}</Badge>
                     </div>
                     <div className="p-4 sm:p-5 space-y-3">
                       <div className="flex justify-between items-center text-sm">
@@ -504,23 +513,19 @@ export default function AddSeatsModal({
         {/* Footer */}
         <div className="p-4 sm:p-5 border-t border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 flex-shrink-0">
           <div className="flex gap-3">
-            <button
+            <Button
+              variant="primary"
               onClick={handlePurchase}
               disabled={isPurchasing || razorpayProcessing || !pricing || !!purchaseSuccess}
-              className="flex-1 py-3 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg font-semibold text-sm active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+              className="flex-1 py-3 font-semibold active:scale-[0.98] shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+              icon={isPurchasing || razorpayProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4 flex-shrink-0" />}
             >
               {isPurchasing || razorpayProcessing ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Processing...</span>
-                </>
+                <span>Processing...</span>
               ) : (
-                <>
-                  <CreditCard className="w-4 h-4 flex-shrink-0" />
-                  <span>Pay ₹{total.toFixed(2)}</span>
-                </>
+                <span>Pay ₹{total.toFixed(2)}</span>
               )}
-            </button>
+            </Button>
           </div>
           <p className="text-center text-2xs text-gray-500 dark:text-slate-500 mt-3 flex items-center justify-center gap-1.5">
             <ShieldCheck className="w-3 h-3 text-brand-cyan" />
