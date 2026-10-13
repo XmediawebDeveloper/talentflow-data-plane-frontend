@@ -372,6 +372,9 @@ export function QuestionsView({ data, renderAnswerAction }: {
   // and the expanded view shows each skill's score + the AI's per-skill note.
   const [openSkills, setOpenSkills] = useState<Record<number, boolean>>({});
   const toggleSkills = (idx: number) => setOpenSkills(p => ({ ...p, [idx]: !p[idx] }));
+  // "All" = one continuous list numbered 1..N across the whole interview;
+  // "Sections" = the MHS / NHS / HR grouping with section-local Q numbers.
+  const [viewMode, setViewMode] = useState<'all' | 'sections'>('all');
 
   if (delivered.length === 0) {
     return (
@@ -451,7 +454,14 @@ export function QuestionsView({ data, renderAnswerAction }: {
 
   // Per-Q card renderer (extracted so the grouped-by-section rendering
   // below stays readable).
-  const renderQCard = (q: typeof delivered[number], idx: number) => {
+  const sectionTag: Record<string, { label: string; cls: string }> = {
+    mth: { label: 'Must-Have', cls: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+    nth: { label: 'Nice-to-Have', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+    hr:  { label: 'HR', cls: 'bg-violet-50 text-violet-700 border-violet-200' },
+  };
+  // `allNum` is set only in the "All" view: the card shows that interview-wide
+  // number plus a section tag (in "Sections" the header already names it).
+  const renderQCard = (q: typeof delivered[number], idx: number, allNum?: number) => {
     const answer = (q.answer && q.answer.trim()) || '';
     const displayOnlyScore = typeof q.displayOnlyQuestionScore === 'number'
       ? q.displayOnlyQuestionScore
@@ -475,8 +485,16 @@ export function QuestionsView({ data, renderAnswerAction }: {
         <div>
           <div className="flex items-center gap-2 mb-1.5 flex-wrap">
             <span className="text-xs font-semibold text-white bg-indigo-600 px-2 py-0.5 rounded-full">
-              Question {q.qNum}
+              Question {allNum ?? q.qNum}
             </span>
+            {allNum !== undefined && sectionTag[q.section] && (
+              <span
+                className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${sectionTag[q.section].cls}`}
+                title={`Question ${q.qNum} of the ${sectionTag[q.section].label} section`}
+              >
+                {sectionTag[q.section].label} · Q{q.qNum}
+              </span>
+            )}
             {isHr && q.notDelivered ? (
               <span
                 className="text-xs font-semibold px-2 py-0.5 rounded-full border bg-gray-100 text-gray-500 border-gray-300"
@@ -923,7 +941,34 @@ export function QuestionsView({ data, renderAnswerAction }: {
           This interview was terminated before completion. The scores below are for attended questions only; no overall pass/fail or final match score is generated.
         </div>
       )}
-      {mhQs.length > 0 && (
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5">
+          {([['all', 'All'], ['sections', 'Sections']] as const).map(([mode, label]) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => setViewMode(mode)}
+              className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
+                viewMode === mode ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {viewMode === 'all' && (
+        <>
+          <div className="flex items-center gap-2 pt-1 pb-1">
+            <div className="text-base font-bold text-gray-900">All Questions</div>
+            <span className="text-xs text-gray-500">
+              · {mhQs.length + nhQs.length + hrQs.length} question{mhQs.length + nhQs.length + hrQs.length === 1 ? '' : 's'}
+            </span>
+          </div>
+          {[...mhQs, ...nhQs, ...hrQs].map((q, i) => renderQCard(q, i, i + 1))}
+        </>
+      )}
+      {viewMode === 'sections' && mhQs.length > 0 && (
         <>
           {sectionHeader(
             'Must-Have Section',
@@ -934,13 +979,13 @@ export function QuestionsView({ data, renderAnswerAction }: {
           {mhQs.map((q, i) => renderQCard(q, i))}
         </>
       )}
-      {nhQs.length > 0 && (
+      {viewMode === 'sections' && nhQs.length > 0 && (
         <>
           {sectionHeader('Nice-to-Have Section', 'Information Only', nhQs.length, 'bg-amber-50 text-amber-700')}
           {nhQs.map((q, i) => renderQCard(q, mhQs.length + i))}
         </>
       )}
-      {hrQs.length > 0 && (
+      {viewMode === 'sections' && hrQs.length > 0 && (
         <>
           {sectionHeader('HR Round', 'Not Scored', hrQs.length, 'bg-violet-50 text-violet-700')}
           {hrQs.map((q, i) => renderQCard(q, mhQs.length + nhQs.length + i))}
