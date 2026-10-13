@@ -1137,11 +1137,15 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       const mixDest = mixCtx.createMediaStreamDestination();
 
       // Bina's TTS voice (guaranteed path — no dependency on getDisplayMedia "Share audio").
-      // Trimmed so the boosted candidate mic sits at a comparable level.
+      // The candidate mic below isn't just boosted 3×, it's also run through a
+      // 20:1 limiter, which raises its AVERAGE loudness well beyond the nominal
+      // 3× peak gain (classic loudness-war compression). Bina's path has no
+      // compressor, so the old 0.75× trim made her sound faint/buried next to
+      // the mic even though both signals were technically present.
       let lindaCaptured = false;
       if (lindaDest && lindaDest.stream.getAudioTracks().length > 0) {
         const lindaGain = mixCtx.createGain();
-        lindaGain.gain.value = 0.75;
+        lindaGain.gain.value = 1.1;
         mixCtx.createMediaStreamSource(lindaDest.stream).connect(lindaGain).connect(mixDest);
         lindaCaptured = true;
       }

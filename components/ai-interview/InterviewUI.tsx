@@ -2770,7 +2770,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           let binaMixed = false;
           if (lindaDest && lindaDest.stream.getAudioTracks().length > 0) {
             const lindaGain = actx.createGain();
-            lindaGain.gain.value = 0.75;
+            // 1.1× — the mic leg isn't just boosted 3×, it's also run through a
+            // 20:1 limiter, which raises its AVERAGE loudness well beyond the
+            // nominal 3× peak gain (classic loudness-war compression). Bina's
+            // path has no compressor, so leaving her at the old 0.75× trim made
+            // her sound faint/buried next to the mic even though both signals
+            // were technically present in the recording.
+            lindaGain.gain.value = 1.1;
             actx.createMediaStreamSource(lindaDest.stream).connect(lindaGain).connect(dest);
             binaMixed = true;
           }
@@ -2786,7 +2792,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           recordingBoostRef.current = boost;
           recordingMicSourceRef.current = srcNode;
           console.log(
-            `[Recording] audio mix active (mic gain 3× + limiter${binaMixed ? ', Bina tap @0.75' : ', Bina tap unavailable — mic only'})`,
+            `[Recording] audio mix active (mic gain 3× + limiter${binaMixed ? ', Bina tap @1.1' : ', Bina tap unavailable — mic only'})`,
           );
         }
       } catch (e) {
