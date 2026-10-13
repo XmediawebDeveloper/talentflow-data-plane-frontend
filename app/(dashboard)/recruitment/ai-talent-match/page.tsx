@@ -149,6 +149,9 @@ interface Job {
    *  counter for display. "View Versions" (job list) needs the real number
    *  to group and count a job's sibling versions correctly. */
   versionNumber?: number;
+  /** The JD row's republish counter (`current_version`) — ONLY for the
+   *  "Published" vs "Republished" status label, never shown as a version. */
+  publishCount?: number;
   /* Carried so the job rows can show what the Resume Scoring job rows show.
      All four already exist on the JD record; they were simply never mapped. */
   industryType?: string;
@@ -204,6 +207,7 @@ function transformJDToJob(jd: JDResponse): Job {
     jobId: mapped.job_id,
     currentVersion: mapped.versionNumber ?? mapped.currentVersion,
     versionNumber: mapped.versionNumber,
+    publishCount: mapped.currentVersion,
     industryType: mapped.industry_type,
     remoteType: mapped.workMode,
     postedBy: mapped.postedBy,

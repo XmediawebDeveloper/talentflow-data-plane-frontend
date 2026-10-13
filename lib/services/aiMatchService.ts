@@ -89,7 +89,8 @@ export interface AIMatchSessionResponse {
   jd_job_id?: string;
   jd_status?: string;
   jd_department?: string;
-  jd_current_version?: number;
+  jd_current_version?: number;  // republish counter — status only
+  jd_version_number?: number;   // job version (v1, v2, ...)
   // Best candidate rating (1-10 scale) for this session, precomputed
   // server-side so "Top Match Rating" / "Top Matching Jobs" can be shown
   // immediately from the session list, without waiting for per-session
