@@ -16,8 +16,15 @@ interface HeaderProps {
   onOpenSettings?: () => void;
 }
 
-export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpenSettings }: HeaderProps) {
-  if (!user) return null;
+/* "No user yet" handled here, not ahead of the hooks below — an early
+   return before hooks changes the hook count once the user loads (React
+   error #310). Same fix as components/Header.tsx. */
+export default function Header(props: HeaderProps) {
+  if (!props.user) return null;
+  return <HeaderBody {...props} user={props.user} />;
+}
+
+function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpenSettings }: HeaderProps & { user: UserType }) {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showPlanMenu, setShowPlanMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
