@@ -83,9 +83,19 @@ export function readInviteHandoffSource(from: string | null | undefined): Invite
   return from === 'resume-scoring' || from === 'ai-talent-match' ? from : null;
 }
 
-/** A `returnUrl` is followed only when it is that origin's own page. */
+/* Other in-app pages a round trip may come back to: AI Talent Match opens
+   a candidate on the resume page (`resumeNavSource = 'ai-talent-match'`),
+   whose Invite runs the same create -> come back -> invite flow. */
+const EXTRA_RETURN_PATHS: Record<InviteHandoffSource, string[]> = {
+  'resume-scoring': [],
+  'ai-talent-match': ['/recruitment/resume-view/'],
+};
+
+/** A `returnUrl` is followed only when it is that origin's own page (or one
+ *  of the in-app pages it opens a candidate on). */
 export function safeInviteReturnUrl(url: string | null | undefined, source: InviteHandoffSource): string {
-  return url && url.startsWith(SOURCES[source].path) ? url : inviteHandoffReturnUrl(source);
+  const allowed = [SOURCES[source].path, ...EXTRA_RETURN_PATHS[source]];
+  return url && allowed.some(p => url.startsWith(p)) ? url : inviteHandoffReturnUrl(source);
 }
 
 export interface InviteHandoffOrigin {
@@ -206,7 +216,7 @@ export function useHandoffCandidateCrumb(): { label: string; href: string } | nu
     if (!raw) return null;
     const h = readInviteHandoff();
     return h?.origin === 'detail' && h.returnUrl
-      ? { label: h.candidateName || 'Candidate', href: safeResumeScoringReturnUrl(h.returnUrl) }
+      ? { label: h.candidateName || 'Candidate', href: safeInviteReturnUrl(h.returnUrl, h.source ?? 'resume-scoring') }
       : null;
   }, [raw]);
 }

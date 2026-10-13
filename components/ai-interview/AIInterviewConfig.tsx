@@ -3756,10 +3756,10 @@ export default function AIInterviewConfig() {
                       <span className="text-xs font-semibold text-gray-900 text-right">{formatEmploymentType(selectedJd.employment_type)}</span>
                     </div>
                   )}
-                  {selectedJd.current_version != null && (
+                  {(selectedJd.version_number ?? selectedJd.current_version) != null && (
                     <div className="px-3 py-2 flex items-start justify-between gap-2">
                       <span className="text-xs text-gray-500 flex-shrink-0">JD Version</span>
-                      <span className="text-xs font-semibold text-gray-900 text-right">v{selectedJd.current_version}</span>
+                      <span className="text-xs font-semibold text-gray-900 text-right">v{selectedJd.version_number ?? 1}</span>
                     </div>
                   )}
                   {selectedJd.domain_keywords && selectedJd.domain_keywords.length > 0 && (

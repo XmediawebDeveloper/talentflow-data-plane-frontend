@@ -2588,6 +2588,23 @@ Best regards`);
                       {formatOverallScore(resume.overallRating10, resume.scorePercentage)}
                     </span>
                   </div>
+
+                  {/* Job / Resume version — the list's two version columns, so
+                      a job showing every version (All) tells the cards apart. */}
+                  {!hiddenColumnIds?.includes('jobVersion') && (
+                    <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-500">
+                      {resume.jobVersion != null && (
+                        <span className="inline-flex items-center gap-1">
+                          Job
+                          <span className="inline-flex px-1.5 py-0.5 rounded-full text-2xs border bg-blue-50 text-blue-700 border-blue-200">v{resume.jobVersion}</span>
+                        </span>
+                      )}
+                      <span className="inline-flex items-center gap-1">
+                        Resume
+                        <span className="inline-flex px-1.5 py-0.5 rounded-full text-2xs border bg-gray-50 text-gray-700 border-gray-200">v{resume.version || resume.resumeVersion || 1}</span>
+                      </span>
+                    </div>
+                  )}
                   </>
                   )}
 
