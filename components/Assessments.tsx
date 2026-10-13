@@ -1515,7 +1515,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
        sends; `total_candidates_completed` is the dashboard view's
        completion-only breakdown and is optional, so it arrives as undefined
        here. Both are kept and read in that order of preference below
-       (`candidatesAssessed`), which is why the Candidates Assessed card is not
+       (`candidatesAssessed`), which is why the Total Assessed card is not
        stuck on 0 the way reading the optional field alone left it. */
     total_candidates_tested: 0,
     total_candidates_completed: 0,
@@ -5927,14 +5927,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Assessments' }]} />
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-5">
           <div className="flex items-start gap-3">
             <div className="hidden sm:flex w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 items-center justify-center shrink-0">
               <ClipboardList className="w-4 h-4 text-brand-blue" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-lg sm:text-xl text-gray-900 dark:text-slate-50 mb-0.5 tracking-tight font-semibold">Assessment Management</h1>
-              <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
+              <h1 className="text-lg lg:text-xl text-gray-900 dark:text-slate-50 mb-0.5 tracking-tight font-semibold">Assessment Management</h1>
+              <p className="text-xs lg:text-sm text-gray-600 dark:text-slate-400">
                 Create and manage skill assessments for candidates
               </p>
               {/* JD Filter Indicator */}
@@ -5975,6 +5975,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   router.push('/recruitment/hr-question-bank');
                 }}
                 icon={<ClipboardList className="w-4 h-4" />}
+                className="sm:h-9 sm:px-3 sm:text-xs lg:h-10 lg:px-4 lg:text-sm"
               >
                 <span className="hidden sm:inline">HR Question Bank</span>
                 <span className="sm:hidden">Questions</span>
@@ -6001,12 +6002,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   : 'Send an assessment invitation'
               }
               icon={<Mail className="w-4 h-4" />}
+              className="sm:h-9 sm:px-3 sm:text-xs lg:h-10 lg:px-4 lg:text-sm"
             >
               <span className="hidden sm:inline">Send Invite</span>
               <span className="sm:hidden">Invite</span>
             </Button>
             {onOpenCandidateView && (
-              <Button variant="secondary" size="md" onClick={onOpenCandidateView} icon={<Eye className="w-4 h-4" />}>
+              <Button variant="secondary" size="md" onClick={onOpenCandidateView} icon={<Eye className="w-4 h-4" />} className="sm:h-9 sm:px-3 sm:text-xs lg:h-10 lg:px-4 lg:text-sm">
                 Preview Candidate View
               </Button>
             )}
@@ -6024,7 +6026,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               aria-disabled={!canCreateAssessment}
               title={!canCreateAssessment ? 'You do not have permission to create assessments' : (!isUnlimited && totalUnits > 0 && (totalUnits - stats.units_consumed) <= 0 ? 'No assessment units available' : '')}
               icon={<Sparkles className="w-4 h-4" />}
-              className={!canCreateAssessment ? 'opacity-50 cursor-not-allowed' : ''}
+              className={`sm:h-9 sm:px-3 sm:text-xs lg:h-10 lg:px-4 lg:text-sm ${!canCreateAssessment ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               <span className="hidden sm:inline">Create AI Assessment</span>
                 <span className="sm:hidden">Create</span>
@@ -6111,7 +6113,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                      against that tab's `status: 'draft'`
                                      request — the same construction, so the
                                      same guarantee.
-              Candidates Assessed -> the Candidate Results tab, which lists the
+              Total Assessed      -> the Candidate Results tab, which lists the
                                      completed attempts across every
                                      assessment. `candidatesAssessed`, derived
                                      above.
@@ -6211,7 +6213,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               active={isOverviewCardActive('completed-candidates')}
               showClickArrow
               icon={Users}
-              label="Candidates Assessed"
+              label="Total Assessed"
               value={isLoadingStats ? '...' : candidatesAssessed.toLocaleString()}
               sparkline={false}
               onClick={() => openAssessmentsList('completed-candidates')}
@@ -6225,6 +6227,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
         {/* No section heading above the search row - the pills already name
             the tab, and the count is the search row's "X of Y" badge. */}
+
+        {/* One toolbar card, laid out like the Job Descriptions page's
+            (components/JobsListing.tsx): search + More Filters on top, a rule,
+            then the tab pills. The rule is the slot's bottom border, so a tab
+            with no toolbar (Settings) leaves no stray line above the pills;
+            `[&>*:last-child:not(:first-child)]:mb-3` spaces an open filter
+            panel (or the match line) off that rule the way the toolbar row's
+            own mb-3 already does when it is alone. */}
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-4">
 
         {/* THE search position for this page: one row, directly above the tab
             pills, for every tab.
@@ -6243,7 +6254,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             placeholder and its own filter fields — what is shared is the row,
             its position and its order: search, More Filters, Reset, count
             badge. */}
-        <ListToolbarSlot ref={toolbarSlot.ref} />
+        <ListToolbarSlot ref={toolbarSlot.ref} className="mb-3 border-b border-gray-200 dark:border-slate-700/60 [&>*:last-child:not(:first-child)]:mb-3" />
 
         {/* Total Jobs and Archived — the two tabs the page lists itself. Same
             ListToolbar, same panel, same handlers as before; the only change is
@@ -6485,8 +6496,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           const visibleTabs = TABS.filter((tab) => !('adminOnly' in tab && tab.adminOnly) || isTenantAdmin);
 
           return (
-            <div className="flex items-center gap-2 flex-wrap mb-3">
-              <span className="shrink-0 text-sm text-gray-600 dark:text-slate-400">Show:</span>
+            <div className="flex items-center gap-2 flex-wrap">
               {visibleTabs.filter((tab) => !AFTER_DIVIDER.includes(tab.key)).map(renderTabPill)}
               <div className="flex items-center gap-2 flex-wrap sm:ml-2 sm:border-l sm:border-gray-200 dark:sm:border-slate-700/60 sm:pl-3">
                 {visibleTabs.filter((tab) => AFTER_DIVIDER.includes(tab.key)).map(renderTabPill)}
@@ -6527,12 +6537,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             </div>
           );
         })()}
+        </div>
 
-        {/* The list itself. Same card as before — it simply no longer
-            carries the tab strip in its header. */}
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+        {/* The list itself. Like the Job Descriptions page, the rows and
+            tables sit straight on the page with their own borders — no outer
+            box around them. Settings is a form, not a list, so it alone keeps
+            the card. */}
+        <div className={activeTab === 'settings' ? 'bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5' : ''}>
           {/* Assessment List */}
-          <div className="p-3 sm:p-6">
+          <div className={activeTab === 'settings' ? 'p-3 sm:p-6' : ''}>
 
             {/* The "Job List (25)" header stood here. Its treatment is what
                 the tab pills now wear — label, then the figure in parentheses
