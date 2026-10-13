@@ -28,11 +28,11 @@ export default function DeleteConfirmDialog({
 }: DeleteConfirmDialogProps) {
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="max-w-md max-h-[90dvh] rounded-3xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-2xl flex flex-col">
+      <AlertDialogContent className="max-w-md max-h-[90dvh] rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-2xl flex flex-col">
         <AlertDialogHeader className="shrink-0">
           <div className="flex items-center gap-3 mb-2">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-orange/[0.12] ring-1 ring-brand-orange/20">
-              <AlertTriangle className="w-5 h-5 text-brand-orange-deep" />
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-destructive-subtle ring-1 ring-destructive-line">
+              <AlertTriangle className="w-5 h-5 text-destructive" />
             </div>
             <AlertDialogTitle>Delete Team</AlertDialogTitle>
           </div>
@@ -47,7 +47,7 @@ export default function DeleteConfirmDialog({
           <AlertDialogAction
             onClick={onConfirm}
             disabled={isDeleting}
-            className="bg-brand-orange-deep hover:bg-brand-orange focus:ring-brand-orange"
+            className="bg-destructive text-white hover:opacity-90 focus:ring-destructive/40"
           >
             {isDeleting ? (
               <>

@@ -2,6 +2,12 @@
 
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Tooltip } from '@/components/ui/tooltip';
+import { EmptyState } from '@/components/ui/empty-state';
 import { useState, useEffect, useRef } from 'react';
 import {
   HelpCircle, Send, Ticket, Clock, CheckCircle, MessageSquare, AlertCircle,
@@ -16,6 +22,7 @@ import { internalTicketService, InternalTicket, InternalTicketAdminStats, Intern
 import ListPagination from '@/components/ListPagination';
 import FeatureGate from '@/components/shared/FeatureGate';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import { PageHeader } from '@/components/ui/page-header';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 // Main API - Local backend handles everything including support tickets
@@ -61,9 +68,9 @@ const internalCategories = [
 ];
 
 const internalPriorities = [
-  { value: 'low', label: 'Low', color: 'text-gray-600 bg-gray-100 border-gray-300' },
-  { value: 'medium', label: 'Medium', color: 'text-gray-800 bg-gray-100 border-gray-300' },
-  { value: 'high', label: 'High', color: 'text-orange-600 bg-orange-100 border-orange-300' },
+  { value: 'low', label: 'Low', color: 'text-[var(--text-secondary)] bg-[var(--surface-hover)] border-[var(--border)]' },
+  { value: 'medium', label: 'Medium', color: 'text-[var(--text-primary)] bg-[var(--surface-hover)] border-[var(--border)]' },
+  { value: 'high', label: 'High', color: 'text-warning bg-warning-subtle border-warning-line' },
 ];
 
 // Transform API response to frontend format
@@ -174,9 +181,9 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
   ];
 
   const priorities = [
-    { value: 'low', label: 'Low', color: 'text-gray-600 bg-gray-100 border-gray-300' },
-    { value: 'medium', label: 'Medium', color: 'text-gray-800 bg-gray-100 border-gray-300' },
-    { value: 'high', label: 'High', color: 'text-orange-600 bg-orange-100 border-orange-300' },
+    { value: 'low', label: 'Low', color: 'text-[var(--text-secondary)] bg-[var(--surface-hover)] border-[var(--border)]' },
+    { value: 'medium', label: 'Medium', color: 'text-[var(--text-primary)] bg-[var(--surface-hover)] border-[var(--border)]' },
+    { value: 'high', label: 'High', color: 'text-warning bg-warning-subtle border-warning-line' },
     { value: 'urgent', label: 'Urgent', color: 'text-destructive bg-destructive-subtle border-destructive-line' }
   ];
 
@@ -443,21 +450,20 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
   };
 
   const getInternalStatusBadge = (status: string) => {
-    const styles = {
-      'open': { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-300', icon: Circle },
-      'in-progress': { bg: 'bg-warning-subtle', text: 'text-warning', border: 'border-warning-line', icon: Clock3 },
-      'resolved': { bg: 'bg-success-subtle', text: 'text-success', border: 'border-success-line', icon: CheckCircle2 },
-      'closed': { bg: 'bg-gray-100', text: 'text-gray-700', border: 'border-gray-300', icon: XCircle }
+    const map = {
+      'open': { variant: 'info' as const, icon: Circle },
+      'in-progress': { variant: 'warning' as const, icon: Clock3 },
+      'resolved': { variant: 'success' as const, icon: CheckCircle2 },
+      'closed': { variant: 'muted' as const, icon: XCircle },
     };
 
-    const style = styles[status as keyof typeof styles] || styles['open'];
-    const Icon = style.icon;
+    const { variant, icon: Icon } = map[status as keyof typeof map] || map['open'];
 
     return (
-      <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs border ${style.bg} ${style.text} ${style.border}`}>
+      <Badge variant={variant} className="gap-1.5 px-3 py-1.5">
         <Icon className="w-3.5 h-3.5" />
         {status.charAt(0).toUpperCase() + status.slice(1).replace('-', ' ')}
-      </span>
+      </Badge>
     );
   };
 
@@ -741,121 +747,99 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
   return (
     <div ref={rootRef} className="flex-1 bg-slate-50 overflow-x-clip">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
-      {/* Direct child of the card (not wrapped in its own div) so `sticky` has
-          the card's full height to travel within — a wrapper boxed to just
-          this row's height let it unstick after a moment of scrolling. */}
-      <PageBreadcrumb className="mx-4 md:mx-8 mt-4 md:mt-6 mb-0" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Support Tickets' }]} />
-      {/* SaaS Hero Header */}
-      <div className="px-4 md:px-8 pt-4 md:pt-6">
-        <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
-          <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />
-          <div className="pointer-events-none absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
-          <div className="relative">
-            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-              <div className="flex items-start gap-3">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15 backdrop-blur-sm">
-                  <HelpCircle className="h-6 w-6 text-white" />
-                </div>
-                <div>
-                  <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-2xs font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
-                    <Sparkles className="h-3 w-3 text-brand-orange" />
-                    Help & support
-                  </div>
-                  <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Support Center</h1>
-                  <p className="mt-2 max-w-2xl text-sm text-white/80 sm:text-base">
-                    {activeTab === 'external' ? 'Get help from the TalentFlow support team.' : 'Manage help requests from your team in one place.'}
-                  </p>
-                  {/* Not in plan → the same pill, muted, with the plan-locked hover (never hidden). */}
-                  <FeatureGate
-                    feature="priority_support"
-                    mode="hidden"
-                    fallback={
-                      <div
-                        aria-disabled="true"
-                        title={PLAN_LOCKED_MESSAGE}
-                        className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-white/5 px-3 py-1.5 text-xs font-medium text-white/50 ring-1 ring-white/10 cursor-not-allowed"
-                      >
-                        <Lock className="h-3 w-3 text-white/40" />
-                        Priority Support is not included in your current plan.
-                      </div>
-                    }
-                  >
-                    <div className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald-400/15 px-3 py-1.5 text-xs font-medium text-emerald-50 ring-1 ring-success-line/30 backdrop-blur-sm">
-                      <Sparkles className="h-3 w-3 text-emerald-200" />
-                      Priority Support is enabled for your plan — tickets are handled with higher priority and faster response times.
-                    </div>
-                  </FeatureGate>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 sm:gap-3">
-                {activeTab === 'team' && isAdmin && (
-                  <button
-                    onClick={() => { fetchInternalTickets(); fetchInternalStats(); }}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-white/10 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-medium text-white ring-1 ring-white/15 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:bg-white/15"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                    <span className="hidden sm:inline">Refresh</span>
-                  </button>
-                )}
-                {activeTab === 'external' && view !== 'overview' && view !== 'submit' && (
-                  <button
-                    onClick={() => setView('submit')}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-medium text-brand-blue shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg"
-                  >
-                    <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                    New Ticket
-                  </button>
-                )}
-              </div>
+      <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+      <PageHeader
+        breadcrumb={<PageBreadcrumb className="mb-0" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Support Tickets' }]} />}
+        icon={<HelpCircle className="h-5 w-5" />}
+        title="Support Center"
+        description={activeTab === 'external' ? 'Get help from the TalentFlow support team.' : 'Manage help requests from your team in one place.'}
+        actions={
+          <>
+            {/* Not in plan → the same pill, muted, with the plan-locked hover (never hidden). */}
+            <FeatureGate
+              feature="priority_support"
+              mode="hidden"
+              fallback={
+                <Badge
+                  variant="secondary"
+                  aria-disabled="true"
+                  title={PLAN_LOCKED_MESSAGE}
+                  className="gap-1.5 cursor-not-allowed"
+                >
+                  <Lock className="h-3 w-3" />
+                  Priority Support is not included in your current plan.
+                </Badge>
+              }
+            >
+              <Badge variant="success" className="gap-1.5">
+                <Sparkles className="h-3 w-3" />
+                Priority Support enabled — tickets handled with higher priority and faster response times.
+              </Badge>
+            </FeatureGate>
+            <div className="flex items-center gap-2 sm:gap-3">
+              {activeTab === 'team' && isAdmin && (
+                <Button
+                  variant="secondary"
+                  onClick={() => { fetchInternalTickets(); fetchInternalStats(); }}
+                  icon={<RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />}
+                >
+                  <span className="hidden sm:inline">Refresh</span>
+                </Button>
+              )}
+              {activeTab === 'external' && view !== 'overview' && view !== 'submit' && (
+                <Button
+                  variant="primary"
+                  onClick={() => setView('submit')}
+                  icon={<Send className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />}
+                >
+                  New Ticket
+                </Button>
+              )}
             </div>
-
-            {/* Tab Switcher - Only show for admins */}
-            {isAdmin && (
-              <div className="flex gap-1 mt-4 sm:mt-6 border-b border-white/15 overflow-x-auto">
-                <button
-                  onClick={() => { setActiveTab('external'); setView('overview'); setSelectedTicket(null); setSelectedInternalTicket(null); }}
-                  className={`px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                    activeTab === 'external'
-                      ? 'text-white border-white'
-                      : 'text-white/70 border-transparent hover:text-white hover:border-white/40'
-                  }`}
-                >
-                  <div className="flex items-center gap-1.5 sm:gap-2">
-                    <HelpCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                    <span className="hidden sm:inline">My Support Tickets</span>
-                    <span className="sm:hidden">My Tickets</span>
-                  </div>
-                </button>
-                <button
-                  onClick={() => { setActiveTab('team'); setView('overview'); setSelectedTicket(null); setSelectedInternalTicket(null); }}
-                  className={`px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                    activeTab === 'team'
-                      ? 'text-white border-white'
-                      : 'text-white/70 border-transparent hover:text-white hover:border-white/40'
-                  }`}
-                >
-                  <div className="flex items-center gap-1.5 sm:gap-2">
-                    <Inbox className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                    <span className="hidden sm:inline">Team Support Tickets</span>
-                    <span className="sm:hidden">Team</span>
-                    {internalUnassignedTickets > 0 && (
-                      <span className="px-1.5 sm:px-2 py-0.5 text-2xs sm:text-xs bg-brand-orange/30 text-white ring-1 ring-white/20 rounded-full font-semibold">
-                        {internalUnassignedTickets}
-                      </span>
-                    )}
-                  </div>
-                </button>
-              </div>
-            )}
-          </div>
-        </section>
-      </div>
+          </>
+        }
+      />
+      {/* Tab Switcher - Only show for admins */}
+      {isAdmin && (
+        <div className="flex gap-1 -mt-2 mb-5 border-b border-gray-200 dark:border-slate-700 overflow-x-auto">
+          <button
+            onClick={() => { setActiveTab('external'); setView('overview'); setSelectedTicket(null); setSelectedInternalTicket(null); }}
+            className={`px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+              activeTab === 'external'
+                ? 'text-brand-blue border-brand-blue'
+                : 'text-gray-500 dark:text-slate-400 border-transparent hover:text-gray-800 dark:hover:text-slate-200 hover:border-gray-300'
+            }`}
+          >
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <HelpCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+              <span className="hidden sm:inline">My Support Tickets</span>
+              <span className="sm:hidden">My Tickets</span>
+            </div>
+          </button>
+          <button
+            onClick={() => { setActiveTab('team'); setView('overview'); setSelectedTicket(null); setSelectedInternalTicket(null); }}
+            className={`px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+              activeTab === 'team'
+                ? 'text-brand-blue border-brand-blue'
+                : 'text-gray-500 dark:text-slate-400 border-transparent hover:text-gray-800 dark:hover:text-slate-200 hover:border-gray-300'
+            }`}
+          >
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <Inbox className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+              <span className="hidden sm:inline">Team Support Tickets</span>
+              <span className="sm:hidden">Team</span>
+              {internalUnassignedTickets > 0 && (
+                <span className="px-1.5 sm:px-2 py-0.5 text-2xs sm:text-xs bg-brand-orange/15 text-brand-orange ring-1 ring-brand-orange/20 rounded-full font-semibold">
+                  {internalUnassignedTickets}
+                </span>
+              )}
+            </div>
+          </button>
+        </div>
+      )}
 
       {/* Content */}
-      <div className="p-3 sm:p-4 md:p-6 lg:p-8">
+      <div>
         {/* ========== EXTERNAL SUPPORT TICKETS (TalentFlow Support) ========== */}
 
         {/* Overview */}
@@ -866,7 +850,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               <button
                 type="button"
                 onClick={() => { setFilterStatus('open'); setView('tickets'); }}
-                className="text-left w-full bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden hover:border-brand-blue/30 hover:shadow-md transition-all"
+                className="text-left w-full bg-white rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden hover:border-brand-blue/30 hover:shadow-md transition-all"
               >
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
                   <span className="text-2xs sm:text-xs md:text-sm text-gray-600">Open Tickets</span>
@@ -879,7 +863,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               <button
                 type="button"
                 onClick={() => { setFilterStatus('in_progress'); setView('tickets'); }}
-                className="text-left w-full bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden hover:border-brand-blue/30 hover:shadow-md transition-all"
+                className="text-left w-full bg-white rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden hover:border-brand-blue/30 hover:shadow-md transition-all"
               >
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
                   <span className="text-2xs sm:text-xs md:text-sm text-gray-600">In Progress</span>
@@ -892,7 +876,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               <button
                 type="button"
                 onClick={() => { setFilterStatus('resolved'); setView('tickets'); }}
-                className="text-left w-full bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden hover:border-brand-blue/30 hover:shadow-md transition-all"
+                className="text-left w-full bg-white rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden hover:border-brand-blue/30 hover:shadow-md transition-all"
               >
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
                   <span className="text-2xs sm:text-xs md:text-sm text-gray-600">Resolved</span>
@@ -905,7 +889,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               <button
                 type="button"
                 onClick={() => { setFilterStatus('all'); setView('tickets'); }}
-                className="text-left w-full bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden hover:border-brand-blue/30 hover:shadow-md transition-all"
+                className="text-left w-full bg-white rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden hover:border-brand-blue/30 hover:shadow-md transition-all"
               >
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
                   <span className="text-2xs sm:text-xs md:text-sm text-gray-600">Total Tickets</span>
@@ -920,7 +904,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 md:gap-6">
               <button
                 onClick={() => setView('submit')}
-                className="bg-gradient-to-r from-gray-800 to-gray-900 text-white rounded-xl shadow-lg p-4 sm:p-6 md:p-8 text-left hover:from-blue-700 hover:to-blue-800 transition-all"
+                className="bg-gradient-to-r from-gray-800 to-gray-900 text-white rounded-xl shadow-lg p-4 sm:p-6 md:p-8 text-left hover:from-brand-blue hover:to-brand-blue-2 transition-all"
               >
                 <Send className="w-6 h-6 sm:w-8 sm:h-8 mb-2 sm:mb-4" />
                 <h3 className="text-white text-sm sm:text-base mb-1 sm:mb-2">Submit New Ticket</h3>
@@ -942,7 +926,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
             </div>
 
             {/* Recent Tickets */}
-            <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6">
+            <div className="bg-white rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6">
               <div className="flex items-center justify-between mb-3 sm:mb-4 md:mb-6">
                 <h3 className="text-sm sm:text-base text-gray-900 font-semibold">Recent Tickets</h3>
                 <button
@@ -958,16 +942,12 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 animate-spin text-gray-800" />
                 </div>
               ) : tickets.length === 0 ? (
-                <div className="text-center py-8 sm:py-12">
-                  <Ticket className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 sm:mb-4 text-gray-400" />
-                  <p className="text-xs sm:text-sm text-gray-600">No tickets yet</p>
-                  <button
-                    onClick={() => setView('submit')}
-                    className="mt-4 text-sm text-gray-800 hover:text-gray-900"
-                  >
-                    Create your first ticket
-                  </button>
-                </div>
+                <EmptyState
+                  icon={Ticket}
+                  title="No tickets yet"
+                  description="You haven't created any support tickets yet. Create your first ticket to get help from our support team."
+                  action={{ label: 'Create your first ticket', onClick: () => setView('submit') }}
+                />
               ) : (
                 <div className="space-y-2 sm:space-y-3">
                   {tickets.slice(0, 5).map(ticket => (
@@ -1077,28 +1057,27 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               Back to Overview
             </button>
 
-            <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-4 sm:p-6 md:p-8">
+            <div className="bg-white rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-4 sm:p-6 md:p-8">
               <h2 className="text-sm sm:text-base md:text-lg text-gray-900 font-semibold mb-4 sm:mb-6">Submit Support Ticket</h2>
 
               <div className="space-y-4 sm:space-y-6">
                 <div>
-                  <label className="block text-xs sm:text-sm text-gray-700 mb-1.5 sm:mb-2">
+                  <Label className="mb-1.5">
                     Title <span className="text-destructive">*</span>
-                  </label>
-                  <input
+                  </Label>
+                  <Input
                     type="text"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     placeholder="Brief description of your issue"
-                    className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg text-xs sm:text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 placeholder-gray-500"
                   />
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                   <div>
-                    <label className="block text-xs sm:text-sm text-gray-700 mb-1.5 sm:mb-2">
+                    <Label className="mb-1.5">
                       Category <span className="text-destructive">*</span>
-                    </label>
+                    </Label>
                     <select
                       value={category}
                       onChange={(e) => setCategory(e.target.value as SupportTicket['category'])}
@@ -1111,9 +1090,9 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   </div>
 
                   <div>
-                    <label className="block text-xs sm:text-sm text-gray-700 mb-1.5 sm:mb-2">
+                    <Label className="mb-1.5">
                       Priority <span className="text-destructive">*</span>
-                    </label>
+                    </Label>
                     <select
                       value={priority}
                       onChange={(e) => setPriority(e.target.value as SupportTicket['priority'])}
@@ -1127,22 +1106,21 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 </div>
 
                 <div>
-                  <label className="block text-xs sm:text-sm text-gray-700 mb-1.5 sm:mb-2">
+                  <Label className="mb-1.5">
                     Description <span className="text-destructive">*</span>
-                  </label>
-                  <textarea
+                  </Label>
+                  <Textarea
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="Please provide detailed information about your issue..."
                     rows={6}
-                    className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg text-xs sm:text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 resize-none placeholder-gray-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs sm:text-sm text-gray-700 mb-1.5 sm:mb-2">
+                  <Label className="mb-1.5">
                     Attachments (Optional)
-                  </label>
+                  </Label>
                   <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 sm:p-6 md:p-8 text-center hover:border-gray-400 transition-colors">
                     <input
                       type="file"
@@ -1178,12 +1156,15 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                               </div>
                             </div>
                           </div>
-                          <button
-                            onClick={() => removeAttachment(index)}
-                            className="p-1.5 sm:p-2 hover:bg-gray-200 rounded transition-colors flex-shrink-0"
-                          >
-                            <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-destructive" />
-                          </button>
+                          <Tooltip content="Remove attachment">
+                            <button
+                              onClick={() => removeAttachment(index)}
+                              aria-label="Remove attachment"
+                              className="p-1.5 sm:p-2 hover:bg-gray-200 rounded-lg transition-colors flex-shrink-0"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-destructive" />
+                            </button>
+                          </Tooltip>
                         </div>
                       ))}
                     </div>
@@ -1191,25 +1172,27 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 </div>
 
                 <div className="flex gap-3 sm:gap-4 pt-3 sm:pt-4">
-                  <button
+                  <Button
+                    variant="secondary"
                     onClick={() => setView('overview')}
-                    className="flex-1 px-4 sm:px-6 py-2.5 sm:py-3 text-xs sm:text-sm border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                     disabled={submitting}
+                    className="flex-1"
                   >
                     Cancel
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="primary"
                     onClick={handleSubmitTicket}
                     disabled={submitting}
-                    className="flex-1 px-4 sm:px-6 py-2.5 sm:py-3 text-xs sm:text-sm bg-brand-blue text-white rounded-xl ring-1 ring-white/10 shadow-md hover:-translate-y-0.5 hover:shadow-lg transition-all transition-colors flex items-center justify-center gap-2 disabled:bg-gray-600"
-                  >
-                    {submitting ? (
+                    className="flex-1"
+                    icon={submitting ? (
                       <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" />
                     ) : (
                       <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     )}
+                  >
                     {submitting ? 'Submitting...' : 'Submit Ticket'}
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
@@ -1227,18 +1210,18 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               Back to Overview
             </button>
 
-            <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02]">
+            <div className="bg-white rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02]">
               {/* Filters */}
               <div className="p-3 sm:p-4 md:p-6 border-b border-gray-200">
                 <div className="flex flex-col gap-2 sm:gap-3 md:gap-4">
                   <div className="flex-1 relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-blue/60" />
-                    <input
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-blue/60 z-10" />
+                    <Input
                       type="text"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder="Search tickets..."
-                      className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 placeholder-gray-500"
+                      className="pl-9 pr-4"
                     />
                   </div>
 
@@ -1371,13 +1354,11 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   </div>
 
                   {filteredTickets.length === 0 && (
-                    <div className="text-center py-10 sm:py-14">
-                      <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 rounded-full bg-muted/50 border border-border flex items-center justify-center">
-                        <Ticket className="w-6 h-6 sm:w-7 sm:h-7 text-muted-foreground" />
-                      </div>
-                      <p className="text-sm font-medium text-foreground mb-1">No tickets found</p>
-                      <p className="text-xs sm:text-sm text-muted-foreground">Try adjusting your search or filters</p>
-                    </div>
+                    <EmptyState
+                      icon={Ticket}
+                      title="No tickets found"
+                      description="Try adjusting your search or filters to find what you're looking for."
+                    />
                   )}
                 </>
               )}
@@ -1412,7 +1393,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               {/* Main Content */}
               <div className="lg:col-span-2 space-y-4 sm:space-y-6">
                 {/* Ticket Header */}
-                <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6">
+                <div className="bg-white rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6">
                   <div className="flex items-start justify-between mb-3 sm:mb-4">
                     <div>
                       <span className="text-2xs sm:text-xs text-gray-600 block mb-1 sm:mb-2">{selectedTicket.ticketNumber}</span>
@@ -1429,7 +1410,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 </div>
 
                 {/* Conversation */}
-                <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6">
+                <div className="bg-white rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6">
                   <h3 className="text-sm sm:text-base text-gray-900 font-semibold mb-4 sm:mb-6">Conversation</h3>
 
                   <div className="space-y-4 sm:space-y-6">
@@ -1469,23 +1450,22 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   {/* Reply Box */}
                   {selectedTicket.status !== 'closed' && (
                     <div className="mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-gray-200">
-                      <label className="block text-xs sm:text-sm text-gray-700 mb-1.5 sm:mb-2">Add Reply</label>
-                      <textarea
+                      <Label className="mb-1.5">Add Reply</Label>
+                      <Textarea
                         value={replyMessage}
                         onChange={(e) => setReplyMessage(e.target.value)}
                         placeholder="Type your message..."
                         rows={3}
-                        className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg text-xs sm:text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 resize-none placeholder-gray-500"
                       />
                       <div className="flex justify-end mt-2 sm:mt-3">
-                        <button
+                        <Button
+                          variant="primary"
                           onClick={handleSendReply}
                           disabled={!replyMessage.trim()}
-                          className="px-3 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm bg-brand-blue text-white rounded-xl ring-1 ring-white/10 shadow-md hover:-translate-y-0.5 hover:shadow-lg transition-all transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-1.5 sm:gap-2"
+                          icon={<MessageSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
                         >
-                          <MessageSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                           Send Reply
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   )}
@@ -1495,7 +1475,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               {/* Sidebar */}
               <div className="space-y-4 sm:space-y-6">
                 {/* Ticket Info */}
-                <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6">
+                <div className="bg-white rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6">
                   <h4 className="text-xs sm:text-sm text-gray-900 font-semibold mb-3 sm:mb-4">Ticket Information</h4>
 
                   <div className="space-y-3 sm:space-y-4">
@@ -1530,7 +1510,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
                 {/* Update Priority */}
                 {selectedTicket.status !== 'closed' && (
-                  <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6">
+                  <div className="bg-white rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6">
                     <h4 className="text-xs sm:text-sm text-gray-900 font-semibold mb-3 sm:mb-4">Update Priority</h4>
                     <select
                       value={selectedTicket.priority}
@@ -1545,7 +1525,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 )}
 
                 {/* Actions */}
-                <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6">
+                <div className="bg-white rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6">
                   <h4 className="text-xs sm:text-sm text-gray-900 font-semibold mb-3 sm:mb-4">Actions</h4>
 
                   <div className="space-y-2">
@@ -1608,7 +1588,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               Back to Overview
             </button>
 
-            <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-4 sm:p-6 md:p-8">
+            <div className="bg-white rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-4 sm:p-6 md:p-8">
               <h2 className="text-sm sm:text-base md:text-lg text-gray-900 font-semibold mb-4 sm:mb-6">Knowledge Base</h2>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
@@ -1638,16 +1618,16 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
           <div className="space-y-4 sm:space-y-6">
             {/* Stats Cards */}
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4 md:gap-6">
-              <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
+              <div className="bg-white rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
                   <span className="text-2xs sm:text-xs md:text-sm text-gray-600">Open</span>
-                  <Circle className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 flex-shrink-0" />
+                  <Circle className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue flex-shrink-0" />
                 </div>
                 <div className="text-lg sm:text-2xl md:text-3xl font-semibold text-gray-900 mb-0.5 sm:mb-1">{internalOpenTickets}</div>
                 <div className="text-2xs sm:text-xs text-gray-600">Awaiting action</div>
               </div>
 
-              <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
+              <div className="bg-white rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
                   <span className="text-2xs sm:text-xs md:text-sm text-gray-600">In Progress</span>
                   <Clock3 className="w-4 h-4 sm:w-5 sm:h-5 text-warning flex-shrink-0" />
@@ -1656,7 +1636,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 <div className="text-2xs sm:text-xs text-gray-600">Being handled</div>
               </div>
 
-              <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
+              <div className="bg-white rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
                   <span className="text-2xs sm:text-xs md:text-sm text-gray-600">Resolved</span>
                   <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-success flex-shrink-0" />
@@ -1665,16 +1645,16 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 <div className="text-2xs sm:text-xs text-gray-600">Successfully resolved</div>
               </div>
 
-              <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
+              <div className="bg-white rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
                   <span className="text-2xs sm:text-xs md:text-sm text-gray-600">Unassigned</span>
-                  <Users className="w-4 h-4 sm:w-5 sm:h-5 text-orange-600 flex-shrink-0" />
+                  <Users className="w-4 h-4 sm:w-5 sm:h-5 text-brand-orange flex-shrink-0" />
                 </div>
                 <div className="text-lg sm:text-2xl md:text-3xl font-semibold text-gray-900 mb-0.5 sm:mb-1">{internalUnassignedTickets}</div>
                 <div className="text-2xs sm:text-xs text-gray-600">Need assignment</div>
               </div>
 
-              <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
+              <div className="bg-white rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
                   <span className="text-2xs sm:text-xs md:text-sm text-gray-600">Total</span>
                   <Ticket className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 flex-shrink-0" />
@@ -1686,7 +1666,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
             {/* Category Breakdown */}
             {internalStats?.tickets_by_category && Object.keys(internalStats.tickets_by_category).length > 0 && (
-              <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6">
+              <div className="bg-white rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6">
                 <h3 className="text-sm sm:text-base font-semibold text-gray-900 mb-3 sm:mb-4">Tickets by Category</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 md:gap-4">
                   {Object.entries(internalStats.tickets_by_category).map(([cat, count]) => {
@@ -1709,11 +1689,11 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
               <button
                 onClick={() => { setInternalFilterAssignment('unassigned'); setView('tickets'); }}
-                className="bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl shadow-lg p-4 sm:p-6 text-left hover:from-orange-600 hover:to-red-600 transition-all"
+                className="bg-gradient-to-r from-brand-orange to-brand-orange-deep text-white rounded-xl shadow-lg p-4 sm:p-6 text-left hover:opacity-90 transition-all"
               >
                 <Users className="w-6 h-6 sm:w-8 sm:h-8 mb-2 sm:mb-3" />
                 <h3 className="text-sm sm:text-lg font-semibold text-white mb-0.5 sm:mb-1">Unassigned Tickets</h3>
-                <p className="text-xs sm:text-sm text-orange-100">
+                <p className="text-xs sm:text-sm text-white/80">
                   {internalUnassignedTickets} tickets need attention
                 </p>
               </button>
@@ -1742,7 +1722,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
             </div>
 
             {/* Recent Team Tickets */}
-            <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6">
+            <div className="bg-white rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6">
               <div className="flex items-center justify-between mb-3 sm:mb-4 md:mb-6">
                 <h3 className="text-sm sm:text-base font-semibold text-gray-900">Recent Team Tickets</h3>
                 <button
@@ -1785,7 +1765,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                         </div>
                         <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
                           {!ticket.assigned_to && (
-                            <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 bg-orange-100 text-orange-700 text-2xs sm:text-xs rounded border border-orange-200">
+                            <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 bg-warning-subtle text-warning-strong text-2xs sm:text-xs rounded border border-warning-line">
                               Unassigned
                             </span>
                           )}
@@ -1818,18 +1798,18 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               Back to Overview
             </button>
 
-            <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02]">
+            <div className="bg-white rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02]">
               {/* Filters */}
               <div className="p-3 sm:p-4 md:p-6 border-b border-gray-200">
                 <div className="flex flex-col gap-2 sm:gap-3 md:gap-4">
                   <div className="flex-1 relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-blue/60" />
-                    <input
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-blue/60 z-10" />
+                    <Input
                       type="text"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder="Search by ticket, title, or user..."
-                      className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 placeholder-gray-500"
+                      className="pl-9 pr-4"
                     />
                   </div>
 
@@ -1902,7 +1882,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                             <div className="flex flex-col items-end gap-1 flex-shrink-0">
                               {getInternalStatusBadge(ticket.status)}
                               {!ticket.assigned_to && (
-                                <span className="px-1.5 py-0.5 bg-orange-100 text-orange-700 text-2xs rounded border border-orange-200">
+                                <span className="px-1.5 py-0.5 bg-warning-subtle text-warning-strong text-2xs rounded border border-warning-line">
                                   Unassigned
                                 </span>
                               )}
@@ -1975,7 +1955,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                                 {ticket.assigned_to ? (
                                   <span className="text-sm text-gray-600">{ticket.assigned_to.name}</span>
                                 ) : (
-                                  <span className="text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded">Unassigned</span>
+                                  <span className="text-xs text-warning-strong bg-warning-subtle px-2 py-1 rounded">Unassigned</span>
                                 )}
                               </td>
                               <td className="px-6 py-4">
@@ -2039,7 +2019,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               {/* Main Content */}
               <div className="lg:col-span-2 space-y-4 sm:space-y-6">
                 {/* Ticket Header */}
-                <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6">
+                <div className="bg-white rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6">
                   <div className="flex items-start justify-between mb-3 sm:mb-4">
                     <div>
                       <span className="text-2xs sm:text-xs text-gray-600 block mb-1 sm:mb-2">{selectedInternalTicket.ticket_number}</span>
@@ -2065,7 +2045,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 </div>
 
                 {/* Conversation */}
-                <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6">
+                <div className="bg-white rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6">
                   <h3 className="text-sm sm:text-base font-semibold text-gray-900 mb-4 sm:mb-6">Conversation</h3>
 
                   <div className="space-y-4 sm:space-y-6">
@@ -2075,7 +2055,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                         className={`${
                           response.user_role === 'admin'
                             ? 'bg-gray-100 border-gray-300'
-                            : 'bg-blue-50 border-blue-200'
+                            : 'bg-brand-blue/5 border-brand-blue/20'
                         } border rounded-lg p-3 sm:p-4 md:p-5`}
                       >
                         <div className="flex items-start gap-2.5 sm:gap-4 mb-2 sm:mb-3">
@@ -2084,7 +2064,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                               A
                             </div>
                           ) : (
-                            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-blue-500 rounded-full flex items-center justify-center text-white flex-shrink-0 text-xs sm:text-sm font-medium">
+                            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-brand-blue rounded-full flex items-center justify-center text-white flex-shrink-0 text-xs sm:text-sm font-medium">
                               {response.user_name?.charAt(0) || 'U'}
                             </div>
                           )}
@@ -2105,23 +2085,22 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   {/* Reply Box */}
                   {selectedInternalTicket.status !== 'closed' && (
                     <div className="mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-gray-200">
-                      <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2">Reply to User</label>
-                      <textarea
+                      <Label className="mb-1.5">Reply to User</Label>
+                      <Textarea
                         value={replyMessage}
                         onChange={(e) => setReplyMessage(e.target.value)}
                         placeholder="Type your response..."
                         rows={3}
-                        className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg text-xs sm:text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 resize-none placeholder-gray-500"
                       />
                       <div className="flex justify-end mt-2 sm:mt-3">
-                        <button
+                        <Button
+                          variant="primary"
                           onClick={handleSendInternalReply}
                           disabled={!replyMessage.trim()}
-                          className="px-3 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm bg-brand-blue text-white rounded-xl ring-1 ring-white/10 shadow-md hover:-translate-y-0.5 hover:shadow-lg transition-all transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-1.5 sm:gap-2"
+                          icon={<MessageSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
                         >
-                          <MessageSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                           Send Reply
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   )}
@@ -2131,7 +2110,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               {/* Sidebar */}
               <div className="space-y-4 sm:space-y-6">
                 {/* Ticket Info */}
-                <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6">
+                <div className="bg-white rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6">
                   <h4 className="text-xs sm:text-sm font-semibold text-gray-900 mb-3 sm:mb-4">Ticket Information</h4>
 
                   <div className="space-y-3 sm:space-y-4">
@@ -2155,7 +2134,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                           <div className="text-xs sm:text-sm text-gray-900">{selectedInternalTicket.assigned_to.name}</div>
                         </div>
                       ) : (
-                        <span className="text-xs sm:text-sm text-orange-600">Not assigned</span>
+                        <span className="text-xs sm:text-sm text-warning-strong">Not assigned</span>
                       )}
                     </div>
 
@@ -2168,7 +2147,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
                 {/* Update Priority */}
                 {selectedInternalTicket.status !== 'closed' && (
-                  <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6">
+                  <div className="bg-white rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6">
                     <h4 className="text-xs sm:text-sm font-semibold text-gray-900 mb-3 sm:mb-4">Update Priority</h4>
                     <select
                       value={selectedInternalTicket.priority}
@@ -2183,7 +2162,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 )}
 
                 {/* Actions */}
-                <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6">
+                <div className="bg-white rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6">
                   <h4 className="text-xs sm:text-sm font-semibold text-gray-900 mb-3 sm:mb-4">Actions</h4>
 
                   <div className="space-y-2">
@@ -2191,7 +2170,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       <button
                         onClick={() => handleAssignInternalTicket(selectedInternalTicket.id)}
                         disabled={internalActionLoading === selectedInternalTicket.id}
-                        className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-brand-blue text-white rounded-xl ring-1 ring-white/10 shadow-md hover:-translate-y-0.5 hover:shadow-lg transition-all transition-colors text-xs sm:text-sm text-left flex items-center gap-1.5 sm:gap-2 disabled:bg-gray-400"
+                        className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-brand-blue text-white rounded-lg ring-1 ring-white/10 shadow-md hover:-translate-y-0.5 hover:shadow-lg transition-all transition-colors text-xs sm:text-sm text-left flex items-center gap-1.5 sm:gap-2 disabled:bg-gray-400"
                       >
                         {internalActionLoading === selectedInternalTicket.id ? (
                           <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" />

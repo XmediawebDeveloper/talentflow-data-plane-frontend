@@ -1,6 +1,6 @@
 'use client';
 
-import { Building2, Save, Edit2, Loader2, ChevronDown, X, Sparkles, AlertCircle, CheckCircle2, MapPin, FileText } from 'lucide-react';
+import { Building2, Save, Edit2, Loader2, ChevronDown, X, AlertCircle, CheckCircle2, MapPin, FileText } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -9,6 +9,12 @@ import authService from '@/lib/services/authService';
 import { handleUnauthorized } from '@/lib/services/api';
 import { PageSkeleton } from '@/components/ui/skeleton';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Tooltip } from '@/components/ui/tooltip';
+import { PageHeader } from '@/components/ui/page-header';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 const POLL_INTERVAL_MS = 30_000; // 30 seconds
@@ -158,11 +164,10 @@ function CompanySizeField({
 
   if (disabled) {
     return (
-      <input
+      <Input
         type="text"
         value={value}
         disabled
-        className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-600"
       />
     );
   }
@@ -170,21 +175,25 @@ function CompanySizeField({
   if (mode === 'manual') {
     return (
       <div className="flex gap-2">
-        <input
+        <Input
           type="text"
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder="e.g. 250 or 1000-2000"
-          className="flex-1 rounded-xl border border-gray-200 px-4 py-2.5 text-sm transition focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+          className="flex-1"
         />
-        <button
-          type="button"
-          onClick={() => { setMode('select'); onChange(''); }}
-          className="px-3 py-2 text-xs text-gray-500 border border-gray-200 rounded-xl hover:bg-brand-cyan/[0.06] hover:text-brand-blue hover:border-brand-blue/30 transition whitespace-nowrap"
-          aria-label="Switch to dropdown" title="Switch to dropdown"
-        >
-          <X className="w-3.5 h-3.5" />
-        </button>
+        <Tooltip content="Switch to dropdown">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => { setMode('select'); onChange(''); }}
+            className="px-2"
+            aria-label="Switch to dropdown"
+          >
+            <X className="w-3.5 h-3.5" />
+          </Button>
+        </Tooltip>
       </div>
     );
   }
@@ -194,12 +203,12 @@ function CompanySizeField({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm transition focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue text-left flex items-center justify-between"
+        className="w-full rounded-lg border bg-white px-4 py-2.5 text-sm transition focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue text-left flex items-center justify-between"
       >
-        <span className={value ? 'text-gray-900' : 'text-gray-400'}>
+        <span className={value ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}>
           {value || 'Select company size'}
         </span>
-        <ChevronDown className="w-4 h-4 text-gray-400" />
+        <ChevronDown className="w-4 h-4 text-[var(--text-muted)]" />
       </button>
 
       {open && (
@@ -209,7 +218,7 @@ function CompanySizeField({
               key={opt}
               type="button"
               onClick={() => { onChange(opt); setOpen(false); }}
-              className={`w-full text-left px-4 py-2 text-sm transition hover:bg-brand-cyan/[0.06] hover:text-brand-blue ${value === opt ? 'bg-brand-blue/[0.06] text-brand-blue font-medium' : 'text-gray-700'}`}
+              className={`w-full text-left px-4 py-2 text-sm transition hover:bg-brand-cyan/[0.06] hover:text-brand-blue ${value === opt ? 'bg-brand-blue/[0.06] text-brand-blue font-medium' : 'text-[var(--text-secondary)]'}`}
             >
               {opt}
             </button>
@@ -380,8 +389,8 @@ export default function CompanyProfilePage() {
     type?: string; placeholder?: string;
   }) => (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1.5">{label}</label>
-      <input
+      <Label className="mb-1.5">{label}</Label>
+      <Input
         type={opts?.type || 'text'}
         value={companyData[key]}
         placeholder={isEditing ? opts?.placeholder : undefined}
@@ -392,8 +401,7 @@ export default function CompanyProfilePage() {
           }
         }}
         disabled={!isEditing}
-        className={`w-full rounded-xl border px-4 py-2.5 text-sm transition focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue disabled:bg-gray-50 disabled:text-gray-600
-          ${validationErrors[key as keyof ValidationErrors] ? 'border-destructive-line bg-destructive-subtle/60 focus:ring-destructive-line focus:border-destructive-line' : 'border-gray-200'}`}
+        aria-invalid={!!validationErrors[key as keyof ValidationErrors]}
       />
       {validationErrors[key as keyof ValidationErrors] && (
         <p className="mt-1 text-xs font-medium text-destructive">{validationErrors[key as keyof ValidationErrors]}</p>
@@ -407,63 +415,47 @@ export default function CompanyProfilePage() {
 
   return (
     <main className="flex-1 overflow-x-clip bg-slate-50">
-      <div className="mx-auto w-full max-w-[1400px] px-4 md:px-8">
-      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className="mx-auto w-full max-w-[1400px]">
+      <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Company Profile' }]} />
 
-        {/* SaaS Hero Header */}
-        <section className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
-          <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />
-          <div className="pointer-events-none absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
-          <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl">
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
-                <Sparkles className="h-3.5 w-3.5 text-brand-orange" />
-                Organization details
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/12 ring-1 ring-white/15 backdrop-blur-sm">
-                  <Building2 className="h-6 w-6 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-lg sm:text-xl font-semibold tracking-tight">Company Profile</h1>
-                  <p className="mt-2 max-w-2xl text-sm text-white/80 sm:text-base">Maintain your organization&apos;s identity, contact info, and address — visible across your dashboard.</p>
-                </div>
-              </div>
-            </div>
-            {!isEditing ? (
-              <button
+        <PageHeader
+          icon={<Building2 className="h-5 w-5" />}
+          title="Company Profile"
+          description="Maintain your organization's identity, contact info, and address — visible across your dashboard."
+          actions={
+            !isEditing ? (
+              <Button
+                variant="primary"
                 onClick={() => setIsEditing(true)}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-brand-blue shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg"
+                icon={<Edit2 className="h-4 w-4" />}
               >
-                <Edit2 className="h-4 w-4" />
                 Edit Profile
-              </button>
+              </Button>
             ) : (
               <div className="flex flex-wrap items-center gap-2">
-                <button
+                <Button
+                  variant="secondary"
                   onClick={handleCancel}
                   disabled={isSaving}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-medium text-white ring-1 ring-white/15 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:bg-white/15 disabled:translate-y-0 disabled:opacity-60"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="primary"
                   onClick={handleSave}
                   disabled={isSaving}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-brand-blue shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:opacity-60"
+                  icon={isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                 >
-                  {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                   {isSaving ? 'Saving...' : 'Save Changes'}
-                </button>
+                </Button>
               </div>
-            )}
-          </div>
-        </section>
+            )
+          }
+        />
 
         {successMessage && (
-          <div className="mb-6 flex items-center gap-3 rounded-2xl border border-brand-teal/20 bg-brand-teal/[0.06] p-4 ring-1 ring-brand-teal/10">
+          <div className="mb-5 flex items-center gap-3 rounded-xl border border-brand-teal/20 bg-brand-teal/[0.06] p-4 ring-1 ring-brand-teal/10">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-teal/15 text-brand-teal">
               <CheckCircle2 className="h-5 w-5" />
             </span>
@@ -471,7 +463,7 @@ export default function CompanyProfilePage() {
           </div>
         )}
         {error && (
-          <div className="mb-6 flex items-center gap-3 rounded-2xl border border-destructive-line bg-destructive-subtle/80 p-4 ring-1 ring-destructive-line">
+          <div className="mb-5 flex items-center gap-3 rounded-xl border border-destructive-line bg-destructive-subtle/80 p-4 ring-1 ring-destructive-line">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-destructive-subtle text-destructive">
               <AlertCircle className="h-5 w-5" />
             </span>
@@ -480,7 +472,7 @@ export default function CompanyProfilePage() {
         )}
 
         {/* Basic Information */}
-        <div className="mb-6 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+        <div className="mb-5 overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
           <div className="flex items-center gap-3 border-b border-gray-100 bg-gray-50 px-5 py-4 sm:px-6">
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
               <Building2 className="h-5 w-5 text-brand-blue" />
@@ -499,7 +491,7 @@ export default function CompanyProfilePage() {
 
             {/* Industry — dropdown + free text when "Other" */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Industry</label>
+              <Label className="mb-1.5">Industry</Label>
               {isEditing ? (() => {
                 // A value is "custom" if it's non-empty and not one of the preset options
                 const PRESET = INDUSTRY_OPTIONS.filter(o => o !== 'Other');
@@ -516,7 +508,7 @@ export default function CompanyProfilePage() {
                           setCompanyData({ ...companyData, industry: e.target.value });
                         }
                       }}
-                      className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm transition focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+                      className="w-full rounded-lg border bg-white px-4 py-2.5 text-sm transition focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
                     >
                       <option value="">Select industry</option>
                       {INDUSTRY_OPTIONS.map((opt) => (
@@ -524,13 +516,13 @@ export default function CompanyProfilePage() {
                       ))}
                     </select>
                     {(isCustom || companyData.industry === '__other__') && (
-                      <input
+                      <Input
                         type="text"
                         value={companyData.industry === '__other__' ? '' : companyData.industry}
                         onChange={(e) => setCompanyData({ ...companyData, industry: e.target.value || '__other__' })}
                         placeholder="Specify your industry"
                         autoFocus
-                        className={`w-full rounded-xl border px-4 py-2.5 text-sm transition focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue ${validationErrors.industry ? 'border-destructive-line bg-destructive-subtle/60 focus:ring-destructive-line focus:border-destructive-line' : 'border-gray-200'}`}
+                        aria-invalid={!!validationErrors.industry}
                       />
                     )}
                     {validationErrors.industry && (
@@ -539,18 +531,17 @@ export default function CompanyProfilePage() {
                   </div>
                 );
               })() : (
-                <input
+                <Input
                   type="text"
                   value={companyData.industry}
                   disabled
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-600"
                 />
               )}
             </div>
 
             {/* Company Size — dropdown + manual */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Company Size</label>
+              <Label className="mb-1.5">Company Size</Label>
               <CompanySizeField
                 value={companyData.size}
                 onChange={(val) => setCompanyData({ ...companyData, size: val })}
@@ -564,7 +555,7 @@ export default function CompanyProfilePage() {
         </div>
 
         {/* Address */}
-        <div className="mb-6 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+        <div className="mb-5 overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
           <div className="flex items-center gap-3 border-b border-gray-100 bg-gray-50 px-5 py-4 sm:px-6">
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-teal/10 ring-1 ring-brand-teal/15 shadow-sm shadow-brand-teal/10">
               <MapPin className="h-5 w-5 text-brand-teal" />
@@ -590,7 +581,7 @@ export default function CompanyProfilePage() {
         </div>
 
         {/* Description */}
-        <div className="mb-6 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+        <div className="mb-5 overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
           <div className="flex items-center gap-3 border-b border-gray-100 bg-gray-50 px-5 py-4 sm:px-6">
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-brand-blue-2/15 to-brand-blue/10 ring-1 ring-brand-blue-2/15 shadow-sm shadow-brand-blue/10">
               <FileText className="h-5 w-5 text-brand-blue-2" />
@@ -601,7 +592,7 @@ export default function CompanyProfilePage() {
             </div>
           </div>
           <div className="p-5 sm:p-6">
-            <textarea
+            <Textarea
               value={companyData.description}
               onChange={(e) => {
                 setCompanyData({ ...companyData, description: e.target.value });
@@ -611,8 +602,7 @@ export default function CompanyProfilePage() {
               rows={4}
               placeholder={isEditing ? 'Describe your company...' : ''}
               maxLength={2000}
-              className={`w-full rounded-xl border px-4 py-2.5 text-sm transition focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue disabled:bg-gray-50 disabled:text-gray-600
-                ${validationErrors.description ? 'border-destructive-line bg-destructive-subtle/60 focus:ring-destructive-line focus:border-destructive-line' : 'border-gray-200'}`}
+              aria-invalid={!!validationErrors.description}
             />
             <div className="flex justify-between mt-1.5">
               {validationErrors.description

@@ -40,39 +40,41 @@ export default function OrganizationTabs() {
 
   return (
     <section className="mb-5">
-      <div className="border-b border-gray-200 dark:border-slate-700">
-        <nav className="flex gap-1 overflow-x-auto scrollbar-hide -mb-px" aria-label="User management tabs">
-          {tabs.map((tab) => {
-            const isActive = pathname === tab.href || pathname.startsWith(`${tab.href}/`);
-            if (tab.planLocked) {
-              return (
-                <span
-                  key={tab.id}
-                  aria-disabled="true"
-                  title={DISABLED_REASON_MESSAGE.plan}
-                  className="whitespace-nowrap px-3 sm:px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-400 dark:text-slate-600 cursor-not-allowed"
-                >
-                  {tab.label}
-                </span>
-              );
-            }
+      <nav
+        aria-label="User management tabs"
+        className="flex max-w-full flex-wrap gap-1 border-b border-gray-200 dark:border-slate-700"
+      >
+        {tabs.map((tab) => {
+          const isActive = pathname === tab.href || pathname.startsWith(`${tab.href}/`);
+          const base = '-mb-px whitespace-nowrap rounded-t-lg border px-4 py-2.5 text-sm font-medium transition-colors';
+          if (tab.planLocked) {
             return (
-              <Link
+              <span
                 key={tab.id}
-                href={tab.href}
-                aria-current={isActive ? 'page' : undefined}
-                className={`whitespace-nowrap px-3 sm:px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-                  isActive
-                    ? 'border-brand-blue text-brand-blue'
-                    : 'border-transparent text-gray-600 dark:text-slate-400 hover:text-brand-blue hover:border-brand-blue/40'
-                }`}
+                aria-disabled="true"
+                title={DISABLED_REASON_MESSAGE.plan}
+                className={`${base} border-transparent text-gray-400 dark:text-slate-600 cursor-not-allowed`}
               >
                 {tab.label}
-              </Link>
+              </span>
             );
-          })}
-        </nav>
-      </div>
+          }
+          return (
+            <Link
+              key={tab.id}
+              href={tab.href}
+              aria-current={isActive ? 'page' : undefined}
+              className={`${base} ${
+                isActive
+                  ? 'border-gray-200 dark:border-slate-700 border-b-slate-50 dark:border-b-slate-800 bg-slate-50 dark:bg-slate-800/40 text-brand-blue'
+                  : 'border-transparent text-gray-600 dark:text-slate-400 hover:text-brand-blue hover:bg-gray-50 dark:hover:bg-slate-800/40'
+              }`}
+            >
+              {tab.label}
+            </Link>
+          );
+        })}
+      </nav>
     </section>
   );
 }

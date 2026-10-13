@@ -79,17 +79,18 @@ export default function TeamHistory() {
   };
 
   return (
-    <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-brand-blue/[0.06] px-3 py-1 text-xs font-medium text-brand-blue ring-1 ring-brand-blue/10">
-            <History className="h-3.5 w-3.5" />
-            Audit trail
+    <div className="space-y-5">
+      <div className="flex flex-col gap-4 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 p-5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
+            <History className="w-5 h-5 text-brand-blue" />
           </div>
-          <h2 className="text-lg font-semibold text-gray-900">Teams History</h2>
-          <p className="text-sm text-gray-500">
-            {loading ? 'Loading activities...' : `${total} ${total === 1 ? 'activity' : 'activities'} recorded`}
-          </p>
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50">Teams History</h2>
+            <p className="text-sm text-gray-600 dark:text-slate-400">
+              {loading ? 'Loading activities...' : `${total} ${total === 1 ? 'activity' : 'activities'} recorded`}
+            </p>
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-2">
@@ -100,7 +101,7 @@ export default function TeamHistory() {
               className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
                 filter === entryFilter
                   ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/20'
-                  : 'bg-gray-50 text-gray-600 ring-1 ring-gray-200 hover:bg-brand-blue/[0.04] hover:text-brand-blue'
+                  : 'bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700 hover:bg-brand-blue/[0.04] hover:text-brand-blue'
               }`}
             >
               {entryFilter === 'ALL' ? 'All' : EVENT_CONFIG[entryFilter]?.label ?? entryFilter}

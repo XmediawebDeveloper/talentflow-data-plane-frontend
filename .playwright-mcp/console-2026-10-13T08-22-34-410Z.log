@@ -1,0 +1,42 @@
+[    1772ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/organization/user-management:6
+[    1932ms] [LOG] [HMR] connected @ http://localhost:3000/organization/user-management:6
+[    2130ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/organization/user-management:6
+[    2140ms] [LOG] [DASHBOARD] Layout render - isLoading: true isAuthenticated: false user: undefined @ http://localhost:3000/organization/user-management:6
+[    2140ms] [LOG] [DASHBOARD] Still loading... @ http://localhost:3000/organization/user-management:6
+[    2170ms] [LOG] [AUTH] Token expired or expiring soon @ http://localhost:3000/organization/user-management:6
+[    2171ms] [LOG] [AUTH] Token expired, clearing session @ http://localhost:3000/organization/user-management:6
+[    2174ms] [LOG] [AUTH] Permission version cleared @ http://localhost:3000/organization/user-management:6
+[    2180ms] [LOG] [DASHBOARD] Layout render - isLoading: false isAuthenticated: false user: undefined @ http://localhost:3000/organization/user-management:6
+[    2180ms] [LOG] [DASHBOARD] Not authenticated, returning null @ http://localhost:3000/organization/user-management:6
+[    2184ms] [LOG] [DASHBOARD] Not authenticated, redirecting to login @ http://localhost:3000/organization/user-management:6
+[    4245ms] [LOG] [Fast Refresh] done in 2222ms @ http://localhost:3000/organization/user-management:6
+[    4835ms] [WARNING] Image with src "/logos/talent_flow_logo.png" has either width or height modified, but not the other. If you use CSS to change the size of your image, also include the styles 'width: "auto"' or 'height: "auto"' to maintain the aspect ratio. @ http://localhost:3000/organization/user-management:6
+[    4926ms] [WARNING] Image with src "/_next/static/media/auth-ai-hero.43i2bdmqqn3-j.png" was detected as the Largest Contentful Paint (LCP). Please add the `loading="eager"` property if this image is above the fold.
+Read more: https://nextjs.org/docs/app/api-reference/components/image#loading @ http://localhost:3000/organization/user-management:6
+[    6460ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/organization/user-management:6
+[    6776ms] [LOG] [Fast Refresh] done in 424ms @ http://localhost:3000/organization/user-management:6
+[   72018ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/organization/user-management:6
+[   72067ms] [LOG] [Fast Refresh] done in 164ms @ http://localhost:3000/organization/user-management:6
+[   74043ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/organization/user-management:6
+[   74044ms] [LOG] [Fast Refresh] done in 101ms @ http://localhost:3000/organization/user-management:6
+[   77675ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/organization/user-management:6
+[   77710ms] [LOG] [Fast Refresh] done in 149ms @ http://localhost:3000/organization/user-management:6
+[   86601ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/organization/user-management:6
+[   86652ms] [LOG] [Fast Refresh] done in 159ms @ http://localhost:3000/organization/user-management:6
+[   86791ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/organization/user-management:6
+[   86914ms] [LOG] [Fast Refresh] done in 234ms @ http://localhost:3000/organization/user-management:6
+[  522005ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/organization/user-management:6
+[  522011ms] [LOG] [Fast Refresh] done in 115ms @ http://localhost:3000/organization/user-management:6
+[  522124ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/organization/user-management:6
+[  524952ms] [LOG] [Fast Refresh] done in 2853ms @ http://localhost:3000/organization/user-management:6
+[  525306ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/organization/user-management:6
+[  526028ms] [LOG] [Fast Refresh] done in 833ms @ http://localhost:3000/organization/user-management:6
+[  526512ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/organization/user-management:6
+[  527269ms] [LOG] [Fast Refresh] done in 872ms @ http://localhost:3000/organization/user-management:6
+[  527405ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/organization/user-management:6
+[  527525ms] [LOG] [Fast Refresh] done in 224ms @ http://localhost:3000/organization/user-management:6
+[  527702ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/organization/user-management:6
+[  527704ms] [LOG] [Fast Refresh] done in 103ms @ http://localhost:3000/organization/user-management:6
+[  568018ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/organization/user-management:6
+[  568055ms] [LOG] [Fast Refresh] done in 139ms @ http://localhost:3000/organization/user-management:6
+[  568167ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/organization/user-management:6
