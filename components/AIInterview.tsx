@@ -48,6 +48,7 @@ import { modeFromConfig } from '@/lib/constants/aiInterviewMode';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import ListPagination from '@/components/ListPagination';
 import ListToolbar from '@/components/ui/list-toolbar';
+import ListFilterPanel from '@/components/ui/list-filter-panel';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
@@ -2527,8 +2528,24 @@ export default function AIInterview() {
             controls" tabs too — AllInterviewsTable portals its own toolbar
             into the same slot, so this one steps aside rather than the two
             fighting over one spot. */}
-        {isConfigListTab && !showUngroupedList && (
-          <div className="mb-4">
+        {/* One toolbar card, laid out like the Job Descriptions page's
+            (components/JobsListing.tsx) and the Assessments page's: search +
+            More Filters on top, a rule, then the tab pills. The rule is the
+            slot's bottom border, so a tab with no toolbar (Settings) leaves no
+            stray line above the pills; `[&>*:last-child:not(:first-child)]:mb-3`
+            spaces an open filter panel off that rule the way the toolbar row's
+            own mb-3 already does when it is alone. */}
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-4">
+
+        {/* Shared toolbar slot — every tab's search/filter row renders here:
+            the config-list tabs' toolbar just below, and All Interviews /
+            Candidate Results / Invitation Status / Activity Logs portal theirs
+            in (see their `toolbarSlot` prop), so the search box sits in the
+            same spot whichever tab is active. */}
+        <div ref={setToolbarSlotEl} className="empty:hidden mb-3 border-b border-gray-200 dark:border-slate-700/60 [&>*:last-child:not(:first-child)]:mb-3" />
+
+        {isConfigListTab && !showUngroupedList && toolbarSlotEl && createPortal(
+          <>
             <ListToolbar
               searchValue={searchQuery}
               searchDebounceMs={0}
@@ -2539,7 +2556,6 @@ export default function AIInterview() {
               activeFilterCount={aiFilterCount}
               filtersApplied={aiFiltersActive}
               onClearFilters={clearAIInterviewFilters}
-              className="mb-0"
               countBadge={
                 <ListCountBadge
                   filtered={collapsedConfigs.length}
@@ -2547,9 +2563,15 @@ export default function AIInterview() {
                   noun="job"
                 />
               }
-              filterPanel={
-                <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-800/30 p-3 sm:p-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            />
+            {showAIFilters && (
+                <ListFilterPanel
+                  footer={
+                    <Button variant="secondary" size="sm" onClick={() => setShowAIFilters(false)}>
+                      Done
+                    </Button>
+                  }
+                >
                     <div>
                       <label htmlFor="ai-interview-mode" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
                         Mode
@@ -2641,29 +2663,16 @@ export default function AIInterview() {
                         </div>
                       </>
                     )}
-                  </div>
-                  <div className="mt-4 pt-3 border-t border-gray-200 dark:border-slate-700/60 flex items-center justify-end gap-2">
-                    <Button variant="secondary" size="sm" onClick={() => setShowAIFilters(false)}>
-                      Done
-                    </Button>
-                  </div>
-                </div>
-              }
-            />
-          </div>
+                </ListFilterPanel>
+            )}
+          </>,
+          toolbarSlotEl,
         )}
 
-        {/* Shared toolbar slot — All Interviews / Candidate Results / Activity
-            Logs each portal their own search/filter bar in here (see their
-            `toolbarSlot` prop below), so it renders in this one spot above
-            the tab pills no matter which tab is active. Empty (and so
-            collapsed) on the tabs whose toolbar renders inline above instead. */}
-        <div ref={setToolbarSlotEl} className="empty:hidden mb-4" />
-
-        {/* Tabs — outside the list card, in the Assessments page's pill row. */}
-        <div className="flex items-start justify-between gap-2 flex-wrap mb-3">
+        {/* Tabs — below the search row inside the same card, in the Job
+            Descriptions page's status-pill row (no "Show:" label). */}
+        <div className="flex items-start justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm text-gray-600 dark:text-slate-400">Show:</span>
           {([
             { key: 'all', label: 'Total Jobs' },
             { key: 'all-interviews', label: 'All Interviews' },
@@ -2776,6 +2785,7 @@ export default function AIInterview() {
           </Button>
           </div>
         </div>
+        </div>{/* closes toolbar card */}
 
         {/* Main Content */}
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">

@@ -27,7 +27,7 @@ import {
   normalizePriority as sharedNormalizePriority,
 } from '@/lib/constants/aiInterviewPriority';
 import type { ClusterPriority } from '@/lib/constants/aiInterviewPriority';
-import { AIInterviewStepIndicator } from './AIInterviewStepIndicator';
+import { AIInterviewStepIndicator, useBreadcrumbOffset } from './AIInterviewStepIndicator';
 import { SectionHeader, SummaryLocation } from './ConfigSummary';
 import WizardDiscardButton from './WizardDiscardButton';
 import ClusterGeneratingState, { CLUSTER_GENERATING_ID } from './ClusterGeneratingState';
@@ -1067,6 +1067,8 @@ function CategorySection({
 
 export default function AIInterviewClusters() {
   const router = useRouter();
+  /* Step indicator pins below the sticky breadcrumb rather than under it. */
+  const [breadcrumbBarRef, breadcrumbHeight] = useBreadcrumbOffset();
   const searchParams = useSearchParams();
   const id = searchParams.get('id') || '';
   // Carried from the Configure step when the flow started on a JD's Job Details
@@ -2974,7 +2976,7 @@ export default function AIInterviewClusters() {
     return (
       <main className="flex-1 overflow-x-clip bg-slate-50">
         <div className="mx-auto w-full max-w-[1400px]">
-          <div className="p-4 md:p-8 pb-24 w-full min-h-[calc(100dvh-7rem)] bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+          <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
             {/* Breadcrumb */}
             <div className="mb-4 md:mb-6 flex items-center gap-2">
               <Skeleton className="h-3 w-16" />
@@ -3067,8 +3069,9 @@ export default function AIInterviewClusters() {
     <DndProvider backend={HTML5Backend}>
       <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
         <div className="mx-auto w-full max-w-[1400px]">
-          <div className="p-4 md:p-8 pb-24 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+          <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
             <PageBreadcrumb
+              barRef={breadcrumbBarRef}
               className="mb-4 md:mb-6"
               items={
                 fromInviteOrigin
@@ -3097,7 +3100,7 @@ export default function AIInterviewClusters() {
               }
             />
           {/* Step indicator — a direct child of the card, so it can stick. */}
-          <AIInterviewStepIndicator currentStep={CURRENT_STEP} />
+          <AIInterviewStepIndicator currentStep={CURRENT_STEP} topOffset={breadcrumbHeight} />
 
           {/* Header */}
           <div className="mb-6">
@@ -3593,7 +3596,7 @@ export default function AIInterviewClusters() {
           {/* Stretching columns, so the sticky summary can travel the whole
               height of the content beside it — see the Preview step. */}
           <div className="flex gap-6 items-stretch">
-          <div className="flex-1 min-w-0 space-y-4 sm:space-y-6 pb-32 sm:pb-24">
+          <div className="flex-1 min-w-0 space-y-4 sm:space-y-6">
 
           {/* Flexible mode: finalized lock banner */}
           {isFlexible && isFinalized && (
@@ -4186,59 +4189,56 @@ export default function AIInterviewClusters() {
           </div>
 
           </div>{/* closes two-column flex */}
+
+            {/* ── Wizard actions ── */}
+            {/* In normal flow at the end of the page (not sticky), matching
+                the Configure step. */}
+            <div className="mt-6 pt-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              {/* Mobile: two rows — leave (Back + Discard) over advance (Save +
+                  Continue), each button sharing its row — instead of four buttons
+                  in one line that overflowed the viewport. */}
+              <div className="flex items-center justify-between sm:justify-start gap-2">
+                <Button variant="secondary" size="md" onClick={handleBack} disabled={saving || generating} icon={<ArrowLeft className="w-4 h-4" />}>
+                  <span className="sm:hidden">Back</span>
+                  <span className="hidden sm:inline">Back to Configure</span>
+                </Button>
+                <WizardDiscardButton onClick={handleDiscard} disabled={saving || generating} />
+              </div>
+              <div className="grid grid-cols-2 sm:flex sm:items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="md"
+                  onClick={handleSaveAsDraft}
+                  disabled={saving || generating}
+                  icon={saving ? <Loader2 className="w-4 h-4 animate-spin" /> : undefined}
+                >
+                  Save as Draft
+                </Button>
+                <Button
+                  variant="primary"
+                  size="md"
+                  onClick={handleContinue}
+                  disabled={saving || generating}
+                  icon={saving ? <Loader2 className="w-4 h-4 animate-spin" /> : undefined}
+                >
+                  {saving ? 'Saving...' : (
+                    <>
+                      <span className="sm:hidden">Continue</span>
+                      <span className="hidden sm:inline">Continue to Preview</span>
+                    </>
+                  )}
+                  {!saving && (
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                    </svg>
+                  )}
+                </Button>
+              </div>
+            </div>
           </div>{/* closes p-4 inner wrapper */}
         </div>{/* closes mx-auto max-w wrapper */}
       </main>{/* closes flex-1 main */}
 
-      {/* ── Sticky footer ── */}
-      {/* Outer is a transparent full-width positioning layer; the WHITE bar
-          (bg/border/shadow) lives on the inner max-w-[1400px] div so it matches
-          the content card width and leaves no white bleed in the side margins —
-          the page background shows through on the left/right. */}
-      <div className="fixed bottom-0 left-0 right-0 z-10">
-        <div className="mx-auto w-full max-w-[1400px] bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 ring-1 ring-black/[0.02] shadow-lg shadow-brand-blue/5 rounded-t-2xl px-4 md:px-8 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          {/* Mobile: two rows — leave (Back + Discard) over advance (Save +
-              Continue), each button sharing its row — instead of four buttons
-              in one line that overflowed the viewport. */}
-          <div className="flex items-center justify-between sm:justify-start gap-2">
-            <Button variant="secondary" size="md" onClick={handleBack} disabled={saving || generating} icon={<ArrowLeft className="w-4 h-4" />}>
-              <span className="sm:hidden">Back</span>
-              <span className="hidden sm:inline">Back to Configure</span>
-            </Button>
-            <WizardDiscardButton onClick={handleDiscard} disabled={saving || generating} />
-          </div>
-          <div className="grid grid-cols-2 sm:flex sm:items-center gap-2">
-            <Button
-              variant="secondary"
-              size="md"
-              onClick={handleSaveAsDraft}
-              disabled={saving || generating}
-              icon={saving ? <Loader2 className="w-4 h-4 animate-spin" /> : undefined}
-            >
-              Save as Draft
-            </Button>
-            <Button
-              variant="primary"
-              size="md"
-              onClick={handleContinue}
-              disabled={saving || generating}
-              icon={saving ? <Loader2 className="w-4 h-4 animate-spin" /> : undefined}
-            >
-              {saving ? 'Saving...' : (
-                <>
-                  <span className="sm:hidden">Continue</span>
-                  <span className="hidden sm:inline">Continue to Preview</span>
-                </>
-              )}
-              {!saving && (
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                </svg>
-              )}
-            </Button>
-          </div>
-        </div>
-      </div>
 
     </DndProvider>
   );
