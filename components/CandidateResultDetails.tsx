@@ -1664,6 +1664,17 @@ export default function CandidateResultDetails({
             <div className="p-4 sm:p-6">
               {detailedResult.candidate_insights?.interview_strength ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                {/* Summary — overall performance write-up, based on the assessment score */}
+                {detailedResult.summary && (
+                  <div className="sm:col-span-2 bg-white dark:bg-slate-900 rounded-xl p-4 border border-gray-200 dark:border-slate-700">
+                    <h3 className="text-gray-900 dark:text-gray-100 font-medium mb-3 flex items-center gap-2">
+                      <Info className="w-4 h-4" />
+                      Summary
+                    </h3>
+                    <InsightPoints text={detailedResult.summary} mode="sentences" markerClass="marker:text-gray-500" />
+                  </div>
+                )}
+
                 {/* Interview Strength */}
                 {detailedResult.candidate_insights.interview_strength && (
                   <div className="bg-white dark:bg-slate-900 rounded-xl p-4 border border-gray-200 dark:border-slate-700">
@@ -2816,10 +2827,57 @@ export default function CandidateResultDetails({
                       </div>
                     </div>
 
-                    {/* Violations Grid */}
+                    {/* Violations Summary — hero total + severity breakdown, pulled out of the
+                        grid below so the headline number isn't buried among 10 equal-weight cards. */}
+                    {(() => {
+                      const ps = detailedResult.proctoring_stats;
+                      const high = (ps.window_blur_count || 0) + (ps.mouse_movement_count || 0)
+                        + (ps.camera_obstructed_count || 0) + (ps.face_not_visible_count || 0) + (ps.multiple_faces_count || 0);
+                      const medium = (ps.tab_switch_count || 0) + (ps.copy_count || 0) + (ps.paste_count || 0)
+                        + (ps.voice_violation_count || 0) + (ps.screen_capture_count || 0);
+                      const low = (ps.fullscreen_exit_count || 0);
+                      const hasViolations = ps.total_violations > 0;
+                      return (
+                        <div className={`rounded-xl p-4 border ring-1 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 ${
+                          hasViolations
+                            ? 'bg-destructive-subtle border-destructive-line ring-destructive-line'
+                            : 'bg-success-subtle border-success-line ring-success-line'
+                        }`}>
+                          <div className="flex items-center gap-3">
+                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ring-1 ${
+                              hasViolations ? 'bg-destructive-subtle ring-destructive-line' : 'bg-success-subtle ring-success-line'
+                            }`}>
+                              <ShieldAlert className={`w-5 h-5 ${hasViolations ? 'text-destructive' : 'text-success'}`} />
+                            </div>
+                            <div>
+                              <div className="text-xs text-gray-600">Total Violations</div>
+                              <div className={`text-3xl font-bold tracking-tight ${hasViolations ? 'text-destructive' : 'text-success'}`}>
+                                {ps.total_violations}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-5 sm:gap-7 pl-1 sm:pl-0">
+                            <div className="text-center">
+                              <div className="text-xl font-semibold text-destructive">{high}</div>
+                              <div className="text-[11px] text-gray-500">Serious</div>
+                            </div>
+                            <div className="text-center">
+                              <div className="text-xl font-semibold text-brand-orange-deep">{medium}</div>
+                              <div className="text-[11px] text-gray-500">Moderate</div>
+                            </div>
+                            <div className="text-center">
+                              <div className="text-xl font-semibold text-brand-blue">{low}</div>
+                              <div className="text-[11px] text-gray-500">Minor</div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Violations Grid — ordered High → Medium → Low via order-1/2/3 on each card */}
                     <div className="grid grid-cols-1 min-[360px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
-                      {/* Window Focus Lost */}
-                      <div className={`rounded-xl p-3 border ring-1 ${
+                      {/* Window Focus Lost — High-severity group (order-1) */}
+                      <div className={`order-1 rounded-xl p-3 border ring-1 ${
                         detailedResult.proctoring_stats.window_blur_count > 0
                           ? 'bg-destructive-subtle border-destructive-line ring-destructive-line'
                           : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
@@ -2850,8 +2908,8 @@ export default function CandidateResultDetails({
                         </div>
                       </div>
 
-                      {/* Mouse Movement */}
-                      <div className={`rounded-xl p-3 border ring-1 ${
+                      {/* Mouse Movement — High-severity group (order-1) */}
+                      <div className={`order-1 rounded-xl p-3 border ring-1 ${
                         (detailedResult.proctoring_stats.mouse_movement_count || 0) > 0
                           ? 'bg-destructive-subtle border-destructive-line ring-destructive-line'
                           : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
@@ -2882,8 +2940,8 @@ export default function CandidateResultDetails({
                         </div>
                       </div>
 
-                      {/* Tab Switch */}
-                      <div className={`rounded-xl p-3 border ring-1 ${
+                      {/* Tab Switch — Medium-severity group (order-2) */}
+                      <div className={`order-2 rounded-xl p-3 border ring-1 ${
                         detailedResult.proctoring_stats.tab_switch_count > 0
                           ? 'bg-brand-orange/10 border-brand-orange/30 ring-brand-orange/15'
                           : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
@@ -2914,8 +2972,8 @@ export default function CandidateResultDetails({
                         </div>
                       </div>
 
-                      {/* Copy Count */}
-                      <div className={`rounded-xl p-3 border ring-1 ${
+                      {/* Copy Count — Medium-severity group (order-2) */}
+                      <div className={`order-2 rounded-xl p-3 border ring-1 ${
                         (detailedResult.proctoring_stats.copy_count || 0) > 0
                           ? 'bg-brand-orange/10 border-brand-orange/30 ring-brand-orange/15'
                           : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
@@ -2946,8 +3004,8 @@ export default function CandidateResultDetails({
                         </div>
                       </div>
 
-                      {/* Paste Count */}
-                      <div className={`rounded-xl p-3 border ring-1 ${
+                      {/* Paste Count — Medium-severity group (order-2) */}
+                      <div className={`order-2 rounded-xl p-3 border ring-1 ${
                         (detailedResult.proctoring_stats.paste_count || 0) > 0
                           ? 'bg-brand-orange/10 border-brand-orange/30 ring-brand-orange/15'
                           : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
@@ -2978,8 +3036,8 @@ export default function CandidateResultDetails({
                         </div>
                       </div>
 
-                      {/* Camera Obstructed / Off */}
-                      <div className={`rounded-xl p-3 border ring-1 ${
+                      {/* Camera Obstructed / Off — High-severity group (order-1) */}
+                      <div className={`order-1 rounded-xl p-3 border ring-1 ${
                         (detailedResult.proctoring_stats.camera_obstructed_count || 0) > 0
                           ? 'bg-destructive-subtle border-destructive-line ring-destructive-line'
                           : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
@@ -3010,8 +3068,8 @@ export default function CandidateResultDetails({
                         </div>
                       </div>
 
-                      {/* Face Not Detected */}
-                      <div className={`rounded-xl p-3 border ring-1 ${
+                      {/* Face Not Detected — High-severity group (order-1) */}
+                      <div className={`order-1 rounded-xl p-3 border ring-1 ${
                         (detailedResult.proctoring_stats.face_not_visible_count || 0) > 0
                           ? 'bg-destructive-subtle border-destructive-line ring-destructive-line'
                           : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
@@ -3042,8 +3100,8 @@ export default function CandidateResultDetails({
                         </div>
                       </div>
 
-                      {/* Voice Violations */}
-                      <div className={`rounded-xl p-3 border ring-1 ${
+                      {/* Voice Violations — Medium-severity group (order-2) */}
+                      <div className={`order-2 rounded-xl p-3 border ring-1 ${
                         detailedResult.proctoring_stats.voice_violation_count > 0
                           ? 'bg-brand-orange/10 border-brand-orange/30 ring-brand-orange/15'
                           : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
@@ -3074,8 +3132,8 @@ export default function CandidateResultDetails({
                         </div>
                       </div>
 
-                      {/* Multiple Faces */}
-                      <div className={`rounded-xl p-3 border ring-1 ${
+                      {/* Multiple Faces — High-severity group (order-1) */}
+                      <div className={`order-1 rounded-xl p-3 border ring-1 ${
                         (detailedResult.proctoring_stats.multiple_faces_count || 0) > 0
                           ? 'bg-destructive-subtle border-destructive-line ring-destructive-line'
                           : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
@@ -3106,8 +3164,8 @@ export default function CandidateResultDetails({
                         </div>
                       </div>
 
-                      {/* Fullscreen Exit */}
-                      <div className={`rounded-xl p-3 border ring-1 ${
+                      {/* Fullscreen Exit — Low-severity group (order-3) */}
+                      <div className={`order-3 rounded-xl p-3 border ring-1 ${
                         (detailedResult.proctoring_stats.fullscreen_exit_count || 0) > 0
                           ? 'bg-brand-blue/5 border-brand-blue/20 ring-brand-blue/10'
                           : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
@@ -3138,8 +3196,8 @@ export default function CandidateResultDetails({
                         </div>
                       </div>
 
-                      {/* Screen capture attempts (screenshots + screen recording) */}
-                      <div className={`rounded-xl p-3 border ring-1 ${
+                      {/* Screen capture attempts (screenshots + screen recording) — Medium-severity group (order-2) */}
+                      <div className={`order-2 rounded-xl p-3 border ring-1 ${
                         (detailedResult.proctoring_stats.screen_capture_count || 0) > 0
                           ? 'bg-brand-orange/10 border-brand-orange/30 ring-brand-orange/15'
                           : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
@@ -3184,37 +3242,6 @@ export default function CandidateResultDetails({
                         </div>
                       )} */}
 
-                      {/* Total Violations */}
-                      <div className={`rounded-xl p-3 border ring-1 ${
-                        detailedResult.proctoring_stats.total_violations > 0
-                          ? 'bg-destructive-subtle border-destructive-line ring-destructive-line'
-                          : 'bg-success-subtle border-success-line ring-success-line'
-                      }`}>
-                        <div className="flex items-center gap-2 mb-2">
-                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ring-1 ${
-                            detailedResult.proctoring_stats.total_violations > 0
-                              ? 'bg-destructive-subtle ring-destructive-line'
-                              : 'bg-success-subtle ring-success-line'
-                          }`}>
-                            <ShieldAlert className={`w-4 h-4 ${
-                              detailedResult.proctoring_stats.total_violations > 0
-                                ? 'text-destructive'
-                                : 'text-success'
-                            }`} />
-                          </div>
-                          <div className="min-w-0 text-xs sm:text-sm font-medium text-gray-700 leading-snug">Total Violations</div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className={`text-2xl font-bold tracking-tight ${
-                            detailedResult.proctoring_stats.total_violations > 0
-                              ? 'text-destructive'
-                              : 'text-success'
-                          }`}>
-                            {detailedResult.proctoring_stats.total_violations}
-                          </div>
-                          <div className="text-xs text-gray-500">Total</div>
-                        </div>
-                      </div>
                     </div>
 
                     {/* Event Log / Timeline */}
@@ -3335,15 +3362,16 @@ export default function CandidateResultDetails({
                               return (
                                 <div
                                   key={`${row.minuteKey}__${row.event_type}`}
-                                  className={`grid grid-cols-[40px_2fr_1fr_1fr_1fr_80px] items-center px-4 py-3 text-sm ${cfg.bg}`}
+                                  className="grid grid-cols-[40px_2fr_1fr_1fr_1fr_80px] items-center px-4 py-3 text-sm"
                                 >
                                   {/* S.No */}
                                   <span className="text-gray-400 text-xs font-medium">{globalIdx}</span>
 
-                                  {/* Event */}
+                                  {/* Event — icon/label stay neutral; the Severity badge alone
+                                      carries the color signal now, instead of 3 overlapping cues. */}
                                   <div className="flex min-w-0 items-center gap-2">
-                                    <span className={`flex-shrink-0 ${cfg.color}`}>{cfg.icon}</span>
-                                    <span className={`min-w-0 font-medium [overflow-wrap:anywhere] ${cfg.color}`}>{cfg.label}</span>
+                                    <span className="flex-shrink-0 text-gray-500">{cfg.icon}</span>
+                                    <span className="min-w-0 font-medium [overflow-wrap:anywhere] text-gray-700">{cfg.label}</span>
                                   </div>
 
                                   {/* Timestamp — minute only */}
