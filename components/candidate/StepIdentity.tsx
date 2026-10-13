@@ -833,7 +833,7 @@ export default function StepIdentity({
           <div className="p-4 sm:p-6 space-y-5 min-w-0 flex-1">
             <div className="flex items-center gap-2 bg-warning-subtle text-warning-strong text-sm font-medium rounded-lg px-4 py-3">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
-              Enter your name exactly as it appears on your government ID.
+              This is the name provided in your invitation.
             </div>
 
             <div>
@@ -842,9 +842,8 @@ export default function StepIdentity({
               </label>
               <input
                 id="identity-name" type="text" value={name}
-                onChange={e => setName(e.target.value)}
-                placeholder="e.g. John Michael Smith"
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue transition-colors"
+                readOnly
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm bg-gray-50 cursor-not-allowed transition-colors"
               />
             </div>
 
