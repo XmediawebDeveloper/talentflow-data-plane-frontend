@@ -353,7 +353,9 @@ export default function StepSamplePractice({
   const [revealedCount, setRevealedCount] = useState(0);
   const [typedAnswer, setTypedAnswer] = useState('');
   const [inputMode, setInputMode] = useState<'none' | 'voice' | 'typing'>('none');
-  const [audioLevel, setAudioLevel] = useState(0);
+  // Mic level bar — written straight to the DOM by the analyser loop (see
+  // initMedia), never through React state.
+  const levelBarRef = useRef<HTMLDivElement>(null);
   const audioLevelRef = useRef(0);
   // "Microphone input is low" — as under the live interview's mic card.
   const [micLow, setMicLow] = useState(false);
@@ -385,7 +387,7 @@ export default function StepSamplePractice({
   // Face identity warning shown when verification detects a different person
   const [faceWarning, setFaceWarning] = useState<string | null>(null);
   // Recorded video duration in seconds — null = no recording yet
-  const [recordedDurationSeconds, setRecordedDurationSeconds] = useState<number | null>(null);
+  const [, setRecordedDurationSeconds] = useState<number | null>(null);
   // Live elapsed seconds shown during recording
   const [recordingElapsed, setRecordingElapsed] = useState(0);
   // Guided coach-mark tour: -1 = inactive, 0..n-1 = current step index.
@@ -514,7 +516,6 @@ export default function StepSamplePractice({
   // is never sent (Whisper invents text from silence — see whisperFilter.ts).
   const speechHeardRef = useRef(false);
   const speechHeardMsRef = useRef(0);
-  const cameraBoxRef = useRef<HTMLDivElement>(null);
   const periodicTranscriptionRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const periodicTranscriptionInFlightRef = useRef(false);
   const recordingStartTimeRef = useRef<number | null>(null);
@@ -589,10 +590,10 @@ export default function StepSamplePractice({
         analyserRef.current = analyser;
 
         const dataArray = new Uint8Array(analyser.fftSize);
-        // Only the small level bar needs this, but setAudioLevel on EVERY
-        // animation frame re-rendered this whole ~3000-line step 60x/second
-        // for the entire practice — on slower laptops the page froze. The ref
-        // stays per-frame (micLow reads it); React state is ~12fps, quantized.
+        // Only the small level bar needs this. Pushing it through React state
+        // re-rendered this whole ~3000-line step on every update for the
+        // entire practice (CPU pinned on 4-core laptops), so the loop writes
+        // the bar's width/colour to the DOM itself, ~12x/s. micLow reads the ref.
         let lastPushAt = 0;
         let lastPushed = -1;
         const tick = () => {
@@ -611,7 +612,12 @@ export default function StepSamplePractice({
           if (now - lastPushAt >= 80 && q !== lastPushed) {
             lastPushAt = now;
             lastPushed = q;
-            setAudioLevel(q);
+            const bar = levelBarRef.current;
+            if (bar) {
+              bar.style.width = `${Math.max(q * 100, 3)}%`;
+              bar.classList.toggle('bg-emerald-300', q > 0.05);
+              bar.classList.toggle('bg-white/30', q <= 0.05);
+            }
           }
           animationFrameRef.current = requestAnimationFrame(tick);
         };
@@ -759,6 +765,10 @@ export default function StepSamplePractice({
   const playingClipRef = useRef<HTMLAudioElement | null>(null);
   useEffect(() => {
     if (typeof Audio === 'undefined') return;
+    // The clips aren't in public/audio/practice yet, so preloading them only
+    // produced three 404s in every candidate's console. Opt in once the files
+    // ship; until then the browser voice is used (as it already was).
+    if (process.env.NEXT_PUBLIC_PRACTICE_VOICE_CLIPS !== '1') return;
     const audios = clipAudioRef.current;
     (Object.keys(PRACTICE_VOICE_CLIPS) as PracticeClipKey[]).forEach((key) => {
       const a = new Audio();
@@ -1547,17 +1557,20 @@ export default function StepSamplePractice({
     if (recordedVideoUrl) { URL.revokeObjectURL(recordedVideoUrl); setRecordedVideoUrl(null); }
     setShowReplay(false);
     videoChunksRef.current = [];
+    // VP8 FIRST, not VP9: this is a throwaway local replay, and Chrome encodes
+    // VP9 in software at several times VP8's CPU cost — on a 4-core laptop it
+    // alone pushed Task Manager to ~100% for the whole answer. Bitrate capped
+    // for the same reason (the clip never leaves the browser).
     const videoMimeType = [
-      'video/webm;codecs=vp9,opus',
       'video/webm;codecs=vp8,opus',
       'video/webm',
       'video/mp4;codecs=avc1.42E01E,mp4a.40.2',  // Safari H.264/AAC
       'video/mp4',
     ].find((m) => { try { return MediaRecorder.isTypeSupported(m); } catch { return false; } }) || '';
-    const vr = new MediaRecorder(
-      mediaStreamRef.current!,
-      videoMimeType ? { mimeType: videoMimeType } : undefined,
-    );
+    const vr = new MediaRecorder(mediaStreamRef.current!, {
+      ...(videoMimeType ? { mimeType: videoMimeType } : {}),
+      videoBitsPerSecond: 600_000,
+    });
     vr.ondataavailable = (e) => { if (e.data.size > 0) videoChunksRef.current.push(e.data); };
     videoRecorderRef.current = vr;
     vr.start(500);
@@ -1706,21 +1719,35 @@ export default function StepSamplePractice({
   // on to the Yes / No question; from question 2 it wraps up the answer and
   // Bina plays the "you're ready — all the best" sign-off (practice done, so
   // the mic doesn't auto-reopen).
-  const handlePracticeNext = useCallback(() => {
-    cancelPreTurnCountdown();
-    if (practiceQRef.current === 1) {
-      practiceQRef.current = 2;
-      setPracticeQ(2);
-      if (isRecording) stopRecordingAndTranscribe();
-      setAnswerElapsed(0);
-      stillThereRetryRef.current = 0; // fresh silence ladder for the new question
-      speakHrQuestion();
-      return;
+  //
+  // The answer's transcript is AWAITED before Bina speaks again — like the live
+  // interview, the candidate's answer lands in the chat first and only then
+  // does she ask the next question. Before, Q2 started while Q1's answer was
+  // still showing the "transcribing" dots.
+  const advancingRef = useRef(false);
+  const handlePracticeNext = useCallback(async () => {
+    // One advance at a time: a second Next click, the 2-minute timer or the
+    // silence ladder must not fire again while the transcript is loading.
+    if (advancingRef.current) return;
+    advancingRef.current = true;
+    try {
+      cancelPreTurnCountdown();
+      if (practiceQRef.current === 1) {
+        if (isRecording) await stopRecordingAndTranscribe();
+        practiceQRef.current = 2;
+        setPracticeQ(2);
+        setAnswerElapsed(0);
+        stillThereRetryRef.current = 0; // fresh silence ladder for the new question
+        speakHrQuestion();
+        return;
+      }
+      practiceDoneRef.current = true;
+      setPracticeDone(true);
+      if (isRecording) await stopRecordingAndTranscribe();
+      speakClosing();
+    } finally {
+      advancingRef.current = false;
     }
-    practiceDoneRef.current = true;
-    setPracticeDone(true);
-    if (isRecording) stopRecordingAndTranscribe();
-    speakClosing();
   }, [isRecording, stopRecordingAndTranscribe, speakClosing, speakHrQuestion, cancelPreTurnCountdown]);
   useEffect(() => { handlePracticeNextRef.current = handlePracticeNext; }, [handlePracticeNext]);
 
@@ -2224,7 +2251,7 @@ export default function StepSamplePractice({
                 You{candidateName?.trim() ? ` · ${candidateName.trim().toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())}` : ''}
               </span>
             </div>
-            <div ref={cameraBoxRef} className="relative bg-black rounded-xl overflow-hidden" style={{ aspectRatio: '16/9' }}>
+            <div className="relative bg-black rounded-xl overflow-hidden" style={{ aspectRatio: '16/9' }}>
               <video ref={videoRef} autoPlay playsInline muted className={`w-full h-full object-cover ${showReplay ? 'hidden' : ''}`} style={{ transform: 'scaleX(-1)' }} />
               {showReplay && recordedVideoUrl && (
                 <video ref={replayVideoRef} src={recordedVideoUrl} controls playsInline controlsList="nodownload nopictureinpicture" disablePictureInPicture onContextMenu={(e) => e.preventDefault()} className="w-full h-full object-cover" />
@@ -2248,16 +2275,16 @@ export default function StepSamplePractice({
                         Microphone input is low. Check headset mic or system input.
                       </div>
                     )}
-                    <div className="min-w-0 rounded-md bg-black/55 backdrop-blur-md border border-black/20 px-2 py-1.5">
+                    <div className="min-w-0 rounded-md bg-black/70 border border-black/20 px-2 py-1.5">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <Mic className="w-3 h-3 text-emerald-300 shrink-0" />
                         <span className="text-white/80 text-[10px] truncate">{practiceMicLabel || 'Microphone'}</span>
                       </div>
                       <div className="mt-1 h-1 rounded-full bg-white/15 overflow-hidden">
-                        <div className={`h-full rounded-full transition-all duration-75 ${audioLevel > 0.05 ? 'bg-emerald-300' : 'bg-white/30'}`} style={{ width: `${Math.max(audioLevel * 100, 3)}%` }} />
+                        <div ref={levelBarRef} className="h-full rounded-full bg-white/30" style={{ width: '3%' }} />
                       </div>
                     </div>
-                    <div className="min-w-0 rounded-md bg-black/55 backdrop-blur-md border border-black/20 px-2 py-1.5" title={rtt !== null && rtt >= 0 ? `Approx. ${Math.round(rtt)} ms round trip to the server` : undefined}>
+                    <div className="min-w-0 rounded-md bg-black/70 border border-black/20 px-2 py-1.5" title={rtt !== null && rtt >= 0 ? `Approx. ${Math.round(rtt)} ms round trip to the server` : undefined}>
                       <div className="flex items-center gap-1.5 min-w-0">
                         {level === 'offline' ? <WifiOff className={`w-3 h-3 shrink-0 ${tone.icon}`} /> : <Wifi className={`w-3 h-3 shrink-0 ${tone.icon}`} />}
                         <span className="text-white/80 text-[10px] truncate">Network · <span className="font-semibold text-white">{tone.label}</span>{pct !== null ? ` ${pct}%` : ''}</span>
@@ -2270,15 +2297,15 @@ export default function StepSamplePractice({
                 );
               })()}
               {!showReplay && (isRecording || isTranscribing) && (
-                <div className={`absolute top-2 left-2 flex items-center rounded-full backdrop-blur-sm text-white ${isRecording ? 'tf-blink gap-1.5 text-xs font-bold px-2.5 py-1 bg-red-500 shadow-lg shadow-red-500/40 ring-2 ring-red-300/50 dark:ring-red-500/40' : 'gap-1.5 text-xs font-medium px-2.5 py-1 bg-blue-600/90'}`}>
+                <div className={`absolute top-2 left-2 flex items-center rounded-full text-white ${isRecording ? 'tf-blink gap-1.5 text-xs font-bold px-2.5 py-1 bg-red-500 shadow-lg shadow-red-500/40 ring-2 ring-red-300/50 dark:ring-red-500/40' : 'gap-1.5 text-xs font-medium px-2.5 py-1 bg-blue-600/90'}`}>
                   {isRecording ? (<><span className="w-2 h-2 bg-white rounded-full animate-ping" />{`REC · ${recordingElapsed}s`}</>) : (<><Loader2 className="w-3 h-3 animate-spin" /> Transcribing…</>)}
                 </div>
               )}
               {showReplay && (
-                <div className="absolute top-2 left-2 flex items-center gap-1.5 bg-blue-600/90 text-white text-xs font-medium px-2.5 py-1 rounded-full backdrop-blur-sm"><Play className="w-3 h-3" /> Playback</div>
+                <div className="absolute top-2 left-2 flex items-center gap-1.5 bg-blue-600/90 text-white text-xs font-medium px-2.5 py-1 rounded-full"><Play className="w-3 h-3" /> Playback</div>
               )}
               {recordedVideoUrl && !isRecording && !isTranscribing && (
-                <div className="absolute top-2 right-2 flex items-center bg-black/70 backdrop-blur-sm rounded-full p-0.5 gap-0.5">
+                <div className="absolute top-2 right-2 flex items-center bg-black/80 rounded-full p-0.5 gap-0.5">
                   <button type="button" onClick={() => setShowReplay(false)} className={`min-h-8 px-3 py-1.5 rounded-full text-2xs font-semibold transition-colors ${!showReplay ? 'bg-white text-gray-900' : 'text-gray-400 hover:text-white'}`}>Live</button>
                   <button type="button" onClick={() => setShowReplay(true)} className={`min-h-8 px-3 py-1.5 rounded-full text-2xs font-semibold transition-colors ${showReplay ? 'bg-white text-gray-900' : 'text-gray-400 hover:text-white'}`}>Replay</button>
                 </div>
@@ -2296,7 +2323,7 @@ export default function StepSamplePractice({
           {preTurnCountdown != null && (
             <div className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center justify-center px-4">
               <style>{`@keyframes cdShine {0%{opacity:0;transform:scale(0.97);background-position:100% 0,0 0}10%{background-position:100% 0,0 0}40%{opacity:1;transform:scale(1)}92%{opacity:1;background-position:0% 0,0 0}100%{opacity:0.15;background-position:0% 0,0 0}}`}</style>
-              <div className="mb-3 px-4 py-1.5 rounded-full bg-black/75 backdrop-blur-sm ring-1 ring-white/10 text-sm sm:text-base font-bold text-sky-300 shadow-lg">Get ready to answer</div>
+              <div className="mb-3 px-4 py-1.5 rounded-full bg-black/85 ring-1 ring-white/10 text-sm sm:text-base font-bold text-sky-300 shadow-lg">Get ready to answer</div>
               <div key={`p-${preTurnCountdown}`} className="flex items-center justify-center w-36 h-36 sm:w-48 sm:h-48">
                 <span
                   className="font-extrabold tabular-nums"
@@ -2487,7 +2514,7 @@ export default function StepSamplePractice({
                             pauseRecordingForBina();
                             speakQuestion(practiceQ === 2 ? PRACTICE_HR_QUESTION : PRACTICE_QUESTION);
                           }}
-                          disabled={!started || aiSpeaking || practiceDone}
+                          disabled={!started || aiSpeaking || practiceDone || isTranscribing}
                           title={practiceDone ? 'Practice complete' : 'Replay the question'}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >
@@ -2688,7 +2715,7 @@ export default function StepSamplePractice({
                             pauseRecordingForBina();
                             speakQuestion(practiceQ === 2 ? PRACTICE_HR_QUESTION : PRACTICE_QUESTION);
                           }}
-                          disabled={!started || aiSpeaking || practiceDone}
+                          disabled={!started || aiSpeaking || practiceDone || isTranscribing}
                           title={practiceDone ? 'Practice complete' : 'Replay the question'}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >
@@ -2848,12 +2875,6 @@ export default function StepSamplePractice({
       {/* Footer Navigation */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end pt-2">
         <div className="flex flex-col w-full sm:w-auto items-stretch sm:items-end gap-1.5">
-          {/* Optional — show how long the practice answer was (not a gate) */}
-          {!isRecording && recordedDurationSeconds !== null && (
-            <p className="text-xs font-medium text-green-600 dark:text-green-400">
-              ✓ Practice recorded ({recordedDurationSeconds}s)
-            </p>
-          )}
           {isRecording && (
             <p className="text-xs font-medium text-amber-500">
               Recording · {recordingElapsed}s
@@ -2897,7 +2918,7 @@ export default function StepSamplePractice({
           interview once practice ends. Dismissible so they can scroll back
           through the practice thread first. */}
       {showStartPopup && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4">
           <div className="w-full max-w-[95vw] sm:max-w-md rounded-2xl bg-white shadow-2xl border border-gray-200 p-6 text-center">
             <div className="w-14 h-14 rounded-full bg-success-subtle flex items-center justify-center mx-auto mb-4">
               <CheckCircle className="w-7 h-7 text-success" />
@@ -2919,24 +2940,6 @@ export default function StepSamplePractice({
                   <>Start Interview <ChevronRight className="w-4 h-4" /></>
                 )}
               </button>
-              {/* Only offered when there IS a recording to review — before,
-                  this just closed the popup and left the candidate looking
-                  for a playback that wasn't on screen. */}
-              {recordedVideoUrl && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowStartPopup(false);
-                    setShowReplay(true);
-                    revealAfterPaint(() => cameraBoxRef.current, 'center');
-                    window.setTimeout(() => { void replayVideoRef.current?.play().catch(() => {}); }, 400);
-                  }}
-                  disabled={submitting}
-                  className="inline-flex items-center justify-center gap-1.5 min-h-10 py-2.5 text-xs font-semibold text-brand-blue hover:text-brand-blue-2 transition-colors disabled:opacity-50"
-                >
-                  <Play className="w-3.5 h-3.5" /> Watch my practice recording
-                </button>
-              )}
             </div>
           </div>
         </div>
