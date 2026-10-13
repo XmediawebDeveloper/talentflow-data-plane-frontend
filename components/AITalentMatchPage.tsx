@@ -926,6 +926,16 @@ export default function AITalentMatchPage({
   // so the page opens straight onto View by Job.
   const [historyPageView, setHistoryPageView] = useState<'cards' | 'list' | 'candidates' | 'resumes'>('list');
   const historyListSectionRef = useRef<HTMLDivElement | null>(null);
+  /* One List / Grid choice for the whole module: picking Grid on the job
+     list, View by Candidates or a job's results page switches all three,
+     so opening a job's detail (or coming back from it) keeps the layout
+     the user picked instead of falling back to List. Each view still keeps
+     its own state (all restored by useListStatePersistence). */
+  const setDisplayModeEverywhere = (mode: ListDisplayMode) => {
+    setJobListDisplayMode(mode);
+    setMatchDisplayMode(mode);
+    setResultsDisplayMode(mode);
+  };
   const [historyListScrollRequest, setHistoryListScrollRequest] = useState(0);
   // The rating pills (All / Rating 10 / 9 – 7 / Below 7) — Resume Scoring's
   // Exact / Partial / No Match pills: a filter of their own, independent of
@@ -1480,6 +1490,10 @@ export default function AITalentMatchPage({
   } | null>(null);
   // App-wide scoring progress popup — scoring started here is tracked there.
   const scoringProgress = useScoringProgress();
+  // Batches started from this page, until they settle — then the Scored
+  // status is reloaded in place (the effect after the scored-ids fetch).
+  const myScoringBatches = useRef<Set<string>>(new Set());
+  const [scoredRefreshTick, setScoredRefreshTick] = useState(0);
 
   // Version selection for scoring (single candidate)
   const [showVersionSelectForScoring, setShowVersionSelectForScoring] = useState(false);
@@ -1878,7 +1892,32 @@ export default function AITalentMatchPage({
       }
     };
     fetchScored();
-  }, [selectedHistoryItem, selectedJob, viewMode]);
+  }, [selectedHistoryItem, selectedJob, viewMode, scoredRefreshTick]);
+
+  /* Scoring started here no longer leaves the page, so once a batch it
+     started settles (or is dismissed from the popup), reload every "Scored"
+     source — the per-job map behind View by Job's Scored Status / "N of M
+     scored", the tenant-wide set, the open job's set and the cached
+     scorecards — so the rows flip to Scored in place. */
+  useEffect(() => {
+    if (myScoringBatches.current.size === 0) return;
+    const jobsById = new Map(scoringProgress.activeScoringJobs.map(j => [j.jobId, j]));
+    const settled = Array.from(myScoringBatches.current).filter(id => {
+      const job = jobsById.get(id);
+      return !job || (job.queued === 0 && job.processing === 0);
+    });
+    if (settled.length === 0) return;
+    settled.forEach(id => myScoringBatches.current.delete(id));
+    void (async () => {
+      const scored = await loadAllScoredResumeIds();
+      setAllScoredResumeIds(scored.ids);
+      setScoredResumeIdsByJd(scored.byJd);
+    })();
+    scoreDetailRequests.current.clear();
+    setScoreDetailsByJd({});
+    setScoredRefreshTick(t => t + 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scoringProgress.activeScoringJobs]);
 
   useEffect(() => {
     const hydrateSelectedHistory = async () => {
@@ -2223,9 +2262,10 @@ export default function AITalentMatchPage({
         candidateName: c.name || 'Unknown',
       }));
 
-      // Scoring lands on the JOB's own page (its Scored Resumes tab), not on
-      // Resume Scoring. Progress rides the app-wide scoring popup, which
-      // follows the user there.
+      // The recruiter STAYS on AI Talent Match: progress rides the app-wide
+      // scoring popup, and the rows' Scored status refreshes when the batch
+      // settles (see `myScoringBatches`). The job's Scored Resumes tab is
+      // only the popup's "view results" target.
       const jobScoredResumesUrl = `/recruitment/job-details?id=${encodeURIComponent(jobId)}&tab=scored-resumes`;
 
       if (newResumeIds.length === 0) {
@@ -2233,7 +2273,6 @@ export default function AITalentMatchPage({
         toast.info(
           `${alreadyScoredItems.length === 1 ? 'This resume is' : `All ${alreadyScoredItems.length} resumes are`} already scored for "${jobTitle}".`,
         );
-        router.push(jobScoredResumesUrl);
         return;
       }
 
@@ -2247,11 +2286,11 @@ export default function AITalentMatchPage({
         items: resumeItems,
         returnUrl: jobScoredResumesUrl,
       });
+      myScoringBatches.current.add(response.batch_id);
       toast.success(
         `Scoring started for ${newResumeIds.length} resume${newResumeIds.length === 1 ? '' : 's'}` +
         (alreadyScoredItems.length > 0 ? ` (${alreadyScoredItems.length} already scored)` : '') + '.',
       );
-      router.push(jobScoredResumesUrl);
     } catch (error: any) {
       console.error('Failed to start scoring:', error);
       toast.error(error.message || 'Failed to start scoring');
@@ -4200,7 +4239,7 @@ export default function AITalentMatchPage({
                 />
                 <ListViewToggle
                   value={matchDisplayMode}
-                  onChange={setMatchDisplayMode}
+                  onChange={setDisplayModeEverywhere}
                   className="h-[38px] !border-brand-blue/10"
                 />
               </ListToolbar>
@@ -5102,7 +5141,7 @@ export default function AITalentMatchPage({
                   </div>
                 )}
 
-                <ListViewToggle value={matchDisplayMode} onChange={setMatchDisplayMode} className="ml-auto" />
+                <ListViewToggle value={matchDisplayMode} onChange={setDisplayModeEverywhere} className="ml-auto" />
               </div>
 
               {/* Same filter panel as "View by Candidates" — one filter set
@@ -5726,7 +5765,7 @@ export default function AITalentMatchPage({
             )}
             <ListViewToggle
               value={jobListDisplayMode}
-              onChange={setJobListDisplayMode}
+              onChange={setDisplayModeEverywhere}
               className="h-[38px] !border-brand-blue/10"
             />
           </ListToolbar>
@@ -7830,7 +7869,7 @@ export default function AITalentMatchPage({
               >
                 Export
               </Button>
-              <ListViewToggle value={resultsDisplayMode} onChange={setResultsDisplayMode} />
+              <ListViewToggle value={resultsDisplayMode} onChange={setDisplayModeEverywhere} />
             </ListToolbar>
 
             {selectedCandidates.length > 0 && availableUnits !== null && selectedCandidates.length > availableUnits && (
