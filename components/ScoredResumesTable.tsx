@@ -427,12 +427,6 @@ interface ScoredResumesTableProps {
    */
   toolbarPortal?: HTMLElement | null;
   /**
-   * How a candidate's name is displayed (e.g. Job Details shows first names
-   * only — `formatCandidateFirstName`). Omitted: the name as stored. Same
-   * optional prop AssessmentResults / AIInterviewResults take.
-   */
-  formatCandidateName?: (name: string) => string;
-  /**
    * Table column ids to leave out (see TABLE_COLUMNS) — for a host that
    * already shows them around the table, e.g. AI Talent Match's per-candidate
    * score table, whose row above names the candidate and the job.
@@ -640,6 +634,7 @@ export default function ScoredResumesTable({
   toolbarPortal,
   hiddenColumnIds,
   formatCandidateName,
+  onOpenInviteDialog,
 }: ScoredResumesTableProps) {
   const showName = (name: string) => (formatCandidateName ? formatCandidateName(name) : name);
   /* Embedded in the Job Details tabs (the toolbar portals into that card's
