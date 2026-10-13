@@ -117,6 +117,8 @@ export interface StatsCardProps {
   className?: string;
   /** Render extra content under the value (e.g. trend chip). */
   children?: React.ReactNode;
+  /** Hover tooltip explaining what the numbers mean. */
+  title?: string;
 }
 
 export function StatsCard({
@@ -132,6 +134,7 @@ export function StatsCard({
   showClickArrow = false,
   className,
   children,
+  title,
 }: StatsCardProps) {
   const t = TONES[tone];
   const path = sparkPath ?? SPARK_PATHS[sparkVariant];
@@ -201,12 +204,12 @@ export function StatsCard({
 
   if (onClick) {
     return (
-      <button type="button" onClick={onClick} className={baseClass}>
+      <button type="button" onClick={onClick} className={baseClass} title={title}>
         {content}
       </button>
     );
   }
-  return <div className={baseClass}>{content}</div>;
+  return <div className={baseClass} title={title}>{content}</div>;
 }
 
 /** Standard responsive grid for arranging StatsCard rows. */

@@ -4037,9 +4037,12 @@ export default function AITalentMatchPage({
             cards at the standard width instead of stretching them to half-page. */}
         {/* Stats cards (SHOW_STAT_CARDS) — the Job Descriptions / Resume
             Scoring StatsCards (icon, count, a small chip under it,
-            highlighted when selected). Matched Jobs / Match by Candidate
-            switch the View by toggle; the two rating cards are the same
-            filter, and the same counts, as the rating pills below. */}
+            highlighted when selected). One rule on every card: the big
+            number is what the title says, the chip is always "N candidates"
+            — the different people behind it. All Matches / Rating 10 /
+            Rating 9-7 are the same counts as the pills below. Matched Jobs /
+            All Matches switch the View by toggle; the rating cards are the
+            same filter as the pills. */}
         {SHOW_STAT_CARDS && (() => {
           const statLoading = (
             <span className="inline-block h-6 w-8 bg-gray-100 dark:bg-slate-800 rounded animate-pulse align-middle" aria-label="Loading" />
@@ -4058,7 +4061,6 @@ export default function AITalentMatchPage({
               {count.toLocaleString()} {count === 1 ? unit : units}
             </span>
           );
-          const runsCount = Object.values(matchSessionCounts).reduce((sum, n) => sum + (n || 0), 0);
           // Distinct candidates holding a match in the band — only once the
           // candidate roll-up is in, so the chip never shows a false 0.
           const rowsLoaded = !loadingCandidateRows && candidateRows.length > 0;
@@ -4075,21 +4077,28 @@ export default function AITalentMatchPage({
             label="Matched Jobs"
             value={matchHistory.length.toLocaleString()}
             sparkline={false}
+            title={`${matchHistory.length.toLocaleString()} jobs have AI Talent Match results`
+              + (totalMatchedCandidatesReady ? `, matching ${totalMatchedCandidates.toLocaleString()} different candidates` : '')
+              + '. Click to view by job.'}
             onClick={() => openHistoryListView()}
           >
-            {runsCount > 0 && <StatChip count={runsCount} unit="run" />}
+            {totalMatchedCandidatesReady && <StatChip count={totalMatchedCandidates} unit="candidate" />}
           </StatsCard>
           <StatsCard
             tone="neutral"
             active={onCandidates}
             showClickArrow
             icon={User}
-            label="Match by Candidate"
-            value={totalMatchedCandidatesReady ? totalMatchedCandidates.toLocaleString() : statLoading}
+            label="All Matches"
+            value={pillCounts.all === null ? statLoading : pillCounts.all.toLocaleString()}
             sparkline={false}
+            title={pillCounts.all === null ? undefined
+              : `${pillCounts.all.toLocaleString()} candidate–job matches`
+                + (totalMatchedCandidatesReady ? `, from ${totalMatchedCandidates.toLocaleString()} different candidates` : '')
+                + ' (one candidate matched to 3 jobs counts as 3). Click to view by candidate.'}
             onClick={() => { void openCandidatesView(); }}
           >
-            {pillCounts.all !== null && <StatChip count={pillCounts.all} unit="match" units="matches" />}
+            {totalMatchedCandidatesReady && <StatChip count={totalMatchedCandidates} unit="candidate" />}
           </StatsCard>
           <StatsCard
             tone="neutral"
@@ -4099,6 +4108,10 @@ export default function AITalentMatchPage({
             label="Match Rating (10)"
             value={pillCounts.exact === null ? statLoading : pillCounts.exact.toLocaleString()}
             sparkline={false}
+            title={pillCounts.exact === null ? undefined
+              : `${pillCounts.exact.toLocaleString()} matches rated 10`
+                + (rowsLoaded ? `, from ${peopleInBand('exact').toLocaleString()} different candidates` : '')
+                + '. Click to show only these; click again to clear.'}
             onClick={() => pickBand('exact')}
           >
             {rowsLoaded && <StatChip count={peopleInBand('exact')} unit="candidate" />}
@@ -4111,6 +4124,10 @@ export default function AITalentMatchPage({
             label="Match Rating (9-7)"
             value={pillCounts.partial === null ? statLoading : pillCounts.partial.toLocaleString()}
             sparkline={false}
+            title={pillCounts.partial === null ? undefined
+              : `${pillCounts.partial.toLocaleString()} matches rated 9 to 7`
+                + (rowsLoaded ? `, from ${peopleInBand('partial').toLocaleString()} different candidates` : '')
+                + '. Click to show only these; click again to clear.'}
             onClick={() => pickBand('partial')}
           >
             {rowsLoaded && <StatChip count={peopleInBand('partial')} unit="candidate" />}
