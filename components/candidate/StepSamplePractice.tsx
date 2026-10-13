@@ -228,7 +228,9 @@ function PracticeTour({
 }) {
   const [ring, setRing] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
   const [panelH, setPanelH] = useState(0);
+  const [panelW, setPanelW] = useState(0);
   const [cardH, setCardH] = useState(160);
+  const [cardW, setCardW] = useState(420);
   const cardRef = useRef<HTMLDivElement>(null);
   const step = steps[stepIndex];
 
@@ -241,7 +243,11 @@ function PracticeTour({
       if (!target) { setRing(null); return; }
       const p = panel.getBoundingClientRect();
       setPanelH(p.height);
-      if (cardRef.current) setCardH(cardRef.current.offsetHeight);
+      setPanelW(p.width);
+      if (cardRef.current) {
+        setCardH(cardRef.current.offsetHeight);
+        setCardW(cardRef.current.offsetWidth);
+      }
       const t = target.getBoundingClientRect();
       setRing({ top: t.top - p.top - 6, left: t.left - p.left - 6, width: t.width + 12, height: t.height + 12 });
     };
@@ -270,6 +276,12 @@ function PracticeTour({
         ? ring.top + ring.height + 8
         : Math.max(8, ring.top - cardH - 8))
     : undefined;
+  // Horizontally the card follows the target too (centred under it, kept
+  // inside the panel). Always centring it in the panel left it far from
+  // targets on the right, e.g. the Your Response bubble.
+  const cardLeft = ring && panelW
+    ? Math.min(Math.max(8, ring.left + ring.width / 2 - cardW / 2), Math.max(8, panelW - cardW - 8))
+    : undefined;
 
   return (
     // pointer-events-none on the wrapper: the dim + ring are visual only, so
@@ -291,8 +303,8 @@ function PracticeTour({
           target (not fixed to the viewport), so it scrolls with the page. */}
       <div
         ref={cardRef}
-        className={`absolute left-1/2 -translate-x-1/2 w-[min(92%,420px)] bg-white rounded-xl shadow-2xl ring-1 ring-black/5 p-4 z-10 pointer-events-auto transition-[top] duration-200 ${cardTop === undefined ? 'bottom-4' : ''}`}
-        style={cardTop !== undefined ? { top: cardTop } : undefined}
+        className={`absolute w-[min(92%,420px)] bg-white rounded-xl shadow-2xl ring-1 ring-black/5 p-4 z-10 pointer-events-auto transition-[top,left] duration-200 ${cardTop === undefined ? 'bottom-4' : ''} ${cardLeft === undefined ? 'left-1/2 -translate-x-1/2' : ''}`}
+        style={{ ...(cardTop !== undefined ? { top: cardTop } : {}), ...(cardLeft !== undefined ? { left: cardLeft } : {}) }}
       >
         <div className="flex items-center justify-between mb-1">
           <p className="text-sm font-bold text-gray-900">{step.title}</p>
@@ -729,15 +741,12 @@ export default function StepSamplePractice({
     };
   }, []);
 
-  // ── Start face verification once camera is live ───────────────────────────
-  useEffect(() => {
-    if (!micReady || !faceVerification?.hasBaseline()) return;
-    if (!videoRef.current) return;
-    faceVerification.startVerification(videoRef.current);
-    return () => {
-      faceVerification.stopVerification();
-    };
-  }, [micReady, faceVerification]);
+  // Continuous face verification is NOT run during practice. It ran face-api
+  // (landmarks + descriptor, CPU backend on Windows Chrome) on the main thread
+  // every 10s, yet nothing here ever showed its result and its events go to
+  // the interview event bus, which isn't connected until the real interview.
+  // Each run froze the page for a second or more — the practice "hang",
+  // worst while toggling Fullscreen/Exit. The live interview starts it itself.
 
   // ── TTS: Speak the practice question ──────────────────────────────────────
   // Called only on explicit user click so the browser always has a user gesture.
@@ -2364,7 +2373,9 @@ export default function StepSamplePractice({
           {/* Chat thread — same bubbles as the live interview: Bina (violet,
               left) and Your Response (mint, right). */}
           <div ref={chatScrollRef} data-tour="answer" className="flex-1 overflow-y-auto p-4 pb-28 space-y-3 bg-slate-50/60 dark:bg-transparent [:fullscreen_&]:!max-h-none [:fullscreen_&]:min-h-0" style={{ maxHeight: '420px' }}>
-            {/* Bina greeting */}
+            {/* Bina greeting — only once she starts speaking; before Start it
+                rendered as an empty bubble. */}
+            {hasStartedRevealing(PRACTICE_GREETING) && (
             <div className="flex gap-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/linda-avatar.webp" onError={(e) => { const t = e.currentTarget; if (!t.src.endsWith('/linda-3.png')) t.src = '/linda-3.png'; }} alt="Bina" className="w-6 h-6 rounded-full object-cover shrink-0 shadow-sm mt-0.5" />
@@ -2380,6 +2391,7 @@ export default function StepSamplePractice({
                 </div>
               </div>
             </div>
+            )}
             {/* Bina practice question — withheld until the greeting has
                 actually finished being spoken/revealed (hasStartedRevealing),
                 so it never sits there empty-with-cursor next to a greeting
@@ -2391,13 +2403,11 @@ export default function StepSamplePractice({
                 <div className="max-w-[80%]">
                   <span className="text-2xs font-semibold text-purple-600 mb-0.5 block">BINA</span>
                   <div className="px-3.5 py-2.5 bg-violet-50 text-violet-900 rounded-2xl rounded-tl-sm border border-violet-200 shadow-sm">
-                    <p className="text-2xs text-violet-500 font-medium uppercase tracking-wide mb-1">Practice question</p>
-                    <p className="text-sm leading-relaxed font-medium">
-                      &ldquo;{revealFor(PRACTICE_QUESTION)}
+                    <p className="text-sm leading-relaxed">
+                      {revealFor(PRACTICE_QUESTION)}
                       {streaming && revealFor(PRACTICE_QUESTION).length < PRACTICE_QUESTION.length && (
                         <span className="tf-blink inline-block w-1.5 h-3.5 ml-0.5 -mb-0.5 bg-violet-600 align-middle" aria-hidden="true" />
                       )}
-                      {revealFor(PRACTICE_QUESTION).length >= PRACTICE_QUESTION.length && <>&rdquo;</>}
                     </p>
                   </div>
                   {/* Play/Replay-question button removed — Repeat Question in the
@@ -2421,7 +2431,7 @@ export default function StepSamplePractice({
                   <span className="text-2xs font-semibold text-emerald-600 mb-0.5 block text-right">
                     Your Response {isTranscribing && <span className="text-sky-600">· enhancing…</span>}
                   </span>
-                  <div className="px-3.5 py-2.5 bg-emerald-50 text-emerald-900 rounded-2xl rounded-tr-sm border border-emerald-200 shadow-sm">
+                  <div data-tour="record" className="px-3.5 py-2.5 bg-emerald-50 text-emerald-900 rounded-2xl rounded-tr-sm border border-emerald-200 shadow-sm">
                     {isRecording ? (
                       // Same as the live interview (and production): no live
                       // transcript while recording — just the waveform + a
@@ -2435,7 +2445,7 @@ export default function StepSamplePractice({
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                           <span className="text-emerald-600 text-2xs font-medium">recording…</span>
                         </div>
-                        <div data-tour="record" className="flex flex-col gap-1.5">
+                        <div className="flex flex-col gap-1.5">
                           <MicWaveform analyserRef={analyserRef} active={isRecording} color="#059669" quietColor="#6ee7b7" />
                           <p className="text-xs leading-relaxed italic text-emerald-700/70 dark:text-emerald-300/70">Recording… Your transcript will appear after you finish speaking.</p>
                         </div>
@@ -2451,7 +2461,7 @@ export default function StepSamplePractice({
                       <p className="text-sm leading-relaxed">{displayAnswer || typedAnswer}</p>
                     ) : (
                       // Waiting for the mic to open (Bina still speaking / not started).
-                      <div data-tour="record" className="flex flex-col gap-1.5">
+                      <div className="flex flex-col gap-1.5">
                         <MicWaveform analyserRef={analyserRef} active={false} color="#059669" quietColor="#6ee7b7" />
                         <p className="text-xs leading-relaxed italic text-emerald-700/70 dark:text-emerald-300/70">
                           {!started ? 'Press Start to begin.' : aiSpeaking ? 'The mic opens when Bina finishes the question.' : 'Getting ready…'}
@@ -2529,13 +2539,11 @@ export default function StepSamplePractice({
                 <div className="max-w-[80%]">
                   <span className="text-2xs font-semibold text-purple-600 mb-0.5 block">BINA</span>
                   <div className="px-3.5 py-2.5 bg-violet-50 text-violet-900 rounded-2xl rounded-tl-sm border border-violet-200 shadow-sm">
-                    <p className="text-2xs text-violet-500 font-medium uppercase tracking-wide mb-1">Practice question 2 · Yes / No</p>
-                    <p className="text-sm leading-relaxed font-medium">
-                      &ldquo;{revealFor(PRACTICE_HR_QUESTION)}
+                    <p className="text-sm leading-relaxed">
+                      {revealFor(PRACTICE_HR_QUESTION)}
                       {streaming && revealFor(PRACTICE_HR_QUESTION).length < PRACTICE_HR_QUESTION.length && (
                         <span className="tf-blink inline-block w-1.5 h-3.5 ml-0.5 -mb-0.5 bg-violet-600 align-middle" aria-hidden="true" />
                       )}
-                      {revealFor(PRACTICE_HR_QUESTION).length >= PRACTICE_HR_QUESTION.length && <>&rdquo;</>}
                     </p>
                   </div>
                 </div>
@@ -2624,7 +2632,7 @@ export default function StepSamplePractice({
                   <span className="text-2xs font-semibold text-emerald-600 mb-0.5 block text-right">
                     Your Response {isTranscribing && <span className="text-sky-600">· enhancing…</span>}
                   </span>
-                  <div className="px-3.5 py-2.5 bg-emerald-50 text-emerald-900 rounded-2xl rounded-tr-sm border border-emerald-200 shadow-sm">
+                  <div data-tour="record" className="px-3.5 py-2.5 bg-emerald-50 text-emerald-900 rounded-2xl rounded-tr-sm border border-emerald-200 shadow-sm">
                     {isRecording ? (
                       // Same as the live interview (and production): no live
                       // transcript while recording — just the waveform + a
@@ -2638,7 +2646,7 @@ export default function StepSamplePractice({
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                           <span className="text-emerald-600 text-2xs font-medium">recording…</span>
                         </div>
-                        <div data-tour="record" className="flex flex-col gap-1.5">
+                        <div className="flex flex-col gap-1.5">
                           <MicWaveform analyserRef={analyserRef} active={isRecording} color="#059669" quietColor="#6ee7b7" />
                           <p className="text-xs leading-relaxed italic text-emerald-700/70 dark:text-emerald-300/70">Recording… Your transcript will appear after you finish speaking.</p>
                         </div>
@@ -2654,7 +2662,7 @@ export default function StepSamplePractice({
                       <p className="text-sm leading-relaxed">{displayAnswer || typedAnswer}</p>
                     ) : (
                       // Waiting for the mic to open (Bina still speaking / not started).
-                      <div data-tour="record" className="flex flex-col gap-1.5">
+                      <div className="flex flex-col gap-1.5">
                         <MicWaveform analyserRef={analyserRef} active={false} color="#059669" quietColor="#6ee7b7" />
                         <p className="text-xs leading-relaxed italic text-emerald-700/70 dark:text-emerald-300/70">
                           {!started ? 'Press Start to begin.' : aiSpeaking ? 'The mic opens when Bina finishes the question.' : 'Getting ready…'}
