@@ -82,6 +82,7 @@ export default function ResumeScoringRoute() {
       resumeId: string;
       candidateName: string;
       score: number;
+      overallRating10?: number;
     }>;
   } | null>(null);
   const [pendingBatchId, setPendingBatchId] = useState<string | null>(null);
@@ -98,6 +99,7 @@ export default function ResumeScoringRoute() {
       candidateName: string;
       status: 'queued' | 'processing' | 'completed' | 'failed' | 'already_scored';
       score?: number;
+      overallRating10?: number;
       matchStatus?: string;
       errorMessage?: string;
     }[];
@@ -162,13 +164,14 @@ export default function ResumeScoringRoute() {
           candidateName: item.candidateName || 'Unknown',
           status: 'already_scored' as const,
           score: item.score,
+          overallRating10: (item as { overallRating10?: number }).overallRating10,
           matchStatus: item.matchStatus,
         }));
 
         try {
           const status = await scoringService.getBatchStatus(batchIdParam);
 
-          let batchItems: { resumeId: string; candidateName: string; status: 'queued' | 'processing' | 'completed' | 'failed' | 'already_scored'; score?: number; matchStatus?: string; errorMessage?: string }[];
+          let batchItems: { resumeId: string; candidateName: string; status: 'queued' | 'processing' | 'completed' | 'failed' | 'already_scored'; score?: number; overallRating10?: number; matchStatus?: string; errorMessage?: string }[];
 
           if (status.items && status.items.length > 0) {
             batchItems = status.items.map((item: any) => ({
@@ -176,6 +179,7 @@ export default function ResumeScoringRoute() {
               candidateName: candidateNameMap.get(item.resume_id) || item.candidate_name || 'Unknown',
               status: item.status,
               score: item.overall_score,
+              overallRating10: item.overall_rating_10,
               matchStatus: item.match_status,
               errorMessage: item.error_message,
             }));
@@ -295,12 +299,13 @@ export default function ResumeScoringRoute() {
       candidateName: item.candidateName || 'Unknown',
       status: 'already_scored' as const,
       score: item.score,
+      overallRating10: (item as { overallRating10?: number }).overallRating10,
       matchStatus: item.matchStatus,
     }));
 
     // Accumulate items across poll cycles so completed items are never dropped
     // from the UI when the API stops returning them.
-    type BatchItem = { resumeId: string; candidateName: string; status: 'queued' | 'processing' | 'completed' | 'failed' | 'already_scored'; score?: number; matchStatus?: string; errorMessage?: string };
+    type BatchItem = { resumeId: string; candidateName: string; status: 'queued' | 'processing' | 'completed' | 'failed' | 'already_scored'; score?: number; overallRating10?: number; matchStatus?: string; errorMessage?: string };
     const accumulatedItems = new Map<string, BatchItem>();
 
     // Seed the map from sessionStorage so all candidates are shown immediately
@@ -334,6 +339,7 @@ export default function ResumeScoringRoute() {
               candidateName: candidateNameMap.get(item.resume_id) || item.candidate_name || 'Unknown',
               status: normalizeScoringStatus(item.status),
               score: item.overall_score,
+              overallRating10: item.overall_rating_10,
               matchStatus: item.match_status,
               errorMessage: item.error_message,
             });

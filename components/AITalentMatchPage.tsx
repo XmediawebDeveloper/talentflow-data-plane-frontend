@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { Button } from '@/components/ui/button';
-import { ArrowUpDown, Sparkles, BarChart3, Search, SlidersHorizontal, Briefcase, ChevronDown, ChevronRight, Mail, Phone, MapPin, CheckCircle, Star, User, Users, FileText, Send, TrendingUp, Calendar, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2, Info, RefreshCw, PieChart, MoreVertical, Video, FileDown, CheckSquare, MinusSquare, Square, MinusCircle, ChevronsDownUp, ChevronsUpDown } from 'lucide-react';
+import { ArrowUpDown, ArrowUp, ArrowDown, Sparkles, BarChart3, Search, SlidersHorizontal, Briefcase, ChevronDown, ChevronRight, Mail, Phone, MapPin, CheckCircle, Star, User, Users, FileText, Send, TrendingUp, Calendar, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2, Info, RefreshCw, PieChart, MoreVertical, Video, FileDown, CheckSquare, MinusSquare, Square, MinusCircle, ChevronsDownUp, ChevronsUpDown } from 'lucide-react';
 import { exportData, type ExportColumn } from '@/lib/utils/exportUtils';
 import ExportFormatModal from '@/components/ExportFormatModal';
 import ColumnCustomizationModal from '@/components/ColumnCustomizationModal';
@@ -104,6 +104,34 @@ const TOOLBAR_BUTTON_CLASS =
   'h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue';
 
 type RatingBand = 'exact' | 'partial' | 'no_match';
+
+/* View by Candidates: what the table is sorted by — the Sort By menu and the
+   clickable column headers drive the same value. */
+type CandidateSortKey = 'score' | 'name' | 'jobs' | 'scored' | 'titles' | 'date';
+const CANDIDATE_SORT_KEYS: CandidateSortKey[] = ['score', 'name', 'jobs', 'scored', 'titles', 'date'];
+
+/* View by Job's inline candidate table: the sortable columns. */
+type JobCandSortKey = 'rating' | 'candidate' | 'experience' | 'scored';
+type JobCandSort = { key: JobCandSortKey; dir: 'asc' | 'desc' };
+/** First click on a column: names A→Z, everything else highest / scored first. */
+const JOB_CAND_SORT_FIRST_DIR: Record<JobCandSortKey, 'asc' | 'desc'> = {
+  rating: 'desc', candidate: 'asc', experience: 'desc', scored: 'desc',
+};
+const DEFAULT_JOB_CAND_SORT: JobCandSort = { key: 'rating', dir: 'desc' };
+
+/* View by Candidates: a candidate's inner matched-jobs table — sortable columns. */
+type CandJobSortKey = 'rating' | 'jdId' | 'title' | 'jobVersion' | 'scored' | 'date' | 'resumeVersion';
+type CandJobSort = { key: CandJobSortKey; dir: 'asc' | 'desc' };
+/** First click: text A→Z, everything else highest / scored / newest first. */
+const CAND_JOB_SORT_FIRST_DIR: Record<CandJobSortKey, 'asc' | 'desc'> = {
+  rating: 'desc', jdId: 'asc', title: 'asc', jobVersion: 'desc', scored: 'desc', date: 'desc', resumeVersion: 'desc',
+};
+const DEFAULT_CAND_JOB_SORT: CandJobSort = { key: 'date', dir: 'desc' };
+/** "5.5 years" → 5.5; no number → null (sorts last either way). */
+const experienceYears = (value: unknown): number | null => {
+  const m = String(value ?? '').match(/\d+(\.\d+)?/);
+  return m ? Number(m[0]) : null;
+};
 
 /* The in-page scorecard's URL params, and its Prev / Next list's storage key. */
 const SCORECARD_JD_PARAM = 'scorecard_jd';
@@ -922,6 +950,10 @@ export default function AITalentMatchPage({
   const [partialJobRows, setPartialJobRows] = useState<Record<string, string[]>>({});
   // Job rows opened inline onto their candidates.
   const [expandedJobKeys, setExpandedJobKeys] = useState<Set<string>>(new Set());
+  // Per job row: how its inline candidate table is sorted (Rating ↓ until a header is clicked).
+  const [jobCandSortByJob, setJobCandSortByJob] = useState<Record<string, JobCandSort>>({});
+  // Per candidate row: how its inner matched-jobs table is sorted (newest match first by default).
+  const [candJobSortByRow, setCandJobSortByRow] = useState<Record<string, CandJobSort>>({});
   const toggleJobExpanded = (key: string) =>
     setExpandedJobKeys(prev => {
       const next = new Set(prev);
@@ -1070,7 +1102,7 @@ export default function AITalentMatchPage({
     dateFrom: candidateFilterDateFrom,
     dateTo: candidateFilterDateTo,
   } = candidateSearch.filters;
-  const [candidateSortBy, setCandidateSortBy] = useState<'score' | 'name' | 'jobs' | 'date'>('jobs');
+  const [candidateSortBy, setCandidateSortBy] = useState<CandidateSortKey>('jobs');
   const [candidateSortOrder, setCandidateSortOrder] = useState<'asc' | 'desc'>('desc');
   // Shared between "View by Candidates" and "All Resumes" (incl. its rating-band
   // filters) — only one of those views is ever on screen at a time, so one flag
@@ -1084,8 +1116,11 @@ export default function AITalentMatchPage({
     const { page, size } = candidateJobsPageOf(key);
     return jobs.slice((page - 1) * size, page * size);
   };
+  // Both read `prev`, never this render's paging: ListPagination's per-page
+  // dropdown calls size-change THEN page-change(1) in the same tick, and a
+  // render-time read here put the old size straight back.
   const setCandidateJobsPage = (key: string, page: number) =>
-    setCandidateJobsPaging(prev => ({ ...prev, [key]: { ...candidateJobsPageOf(key), page } }));
+    setCandidateJobsPaging(prev => ({ ...prev, [key]: { ...(prev[key] ?? { page: 1, size: 10 }), page } }));
   const setCandidateJobsSize = (key: string, size: number) =>
     setCandidateJobsPaging(prev => ({ ...prev, [key]: { page: 1, size } }));
 
@@ -1119,6 +1154,24 @@ export default function AITalentMatchPage({
       sessionStorage.removeItem('resumeNavAIMatchJobTitle');
     } catch { /* ignore */ }
     router.push(`/recruitment/resume-view/${row.resumeId}`);
+  };
+
+  // View by Job: a candidate's name opens their resume, on AI Talent Match's
+  // trail (Dashboard › AI Talent Match › <job> › <candidate>). `resumeIds` seeds
+  // resume-view's Prev / Next with this job's list, in table order.
+  const openJobCandidateResume = (jdId: string, jobTitle: string, resumeId: string | undefined, resumeIds: (string | undefined)[]) => {
+    if (!resumeId) {
+      toast.error('Resume not found for this candidate');
+      return;
+    }
+    try {
+      sessionStorage.setItem('resumeNavList', JSON.stringify(resumeIds.filter(Boolean)));
+      sessionStorage.setItem('resumeNavSource', 'ai-talent-match');
+      sessionStorage.setItem('resumeNavAIMatchJobId', jdId);
+      sessionStorage.setItem('resumeNavAIMatchJobTitle', jobTitle || '');
+      markAIMatchReturnTrip();
+    } catch { /* ignore */ }
+    router.push(`/recruitment/resume-view/${resumeId}`);
   };
 
   // "Score Resume" from inside the candidate roll-up's per-job list.
@@ -1706,7 +1759,7 @@ export default function AITalentMatchPage({
         dateFrom: typeof s.candidateFilterDateFrom === 'string' ? s.candidateFilterDateFrom : '',
         dateTo: typeof s.candidateFilterDateTo === 'string' ? s.candidateFilterDateTo : '',
       });
-      if (s.candidateSortBy === 'score' || s.candidateSortBy === 'name' || s.candidateSortBy === 'jobs' || s.candidateSortBy === 'date') setCandidateSortBy(s.candidateSortBy);
+      if (CANDIDATE_SORT_KEYS.includes(s.candidateSortBy)) setCandidateSortBy(s.candidateSortBy);
       if (s.candidateSortOrder === 'asc' || s.candidateSortOrder === 'desc') setCandidateSortOrder(s.candidateSortOrder);
       if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
       if (s.filterRatingBand === 'all' || s.filterRatingBand === 'exact' || s.filterRatingBand === 'partial' || s.filterRatingBand === 'no_match') setFilterRatingBand(s.filterRatingBand);
@@ -3145,8 +3198,47 @@ export default function AITalentMatchPage({
           row.jobs.reduce((latest, job) => Math.max(latest, new Date(job.matchedAt).getTime()), 0);
         return (lastOf(a) - lastOf(b)) * direction;
       }
+      if (candidateSortBy === 'scored') {
+        // Job versions scored in Resume Scoring; ties → more matched versions first.
+        const scoredOf = (row: CandidateMatchRow) => row.jobs.filter(j => !!scoreIdFor(j.jobId, j.resumeId)).length;
+        return (scoredOf(a) - scoredOf(b)) * direction || b.jobs.length - a.jobs.length;
+      }
+      if (candidateSortBy === 'titles') {
+        const titlesOf = (row: CandidateMatchRow) => new Set(row.jobs.map(j => j.jobTitle).filter(Boolean)).size;
+        return (titlesOf(a) - titlesOf(b)) * direction || b.jobs.length - a.jobs.length;
+      }
       return (a.jobs.length - b.jobs.length) * direction;
     });
+
+    /** A View by Candidates column header that sorts the table (click again to flip). */
+    const candidateSortHeader = (key: CandidateSortKey, label: string, align: 'left' | 'center' = 'left') => {
+      const active = candidateSortBy === key;
+      const Icon = !active ? ArrowUpDown : candidateSortOrder === 'asc' ? ArrowUp : ArrowDown;
+      return (
+        <th
+          aria-sort={active ? (candidateSortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}
+          className={`${align === 'center' ? 'text-center' : 'text-left'} py-3 px-4 text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide whitespace-nowrap`}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              if (active) {
+                setCandidateSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'));
+              } else {
+                setCandidateSortBy(key);
+                // Names A→Z first; counts and dates highest / newest first.
+                setCandidateSortOrder(key === 'name' ? 'asc' : 'desc');
+              }
+            }}
+            title={`Sort by ${label}`}
+            className={`group inline-flex items-center gap-1.5 uppercase tracking-wide transition-colors hover:text-brand-blue ${active ? 'text-brand-blue' : ''}`}
+          >
+            {label}
+            <Icon className={`w-3.5 h-3.5 flex-shrink-0 transition-opacity ${active ? 'opacity-100' : 'opacity-40 group-hover:opacity-100'}`} />
+          </button>
+        </th>
+      );
+    };
 
     const paginatedCandidateRows = sortedCandidateRows.slice(
       (candidateCurrentPage - 1) * candidateItemsPerPage,
@@ -3347,6 +3439,62 @@ export default function AITalentMatchPage({
     // A candidate's matched jobs under the rating pill (View by Candidates).
     const bandJobsOf = <T extends { score: number }>(list: T[]): T[] =>
       candidateRatingBand ? list.filter(j => matchBandForRating(toMatchRating(j.score)) === candidateRatingBand) : list;
+    /** A candidate's matched jobs (under the rating pill), in its inner table's sort order. */
+    const innerJobsOf = (rowKey: string, list: CandidateMatchRow['jobs']): CandidateMatchRow['jobs'] => {
+      const sort = candJobSortByRow[rowKey] ?? DEFAULT_CAND_JOB_SORT;
+      const sign = sort.dir === 'asc' ? 1 : -1;
+      const jobRecordOf = (jdId: string) => jobs.find(j => j.id === jdId);
+      const valueOf = (j: CandidateMatchRow['jobs'][number]): number | string => {
+        switch (sort.key) {
+          case 'rating': return j.score ?? 0;
+          case 'jdId': return jobRecordOf(j.jobId)?.jobId || '';
+          case 'title': return j.jobTitle || '';
+          case 'jobVersion': return jobRecordOf(j.jobId)?.currentVersion ?? 1;
+          case 'scored': return scoreIdFor(j.jobId, j.resumeId) ? 1 : 0;
+          case 'resumeVersion': return j.resumeVersion ?? 1;
+          default: return new Date(j.matchedAt).getTime();
+        }
+      };
+      return bandJobsOf(list).slice().sort((a, b) => {
+        const va = valueOf(a);
+        const vb = valueOf(b);
+        const diff = typeof va === 'string' || typeof vb === 'string'
+          // numeric-aware so JD-9 sorts before JD-10
+          ? String(va).localeCompare(String(vb), undefined, { numeric: true, sensitivity: 'base' })
+          : (va as number) - (vb as number);
+        // Ties: newest match first.
+        return diff * sign || new Date(b.matchedAt).getTime() - new Date(a.matchedAt).getTime();
+      });
+    };
+    const innerJobSortHeader = (rowKey: string, key: CandJobSortKey, label: string, align: 'left' | 'center', extraClass = '') => {
+      const sort = candJobSortByRow[rowKey] ?? DEFAULT_CAND_JOB_SORT;
+      const active = sort.key === key;
+      const Icon = !active ? ArrowUpDown : sort.dir === 'asc' ? ArrowUp : ArrowDown;
+      return (
+        <th
+          aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+          className={`${align === 'center' ? 'text-center' : 'text-left'} py-2 px-4 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap ${extraClass}`}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              setCandJobSortByRow(prev => ({
+                ...prev,
+                [rowKey]: active
+                  ? { key, dir: sort.dir === 'asc' ? 'desc' : 'asc' }
+                  : { key, dir: CAND_JOB_SORT_FIRST_DIR[key] },
+              }));
+              setCandidateJobsPage(rowKey, 1);
+            }}
+            title={`Sort by ${label}`}
+            className={`group inline-flex items-center gap-1.5 uppercase tracking-wide transition-colors hover:text-brand-blue ${active ? 'text-brand-blue' : ''}`}
+          >
+            {label}
+            <Icon className={`w-3.5 h-3.5 flex-shrink-0 transition-opacity ${active ? 'opacity-100' : 'opacity-40 group-hover:opacity-100'}`} />
+          </button>
+        </th>
+      );
+    };
     const jobLoaded = (item: MatchHistory) =>
       (item.totalMatches || 0) <= 0 || historyCandidatesById[item.id] !== undefined || failedHistorySessionIds.has(item.id);
     const jobCandidates = (item: MatchHistory): MatchedCandidateWithVersions[] => historyCandidatesById[item.id] ?? [];
@@ -3991,6 +4139,8 @@ export default function AITalentMatchPage({
                     { value: 'jobs' as const, label: 'Matched Jobs' },
                     { value: 'score' as const, label: 'Best Match' },
                     { value: 'name' as const, label: 'Candidate Name' },
+                    { value: 'scored' as const, label: 'Scored' },
+                    { value: 'titles' as const, label: 'Job Titles' },
                     { value: 'date' as const, label: 'Last Matched' },
                   ]}
                   onChange={(v) => setCandidateSortBy(v)}
@@ -4221,11 +4371,11 @@ export default function AITalentMatchPage({
                               );
                             })()}
                           </th>
-                          <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide">Candidate</th>
-                          <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide">Job Versions</th>
-                          <th className="text-center py-3 px-4 text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide">Scored</th>
-                          <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide">Job Titles</th>
-                          <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide">Latest Matched</th>
+                          {candidateSortHeader('name', 'Candidate')}
+                          {candidateSortHeader('jobs', 'Job Versions')}
+                          {candidateSortHeader('scored', 'Scored', 'center')}
+                          {candidateSortHeader('titles', 'Job Titles')}
+                          {candidateSortHeader('date', 'Latest Matched')}
                           <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide">Actions</th>
                         </tr>
                       </thead>
@@ -4359,18 +4509,18 @@ export default function AITalentMatchPage({
                                         <thead className="sticky top-0 z-20 bg-gray-50 dark:bg-slate-800 shadow-[0_1px_0_0_var(--border)]">
                                           <tr>
                                             <th className="w-10 py-2 pl-4 pr-1" />
-                                            <th className="text-center py-2 px-4 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap tf-sticky-col-left !bg-gray-50 dark:!bg-slate-800">Match Rating</th>
-                                            <th className="text-left py-2 px-4 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap">JD ID</th>
-                                            <th className="text-left py-2 px-4 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap">Job Title</th>
-                                            <th className="text-center py-2 px-4 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap">Job Version</th>
-                                            <th className="text-left py-2 px-4 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap">Scored Status</th>
-                                            <th className="text-left py-2 px-4 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap">Matched By / Date</th>
-                                            <th className="text-center py-2 px-4 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap">Resume Version</th>
+                                            {innerJobSortHeader(row.key, 'rating', 'Match Rating', 'center', 'tf-sticky-col-left !bg-gray-50 dark:!bg-slate-800')}
+                                            {innerJobSortHeader(row.key, 'jdId', 'JD ID', 'left')}
+                                            {innerJobSortHeader(row.key, 'title', 'Job Title', 'left')}
+                                            {innerJobSortHeader(row.key, 'jobVersion', 'Job Version', 'center')}
+                                            {innerJobSortHeader(row.key, 'scored', 'Scored Status', 'left')}
+                                            {innerJobSortHeader(row.key, 'date', 'Matched By / Date', 'left')}
+                                            {innerJobSortHeader(row.key, 'resumeVersion', 'Resume Version', 'center')}
                                             <th className="text-left py-2 px-4 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap tf-sticky-col !bg-gray-50 dark:!bg-slate-800">Actions</th>
                                           </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
-                                          {pageCandidateJobs(row.key, bandJobsOf(sortedJobs)).map(job => {
+                                          {pageCandidateJobs(row.key, innerJobsOf(row.key, sortedJobs)).map(job => {
                                             // Who ran the match comes from the session's `run_by_name`
                                             // (ai_talent_match_sessions.run_by); 'System' is only the
                                             // fallback for a run with no resolvable user.
@@ -4380,7 +4530,7 @@ export default function AITalentMatchPage({
                                             const jobScoreId = scoreIdFor(job.jobId, job.resumeId);
                                             const jobSummaryOpen = !!jobScoreId && expandedScoreKeys.has(`${job.jobId}::${jobScoreId}`);
                                             // Prev / Next on the scorecard: this candidate's scored jobs, in table order.
-                                            const candScoreNav: ScoreRef[] = bandJobsOf(sortedJobs)
+                                            const candScoreNav: ScoreRef[] = innerJobsOf(row.key, sortedJobs)
                                               .map(j => ({ jdId: j.jobId, scoreId: scoreIdFor(j.jobId, j.resumeId) || '' }))
                                               .filter(r => r.scoreId);
                                             return (
@@ -4517,7 +4667,7 @@ export default function AITalentMatchPage({
                                                       )}
                                                     </DropdownMenuContent>
                                                   </DropdownMenu>
-                                                  {jobScoreId && (
+                                                  {jobScoreId ? (
                                                     <button
                                                       type="button"
                                                       onClick={() => toggleScoreSummary(job.jobId, job.jobTitle, jobScoreId)}
@@ -4528,6 +4678,10 @@ export default function AITalentMatchPage({
                                                     >
                                                       <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${jobSummaryOpen ? 'rotate-180' : ''}`} />
                                                     </button>
+                                                  ) : (
+                                                    <span /* unscored: an invisible ▾-sized slot, so ⋮ sits in one column on every row */ aria-hidden="true" className={`${ROW_ACTION_BUTTON_CLASS} invisible pointer-events-none`}>
+                                                      <ChevronDown className="w-4 h-4" />
+                                                    </span>
                                                   )}
                                                   </div>
                                                 </td>
@@ -4551,7 +4705,7 @@ export default function AITalentMatchPage({
                                         compact
                                         currentPage={candidateJobsPageOf(row.key).page}
                                         itemsPerPage={candidateJobsPageOf(row.key).size}
-                                        totalItems={bandJobsOf(sortedJobs).length}
+                                        totalItems={innerJobsOf(row.key, sortedJobs).length}
                                         onPageChange={(page) => setCandidateJobsPage(row.key, page)}
                                         onItemsPerPageChange={(size) => setCandidateJobsSize(row.key, size)}
                                         itemLabel="matched jobs"
@@ -4672,7 +4826,7 @@ export default function AITalentMatchPage({
 
                         {isExpanded && (
                           <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-800 space-y-2 cursor-default" onClick={(e) => e.stopPropagation()}>
-                            {pageCandidateJobs(row.key, bandJobsOf(sortedJobs)).map(job => (
+                            {pageCandidateJobs(row.key, innerJobsOf(row.key, sortedJobs)).map(job => (
                               <div key={job.historyId} className="flex items-center justify-between gap-2">
                                 <div className="min-w-0">
                                   <div className="text-sm text-gray-700 dark:text-slate-300 truncate">{job.jobTitle}</div>
@@ -4697,7 +4851,7 @@ export default function AITalentMatchPage({
                               compact
                               currentPage={candidateJobsPageOf(row.key).page}
                               itemsPerPage={candidateJobsPageOf(row.key).size}
-                              totalItems={bandJobsOf(sortedJobs).length}
+                              totalItems={innerJobsOf(row.key, sortedJobs).length}
                               onPageChange={(page) => setCandidateJobsPage(row.key, page)}
                               onItemsPerPageChange={(size) => setCandidateJobsSize(row.key, size)}
                               itemLabel="matched jobs"
@@ -4755,7 +4909,7 @@ export default function AITalentMatchPage({
                     <div className="relative">
                       <select
                         value={candidateSortBy}
-                        onChange={(e) => setCandidateSortBy(e.target.value as 'score' | 'name' | 'jobs' | 'date')}
+                        onChange={(e) => setCandidateSortBy(e.target.value as CandidateSortKey)}
                         aria-label="Sort resumes by"
                         className="appearance-none h-8 pl-3 pr-8 bg-transparent rounded-full focus:outline-none focus:ring-2 focus:ring-brand-blue/40 text-sm font-medium text-gray-800 dark:text-slate-200 cursor-pointer"
                       >
@@ -5726,9 +5880,61 @@ export default function AITalentMatchPage({
               const isPartlySelected = isJobPartlySelected(jobKey);
               const tally = jobTally(item);
               const allCandidates = jobCandidates(item);
+              const candSort = jobCandSortByJob[jobKey] ?? DEFAULT_JOB_CAND_SORT;
+              const candSortSign = candSort.dir === 'asc' ? 1 : -1;
               const panelCandidates = jobCandidatesInBand(item)
                 .slice()
-                .sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
+                .sort((a, b) => {
+                  let diff = 0;
+                  if (candSort.key === 'candidate') {
+                    diff = (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' });
+                  } else if (candSort.key === 'experience') {
+                    const ea = experienceYears(a.experience);
+                    const eb = experienceYears(b.experience);
+                    // No experience on file sorts last, whichever way.
+                    if (ea === null || eb === null) {
+                      if (ea !== eb) return ea === null ? 1 : -1;
+                    } else {
+                      diff = ea - eb;
+                    }
+                  } else if (candSort.key === 'scored') {
+                    diff = Number(!!scoreIdFor(item.jobId, a.resumeId)) - Number(!!scoreIdFor(item.jobId, b.resumeId));
+                  } else {
+                    diff = (a.matchScore ?? 0) - (b.matchScore ?? 0);
+                  }
+                  // Ties: best match first, then name.
+                  return diff * candSortSign
+                    || (b.matchScore ?? 0) - (a.matchScore ?? 0)
+                    || (a.name || '').localeCompare(b.name || '');
+                });
+              const candSortHeader = (key: JobCandSortKey, label: string, align: 'left' | 'center') => {
+                const active = candSort.key === key;
+                const Icon = !active ? ArrowUpDown : candSort.dir === 'asc' ? ArrowUp : ArrowDown;
+                return (
+                  <th
+                    aria-sort={active ? (candSort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+                    className={`${align === 'center' ? 'text-center' : 'text-left'} py-2.5 px-3 text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide whitespace-nowrap`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setJobCandSortByJob(prev => ({
+                          ...prev,
+                          [jobKey]: active
+                            ? { key, dir: candSort.dir === 'asc' ? 'desc' : 'asc' }
+                            : { key, dir: JOB_CAND_SORT_FIRST_DIR[key] },
+                        }));
+                        setCandidateJobsPage(pagingKey, 1);
+                      }}
+                      title={`Sort by ${label}`}
+                      className={`group inline-flex items-center gap-1.5 uppercase tracking-wide transition-colors hover:text-brand-blue ${active ? 'text-brand-blue' : ''}`}
+                    >
+                      {label}
+                      <Icon className={`w-3.5 h-3.5 flex-shrink-0 transition-opacity ${active ? 'opacity-100' : 'opacity-40 group-hover:opacity-100'}`} />
+                    </button>
+                  </th>
+                );
+              };
               const allIds = allCandidates.map(c => c.id);
               const tickedIds = isSelected ? allIds : (partialJobRows[jobKey] ?? []);
               const pagingKey = `job:${jobKey}`;
@@ -5784,11 +5990,11 @@ export default function AITalentMatchPage({
                                       : <Square className="w-4 h-4 text-gray-400" />}
                                   </button>
                                 </th>
-                                <th className="text-center py-2.5 px-3 text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide whitespace-nowrap">Rating</th>
-                                <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide">Candidate</th>
-                                <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide whitespace-nowrap">Experience</th>
+                                {candSortHeader('rating', 'Rating', 'center')}
+                                {candSortHeader('candidate', 'Candidate', 'left')}
+                                {candSortHeader('experience', 'Experience', 'left')}
                                 <th className="text-center py-2.5 px-3 text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide whitespace-nowrap">Resume Version</th>
-                                <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide whitespace-nowrap">Scored Status</th>
+                                {candSortHeader('scored', 'Scored Status', 'left')}
                                 <th className="text-right py-2.5 px-3 text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide tf-sticky-col !bg-gray-50 dark:!bg-slate-800">Actions</th>
                               </tr>
                             </thead>
@@ -5837,7 +6043,10 @@ export default function AITalentMatchPage({
                                         <div className="min-w-0">
                                           <button
                                             type="button"
-                                            onClick={(e) => { e.stopPropagation(); if (c.resumeId) setPreviewResume({ id: c.resumeId, name: c.name || 'Resume' }); }}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              openJobCandidateResume(item.jobId, item.jobTitle, c.resumeId, panelCandidates.map(x => x.resumeId));
+                                            }}
                                             className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block truncate max-w-[16rem]"
                                             title={c.name}
                                           >
@@ -5920,7 +6129,7 @@ export default function AITalentMatchPage({
                                         </DropdownMenuContent>
                                       </DropdownMenu>
                                       {/* ▾ — the score, inline (scored candidates only). */}
-                                      {scored && (
+                                      {scored ? (
                                         <button
                                           type="button"
                                           onClick={() => toggleScoreSummary(item.jobId, item.jobTitle, scoreId!)}
@@ -5931,6 +6140,10 @@ export default function AITalentMatchPage({
                                         >
                                           <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${summaryOpen ? 'rotate-180' : ''}`} />
                                         </button>
+                                      ) : (
+                                        <span /* unscored: an invisible ▾-sized slot, so ⋮ sits in one column on every row */ aria-hidden="true" className={`${ROW_ACTION_BUTTON_CLASS} invisible pointer-events-none`}>
+                                          <ChevronDown className="w-4 h-4" />
+                                        </span>
                                       )}
                                       </div>
                                     </td>
@@ -6915,6 +7128,16 @@ export default function AITalentMatchPage({
       {scoringReviewDialog}
       {assessmentInviteDialogs}
       {createInviteTargetModal}
+      {/* Preview Resume from a row's ⋮ menu (View by Job / View by Candidates) —
+          this view returns early, so the results view's copy below never rendered here. */}
+      {previewResume && (
+        <ResumeTextPreviewModal
+          resumeId={previewResume.id}
+          title={previewResume.name}
+          subtitle={previewResume.fileName}
+          onClose={() => setPreviewResume(null)}
+        />
+      )}
       <ExportFormatModal
         open={!!exportRows}
         onClose={() => setExportRows(null)}

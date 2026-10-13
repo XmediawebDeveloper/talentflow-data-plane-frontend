@@ -350,6 +350,8 @@ interface AlreadyScoredItem {
   resumeId: string;
   candidateName: string;
   score: number;
+  /** 0-10 Overall Rating — what the progress table's Score column prints. */
+  overallRating10?: number;
   scoredAt?: string;
   matchStatus?: string;
 }
@@ -368,6 +370,8 @@ interface BatchProgressItem {
   candidateName: string;
   status: 'queued' | 'processing' | 'completed' | 'failed' | 'already_scored';
   score?: number;
+  /** 0-10 Overall Rating — what the progress table's Score column prints. */
+  overallRating10?: number;
   matchStatus?: string;
   // snake_case alias: the read site does `item.matchStatus || item.match_status`, a
   // defensive fallback for raw (untransformed) API payloads. Declared so that read
@@ -745,6 +749,7 @@ export default function ResumeScoringPage({
         : 'Queued' as const,
       errorReason: item.errorMessage,
       score: item.score,
+      overallRating10: item.overallRating10,
       scoredDateTime: item.status === 'already_scored' && item.scoredAt
         ? new Date(item.scoredAt)
         : normalizeScoringStatus(item.status) === 'completed'
@@ -1160,6 +1165,52 @@ export default function ResumeScoringPage({
     view: 'job' | 'candidates';
   } | null>(null);
   const peopleIn = (rows: any[]) => new Set(rows.map(r => String(r.email || r.resumeId || r.id).toLowerCase())).size;
+  /* The progress popup's View (and a click on a settled row): that
+     candidate's scoring result for THIS job, opened in place — the same
+     candidate view the job rows open — instead of the resume in a new tab.
+     Rows carry the resume and job, not the score id, so the score is found
+     in the loaded scores, else fetched for that job. */
+  const openProgressResult = async (item: ScoringProgressItem) => {
+    if (!item.resumeId || !item.jobId) return;
+    const newest = (rows: any[]) =>
+      [...rows].sort((a, b) => new Date(b.scoredDate || b.created_at || 0).getTime() - new Date(a.scoredDate || a.created_at || 0).getTime())[0];
+    let row = newest(globalScoredResumes.filter(r => r.resumeId === item.resumeId && (r.jdId || '') === item.jobId));
+    if (!row) {
+      try {
+        const res = await scoringService.getJDScoredResumes(item.jobId, { page_size: 500 });
+        const hit = newest((res.items || []).filter((r: any) => r.resume_id === item.resumeId));
+        if (hit) {
+          row = {
+            id: hit.id,
+            resumeId: hit.resume_id,
+            candidateName: hit.candidate_name || item.candidateName,
+            email: hit.candidate_email || item.email,
+            jdId: item.jobId,
+            jobTitle: item.jobTitle,
+            jobCode: item.jobCode,
+            jobVersion: item.jobVersion,
+            matchStatus: hit.match_status,
+            overallRating10: hit.overall_rating_10,
+            resumeVersion: hit.resume_version || item.resumeVersion,
+            scoredDate: hit.created_at,
+          };
+        }
+      } catch {
+        /* fall through to the toast below */
+      }
+    }
+    if (!row) {
+      toast.error('Could not open this scoring result. Please try again.');
+      return;
+    }
+    // Hide the popup (the run itself is left alone) and open the result.
+    setShowProgressModal(false);
+    setSelectedHistoryItem(null);
+    setSelectedCandidateForView({ ...row, jdId: row.jdId || item.jobId, jobTitle: row.jobTitle || item.jobTitle });
+    setViewMode('candidateView');
+    router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}&score_id=${row.id}&view=job`, { scroll: false });
+  };
+
   const startCreateInviteTarget = () => {
     const t = createInviteTarget;
     if (!t) return;
@@ -1598,12 +1649,13 @@ export default function ResumeScoringPage({
     console.log('[ResumeScoringPage] Starting pending scoring for job:', jobTitle, 'with', resumeIds.length, 'new resumes,', alreadyScoredItems.length, 'already scored');
 
     // Build already-scored items for the progress modal
-    const alreadyScoredProgressItems: { resumeId: string; candidateName: string; status: 'already_scored'; score?: number; scoredAt?: string; matchStatus?: string }[] =
+    const alreadyScoredProgressItems: { resumeId: string; candidateName: string; status: 'already_scored'; score?: number; overallRating10?: number; scoredAt?: string; matchStatus?: string }[] =
       alreadyScoredItems.map(item => ({
         resumeId: item.resumeId,
         candidateName: item.candidateName,
         status: 'already_scored' as const,
         score: item.score,
+        overallRating10: item.overallRating10,
         scoredAt: item.scoredAt,
         matchStatus: item.matchStatus,
       }));
@@ -1661,6 +1713,7 @@ export default function ResumeScoringPage({
           : 'Queued' as const,
         errorReason: item.errorMessage,
         score: item.score,
+        overallRating10: item.overallRating10,
         scoredDateTime: item.status === 'already_scored' && item.scoredAt
           ? new Date(item.scoredAt)
           : normalizeScoringStatus(item.status) === 'completed'
@@ -1732,9 +1785,11 @@ export default function ResumeScoringPage({
                 if (itemStatus === 'completed' && newItemStatuses[idx].status !== 'completed') {
                   newItemStatuses[idx].status = 'completed';
                   newItemStatuses[idx].score = item.overall_score ?? 0;
+                  (newItemStatuses[idx] as any).overallRating10 = item.overall_rating_10;
                   newItemStatuses[idx].matchStatus = item.match_status;
                   updateItemStatus(jobId, itemId, 'Scored successfully', {
                     score: item.overall_score ?? 0,
+                    overallRating10: item.overall_rating_10,
                     matchResult: convertMatchStatus(item.match_status),
                     scoredDateTime: new Date().toISOString(),
                   });
@@ -1843,6 +1898,7 @@ export default function ResumeScoringPage({
       candidateName: item.candidateName || 'Unknown',
       status: item.status,
       score: item.score,
+      overallRating10: item.overallRating10,
       errorMessage: item.errorMessage,
       matchStatus: item.matchStatus || item.match_status,
     }));
@@ -1870,6 +1926,7 @@ export default function ResumeScoringPage({
         : 'Queued' as const,
       errorReason: item.errorMessage,
       score: item.score,
+      overallRating10: item.overallRating10,
       matchResult: item.matchStatus
         ? convertMatchStatus(item.matchStatus)
         : undefined, // Stay "Pending" until real match_status is fetched after completion
@@ -1911,6 +1968,7 @@ export default function ResumeScoringPage({
         scoredDateTime: item.scoredDateTime ? item.scoredDateTime.toISOString() : undefined,
         matchResult: item.matchResult,
         score: item.score,
+        overallRating10: item.overallRating10,
       })),
     });
 
@@ -1931,12 +1989,15 @@ export default function ResumeScoringPage({
           .then(jdScores => {
             // Build map of resume_id → match_status from the actual score records
             const scoreMap = new Map(jdScores.items.map(s => [s.resume_id, s.match_status]));
-            // Update the popup items with correct match results
+            const ratingMap = new Map(jdScores.items.map((s: any) => [s.resume_id, s.overall_rating_10 as number | undefined]));
+            // Update the popup items with correct match results (and the
+            // 0-10 rating the Score column prints)
             setProgressData(prev => prev.map(item => ({
               ...item,
               matchResult: scoreMap.has(item.resumeId)
                 ? convertMatchStatus(scoreMap.get(item.resumeId)!)
                 : item.matchResult,
+              overallRating10: ratingMap.get(item.resumeId) ?? item.overallRating10,
             })));
           })
           .catch(e => console.warn('[ResumeScoringPage] Could not update match statuses from scores:', e))
@@ -2844,6 +2905,8 @@ export default function ResumeScoringPage({
         {showProgressModal && (
           <BulkScoringProgressModal
             progressData={progressData}
+            // View / a settled row: the scoring result in place, not a new tab.
+            onViewResult={openProgressResult}
             onClose={() => {
               setShowProgressModal(false);
               /* Every job, not just the settled ones. Clearing only finished
@@ -2898,7 +2961,8 @@ export default function ResumeScoringPage({
                           errorReason: undefined,
                           scoredDateTime: new Date(),
                           matchResult: convertMatchStatus(retryData.match_status),
-                          score: retryData.overall_score
+                          score: retryData.overall_score,
+                          overallRating10: retryData.overall_rating_10
                         }
                       : p
                   ));
@@ -3896,6 +3960,7 @@ export default function ResumeScoringPage({
                       scoredDateTime: resume.created_at ? new Date(resume.created_at) : undefined,
                       matchResult: convertMatchStatus(resume.match_status),
                       score: resume.overall_score || 0,
+                      overallRating10: resume.overall_rating_10 ?? resume.overallRating10,
                     }));
                   }));
                   const allProgressItems: ScoringProgressItem[] = perVersion
@@ -4154,6 +4219,16 @@ export default function ResumeScoringPage({
                           <span className="flex items-center gap-1">
                             <span className="font-medium text-gray-700 dark:text-slate-300">Scored:</span>
                             <span className="font-normal text-gray-500 dark:text-slate-400">{formatIST(item.scoredAt)}</span>
+                          </span>
+                          {/* How many scores this job has — every version, the
+                              same rows the Exact / Partial / No Match badges
+                              add up to. Until those load, the version's own
+                              total. */}
+                          <span className="flex items-center gap-1">
+                            <span className="font-medium text-gray-700 dark:text-slate-300">Scored Count:</span>
+                            <span className="font-normal text-gray-500 dark:text-slate-400 tabular-nums">
+                              {globalLoaded ? verdictTally.exact + verdictTally.partial + verdictTally.none : item.totalScored}
+                            </span>
                           </span>
                           {/* Grid only: the verdict counts inline. The list
                               view stacks them on the right, as the Job
@@ -4499,6 +4574,8 @@ export default function ResumeScoringPage({
         {showProgressModal && (
           <BulkScoringProgressModal
             progressData={progressData}
+            // View / a settled row: the scoring result in place, not a new tab.
+            onViewResult={openProgressResult}
             onClose={() => {
               setShowProgressModal(false);
               /* Every job, not just the settled ones. Clearing only finished
@@ -4553,7 +4630,8 @@ export default function ResumeScoringPage({
                           errorReason: undefined,
                           scoredDateTime: new Date(),
                           matchResult: convertMatchStatus(retryData.match_status),
-                          score: retryData.overall_score
+                          score: retryData.overall_score,
+                          overallRating10: retryData.overall_rating_10
                         }
                       : p
                   ));
@@ -5341,6 +5419,8 @@ export default function ResumeScoringPage({
       {showProgressModal && (
         <BulkScoringProgressModal
           progressData={progressData}
+          // View / a settled row: the scoring result in place, not a new tab.
+          onViewResult={openProgressResult}
           onClose={() => {
             setShowProgressModal(false);
             /* The corner widget is a second face of this same run — leaving it
@@ -5395,7 +5475,8 @@ export default function ResumeScoringPage({
                         errorReason: undefined,
                         scoredDateTime: new Date(),
                         matchResult: convertMatchStatus(retryData.match_status),
-                        score: retryData.overall_score
+                        score: retryData.overall_score,
+                        overallRating10: retryData.overall_rating_10
                       }
                     : p
                 ));

@@ -17,7 +17,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Activity, Target, Sparkles, ClipboardCheck, Bot, Loader2, ChevronRight, Lock,
-  Mail, Ban, Play, Monitor, Clock, CheckCircle, X, RefreshCw,
+  Mail, Ban, Play, Monitor, Clock, CheckCircle, XCircle, X, RefreshCw,
 } from 'lucide-react';
 import {
   resumeService,
@@ -73,10 +73,6 @@ function AssessmentStatusBadge({ status }: { status: string }) {
   }
 }
 
-const TALENT_MATCH_STATUS: Record<string, string> = {
-  pending: 'Pending', shortlisted: 'Shortlisted', rejected: 'Rejected', contacted: 'Contacted',
-};
-
 const VersionTag = ({ version }: { version: number | null | undefined }) =>
   version ? (
     <span className="px-1.5 py-0.5 rounded bg-brand-blue/10 text-brand-blue text-2xs font-medium ring-1 ring-brand-blue/15">v{version}</span>
@@ -98,12 +94,18 @@ const PassFail = ({ passed }: { passed: boolean | null | undefined }) =>
     </span>
   );
 
-/* One column layout for every row of every tab, so the cells line up no
-   matter what a row carries: Score | Result | Status | Action, each a fixed
-   width. A missing value leaves its cell empty (score shows a dash, as the
-   module lists do) instead of letting the row's badges slide over. On a phone
-   the cells simply wrap under the title. */
-const ROW_GRID = 'sm:grid sm:grid-cols-[minmax(0,1fr)_5.5rem_7.5rem_8.5rem_7rem] sm:items-center sm:gap-x-3';
+/* One column layout per tab, so every row of a tab lines up no matter what it
+   carries: Details | <the tab's value columns> | View, each a fixed width. A
+   missing value shows a dash instead of letting the row's badges slide over.
+   Headings and values are centred. On a phone the cells simply wrap under the
+   title. Grid classes are written out in full so Tailwind picks them up. */
+const COLUMNS: Record<TabKey, { heads: string[]; grid: string }> = {
+  scores: { heads: ['Score out of 10', 'Match'], grid: 'sm:grid-cols-[minmax(0,1fr)_8rem_9rem_7rem]' },
+  talent_matches: { heads: ['Rating', 'Scored Status'], grid: 'sm:grid-cols-[minmax(0,1fr)_6rem_9rem_7rem]' },
+  assessments: { heads: ['Tech %', 'Coding %', 'Result', 'Status'], grid: 'sm:grid-cols-[minmax(0,1fr)_5.5rem_5.5rem_5.5rem_8.5rem_7rem]' },
+  interviews: { heads: ['Match Score', 'Result', 'Status'], grid: 'sm:grid-cols-[minmax(0,1fr)_6.5rem_5.5rem_8.5rem_7rem]' },
+};
+const gridFor = (tab: TabKey) => `sm:grid ${COLUMNS[tab].grid} sm:items-center sm:gap-x-3`;
 
 const NoValue = () => <span className="text-sm text-gray-400">—</span>;
 
@@ -118,28 +120,36 @@ const verdictColour = (matchStatus: string) => {
   return verdict ? MATCH_SCORE_TEXT_CLASS[verdict] : 'text-gray-900';
 };
 
+/* AI Talent Match shows its 0-100 score as a 0-10 rating everywhere — the
+   same rounding as AITalentMatchPage's toMatchRating. */
+const toMatchRating = (score: number) => Math.max(0, Math.min(10, Math.round(score / 10)));
+
+/* An assessment section score cell (Tech % / Coding %); undefined → dash. */
+const sectionPct = (v: number | null | undefined, colour: string) =>
+  v != null ? <span className={`${SCORE_TEXT} ${colour}`}>{formatScore(v)}%</span> : undefined;
+
 function Row({
-  title, meta, score, result, status, onOpen, openLabel,
+  tab, title, meta, cells, onOpen, openLabel,
 }: {
+  tab: TabKey;
   title: ReactNode;
   meta: ReactNode;
-  score?: ReactNode;
-  result?: ReactNode;
-  status?: ReactNode;
+  /** One per COLUMNS[tab].heads entry; undefined renders a dash. */
+  cells: (ReactNode | undefined)[];
   onOpen?: () => void;
   openLabel?: string;
 }) {
   return (
-    <div className={`flex flex-col gap-2 ${ROW_GRID} py-3 px-3 rounded-lg ring-1 ring-gray-100 hover:ring-brand-blue/20 hover:bg-brand-blue/[0.02] transition-all`}>
+    <div className={`flex flex-col gap-2 ${gridFor(tab)} py-3 px-3 rounded-lg ring-1 ring-gray-100 hover:ring-brand-blue/20 hover:bg-brand-blue/[0.02] transition-all`}>
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-1.5 text-sm font-medium text-gray-900">{title}</div>
         <div className="mt-0.5 text-xs text-gray-500 flex flex-wrap gap-x-3 gap-y-0.5">{meta}</div>
       </div>
       <div className="flex flex-wrap items-center gap-2 sm:contents">
-        <div className="sm:text-right">{score ?? <NoValue />}</div>
-        <div className="sm:flex sm:justify-center">{result}</div>
-        <div className="sm:flex sm:justify-center">{status}</div>
-        <div className="sm:flex sm:justify-end">
+        {cells.map((cell, i) => (
+          <div key={i} className="sm:flex sm:justify-center sm:text-center">{cell ?? <NoValue />}</div>
+        ))}
+        <div className="sm:flex sm:justify-center">
           {onOpen && (
             <button
               onClick={onOpen}
@@ -155,22 +165,12 @@ function Row({
 }
 
 /* Column headings over the rows (desktop only), named per tab. */
-const COLUMN_HEADS: Record<TabKey, [string, string, string]> = {
-  scores: ['Rating', 'Match', ''],
-  talent_matches: ['Match %', '', 'Status'],
-  assessments: ['Score', 'Result', 'Status'],
-  interviews: ['MHS Score', 'Result', 'Status'],
-};
-
 function ColumnHeader({ tab }: { tab: TabKey }) {
-  const [score, result, status] = COLUMN_HEADS[tab];
   return (
-    <div className={`hidden ${ROW_GRID} px-3 pb-1 text-2xs font-semibold uppercase tracking-wide text-gray-400`}>
+    <div className={`hidden ${gridFor(tab)} px-3 pb-1 text-2xs font-semibold uppercase tracking-wide text-gray-400`}>
       <span>Details</span>
-      <span className="text-right">{score}</span>
-      <span className="text-center">{result}</span>
-      <span className="text-center">{status}</span>
-      <span className="text-right">View</span>
+      {COLUMNS[tab].heads.map(h => <span key={h} className="text-center">{h}</span>)}
+      <span className="text-center">View</span>
     </div>
   );
 }
@@ -246,6 +246,7 @@ export default function CandidateActivityCard({ resumeId, trail }: { resumeId: s
         {active === 'scores' && visible.map(s => (
           <Row
             key={s.id}
+            tab="scores"
             title={<>
               <span className="truncate">{s.jd_title || 'Untitled job'}</span>
               {s.jd_job_id && <span className="text-xs font-normal text-gray-500">{s.jd_job_id}</span>}
@@ -256,13 +257,12 @@ export default function CandidateActivityCard({ resumeId, trail }: { resumeId: s
               <span>{formatIST(s.created_at)}</span>
               {s.run_count > 1 && <span title="Same resume version scored against this job more than once — the latest run is shown">Re-scored {s.run_count - 1}×</span>}
             </>}
-            score={
-              <span className={`${SCORE_TEXT} ${verdictColour(s.match_status)}`} title="Overall rating out of 10">
+            cells={[
+              <span key="rating" className={`${SCORE_TEXT} ${verdictColour(s.match_status)}`} title="Overall rating out of 10">
                 {formatOverallScoreValue(s.overall_rating_10, s.overall_score)}
-                {s.overall_rating_10 != null && <span className="text-xs font-normal text-gray-500">/10</span>}
-              </span>
-            }
-            result={<span className={`${BADGE} ${matchBadgeClass(s.match_status)}`}>{s.match_status}</span>}
+              </span>,
+              <span key="match" className={`${BADGE} ${matchBadgeClass(s.match_status)}`}>{s.match_status}</span>,
+            ]}
             onOpen={() => openFromResume(`/recruitment/resume-scoring?jd_id=${s.jd_id}&score_id=${s.id}`)}
             openLabel="View Score"
           />
@@ -271,6 +271,7 @@ export default function CandidateActivityCard({ resumeId, trail }: { resumeId: s
         {active === 'talent_matches' && visible.map(m => (
           <Row
             key={m.id}
+            tab="talent_matches"
             title={<>
               <span className="truncate">{m.jd_title || 'Custom search'}</span>
               {m.jd_job_id && <span className="text-xs font-normal text-gray-500">{m.jd_job_id}</span>}
@@ -280,8 +281,17 @@ export default function CandidateActivityCard({ resumeId, trail }: { resumeId: s
               <span>Matched by {m.run_by_name}</span>
               <span>{formatIST(m.created_at)}</span>
             </>}
-            score={m.final_score != null ? <span className={`${SCORE_TEXT} text-gray-900`}>{formatScore(m.final_score)}%</span> : undefined}
-            status={<span className={`${BADGE} bg-slate-100 text-gray-700 ring-gray-200`}>{TALENT_MATCH_STATUS[m.status] || m.status}</span>}
+            cells={[
+              m.final_score != null ? (
+                <span key="rating" className={`${SCORE_TEXT} text-gray-900`} title="AI Talent Match rating out of 10">{toMatchRating(m.final_score)}</span>
+              ) : undefined,
+              // "Scored Status" as AI Talent Match shows it: scored against this job in Resume Scoring.
+              m.scored ? (
+                <span key="scored" className={`${BADGE} bg-success-subtle text-success ring-success/20`}><CheckCircle className="w-3 h-3" /> Scored</span>
+              ) : (
+                <span key="scored" className={`${BADGE} bg-slate-100 text-gray-600 ring-gray-200`}><XCircle className="w-3 h-3" /> Not Scored</span>
+              ),
+            ]}
             onOpen={m.jd_id ? () => openFromResume(`/recruitment/ai-talent-match?jdId=${m.jd_id}&view=results`) : undefined}
             openLabel="View Match"
           />
@@ -293,6 +303,7 @@ export default function CandidateActivityCard({ resumeId, trail }: { resumeId: s
           return (
             <Row
               key={a.id}
+              tab="assessments"
               title={<>
                 <span className="truncate">{a.assessment_title || 'Assessment'}</span>
                 {a.assessment_deleted && <span className="text-2xs text-destructive">(assessment deleted)</span>}
@@ -303,9 +314,12 @@ export default function CandidateActivityCard({ resumeId, trail }: { resumeId: s
                 <span>Invited {formatIST(a.invited_at)}</span>
                 {a.completed_at && <span>Completed {formatIST(a.completed_at)}</span>}
               </>}
-              score={a.score != null ? <span className={`${SCORE_TEXT} ${passColour(a.passed)}`}>{formatScore(a.score)}%</span> : undefined}
-              result={<PassFail passed={a.passed} />}
-              status={<AssessmentStatusBadge status={a.status} />}
+              cells={[
+                sectionPct(a.technical_score, passColour(a.passed)),
+                sectionPct(a.coding_score, passColour(a.passed)),
+                a.passed != null ? <PassFail key="result" passed={a.passed} /> : undefined,
+                <AssessmentStatusBadge key="status" status={a.status} />,
+              ]}
               onOpen={canOpen ? () => openFromResume(`/recruitment/assessments/${a.assessment_id}/results/details?candidate_id=${a.attempt_id}${cid}`) : undefined}
               openLabel="View Result"
             />
@@ -319,6 +333,7 @@ export default function CandidateActivityCard({ resumeId, trail }: { resumeId: s
           return (
             <Row
               key={i.id}
+              tab="interviews"
               title={<>
                 <span className="truncate">{i.title || 'AI Interview'}</span>
                 {i.config_display_id && <span className="text-xs font-normal text-gray-500">{i.config_display_id}</span>}
@@ -329,11 +344,13 @@ export default function CandidateActivityCard({ resumeId, trail }: { resumeId: s
                 <span>Invited {formatIST(i.invited_at)}</span>
                 {i.completed_at && <span>Completed {formatIST(i.completed_at)}</span>}
               </>}
-              score={score != null ? (
-                <span className={`${SCORE_TEXT} ${passColour(result ? result === 'Pass' : null)}`} title="Must-Have Skills score">{score}%</span>
-              ) : undefined}
-              result={result ? <PassFail passed={result === 'Pass'} /> : undefined}
-              status={<AIInviteStatusBadge inv={i} />}
+              cells={[
+                score != null ? (
+                  <span key="score" className={`${SCORE_TEXT} ${passColour(result ? result === 'Pass' : null)}`} title="Must-Have Skills score">{score}%</span>
+                ) : undefined,
+                result ? <PassFail key="result" passed={result === 'Pass'} /> : undefined,
+                <AIInviteStatusBadge key="status" inv={i} />,
+              ]}
               onOpen={canOpen ? () => openFromResume(`/recruitment/ai-interviews/${i.config_id}/results/details?session_id=${i.id}`) : undefined}
               openLabel="View Result"
             />

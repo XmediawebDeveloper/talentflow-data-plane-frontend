@@ -477,7 +477,14 @@ export function QuestionsView({ data, renderAnswerAction }: {
             <span className="text-xs font-semibold text-white bg-indigo-600 px-2 py-0.5 rounded-full">
               Question {q.qNum}
             </span>
-            {isHr ? (
+            {isHr && q.notDelivered ? (
+              <span
+                className="text-xs font-semibold px-2 py-0.5 rounded-full border bg-gray-100 text-gray-500 border-gray-300"
+                title="This selected HR question was never asked — the candidate ended the interview before reaching it."
+              >
+                HR · Not Asked
+              </span>
+            ) : isHr ? (
               <span className="text-xs font-semibold px-2 py-0.5 rounded-full border bg-violet-50 text-violet-700 border-violet-200">
                 HR · Not Scored
               </span>

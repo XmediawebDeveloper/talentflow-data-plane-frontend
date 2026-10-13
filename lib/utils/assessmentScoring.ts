@@ -12,6 +12,8 @@
  * - Final PASS/FAIL uses only Technical + Coding scores
  */
 
+import { toOneDecimalScore } from '@/lib/utils/score';
+
 export interface QuestionScore {
   questionId: string;
   question: string;
@@ -89,7 +91,10 @@ export function evaluateSection(questions: QuestionScore[]): SectionScoreResult 
     questions,
     totalQuestions,
     questionsPassingThreshold,
-    averageScore: Math.round(averageScore * 10) / 10, // Round to 1 decimal
+    // One decimal, TRUNCATED - the same rule as `toOneDecimalScore`
+    // (lib/utils/score.ts). `isPassing` above still uses the full-precision
+    // average, so display precision cannot move a pass/fail.
+    averageScore: toOneDecimalScore(averageScore),
     isPassing: isEvaluated ? isPassing : false,
     isEvaluated,
   };

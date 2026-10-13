@@ -46,7 +46,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu';
-import { SortByControl } from '@/components/ui/select-all-menu';
+import { SelectAllMenu, SortByControl } from '@/components/ui/select-all-menu';
 
 /* Action menu item styling — cloned from the Job Openings page's three-dot
    menu (JobsListing.tsx: gray-700 text, hover:bg-gray-50, px-4/py-2.5 rows,
@@ -419,6 +419,12 @@ interface ScoredResumesTableProps {
    */
   toolbarPortal?: HTMLElement | null;
   /**
+   * How a candidate's name is displayed (e.g. Job Details shows first names
+   * only — `formatCandidateFirstName`). Omitted: the name as stored. Same
+   * optional prop AssessmentResults / AIInterviewResults take.
+   */
+  formatCandidateName?: (name: string) => string;
+  /**
    * Table column ids to leave out (see TABLE_COLUMNS) — for a host that
    * already shows them around the table, e.g. AI Talent Match's per-candidate
    * score table, whose row above names the candidate and the job.
@@ -617,7 +623,9 @@ export default function ScoredResumesTable({
   hideSelectionBar = false,
   toolbarPortal,
   hiddenColumnIds,
+  formatCandidateName,
 }: ScoredResumesTableProps) {
+  const showName = (name: string) => (formatCandidateName ? formatCandidateName(name) : name);
   /* Embedded in the Job Details tabs (the toolbar portals into that card's
      slot). When so, the toolbar controls switch to the 36px / tinted-pill
      chrome of the AI Talent Match reference; the standalone Resume Scoring
@@ -1515,10 +1523,10 @@ Best regards`);
               onClick={() => onViewCandidate(resume)}
               className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors"
             >
-              {resume.candidateName}
+              {showName(resume.candidateName)}
             </button>
           ) : (
-            <div className="text-sm text-gray-900">{resume.candidateName}</div>
+            <div className="text-sm text-gray-900">{showName(resume.candidateName)}</div>
           )}
           {/* "Candidate" is name WITH mail — the email rides under the name
               instead of taking a column of its own. */}
@@ -2079,10 +2087,12 @@ Best regards`);
           // More Filters, Reset, Sort by, List / Grid. In Job Details the
           // controls keep the AI Talent Match row's 12px gap from the search.
           controlsFollowSearch={!toolbarPortal}
-          /* Select All — at the very start of the toolbar row, matching the AI
-             Talent Match reference (it used to sit in its own strip below). */
+          /* Select All — embedded in Job Details, at the very start of the
+             toolbar row, matching the AI Talent Match reference. Standalone
+             Resume Scoring keeps it leading row 2 instead (see below), the
+             same place View by Job has it, so both views' toolbars match. */
           beforeSearch={
-            filteredResumes.length > 0
+            embedded && filteredResumes.length > 0
               ? (
                 <>
                   {(() => {
@@ -2135,9 +2145,10 @@ Best regards`);
                 searchPlaceholder="Search recruiter..."
                 ariaLabel="Filter by recruiter"
               />
-              {/* Sort by — ahead of More Filters, matching the AI Talent Match
-                  reference's control order. */}
-              {filteredResumes.length > 0 && (
+              {/* Sort by — embedded: ahead of More Filters, matching the AI
+                  Talent Match reference's control order. Standalone: after
+                  More Filters (the toolbar's children), as View by Job. */}
+              {embedded && filteredResumes.length > 0 && (
                 <SortByControl<SortKey>
                   value={sortBy}
                   order={sortOrder}
@@ -2149,13 +2160,28 @@ Best regards`);
             </>
           }
           /* List / Grid pinned to the far right, as on the AI Talent Match tab. */
-          trailing={<ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-9" />}
+          trailing={embedded ? <ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-9" /> : undefined}
           /* 36px control band like the AI Talent Match tab (its More Filters is h-9). */
           compactButtons={!!toolbarPortal}
           /* Standalone the gap comes from the block's space-y; in Job Details
              the row keeps ListToolbar's own `mb-3`, as on AI Talent Match. */
           className={toolbarPortal ? undefined : 'mb-0'}
-        />
+        >
+          {/* Standalone: Sort by, then List / Grid, after More Filters — the
+              same order and sizes as View by Job's toolbar row. */}
+          {!embedded && filteredResumes.length > 0 && (
+            <SortByControl<SortKey>
+              value={sortBy}
+              order={sortOrder}
+              options={isGrouped ? GROUPED_SORT_OPTIONS : FLAT_SORT_OPTIONS}
+              onChange={setSortBy}
+              onToggleOrder={() => setSortOrder((o) => (o === 'asc' ? 'desc' : 'asc'))}
+            />
+          )}
+          {!embedded && (
+            <ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-[38px] !border-brand-blue/10" />
+          )}
+        </ListToolbar>
 
         {/* Advanced Filters */}
         {showFilters && (
@@ -2275,8 +2301,36 @@ Best regards`);
         {/* Row 2: the host's verdict pills and View by toggle. Select All now
             rides the toolbar row above (beforeSearch), matching the AI Talent
             Match reference; this row renders only when it still has content. */}
-        {(viewPillsSlot || (isGrouped && paginatedGroups.length > 0)) && (
+        {(viewPillsSlot || (isGrouped && paginatedGroups.length > 0) || (!embedded && filteredResumes.length > 0)) && (
         <div className="mt-3 pt-3 border-t border-gray-200 dark:border-slate-700/60 flex flex-wrap items-center gap-2">
+          {/* Standalone: Select All leads this row, then a divider and the
+              verdict pills — exactly View by Job's row 2. */}
+          {!embedded && filteredResumes.length > 0 && (() => {
+            const pageRows = isGrouped ? paginatedGroups.flatMap((g) => g.rows) : paginatedResumes;
+            const selectedCount = isGrouped
+              ? new Set(effectiveSelectedRows.map(candidateGroupKey)).size
+              : effectiveSelectedRows.length;
+            return (
+              <>
+                <SelectAllMenu
+                  selectedCount={selectedCount}
+                  pageCount={isGrouped ? paginatedGroups.length : paginatedResumes.length}
+                  totalCount={isGrouped ? candidateGroups.length : filteredResumes.length}
+                  noun={isGrouped ? 'candidates' : 'resumes'}
+                  allSelected={allVisibleSelected}
+                  onSelectPage={() => {
+                    const ids = Array.from(new Set([...effectiveSelectedRows.map((r) => r.id), ...pageRows.map((r) => r.id)]));
+                    selectExactly(ids);
+                  }}
+                  onSelectAll={() => selectExactly(filteredResumes.map((r) => r.id))}
+                  onClear={clearSelection}
+                />
+                {viewPillsSlot && (
+                  <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
+                )}
+              </>
+            );
+          })()}
           {viewPillsSlot}
           {/* Expand all / Collapse all — every candidate on this page. */}
           {isGrouped && paginatedGroups.length > 0 && (() => {
@@ -2302,9 +2356,15 @@ Best regards`);
         </div>
         )}
 
-        {/* Actions now rides the toolbar row beside Select All (see
-            beforeSearch), matching the AI Talent Match reference — no separate
-            Actions row below the toolbar. */}
+        {/* Actions — embedded: in the toolbar row beside Select All (see
+            beforeSearch), matching the AI Talent Match reference. Standalone:
+            on a line of its own under Select All once rows are ticked, as
+            View by Job shows it. */}
+        {!embedded && selectionActions && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+            {selectionActions}
+          </div>
+        )}
 
         </div>
         );
@@ -2375,10 +2435,10 @@ Best regards`);
                               onClick={(e) => { e.stopPropagation(); onViewCandidate(resume); }}
                               className="block max-w-full truncate text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors"
                             >
-                              {resume.candidateName || 'Candidate'}
+                              {showName(resume.candidateName) || 'Candidate'}
                             </button>
                           ) : (
-                            <p className="text-sm font-medium text-gray-900 truncate">{resume.candidateName || 'Candidate'}</p>
+                            <p className="text-sm font-medium text-gray-900 truncate">{showName(resume.candidateName) || 'Candidate'}</p>
                           )}
                           <p className="text-xs text-gray-500 truncate" title={resume.email || undefined}>{resume.email || '—'}</p>
                         </div>
@@ -2410,7 +2470,7 @@ Best regards`);
                   {/* No initials avatar — there is no profile photo behind it. */}
                   <div className="flex items-start gap-2.5">
                     <div className="min-w-0 flex-1">
-                      <p className="font-medium text-gray-900 truncate">{resume.candidateName || 'Candidate'}</p>
+                      <p className="font-medium text-gray-900 truncate">{showName(resume.candidateName) || 'Candidate'}</p>
                       <p className="text-xs text-gray-500 truncate">{resume.email || '—'}</p>
                     </div>
                   </div>
@@ -3087,7 +3147,7 @@ Best regards`);
                   )}
                 </button>
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-gray-900 mb-1 break-words">{resume.candidateName}</h3>
+                  <h3 className="text-gray-900 mb-1 break-words">{showName(resume.candidateName)}</h3>
                   {/* Show job title in global view */}
                   {isGlobalView && resume.jobTitle && (
                     <div className="text-xs text-gray-500 mb-1 truncate">

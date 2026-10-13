@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Calendar, Clock, Eye, Info, Layers, Mail, Star, Timer, User, Video } from 'lucide-react';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
+import { VersionPill } from '@/components/assessments/AllAssessmentsTable';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { modeFromConfig } from '@/lib/constants/aiInterviewMode';
 import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
@@ -32,24 +33,44 @@ export function jobInterviewConfigs(configs: AIInterviewResponse[], jobId: strin
     .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
 }
 
-/**
- * The interview picker for an invite that already knows its job (a candidate
- * opened from that job's AI Talent Match results): one card per interview
- * version of THAT job — radio, "Job V · Interview V", Latest tag, date,
- * rounds, duration, invitations — with its status. Only Active versions are
- * listed: drafts and archived ones can't take an invite.
- */
-/** The version the cards tag "Latest": the job's newest Active interview —
+/** The cards actually listed, newest first — the Invite to Assessment cards'
+ *  rule: the ACTIVE interviews of the matched job version (the `jobId` JD
+ *  row) when it has any, else the job's other versions' active ones.
+ *  Interview version numbers restart per job version, so listing every job
+ *  version's interviews together showed several "V1" cards that read as
+ *  duplicates. */
+function listedJobInterviewConfigs(configs: AIInterviewResponse[], jobId: string): AIInterviewResponse[] {
+  const active = jobInterviewConfigs(configs, jobId).filter((c) => normalizeStatus(c.status) === 'published');
+  const ofMatchedVersion = active.filter((c) => c.jd_id === jobId);
+  return ofMatchedVersion.length > 0 ? ofMatchedVersion : active;
+}
+
+/** The version the cards tag "Latest": the newest listed Active interview —
  *  what a host pre-selects (and, with a single version, the only choice). */
 export function latestActiveInterviewConfig(configs: AIInterviewResponse[], jobId: string): AIInterviewResponse | undefined {
-  return jobInterviewConfigs(configs, jobId).find((c) => normalizeStatus(c.status) === 'published');
+  return listedJobInterviewConfigs(configs, jobId)[0];
 }
+
+/**
+ * The interview picker for an invite that already knows its job (candidates
+ * opened from that job's Job Details or AI Talent Match results) — the
+ * Invite to Assessment dialog's JobAssessmentVersionPicker, card for card:
+ * one card per active interview version of THAT job with its pick control,
+ * the interview's name (its position / job title) with its version pills and
+ * Latest tag, then date, mode, rounds, duration, invitations sent and
+ * creator, its status and a preview.
+ */
 
 export default function JobInterviewVersionPicker({
   configs,
   jobId,
   selection,
   onSelectionChange,
+  multiple = false,
+  selectedIds,
+  onSelectedIdsChange,
+  jobVersionNumber,
+  onlyConfigId,
 }: {
   /** Every config the host loaded, any status — numbering needs them all. */
   configs: AIInterviewResponse[];
@@ -57,25 +78,46 @@ export default function JobInterviewVersionPicker({
   jobId: string;
   selection: AIInterviewPickerSelection | null;
   onSelectionChange: (selection: AIInterviewPickerSelection | null) => void;
+  /** Opt-in multi-select (the Job Details invite, as the assessment cards'
+   *  `multiple`): a card click adds / removes it from `selectedIds` instead
+   *  of replacing `selection`. */
+  multiple?: boolean;
+  selectedIds?: string[];
+  onSelectedIdsChange?: (ids: string[]) => void;
+  /** That JD row's own job version, when the host knows it (Job Details) —
+   *  heads the list instead of a config's `jd_version` snapshot, as the
+   *  assessment cards do. */
+  jobVersionNumber?: number;
+  /** Given (Job Details), the cards are just this interview — the job
+   *  version's mapped one; null lists none. Omitted, the usual rule. */
+  onlyConfigId?: string | null;
 }) {
   const [previewId, setPreviewId] = useState<string | null>(null);
   const allVersions = jobInterviewConfigs(configs, jobId);
-  // Only Active versions — the ones an invite can actually go out on.
-  const versions = allVersions.filter((c) => normalizeStatus(c.status) === 'published');
+  // Only Active versions — the ones an invite can actually go out on — of the
+  // matched job version first (see listedJobInterviewConfigs).
+  const versions = onlyConfigId === undefined
+    ? listedJobInterviewConfigs(configs, jobId)
+    : configs.filter((c) => c.id === onlyConfigId);
+  /* Only when the matched job version has none are the job's other versions
+     listed — each card then names its own job version. */
+  const spansJobVersions = new Set(versions.map((c) => c.jd_id)).size > 1;
   const latestActiveId = versions[0]?.id;
   // The job version the candidate was matched against — a config on that
   // exact JD row — else the newest one known for the job.
-  const job = allVersions.find((c) => c.jd_id === jobId) ?? allVersions[0];
+  const job = allVersions.find((c) => c.jd_id === jobId) ?? versions[0] ?? allVersions[0];
 
   return (
     <div>
       <div className="flex items-center gap-2 flex-wrap mb-3">
-        <span className="text-sm font-semibold text-gray-900 dark:text-slate-100">Select Interview Version</span>
+        <span className="text-sm font-semibold text-gray-900 dark:text-slate-100">
+          {multiple ? 'Select Interview Versions' : 'Select Interview Version'}
+        </span>
         {job?.jd_short_id && <JobIdBadge>{job.jd_short_id}</JobIdBadge>}
-        {job && <span className="text-sm text-gray-600 dark:text-slate-400 truncate">{job.jd_title || job.position}</span>}
-        {job && (
+        {job && (job.jd_title || job.position) && <span className="min-w-0 text-sm text-gray-600 dark:text-slate-400 truncate">{job.jd_title || job.position}</span>}
+        {job && !spansJobVersions && (
           <span className="text-xs font-semibold px-1.5 py-0.5 rounded-md bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20" title="Job version">
-            Job V{job.jd_version ?? 1}
+            V{jobVersionNumber ?? job.jd_version ?? 1}
           </span>
         )}
       </div>
@@ -93,29 +135,34 @@ export default function JobInterviewVersionPicker({
           </div>
         </div>
       ) : (
-        <div className="space-y-2.5" role="radiogroup" aria-label="Interview versions">
+        <div className="space-y-2.5" role={multiple ? 'group' : 'radiogroup'} aria-label="Interview versions">
           {versions.map((c) => {
             const status = normalizeStatus(c.status);
             const pill = STATUS_PILL[status] ?? { label: status, className: STATUS_PILL.cancelled.className };
             const selectable = status === 'published';
-            const isSelected = selection?.interviewId === c.id;
+            const isSelected = multiple ? (selectedIds ?? []).includes(c.id) : selection?.interviewId === c.id;
             const ivNum = interviewVersionOrdinal(c, configs);
             const rounds = (c.rounds_config || []).filter((r) => r.enabled !== false);
             const isFlexible = modeFromConfig(c.special_instructions, c.duration_minutes) === 'flexible';
             const pick = () => {
               if (!selectable) return;
+              if (multiple) {
+                const ids = selectedIds ?? [];
+                onSelectedIdsChange?.(isSelected ? ids.filter((id) => id !== c.id) : [...ids, c.id]);
+                return;
+              }
               onSelectionChange(isSelected ? null : { jobKey: c.id, jdId: c.jd_id, interviewId: c.id });
             };
             return (
               <div
                 key={c.id}
-                role="radio"
+                role={multiple ? 'checkbox' : 'radio'}
                 aria-checked={isSelected}
                 aria-disabled={!selectable}
                 tabIndex={selectable ? 0 : -1}
                 onClick={pick}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } }}
-                className={`flex items-center gap-4 rounded-xl border px-4 py-3.5 transition-colors ${
+                className={`flex items-center gap-3 sm:gap-4 rounded-xl border px-3 sm:px-4 py-3.5 transition-colors ${
                   isSelected
                     ? 'border-brand-blue/50 bg-brand-blue/[0.06] ring-1 ring-brand-blue/30'
                     : selectable
@@ -123,35 +170,44 @@ export default function JobInterviewVersionPicker({
                       : 'border-gray-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 opacity-70 cursor-not-allowed'
                 }`}
               >
-                {/* A native radio in the AI Talent Match results table's
+                {/* A native checkbox in the AI Talent Match results table's
                     checkbox chrome (`border-gray-300`). Display only: the card
                     is the control (role / aria-checked / keyboard above).
-                    `m-0`: a radio's default margin is uneven (none below), which
+                    `m-0`: the box's default margin is uneven (none below), which
                     sat it off the card's centre line.
 
-                    Level with the TITLE line (Interview + version pill), not
+                    Level with the TITLE line (name + version pills), not
                     with the card's middle — the Invite to Assessment cards'
                     fix: a wrapper one title line tall (`h-6`, the title row's
                     `min-h-6` below), pinned to the top of the text column. */}
                 <span className="self-start h-6 flex items-center shrink-0">
                   <input
-                    type="radio"
+                    type="checkbox"
                     checked={isSelected}
                     readOnly
                     tabIndex={-1}
                     aria-hidden="true"
-                    className="m-0 border-gray-300 pointer-events-none"
+                    className="rounded m-0 border-gray-300 pointer-events-none"
                   />
                 </span>
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap min-h-6">
-                    <span className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">Interview</span>
-                    {/* Interview version as a badge — the cyan interview-version
-                        pill used across the AI Interview tables. */}
-                    <span className="inline-flex items-center justify-center min-w-[2.25rem] px-1.5 py-0.5 rounded-md text-xs font-semibold tabular-nums ring-1 text-brand-cyan bg-brand-cyan/10 ring-brand-cyan/20">
-                      V{ivNum}
+                    {/* The interview's own name — the position / job title it
+                        was configured for (an interview config has no title
+                        of its own) — as the assessment cards lead with the
+                        assessment's name; the pills carry the versions. */}
+                    <span
+                      className="min-w-0 text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 [overflow-wrap:anywhere]"
+                      title={c.display_id ? `${c.position || c.jd_title || 'AI Interview'} (${c.display_id})` : undefined}
+                    >
+                      {c.position || c.jd_title || 'AI Interview'}
                     </span>
+                    {/* Its own job version, only when the cards span several —
+                        the pair is what tells two "V1"s apart. */}
+                    {spansJobVersions && c.jd_version ? <VersionPill kind="job" version={c.jd_version} /> : null}
+                    {/* The cyan version pill the assessment cards use. */}
+                    <VersionPill kind="assessment" version={ivNum} />
                     {c.id === latestActiveId && (
                       <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md bg-brand-blue/10 text-brand-blue">
                         <Star className="w-3 h-3 fill-current" /> Latest
@@ -186,7 +242,7 @@ export default function JobInterviewVersionPicker({
                     )}
                     <span className="inline-flex items-center gap-1"><Mail className="w-3.5 h-3.5" />{c.invitations_count ?? 0} sent</span>
                     {c.created_by_name && (
-                      <span className="inline-flex items-center gap-1"><User className="w-3.5 h-3.5" />Created by {c.created_by_name}</span>
+                      <span className="inline-flex items-center gap-1 min-w-0"><User className="w-3.5 h-3.5 shrink-0" /><span className="truncate">Created by {c.created_by_name}</span></span>
                     )}
                   </div>
                 </div>
@@ -210,9 +266,17 @@ export default function JobInterviewVersionPicker({
       {versions.length > 0 && (
         <div className="mt-4 flex items-start gap-3 rounded-xl bg-brand-blue/5 border border-gray-200 dark:border-slate-700 px-4 py-3">
           <Info className="w-5 h-5 text-brand-blue shrink-0 mt-0.5" />
-          <div className="text-sm">
-            <div className="font-medium text-gray-900 dark:text-slate-100">You&apos;re about to use this interview version to invite candidates.</div>
-            <div className="text-xs text-gray-600 dark:text-slate-400 mt-0.5">Once selected, this version will be used for the candidate invitation.</div>
+          <div className="text-sm min-w-0">
+            <div className="font-medium text-gray-900 dark:text-slate-100">
+              {multiple
+                ? 'You’re about to use the selected interview versions to invite candidates.'
+                : 'You’re about to use this interview version to invite candidates.'}
+            </div>
+            <div className="text-xs text-gray-600 dark:text-slate-400 mt-0.5">
+              {multiple
+                ? 'Each candidate you invite receives every interview version you select.'
+                : 'Once selected, this version will be used for the candidate invitation.'}
+            </div>
           </div>
         </div>
       )}

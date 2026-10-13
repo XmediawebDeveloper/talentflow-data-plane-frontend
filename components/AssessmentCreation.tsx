@@ -23,7 +23,7 @@ import JDVersionHistoryModal from '@/components/JDVersionHistoryModal';
 import UnsavedChangesModal from '@/components/UnsavedChangesModal';
 import JDFullViewModal from '@/components/jobs/JDFullViewModal';
 import CodingRoundLanguageModal from '@/components/assessments/CodingRoundLanguageModal';
-import LanguageLogo from '@/components/assessments/LanguageLogo';
+import LanguageLogo, { logoLabelForId } from '@/components/assessments/LanguageLogo';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import DraftAssessmentExistsModal, { type ExistingDraftAssessment } from '@/components/assessments/DraftAssessmentExistsModal';
 import { loadJobAssessmentHierarchy } from '@/lib/utils/jobAssessmentHierarchy';
@@ -671,6 +671,9 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
   // the JD crumb would render a placeholder on first paint and visibly swap to
   // the real title a moment later.
   const urlJdTitle = searchParams.get('jd_title');
+  // `op=create`: the `edit` id is a version Job Details' Create Assessment has
+  // just made (a draft copy), so the job trail says Create, not Edit.
+  const urlCreatesVersion = !embedded && searchParams.get('op') === 'create';
 
   /* The publish step only reports an assessment published in this session — it
      holds nothing of its own to rebuild. A reload lands back on
@@ -988,7 +991,12 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
         // urlJdTitle before the fetched title: identical text, but available on
         // the very first paint, so the crumb never changes under the user.
         { label: urlJdTitle || selectedJob?.title || 'Job Details', href: returnUrl || `/recruitment/job-details?id=${encodeURIComponent(jdId)}` },
-        ...buildStepCrumbs(),
+        /* The leaf is the operation — Edit on an existing assessment, Create
+           on a new one (`op=create` marks a version just created as a draft
+           copy) — and, once published, the assessment itself. */
+        ...(step === 'publish' || step === 'preview'
+          ? buildStepCrumbs()
+          : [{ label: editAssessmentId && !urlCreatesVersion ? 'Edit' : 'Create' }]),
       ];
     }
     return [
@@ -5391,8 +5399,10 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
         {showCodingConfirm && codingPopupMode === 'disable' && (
           <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6">
             <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-w-[95vw] sm:max-w-md w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
-              {/* Header */}
-              <div className="flex-shrink-0 bg-destructive-subtle border-b border-destructive-line px-4 sm:px-6 py-3 sm:py-4 rounded-t-xl">
+              {/* Header — a lighter wash than the icon tile (originally
+                  red-50 under a red-100 tile), so the tile and its Code mark
+                  read as an icon rather than melting into the header. */}
+              <div className="flex-shrink-0 bg-destructive-subtle/50 border-b border-destructive-line px-4 sm:px-6 py-3 sm:py-4 rounded-t-xl">
                 <div className="flex items-center gap-2 sm:gap-3">
                   <div className="w-8 h-8 sm:w-10 sm:h-10 bg-destructive-subtle rounded-xl flex items-center justify-center flex-shrink-0">
                     <Code className="w-4 h-4 sm:w-5 sm:h-5 text-destructive" />
@@ -5415,7 +5425,9 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {selectedCodingLanguages.map(lang => (
-                    <span key={lang} className="px-3 py-1.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded-full text-sm">
+                    <span key={lang} className="inline-flex items-center gap-1.5 pl-2 pr-3 py-1.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded-full text-sm">
+                      {/* Each language's own mark, as on the Coding round card's chips. */}
+                      <LanguageLogo language={logoLabelForId(lang, lang)} size="sm" />
                       {lang}
                     </span>
                   ))}
