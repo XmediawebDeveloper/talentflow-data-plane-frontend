@@ -833,7 +833,7 @@ export default function StepIdentity({
           <div className="p-4 sm:p-6 space-y-5 min-w-0 flex-1">
             <div className="flex items-center gap-2 bg-warning-subtle text-warning-strong text-sm font-medium rounded-lg px-4 py-3">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
-              This is the name provided in your invitation. If it needs to be corrected, contact your recruiter.
+              This is the name provided in your invitation.
             </div>
 
             <div>
