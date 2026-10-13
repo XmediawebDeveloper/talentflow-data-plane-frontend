@@ -195,6 +195,13 @@ export default function GlobalScoringProgressIndicator() {
           setShowGlobalModal(false);
           setMinimized(true);
         }}
+        // Same tab: this popup's run lives in context, so leaving the page
+        // loses nothing — it shrinks to the corner widget and carries on.
+        onOpenResume={(resumeId) => {
+          setShowGlobalModal(false);
+          setMinimized(true);
+          router.push(`/recruitment/resume-view/${resumeId}`);
+        }}
       />
     );
   }

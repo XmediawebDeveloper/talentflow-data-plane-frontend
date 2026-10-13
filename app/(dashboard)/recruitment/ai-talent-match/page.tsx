@@ -9,9 +9,9 @@ import FeatureGate from '@/components/shared/FeatureGate';
 import { Skeleton } from '@/components/ui/skeleton';
 
 // Neutral-gray skeleton mirroring the AI Talent Match landing as it is now —
-// the stat cards are off (SHOW_STAT_CARDS), so it opens straight on View by
-// Job — so there is no layout jump when AITalentMatchPage takes over:
-//   breadcrumb bar · header (icon, title, Run AI Match)
+// View by Job under the 4 stat cards — so there is no layout jump when
+// AITalentMatchPage takes over:
+//   breadcrumb bar · header (icon, title, Run AI Match) · 4 stat cards
 //   one card: row 1 search + Location + Industry + More Filters + Sort by + List/Grid,
 //             row 2 Select All | All + 3 rating pills | View by toggle … Expand all,
 //             then the job cards (tick, JD badge, title, version, history;
@@ -38,6 +38,25 @@ function AITalentMatchSkeleton() {
               </div>
               <Skeleton className="h-9 w-full sm:w-36 rounded-lg shrink-0" />
             </div>
+          </div>
+
+          {/* Stat cards — 4-up grid (matches StatsCardGrid, as on Job Openings) */}
+          <div className="mb-4 sm:mb-5 grid gap-2.5 sm:gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="rounded-xl border border-gray-200 dark:border-slate-700/60 bg-white dark:bg-slate-900 px-3.5 py-3.5 sm:px-4 sm:py-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-2.5">
+                    <Skeleton className="h-9 w-9 shrink-0 rounded-lg" />
+                    <div className="space-y-2 pt-0.5">
+                      <Skeleton className="h-3.5 w-24" />
+                      <Skeleton className="h-6 w-12" />
+                    </div>
+                  </div>
+                  <Skeleton className="h-7 w-7 shrink-0 rounded-lg" />
+                </div>
+                <Skeleton className="mt-3 h-5 w-20 rounded-full" />
+              </div>
+            ))}
           </div>
 
           <div className="rounded-lg border border-gray-200 dark:border-slate-700/60 p-4 sm:p-6">

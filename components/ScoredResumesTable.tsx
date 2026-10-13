@@ -110,6 +110,17 @@ export const FILTER_LABEL_CLASS = 'block text-sm text-gray-700 mb-1 truncate';
 export const FILTER_CONTROL_CLASS =
   'w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white';
 
+/* Job Details' More Filters panel — the AI Talent Match tab's own layout,
+   copied class for class, which the Score Resume, Assessment Result and AI
+   Interview Result tabs use when embedded there: a 1 / 2 / 4-column grid
+   (each field one cell), medium labels and 36px brand-blue inputs. Standalone
+   pages keep the FILTER_* row above. */
+export const JOB_TAB_FILTER_GRID_CLASS = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 [&>div]:min-w-0';
+export const JOB_TAB_FILTER_FIELD_CLASS = 'min-w-0';
+export const JOB_TAB_FILTER_LABEL_CLASS = 'block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium';
+export const JOB_TAB_FILTER_CONTROL_CLASS =
+  'w-full h-9 px-3 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue hover:border-brand-blue/40 transition-colors text-sm text-black dark:text-slate-50 placeholder:text-gray-400 dark:placeholder:text-slate-500 bg-white dark:bg-slate-900';
+
 /* The table's columns — FIXED, in this order (Actions follows as its own
    sticky column). No per-user customization: every recruiter sees the same
    table. "Candidate" carries the email under the name rather than spending a
@@ -427,17 +438,29 @@ interface ScoredResumesTableProps {
    */
   toolbarPortal?: HTMLElement | null;
   /**
-   * How a candidate's name is displayed (e.g. Job Details shows first names
-   * only — `formatCandidateFirstName`). Omitted: the name as stored. Same
-   * optional prop AssessmentResults / AIInterviewResults take.
-   */
-  formatCandidateName?: (name: string) => string;
-  /**
    * Table column ids to leave out (see TABLE_COLUMNS) — for a host that
    * already shows them around the table, e.g. AI Talent Match's per-candidate
    * score table, whose row above names the candidate and the job.
    */
   hiddenColumnIds?: string[];
+  /**
+   * List / Grid, controlled by the host. The table unmounts while a detail
+   * page is open, so its own state reset to List on Back — a host that wants
+   * the choice kept owns (and persists) it here. Uncontrolled when omitted.
+   */
+  displayMode?: ListDisplayMode;
+  onDisplayModeChange?: (mode: ListDisplayMode) => void;
+  /**
+   * View by Candidates under a verdict filter: the host hands the FILTERED
+   * rows as `resumes` (who is listed) and every row here (what each one's
+   * Exact / Partial / No Match counts read). Without it the counts came from
+   * the filtered rows, so under "No Match" every candidate read Exact 0 /
+   * Partial 0 whatever they really had — unlike View by Job, whose badges
+   * count every score and grey the verdicts outside the filter.
+   */
+  verdictCountRows?: ScoredResume[];
+  /** The verdict filter in force: the other two counts are shown muted. */
+  activeVerdict?: 'Exact Match' | 'Partial Match' | 'No Match' | null;
   /** Opt-in: how a candidate's name is SHOWN (Job Details: first name
    *  capitalised). Display only — search, sort, filters and exports keep the
    *  name as it is; other hosts leave it unset. */
@@ -640,6 +663,11 @@ export default function ScoredResumesTable({
   toolbarPortal,
   hiddenColumnIds,
   formatCandidateName,
+  onOpenInviteDialog,
+  verdictCountRows,
+  activeVerdict = null,
+  displayMode: controlledDisplayMode,
+  onDisplayModeChange,
 }: ScoredResumesTableProps) {
   const showName = (name: string) => (formatCandidateName ? formatCandidateName(name) : name);
   /* Embedded in the Job Details tabs (the toolbar portals into that card's
@@ -874,7 +902,12 @@ Best regards`);
       // No-op when using external control
     } : setInternalSelectedResumes;
   const [showFilters, setShowFilters] = useState(false);
-  const [displayMode, setDisplayMode] = useState<ListDisplayMode>('list');
+  const [internalDisplayMode, setInternalDisplayMode] = useState<ListDisplayMode>('list');
+  const displayMode = controlledDisplayMode ?? internalDisplayMode;
+  const setDisplayMode = (mode: ListDisplayMode) => {
+    setInternalDisplayMode(mode);
+    onDisplayModeChange?.(mode);
+  };
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteCandidate, setInviteCandidate] = useState<ScoredResume | null>(null);
 
@@ -1087,8 +1120,27 @@ Best regards`);
       },
       { exact: 0, partial: 0, none: 0 },
     );
+  /* A candidate's counts across ALL their scores (verdictCountRows), keyed
+     like the groups; falls back to the listed rows when the host gives none. */
+  const fullTallyByCandidate = useMemo(() => {
+    if (!verdictCountRows) return null;
+    const byKey = new Map<string, ScoredResume[]>();
+    verdictCountRows.forEach((r) => {
+      const k = candidateGroupKey(r);
+      const list = byKey.get(k);
+      if (list) list.push(r);
+      else byKey.set(k, [r]);
+    });
+    return new Map(Array.from(byKey.entries()).map(([k, rows]) => [k, tallyVerdicts(rows)]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [verdictCountRows]);
+  const groupTally = (rows: ScoredResume[]) =>
+    (rows.length > 0 && fullTallyByCandidate?.get(candidateGroupKey(rows[0]))) || tallyVerdicts(rows);
+  const VERDICT_OF_KIND = { exact: 'Exact Match', partial: 'Partial Match', none: 'No Match' } as const;
   /* One count, in its verdict's colours (the same chips View by Job's rows
-     use). A zero is shown muted rather than hidden, so the columns line up. */
+     use). A zero is shown muted rather than hidden, so the columns line up;
+     under a verdict filter the OTHER verdicts are muted too (count kept),
+     as View by Job's badges are. */
   const VERDICT_COUNT_CLASS = {
     exact: 'bg-success-subtle text-success border-success/20',
     partial: 'bg-warning-subtle text-warning border-warning/20',
@@ -1097,7 +1149,9 @@ Best regards`);
   const renderVerdictCount = (kind: keyof typeof VERDICT_COUNT_CLASS, count: number, label?: string) => (
     <span
       className={`inline-flex items-center justify-center gap-1 min-w-[2rem] px-2 py-0.5 rounded-full text-xs font-semibold tabular-nums border ${
-        count > 0 ? VERDICT_COUNT_CLASS[kind] : 'bg-gray-50 text-gray-400 border-gray-200'
+        activeVerdict && VERDICT_OF_KIND[kind] !== activeVerdict
+          ? 'bg-gray-50 text-gray-400 border-gray-200 opacity-60'
+          : count > 0 ? VERDICT_COUNT_CLASS[kind] : 'bg-gray-50 text-gray-400 border-gray-200'
       }`}
     >
       {label && <span className="font-medium">{label}</span>}
@@ -1191,9 +1245,9 @@ Best regards`);
       switch (sortBy) {
         case 'name': return (rows[0].candidateName || '').toLowerCase();
         case 'versions': return rows.length;
-        case 'exact': return tallyVerdicts(rows).exact;
-        case 'partial': return tallyVerdicts(rows).partial;
-        case 'none': return tallyVerdicts(rows).none;
+        case 'exact': return groupTally(rows).exact;
+        case 'partial': return groupTally(rows).partial;
+        case 'none': return groupTally(rows).none;
         default: return dateOf(rows[0]);
       }
     };
@@ -2256,18 +2310,18 @@ Best regards`);
                 fit on a row — and `grow` shares out whatever the row has left,
                 so a row is always filled edge to edge. `max-w` keeps a short
                 final row from stretching two fields across the whole panel. */}
-            <div className="flex flex-wrap gap-4">
+            <div className={embedded ? JOB_TAB_FILTER_GRID_CLASS : 'flex flex-wrap gap-4'}>
               {/* 1. Match Status — dropped when the list is already one
                   verdict; see `hideMatchStatusFilter`. The only conditional
                   field in this panel, and it turns on a host's explicit
                   statement about its own rows rather than on the data. */}
               {!hideMatchStatusFilter && (
-                <div className={FILTER_FIELD_CLASS}>
-                  <label className={FILTER_LABEL_CLASS}>Match Status</label>
+                <div className={embedded ? JOB_TAB_FILTER_FIELD_CLASS : FILTER_FIELD_CLASS}>
+                  <label className={embedded ? JOB_TAB_FILTER_LABEL_CLASS : FILTER_LABEL_CLASS}>Match Status</label>
                   <select
                     value={filterMatchStatus}
                     onChange={(e) => search.setFilter('matchStatus', e.target.value as typeof filterMatchStatus)}
-                    className={FILTER_CONTROL_CLASS}
+                    className={embedded ? JOB_TAB_FILTER_CONTROL_CLASS : FILTER_CONTROL_CLASS}
                   >
                     <option value="all">All Statuses</option>
                     <option value="Exact Match">Exact Match</option>
@@ -2280,8 +2334,8 @@ Best regards`);
               {/* 2. Score Range — two inputs sharing ONE field, so the pair
                   reads as a single filter rather than two. Widened to take up
                   the first row's leftover space; see FILTER_FIELD_WIDE_CLASS. */}
-              <div className={FILTER_FIELD_WIDE_CLASS}>
-                <label className={FILTER_LABEL_CLASS}>Score Range (0.0 – 10.0)</label>
+              <div className={embedded ? JOB_TAB_FILTER_FIELD_CLASS : FILTER_FIELD_WIDE_CLASS}>
+                <label className={embedded ? JOB_TAB_FILTER_LABEL_CLASS : FILTER_LABEL_CLASS}>Score Range (0.0 – 10.0)</label>
                 {/* The 0.0–10.0 scale the Score column prints, not the 0–100
                     percentage underneath it. */}
                 <div className="flex gap-2">
@@ -2293,14 +2347,14 @@ Best regards`);
                     /* min-w-0 so a flex child can shrink below its intrinsic
                        width — a number input's default is wider than half of
                        this field, and without it the pair overflows. */
-                    className={`${FILTER_CONTROL_CLASS} min-w-0`}
+                    className={`${embedded ? JOB_TAB_FILTER_CONTROL_CLASS : FILTER_CONTROL_CLASS} min-w-0`}
                   />
                   <ScoreBoundInput
                     value={filterScoreMax}
                     onChange={(v) => search.setFilter('scoreMax', v)}
                     placeholder="10.0"
                     ariaLabel="Maximum score"
-                    className={`${FILTER_CONTROL_CLASS} min-w-0`}
+                    className={`${embedded ? JOB_TAB_FILTER_CONTROL_CLASS : FILTER_CONTROL_CLASS} min-w-0`}
                   />
                 </div>
               </div>
@@ -2317,8 +2371,8 @@ Best regards`);
                   cannot learn, and it left a hole in the row beside a Job Title
                   that did render. `Scored By` has always shown even with a
                   single recruiter; these now match it. */}
-              <div className={FILTER_FIELD_CLASS}>
-                <label className={FILTER_LABEL_CLASS}>Job ID</label>
+              <div className={embedded ? JOB_TAB_FILTER_FIELD_CLASS : FILTER_FIELD_CLASS}>
+                <label className={embedded ? JOB_TAB_FILTER_LABEL_CLASS : FILTER_LABEL_CLASS}>Job ID</label>
                 <SearchableSelect
                   value={filterJdId === 'all' ? '' : filterJdId}
                   onChange={(v) => search.setFilter('jdId', v || 'all')}
@@ -2330,12 +2384,12 @@ Best regards`);
                 />
               </div>
 
-              <div className={FILTER_FIELD_CLASS}>
-                <label className={FILTER_LABEL_CLASS}>Job Version</label>
+              <div className={embedded ? JOB_TAB_FILTER_FIELD_CLASS : FILTER_FIELD_CLASS}>
+                <label className={embedded ? JOB_TAB_FILTER_LABEL_CLASS : FILTER_LABEL_CLASS}>Job Version</label>
                 <select
                   value={filterJobVersion}
                   onChange={(e) => search.setFilter('jobVersion', e.target.value)}
-                  className={FILTER_CONTROL_CLASS}
+                  className={embedded ? JOB_TAB_FILTER_CONTROL_CLASS : FILTER_CONTROL_CLASS}
                 >
                   <option value="all">All Versions</option>
                   {uniqueJobVersions.map(version => (
@@ -2504,7 +2558,7 @@ Best regards`);
                         </div>
 
                         {(() => {
-                          const t = tallyVerdicts(groupRows);
+                          const t = groupTally(groupRows);
                           return (
                             <div className="flex flex-wrap items-center gap-1.5">
                               {renderVerdictCount('exact', t.exact, 'Exact Match')}
@@ -2631,6 +2685,12 @@ Best regards`);
                                 <span>{formatISTDate(row.scoredDate)} <span className="text-gray-400">{formatISTTime(row.scoredDate)}</span></span>
                               </div>
                             </div>
+                            {/* Stops clicks here, as the list's Actions cell does.
+                                The menu renders in a portal, but React still
+                                bubbles its clicks through this row — so ⋮ or any
+                                item (even a disabled Invite) also hit the row's
+                                onClick and opened the scorecard. */}
+                            <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <button
@@ -2647,6 +2707,7 @@ Best regards`);
                                 {renderActionsMenuItems(row)}
                               </DropdownMenuContent>
                             </DropdownMenu>
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -2770,7 +2831,7 @@ Best regards`);
                           {renderJobTitles(distinctTitles)}
                         </td>
                         {(() => {
-                          const t = tallyVerdicts(rows);
+                          const t = groupTally(rows);
                           return (
                             <>
                               <td className="px-4 py-3 align-middle text-center">{renderVerdictCount('exact', t.exact)}</td>
@@ -2943,7 +3004,7 @@ Best regards`);
                   </div>
 
                   {(() => {
-                    const t = tallyVerdicts(rows);
+                    const t = groupTally(rows);
                     return (
                       <div className="mt-3 flex flex-wrap items-center gap-1.5">
                         {renderVerdictCount('exact', t.exact, 'Exact Match')}
@@ -3872,9 +3933,6 @@ export function BulkActionConfirmModal({
               <p className="text-sm text-gray-500 mt-1">{rows.length} selected</p>
             </div>
           </div>
-          <Button variant="secondary" size="sm" onClick={onCancel} className="px-2 flex-shrink-0" aria-label="Close">
-            <X className="w-5 h-5" />
-          </Button>
         </div>
 
         <div className="p-5 overflow-y-auto flex-1 space-y-4">
@@ -3931,11 +3989,11 @@ export function BulkActionConfirmModal({
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-3 p-5 border-t border-gray-200 shrink-0">
+        <div className="flex flex-wrap items-center justify-between gap-3 p-5 border-t border-gray-200 shrink-0">
           <p className="text-sm text-gray-600">
             <span className="font-semibold text-gray-900">{chosen.length}</span> of {rows.length} will be included
           </p>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3 ml-auto">
             <Button variant="secondary" size="md" onClick={onCancel}>Cancel</Button>
             <Button
               variant="primary"

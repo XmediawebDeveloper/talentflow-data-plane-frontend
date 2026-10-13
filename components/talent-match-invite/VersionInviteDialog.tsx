@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
-import { ArrowLeft, Brain, CheckCircle, ClipboardCheck, Link2, Loader2, Mail } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Brain, CheckCircle, ClipboardCheck, Link2, Loader2, Mail } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
@@ -16,6 +16,9 @@ import AIInterviewPicker from '@/components/ai-interview/AIInterviewPicker';
 import ConfigurePreviewDialog from '@/components/ai-interview/ConfigurePreviewDialog';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import type { AssessmentResponse } from '@/lib/services/assessmentService';
+import ShareAssessmentModal from '@/components/ShareAssessmentModal';
+import AIInterviewShareQueue from './AIInterviewShareQueue';
+import { VersionChip } from '@/components/assessments/AssessmentVersionHistoryPanel';
 import {
   KIND_LABEL,
   createBlockedReason,
@@ -67,8 +70,8 @@ export default function VersionInviteDialog({
   candidates,
   disabledReason,
   onSent,
-  onShare,
-  onShareInterviews,
+  onAssessmentsSent,
+  onInterviewsSent,
 }: {
   kind: InviteKind;
   onClose: () => void;
@@ -82,17 +85,17 @@ export default function VersionInviteDialog({
   disabledReason?: string | null;
   /** Invitations went out — the host refreshes its counts. */
   onSent?: (kind: InviteKind, sentCount: number) => void;
-  /** Assessment popup: Send opens the host's Share Assessment via Email step
-   *  with the picked assessment(s) and the ticked candidates — nothing is sent
-   *  from this popup. Given it, the popup also offers "Browse all assessments
-   *  instead" (the original cross-job list: search, Select All, Grouped /
-   *  Ungrouped), whose Send hands over the same way. */
-  onShare?: (assessments: AssessmentResponse[], candidates: InviteCandidate[]) => void;
-  /** AI Interview popup, the same pattern: Send opens the host's Send AI
-   *  Interview via Email step with the picked interview(s) and the ticked
-   *  candidates — that step sends — and "Browse all AI interviews instead"
-   *  offers the original cross-job AI interview list. */
-  onShareInterviews?: (interviews: AIInterviewResponse[], candidates: InviteCandidate[]) => void;
+  /** Assessment popup: Next moves to a second step IN this popup — Share
+   *  Assessment via Email (embedded) with the picked assessment(s) and the
+   *  ticked candidates; that step sends, Back returns here. Given it, the
+   *  popup also offers "Browse all assessments instead" (the original
+   *  cross-job list), whose Next does the same. Called with the number sent. */
+  onAssessmentsSent?: (sentCount: number) => void;
+  /** AI Interview popup, the same pattern: Next moves to Send AI Interview
+   *  via Email IN this popup with the picked interview(s) — several (Browse
+   *  all) go one after another — and the ticked candidates; that step sends,
+   *  Back returns here. Called once when at least one invitation went out. */
+  onInterviewsSent?: () => void;
 }) {
   const { user, isTenantAdmin } = useAuth();
   const p = (user?.permissions || {}) as Record<string, boolean | undefined>;
@@ -145,7 +148,55 @@ export default function VersionInviteDialog({
   const [browseConfigs, setBrowseConfigs] = useState<AIInterviewResponse[] | null>(null);
   const [browseIds, setBrowseIds] = useState<string[]>([]);
   /* Send hands over to the host's share step rather than sending here. */
-  const handsOff = kind === 'assessment' ? !!onShare : !!onShareInterviews;
+  const handsOff = kind === 'assessment' ? !!onAssessmentsSent : !!onInterviewsSent;
+  /* Step 2 (assessments): the share step, with what Next handed it. Step 1's
+     state stays as it is underneath, so Back returns to it unchanged. */
+  const [shareStep, setShareStep] = useState<{ assessments: AssessmentResponse[]; candidates: InviteCandidate[] } | null>(null);
+  /* Step 2 (AI interviews): the picked interview(s), with the job and
+     interview version each is shown under. */
+  const [interviewStep, setInterviewStep] = useState<{
+    configs: AIInterviewResponse[];
+    candidates: InviteCandidate[];
+    interviewVersions: Record<string, number>;
+    jobVersions: Record<string, number>;
+  } | null>(null);
+  const openInterviewStep = (picked: { config: AIInterviewResponse; version?: number }[], candidates: InviteCandidate[]) => {
+    const interviewVersions: Record<string, number> = {};
+    const jobVersions: Record<string, number> = {};
+    for (const { config, version } of picked) {
+      if (version != null) interviewVersions[config.id] = version;
+      // This JD row's own interview: the job version picked here, not the
+      // config's creation-time `jd_version` snapshot.
+      if (config.jd_id === jdId && jobVersionNumber) jobVersions[config.id] = jobVersionNumber;
+    }
+    setInterviewStep({ configs: picked.map((p) => p.config), candidates, interviewVersions, jobVersions });
+    bodyRef.current?.scrollTo({ top: 0 });
+  };
+  /* The popup's footer: step 2 portals its own footer content into it. */
+  const [footerEl, setFooterEl] = useState<HTMLDivElement | null>(null);
+  const openShareStep = (assessments: AssessmentResponse[], candidates: InviteCandidate[]) => {
+    setShareStep({ assessments, candidates });
+    bodyRef.current?.scrollTo({ top: 0 });
+  };
+  /* The job an assessment is shared for. One of this JD row's own: this
+     row, at the job version picked here — NOT the assessment's `jd_version`,
+     a snapshot the backend stamps at creation that comes back as 1 for
+     assessments authored against a later version (it labelled a V2 job's
+     assessment "V1"; AssessmentResults resolves it the same way). A Browse
+     all pick from another job keeps its own job and that snapshot. */
+  const shareJob = (a: AssessmentResponse) => a.jd_id === jdId
+    ? { jd_short_id: jdCode || a.jd_short_id, jd_title: jdTitle, jd_version: jobVersionNumber ?? a.jd_version }
+    : { jd_short_id: a.jd_short_id, jd_title: a.jd_title || jdTitle, jd_version: a.jd_version };
+  const backFromShareStep = () => {
+    setShareStep(null);
+    setInterviewStep(null);
+    bodyRef.current?.scrollTo({ top: 0 });
+  };
+  const inStep2 = !!shareStep || !!interviewStep;
+  /* "Choose candidates in the next step": Next goes on with nobody ticked
+     (step 2 has Manual, Upload Excel and the Resume Database). Only where
+     Next leads to that step. */
+  const [chooseLater, setChooseLater] = useState(false);
   const browseCount = kind === 'assessment' ? browsePicked.length : browseIds.length;
   const browseNoun = kind === 'assessment' ? 'assessment' : 'AI interview';
   /* Switching between this job's versions and the full list starts the pick
@@ -167,8 +218,8 @@ export default function VersionInviteDialog({
     }
   };
   const shareBrowse = () => {
-    if (kind === 'assessment') onShare?.(browsePicked, recipients);
-    else onShareInterviews?.((browseConfigs ?? []).filter((c) => browseIds.includes(c.id)), recipients);
+    if (kind === 'assessment') openShareStep(browsePicked, recipients);
+    else openInterviewStep((browseConfigs ?? []).filter((c) => browseIds.includes(c.id)).map((config) => ({ config })), recipients);
   };
   /* Assessment View / Edit open over this popup — the assessment preview and
      the Configure popup the Assessments pages use — so the picks underneath
@@ -250,6 +301,8 @@ export default function VersionInviteDialog({
 
   const selected = versions.find((v) => v.id === versionId) ?? null;
   const recipients = candidates.filter((c) => c.email && candidateIds.includes(c.id));
+  /* Next: someone ticked, or candidates are to be chosen in step 2. */
+  const hasCandidatesForNext = recipients.length > 0 || (handsOff && chooseLater);
   const blocked = createBlockedReason(versions, perms, kind);
   const returnUrl = `/recruitment/job-details?id=${encodeURIComponent(jdId)}`;
   const openInNewTab = (href: string) => window.open(href, '_blank', 'noopener');
@@ -370,17 +423,17 @@ export default function VersionInviteDialog({
   };
 
   const askSend = () => {
-    if (!selected?.sendable || recipients.length === 0) return;
-    /* Assessments: no send from here — the picked version and the ticked
-       candidates go to Share Assessment via Email, which sends. */
-    if (kind === 'assessment' && onShare) {
+    if (!selected?.sendable || !hasCandidatesForNext) return;
+    /* Assessments: no send from here — Next moves to the Share Assessment via
+       Email step with the picked version and the ticked candidates. */
+    if (kind === 'assessment' && onAssessmentsSent) {
       if (!selected.raw) return;
-      onShare([selected.raw], recipients);
+      openShareStep([selected.raw], recipients);
       return;
     }
-    if (kind === 'interview' && onShareInterviews) {
+    if (kind === 'interview' && onInterviewsSent) {
       if (!selected.config) return;
-      onShareInterviews([selected.config], recipients);
+      openInterviewStep([{ config: selected.config, version: selected.version }], recipients);
       return;
     }
     const links = method === 'link';
@@ -393,22 +446,22 @@ export default function VersionInviteDialog({
   };
 
   const failed = candidates.filter((c) => results.some((r) => r.candidateId === c.id && r.status === 'failed'));
-  const canSend = !!selected?.sendable && recipients.length > 0 && perms.canInvite && !off;
+  const canSend = !!selected?.sendable && hasCandidatesForNext && perms.canInvite && !off;
   const count = (s: SendResult['status']) => results.filter((r) => r.status === s).length;
 
   /* The Invite popups' footer sentence: what is missing, then what is about to happen. */
   const footerText = off
     ? ''
     : browseAll
-      ? (recipients.length === 0
-          ? 'Select at least one candidate to continue'
-          : browseCount === 0 ? `Select at least one ${browseNoun} to continue` : null)
+      ? (browseCount === 0
+          ? `Select at least one ${browseNoun} to continue`
+          : recipients.length === 0 ? (chooseLater ? 'Choose candidates in the next step' : '') : null)
     : view === 'results'
       ? (sending ? `Sending ${results.length} of ${sendTotal}…` : `${count('sent')} sent · ${count('skipped')} skipped · ${count('failed')} failed`)
-      : candidates.length === 0 || recipients.length === 0
-        ? 'Select at least one candidate to continue'
-        : !selected
-          ? `Select ${label.singular === 'Assessment' ? 'an assessment' : 'an AI interview'} version to continue`
+      : !selected
+        ? `Select ${label.singular === 'Assessment' ? 'an assessment' : 'an AI interview'} version to continue`
+        : recipients.length === 0
+          ? (handsOff && chooseLater ? 'Choose candidates in the next step' : '')
           : null;
 
   const Icon = kind === 'assessment' ? ClipboardCheck : Brain;
@@ -440,9 +493,8 @@ export default function VersionInviteDialog({
                 <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500 dark:text-slate-500 min-w-0">
                   {jdCode && <JobIdBadge>{jdCode}</JobIdBadge>}
                   <span className="min-w-0 truncate">{jdTitle}</span>
-                  {jobVersionNumber ? (
-                    <span className="font-semibold px-1.5 py-0.5 rounded-md bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">Job V{jobVersionNumber}</span>
-                  ) : null}
+                  {/* The job version — the same blue chip step 2 shows, no wording. */}
+                  {jobVersionNumber ? <VersionChip kind="job" version={jobVersionNumber} /> : null}
                 </div>
               </div>
             </div>
@@ -452,6 +504,66 @@ export default function VersionInviteDialog({
           <div ref={bodyRef} className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
             {off ? (
               <div className="rounded-xl border border-dashed border-gray-200 dark:border-slate-700 py-10 px-4 text-center text-sm text-gray-600 dark:text-slate-400">{off}</div>
+            ) : interviewStep ? (
+              /* Step 2 — Send AI Interview via Email in place of the content,
+                 one picked interview after another; this popup's header and
+                 footer stay (the step fills the footer). */
+              <AIInterviewShareQueue
+                configs={interviewStep.configs}
+                candidates={interviewStep.candidates.map((c) => ({ name: c.name, email: c.email, resumeId: c.resumeId }))}
+                interviewVersions={interviewStep.interviewVersions}
+                jobVersions={interviewStep.jobVersions}
+                inPopupStep
+                footerTarget={footerEl}
+                onBack={backFromShareStep}
+                onInvited={onInterviewsSent}
+                onClose={onClose}
+              />
+            ) : shareStep ? (
+              /* Step 2 — Share Assessment via Email in place of the content;
+                 this popup's header and footer stay (its footer is filled by
+                 the step: summary, Back, Send Invitations). */
+              <ShareAssessmentModal
+                isOpen
+                embedded
+                footerTarget={footerEl}
+                onClose={onClose}
+                onBack={backFromShareStep}
+                assessment={{
+                  id: shareStep.assessments[0].id,
+                  title: shareStep.assessments[0].title,
+                  duration: `${shareStep.assessments[0].duration_minutes || 30} min`,
+                  questions: (shareStep.assessments[0].hr_enabled ? 1 : 0)
+                    + (shareStep.assessments[0].technical_enabled ? 1 : 0)
+                    + (shareStep.assessments[0].coding_enabled ? 1 : 0),
+                  type: 'AI-Generated',
+                  short_id: shareStep.assessments[0].short_id,
+                  version: shareStep.assessments[0].version,
+                  ...shareJob(shareStep.assessments[0]),
+                }}
+                additionalAssessments={shareStep.assessments.slice(1).map((a) => ({
+                  id: a.id,
+                  title: a.title,
+                  duration: `${a.duration_minutes || 30} min`,
+                  questions: (a.hr_enabled ? 1 : 0) + (a.technical_enabled ? 1 : 0) + (a.coding_enabled ? 1 : 0),
+                  type: 'AI-Generated',
+                  short_id: a.short_id,
+                  version: a.version,
+                  ...shareJob(a),
+                }))}
+                /* The ticked candidates, pre-filled, under the source this
+                   hand-over has always sent with. */
+                prefilledCandidates={shareStep.candidates.map((c) => ({
+                  id: c.id,
+                  name: c.name,
+                  email: c.email,
+                  phone: c.phone,
+                  source: 'database' as const,
+                  resumeId: c.resumeId,
+                }))}
+                inviteSource="Resume Scoring"
+                onInviteSent={(count) => onAssessmentsSent?.(Math.max(count, 1))}
+              />
             ) : browseAll ? (
               /* The original Browse all view: back to the cards, the shared
                  cross-job picker, then who it goes to. */
@@ -508,6 +620,8 @@ export default function VersionInviteDialog({
                     expiryDays={expiryDays}
                     onExpiry={setExpiryDays}
                     candidatesOnly
+                    chooseLater={chooseLater}
+                    onChooseLater={handsOff ? setChooseLater : undefined}
                   />
                 </section>
               </div>
@@ -555,13 +669,16 @@ export default function VersionInviteDialog({
                        step — Share Assessment via Email / Send AI Interview
                        via Email has its own delivery, message and expiry. */
                     candidatesOnly={handsOff}
+                    chooseLater={chooseLater}
+                    onChooseLater={handsOff ? setChooseLater : undefined}
                   />
                 </section>
               </div>
             )}
           </div>
 
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 sm:p-6 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 shrink-0">
+          <div ref={setFooterEl} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 sm:p-6 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 shrink-0">
+            {!inStep2 && (<>
             <div className="min-w-0 sm:truncate sm:whitespace-nowrap text-xs sm:text-sm text-gray-700 dark:text-slate-300">
               {footerText ?? (browseAll ? (
                 <span className="inline-flex items-center gap-1.5 align-middle">
@@ -584,12 +701,12 @@ export default function VersionInviteDialog({
                   {/* The original hand-over: the share step, pre-filled. */}
                   <button
                     onClick={shareBrowse}
-                    disabled={browseCount === 0 || recipients.length === 0 || !perms.canInvite}
+                    disabled={browseCount === 0 || !hasCandidatesForNext || !perms.canInvite}
                     title={!perms.canInvite ? `You do not have permission to invite to ${label.plural.toLowerCase()}` : undefined}
                     className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <Mail className="w-4 h-4" />
-                    Send Invitations
+                    <ArrowRight className="w-4 h-4" />
+                    Next
                   </button>
                 </>
               ) : view === 'results' ? (
@@ -618,14 +735,15 @@ export default function VersionInviteDialog({
                     title={!perms.canInvite ? `You do not have permission to invite to ${label.plural.toLowerCase()}` : undefined}
                     className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {method === 'link' ? <Link2 className="w-4 h-4" /> : <Mail className="w-4 h-4" />}
+                    {handsOff ? <ArrowRight className="w-4 h-4" /> : method === 'link' ? <Link2 className="w-4 h-4" /> : <Mail className="w-4 h-4" />}
                     {handsOff
-                      ? 'Send'
+                      ? 'Next'
                       : selected ? `${method === 'link' ? 'Create links for' : 'Send with'} V${selected.version}` : 'Send Invitations'}
                   </button>
                 </>
               )}
             </div>
+            </>)}
           </div>
 
           {/* In-popup confirmation, over the whole card. */}

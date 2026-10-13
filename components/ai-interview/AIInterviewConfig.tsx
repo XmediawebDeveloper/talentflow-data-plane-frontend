@@ -31,7 +31,7 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { modeFromConfig, durationFromMode } from '@/lib/constants/aiInterviewMode';
 import { STT_MODELS, DEFAULT_STT_MODEL } from '@/lib/constants/aiInterviewSttModels';
 import { PROXY_INTEGRITY_VERIFICATION_ENABLED } from '@/lib/constants/featureFlags';
-import { AIInterviewStepIndicator } from './AIInterviewStepIndicator';
+import { AIInterviewStepIndicator, useBreadcrumbOffset } from './AIInterviewStepIndicator';
 import AIInterviewFlowLoader from './AIInterviewFlowLoader';
 import { SectionHeader, SummaryLocation } from './ConfigSummary';
 import WizardDiscardButton from './WizardDiscardButton';
@@ -1433,6 +1433,9 @@ export default function AIInterviewConfig() {
     mthJd?: string[]; mthCustom?: string[];
     nthJd?: string[]; nthCustom?: string[];
   }>({});
+
+  /* Step indicator pins below the sticky breadcrumb rather than under it. */
+  const [breadcrumbBarRef, breadcrumbHeight] = useBreadcrumbOffset();
 
   /* Interview mode */
   const [mode, setMode] = useState<InterviewMode>('fixed');
@@ -2996,6 +2999,7 @@ export default function AIInterviewConfig() {
       <div className="mx-auto w-full max-w-[1400px]">
         <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
           <PageBreadcrumb
+            barRef={breadcrumbBarRef}
             className="mb-4 md:mb-6"
             items={
               fromInviteOrigin
@@ -3030,7 +3034,7 @@ export default function AIInterviewConfig() {
             three and pushed the first real control below the fold. */}
 
         {/* Step indicators */}
-        <AIInterviewStepIndicator currentStep={CURRENT_STEP} />
+        <AIInterviewStepIndicator currentStep={CURRENT_STEP} topOffset={breadcrumbHeight} />
 
         {/* ── The JD this configuration is being built against ──────────────
             The same row the JD picker draws, so the recruiter recognises the
@@ -3944,12 +3948,11 @@ export default function AIInterviewConfig() {
             One bar at the foot of the page instead of a stack buried in the
             sidebar: leaving (left) and advancing (right) are the page's two
             outcomes, and they now sit where the form ends rather than beside
-            the summary the recruiter is still reading. Sticky, because this
-            form is long enough that the buttons were regularly off-screen. */}
-        <div className="sticky bottom-0 z-10 mt-6 -mx-4 md:-mx-8 px-4 md:px-8 py-3 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 rounded-b-2xl">
+            the summary the recruiter is still reading. Not sticky: it sits
+            in normal flow at the end of the page, below the last section. */}
+        <div className="mt-6 pt-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3">
           {/* On phones the bar is two rows (leave / advance) rather than four
-              stacked buttons: it is sticky, and the full stack covered a
-              quarter of the screen the form itself needs. */}
+              stacked buttons. */}
           <div className="flex items-center justify-between sm:justify-start gap-2">
             <button
               type="button"

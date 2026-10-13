@@ -1,6 +1,6 @@
 'use client';
 
-import { X, Mail, Plus, Trash2, Send, CheckCircle, Copy, Clock, Users, Upload, Database, AlertTriangle, Loader2, FileSpreadsheet, MapPin, ShieldAlert, Info, FolderOpen, ChevronRight, Eye, Layers, FolderRoot, FolderInput, Bot, ChevronDown } from 'lucide-react';
+import { X, ArrowLeft, Mail, Plus, Trash2, Send, CheckCircle, Copy, Clock, Users, Upload, Database, AlertTriangle, Loader2, FileSpreadsheet, MapPin, ShieldAlert, Info, FolderOpen, ChevronRight, Eye, Layers, FolderRoot, FolderInput, Bot, ChevronDown } from 'lucide-react';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { VersionPill } from './AllInterviewsTable';
 import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
@@ -42,7 +42,15 @@ interface CandidateEmail {
   resumeId?: string;
   generatedLink?: string | null;
   generatedSessionId?: string | null;
+  /** A typed row moved into the candidate list with Add. */
+  added?: boolean;
 }
+
+/* Pre-filled candidates (already chosen) are listed as they are; Manual's
+   entry fields sit above them — one empty row ready to type into. An empty
+   row is ignored by Send and the counts. */
+const withEntryRow = (list: CandidateEmail[]): CandidateEmail[] =>
+  list.some((c) => c.source !== 'database') ? list : [...list, { id: 'manual-entry', name: '', email: '', source: 'manual' }];
 
 interface Resume {
   id: string;
@@ -72,6 +80,19 @@ interface ShareAIInterviewModalProps {
   /** This interview's version, shown in the header. Looked up from the
    *  config list when the host does not pass it. */
   interviewVersion?: number;
+  /** Shows Back in the footer, returning to the popup this one came from. */
+  onBack?: () => void;
+  /** Rendered as a step INSIDE a host popup (Job Details' Invite to AI
+   *  Interview): no backdrop, card or header of its own — the host keeps its
+   *  header and footer, and owns Escape and the scroll lock — and this step's
+   *  footer (summary, Back, Send Invitations) is portalled into `footerTarget`,
+   *  the host's footer. Not `embedded`, which is an inline card of its own. */
+  inPopupStep?: boolean;
+  footerTarget?: HTMLElement | null;
+  /** The job version the host has selected — shown instead of the config's
+   *  `jd_version`, a snapshot stamped at creation that reads 1 for interviews
+   *  authored against a later version. */
+  jobVersion?: number;
 }
 
 const ROUND_LABELS: Record<string, string> = {
@@ -85,7 +106,7 @@ const ROUND_LABELS: Record<string, string> = {
   nice_to_have_skills: 'Nice-to-Have Skills',
 };
 
-export default function ShareAIInterviewModal({ isOpen, onClose, config, onInviteSent, embedded = false, initialCandidates, interviewVersion: interviewVersionProp }: ShareAIInterviewModalProps) {
+export default function ShareAIInterviewModal({ isOpen, onClose, config, onInviteSent, embedded = false, initialCandidates, interviewVersion: interviewVersionProp, onBack, inPopupStep = false, footerTarget = null, jobVersion }: ShareAIInterviewModalProps) {
   const { user } = useAuth();
   const { quotaData } = useQuota();
 
@@ -119,13 +140,13 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
   const [inputMode, setInputMode] = useState<'manual' | 'database' | 'excel'>('manual');
   const [candidates, setCandidates] = useState<CandidateEmail[]>(() =>
     initialCandidates && initialCandidates.length > 0
-      ? initialCandidates.map((candidate, index) => ({
+      ? withEntryRow(initialCandidates.map((candidate, index) => ({
           id: `prefilled-${index}`,
           name: candidate.name,
           email: candidate.email,
           source: 'database' as const,
           resumeId: candidate.resumeId,
-        }))
+        })))
       : [{ id: '1', name: '', email: '', /* scheduledDate: '', scheduledTime: '', */ source: 'manual' }]
   );
   /* Ticked "Select From" resumes, kept across tabs and folders so a pick can
@@ -233,7 +254,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
 
   // Lock background scroll + close on Escape while modal is open
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || inPopupStep) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const onKey = (e: KeyboardEvent) => {
@@ -244,7 +265,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
       document.body.style.overflow = previousOverflow;
       window.removeEventListener('keydown', onKey);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, inPopupStep]);
 
   // Load resumes when database mode is selected. Both tabs load up front —
   // the Shared Database badge read 0 until its tab was clicked.
@@ -439,9 +460,14 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
      push the rest of the dialog out of reach. */
   const [candidatePage, setCandidatePage] = useState(1);
   const [candidatePageSize, setCandidatePageSize] = useState(10);
-  const candidateTotalPages = Math.max(1, Math.ceil(candidates.length / candidatePageSize));
+  /* Manual: the rows typed or imported here, paged, then the chosen
+     candidates (pre-filled, added from Select From, or added with Add) as a
+     list under them. */
+  const listedCandidates = candidates.filter((c) => c.source === 'database' || c.added);
+  const entryCandidates = candidates.filter((c) => c.source !== 'database' && !c.added);
+  const candidateTotalPages = Math.max(1, Math.ceil(entryCandidates.length / candidatePageSize));
   const candidateSafePage = Math.min(candidatePage, candidateTotalPages);
-  const pagedCandidates = candidates.slice(
+  const pagedCandidates = entryCandidates.slice(
     (candidateSafePage - 1) * candidatePageSize,
     candidateSafePage * candidatePageSize,
   );
@@ -475,7 +501,20 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
       { id: Date.now().toString(), name: '', email: '', /* scheduledDate: '', scheduledTime: '', */ source: 'manual' },
     ]);
     // Land on the page holding the new, empty row so it can be filled in.
-    setCandidatePage(Math.ceil((candidates.length + 1) / candidatePageSize));
+    setCandidatePage(Math.ceil((candidates.filter((c) => c.source !== 'database' && !c.added).length + 1) / candidatePageSize));
+  };
+
+  /* Add: a complete entry row joins the candidate list; a fresh empty row
+     takes its place when it was the last one. */
+  const canAddEntry = (c: CandidateEmail) =>
+    !!c.name.trim() && isValidEmail(c.email) && !isDuplicateEmail(c.id, c.email);
+  const addEntry = (id: string) => {
+    setCandidates((prev) => {
+      const next = prev.map((c) => (c.id === id ? { ...c, added: true } : c));
+      return next.some((c) => c.source !== 'database' && !c.added)
+        ? next
+        : [...next, { id: Date.now().toString(), name: '', email: '', source: 'manual' as const }];
+    });
   };
 
   const removeCandidate = (id: string) => {
@@ -971,7 +1010,9 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
 
   // Success screen
   if (showSuccess) {
-    return (
+    /* The same success popup in every host; in a popup step it is portalled
+       to the page so it opens over that popup rather than inside its body. */
+    const successPopup = (
       <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6" role="dialog" aria-modal="true">
         <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-[95vw] sm:max-w-md w-full p-6 sm:p-8 text-center max-h-[calc(100dvh-2rem)] overflow-y-auto tf-round-edges">
           <div className="flex justify-center mb-4">
@@ -991,6 +1032,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
         </div>
       </div>
     );
+    return inPopupStep && typeof document !== 'undefined' ? createPortal(successPopup, document.body) : successPopup;
   }
 
   // Duplicate invitation error popup
@@ -1083,29 +1125,10 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
     );
   }
 
-  return (
-    <div
-      className={embedded
-        ? ''
-        : 'fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6'}
-      onClick={embedded ? undefined : (e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-      role={embedded ? undefined : 'dialog'}
-      aria-modal={embedded ? undefined : true}
-      aria-label="Send AI Interview via Email"
-    >
-      <div className={embedded
-        ? 'bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 w-full flex flex-col overflow-hidden tf-round-edges'
-        : 'bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-[95vw] sm:max-w-[935px] w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col tf-round-edges'}>
-        {/* Header */}
-        <div className="bg-slate-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3 shrink-0">
-          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-lg bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center flex-shrink-0">
-              <Mail className="w-4 h-4 text-white" />
-            </div>
-            <div className="min-w-0">
-              <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight truncate">Send AI Interview via Email</h2>
+  /* The job, its version, the interview version and the setup — the
+     header's detail lines; a popup step shows them above its content. */
+  const headerMeta = (
+    <>
               {/* JD ID, the job title, then its job version — which job (and
                   which version of it) these invitations are for. */}
               <p className="flex items-center gap-2 mt-0.5 text-xs sm:text-sm text-gray-600 dark:text-slate-400 min-w-0">
@@ -1114,7 +1137,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                 {config.jd_id && (
                   <span className="inline-flex items-center gap-1.5 flex-shrink-0" title="Job version">
                     -
-                    <VersionPill kind="job" version={config.jd_version ?? 1} />
+                    <VersionPill kind="job" version={jobVersion ?? config.jd_version ?? 1} />
                   </span>
                 )}
                 {interviewVersion != null && (
@@ -1143,21 +1166,12 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                   </>
                 )}
               </p>
-            </div>
-          </div>
-          {!embedded && (
-            <button
-              onClick={onClose}
-              aria-label="Close dialog"
-              className="text-gray-500 dark:text-slate-400 hover:text-brand-blue hover:bg-brand-blue/5 p-1.5 sm:p-2 rounded-lg transition-colors flex-shrink-0"
-            >
-              <X className="w-4 h-4 sm:w-5 sm:h-5" />
-            </button>
-          )}
-        </div>
-
+    </>
+  );
+  const contentBlock = (
+    <>
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+        <div className={inPopupStep ? '' : 'flex-1 overflow-y-auto p-4 sm:p-6'}>
           {/* Quota Banner — styled like the Upload Resume dialog's RU card:
               icon tile, headline + available count, usage bar, then the
               breakdown with a status pill. */}
@@ -1439,6 +1453,18 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                                     : <><Copy className="w-3.5 h-3.5" /><span>Copy Link</span></>
                                 }
                               </button>
+                              {candidate.source !== 'database' && (
+                                <button
+                                  type="button"
+                                  onClick={() => addEntry(candidate.id)}
+                                  disabled={!canAddEntry(candidate)}
+                                  title="Add to the candidate list"
+                                  className="flex-shrink-0 inline-flex items-center gap-1 px-3 py-2 text-sm font-medium text-brand-blue border border-brand-blue/30 rounded-lg hover:bg-brand-blue/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  <Plus className="w-4 h-4" />
+                                  Add
+                                </button>
+                              )}
                               {(candidates.length > 1 || candidate.source === 'database') && (
                                 <button
                                   onClick={() => removeCandidate(candidate.id)}
@@ -1541,16 +1567,70 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                   ))}
                 </div>
 
-                {candidates.length > 0 && (
+                {entryCandidates.length > 0 && (
                   <ListPagination
                     currentPage={candidateSafePage}
                     itemsPerPage={candidatePageSize}
-                    totalItems={candidates.length}
+                    totalItems={entryCandidates.length}
                     onPageChange={setCandidatePage}
                     onItemsPerPageChange={(size) => { setCandidatePageSize(size); setCandidatePage(1); }}
                     itemLabel="candidates"
                     compact
                   />
+                )}
+
+                {listedCandidates.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-sm text-gray-600 dark:text-slate-400 mb-2">Selected candidates ({listedCandidates.length})</p>
+                    <ul className="rounded-lg border border-gray-200 dark:border-slate-700 divide-y divide-gray-100 dark:divide-slate-700/60 max-h-72 overflow-y-auto">
+                      {listedCandidates.map((candidate) => {
+                        const badge =
+                          candidate.origin === 'my-resumes' ? { label: 'My Resumes', cls: 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20' }
+                          : candidate.origin === 'shared-db' ? { label: 'Shared DB', cls: 'bg-brand-cyan/10 text-brand-cyan ring-brand-cyan/20' }
+                          : candidate.source !== 'database' ? { label: candidate.origin === 'excel' ? 'Excel' : 'Manual', cls: 'bg-gray-100 text-gray-600 ring-gray-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700' }
+                          : { label: 'Database', cls: 'bg-brand-blue/10 text-brand-blue ring-brand-blue/15' };
+                        return (
+                          <li key={candidate.id} className="flex items-center gap-3 px-3 py-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate" title={candidate.name}>{candidate.name}</p>
+                              <p className="text-xs text-gray-500 dark:text-slate-400 truncate [overflow-wrap:anywhere]" title={candidate.email}>{candidate.email}</p>
+                            </div>
+                            <span className={`shrink-0 inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-2xs font-semibold ring-1 ${badge.cls}`}>
+                              {badge.label}
+                            </span>
+                            {/* The row's per-candidate Copy Link, as on the entry rows. */}
+                            <button
+                              type="button"
+                              onClick={() => handleCopyLinkForCandidate(candidate.id)}
+                              disabled={generatingLinkFor === candidate.id || (!candidate.generatedLink && isDuplicateEmail(candidate.id, candidate.email))}
+                              title={candidate.generatedLink ? 'Link generated — click to copy again' : 'Generate & copy interview link'}
+                              aria-label={`Copy interview link for ${candidate.name}`}
+                              className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs border transition-colors whitespace-nowrap flex-shrink-0 ${
+                                candidate.generatedLink
+                                  ? 'bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:border-emerald-500/30 dark:text-emerald-300 dark:hover:bg-emerald-500/20'
+                                  : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                              } disabled:opacity-50`}
+                            >
+                              {generatingLinkFor === candidate.id
+                                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                : candidate.generatedLink
+                                  ? <><CheckCircle className="w-3.5 h-3.5" /><span className="hidden sm:inline">Copied</span></>
+                                  : <><Copy className="w-3.5 h-3.5" /><span className="hidden sm:inline">Copy Link</span></>}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeCandidate(candidate.id)}
+                              title="Remove candidate"
+                              aria-label={`Remove ${candidate.name}`}
+                              className="shrink-0 p-2 text-destructive hover:bg-destructive-subtle rounded-lg transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
                 )}
               </>
             )}
@@ -1900,8 +1980,10 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="px-6 py-4 bg-gray-50 dark:bg-slate-800/50 border-t border-gray-200 dark:border-slate-700 flex items-center justify-between shrink-0">
+    </>
+  );
+  const footerContent = (
+    <>
           <div className="text-sm text-gray-600 dark:text-slate-400">
             {(() => {
               const validRows = sendCandidates.filter((c) => c.name.trim() && c.email.trim());
@@ -1922,6 +2004,11 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
             })()}
           </div>
           <div className="flex items-center gap-3">
+            {onBack && (
+              <Button variant="secondary" onClick={onBack} disabled={isSubmitting} icon={<ArrowLeft className="w-4 h-4" />}>
+                Back
+              </Button>
+            )}
             <Button
               variant="primary"
               onClick={handleSend}
@@ -1940,9 +2027,10 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
               )}
             </Button>
           </div>
-        </div>
-      </div>
-
+    </>
+  );
+  const extras = (
+    <>
       {/* Subfolder flyouts, one portal per open depth, beside their trigger row.
           z-[60] keeps them above this z-50 modal. */}
       {typeof document !== 'undefined' && openPath.map((entry, i) => {
@@ -1981,6 +2069,70 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
           onClose={() => setVersionViewer(null)}
         />
       )}
+    </>
+  );
+
+  if (inPopupStep) {
+    return (
+      <>
+        <div className="mb-4 rounded-xl border border-gray-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 px-3 py-2.5">
+          <p className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-slate-50">
+            <Mail className="w-4 h-4 text-brand-blue flex-shrink-0" />
+            Send AI Interview via Email
+          </p>
+          {headerMeta}
+        </div>
+        {contentBlock}
+        {footerTarget && createPortal(footerContent, footerTarget)}
+        {extras}
+      </>
+    );
+  }
+
+  return (
+    <div
+      className={embedded
+        ? ''
+        : 'fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6'}
+      onClick={embedded ? undefined : (e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      role={embedded ? undefined : 'dialog'}
+      aria-modal={embedded ? undefined : true}
+      aria-label="Send AI Interview via Email"
+    >
+      <div className={embedded
+        ? 'bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 w-full flex flex-col overflow-hidden tf-round-edges'
+        : 'bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-[95vw] sm:max-w-[935px] w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col tf-round-edges'}>
+        {/* Header */}
+        <div className="bg-slate-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3 shrink-0">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-lg bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center flex-shrink-0">
+              <Mail className="w-4 h-4 text-white" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight truncate">Send AI Interview via Email</h2>
+              {headerMeta}
+            </div>
+          </div>
+          {!embedded && (
+            <button
+              onClick={onClose}
+              aria-label="Close dialog"
+              className="text-gray-500 dark:text-slate-400 hover:text-brand-blue hover:bg-brand-blue/5 p-1.5 sm:p-2 rounded-lg transition-colors flex-shrink-0"
+            >
+              <X className="w-4 h-4 sm:w-5 sm:h-5" />
+            </button>
+          )}
+        </div>
+
+        {contentBlock}
+        <div className="px-6 py-4 bg-gray-50 dark:bg-slate-800/50 border-t border-gray-200 dark:border-slate-700 flex items-center justify-between shrink-0">
+          {footerContent}
+        </div>
+      </div>
+
+      {extras}
     </div>
   );
 }

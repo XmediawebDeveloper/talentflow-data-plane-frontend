@@ -7,7 +7,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { PublishedJD } from '@/lib/services/aiInterviewService';
 import { toast } from 'sonner';
-import { AIInterviewStepIndicator } from './AIInterviewStepIndicator';
+import { AIInterviewStepIndicator, useBreadcrumbOffset } from './AIInterviewStepIndicator';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import JDVersionHistoryModal from '@/components/JDVersionHistoryModal';
 import { Button } from '@/components/ui/button';
@@ -44,6 +44,8 @@ function InterviewCreatedLabel({ created }: { created: boolean }) {
 
 export default function AIInterviewJDSelection() {
   const router = useRouter();
+  /* Step indicator pins below the sticky breadcrumb rather than under it. */
+  const [breadcrumbBarRef, breadcrumbHeight] = useBreadcrumbOffset();
   const { user, isTenantAdmin } = useAuth();
   const canCreateJD = isTenantAdmin || !!user?.permissions?.canCreateJD;
   const canCreateAIInterviews = isTenantAdmin || !!user?.permissions?.canCreateAIInterviews;
@@ -169,6 +171,7 @@ export default function AIInterviewJDSelection() {
       <div className="mx-auto w-full max-w-[1400px]">
         <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
           <PageBreadcrumb
+            barRef={breadcrumbBarRef}
             className="mb-3"
             items={[
               { label: 'Dashboard', href: '/dashboard' },
@@ -176,7 +179,7 @@ export default function AIInterviewJDSelection() {
               { label: 'Select Job Description' },
             ]}
           />
-          <AIInterviewStepIndicator currentStep={1} />
+          <AIInterviewStepIndicator currentStep={1} topOffset={breadcrumbHeight} />
 
           <div className="w-full">
             <div className="mb-6 sm:mb-8">

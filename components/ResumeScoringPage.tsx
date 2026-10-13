@@ -285,6 +285,11 @@ const historyLineageKey = (item: ScoredResumeData): string => item.jdJobId || it
  * bring the cards back exactly as they were.
  */
 const SHOW_STAT_CARDS = false;
+/* The four verdict cards (All / Exact / Partial / No Match) in the Job
+   Descriptions cards' style, above the list. Unlike SHOW_STAT_CARDS above
+   they never replace the list — they sit on top of it and set the same
+   verdict filter as the pills. */
+const SHOW_VERDICT_CARDS = true;
 
 type Verdict = 'Exact Match' | 'Partial Match' | 'No Match';
 
@@ -941,6 +946,11 @@ export default function ResumeScoringPage({
   // View by Job's own List / Grid switch and Export dialog — the same two
   // controls View by Candidates has in its toolbar.
   const [jobListDisplayMode, setJobListDisplayMode] = useState<ListDisplayMode>('list');
+  /* View by Candidates' and a job's scored-resumes List / Grid. Owned here
+     (not inside ScoredResumesTable, which unmounts while a detail is open)
+     and persisted below, so Back / the breadcrumb return to the same mode. */
+  const [candidatesDisplayMode, setCandidatesDisplayMode] = useState<ListDisplayMode>('list');
+  const [jobResumesDisplayMode, setJobResumesDisplayMode] = useState<ListDisplayMode>('list');
   const [showJobExportModal, setShowJobExportModal] = useState(false);
   /* View by Job's Actions menu — the same three actions, popup and dialogs
      as View by Candidates', run on the candidates of the ticked jobs. */
@@ -1009,6 +1019,8 @@ export default function ResumeScoringPage({
       // the filtered list and the whole toolbar — indistinguishable from the
       // filters having been cleared.
       pageView,
+      // List / Grid in each view — reset to List on every Back before.
+      jobListDisplayMode, candidatesDisplayMode, jobResumesDisplayMode,
     },
     (s) => {
       if (typeof s.isGlobalView === 'boolean') setIsGlobalView(s.isGlobalView);
@@ -1034,6 +1046,10 @@ export default function ResumeScoringPage({
       if (typeof s.historyItemsPerPage === 'number') setHistoryItemsPerPage(s.historyItemsPerPage);
       // With the stat cards off there is no 'cards' landing to go back to.
       if (s.pageView === 'list' || (SHOW_STAT_CARDS && s.pageView === 'cards')) setPageView(s.pageView);
+      const isMode = (m: unknown): m is ListDisplayMode => m === 'list' || m === 'grid';
+      if (isMode(s.jobListDisplayMode)) setJobListDisplayMode(s.jobListDisplayMode);
+      if (isMode(s.candidatesDisplayMode)) setCandidatesDisplayMode(s.candidatesDisplayMode);
+      if (isMode(s.jobResumesDisplayMode)) setJobResumesDisplayMode(s.jobResumesDisplayMode);
     },
   );
 
@@ -2838,6 +2854,8 @@ export default function ResumeScoringPage({
         {/* Scored Resumes Table */}
         <ScoredResumesTable
           resumes={scoredResumesData}
+          displayMode={jobResumesDisplayMode}
+          onDisplayModeChange={setJobResumesDisplayMode}
           jobTitle={selectedHistoryItem.jobTitle}
           jobId={selectedHistoryItem.jobId}
           jobCode={jdCodeOf(selectedHistoryItem)}
@@ -3308,73 +3326,60 @@ export default function ResumeScoringPage({
           </div>
         </div>
 
-        {/* Overview cards — switched OFF (SHOW_STAT_CARDS): their counts now
-            sit on the verdict filter in the view row below. Kept intact so
-            they can be turned back on as they were. */}
-          {SHOW_STAT_CARDS && (
-          <div className="mb-4 sm:mb-5">
-            {/* The page used to also render its own "reopen last progress" floating
-                clock button here (bottom-24, offset above GlobalScoringProgressIndicator's
-                bottom-6 widget). GlobalScoringProgressIndicator already keeps a
-                finished run's round button up for a day and restores this exact
-                popup on click, so the two were showing side by side for the same
-                purpose — the visible "duplicate clock" bug. Removed in favor of
-                the single global widget everywhere, this page included. */}
-
-            {/* One clickable card — Total Resumes Scored, which opens the list —
-                followed by the verdict breakdown, which is read-only. Switching
-                between the job / candidate / all-resumes views moved to the
-                pills under this row. */}
-            <StatsCardGrid className="mb-0">
-              <StatsCard
-                tone="neutral"
-                active={pageView === 'list' && isGlobalView && globalListMode === 'events' && !matchFilter}
-                showClickArrow
-                icon={FileText}
-                label="Total Resumes Scored"
-                value={totalResumesScored.toLocaleString()}
-                sparkline={false}
-                onClick={() => {
-                  setMatchFilter(null);
-                  openScoringListView(true, 'events');
-                }}
-              />
-              {/* The verdict breakdown, and the filter for it. Each opens the
-                  all-resumes list narrowed to that verdict; clicking the
-                  selected one again clears the filter, so the cards are a
-                  toggle rather than a one-way trip that needs a Reset.
-
-                  `tone="neutral"` like every other card on the page — the
-                  verdict's own colour lives on the badges in the rows, where it
-                  marks one row against another. Spread across the tiles it just
-                  made the row read as four unrelated widgets. */}
-              {([
-                { id: 'Exact Match' as const, icon: CheckCircle2, count: matchCounts.exact },
-                { id: 'Partial Match' as const, icon: TrendingUp, count: matchCounts.partial },
-                { id: 'No Match' as const, icon: XCircle, count: matchCounts.none },
-              ]).map(card => (
-                <StatsCard
-                  key={card.id}
-                  tone="neutral"
-                  active={pageView === 'list' && isGlobalView && matchFilter === card.id}
-                  showClickArrow
-                  icon={card.icon}
-                  label={card.id}
-                  value={card.count.toLocaleString()}
-                  sparkline={false}
-                  onClick={() => {
-                    const next = matchFilter === card.id ? null : card.id;
-                    setMatchFilter(next);
-                    /* Always the flat all-resumes view: these are scoring
-                       events, which is what the counts above are, and the
-                       candidate view would cluster them back into people. */
-                    openScoringListView(true, 'events');
-                  }}
-                />
-              ))}
-            </StatsCardGrid>
-          </div>
-          )}
+        {/* Verdict cards — the Job Descriptions page's StatsCards (icon,
+            count, a "N candidates" chip under it, highlighted when selected).
+            Each sets the same verdict filter as the pills in the view row
+            below (clicking the selected one again goes back to All), so the
+            list under them follows, in either View by Job or Candidates. */}
+        {SHOW_VERDICT_CARDS && (() => {
+          /* Distinct candidates behind each count — the cards' sub-line, as
+             the JD cards carry "N versions". Same candidate key the
+             candidate view groups by. */
+          const people = { all: new Set<string>(), exact: new Set<string>(), partial: new Set<string>(), none: new Set<string>() };
+          globalScoredResumesVersioned.forEach((r: any) => {
+            const k = candidateGroupKey(r);
+            people.all.add(k);
+            const v = rowVerdict(r);
+            (v === 'Exact Match' ? people.exact : v === 'Partial Match' ? people.partial : people.none).add(k);
+          });
+          const CandidatesChip = ({ count }: { count: number }) => (
+            <span className="mt-1.5 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700">
+              {count} {count === 1 ? 'candidate' : 'candidates'}
+            </span>
+          );
+          const cards = [
+            { id: null, label: 'All Scored', icon: FileText, count: totalResumesScored, people: people.all.size },
+            { id: 'Exact Match' as const, label: 'Exact Match', icon: CheckCircle2, count: matchCounts.exact, people: people.exact.size },
+            { id: 'Partial Match' as const, label: 'Partial Match', icon: TrendingUp, count: matchCounts.partial, people: people.partial.size },
+            { id: 'No Match' as const, label: 'No Match', icon: XCircle, count: matchCounts.none, people: people.none.size },
+          ];
+          return (
+            <div className="mb-4 sm:mb-5">
+              <StatsCardGrid className="mb-0">
+                {cards.map(card => (
+                  <StatsCard
+                    key={card.label}
+                    tone="neutral"
+                    active={pageView === 'list' && matchFilter === card.id}
+                    showClickArrow
+                    icon={card.icon}
+                    label={card.label}
+                    value={card.count.toLocaleString()}
+                    sparkline={false}
+                    onClick={() => {
+                      // All always clears; a verdict toggles back to All.
+                      setMatchFilter(card.id === null || matchFilter === card.id ? null : card.id);
+                      setHistoryCurrentPage(1);
+                      setPageView('list');
+                    }}
+                  >
+                    {globalLoaded && <CandidatesChip count={card.people} />}
+                  </StatsCard>
+                ))}
+              </StatsCardGrid>
+            </div>
+          );
+        })()}
 
         {pageView === 'list' && (() => {
         /* View pills — the same control the Job Openings list uses for its
@@ -3505,6 +3510,13 @@ export default function ResumeScoringPage({
             ) : (
               <ScoredResumesTable
                 resumes={globalScoredResumesWithVersion}
+                displayMode={candidatesDisplayMode}
+                onDisplayModeChange={setCandidatesDisplayMode}
+                /* Who is listed follows the verdict filter (above); each
+                   candidate's Exact / Partial / No Match counts read ALL their
+                   scores, the filter's other verdicts muted — as View by Job. */
+                verdictCountRows={globalScoredResumesVersioned}
+                activeVerdict={matchFilter}
                 jobTitle="All Jobs"
                 jobId="global"
                 availableUnits={availableASUnits ?? 10}

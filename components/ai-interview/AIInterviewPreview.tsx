@@ -7,7 +7,7 @@ import {
   ArrowLeft, CheckCircle2, Loader2, Clock, Shield, Users,
   Brain, Video, Globe, Timer, Layers, Settings,
   ChevronRight, ChevronDown, CheckCircle, ClipboardList, Mic, Pencil, Play, Eye,
-  Bot, Share2, ArrowRight,
+  Share2, ArrowRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
@@ -21,7 +21,7 @@ import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { getPriorityLabel } from '@/lib/constants/aiInterviewPriority';
 import { modeFromDuration } from '@/lib/constants/aiInterviewMode';
-import { AIInterviewStepIndicator } from './AIInterviewStepIndicator';
+import { AIInterviewStepIndicator, useBreadcrumbOffset } from './AIInterviewStepIndicator';
 import WizardDiscardButton from './WizardDiscardButton';
 import AIInterviewFlowLoader from './AIInterviewFlowLoader';
 import { SectionHeader, SummaryLocation } from './ConfigSummary';
@@ -230,6 +230,8 @@ function HRQuestionStageBadge({ stage }: { stage?: string }) {
 
 export default function AIInterviewPreview() {
   const router = useRouter();
+  /* Step indicator pins below the sticky breadcrumb rather than under it. */
+  const [breadcrumbBarRef, breadcrumbHeight] = useBreadcrumbOffset();
   const { isTenantAdmin, hasPermissionCode } = useAuth();
   const canPublishAIInterview = isTenantAdmin || hasPermissionCode('ai_interview:publish');
   const canInviteAIInterview = isTenantAdmin || hasPermissionCode('ai_interview:invite');
@@ -501,6 +503,7 @@ export default function AIInterviewPreview() {
           <div className="mx-auto w-full max-w-[1400px]">
             <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
               <PageBreadcrumb
+                barRef={breadcrumbBarRef}
                 className="mb-4 md:mb-6"
                 items={fromInviteOrigin
                   ? [
@@ -515,22 +518,22 @@ export default function AIInterviewPreview() {
                       { label: position },
                     ]}
               />
-              <AIInterviewStepIndicator currentStep={CURRENT_STEP} />
+              <AIInterviewStepIndicator currentStep={CURRENT_STEP} topOffset={breadcrumbHeight} />
 
-              <div className="mx-auto w-full max-w-3xl py-8 sm:py-12 text-center">
+              <div className="mx-auto w-full max-w-2xl py-4 sm:py-6 text-center">
                 {/* The published tick, animated — the same Lottie every other
                     "published" screen plays (JD creation among them). It
                     replaces the tinted disc outright: it brings its own circle
                     and throws particles past its edge, and a ring behind it
                     would draw a hard line straight through the burst. */}
                 <div className="flex justify-center">
-                  <SuccessAnimation />
+                  <SuccessAnimation className="w-16 h-16 sm:w-20 sm:h-20" />
                 </div>
 
-                <h1 className="mt-6 text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
+                <h1 className="mt-3 text-lg sm:text-xl font-bold text-gray-900 tracking-tight">
                   AI Interview Published!
                 </h1>
-                <p className="mt-3 text-sm sm:text-base text-gray-500 max-w-xl mx-auto">
+                <p className="mt-2 text-xs sm:text-sm text-gray-500 max-w-lg mx-auto">
                   Your AI interview has been successfully published and is now live.
                   {fromInviteOrigin
                     ? ` Next, send it to the candidates you picked in ${inviteOriginLabel}.`
@@ -538,12 +541,9 @@ export default function AIInterviewPreview() {
                 </p>
 
                 {/* What was published */}
-                <div className="mt-8 rounded-xl border border-gray-100 ring-1 ring-black/[0.02] bg-slate-50/60 p-4 sm:p-5 text-left flex items-start gap-3 sm:gap-4">
-                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
-                    <Bot className="w-7 h-7 text-brand-blue" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-base sm:text-lg font-semibold text-gray-900 truncate">
+                <div className="mt-5 rounded-xl border border-gray-100 ring-1 ring-black/[0.02] bg-slate-50/60 p-3 sm:p-4 flex flex-col items-center text-center">
+                  <div className="min-w-0 max-w-full">
+                    <p className="text-sm sm:text-base font-semibold text-gray-900 truncate">
                       {[
                         interview.jd_short_id,
                         position,
@@ -551,12 +551,12 @@ export default function AIInterviewPreview() {
                         interview.jd_version != null ? `v${interview.jd_version}` : null,
                       ].filter(Boolean).join(' · ')}
                     </p>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-white text-gray-700 ring-1 ring-gray-200">
+                    <div className="mt-1.5 flex flex-wrap items-center justify-center gap-2">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-white text-gray-700 ring-1 ring-gray-200">
                         {mode === 'fixed' ? duration : bufferEnabled ? 35 : 30} mins
                       </span>
                       {mode === 'fixed' && (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-white text-gray-700 ring-1 ring-gray-200">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-white text-gray-700 ring-1 ring-gray-200">
                           {totalPreviewQuestions} Questions
                         </span>
                       )}
@@ -564,11 +564,11 @@ export default function AIInterviewPreview() {
                   </div>
                 </div>
 
-                <div className={`mt-6 pt-6 border-t border-gray-100 grid grid-cols-1 ${fromInviteOrigin ? 'sm:grid-cols-2' : 'sm:grid-cols-3'} gap-3`}>
+                <div className={`mt-4 pt-4 border-t border-gray-100 grid grid-cols-1 ${fromInviteOrigin ? 'sm:grid-cols-2' : 'sm:grid-cols-3'} gap-3`}>
                   <button
                     type="button"
                     onClick={() => router.push(`/recruitment/ai-interviews/${encodeURIComponent(id)}`)}
-                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
+                    className="inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
                   >
                     <Eye className="w-4 h-4" />
                     View Interview
@@ -585,7 +585,7 @@ export default function AIInterviewPreview() {
                     }}
                     aria-disabled={!canInviteAIInterview}
                     title={!canInviteAIInterview ? 'You do not have permission to invite candidates' : undefined}
-                    className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors ${!canInviteAIInterview ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    className={`inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors ${!canInviteAIInterview ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     <Share2 className="w-4 h-4" />
                     Share Invite Link
@@ -594,7 +594,7 @@ export default function AIInterviewPreview() {
                   <button
                     type="button"
                     onClick={() => (fromInviteOrigin ? router.replace(listHref) : router.push(listHref))}
-                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                    className="inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
                   >
                     <ArrowRight className="w-4 h-4" />
                     {fromInviteOrigin ? handoffContinueLabel() : 'Go to AI Interviews'}
@@ -624,8 +624,9 @@ export default function AIInterviewPreview() {
           card so both steps of the flow line up at the same width and gutters. */}
       <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
         <div className="mx-auto w-full max-w-[1400px]">
-          <div className="p-4 md:p-8 pb-52 sm:pb-24 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+          <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
             <PageBreadcrumb
+              barRef={breadcrumbBarRef}
               className="mb-4 md:mb-6"
               items={
                 fromInviteOrigin
@@ -654,7 +655,7 @@ export default function AIInterviewPreview() {
               }
             />
             {/* Step indicator — a direct child of the card, so it can stick. */}
-            <AIInterviewStepIndicator currentStep={CURRENT_STEP} />
+            <AIInterviewStepIndicator currentStep={CURRENT_STEP} topOffset={breadcrumbHeight} />
 
             {/* Header */}
             <div className="mb-6">
@@ -1174,54 +1175,51 @@ export default function AIInterviewPreview() {
       </div>
       </div>
 
+
+            {/* ── Wizard actions ── */}
+            {/* In normal flow at the end of the page (not sticky), matching
+                the Configure step. */}
+            <div className="mt-6 pt-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+              <div className="flex items-center justify-between sm:justify-start gap-2">
+                <Button variant="secondary" size="md" onClick={goBack} icon={<ArrowLeft className="w-4 h-4" />}>
+                  Back to Clusters
+                </Button>
+                <WizardDiscardButton onClick={handleDiscard} />
+              </div>
+              {/* Phones stack the two actions full-width, Publish on top. */}
+              <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2">
+                <Button variant="secondary" size="md" onClick={handleSaveAsDraft} className="w-full sm:w-auto justify-center">
+                  Save as Draft
+                </Button>
+                <Button
+                  variant="primary"
+                  size="md"
+                  onClick={() => {
+                    if (!canPublishAIInterview) {
+                      toast.error('You do not have permission to publish AI interviews');
+                      return;
+                    }
+                    setShowConfirm(true);
+                  }}
+                  disabled={publishing}
+                  aria-disabled={!canPublishAIInterview}
+                  title={!canPublishAIInterview ? 'You do not have permission to publish AI interviews' : undefined}
+                  className={`w-full sm:w-auto justify-center ${!canPublishAIInterview ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  icon={publishing ? <Loader2 className="w-4 h-4 animate-spin" /> : undefined}
+                >
+                  {publishing ? 'Publishing...' : (
+                    <>
+                      Publish Interview
+                      <ChevronRight className="w-4 h-4" />
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
           </div>{/* closes content card */}
         </div>{/* closes mx-auto max-w wrapper */}
       </main>{/* closes flex-1 main */}
 
-      {/* ── Sticky footer ── */}
-      {/* Matches the Clusters step: the outer div is a transparent full-width
-          positioning layer, while the WHITE bar lives on the inner
-          max-w-[1400px] div so it lines up with the content card and leaves no
-          white bleed in the side margins. */}
-      <div className="fixed bottom-0 left-0 right-0 z-40">
-        <div className="mx-auto w-full max-w-[1400px] bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 ring-1 ring-black/[0.02] shadow-lg shadow-brand-blue/5 rounded-t-2xl px-4 md:px-8 py-3 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
-          <div className="flex items-center justify-between sm:justify-start gap-2">
-            <Button variant="secondary" size="md" onClick={goBack} icon={<ArrowLeft className="w-4 h-4" />}>
-              Back to Clusters
-            </Button>
-            <WizardDiscardButton onClick={handleDiscard} />
-          </div>
-          {/* Phones stack the two actions full-width, Publish on top. */}
-          <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2">
-            <Button variant="secondary" size="md" onClick={handleSaveAsDraft} className="w-full sm:w-auto justify-center">
-              Save as Draft
-            </Button>
-            <Button
-              variant="primary"
-              size="md"
-              onClick={() => {
-                if (!canPublishAIInterview) {
-                  toast.error('You do not have permission to publish AI interviews');
-                  return;
-                }
-                setShowConfirm(true);
-              }}
-              disabled={publishing}
-              aria-disabled={!canPublishAIInterview}
-              title={!canPublishAIInterview ? 'You do not have permission to publish AI interviews' : undefined}
-              className={`w-full sm:w-auto justify-center ${!canPublishAIInterview ? 'opacity-50 cursor-not-allowed' : ''}`}
-              icon={publishing ? <Loader2 className="w-4 h-4 animate-spin" /> : undefined}
-            >
-              {publishing ? 'Publishing...' : (
-                <>
-                  Publish Interview
-                  <ChevronRight className="w-4 h-4" />
-                </>
-              )}
-            </Button>
-          </div>
-        </div>
-      </div>
 
       {/* ── Job description, in place ── */}
       {jdViewOpen && interview.jd_id && (
