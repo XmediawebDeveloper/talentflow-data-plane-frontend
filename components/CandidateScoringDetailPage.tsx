@@ -2869,7 +2869,8 @@ Best regards`);
                       <span>By {jdDetails.created_by_name || 'System'}</span>
                       <span className="text-gray-300">•</span>
                       <span className="inline-flex items-center px-2.5 py-1 bg-purple-600 text-white rounded-full text-xs font-medium">
-                        v{jdDetails.current_version && jdDetails.current_version > 0 ? jdDetails.current_version : 1}.0
+                        {/* Job version (version_number), not current_version — the republish counter. */}
+                        v{jdDetails.version_number && jdDetails.version_number > 0 ? jdDetails.version_number : 1}.0
                       </span>
                     </div>
                   </div>

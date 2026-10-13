@@ -225,6 +225,9 @@ interface Job {
   experience?: string;
   jobId?: string;
   currentVersion?: number;
+  /** Republish counter — ONLY for the "Published" vs "Republished" label;
+   *  `currentVersion` above is the job version (v1, v2, ...). */
+  publishCount?: number;
   /* Carried so the job rows can show what the Resume Scoring job rows show.
      All four already exist on the JD record; they were simply never mapped. */
   industryType?: string;
@@ -5611,7 +5614,7 @@ export default function AITalentMatchPage({
                           <td className="text-center py-3 px-4 align-middle whitespace-nowrap">
                             {(() => {
                               const jobVersion = jobs.find(j => j.id === job.jobId)?.currentVersion
-                                ?? allMatchSessions.find(s => s.id === job.historyId)?.jd_current_version;
+                                ?? allMatchSessions.find(s => s.id === job.historyId)?.jd_version_number;
                               return jobVersion
                                 ? (
                                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs border bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-500/30">
@@ -6547,7 +6550,7 @@ export default function AITalentMatchPage({
                           const raw = jobData.status || 'published';
                           const label = getDisplayStatus(
                             raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase(),
-                            jobData.currentVersion,
+                            jobData.publishCount,
                           );
                           if (label === 'Published' || label === 'Republished') return null;
                           const tone = getStatusConfig(label);
@@ -6724,7 +6727,8 @@ export default function AITalentMatchPage({
                           const j = jobs.find(x => x.id === (session.jd_id || item.jobId));
                           return j ? {
                             status: j.status,
-                            currentVersion: j.currentVersion,
+                            // The status label's republish counter, not the job version.
+                            currentVersion: j.publishCount,
                             experience: j.experience,
                             industryType: j.industryType,
                             location: j.location,
@@ -7500,16 +7504,23 @@ export default function AITalentMatchPage({
     // Each version's JD status in the app's shared vocabulary and colours
     // (Published / Republished / Draft / Disabled / Archived…), from the
     // lineage, else the job list for a version the lineage hasn't covered.
-    const versionStatusLabel = (jdId: string, number: number): string | undefined => {
-      const raw = resultsLineage.find(l => l.id === jdId)?.status || jobs.find(j => j.id === jdId)?.status;
+    // "Republished" comes from that version's republish counter, not its
+    // version number — a forked v2 is "Published" until it is republished.
+    const versionStatusLabel = (jdId: string): string | undefined => {
+      const lineageEntry = resultsLineage.find(l => l.id === jdId);
+      const jobEntry = jobs.find(j => j.id === jdId);
+      const raw = lineageEntry?.status || jobEntry?.status;
       if (!raw) return undefined;
-      return getDisplayStatus(raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase(), number);
+      return getDisplayStatus(
+        raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase(),
+        lineageEntry?.current_version ?? jobEntry?.publishCount,
+      );
     };
     const versionDropdownOptions = [
       ...matchedVersionOptions.map(o => ({ ...o, matched: true as const })),
       ...unmatchedVersionOptions.map(o => ({ ...o, matched: false as const })),
     ]
-      .map(o => ({ ...o, statusLabel: versionStatusLabel(o.jdId, o.number) }))
+      .map(o => ({ ...o, statusLabel: versionStatusLabel(o.jdId) }))
       .sort((a, b) => b.number - a.number);
 
     // Reset what belongs to the previous list — selection, search, filters —
