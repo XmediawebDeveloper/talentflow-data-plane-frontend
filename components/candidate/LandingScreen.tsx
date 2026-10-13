@@ -12,6 +12,7 @@ import {
   Award,
   Clock,
   FileText,
+  Settings,
   Code,
   Users,
   CheckCircle,
@@ -83,7 +84,10 @@ export function LandingScreen({ assessmentInfo, onBegin }: LandingScreenProps) {
       type: 'technical',
       enabled: assessmentInfo.has_technical_round,
       name: 'Technical Round',
-      icon: FileText,
+      /* The gear the question screen shows for this round, tilted the same
+         way, so the round looks the same from this screen to the last. */
+      icon: Settings,
+      iconClass: 'rotate-[20deg]',
       tone: TILE_BRAND
     },
     {
@@ -260,7 +264,7 @@ export function LandingScreen({ assessmentInfo, onBegin }: LandingScreenProps) {
                 {rounds.map((round) => (
                   <div key={round.type} className={`${CARD_MUTED} flex items-center gap-3`}>
                     <div className={`${ICON_TILE} ${round.tone}`}>
-                      <round.icon className={ICON} />
+                      <round.icon className={`${ICON} ${'iconClass' in round ? round.iconClass : ''}`} />
                     </div>
                     <p className={`${T_CARD_TITLE} min-w-0 break-words`}>{round.name}</p>
                   </div>
