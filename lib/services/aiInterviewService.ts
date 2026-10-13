@@ -170,7 +170,8 @@ export interface PublishedJD {
   coding_required?: boolean;
   created_at?: string;
   published_at?: string;
-  current_version?: number;
+  current_version?: number;  // republish counter — not the job version
+  version_number?: number;   // job version (v1, v2, ...)
   created_by_name?: string;
   has_published_config?: boolean;
 }

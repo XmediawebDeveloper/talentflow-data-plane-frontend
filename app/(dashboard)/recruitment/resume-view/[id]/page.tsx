@@ -3,6 +3,12 @@
 import { RESUME_EMAIL_SHARE_ENABLED } from '@/lib/constants/featureFlags';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import CreateInviteTargetModal from '@/components/resume-scoring/CreateInviteTargetModal';
+import { useJobInviteTargets } from '@/lib/hooks/useJobInviteTargets';
+import {
+  buildCreateUrl, clearInviteHandoff, readInviteHandoff, saveInviteHandoff, withResumeInviteMarker,
+  RESUME_INVITE_PARAM, type InviteHandoffKind,
+} from '@/lib/utils/resumeScoringInviteHandoff';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import VersionCompareModal from '@/components/VersionCompareModal';
 import RecordPager from '@/components/RecordPager';
@@ -11,7 +17,7 @@ import {
   Languages, Star, Edit2, Trash2, Send, Building2, GraduationCap, Code,
   ChevronRight, ExternalLink, Linkedin, Globe, FileText, Clock, History,
   User, File, HardDrive, Loader2, Share2, Copy, Check, ChevronDown, ChevronUp,
-  AlignLeft, Hash, X, Eye, UserPlus, Sparkles, Search, Database, Paperclip
+  AlignLeft, Hash, X, Eye, UserPlus, Sparkles, Search, Database, Paperclip, Plus
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -494,6 +500,107 @@ export default function ResumeViewPage() {
     } finally {
       setLoadingInvite(false);
     }
+  };
+
+  /* Opened from AI Talent Match, the job is known — so Invite follows
+     Resume Scoring's flow: a job with no AI Assessment / AI Interview yet
+     greys that entry with the reason and offers "+ Create …" under it; the
+     create pages come back here (`?resume_invite=1`) and the invite opens
+     for this candidate. */
+  const aiMatchInviteJobId = viewSource === 'ai-talent-match' ? aiMatchJobId : null;
+  const aiMatchInviteTargets = useJobInviteTargets(aiMatchInviteJobId ?? undefined);
+  const assessmentMissing = !!aiMatchInviteJobId && aiMatchInviteTargets.known && !aiMatchInviteTargets.assessmentConfigured;
+  const aiInterviewMissing = !!aiMatchInviteJobId && aiMatchInviteTargets.known && !aiMatchInviteTargets.aiInterviewConfigured;
+  const [createInviteKind, setCreateInviteKind] = useState<InviteHandoffKind | null>(null);
+
+  const startCreateInviteTarget = () => {
+    const kind = createInviteKind;
+    if (!kind || !aiMatchInviteJobId) return;
+    const returnUrl = withResumeInviteMarker(`${window.location.pathname}${window.location.search}`);
+    saveInviteHandoff({
+      source: 'ai-talent-match',
+      kind,
+      jdId: aiMatchInviteJobId,
+      jdTitle: aiMatchJobTitle || 'Job',
+      scoreIds: [resumeId],
+      candidateCount: 1,
+      view: 'job',
+      origin: 'detail',
+      candidateName: getCandidateName(),
+      returnUrl,
+    });
+    setCreateInviteKind(null);
+    router.push(buildCreateUrl(kind, { id: aiMatchInviteJobId, title: aiMatchJobTitle }, returnUrl, 'ai-talent-match'));
+  };
+
+  // Back from a create: re-check the job, then open the invite for this candidate.
+  const inviteHandoffCheckedRef = useRef(false);
+  useEffect(() => {
+    if (inviteHandoffCheckedRef.current || !aiMatchInviteJobId || !resume) return;
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has(RESUME_INVITE_PARAM)) return;
+    const h = readInviteHandoff();
+    if (!h || h.source !== 'ai-talent-match' || h.origin !== 'detail' || !h.scoreIds.includes(resumeId)) return;
+    inviteHandoffCheckedRef.current = true;
+    // Drop the marker so a reload doesn't run this again.
+    params.delete(RESUME_INVITE_PARAM);
+    const q = params.toString();
+    window.history.replaceState(window.history.state, '', `${window.location.pathname}${q ? `?${q}` : ''}`);
+    clearInviteHandoff();
+    const what = h.kind === 'assessment' ? 'AI Assessment' : 'AI Interview';
+    const jobName = h.jdCode || h.jdTitle;
+    (async () => {
+      let live = false;
+      try {
+        if (h.kind === 'assessment') {
+          const { assessmentService } = await import('@/lib/services/assessmentService');
+          const { isInvitableAssessment } = await import('@/lib/hooks/useJobInviteTargets');
+          live = ((await assessmentService.list({ jd_id: h.jdId, page_size: 100 }))?.items || []).some(isInvitableAssessment);
+        } else {
+          const { aiInterviewService } = await import('@/lib/services/aiInterviewService');
+          live = !!(await aiInterviewService.findLiveConfigForJd(h.jdId));
+        }
+      } catch {
+        live = false;
+      }
+      if (!live) {
+        toast.info(`No ${what} was published for ${jobName} yet - create it from Invite when you are ready.`);
+        return;
+      }
+      aiMatchInviteTargets.refresh();
+      toast.success(`${what} is live for ${jobName} - now invite ${getCandidateName() || 'this candidate'}.`);
+      if (h.kind === 'assessment') void startInvite('assessment');
+      else setShowAIInviteFlow(true);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aiMatchInviteJobId, resume, resumeId]);
+
+  /* The greyed entry with its reason, and "+ Create …" under it — the same
+     pair as AI Talent Match's / Resume Scoring's Actions menu. */
+  const renderCreateInviteItems = (kind: InviteHandoffKind) => {
+    const what = kind === 'assessment' ? 'AI Assessment' : 'AI Interview';
+    const Icon = kind === 'assessment' ? Mail : Sparkles;
+    return (
+      <>
+        <div role="menuitem" aria-disabled="true" className="w-full flex items-start gap-3 px-3 py-2 text-left text-gray-400 cursor-not-allowed">
+          <span className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+            <Icon className="w-4 h-4 text-gray-400" />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-sm font-medium">{kind === 'assessment' ? 'Assessment' : 'AI Interview'}</span>
+            <span className="block text-2xs leading-snug">{aiMatchJobTitle || 'This job'} has no {what} yet</span>
+          </span>
+        </div>
+        <button
+          role="menuitem"
+          onClick={() => { setShowInviteMenu(false); setCreateInviteKind(kind); }}
+          className="w-full flex items-center gap-2 pl-14 pr-3 py-2 text-left text-sm font-medium text-brand-blue hover:bg-brand-blue/5"
+        >
+          <Plus className="w-4 h-4" />
+          Create {what}
+        </button>
+      </>
+    );
   };
 
   const handleInviteJobPicked = (job: Job) => {
@@ -1286,8 +1393,8 @@ Best regards`);
                 </button>
 
                 {showInviteMenu && (
-                  <div role="menu" className="absolute left-0 top-full mt-2 w-52 max-w-[calc(100vw-1.5rem)] bg-white rounded-xl border border-gray-200 shadow-lg shadow-gray-900/10 py-1.5 z-[60]">
-                    {canInviteAssessment && (
+                  <div role="menu" className={`absolute left-0 top-full mt-2 ${assessmentMissing || aiInterviewMissing ? 'w-64' : 'w-52'} max-w-[calc(100vw-1.5rem)] bg-white rounded-xl border border-gray-200 shadow-lg shadow-gray-900/10 py-1.5 z-[60]`}>
+                    {canInviteAssessment && !assessmentPlanLocked && assessmentMissing ? renderCreateInviteItems('assessment') : canInviteAssessment && (
                       <button
                         role="menuitem"
                         onClick={() => startInvite('assessment')}
@@ -1303,7 +1410,7 @@ Best regards`);
                         <span className="min-w-0 text-sm font-medium text-gray-900">Assessment</span>
                       </button>
                     )}
-                    {canInviteAIInterview && (
+                    {canInviteAIInterview && !aiInterviewPlanLocked && aiInterviewMissing ? renderCreateInviteItems('interview') : canInviteAIInterview && (
                       <button
                         role="menuitem"
                         onClick={() => startInvite('ai-interview')}
@@ -2608,6 +2715,17 @@ Best regards`);
            "Browse all assessments instead" for the rest. */
         jobId={viewSource === 'ai-talent-match' && aiMatchJobId ? aiMatchJobId : undefined}
       />
+
+      {createInviteKind && aiMatchInviteJobId && (
+        <CreateInviteTargetModal
+          kind={createInviteKind}
+          jdTitle={aiMatchJobTitle || 'This job'}
+          candidateCount={1}
+          sourceLabel={getCandidateName() || 'this resume'}
+          onCancel={() => setCreateInviteKind(null)}
+          onStart={startCreateInviteTarget}
+        />
+      )}
 
       <InviteToAIInterviewFlow
         open={showAIInviteFlow}

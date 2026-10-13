@@ -19,6 +19,8 @@ import { toast } from 'sonner';
 import { featurePermissionService, UserLimitsResponse } from '@/lib/services/featurePermissionService';
 import { useQuota } from '@/contexts/QuotaContext';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import AddSeatsModal from './AddSeatsModal';
 
 interface UserLimitsProps {
@@ -103,7 +105,7 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
 
   const progressPercentage = Math.min(limits.usage_percentage, 100);
   const progressColor = limits.is_at_limit
-    ? 'bg-gradient-to-r from-red-500 to-red-600'
+    ? 'bg-destructive'
     : limits.approaching_limit
     ? 'bg-brand-orange'
     : 'bg-brand-blue';
@@ -122,7 +124,7 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
             <div className="flex items-center gap-2 min-w-0">
               <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm ring-1 ring-white/10 ${
                 limits.is_at_limit
-                  ? 'bg-gradient-to-br from-red-500 to-red-600 shadow-red-500/25'
+                  ? 'bg-destructive shadow-destructive/25'
                   : limits.approaching_limit
                   ? 'bg-brand-orange shadow-brand-orange/25'
                   : 'bg-brand-blue shadow-brand-blue/25'
@@ -134,7 +136,9 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
               </span>
             </div>
             {limits.is_at_limit && !isTrial && (
-              <button
+              <Button
+                variant="primary"
+                size="sm"
                 onClick={() => {
                   if (onAddSeatsClick) {
                     onAddSeatsClick();
@@ -142,11 +146,11 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
                     setShowAddSeatsModal(true);
                   }
                 }}
-                className="inline-flex items-center gap-1 px-2.5 py-1 bg-brand-blue hover:bg-brand-blue-2 text-white text-2xs sm:text-xs font-medium rounded-lg transition-all flex-shrink-0 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
+                className="flex-shrink-0"
+                icon={<Plus className="w-3 h-3" />}
               >
-                <Plus className="w-3 h-3" />
                 Add Seats
-              </button>
+              </Button>
             )}
           </div>
           <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden ring-1 ring-gray-200/60">
@@ -182,7 +186,7 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
         <div className="flex items-center gap-3 min-w-0">
           <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center flex-shrink-0 shadow-md ring-1 ring-white/10 ${
             limits.is_at_limit
-              ? 'bg-gradient-to-br from-red-500 to-red-600 shadow-red-500/25'
+              ? 'bg-destructive shadow-destructive/25'
               : limits.approaching_limit
               ? 'bg-brand-orange shadow-brand-orange/25'
               : 'bg-brand-blue shadow-brand-blue/25'
@@ -193,11 +197,11 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="text-sm sm:text-base font-semibold text-gray-900">User Seats</h3>
               {limits.is_at_limit ? (
-                <span className="px-2 py-0.5 rounded-full text-xs font-medium ring-1 ring-destructive-line bg-destructive-subtle text-destructive">At limit</span>
+                <Badge variant="destructive">At limit</Badge>
               ) : limits.approaching_limit ? (
-                <span className="px-2 py-0.5 rounded-full text-xs font-medium ring-1 ring-brand-orange/30 bg-brand-orange/10 text-brand-orange-deep">Nearing</span>
+                <Badge variant="warning">Nearing</Badge>
               ) : (
-                <span className="px-2 py-0.5 rounded-full text-xs font-medium ring-1 ring-brand-cyan/30 bg-brand-cyan/10 text-brand-cyan">Active</span>
+                <Badge variant="success">Active</Badge>
               )}
             </div>
             <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
@@ -238,7 +242,7 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
       {/* Warning messages */}
       {limits.is_at_limit && (
         <div className="mt-4 flex items-start gap-3 p-3 sm:p-4 bg-destructive-subtle border border-destructive-line rounded-xl ring-1 ring-destructive-line">
-          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center flex-shrink-0 shadow-sm shadow-red-500/25 ring-1 ring-white/10">
+          <div className="w-9 h-9 rounded-lg bg-destructive flex items-center justify-center flex-shrink-0 shadow-sm shadow-destructive/25 ring-1 ring-white/10">
             <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
           </div>
           <div className="flex-1 min-w-0">
@@ -250,7 +254,9 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               {!isTrial && (
-                <button
+                <Button
+                  variant="primary"
+                  size="sm"
                   onClick={() => {
                     if (onAddSeatsClick) {
                       onAddSeatsClick();
@@ -258,20 +264,20 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
                       setShowAddSeatsModal(true);
                     }
                   }}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand-blue hover:bg-brand-blue-2 text-white text-xs sm:text-sm font-medium rounded-lg transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                  icon={<ShoppingCart className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
                 >
-                  <ShoppingCart className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   Add Seats
-                </button>
+                </Button>
               )}
               {onUpgradeClick && (
-                <button
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={onUpgradeClick}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white text-gray-700 text-xs sm:text-sm font-medium rounded-lg border border-gray-200 hover:bg-gray-50 hover:border-brand-blue/30 hover:text-brand-blue transition-all"
+                  icon={<TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
                 >
-                  <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   Upgrade Plan
-                </button>
+                </Button>
               )}
             </div>
           </div>
@@ -290,7 +296,9 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
               Consider adding more seats or upgrading your plan.
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
-              <button
+              <Button
+                variant="primary"
+                size="sm"
                 onClick={() => {
                   if (onAddSeatsClick) {
                     onAddSeatsClick();
@@ -298,11 +306,10 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
                     setShowAddSeatsModal(true);
                   }
                 }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand-blue hover:bg-brand-blue-2 text-white text-xs sm:text-sm font-medium rounded-lg transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                icon={<Plus className="w-3.5 h-3.5" />}
               >
-                <Plus className="w-3.5 h-3.5" />
                 Add Seats
-              </button>
+              </Button>
             </div>
           </div>
         </div>

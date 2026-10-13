@@ -229,7 +229,10 @@ interface ScoredResumeData {
   jdStatus?: string;
   jdJobId?: string;
   jdCreationMethod?: string;
+  /** Republish counter of the JD row — drives the "Republished" status only. */
   jdCurrentVersion?: number;
+  /** Job version (v1, v2, ...) — what every Job Version label shows. */
+  jdVersionNumber?: number;
   jdDepartment?: string;
   jdIndustryType?: string;
   jdEmploymentType?: string;
@@ -240,11 +243,11 @@ interface ScoredResumeData {
   totalScored: number;
   scoredResumes: any[];
   /**
-   * The highest `jdCurrentVersion` seen across every scored entry in this
+   * The highest `jdVersionNumber` seen across every scored entry in this
    * job's lineage, filled in by `collapseHistoryToLatestVersions`. Since that
    * function now picks its representative row by most-recent `scoredAt` (not
    * by version number), the representative itself can be an older,
-   * superseded version whose OWN `jdCurrentVersion` reads back as 1 — this
+   * superseded version whose OWN `jdVersionNumber` is lower — this
    * field is what "does this job have version history worth a button"
    * actually needs to check.
    */
@@ -340,7 +343,7 @@ const collapseHistoryToLatestVersions = (
   const maxVersionByKey = new Map<string, number>();
   for (const item of list) {
     const key = resolveKey(item);
-    maxVersionByKey.set(key, Math.max(maxVersionByKey.get(key) ?? 1, item.jdCurrentVersion ?? 1));
+    maxVersionByKey.set(key, Math.max(maxVersionByKey.get(key) ?? 1, item.jdVersionNumber ?? 1));
     const existing = groups.get(key);
     if (!existing || new Date(item.scoredAt).getTime() > new Date(existing.scoredAt).getTime()) {
       groups.set(key, item);
@@ -1110,7 +1113,7 @@ export default function ResumeScoringPage({
         resumeVersion: item.resume_version || 1,
         // The JD's own version this candidate was scored against — rows here
         // span every job, so the same title can repeat once per JD version.
-        jobVersion: item.jd_current_version || 1,
+        jobVersion: item.jd_version_number || 1,
       }));
 
       setGlobalScoredResumes(converted);
@@ -1136,10 +1139,9 @@ export default function ResumeScoringPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isGlobalView]);
 
-  /* Each row's `jobVersion` above is seeded from `jd_current_version` — that
-     JD document's own republish counter, not its position in the lineage
-     (v1/v2/v3), so it reads back as 1 for a version that was never itself
-     republished even when it's, say, the lineage's v7. Prefetch the real
+  /* Each row's `jobVersion` above is seeded from `jd_version_number` (the
+     JD row's lineage version). NOT `jd_current_version`: that is the
+     republish counter, so republishing v1 in place read as "v2". Prefetch the real
      lineage (same endpoint/hook the "View by Job" history rows use) for
      every distinct JD this global list actually scored against, so the
      table can resolve the true version_number below once it lands. */
@@ -2555,7 +2557,7 @@ export default function ResumeScoringPage({
     // navigate straight to that version's own scoring page (goToVersion),
     // rather than expanding an inline list in place.
     const detailsLineageEntry = resolveHistoryLineageEntry(selectedHistoryItem);
-    const detailsVersionNumber = detailsLineageEntry?.version_number ?? selectedHistoryItem.jdCurrentVersion;
+    const detailsVersionNumber = detailsLineageEntry?.version_number ?? selectedHistoryItem.jdVersionNumber;
     // Every row in this table belongs to the one job version the page is
     // scoped to, so the Job Version column reads the same value the header
     // badge above it shows — never blank, unlike the cross-job "All
@@ -2569,7 +2571,7 @@ export default function ResumeScoringPage({
         )
       : [];
     const versionNumberOf = (item: ScoredResumeData) =>
-      resolveHistoryLineageEntry(item)?.version_number ?? item.jdCurrentVersion;
+      resolveHistoryLineageEntry(item)?.version_number ?? item.jdVersionNumber;
     /* Every scored version of this job, newest version first. selectedHistoryItem
        itself is only prepended when scoredHistory has no entry for it yet —
        goToVersion parks a stub here while that version's scores load. */
@@ -3909,11 +3911,11 @@ export default function ResumeScoringPage({
 
               // This item's own entry in its (prefetched) lineage — the
               // authoritative version_number for the badge below, since
-              // item.jdCurrentVersion is that JD document's republish
-              // counter, not its position in the lineage (v1/v2/v3). Falls
-              // back to jdCurrentVersion while the fetch is still in flight.
+              // Falls back to item.jdVersionNumber (the same number, from the
+              // scores list) while the fetch is still in flight — never
+              // jdCurrentVersion, the republish counter.
               const historyLineageEntry = resolveHistoryLineageEntry(item);
-              const displayVersionNumber = historyLineageEntry?.version_number ?? item.jdCurrentVersion;
+              const displayVersionNumber = historyLineageEntry?.version_number ?? item.jdVersionNumber;
               const filterLineageForItem = versionLineage.filterLineages[item.jobId];
               /* "View Progress" on the job row itself — the whole job, not
                  only the version this representative row happens to be:
@@ -4097,6 +4099,11 @@ export default function ResumeScoringPage({
                           availableUnits={availableASUnits ?? 10}
                           title=""
                           hideMatchStatusFilter
+                          // The job card above already shows the JD ID and title.
+                          hiddenColumnIds={['jdId', 'jobTitle']}
+                          // Follows the page's List / Grid toggle, so Grid shows
+                          // the candidates as cards instead of a table.
+                          displayMode={jobListDisplayMode}
                           enableInternalAIInterviewInvite
                           onViewCandidate={(resume) => {
                             setSelectedCandidateForView(resume);
@@ -4706,7 +4713,7 @@ export default function ResumeScoringPage({
            `resume_version` — the CANDIDATE's own uploaded-resume revision,
            not the job's — so it's never used for this. */
         const versionNumberForItem = (item: ScoredResumeData): number =>
-          resolveHistoryLineageEntry(item)?.version_number ?? item.jdCurrentVersion ?? 1;
+          resolveHistoryLineageEntry(item)?.version_number ?? item.jdVersionNumber ?? 1;
 
         const allResumes = historyModalLineageItems.flatMap((item) => {
           const versionNumber = versionNumberForItem(item);
