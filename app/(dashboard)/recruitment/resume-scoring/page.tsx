@@ -28,6 +28,7 @@ interface ScoredResumeData {
   jdJobId?: string;
   jdCreationMethod?: string;
   jdCurrentVersion?: number;
+  jdVersionNumber?: number;
   jdDepartment?: string;
   jdIndustryType?: string;
   jdEmploymentType?: string;
@@ -427,7 +428,7 @@ export default function ResumeScoringRoute() {
       // Group scores by JD
       const scoresByJd = new Map<string, {
         jdTitle: string; jdStatus: string; jdJobId?: string;
-        jdCreationMethod?: string; jdCurrentVersion?: number;
+        jdCreationMethod?: string; jdCurrentVersion?: number; jdVersionNumber?: number;
         jdDepartment?: string; jdIndustryType?: string;
         jdEmploymentType?: string; jdRemoteType?: string; jdLocation?: string;
         jdPublishedAt?: string; jdCreatedByName?: string;
@@ -455,6 +456,7 @@ export default function ResumeScoringRoute() {
             jdJobId: item.jd_job_id,
             jdCreationMethod: item.jd_creation_method,
             jdCurrentVersion: item.jd_current_version,
+            jdVersionNumber: item.jd_version_number,
             jdDepartment: item.jd_department,
             jdIndustryType: item.jd_industry_type,
             jdEmploymentType: item.jd_employment_type,
@@ -555,6 +557,7 @@ export default function ResumeScoringRoute() {
             jdJobId: data.jdJobId,
             jdCreationMethod: data.jdCreationMethod,
             jdCurrentVersion: data.jdCurrentVersion,
+            jdVersionNumber: data.jdVersionNumber,
             jdDepartment: data.jdDepartment,
             jdIndustryType: data.jdIndustryType,
             jdEmploymentType: data.jdEmploymentType,

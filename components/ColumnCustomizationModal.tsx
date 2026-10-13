@@ -1,5 +1,5 @@
-import { X, Check } from 'lucide-react';
 import { useState } from 'react';
+import { Button } from '@/components/ui/button';
 
 interface ColumnOption {
   id: string;
@@ -36,19 +36,13 @@ export default function ColumnCustomizationModal({ columns, onClose, onApply }: 
     <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 sm:p-5 border-b border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 flex-shrink-0">
+        <div className="flex items-center p-4 sm:p-5 border-b border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 flex-shrink-0">
           <div>
             <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50">Customize Columns</h2>
             <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mt-0.5">
               {enabledCount} of {selectedColumns.length} columns selected
             </p>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 text-gray-400 dark:text-slate-500 hover:text-brand-blue rounded-lg hover:bg-brand-blue/5 transition-colors"
-           aria-label="Close">
-            <X className="w-5 h-5" />
-          </button>
         </div>
 
         {/* Column List */}
@@ -73,15 +67,13 @@ export default function ColumnCustomizationModal({ columns, onClose, onApply }: 
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 px-4 sm:px-6 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 flex-shrink-0">
-          <button
-            onClick={handleApply}
-            disabled={enabledCount === 0}
-            className="px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
+        {/* Footer — Cancel (drops the unsaved picks), then Apply Changes,
+            bottom-right. */}
+        <div className="flex flex-wrap items-center justify-end gap-3 px-4 sm:px-6 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 flex-shrink-0">
+          <Button variant="secondary" size="md" onClick={onClose}>Cancel</Button>
+          <Button variant="primary" size="md" onClick={handleApply} disabled={enabledCount === 0}>
             Apply Changes
-          </button>
+          </Button>
         </div>
       </div>
     </div>

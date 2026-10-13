@@ -13,7 +13,7 @@ import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggl
 import ToolbarFilterSelect from '@/components/ui/toolbar-filter-select';
 import ToolbarSelectAll from '@/components/ui/toolbar-select-all';
 import { SortByControl } from '@/components/ui/select-all-menu';
-import { FILTER_FIELD_CLASS, FILTER_FIELD_WIDE_CLASS, FILTER_LABEL_CLASS, FILTER_CONTROL_CLASS, useScoringActionPermissions } from '@/components/ScoredResumesTable';
+import { JOB_TAB_FILTER_GRID_CLASS, JOB_TAB_FILTER_FIELD_CLASS, JOB_TAB_FILTER_LABEL_CLASS, JOB_TAB_FILTER_CONTROL_CLASS, useScoringActionPermissions } from '@/components/ScoredResumesTable';
 import type { InviteCandidate } from '@/components/talent-match-invite/inviteVersions';
 import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
 import TimelineStamps from '@/components/ui/timeline-stamps';
@@ -26,7 +26,7 @@ import { useRouter } from 'next/navigation';
 import {
   ChevronLeft, ChevronRight, ChevronDown, Eye, Loader2,
   Users, CheckCircle, Clock, Mail, XCircle, AlertTriangle, CalendarDays,
-  Ban, SlidersHorizontal, FileDown, FileText, FileSpreadsheet, Info, Download, X,
+  Ban, SlidersHorizontal, FileDown, FileText, FileSpreadsheet, Download,
   Play, Video,
 } from 'lucide-react';
 import {
@@ -41,9 +41,11 @@ import type { AIInterviewResponse, AIInterviewInvitationListResponse } from '@/l
 import { formatIST, parseIST } from '@/lib/utils/dateUtils';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import ColumnCustomizationModal from '@/components/ColumnCustomizationModal';
+import ExportColumnsModal from '@/components/ExportColumnsModal';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { INVITE_SOURCE_FILTER_OPTIONS, RESULT_FILTER_OPTIONS } from './ColumnFilterFields';
-import { InviteSourceValue, inviteSourceLabel, isRevocableInvite, isExpiredForActions, displayInviteScore, inviteResult, matchesInviteResultFilter, ResultBadge, InviteTimelineLines } from '@/components/AIInterviewInviteTable';
+import { InviteSourceValue, inviteSourceLabel, isRevocableInvite, isExpiredForActions, displayInviteScore, inviteResult, matchesInviteResultFilter, ResultBadge, InviteTimelineLines, hasMoreTimelineHistory, loadInterviewHistory } from '@/components/AIInterviewInviteTable';
+import { RESULTS_TIMELINE_LIMIT, TimelineHistoryDialog, ViewHistoryButton } from '@/components/ui/timeline-history-dialog';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 
 interface AIInterviewResultsProps {
@@ -117,10 +119,11 @@ interface AIInterviewResultsProps {
    * it unset and the toolbar renders inline in its own card as before.
    */
   toolbarPortal?: HTMLElement | null;
-  /** Job Details: adds the AI Talent Match tab's "Create / Send AI Interview"
-   *  to the selection Actions menu, handing the ticked candidates to the
-   *  host's version popup (VersionInviteDialog). Other hosts leave it unset. */
-  onOpenInviteDialog?: (candidates: InviteCandidate[]) => void;
+  /** Job Details: adds the AI Talent Match tab's "Create / Send Assessment"
+   *  and "Create / Send AI Interview" to the selection Actions menu, handing
+   *  the ticked candidates to the host's version popup of that type
+   *  (VersionInviteDialog). Other hosts leave it unset. */
+  onOpenInviteDialog?: (kind: 'assessment' | 'interview', candidates: InviteCandidate[]) => void;
 }
 
 /* Toggleable table columns (Actions always shows). Same Customize Columns
@@ -265,8 +268,8 @@ const RESULT_STATUSES = new Set(['in_progress', 'completed', 'terminated']);
 const isResultStatus = (v: unknown) => RESULT_STATUS_OPTIONS.some((o) => o.value === v);
 
 export default function AIInterviewResults({ configId, configTitle, jdTitle, jdShortId, embedded = false, showStats, hideVersionDetails = false, hideJobVersion = false, onViewCandidate, breadcrumbItems, toolbarActions, emptyStateAction, jobVersion: jobVersionProp, interviewVersion: interviewVersionProp, toolbarPortal, formatCandidateName, onOpenInviteDialog }: AIInterviewResultsProps) {
-  /* Create / Send AI Interview's gate — the AI Talent Match tab's own. */
-  const { mayInviteAIInterview, aiInterviewDeniedReason } = useScoringActionPermissions(true);
+  /* Create / Send Assessment | AI Interview's gates — the AI Talent Match tab's own. */
+  const { canCreateAssessments, assessmentDeniedReason, mayInviteAIInterview, aiInterviewDeniedReason } = useScoringActionPermissions(true);
   const showName = (name?: string | null) => (formatCandidateName && name ? formatCandidateName(name) : name);
   const router = useRouter();
   const [sessions, setSessions] = useState<AIInterviewResponse[]>([]);
@@ -610,6 +613,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
     .filter((c) => !hideJobVersion || c.id !== 'jobVersion')
     .map((c) => ({ id: c.id as string, label: c.label as string, enabled: true })));
   const [showColumnModal, setShowColumnModal] = useState(false);
+  /** The row whose Timeline "View History" is open. */
+  const [historyFor, setHistoryFor] = useState<AIInterviewResponse | null>(null);
   const enabledColumns = columns.filter((c) => c.enabled);
   const col = (id: ResultColumnId) => columns.some((c) => c.id === id && c.enabled);
 
@@ -618,16 +623,18 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
   const [isExporting, setIsExporting] = useState(false);
 
   // One export cell per column; Timeline splits into its three parts so each
-  // lands in its own spreadsheet column.
-  const exportHeaders = (): string[] =>
-    enabledColumns.flatMap((c) => (
+  // lands in its own spreadsheet column. `ids` = the Export popup's ticked
+  // columns, taken in the table's column order.
+  const exportColumnsOf = (ids: string[]) => columns.filter((c) => ids.includes(c.id));
+  const exportHeaders = (ids: string[]): string[] =>
+    exportColumnsOf(ids).flatMap((c) => (
       c.id === 'timeline' ? ['Started At', 'Completed At', 'Duration']
       // Email lives under the name on screen, but stays its own spreadsheet column.
       : c.id === 'candidate' ? ['Candidate', 'Email']
       : [c.label]
     ));
-  const exportRow = (session: AIInterviewResponse): string[] =>
-    enabledColumns.flatMap((c): string[] => {
+  const exportRow = (session: AIInterviewResponse, ids: string[]): string[] =>
+    exportColumnsOf(ids).flatMap((c): string[] => {
       switch (c.id) {
         case 'cid': return [session.candidate_cid || ''];
         case 'candidate': return [session.candidate_name || '', session.candidate_email || ''];
@@ -662,7 +669,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
     return all;
   };
 
-  const handleExport = async () => {
+  const handleExport = async (columnIds: string[]) => {
     setIsExporting(true);
     try {
       const rows = await collectExportRows();
@@ -670,8 +677,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
         toast.warning('No candidates to export');
         return;
       }
-      const headers = exportHeaders();
-      const data = rows.map(exportRow);
+      const headers = exportHeaders(columnIds);
+      const data = rows.map((row) => exportRow(row, columnIds));
       const baseName = `${(configTitle || jdTitle || 'AI_Interview').replace(/\s+/g, '_')}_Results_${new Date().toISOString().slice(0, 10)}`;
       let blob: Blob;
       let fileName: string;
@@ -810,7 +817,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
   const portaled = !!toolbarPortal;
   /* Embedded, the More Filters labels take the Scored Resumes panel's class;
      standalone keeps its own. */
-  const filterLabelClass = portaled ? FILTER_LABEL_CLASS : 'block text-xs font-medium text-gray-600 mb-1.5';
+  const filterLabelClass = portaled ? JOB_TAB_FILTER_LABEL_CLASS : 'block text-xs font-medium text-gray-600 mb-1.5';
   const body = (
     <>
       {/* Header — hidden when embedded as a tab (the details page already
@@ -934,7 +941,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                       onSelect={() => setShowExportModal(true)}
                     >
                       <FileDown className="w-4 h-4 text-menu-icon-download" />
-                      <span>Export ({selected.size})</span>
+                      <span>Export</span>
                     </DropdownMenuItem>
                     {revocableSelected.length > 0 && (
                       <DropdownMenuItem
@@ -968,34 +975,46 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                           : 'Download PDF Reports'}
                       </span>
                     </DropdownMenuItem>
-                    {/* Create / Send AI Interview — the AI Talent Match tab's
-                        item: the ticked candidates (once each, as a candidate
-                        can have several sessions) go to the host's version
-                        popup. */}
-                    {onOpenInviteDialog && (
-                      <DropdownMenuItem
-                        className={`flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer ${mayInviteAIInterview ? '' : 'text-gray-400 opacity-60'}`}
-                        onSelect={(e) => {
-                          if (!mayInviteAIInterview) {
-                            e.preventDefault();
-                            toast.error(aiInterviewDeniedReason);
-                            return;
+                    {/* Create / Send Assessment | AI Interview — the AI Talent
+                        Match tab's items: the ticked candidates (once each, as
+                        a candidate can have several sessions) go to the host's
+                        version popup of that type. */}
+                    {onOpenInviteDialog && (() => {
+                      const openInvite = (kind: 'assessment' | 'interview', allowed: boolean, deniedReason: string) => (e: Event) => {
+                        if (!allowed) {
+                          e.preventDefault();
+                          toast.error(deniedReason);
+                          return;
+                        }
+                        const invitees = new Map<string, InviteCandidate>();
+                        selected.forEach((s) => {
+                          const email = s.candidate_email || '';
+                          const key = s.resume_id || email.trim().toLowerCase() || s.id;
+                          if (!invitees.has(key)) {
+                            invitees.set(key, { id: s.resume_id || s.id, name: s.candidate_name || '', email, resumeId: s.resume_id });
                           }
-                          const invitees = new Map<string, InviteCandidate>();
-                          selected.forEach((s) => {
-                            const email = s.candidate_email || '';
-                            const key = s.resume_id || email.trim().toLowerCase() || s.id;
-                            if (!invitees.has(key)) {
-                              invitees.set(key, { id: s.resume_id || s.id, name: s.candidate_name || '', email, resumeId: s.resume_id });
-                            }
-                          });
-                          onOpenInviteDialog(Array.from(invitees.values()));
-                        }}
-                      >
-                        <Video className="w-4 h-4 text-menu-icon-share" />
-                        <span>Create / Send AI Interview</span>
-                      </DropdownMenuItem>
-                    )}
+                        });
+                        onOpenInviteDialog(kind, Array.from(invitees.values()));
+                      };
+                      return (
+                        <>
+                          <DropdownMenuItem
+                            className={`flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer ${canCreateAssessments ? '' : 'text-gray-400 opacity-60'}`}
+                            onSelect={openInvite('assessment', canCreateAssessments, assessmentDeniedReason)}
+                          >
+                            <FileText className="w-4 h-4 text-menu-icon-view" />
+                            <span>Create / Send Assessment</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className={`flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer ${mayInviteAIInterview ? '' : 'text-gray-400 opacity-60'}`}
+                            onSelect={openInvite('interview', mayInviteAIInterview, aiInterviewDeniedReason)}
+                          >
+                            <Video className="w-4 h-4 text-menu-icon-share" />
+                            <span>Create / Send AI Interview</span>
+                          </DropdownMenuItem>
+                        </>
+                      );
+                    })()}
                   </DropdownMenuContent>
                 </DropdownMenu>
               )}
@@ -1190,13 +1209,12 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             changes (no Done step); Reset in the toolbar clears them all. */}
         {showFilters && (
           /* pb-4 when embedded — the reference panel's bottom inset, off the
-             tab card's border. Embedded it is also the Scored Resumes tab's
-             panel: its wrapping row of flexing fields (one row on desktop,
-             wrapping on smaller screens) and neutral selects, no completion
-             dates. */
+             tab card's border. Embedded it is the AI Talent Match tab's panel
+             (JOB_TAB_FILTER_*): its 1 / 2 / 4-column grid, labels and 36px
+             inputs; no completion dates. */
           <div className={`mt-4 sm:mt-5 pt-4 sm:pt-5 border-t border-brand-blue/10${portaled ? ' pb-4' : ''}`}>
-          <div className={portaled ? 'flex flex-wrap gap-4' : 'flex flex-wrap gap-x-6 gap-y-4'}>
-            <div className={portaled ? FILTER_FIELD_WIDE_CLASS : 'flex-1 min-w-0 basis-[240px]'}>
+          <div className={portaled ? JOB_TAB_FILTER_GRID_CLASS : 'flex flex-wrap gap-x-6 gap-y-4'}>
+            <div className={portaled ? JOB_TAB_FILTER_FIELD_CLASS : 'flex-1 min-w-0 basis-[240px]'}>
               <label className={filterLabelClass}>Score Range (%)</label>
               <div className="flex items-center gap-2">
                 <input
@@ -1206,7 +1224,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                   max={100}
                   value={search.filters.scoreMin}
                   onChange={(e) => search.setFilter('scoreMin', e.target.value)}
-                  className={portaled ? `${FILTER_CONTROL_CLASS} min-w-0` : "w-full min-w-0 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"}
+                  className={portaled ? `${JOB_TAB_FILTER_CONTROL_CLASS} min-w-0` : "w-full min-w-0 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"}
                 />
                 <span className="text-gray-400 text-sm">to</span>
                 <input
@@ -1216,7 +1234,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                   max={100}
                   value={search.filters.scoreMax}
                   onChange={(e) => search.setFilter('scoreMax', e.target.value)}
-                  className={portaled ? `${FILTER_CONTROL_CLASS} min-w-0` : "w-full min-w-0 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"}
+                  className={portaled ? `${JOB_TAB_FILTER_CONTROL_CLASS} min-w-0` : "w-full min-w-0 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"}
                 />
               </div>
             </div>
@@ -1243,26 +1261,26 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             {!hideVersionDetails && (
             <>
             {!hideJobVersion && (
-            <div className={portaled ? FILTER_FIELD_CLASS : 'flex-1 min-w-0 basis-[180px]'}>
+            <div className={portaled ? JOB_TAB_FILTER_FIELD_CLASS : 'flex-1 min-w-0 basis-[180px]'}>
               <label className={filterLabelClass}>Job Version</label>
               <select
                 value={search.filters.jobVersion}
                 onChange={(e) => search.setFilter('jobVersion', e.target.value)}
                 aria-label="Job Version"
-                className={portaled ? FILTER_CONTROL_CLASS : "w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-black"}
+                className={portaled ? JOB_TAB_FILTER_CONTROL_CLASS : "w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-black"}
               >
                 <option value="">All job versions</option>
                 {jobVersion != null && <option value={String(jobVersion)}>V{jobVersion}</option>}
               </select>
             </div>
             )}
-            <div className={portaled ? FILTER_FIELD_CLASS : 'flex-1 min-w-0 basis-[180px]'}>
+            <div className={portaled ? JOB_TAB_FILTER_FIELD_CLASS : 'flex-1 min-w-0 basis-[180px]'}>
               <label className={filterLabelClass}>Interview Version</label>
               <select
                 value={search.filters.interviewVersion}
                 onChange={(e) => search.setFilter('interviewVersion', e.target.value)}
                 aria-label="Interview Version"
-                className={portaled ? FILTER_CONTROL_CLASS : "w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-black"}
+                className={portaled ? JOB_TAB_FILTER_CONTROL_CLASS : "w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-black"}
               >
                 <option value="">All interview versions</option>
                 {interviewVersion != null && <option value={String(interviewVersion)}>V{interviewVersion}</option>}
@@ -1270,13 +1288,13 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             </div>
             </>
             )}
-            <div className={portaled ? FILTER_FIELD_CLASS : 'flex-1 min-w-0 basis-[180px]'}>
+            <div className={portaled ? JOB_TAB_FILTER_FIELD_CLASS : 'flex-1 min-w-0 basis-[180px]'}>
               <label className={filterLabelClass}>Source</label>
               <select
                 value={search.filters.inviteSource}
                 onChange={(e) => search.setFilter('inviteSource', e.target.value)}
                 aria-label="Source"
-                className={portaled ? FILTER_CONTROL_CLASS : "w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-black"}
+                className={portaled ? JOB_TAB_FILTER_CONTROL_CLASS : "w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-black"}
               >
                 <option value="">All sources</option>
                 {INVITE_SOURCE_FILTER_OPTIONS.map((option) => (
@@ -1549,7 +1567,14 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                           <td className="px-4 py-3 align-top whitespace-nowrap text-gray-600">
                             {/* The Track Invites timeline (Invited, System Check,
                                 Started, Completed) plus this table's Duration. */}
-                            <InviteTimelineLines inv={session} duration={formatDuration(session)} />
+                            <InviteTimelineLines inv={session} duration={formatDuration(session)} limit={RESULTS_TIMELINE_LIMIT} />
+                            {/* The two latest events above; the whole trail
+                                behind View History. */}
+                            {hasMoreTimelineHistory(session, RESULTS_TIMELINE_LIMIT) && (
+                              <div className="mt-1">
+                                <ViewHistoryButton onClick={() => setHistoryFor(session)} />
+                              </div>
+                            )}
                           </td>
                         )}
                         {col('status') && (
@@ -1728,6 +1753,15 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
           </div>
         )}
 
+      {historyFor && (
+        <TimelineHistoryDialog
+          candidateName={showName(historyFor.candidate_name)}
+          candidateEmail={historyFor.candidate_email}
+          load={() => loadInterviewHistory(historyFor)}
+          onClose={() => setHistoryFor(null)}
+        />
+      )}
+
       {showColumnModal && (
         <ColumnCustomizationModal
           columns={columns}
@@ -1736,80 +1770,24 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
         />
       )}
 
-      {/* Export format picker — same modal as the resume scoring All Resumes tab. */}
+      {/* Export — the Score Resume tab's popup: format, then the columns to
+          include (starting from Customize Columns), then Cancel / Export. */}
       {showExportModal && (
-        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-          <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] flex flex-col">
-            <div className="flex items-start justify-between gap-3 p-5 border-b border-gray-200 shrink-0">
-              <div className="flex items-start gap-3">
-                <div className="w-11 h-11 rounded-full bg-blue-50 flex items-center justify-center flex-shrink-0">
-                  <FileDown className="w-5 h-5 text-blue-600" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-gray-900">Export Interview Results</h3>
-                  <p className="text-sm text-gray-500 mt-1 flex items-center gap-1.5">
-                    {selected.size > 0 ? `${selected.size} selected records` : `${versionMatches ? totalSessions : 0} records`}
-                    <span className="w-1 h-1 rounded-full bg-blue-500" />
-                    {enabledColumns.length} columns
-                  </p>
-                </div>
-              </div>
-              <Button variant="secondary" size="sm" onClick={() => setShowExportModal(false)} className="px-2 flex-shrink-0" aria-label="Close">
-                <X className="w-5 h-5" />
-              </Button>
-            </div>
-
-            <div className="p-5 overflow-y-auto flex-1">
-              <p className="text-sm font-bold text-gray-900 mb-3">Choose export format</p>
-              <div className="space-y-3">
-                {([
-                  { key: 'csv', title: 'CSV Format', desc: 'Compatible with Excel, Google Sheets, and most spreadsheet apps.', Icon: FileText, iconWrap: 'bg-success-subtle', iconColor: 'text-success' },
-                  { key: 'xls', title: 'Excel Format (.xls)', desc: 'Native Excel format with formatting and styling.', Icon: FileSpreadsheet, iconWrap: 'bg-blue-100', iconColor: 'text-blue-700' },
-                ] as const).map(({ key, title, desc, Icon, iconWrap, iconColor }) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => setExportFormat(key)}
-                    className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left ${
-                      exportFormat === key ? 'border-blue-500 bg-blue-50/60' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                    }`}
-                  >
-                    <div className={`w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 ${iconWrap}`}>
-                      <Icon className={`w-6 h-6 ${iconColor}`} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-bold text-gray-900">{title}</div>
-                      <div className="text-sm text-gray-500">{desc}</div>
-                    </div>
-                    <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${exportFormat === key ? 'border-blue-600' : 'border-gray-300'}`}>
-                      {exportFormat === key && <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />}
-                    </span>
-                  </button>
-                ))}
-              </div>
-
-              <div className="mt-4 p-4 bg-blue-50/60 rounded-xl flex items-start gap-3">
-                <Info className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
-                <p className="text-sm text-gray-600">
-                  <span className="block font-bold text-blue-700 mb-0.5">Columns included</span>
-                  {enabledColumns.map((c) => c.label).join(', ')}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-3 p-5 border-t border-gray-200 shrink-0">
-              <Button
-                variant="primary"
-                size="md"
-                onClick={handleExport}
-                disabled={isExporting || enabledColumns.length === 0}
-                icon={isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              >
-                Export
-              </Button>
-            </div>
-          </div>
-        </div>
+        <ExportColumnsModal<'csv' | 'xls'>
+          title="Export Interview Results"
+          recordCount={selected.size > 0 ? selected.size : versionMatches ? totalSessions : 0}
+          formats={[
+            { key: 'csv', title: 'CSV Format', description: 'Compatible with Excel, Google Sheets, and most spreadsheet apps.', Icon: FileText, iconWrap: 'bg-success-subtle', iconColor: 'text-success' },
+            { key: 'xls', title: 'Excel Format (.xls)', description: 'Native Excel format with formatting and styling.', Icon: FileSpreadsheet, iconWrap: 'bg-blue-100', iconColor: 'text-blue-700' },
+          ]}
+          format={exportFormat}
+          onFormatChange={setExportFormat}
+          columns={columns}
+          initialColumnIds={enabledColumns.map((c) => c.id)}
+          exporting={isExporting}
+          onExport={(ids) => void handleExport(ids)}
+          onClose={() => setShowExportModal(false)}
+        />
       )}
     </>
   );

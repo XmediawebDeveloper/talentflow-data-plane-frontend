@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import type { TimelineHistoryRow } from '@/components/ui/timeline-history-dialog';
 import {
   Dialog,
   DialogContent,
@@ -377,8 +378,8 @@ const buildFullTimeline = (
  *  Older events drop off the cell, not the trail: "View full history" opens
  *  every one of them. */
 const COMPACT_TIMELINE_LIMIT = 4;
-export const timelineEvents = (inv: any): TimelineEntry[] =>
-  buildFullTimeline(inv, inv.timeline || []).slice(0, COMPACT_TIMELINE_LIMIT).reverse();
+export const timelineEvents = (inv: any, limit: number = COMPACT_TIMELINE_LIMIT): TimelineEntry[] =>
+  buildFullTimeline(inv, inv.timeline || []).slice(0, limit).reverse();
 
 /** Timeline entry label -> the status key it puts an invitation in (the keys
  *  the status badge and the Invitation Status tabs use). Only entries that ARE
@@ -430,8 +431,21 @@ const TIMELINE_EVENT_DESCRIPTION: Record<string, string> = {
 /** "View full history" only earns its place once something is actually
  *  hidden by the cap above — at 4 events or fewer the cell already shows
  *  everything, so the link would open a modal identical to what's on screen. */
-export const hasMoreTimelineHistory = (inv: any): boolean =>
-  buildFullTimeline(inv, inv.timeline || []).length > COMPACT_TIMELINE_LIMIT;
+export const hasMoreTimelineHistory = (inv: any, limit: number = COMPACT_TIMELINE_LIMIT): boolean =>
+  buildFullTimeline(inv, inv.timeline || []).length > limit;
+
+/** View History on the Job Details Assessment Result tab: the invitation's
+ *  whole trail, oldest first — the embedded `timeline` merged with the audit
+ *  endpoint, exactly as the Invitation History dialog reads it. */
+export const loadInvitationHistory = async (inv: any, assessmentId: string, invitationId: string): Promise<TimelineHistoryRow[]> => {
+  const logs = await assessmentService.getInvitationTimeline(assessmentId, invitationId);
+  // buildFullTimeline hands back newest first; reversed to time order.
+  return buildFullTimeline(inv, [...(inv.timeline || []), ...logs]).reverse().map((entry) => ({
+    ...entry,
+    isStatus: isStatusEntry(entry),
+    description: TIMELINE_EVENT_DESCRIPTION[entry.label],
+  }));
+};
 
 /* ── Row-action builder ─────────────────────────────────────────────────
    One function, called by all three surfaces, so the status rules for

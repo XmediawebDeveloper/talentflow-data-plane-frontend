@@ -372,6 +372,9 @@ export function QuestionsView({ data, renderAnswerAction }: {
   // and the expanded view shows each skill's score + the AI's per-skill note.
   const [openSkills, setOpenSkills] = useState<Record<number, boolean>>({});
   const toggleSkills = (idx: number) => setOpenSkills(p => ({ ...p, [idx]: !p[idx] }));
+  // "All" = one continuous list numbered 1..N across the whole interview;
+  // "Sections" = the MHS / NHS / HR grouping with section-local Q numbers.
+  const [viewMode, setViewMode] = useState<'all' | 'sections'>('all');
 
   if (delivered.length === 0) {
     return (
@@ -449,9 +452,31 @@ export function QuestionsView({ data, renderAnswerAction }: {
   const nhScore = (typeof data.scores?.niceToHave === 'number') ? data.scores.niceToHave : _nhRecompute;
   const mhPass = mhScore >= MHS_THRESHOLD;
 
+  // "All" view order follows the HR stage configured on the interview:
+  // Opening HR questions (asked before the technical rounds) lead, Closing
+  // ones follow NHS. The stage isn't carried on the result rows, so it is
+  // read from the ask order — an HR question asked before the first MHS/NHS
+  // question was an Opening one. Un-reached HR rows fall to the Closing end.
+  const _skillAsked = [...mhQs, ...nhQs]
+    .filter(q => !q.notDelivered && typeof q.askedNum === 'number')
+    .map(q => q.askedNum as number);
+  const firstSkillAsked = _skillAsked.length > 0 ? Math.min(..._skillAsked) : Infinity;
+  const isOpeningHr = (q: PerQuestionDetail) =>
+    !q.notDelivered && typeof q.askedNum === 'number' && q.askedNum < firstSkillAsked;
+  const hrOpening = hrQs.filter(isOpeningHr);
+  const hrClosing = hrQs.filter(q => !isOpeningHr(q));
+  const allOrder = [...hrOpening, ...mhQs, ...nhQs, ...hrClosing];
+
   // Per-Q card renderer (extracted so the grouped-by-section rendering
   // below stays readable).
-  const renderQCard = (q: typeof delivered[number], idx: number) => {
+  const sectionTag: Record<string, { label: string; cls: string }> = {
+    mth: { label: 'Must-Have', cls: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+    nth: { label: 'Nice-to-Have', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+    hr:  { label: 'HR', cls: 'bg-violet-50 text-violet-700 border-violet-200' },
+  };
+  // `allNum` is set only in the "All" view: the card shows that interview-wide
+  // number plus a section tag (in "Sections" the header already names it).
+  const renderQCard = (q: typeof delivered[number], idx: number, allNum?: number) => {
     const answer = (q.answer && q.answer.trim()) || '';
     const displayOnlyScore = typeof q.displayOnlyQuestionScore === 'number'
       ? q.displayOnlyQuestionScore
@@ -475,8 +500,17 @@ export function QuestionsView({ data, renderAnswerAction }: {
         <div>
           <div className="flex items-center gap-2 mb-1.5 flex-wrap">
             <span className="text-xs font-semibold text-white bg-indigo-600 px-2 py-0.5 rounded-full">
-              Question {q.qNum}
+              {/* Sections view: per-section serial number (q.qNum, from 1). */}
+              {allNum !== undefined ? `Question ${allNum}` : `S.No. ${q.qNum}`}
             </span>
+            {allNum !== undefined && sectionTag[q.section] && (
+              <span
+                className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${sectionTag[q.section].cls}`}
+                title={`Question ${q.qNum} of the ${sectionTag[q.section].label} section`}
+              >
+                {sectionTag[q.section].label} · Q{q.qNum}
+              </span>
+            )}
             {isHr && q.notDelivered ? (
               <span
                 className="text-xs font-semibold px-2 py-0.5 rounded-full border bg-gray-100 text-gray-500 border-gray-300"
@@ -515,6 +549,15 @@ export function QuestionsView({ data, renderAnswerAction }: {
                 title="Question Score = Σ(skill_score × weight) / Σ(weight)"
               >
                 Score: {q.questionScore.toFixed(1)}/10
+              </span>
+            )}
+            {/* Sections view: interview-wide ask position, after the score. */}
+            {allNum === undefined && q.askedNum !== undefined && (
+              <span
+                className="text-xs font-semibold px-2 py-0.5 rounded-full border bg-gray-50 text-gray-600 border-gray-200"
+                title="Position in the whole interview, in the order the questions were asked"
+              >
+                Q{q.askedNum}
               </span>
             )}
             {q.bundledFollowUp && q.bundledFollowUp.source_qnum !== q.qNum && (
@@ -923,7 +966,35 @@ export function QuestionsView({ data, renderAnswerAction }: {
           This interview was terminated before completion. The scores below are for attended questions only; no overall pass/fail or final match score is generated.
         </div>
       )}
-      {mhQs.length > 0 && (
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5">
+          {([['all', 'All'], ['sections', 'Sections']] as const).map(([mode, label]) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => setViewMode(mode)}
+              className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
+                viewMode === mode ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {viewMode === 'all' && (
+        <>
+          <div className="flex items-center gap-2 pt-1 pb-1">
+            <div className="text-base font-bold text-gray-900">All Questions</div>
+            <span className="text-xs text-gray-500">
+              · {mhQs.length + nhQs.length + hrQs.length} question{mhQs.length + nhQs.length + hrQs.length === 1 ? '' : 's'}
+            </span>
+          </div>
+          {allOrder.map((q, i) => renderQCard(q, i, i + 1))}
+        </>
+      )}
+      {/* Sections view keeps MHS → NHS → HR regardless of the HR stage. */}
+      {viewMode === 'sections' && mhQs.length > 0 && (
         <>
           {sectionHeader(
             'Must-Have Section',
@@ -931,19 +1002,19 @@ export function QuestionsView({ data, renderAnswerAction }: {
             mhQs.length,
             'bg-indigo-50 text-indigo-700',
           )}
-          {mhQs.map((q, i) => renderQCard(q, i))}
+          {mhQs.map((q, i) => renderQCard(q, hrQs.length + i))}
         </>
       )}
-      {nhQs.length > 0 && (
+      {viewMode === 'sections' && nhQs.length > 0 && (
         <>
           {sectionHeader('Nice-to-Have Section', 'Information Only', nhQs.length, 'bg-amber-50 text-amber-700')}
-          {nhQs.map((q, i) => renderQCard(q, mhQs.length + i))}
+          {nhQs.map((q, i) => renderQCard(q, hrQs.length + mhQs.length + i))}
         </>
       )}
-      {hrQs.length > 0 && (
+      {viewMode === 'sections' && hrQs.length > 0 && (
         <>
           {sectionHeader('HR Round', 'Not Scored', hrQs.length, 'bg-violet-50 text-violet-700')}
-          {hrQs.map((q, i) => renderQCard(q, mhQs.length + nhQs.length + i))}
+          {hrQs.map((q, i) => renderQCard(q, i))}
         </>
       )}
 
@@ -1001,7 +1072,7 @@ export function QuestionsView({ data, renderAnswerAction }: {
             </div>
           )}
           {hrQs.length > 0 && (
-            <div className="rounded-2xl border-2 border-violet-500 overflow-hidden">
+            <div className={`${viewMode === 'all' && hrOpening.length > 0 && hrClosing.length === 0 ? 'order-first ' : ''}rounded-2xl border-2 border-violet-500 overflow-hidden`}>
               <div className="bg-violet-500 text-white px-4 py-2 text-xs font-bold uppercase tracking-wide">
                 HR Round
               </div>

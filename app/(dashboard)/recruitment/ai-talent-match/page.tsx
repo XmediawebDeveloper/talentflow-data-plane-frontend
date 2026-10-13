@@ -9,9 +9,9 @@ import FeatureGate from '@/components/shared/FeatureGate';
 import { Skeleton } from '@/components/ui/skeleton';
 
 // Neutral-gray skeleton mirroring the AI Talent Match landing as it is now —
-// the stat cards are off (SHOW_STAT_CARDS), so it opens straight on View by
-// Job — so there is no layout jump when AITalentMatchPage takes over:
-//   breadcrumb bar · header (icon, title, Run AI Match)
+// View by Job under the 4 stat cards — so there is no layout jump when
+// AITalentMatchPage takes over:
+//   breadcrumb bar · header (icon, title, Run AI Match) · 4 stat cards
 //   one card: row 1 search + Location + Industry + More Filters + Sort by + List/Grid,
 //             row 2 Select All | All + 3 rating pills | View by toggle … Expand all,
 //             then the job cards (tick, JD badge, title, version, history;
@@ -38,6 +38,26 @@ function AITalentMatchSkeleton() {
               </div>
               <Skeleton className="h-9 w-full sm:w-36 rounded-lg shrink-0" />
             </div>
+          </div>
+
+          {/* Stat cards — 4-up grid (StatsCardGrid): Matched Jobs, All Matches,
+              Match Rating (10), (9 – 7) / Below 7. Each StatsCard: icon ·
+              label · count · "N candidates" chip under the count, and the
+              click arrow in the top-right corner. */}
+          <div className="mb-4 sm:mb-5 grid gap-2.5 sm:gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="relative rounded-xl border border-gray-200 dark:border-slate-700/60 bg-white dark:bg-slate-900 px-3.5 py-3.5 sm:px-4 sm:py-4 pr-12">
+                <div className="flex items-start gap-2.5">
+                  <Skeleton className="h-9 w-9 shrink-0 rounded-xl" />
+                  <div className="space-y-2 pt-0.5">
+                    <Skeleton className="h-4 w-28" />
+                    <Skeleton className="h-7 w-12" />
+                    <Skeleton className="h-5 w-24 rounded-full" />
+                  </div>
+                </div>
+                <Skeleton className="absolute right-3 top-3 h-7 w-7 rounded-lg" />
+              </div>
+            ))}
           </div>
 
           <div className="rounded-lg border border-gray-200 dark:border-slate-700/60 p-4 sm:p-6">
@@ -73,34 +93,34 @@ function AITalentMatchSkeleton() {
               {Array.from({ length: 4 }).map((_, i) => (
                 <div
                   key={i}
-                  className="rounded-xl border border-gray-100 dark:border-slate-700/60 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-4"
+                  className="rounded-xl border border-gray-300 dark:border-slate-700/60 p-4 flex flex-col sm:flex-row items-start gap-3"
                 >
-                  <div className="flex-1 min-w-0 space-y-3">
+                  <div className="flex-1 min-w-0 w-full space-y-3">
                     {/* tick · JD badge · title · version · history */}
-                    <div className="flex items-center gap-3 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <Skeleton className="h-4 w-4 rounded" />
                       <Skeleton className="h-7 w-16 rounded-md" />
                       <Skeleton className="h-6 w-64 max-w-[50vw]" />
-                      <Skeleton className="h-6 w-12 rounded-full" />
-                      <Skeleton className="h-8 w-8 rounded-full" />
+                      <Skeleton className="h-7 w-12 rounded-full" />
+                      <Skeleton className="h-7 w-7 rounded-lg" />
                     </div>
                     {/* By · Matched · Scored */}
-                    <div className="flex items-center gap-4 flex-wrap pl-7">
+                    <div className="flex items-center gap-4 flex-wrap">
                       <Skeleton className="h-4 w-28" />
                       <Skeleton className="h-4 w-48" />
                       <Skeleton className="h-4 w-28" />
                     </div>
                   </div>
-                  {/* rating stack · details icon / View Candidates */}
-                  <div className="flex items-center gap-4">
-                    <div className="space-y-1.5">
+                  {/* rating stack · details icon over View Candidates */}
+                  <div className="flex items-start justify-end gap-6 w-full sm:w-auto">
+                    <div className="flex flex-col gap-1.5">
                       <Skeleton className="h-6 w-32 rounded-md" />
                       <Skeleton className="h-6 w-32 rounded-md" />
                       <Skeleton className="h-6 w-32 rounded-md" />
                     </div>
-                    <div className="flex flex-col items-end gap-2">
-                      <Skeleton className="h-11 w-11 rounded-lg" />
-                      <Skeleton className="h-11 w-48 rounded-lg" />
+                    <div className="flex flex-col items-stretch gap-2">
+                      <Skeleton className="h-9 w-9 rounded-lg self-end" />
+                      <Skeleton className="h-9 w-44 rounded-lg" />
                     </div>
                   </div>
                 </div>

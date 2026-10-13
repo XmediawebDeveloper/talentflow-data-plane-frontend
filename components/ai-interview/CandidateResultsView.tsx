@@ -1944,6 +1944,14 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                             (interview as any).special_instructions
                             || (liveSession as any).special_instructions
                           }
+                          // HR column: the enabled HR round's selected questions.
+                          hrQuestions={(() => {
+                            const rc = (interview as any).rounds_config || (liveSession as any).rounds_config;
+                            const hr = Array.isArray(rc)
+                              ? rc.find((r: any) => r?.type === 'hr' && r?.enabled !== false)
+                              : null;
+                            return Array.isArray(hr?.hr_questions) ? hr.hr_questions : [];
+                          })()}
                         />
                       )}
                     </div>

@@ -25,7 +25,7 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import MyResumesView from '@/components/resumes/MyResumesView';
 import InternalDatabaseView from '@/components/resumes/InternalDatabaseView';
-import { resumeService } from '@/lib/services/resumeService';
+import { resumeService, RESUMES_CHANGED_EVENT } from '@/lib/services/resumeService';
 import type { Permission } from '@/lib/types/tenant';
 
 export type ResumeTab = 'my-resumes' | 'internal-db';
@@ -113,17 +113,26 @@ export default function ResumeDatabasePage() {
   useEffect(() => {
     if (!showTabs) return;
     let cancelled = false;
-    (['my-resumes', 'internal-db'] as const).forEach((tab) => {
-      resumeService
-        .list({ source: tab, page: 1, page_size: 1, include_archived: false })
-        .then((res) => {
-          if (!cancelled) setTabCounts((prev) => ({ ...prev, [tab]: res.total }));
-        })
-        .catch(() => {
-          // Keep the last known figure (or none) rather than showing a wrong one.
-        });
-    });
-    return () => { cancelled = true; };
+    const load = () => {
+      (['my-resumes', 'internal-db'] as const).forEach((tab) => {
+        resumeService
+          .list({ source: tab, page: 1, page_size: 1, include_archived: false })
+          .then((res) => {
+            if (!cancelled) setTabCounts((prev) => ({ ...prev, [tab]: res.total }));
+          })
+          .catch(() => {
+            // Keep the last known figure (or none) rather than showing a wrong one.
+          });
+      });
+    };
+    load();
+    // Archive / unarchive / move / delete inside either view changes these
+    // totals without a tab switch — refetch when the service says so.
+    window.addEventListener(RESUMES_CHANGED_EVENT, load);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(RESUMES_CHANGED_EVENT, load);
+    };
   }, [showTabs, activeTab]);
 
   // The tab strip already shows which pool is open, so the breadcrumb stops at
