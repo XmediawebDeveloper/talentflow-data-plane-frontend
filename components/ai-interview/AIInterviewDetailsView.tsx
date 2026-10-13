@@ -1589,11 +1589,8 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   Linked JD has changed since this interview was configured
                 </p>
                 <p className="mt-0.5 text-xs text-warning-strong">
-                  {config.jd_stale_reason ?? 'The underlying Job Description was updated after this config was created.'}
-                  {config.jd_current_version != null && config.jd_version != null && (
-                    <> Snapshot: v{config.jd_version} &middot; Current: v{config.jd_current_version}.</>
-                  )}
-                  {' '}Candidates who take this interview will be evaluated against the snapshotted skills, not the current JD.
+                  {config.jd_stale_reason ?? 'The underlying Job Description was updated after this config was created'}
+                  .{' '}Candidates who take this interview will be evaluated against the snapshotted skills, not the current JD.
                 </p>
                 {config.status === 'draft' && config.jd_id && (
                   <button

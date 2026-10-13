@@ -28,6 +28,9 @@ import {
   Cog
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Tooltip } from '@/components/ui/tooltip';
 import { featurePermissionService } from '@/lib/services/featurePermissionService';
 import {
   FeatureFlags,
@@ -314,18 +317,22 @@ export default function FeaturePermissionManager({
               </h2>
               <p className="text-sm text-gray-500 mt-0.5 flex items-center gap-2 flex-wrap">
                 <span className="truncate">{userName}</span>
-                <span className="px-2 py-0.5 rounded-full text-2xs font-medium ring-1 ring-brand-blue/20 bg-brand-blue/10 text-brand-blue uppercase tracking-wider">
+                <Badge variant="info" className="text-2xs uppercase tracking-wider">
                   {userRole}
-                </span>
+                </Badge>
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 text-gray-400 hover:text-brand-blue rounded-lg hover:bg-brand-blue/10 transition-colors flex-shrink-0"
-           aria-label="Close">
-            <X className="w-5 h-5" />
-          </button>
+          <Tooltip content="Close">
+            <Button
+              variant="secondary"
+              onClick={onClose}
+              aria-label="Close"
+              className="px-2 flex-shrink-0"
+            >
+              <X className="w-5 h-5" />
+            </Button>
+          </Tooltip>
         </div>
 
         {/* Content */}
@@ -401,9 +408,9 @@ export default function FeaturePermissionManager({
                             <CategoryIcon className="w-4 h-4 text-white" />
                           </div>
                           <span className="font-semibold text-gray-900">{category}</span>
-                          <span className="text-xs font-medium text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 px-2 py-0.5 rounded-full">
+                          <Badge variant="default">
                             {enabledCount} / {categoryFeatures.length}
-                          </span>
+                          </Badge>
                         </div>
                         {isExpanded ? (
                           <ChevronDown className="w-5 h-5 text-brand-blue" />
@@ -434,20 +441,22 @@ export default function FeaturePermissionManager({
                                       {feature.name}
                                     </span>
                                     {feature.locked && (
-                                      <span
+                                      <Badge
+                                        variant="warning"
                                         title={feature.lockedReason}
-                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium ring-1 ring-brand-orange/30 bg-brand-orange/10 text-brand-orange-deep"
+                                        className="text-2xs"
                                       >
                                         <Lock className="w-3 h-3" /> Locked
-                                      </span>
+                                      </Badge>
                                     )}
                                     {feature.dependencies.length > 0 && (
-                                      <span
-                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium ring-1 ring-brand-cyan/30 bg-brand-cyan/10 text-brand-cyan"
+                                      <Badge
+                                        variant="secondary"
+                                        className="text-2xs"
                                         title={`Requires: ${feature.dependencies.join(', ')}`}
                                       >
                                         <Link2 className="w-3 h-3" /> {feature.dependencies.length}
-                                      </span>
+                                      </Badge>
                                     )}
                                   </div>
                                   <p className="text-sm text-gray-500 mt-0.5">
@@ -492,12 +501,13 @@ export default function FeaturePermissionManager({
                         {Object.keys(pendingChanges).length} change(s) pending
                       </span>
                     </div>
-                    <button
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       onClick={handleReset}
-                      className="text-sm font-medium text-brand-blue hover:text-brand-blue-2 px-3 py-1.5 rounded-lg hover:bg-white/60 transition-colors"
                     >
                       Reset
-                    </button>
+                    </Button>
                   </div>
                 </div>
               )}
@@ -507,23 +517,14 @@ export default function FeaturePermissionManager({
 
         {/* Footer */}
         <div className="px-6 py-4 border-t border-gray-200 bg-white flex items-center justify-end gap-3">
-          <button
+          <Button
+            variant="primary"
             onClick={handleSave}
             disabled={isSaving || isExpansionBlocked}
-            className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg text-sm font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            icon={isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
           >
-            {isSaving ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Check className="w-4 h-4" />
-                Save Changes
-              </>
-            )}
-          </button>
+            {isSaving ? 'Saving...' : 'Save Changes'}
+          </Button>
         </div>
       </div>
     </div>

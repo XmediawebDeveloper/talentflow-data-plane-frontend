@@ -38,7 +38,6 @@ import {
   Info,
   ExternalLink,
   Loader2,
-  Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -59,6 +58,14 @@ import { featurePermissionService, UserLimitsResponse } from '@/lib/services/fea
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DateField } from '@/components/ui/date-field';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Tooltip } from '@/components/ui/tooltip';
+import { PageHeader } from '@/components/ui/page-header';
+
+type BadgeVariant = React.ComponentProps<typeof Badge>['variant'];
 
 /* Neutral-gray table skeleton whose columns mirror a specific usage-history
    tab. `cols` is one width class (e.g. 'w-24') per column, in table order. */
@@ -95,7 +102,7 @@ type LucideIcon = React.FC<React.SVGProps<SVGSVGElement>>;
 
 const UNIT_TYPE_CONFIG: Record<UnitType, { label: string; icon: LucideIcon; color: string; bg: string; bar: string }> = {
   RS: { label: 'Resume Scoring', icon: ClipboardList, color: 'text-brand-blue', bg: 'bg-brand-blue/10', bar: 'bg-brand-blue' },
-  AS: { label: 'Assessment', icon: ClipboardCheck, color: 'text-purple-700', bg: 'bg-purple-50', bar: 'bg-purple-500' },
+  AS: { label: 'Assessment', icon: ClipboardCheck, color: 'text-brand-cyan', bg: 'bg-brand-cyan/10', bar: 'bg-brand-cyan' },
   AIU: { label: 'AI Interview', icon: Video, color: 'text-success', bg: 'bg-success-subtle', bar: 'bg-success' },
 };
 
@@ -106,7 +113,7 @@ const CONSUMPTION_COLUMNS: Array<{
   iconClass: string;
 }> = [
   { key: 'RS', label: 'Resume Scoring', icon: ClipboardList, iconClass: 'text-brand-blue' },
-  { key: 'AS', label: 'Assessment', icon: ClipboardCheck, iconClass: 'text-purple-500' },
+  { key: 'AS', label: 'Assessment', icon: ClipboardCheck, iconClass: 'text-brand-cyan' },
   { key: 'AIU', label: 'AI Interview', icon: Video, iconClass: 'text-success' },
   { key: 'RU', label: 'Resume Storage', icon: Upload, iconClass: 'text-brand-orange' },
 ];
@@ -138,7 +145,7 @@ function getUsagePct(consumed: number, allocated: number): number {
 }
 
 function getBarColor(pct: number): string {
-  if (pct >= 90) return 'bg-gradient-to-r from-red-500 to-red-600';
+  if (pct >= 90) return 'bg-destructive';
   if (pct >= 70) return 'bg-brand-orange';
   return 'bg-gradient-to-r from-brand-blue to-brand-cyan';
 }
@@ -147,37 +154,28 @@ function getBarColor(pct: number): string {
 
 function StatusBadge({ status }: { status: string }) {
   const cfg = STATUS_CONFIG[status] ?? { label: status, color: 'text-gray-600', bg: 'bg-gray-100' };
-  const ringMap: Record<string, string> = {
-    SUCCESS: 'ring-success-line',
-    FAILED: 'ring-destructive-line',
-    INSUFFICIENT_UNITS: 'ring-orange-200',
-    ABANDONED: 'ring-gray-200',
-    INTERRUPTED: 'ring-warning-line',
-    TENANT_SUSPENDED: 'ring-destructive-line',
-    TENANT_EXPIRED: 'ring-destructive-line',
-    BLOCKED: 'ring-gray-200',
+  const variantMap: Record<string, BadgeVariant> = {
+    SUCCESS: 'success',
+    FAILED: 'destructive',
+    INSUFFICIENT_UNITS: 'warning',
+    ABANDONED: 'muted',
+    INTERRUPTED: 'warning',
+    TENANT_SUSPENDED: 'destructive',
+    TENANT_EXPIRED: 'destructive',
+    BLOCKED: 'muted',
   };
-  const ring = ringMap[status] ?? 'ring-gray-200';
-  return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ring-1 ${ring} ${cfg.bg} ${cfg.color}`}>
-      {cfg.label}
-    </span>
-  );
+  return <Badge variant={variantMap[status] ?? 'muted'}>{cfg.label}</Badge>;
 }
 
 function UnitTypeBadge({ type }: { type: string }) {
   const cfg = UNIT_TYPE_CONFIG[type as UnitType];
   if (!cfg) {
-    return (
-      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 ring-1 ring-gray-200">
-        {type}
-      </span>
-    );
+    return <Badge variant="muted">{type}</Badge>;
   }
   const Icon = cfg.icon;
   const ringMap: Record<string, string> = {
     RS: 'ring-brand-blue/20',
-    AS: 'ring-purple-200',
+    AS: 'ring-brand-cyan/20',
     AIU: 'ring-success-line',
   };
   return (
@@ -219,14 +217,14 @@ function Pagination({
   };
 
   return (
-    <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gradient-to-b from-white to-slate-50/50">
+    <div className="flex flex-wrap items-center justify-between gap-y-3 gap-x-2 px-4 py-3 border-t border-gray-100 bg-gradient-to-b from-white to-slate-50/50">
       <p className="text-sm text-gray-500">
         Showing <span className="font-medium text-gray-900">{start}–{end}</span> of <span className="font-medium text-gray-900">{total}</span> records
       </p>
       <div className="flex items-center gap-2 sm:gap-3">
         <div className="flex items-center gap-1.5">
           <span className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Go to</span>
-          <input
+          <Input
             type="number"
             min={1}
             max={totalPages}
@@ -240,28 +238,32 @@ function Pagination({
             }}
             onBlur={commitGoToPage}
             aria-label="Go to page"
-            className="w-14 h-8 sm:h-9 px-2 text-sm text-center border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-gray-900"
+            className="w-14 h-8 sm:h-9 text-center"
           />
         </div>
-        <button
-          onClick={() => onPageChange(page - 1)}
-          disabled={page === 1}
-          className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
-          aria-label="Previous page" title="Previous page"
-        >
-          <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-        </button>
+        <Tooltip content="Previous page">
+          <button
+            onClick={() => onPageChange(page - 1)}
+            disabled={page === 1}
+            className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
+            aria-label="Previous page"
+          >
+            <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+          </button>
+        </Tooltip>
         <span className="text-sm font-medium text-gray-700 px-1 whitespace-nowrap">
           <span className="text-brand-blue font-semibold">{page}</span> / {totalPages}
         </span>
-        <button
-          onClick={() => onPageChange(page + 1)}
-          disabled={page === totalPages}
-          className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
-          aria-label="Next page" title="Next page"
-        >
-          <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-        </button>
+        <Tooltip content="Next page">
+          <button
+            onClick={() => onPageChange(page + 1)}
+            disabled={page === totalPages}
+            className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
+            aria-label="Next page"
+          >
+            <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+          </button>
+        </Tooltip>
       </div>
     </div>
   );
@@ -289,9 +291,11 @@ function ExportModal({
             </div>
             <h3 className="text-base font-semibold text-white">Export Usage History</h3>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors ring-1 ring-white/20" aria-label="Close">
-            <X className="w-4 h-4" />
-          </button>
+          <Tooltip content="Close">
+            <button onClick={onClose} className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors ring-1 ring-white/20" aria-label="Close">
+              <X className="w-4 h-4" />
+            </button>
+          </Tooltip>
         </div>
         <div className="p-5 space-y-3 flex-1 overflow-y-auto">
           <p className="text-sm text-gray-500">Choose export format:</p>
@@ -300,7 +304,7 @@ function ExportModal({
             disabled={isExporting}
             className="w-full flex items-center gap-3 p-3.5 rounded-xl border border-gray-200 hover:border-brand-blue/40 hover:bg-brand-blue/5 hover:shadow-md transition-all group disabled:opacity-50"
           >
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-sm shadow-emerald-500/25 ring-1 ring-white/10">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-success text-white shadow-sm shadow-success/25 ring-1 ring-white/10">
               <FileText className="w-5 h-5" />
             </div>
             <div className="text-left">
@@ -352,13 +356,13 @@ function AnalyticsCards({
 
   const tileGradient: Record<UnitType, string> = {
     RS: 'from-brand-blue to-brand-blue-2 shadow-brand-blue/25',
-    AS: 'from-purple-500 to-purple-700 shadow-purple-500/25',
-    AIU: 'from-brand-cyan to-emerald-500 shadow-brand-cyan/25',
+    AS: 'from-brand-cyan to-brand-blue shadow-brand-cyan/25',
+    AIU: 'from-success to-success-strong shadow-success/25',
   };
   const ringByType: Record<UnitType, string> = {
     RS: 'ring-brand-blue/20',
-    AS: 'ring-purple-200',
-    AIU: 'ring-brand-cyan/20',
+    AS: 'ring-brand-cyan/20',
+    AIU: 'ring-success-line',
   };
 
   return (
@@ -379,7 +383,7 @@ function AnalyticsCards({
         const barColor = getBarColor(pct);
 
         return (
-          <div key={type} className="group bg-white rounded-xl border border-gray-200 p-5 shadow-sm hover:shadow-md hover:border-brand-blue/30 hover:-translate-y-0.5 transition-all">
+          <div key={type} className="group bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-5 shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/40 hover:-translate-y-0.5 transition-all">
             <div className="flex items-start justify-between mb-4">
               <div className={`flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br ${tileGradient[type]} text-white shadow-sm ring-1 ring-white/10`}>
                 <Icon className="w-5 h-5" />
@@ -388,17 +392,17 @@ function AnalyticsCards({
             </div>
             <h3 className="text-sm font-medium text-gray-500 mb-1">{cfg.label}</h3>
             <div className="grid grid-cols-3 gap-2 mb-3">
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs text-gray-400">Purchased</p>
-                <p className="text-lg font-bold text-gray-900">{isUnlimited ? '∞' : (purchased?.toLocaleString() ?? '—')}</p>
+                <p className="text-lg font-bold text-gray-900 truncate">{isUnlimited ? '∞' : (purchased?.toLocaleString() ?? '—')}</p>
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs text-gray-400">Consumed</p>
-                <p className="text-lg font-bold text-gray-700">{consumed?.toLocaleString() ?? '—'}</p>
+                <p className="text-lg font-bold text-gray-700 truncate">{consumed?.toLocaleString() ?? '—'}</p>
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs text-gray-400">Remaining</p>
-                <p className={`text-lg font-bold ${pct >= 90 ? 'text-destructive' : pct >= 70 ? 'text-brand-orange-deep' : 'text-success'}`}>
+                <p className={`text-lg font-bold truncate ${pct >= 90 ? 'text-destructive' : pct >= 70 ? 'text-brand-orange-deep' : 'text-success'}`}>
                   {isUnlimited ? '∞' : (remaining?.toLocaleString() ?? '—')}
                 </p>
               </div>
@@ -422,7 +426,7 @@ function AnalyticsCards({
         const pct = ru ? (ru.is_unlimited ? 0 : Math.min(100, Math.round(ru.percentage_used))) : 0;
         const barColor = getBarColor(pct);
         return (
-          <div className="group bg-white rounded-xl border border-gray-200 p-5 shadow-sm hover:shadow-md hover:border-brand-blue/30 hover:-translate-y-0.5 transition-all">
+          <div className="group bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-5 shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/40 hover:-translate-y-0.5 transition-all">
             <div className="flex items-start justify-between mb-4">
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-orange text-white shadow-sm shadow-brand-orange/25 ring-1 ring-white/10">
                 <FileText className="w-5 h-5" />
@@ -431,19 +435,19 @@ function AnalyticsCards({
             </div>
             <h3 className="text-sm font-medium text-gray-500 mb-1">Resume Storage</h3>
             <div className="grid grid-cols-3 gap-2 mb-3">
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs text-gray-400">Limit</p>
-                <p className="text-lg font-bold text-gray-900">
+                <p className="text-lg font-bold text-gray-900 truncate">
                   {ru ? (ru.is_unlimited ? '∞' : ru.limit.toLocaleString()) : '—'}
                 </p>
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs text-gray-400">Used</p>
-                <p className="text-lg font-bold text-gray-700">{ru?.used?.toLocaleString() ?? '—'}</p>
+                <p className="text-lg font-bold text-gray-700 truncate">{ru?.used?.toLocaleString() ?? '—'}</p>
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs text-gray-400">Available</p>
-                <p className={`text-lg font-bold ${pct >= 90 ? 'text-destructive' : pct >= 70 ? 'text-brand-orange-deep' : 'text-success'}`}>
+                <p className={`text-lg font-bold truncate ${pct >= 90 ? 'text-destructive' : pct >= 70 ? 'text-brand-orange-deep' : 'text-success'}`}>
                   {ru ? (ru.is_unlimited ? '∞' : ru.available.toLocaleString()) : '—'}
                 </p>
               </div>
@@ -469,28 +473,28 @@ function AnalyticsCards({
         const pct = userLimits && !isUnlimited ? Math.min(100, Math.round(userLimits.usage_percentage)) : 0;
         const barColor = getBarColor(pct);
         return (
-          <div className="group bg-white rounded-xl border border-gray-200 p-5 shadow-sm hover:shadow-md hover:border-brand-blue/30 hover:-translate-y-0.5 transition-all">
+          <div className="group bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-5 shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/40 hover:-translate-y-0.5 transition-all">
             <div className="flex items-start justify-between mb-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-indigo-700 text-white shadow-sm shadow-indigo-500/25 ring-1 ring-white/10">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-brand-blue-2 to-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                 <Users className="w-5 h-5" />
               </div>
-              <span className="text-xs font-semibold px-2.5 py-1 rounded-full ring-1 ring-indigo-200 bg-indigo-50 text-indigo-700">MAX</span>
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-full ring-1 ring-gray-200 bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-300">MAX</span>
             </div>
             <h3 className="text-sm font-medium text-gray-500 mb-1">User Seats</h3>
             <div className="grid grid-cols-3 gap-2 mb-3">
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs text-gray-400">Max Users</p>
-                <p className="text-lg font-bold text-gray-900">
+                <p className="text-lg font-bold text-gray-900 truncate">
                   {userLimits ? (isUnlimited ? '∞' : userLimits.max_users.toLocaleString()) : '—'}
                 </p>
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs text-gray-400">Active</p>
-                <p className="text-lg font-bold text-gray-700">{userLimits?.current_users?.toLocaleString() ?? '—'}</p>
+                <p className="text-lg font-bold text-gray-700 truncate">{userLimits?.current_users?.toLocaleString() ?? '—'}</p>
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs text-gray-400">Available</p>
-                <p className={`text-lg font-bold ${pct >= 90 ? 'text-destructive' : pct >= 70 ? 'text-brand-orange-deep' : 'text-success'}`}>
+                <p className={`text-lg font-bold truncate ${pct >= 90 ? 'text-destructive' : pct >= 70 ? 'text-brand-orange-deep' : 'text-success'}`}>
                   {userLimits ? (isUnlimited ? '∞' : userLimits.available_slots.toLocaleString()) : '—'}
                 </p>
               </div>
@@ -537,13 +541,11 @@ function FeatureWiseTab({
 
   if (!items.length) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15 mb-4">
-          <Layers className="w-7 h-7 text-brand-blue" />
-        </div>
-        <p className="text-gray-700 font-semibold">No usage records found</p>
-        <p className="text-gray-500 text-sm mt-1">Try adjusting your filters or date range</p>
-      </div>
+      <EmptyState
+        icon={Layers}
+        title="No usage records found"
+        description="Try adjusting your filters or date range"
+      />
     );
   }
 
@@ -589,9 +591,7 @@ function FeatureWiseTab({
                 <td className="px-4 py-3">
                   <StatusBadge status={entry.status} />
                   {entry.refund_flag === 'YES' && (
-                    <span className="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">
-                      Refunded
-                    </span>
+                    <Badge variant="secondary" className="ml-1">Refunded</Badge>
                   )}
                 </td>
                 <td className="px-4 py-3 text-right">
@@ -707,12 +707,11 @@ function UserWiseTab({
 
   if (!users.length) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15 mb-4">
-          <Users className="w-7 h-7 text-brand-blue" />
-        </div>
-        <p className="text-gray-700 font-semibold">No user usage data found</p>
-      </div>
+      <EmptyState
+        icon={Users}
+        title="No user usage data found"
+        description="Try adjusting your filters or date range"
+      />
     );
   }
 
@@ -765,12 +764,12 @@ function UserWiseTab({
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center justify-center gap-2">
-                    <span className="inline-flex items-center gap-1 text-xs text-success font-medium px-2 py-0.5 rounded-full bg-success-subtle ring-1 ring-success-line">
+                    <Badge variant="success">
                       <CheckCircle2 className="w-3 h-3" />{u.successCount}
-                    </span>
-                    <span className="inline-flex items-center gap-1 text-xs text-destructive font-medium px-2 py-0.5 rounded-full bg-destructive-subtle ring-1 ring-destructive-line">
+                    </Badge>
+                    <Badge variant="destructive">
                       <XCircle className="w-3 h-3" />{u.failedCount}
-                    </span>
+                    </Badge>
                   </div>
                 </td>
                 <td className="px-4 py-3 text-gray-500 text-xs">{u.lastUsed ? formatIST(u.lastUsed) : '—'}</td>
@@ -812,13 +811,11 @@ function TeamWiseTab({
 
   if (!teamsData?.teams?.length) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15 mb-4">
-          <Users className="w-7 h-7 text-brand-blue" />
-        </div>
-        <p className="text-gray-700 font-semibold">No team usage data found</p>
-        <p className="text-gray-500 text-sm mt-1">Teams data will appear once team members start using features</p>
-      </div>
+      <EmptyState
+        icon={Users}
+        title="No team usage data found"
+        description="Teams data will appear once team members start using features"
+      />
     );
   }
 
@@ -913,7 +910,7 @@ function TeamWiseTab({
               <td className="px-4 py-3 text-right text-xs font-bold text-brand-blue">
                 {teamsData.teams.reduce((s, t) => s + (t.by_type?.RS?.total_consumed ?? 0), 0).toLocaleString()}
               </td>
-              <td className="px-4 py-3 text-right text-xs font-bold text-purple-700">
+              <td className="px-4 py-3 text-right text-xs font-bold text-brand-cyan">
                 {teamsData.teams.reduce((s, t) => s + (t.by_type?.AS?.total_consumed ?? 0), 0).toLocaleString()}
               </td>
               <td className="px-4 py-3 text-right text-xs font-bold text-success">
@@ -1087,15 +1084,15 @@ function RefundsTab({
 }) {
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
-  const ACTION_CONFIG: Record<string, { label: string; color: string; bg: string; ring: string }> = {
-    REFUND: { label: 'Refund', color: 'text-brand-cyan', bg: 'bg-brand-cyan/10', ring: 'ring-brand-cyan/20' },
-    ADJUST_ADD: { label: 'Credit', color: 'text-success', bg: 'bg-success-subtle', ring: 'ring-success-line' },
-    ADJUST_DEDUCT: { label: 'Deduct', color: 'text-destructive', bg: 'bg-destructive-subtle', ring: 'ring-destructive-line' },
-    REPLENISH: { label: 'Replenish', color: 'text-brand-blue', bg: 'bg-brand-blue/10', ring: 'ring-brand-blue/20' },
-    UPGRADE: { label: 'Upgrade', color: 'text-indigo-700', bg: 'bg-indigo-50', ring: 'ring-indigo-200' },
-    EXPIRE: { label: 'Expired', color: 'text-gray-600', bg: 'bg-gray-100', ring: 'ring-gray-200' },
-    INIT: { label: 'Init', color: 'text-gray-600', bg: 'bg-gray-100', ring: 'ring-gray-200' },
-    CONSUME: { label: 'Consume', color: 'text-brand-orange-deep', bg: 'bg-brand-orange/10', ring: 'ring-brand-orange/20' },
+  const ACTION_CONFIG: Record<string, { label: string; variant: BadgeVariant }> = {
+    REFUND: { label: 'Refund', variant: 'secondary' },
+    ADJUST_ADD: { label: 'Credit', variant: 'success' },
+    ADJUST_DEDUCT: { label: 'Deduct', variant: 'destructive' },
+    REPLENISH: { label: 'Replenish', variant: 'default' },
+    UPGRADE: { label: 'Upgrade', variant: 'secondary' },
+    EXPIRE: { label: 'Expired', variant: 'muted' },
+    INIT: { label: 'Init', variant: 'muted' },
+    CONSUME: { label: 'Consume', variant: 'warning' },
   };
 
   if (isLoading) {
@@ -1105,28 +1102,21 @@ function RefundsTab({
 
   if (unavailable) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-orange/10 to-amber-100 ring-1 ring-brand-orange/20 mb-4">
-          <AlertTriangle className="w-7 h-7 text-brand-orange-deep" />
-        </div>
-        <p className="text-gray-700 font-semibold">Refunds & Adjustments Not Yet Available</p>
-        <p className="text-gray-500 text-sm mt-1 max-w-sm">
-          This feature requires a database migration that hasn't been applied to your tenant yet.
-          Please contact your system administrator.
-        </p>
-      </div>
+      <EmptyState
+        icon={AlertTriangle}
+        title="Refunds & Adjustments Not Yet Available"
+        description="This feature requires a database migration that hasn't been applied to your tenant yet. Please contact your system administrator."
+      />
     );
   }
 
   if (!items.length) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15 mb-4">
-          <RefreshCw className="w-7 h-7 text-brand-blue" />
-        </div>
-        <p className="text-gray-700 font-semibold">No refunds or adjustments found</p>
-        <p className="text-gray-500 text-sm mt-1">Unit adjustments and refunds will appear here</p>
-      </div>
+      <EmptyState
+        icon={RefreshCw}
+        title="No refunds or adjustments found"
+        description="Unit adjustments and refunds will appear here"
+      />
     );
   }
 
@@ -1148,14 +1138,12 @@ function RefundsTab({
           </thead>
           <tbody className="divide-y divide-gray-100">
             {items.map((entry) => {
-              const acfg = ACTION_CONFIG[entry.action_type] ?? { label: entry.action_type, color: 'text-gray-600', bg: 'bg-gray-100', ring: 'ring-gray-200' };
+              const acfg = ACTION_CONFIG[entry.action_type] ?? { label: entry.action_type, variant: 'muted' as BadgeVariant };
               const isPositive = ['REFUND', 'ADJUST_ADD', 'REPLENISH', 'UPGRADE', 'INIT'].includes(entry.action_type);
               return (
                 <tr key={entry.id} className="hover:bg-brand-blue/[0.03] transition-colors">
                   <td className="px-4 py-3">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ring-1 ${acfg.ring} ${acfg.bg} ${acfg.color}`}>
-                      {acfg.label}
-                    </span>
+                    <Badge variant={acfg.variant}>{acfg.label}</Badge>
                   </td>
                   <td className="px-4 py-3">
                     <UnitTypeBadge type={entry.unit_type} />
@@ -1467,50 +1455,37 @@ export default function UsageHistory() {
 
   return (
     <div ref={rootRef} className="flex-1 bg-slate-50">
-      <div className="mx-auto w-full max-w-[1400px] px-4 md:px-8">
-      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl space-y-6">
+      <div className="mx-auto w-full max-w-[1400px]">
+      <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl space-y-6">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Usage History' }]} />
+        <div>
         <OrganizationTabs />
+        <div className="-mt-5 rounded-b-xl border border-t-0 border-gray-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 p-4 sm:p-5 space-y-6">
       {/* ── Page Header ── */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10">
-        <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />
-        <div className="pointer-events-none absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
-        <div className="relative flex flex-col gap-4 p-6 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15 backdrop-blur-sm">
-              <TrendingDown className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-2xs font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
-                <Sparkles className="h-3 w-3 text-brand-orange" />
-                Usage analytics
-              </div>
-              <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Usage History</h1>
-              <p className="text-white/80 mt-2 text-sm max-w-2xl sm:text-base">
-                Comprehensive feature-wise, user-wise, and team-wise consumption tracking for your organization.
-              </p>
-            </div>
-          </div>
+      <PageHeader
+        icon={<TrendingDown className="h-5 w-5" />}
+        title="Usage History"
+        description="Comprehensive feature-wise, user-wise, and team-wise consumption tracking for your organization."
+        actions={
           <div className="flex items-center gap-2 flex-shrink-0">
-            <button
+            <Button
+              variant="secondary"
               onClick={handleRefresh}
               disabled={isRefreshing}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-white/10 border border-white/20 rounded-lg hover:bg-white/20 transition-colors disabled:opacity-50 backdrop-blur"
+              icon={<RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />}
             >
-              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
               Refresh
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="primary"
               onClick={() => setShowExportModal(true)}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-brand-blue bg-white rounded-lg hover:bg-white/95 transition-colors shadow-md ring-1 ring-white/40"
+              icon={<Download className="w-4 h-4" />}
             >
-              <Download className="w-4 h-4" />
               Export
-            </button>
+            </Button>
           </div>
-        </div>
-      </div>
+        }
+      />
 
       {/* ── Feature Analytics Cards ── */}
       <AnalyticsCards
@@ -1533,7 +1508,7 @@ export default function UsageHistory() {
         </div>
         <div className="flex flex-wrap gap-3">
           {/* Quick Period */}
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-gray-600">Period</label>
             <select
               value={quickPeriod}
@@ -1571,7 +1546,7 @@ export default function UsageHistory() {
           </div>
 
           {/* Date Range */}
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-gray-600">From</label>
             <DateField
               value={startDateInput}
@@ -1579,7 +1554,7 @@ export default function UsageHistory() {
               onChange={(v) => { setStartDateInput(v); setQuickPeriod(''); }}
             />
           </div>
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-gray-600">To</label>
             <DateField
               value={endDateInput}
@@ -1591,7 +1566,7 @@ export default function UsageHistory() {
 
           {/* Status */}
           {(activeTab === 'feature') && (
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1.5">
               <label className="text-xs font-medium text-gray-600">Status</label>
               <select
                 value={filterStatus}
@@ -1692,6 +1667,8 @@ export default function UsageHistory() {
           <Info className="w-3.5 h-3.5" />
         </div>
         <p className="pt-1">All dashboard access and exports are audit-logged with your Tenant ID, User ID, and timestamp in compliance with platform policies.</p>
+      </div>
+      </div>
       </div>
 
       {/* ── Export Modal ── */}
