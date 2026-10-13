@@ -12,6 +12,7 @@ import { formatIST } from '@/lib/utils/dateUtils';
 import { MENU_ITEM_SCALE_CLASS, MENU_ITEM_LIGHT_HIGHLIGHT_CLASS, MENU_ITEM_DESTRUCTIVE_HIGHLIGHT_CLASS, MENU_PANEL_BORDER_CLASS } from '@/lib/constants/menuAnimation';
 import { TRACKER_DIALOG_PLACEHOLDER_CLASS } from '@/lib/constants/trackerDialog';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import type { TimelineHistoryRow } from '@/components/ui/timeline-history-dialog';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { VersionPill } from '@/components/ai-interview/AllInterviewsTable';
 import {
@@ -223,16 +224,16 @@ const COMPACT_TIMELINE_LIMIT = 4;
 const collapseRepeatedSystemChecks = (events: TimelineEntry[]): TimelineEntry[] =>
   events.filter((e, i) => !(e.label === 'System Check' && events[i - 1]?.label === 'System Check'));
 
-export const timelineEvents = (inv: any): TimelineEntry[] =>
-  collapseRepeatedSystemChecks(buildFullTimeline(inv, inv.timeline || [])).slice(-COMPACT_TIMELINE_LIMIT);
+export const timelineEvents = (inv: any, limit: number = COMPACT_TIMELINE_LIMIT): TimelineEntry[] =>
+  collapseRepeatedSystemChecks(buildFullTimeline(inv, inv.timeline || [])).slice(-limit);
 
 /** The Timeline cell's lines (Invited, System Check, Started, Completed...)
  *  for any AI interview row, so the Results tables read exactly like the
  *  Track Invites table. A results row is the same session/invite record,
  *  so it carries the same fields timelineEvents reads. `duration` adds the
  *  results-only Duration line underneath. */
-export const InviteTimelineLines = ({ inv, duration }: { inv: any; duration?: string | null }) => {
-  const events = timelineEvents(inv);
+export const InviteTimelineLines = ({ inv, duration, limit }: { inv: any; duration?: string | null; limit?: number }) => {
+  const events = timelineEvents(inv, limit);
   if (events.length === 0 && !duration) {
     return <span className="text-xs text-gray-400 dark:text-slate-500">—</span>;
   }
@@ -257,8 +258,35 @@ export const InviteTimelineLines = ({ inv, duration }: { inv: any; duration?: st
 /** "View full history" only earns its place once something is actually
  *  hidden from the compact cell — by the cap or the System Check collapse —
  *  otherwise the link would open a modal identical to what's on screen. */
-const hasMoreTimelineHistory = (inv: any): boolean =>
-  buildFullTimeline(inv, inv.timeline || []).length > timelineEvents(inv).length;
+export const hasMoreTimelineHistory = (inv: any, limit?: number): boolean =>
+  buildFullTimeline(inv, inv.timeline || []).length > timelineEvents(inv, limit).length;
+
+/** Timeline labels that are a status of the invitation (Edited only records
+ *  a change to it) — View History's Status column. */
+const TIMELINE_STATUS_LABELS = new Set(['Invited', 'Revoked', 'System Check', 'Started', 'Completed', 'Terminated', 'Expired at']);
+
+/** One line under each event in View History, saying what it means. */
+const TIMELINE_EVENT_DESCRIPTION: Record<string, string> = {
+  'Invited': 'Invitation sent to candidate',
+  'Revoked': 'Invitation revoked',
+  'Edited': 'Invitation details edited',
+  'System Check': 'Candidate accepted consent and began the system check',
+  'Started': 'Candidate started the AI interview',
+  'Completed': 'Candidate completed the AI interview',
+  'Terminated': 'AI interview ended before it was completed',
+  'Expired at': 'Invitation link expired',
+};
+
+/** View History on the Job Details AI Interview Result tab: the session's
+ *  whole audit trail (the "View full history" modal's source), oldest first. */
+export const loadInterviewHistory = async (inv: any): Promise<TimelineHistoryRow[]> => {
+  const logs = await aiInterviewService.getSessionTimeline(inv.id);
+  return buildFullTimeline(inv, logs).map((entry) => ({
+    ...entry,
+    isStatus: TIMELINE_STATUS_LABELS.has(entry.label),
+    description: TIMELINE_EVENT_DESCRIPTION[entry.label],
+  }));
+};
 
 /** Every occurrence of an invitation-management action (not just the latest)
  *  reads the same audit trail the Activity Log is built from — see

@@ -438,6 +438,21 @@ export async function versionHref(v: InviteVersion, action: 'view' | 'edit', jdT
 
 /* ── Sending ─────────────────────────────────────────────────────────── */
 
+/** Where a candidate in the popup came from: the Job Details tab that opened it. */
+export type InviteCandidateSource =
+  | 'talent-match'
+  | 'score-resume'
+  | 'assessment-result'
+  | 'interview-result';
+
+/** The candidate list's group headings, in the order groups are listed. */
+export const CANDIDATE_SOURCE_LABEL: Record<InviteCandidateSource, string> = {
+  'talent-match': 'AI Talent Match Candidates',
+  'score-resume': 'Score Resume Candidates',
+  'assessment-result': 'Assessment Result Candidates',
+  'interview-result': 'AI Interview Result Candidates',
+};
+
 export interface InviteCandidate {
   id: string;
   name: string;
@@ -446,6 +461,7 @@ export interface InviteCandidate {
   /** The AI Talent Match rating (1–10). */
   rating?: number;
   resumeId?: string;
+  source?: InviteCandidateSource;
 }
 
 export type DeliveryMethod = 'email' | 'link';

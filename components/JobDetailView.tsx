@@ -33,8 +33,7 @@ import ScoredResumesTable, {
   useScoringActionPermissions,
 } from './ScoredResumesTable';
 import VersionInviteDialog from './talent-match-invite/VersionInviteDialog';
-import AIInterviewShareQueue from './talent-match-invite/AIInterviewShareQueue';
-import type { InviteCandidate, InviteKind } from './talent-match-invite/inviteVersions';
+import type { InviteCandidate, InviteCandidateSource, InviteKind } from './talent-match-invite/inviteVersions';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -994,13 +993,11 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   /* The AI Talent Match tab's "Create / Send Assessment | AI Interview"
      popups (VersionInviteDialog — one per type): null = closed; else which
      popup and the candidates ticked in the table. */
-  /* Invite to AI Interview's hand-over: Send AI Interview via Email, once per
-     picked interview, pre-filled with the ticked candidates. */
-  const [aiInterviewShare, setAiInterviewShare] = useState<{
-    configs: AIInterviewResponse[];
-    candidates: { name: string; email: string; resumeId?: string }[];
-  } | null>(null);
   const [inviteDialog, setInviteDialog] = useState<{ kind: InviteKind; candidates: InviteCandidate[] } | null>(null);
+  /** Opens the popup with a tab's ticked candidates, each tagged with that tab
+   *  as its source (the popup's group headings). */
+  const openInviteDialog = (kind: InviteKind, candidates: InviteCandidate[], source: InviteCandidateSource) =>
+    setInviteDialog({ kind, candidates: candidates.map((c) => ({ ...c, source })) });
   // AI Interview Version History dialog (history icon on the AI Interview heading).
   const [showAIVersionHistory, setShowAIVersionHistory] = useState(false);
   // Assessment Version History dialog (history icon on the Assessment heading).
@@ -4328,7 +4325,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               availableUnits={15}
               /* Actions ▸ AI Assessment / AI Interview Invite: the AI Talent
                  Match tab's version popups, with the ticked candidates. */
-              onOpenInviteDialog={(kind, invitees) => setInviteDialog({ kind, candidates: invitees })}
+              onOpenInviteDialog={(kind, invitees) => openInviteDialog(kind, invitees, 'score-resume')}
               initialMatchStatus={scoredResumesMatchFilter}
               // Same gate and target as the Score Resumes quick action — opens
               // "Select Applicants to Score" in place on this page.
@@ -4395,9 +4392,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                 canDownloadPDF={isTenantAdmin || (user?.permissions?.canDownloadAssessmentPDF ?? false)}
                 canBatchDownload={isTenantAdmin || hasPermissionCode('assessments:batch_download')}
                 formatCandidateName={formatCandidateFirstName}
-                /* Actions ▸ Create / Send Assessment: the AI Talent Match
-                   tab's version popup, with the ticked candidates. */
-                onOpenInviteDialog={(invitees) => setInviteDialog({ kind: 'assessment', candidates: invitees })}
+                /* Actions ▸ Create / Send Assessment | AI Interview: the AI
+                   Talent Match tab's version popups, with the ticked candidates. */
+                onOpenInviteDialog={(kind, invitees) => openInviteDialog(kind, invitees, 'assessment-result')}
               />
             );
           })()}
@@ -4483,9 +4480,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               jdTitle={aiInterviewConfig.jd_title || ''}
               onBack={() => setActiveTab('overview')}
               onViewCandidate={handleAIInterviewCandidateClick}
-              /* Actions ▸ Create / Send AI Interview: the AI Talent Match
-                 tab's version popup, with the ticked candidates. */
-              onOpenInviteDialog={(invitees) => setInviteDialog({ kind: 'interview', candidates: invitees })}
+              /* Actions ▸ Create / Send Assessment | AI Interview: the AI
+                 Talent Match tab's version popups, with the ticked candidates. */
+              onOpenInviteDialog={(kind, invitees) => openInviteDialog(kind, invitees, 'interview-result')}
             />
           ) : (
             /* No interview exists for this JD yet. Create has to stay reachable
@@ -4529,9 +4526,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             } catch { /* ignore */ }
             router.push(`/recruitment/resume-view/${candidate.resumeId}`);
           }}
-          onOpenInviteDrawer={(kind, selected) => setInviteDialog({
+          onOpenInviteDrawer={(kind, selected) => openInviteDialog(
             kind,
-            candidates: selected.map((c) => ({
+            selected.map((c) => ({
               id: c.resumeId,
               name: c.name,
               email: c.email,
@@ -4539,7 +4536,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               rating: c.rank,
               resumeId: c.resumeId,
             })),
-          })}
+            'talent-match',
+          )}
         />
       )}
 
@@ -4953,7 +4951,10 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             // Display ID (JD-133), not `job.id` — the UUID the header printed.
             jd_short_id: shareAssessments[0].jd_short_id || job.job_id,
             jd_title: job.title,
-            jd_version: shareAssessments[0].jd_version,
+            /* This job's version, not the assessment's `jd_version` snapshot
+               (stamped at creation; reads 1 for later-version assessments).
+               These are this JD row's assessments (listed by its id). */
+            jd_version: job.versionNumber && job.versionNumber > 0 ? job.versionNumber : shareAssessments[0].jd_version,
           }}
           additionalAssessments={shareAssessments.slice(1).map((a: any) => ({
             id: a.id,
@@ -4967,7 +4968,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             version: a.version,
             jd_short_id: a.jd_short_id || job.job_id,
             jd_title: job.title,
-            jd_version: a.jd_version,
+            jd_version: job.versionNumber && job.versionNumber > 0 ? job.versionNumber : a.jd_version,
           }))}
           /* From the AI Talent Match tab: its ticked candidates, pre-filled,
              under the source that tab's Actions menu has always sent with
@@ -5202,41 +5203,21 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           /* Send (the picked version) and Browse all → Share Assessment via
              Email, pre-filled with the assessment(s) and the ticked
              candidates; that step validates and sends. */
-          onShare={(items, invitees) => {
-            setInviteDialog(null);
-            openShareWithAssessments(items, invitees.map((c) => ({
-              id: c.id,
-              name: c.name,
-              email: c.email,
-              phone: c.phone,
-              source: 'database' as const,
-              resumeId: c.resumeId,
-            })));
+          /* Next → Share Assessment via Email as the popup's own second step;
+             a send refreshes this page's assessment count and results. */
+          onAssessmentsSent={(sent) => {
+            setAssessmentInviteCount((prev) => prev + sent);
+            void fetchAssessmentResults();
           }}
-          /* The AI Interview popup, the same way: Send (the picked version)
-             and Browse all → Send AI Interview via Email, pre-filled. */
-          onShareInterviews={(configs, invitees) => {
-            setInviteDialog(null);
-            setAiInterviewShare({
-              configs,
-              candidates: invitees.map((c) => ({ name: c.name, email: c.email, resumeId: c.resumeId })),
-            });
+          /* Next → Send AI Interview via Email as the popup's own second
+             step; a send counts here as this page's own Invite does. */
+          onInterviewsSent={() => {
+            setAiInterviewCount((prev) => Math.max(prev + 1, 1));
+            toast.success('AI interview invitation sent');
           }}
           onSent={(kind, sent) => {
             if (kind === 'assessment') void fetchAssessmentResults();
             else setAiInterviewCount((prev) => Math.max(prev + sent, 1));
-          }}
-        />
-      )}
-      {aiInterviewShare && (
-        <AIInterviewShareQueue
-          configs={aiInterviewShare.configs}
-          candidates={aiInterviewShare.candidates}
-          onClose={() => setAiInterviewShare(null)}
-          /* As this page's own Invite to AI Interview reports a send. */
-          onInvited={() => {
-            setAiInterviewCount((prev) => Math.max(prev + 1, 1));
-            toast.success('AI interview invitation sent');
           }}
         />
       )}

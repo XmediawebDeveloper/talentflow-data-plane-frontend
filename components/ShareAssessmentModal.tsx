@@ -1,4 +1,4 @@
-import { X, Mail, Plus, Trash2, Send, CheckCircle, Clock, Users, Upload, Database, AlertTriangle, ShieldAlert, Info, FolderOpen, ChevronRight, ChevronDown, Loader2, FileSpreadsheet, Eye, Layers, FolderRoot, FolderInput, ClipboardCheck } from 'lucide-react';
+import { X, ArrowLeft, Mail, Plus, Trash2, Send, CheckCircle, Clock, Users, Upload, Database, AlertTriangle, ShieldAlert, Info, FolderOpen, ChevronRight, ChevronDown, Loader2, FileSpreadsheet, Eye, Layers, FolderRoot, FolderInput, ClipboardCheck } from 'lucide-react';
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
@@ -78,6 +78,14 @@ interface ShareAssessmentModalProps {
     technical_enabled?: boolean;
     coding_enabled?: boolean;
   }>; // Additional assessments for bulk invite
+  /** Shows Back in the footer, returning to the popup this one came from. */
+  onBack?: () => void;
+  /** Rendered as a step INSIDE a host popup (Job Details' Invite to
+   *  Assessment): no backdrop, card or header of its own — the host keeps
+   *  its header and footer — and this step's footer (summary, Back, Send
+   *  Invitations) is portalled into `footerTarget`, the host's footer. */
+  embedded?: boolean;
+  footerTarget?: HTMLElement | null;
 }
 
 interface CandidateEmail {
@@ -89,6 +97,8 @@ interface CandidateEmail {
   /** Finer-grained origin for the row's source badge. Absent on prefilled rows. */
   origin?: 'manual' | 'excel' | 'my-resumes' | 'shared-db';
   resumeId?: string; // Link to resume if from database
+  /** A typed row moved into the candidate list with Add. */
+  added?: boolean;
 }
 
 interface Resume {
@@ -104,7 +114,13 @@ interface Resume {
 
 type SidebarFolder = { id: string; name: string; parentId?: string | null; count: number };
 
-export default function ShareAssessmentModal({ isOpen, onClose, assessment, prefilledCandidates, inviteSource, onInviteSent, additionalAssessments }: ShareAssessmentModalProps) {
+/* Pre-filled candidates (already chosen) are listed as they are; Manual's
+   entry fields sit under them — one empty row ready to type into. An empty
+   row is ignored by Send and the counts. */
+const withEntryRow = (list: CandidateEmail[]): CandidateEmail[] =>
+  list.some((c) => c.source !== 'database') ? list : [...list, { id: 'manual-entry', name: '', email: '', source: 'manual' }];
+
+export default function ShareAssessmentModal({ isOpen, onClose, assessment, prefilledCandidates, inviteSource, onInviteSent, additionalAssessments, onBack, embedded = false, footerTarget = null }: ShareAssessmentModalProps) {
   const router = useRouter();
   const { user } = useAuth();
   const { quotaData } = useQuota();
@@ -128,7 +144,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
   const excelInputRef = useRef<HTMLInputElement>(null);
   const [candidates, setCandidates] = useState<CandidateEmail[]>(
     prefilledCandidates && prefilledCandidates.length > 0
-      ? prefilledCandidates
+      ? withEntryRow(prefilledCandidates)
       : [{ id: '1', name: '', email: '', source: 'manual' }]
   );
   /* Ticked "Select From" resumes, kept across tabs and folders so a pick can
@@ -180,7 +196,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
   // Update candidates when pre-filled candidates change
   useEffect(() => {
     if (prefilledCandidates && prefilledCandidates.length > 0) {
-      setCandidates(prefilledCandidates);
+      setCandidates(withEntryRow(prefilledCandidates));
     }
   }, [prefilledCandidates]);
 
@@ -195,7 +211,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
 
   // Lock background scroll + close on Escape while modal is open
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || embedded) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const onKey = (e: KeyboardEvent) => {
@@ -206,7 +222,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
       document.body.style.overflow = previousOverflow;
       window.removeEventListener('keydown', onKey);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, embedded]);
 
   // Load resumes when database mode is selected. Both tabs load up front —
   // the Shared Database badge read 0 until its tab was clicked.
@@ -346,9 +362,13 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
   // Early return must stay below every hook call (Rules of Hooks).
   if (!isOpen) return null;
 
-  const candidateTotalPages = Math.max(1, Math.ceil(candidates.length / candidatePageSize));
+  /* Manual: the chosen candidates (pre-filled, or added from Select From) as
+     a list, and under it the rows typed or imported here, paged. */
+  const listedCandidates = candidates.filter((c) => c.source === 'database' || c.added);
+  const entryCandidates = candidates.filter((c) => c.source !== 'database' && !c.added);
+  const candidateTotalPages = Math.max(1, Math.ceil(entryCandidates.length / candidatePageSize));
   const candidateSafePage = Math.min(candidatePage, candidateTotalPages);
-  const pagedCandidates = candidates.slice(
+  const pagedCandidates = entryCandidates.slice(
     (candidateSafePage - 1) * candidatePageSize,
     candidateSafePage * candidatePageSize,
   );
@@ -621,7 +641,20 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
   const addCandidate = () => {
     setCandidates([...candidates, { id: Date.now().toString(), name: '', email: '', source: 'manual' }]);
     // Land on the page holding the new, empty row so it can be filled in.
-    setCandidatePage(Math.ceil((candidates.length + 1) / candidatePageSize));
+    setCandidatePage(Math.ceil((candidates.filter((c) => c.source !== 'database').length + 1) / candidatePageSize));
+  };
+
+  /* Add: a complete entry row joins the candidate list; a fresh empty row
+     takes its place when it was the last one. */
+  const canAddEntry = (c: CandidateEmail) =>
+    !!c.name.trim() && isValidEmail(c.email) && !isDuplicateEmail(c.id, c.email);
+  const addEntry = (id: string) => {
+    setCandidates((prev) => {
+      const next = prev.map((c) => (c.id === id ? { ...c, added: true } : c));
+      return next.some((c) => c.source !== 'database' && !c.added)
+        ? next
+        : [...next, { id: Date.now().toString(), name: '', email: '', source: 'manual' }];
+    });
   };
 
   const removeCandidate = (id: string) => {
@@ -924,7 +957,10 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
   })();
 
   if (showSuccess) {
-    return (
+    /* The Assessment invitation success popup — the same one in every host.
+       Embedded in a host popup it is portalled to the page so it opens over
+       that popup rather than inside its body. */
+    const successPopup = (
       <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6" role="dialog" aria-modal="true">
         <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-[95vw] sm:max-w-md w-full p-6 sm:p-8 text-center max-h-[calc(100dvh-2rem)] overflow-y-auto tf-round-edges">
           <div className="flex justify-center mb-4">
@@ -944,6 +980,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
         </div>
       </div>
     );
+    return embedded && typeof document !== 'undefined' ? createPortal(successPopup, document.body) : successPopup;
   }
 
   // Duplicate invitation error popup
@@ -1000,23 +1037,10 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
     );
   }
 
-  return (
-    <div
-      className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Share Assessment via Email"
-    >
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-[95vw] sm:max-w-[935px] w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col tf-round-edges">
-        {/* Header */}
-        <div className="bg-slate-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3 shrink-0">
-          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-lg bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center flex-shrink-0">
-              <Mail className="w-4 h-4 text-white" />
-            </div>
-            <div className="min-w-0">
-              <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight truncate">Share Assessment via Email</h2>
+  /* The job, its version and the assessment setup — the header's detail
+     lines; the embedded step shows them above its content instead. */
+  const headerMeta = (
+    <>
               {/* JD ID, the job, its job version, then the assessment version
                   — which job, and which version of it, these invitations are
                   for. The version chips are the Assessments page's own. */}
@@ -1056,19 +1080,103 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                   </>
                 )}
               </p>
-            </div>
+    </>
+  );
+  const footerContent = (
+    <>
+          <div className="text-sm text-gray-600 dark:text-slate-400 min-w-0">
+            {(() => {
+              const validRows = sendCandidates.filter(c => c.name.trim() && c.email.trim());
+              const validCount = validRows.length;
+              const breakdown = validCount > 0 ? sourceBreakdown(validRows) : '';
+              const needed = validCount * allAssessments.length;
+              const available = quotaStats?.available ?? null;
+              const isUnlimited = available !== null && available >= 999999;
+              const insufficientQuota = !isUnlimited && available !== null && available < needed;
+              return (
+                <span className={insufficientQuota ? 'text-destructive' : ''}>
+                  {validCount} candidate{validCount !== 1 ? 's' : ''} will receive {allAssessments.length > 1 ? `${allAssessments.length} assessments` : 'this assessment'}
+                  {breakdown && <span className="block text-xs text-gray-500 dark:text-slate-500">{breakdown}</span>}
+                  {insufficientQuota && (
+                    <span className="ml-2 font-medium">— only {available} unit{available !== 1 ? 's' : ''} available</span>
+                  )}
+                </span>
+              );
+            })()}
           </div>
-          <button
-            onClick={onClose}
-            aria-label="Close dialog"
-            className="text-gray-500 dark:text-slate-400 hover:text-brand-blue hover:bg-brand-blue/5 p-1.5 sm:p-2 rounded-lg transition-colors flex-shrink-0"
+          <div className="flex items-center gap-3 ml-auto">
+            {onBack && (
+              <Button variant="secondary" onClick={onBack} disabled={isSubmitting} icon={<ArrowLeft className="w-4 h-4" />}>
+                Back
+              </Button>
+            )}
+            <Button
+              variant="primary"
+              onClick={handleSend}
+              disabled={!isValid || isSubmitting || (quotaStats !== null && quotaStats.available === 0 && quotaStats.total_quota < 999999)}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 text-white animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4" />
+                  Send Invitations
+                </>
+              )}
+            </Button>
+          </div>
+    </>
+  );
+  const extras = (
+    <>
+      {/* Subfolder flyouts, one portal per open depth, beside their trigger row.
+          z-[60] keeps them above this z-50 modal. */}
+      {typeof document !== 'undefined' && openPath.map((entry, i) => {
+        const ancestors = openPath.slice(0, i + 1);
+        const pos = computeFlyoutPosition(entry.anchor);
+        return createPortal(
+          <div
+            key={entry.folder.id}
+            className="fixed z-[60] bg-white dark:bg-slate-900 rounded-lg shadow-2xl border border-gray-200 dark:border-slate-700 p-1 space-y-0.5 overflow-y-auto overscroll-contain"
+            style={{ top: pos.top, left: pos.left, width: FLYOUT_WIDTH, maxHeight: pos.maxHeight }}
+            onMouseEnter={cancelScheduledClose}
+            onMouseLeave={() => scheduleOpenPath(openPath.slice(0, i))}
           >
-            <X className="w-4 h-4 sm:w-5 sm:h-5" />
-          </button>
-        </div>
+            {myFolders.filter(f => f.parentId === entry.folder.id).map(child => renderFolderRow(child, i + 1, ancestors))}
+          </div>,
+          document.body,
+        );
+      })}
 
+      {/* Read a candidate's resume without leaving the dialog — z-[60] keeps it above this z-50 modal. */}
+      {previewResume && (
+        <ResumeTextPreviewModal
+          resumeId={previewResume.id}
+          title={previewResume.name}
+          zIndexClassName="z-[60]"
+          onClose={() => setPreviewResume(null)}
+        />
+      )}
+
+      {/* Several versions: preview and compare. No onSelectVersion, so the
+          "In use" / "Use this version" controls stay hidden here. */}
+      {versionViewer && (
+        <ResumeVersionsModal
+          candidate={{ id: versionViewer.id, name: versionViewer.name, resumeId: versionViewer.id }}
+          versions={versionViewer.versions}
+          onClose={() => setVersionViewer(null)}
+        />
+      )}
+    </>
+  );
+
+  const contentBlock = (
+    <>
         {/* Content */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
+        <div className={embedded ? '' : 'flex-1 min-h-0 overflow-y-auto p-4 sm:p-6'}>
           {/* Several assessments in one send — this dialog's own; the header
               names the first, this lists them all. */}
           {allAssessments.length > 1 && (
@@ -1335,6 +1443,18 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                                       : 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/40 focus:border-transparent'
                                 }`}
                               />
+                              {candidate.source !== 'database' && (
+                                <button
+                                  type="button"
+                                  onClick={() => addEntry(candidate.id)}
+                                  disabled={!canAddEntry(candidate)}
+                                  title="Add to the candidate list"
+                                  className="flex-shrink-0 inline-flex items-center gap-1 px-3 py-2 text-sm font-medium text-brand-blue border border-brand-blue/30 rounded-lg hover:bg-brand-blue/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  <Plus className="w-4 h-4" />
+                                  Add
+                                </button>
+                              )}
                               {(candidates.length > 1 || candidate.source === 'database') && (
                                 <button
                                   type="button"
@@ -1360,16 +1480,51 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                   ))}
                 </div>
 
-                {candidates.length > 0 && (
+                {entryCandidates.length > 0 && (
                   <ListPagination
                     currentPage={candidateSafePage}
                     itemsPerPage={candidatePageSize}
-                    totalItems={candidates.length}
+                    totalItems={entryCandidates.length}
                     onPageChange={setCandidatePage}
                     onItemsPerPageChange={(size) => { setCandidatePageSize(size); setCandidatePage(1); }}
                     itemLabel="candidates"
                     compact
                   />
+                )}
+
+                {listedCandidates.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-sm text-gray-600 dark:text-slate-400 mb-2">Selected candidates ({listedCandidates.length})</p>
+                    <ul className="rounded-lg border border-gray-200 dark:border-slate-700 divide-y divide-gray-100 dark:divide-slate-700/60 max-h-72 overflow-y-auto">
+                      {listedCandidates.map((candidate) => {
+                        const badge =
+                          candidate.origin === 'my-resumes' ? { label: 'My Resumes', cls: 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20' }
+                          : candidate.origin === 'shared-db' ? { label: 'Shared DB', cls: 'bg-brand-cyan/10 text-brand-cyan ring-brand-cyan/20' }
+                          : candidate.source !== 'database' ? { label: candidate.origin === 'excel' ? 'Excel' : 'Manual', cls: 'bg-gray-100 text-gray-600 ring-gray-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700' }
+                          : { label: 'Database', cls: 'bg-brand-blue/10 text-brand-blue ring-brand-blue/15' };
+                        return (
+                          <li key={candidate.id} className="flex items-center gap-3 px-3 py-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate" title={candidate.name}>{candidate.name}</p>
+                              <p className="text-xs text-gray-500 dark:text-slate-400 truncate [overflow-wrap:anywhere]" title={candidate.email}>{candidate.email}</p>
+                            </div>
+                            <span className={`shrink-0 inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-2xs font-semibold ring-1 ${badge.cls}`}>
+                              {badge.label}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => removeCandidate(candidate.id)}
+                              title="Remove candidate"
+                              aria-label={`Remove ${candidate.name}`}
+                              className="shrink-0 p-2 text-destructive hover:bg-destructive-subtle rounded-lg transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
                 )}
               </>
             )}
@@ -1705,88 +1860,62 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
           </div>
         </div>
 
-        {/* Footer */}
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <>
+        <div className="mb-4 rounded-xl border border-gray-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 px-3 py-2.5">
+          <p className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-slate-50">
+            <Mail className="w-4 h-4 text-brand-blue flex-shrink-0" />
+            Share Assessment via Email
+          </p>
+          {headerMeta}
+        </div>
+        {contentBlock}
+        {footerTarget && createPortal(footerContent, footerTarget)}
+        {extras}
+      </>
+    );
+  }
+
+  return (
+    <div
+      className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Share Assessment via Email"
+    >
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-[95vw] sm:max-w-[935px] w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col tf-round-edges">
+        {/* Header */}
+        <div className="bg-slate-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3 shrink-0">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-lg bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center flex-shrink-0">
+              <Mail className="w-4 h-4 text-white" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight truncate">Share Assessment via Email</h2>
+              {headerMeta}
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close dialog"
+            className="text-gray-500 dark:text-slate-400 hover:text-brand-blue hover:bg-brand-blue/5 p-1.5 sm:p-2 rounded-lg transition-colors flex-shrink-0"
+          >
+            <X className="w-4 h-4 sm:w-5 sm:h-5" />
+          </button>
+        </div>
+
+        {contentBlock}
         <div className="px-4 sm:px-6 py-4 bg-gray-50 dark:bg-slate-800/50 border-t border-gray-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3 shrink-0">
-          <div className="text-sm text-gray-600 dark:text-slate-400 min-w-0">
-            {(() => {
-              const validRows = sendCandidates.filter(c => c.name.trim() && c.email.trim());
-              const validCount = validRows.length;
-              const breakdown = validCount > 0 ? sourceBreakdown(validRows) : '';
-              const needed = validCount * allAssessments.length;
-              const available = quotaStats?.available ?? null;
-              const isUnlimited = available !== null && available >= 999999;
-              const insufficientQuota = !isUnlimited && available !== null && available < needed;
-              return (
-                <span className={insufficientQuota ? 'text-destructive' : ''}>
-                  {validCount} candidate{validCount !== 1 ? 's' : ''} will receive {allAssessments.length > 1 ? `${allAssessments.length} assessments` : 'this assessment'}
-                  {breakdown && <span className="block text-xs text-gray-500 dark:text-slate-500">{breakdown}</span>}
-                  {insufficientQuota && (
-                    <span className="ml-2 font-medium">— only {available} unit{available !== 1 ? 's' : ''} available</span>
-                  )}
-                </span>
-              );
-            })()}
-          </div>
-          <div className="flex items-center gap-3 ml-auto">
-            <Button
-              variant="primary"
-              onClick={handleSend}
-              disabled={!isValid || isSubmitting || (quotaStats !== null && quotaStats.available === 0 && quotaStats.total_quota < 999999)}
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="w-4 h-4 text-white animate-spin" />
-                  Sending...
-                </>
-              ) : (
-                <>
-                  <Send className="w-4 h-4" />
-                  Send Invitations
-                </>
-              )}
-            </Button>
-          </div>
+          {footerContent}
         </div>
       </div>
 
-      {/* Subfolder flyouts, one portal per open depth, beside their trigger row.
-          z-[60] keeps them above this z-50 modal. */}
-      {typeof document !== 'undefined' && openPath.map((entry, i) => {
-        const ancestors = openPath.slice(0, i + 1);
-        const pos = computeFlyoutPosition(entry.anchor);
-        return createPortal(
-          <div
-            key={entry.folder.id}
-            className="fixed z-[60] bg-white dark:bg-slate-900 rounded-lg shadow-2xl border border-gray-200 dark:border-slate-700 p-1 space-y-0.5 overflow-y-auto overscroll-contain"
-            style={{ top: pos.top, left: pos.left, width: FLYOUT_WIDTH, maxHeight: pos.maxHeight }}
-            onMouseEnter={cancelScheduledClose}
-            onMouseLeave={() => scheduleOpenPath(openPath.slice(0, i))}
-          >
-            {myFolders.filter(f => f.parentId === entry.folder.id).map(child => renderFolderRow(child, i + 1, ancestors))}
-          </div>,
-          document.body,
-        );
-      })}
-
-      {/* Read a candidate's resume without leaving the dialog — z-[60] keeps it above this z-50 modal. */}
-      {previewResume && (
-        <ResumeTextPreviewModal
-          resumeId={previewResume.id}
-          title={previewResume.name}
-          zIndexClassName="z-[60]"
-          onClose={() => setPreviewResume(null)}
-        />
-      )}
-
-      {/* Several versions: preview and compare. No onSelectVersion, so the
-          "In use" / "Use this version" controls stay hidden here. */}
-      {versionViewer && (
-        <ResumeVersionsModal
-          candidate={{ id: versionViewer.id, name: versionViewer.name, resumeId: versionViewer.id }}
-          versions={versionViewer.versions}
-          onClose={() => setVersionViewer(null)}
-        />
-      )}
+      {extras}
     </div>
   );
 }
