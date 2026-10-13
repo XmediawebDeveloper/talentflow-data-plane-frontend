@@ -838,7 +838,7 @@ export default function StepIdentity({
 
             <div>
               <label htmlFor="identity-name" className="flex items-center gap-1.5 text-sm font-medium text-gray-900 mb-1.5">
-                <User className="w-4 h-4 text-gray-500" /> Full Name <span className="text-destructive">*</span>
+                <User className="w-4 h-4 text-gray-500" /> Full Name
               </label>
               <input
                 id="identity-name" type="text" value={name}
