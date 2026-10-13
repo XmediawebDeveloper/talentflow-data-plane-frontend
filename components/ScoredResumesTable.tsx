@@ -433,6 +433,13 @@ interface ScoredResumesTableProps {
    */
   hiddenColumnIds?: string[];
   /**
+   * List / Grid, controlled by the host. The table unmounts while a detail
+   * page is open, so its own state reset to List on Back — a host that wants
+   * the choice kept owns (and persists) it here. Uncontrolled when omitted.
+   */
+  displayMode?: ListDisplayMode;
+  onDisplayModeChange?: (mode: ListDisplayMode) => void;
+  /**
    * View by Candidates under a verdict filter: the host hands the FILTERED
    * rows as `resumes` (who is listed) and every row here (what each one's
    * Exact / Partial / No Match counts read). Without it the counts came from
@@ -648,6 +655,8 @@ export default function ScoredResumesTable({
   onOpenInviteDialog,
   verdictCountRows,
   activeVerdict = null,
+  displayMode: controlledDisplayMode,
+  onDisplayModeChange,
 }: ScoredResumesTableProps) {
   const showName = (name: string) => (formatCandidateName ? formatCandidateName(name) : name);
   /* Embedded in the Job Details tabs (the toolbar portals into that card's
@@ -882,7 +891,12 @@ Best regards`);
       // No-op when using external control
     } : setInternalSelectedResumes;
   const [showFilters, setShowFilters] = useState(false);
-  const [displayMode, setDisplayMode] = useState<ListDisplayMode>('list');
+  const [internalDisplayMode, setInternalDisplayMode] = useState<ListDisplayMode>('list');
+  const displayMode = controlledDisplayMode ?? internalDisplayMode;
+  const setDisplayMode = (mode: ListDisplayMode) => {
+    setInternalDisplayMode(mode);
+    onDisplayModeChange?.(mode);
+  };
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteCandidate, setInviteCandidate] = useState<ScoredResume | null>(null);
 
@@ -2660,6 +2674,12 @@ Best regards`);
                                 <span>{formatISTDate(row.scoredDate)} <span className="text-gray-400">{formatISTTime(row.scoredDate)}</span></span>
                               </div>
                             </div>
+                            {/* Stops clicks here, as the list's Actions cell does.
+                                The menu renders in a portal, but React still
+                                bubbles its clicks through this row — so ⋮ or any
+                                item (even a disabled Invite) also hit the row's
+                                onClick and opened the scorecard. */}
+                            <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <button
@@ -2676,6 +2696,7 @@ Best regards`);
                                 {renderActionsMenuItems(row)}
                               </DropdownMenuContent>
                             </DropdownMenu>
+                            </div>
                           </div>
                         </div>
                       ))}

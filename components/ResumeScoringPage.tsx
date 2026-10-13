@@ -946,6 +946,11 @@ export default function ResumeScoringPage({
   // View by Job's own List / Grid switch and Export dialog — the same two
   // controls View by Candidates has in its toolbar.
   const [jobListDisplayMode, setJobListDisplayMode] = useState<ListDisplayMode>('list');
+  /* View by Candidates' and a job's scored-resumes List / Grid. Owned here
+     (not inside ScoredResumesTable, which unmounts while a detail is open)
+     and persisted below, so Back / the breadcrumb return to the same mode. */
+  const [candidatesDisplayMode, setCandidatesDisplayMode] = useState<ListDisplayMode>('list');
+  const [jobResumesDisplayMode, setJobResumesDisplayMode] = useState<ListDisplayMode>('list');
   const [showJobExportModal, setShowJobExportModal] = useState(false);
   /* View by Job's Actions menu — the same three actions, popup and dialogs
      as View by Candidates', run on the candidates of the ticked jobs. */
@@ -1014,6 +1019,8 @@ export default function ResumeScoringPage({
       // the filtered list and the whole toolbar — indistinguishable from the
       // filters having been cleared.
       pageView,
+      // List / Grid in each view — reset to List on every Back before.
+      jobListDisplayMode, candidatesDisplayMode, jobResumesDisplayMode,
     },
     (s) => {
       if (typeof s.isGlobalView === 'boolean') setIsGlobalView(s.isGlobalView);
@@ -1039,6 +1046,10 @@ export default function ResumeScoringPage({
       if (typeof s.historyItemsPerPage === 'number') setHistoryItemsPerPage(s.historyItemsPerPage);
       // With the stat cards off there is no 'cards' landing to go back to.
       if (s.pageView === 'list' || (SHOW_STAT_CARDS && s.pageView === 'cards')) setPageView(s.pageView);
+      const isMode = (m: unknown): m is ListDisplayMode => m === 'list' || m === 'grid';
+      if (isMode(s.jobListDisplayMode)) setJobListDisplayMode(s.jobListDisplayMode);
+      if (isMode(s.candidatesDisplayMode)) setCandidatesDisplayMode(s.candidatesDisplayMode);
+      if (isMode(s.jobResumesDisplayMode)) setJobResumesDisplayMode(s.jobResumesDisplayMode);
     },
   );
 
@@ -2843,6 +2854,8 @@ export default function ResumeScoringPage({
         {/* Scored Resumes Table */}
         <ScoredResumesTable
           resumes={scoredResumesData}
+          displayMode={jobResumesDisplayMode}
+          onDisplayModeChange={setJobResumesDisplayMode}
           jobTitle={selectedHistoryItem.jobTitle}
           jobId={selectedHistoryItem.jobId}
           jobCode={jdCodeOf(selectedHistoryItem)}
@@ -3497,6 +3510,8 @@ export default function ResumeScoringPage({
             ) : (
               <ScoredResumesTable
                 resumes={globalScoredResumesWithVersion}
+                displayMode={candidatesDisplayMode}
+                onDisplayModeChange={setCandidatesDisplayMode}
                 /* Who is listed follows the verdict filter (above); each
                    candidate's Exact / Partial / No Match counts read ALL their
                    scores, the filter's other verdicts muted — as View by Job. */
