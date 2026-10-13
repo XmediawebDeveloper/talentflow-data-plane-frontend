@@ -349,6 +349,7 @@ export interface ResumeSearchParams {
   current_company?: string;
   previous_company?: string;
   notice_period?: string;
+  uploaded_by_name?: string;
   upload_date_from?: string;
   upload_date_to?: string;
   source_type?: string;
