@@ -40,6 +40,7 @@ import StepLanguageSelect from '@/components/candidate/StepLanguageSelect';
 import StepSamplePractice from '@/components/candidate/StepSamplePractice';
 import InterviewFeedbackModal from '@/components/candidate/InterviewFeedbackModal';
 import CandidateHeader from '@/components/candidate/CandidateHeader';
+import { CloseWindowPill } from '@/components/candidate/CloseWindowPill';
 import {
   readInterviewStep,
   writeInterviewStep,
@@ -2705,9 +2706,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
             </div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">Thank you for attending the interview</h1>
             <p className="mt-3 text-base text-gray-600">Your responses have been submitted successfully.</p>
-            <p className="mt-6 inline-flex items-center rounded-full bg-white px-4 py-2 text-sm font-medium text-gray-700 ring-1 ring-gray-200 shadow-sm">
-              You can now close this window.
-            </p>
+            <CloseWindowPill className="mt-6" />
           </div>
         </main>
         {/* AII17 — feedback popup layered OVER the completion card, so closing
