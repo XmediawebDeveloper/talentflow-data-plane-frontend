@@ -38,6 +38,9 @@ interface JDEditBlockedModalProps {
    *  would fail on the backend anyway, so it is disabled here and the reason
    *  shown up front, rather than letting the click round-trip to an error. */
   atMaxVersions?: boolean;
+  /** Swap the header's Close (X) icon for a Cancel button in the footer.
+   *  Both just call `onClose` — nothing is saved either way. */
+  cancelInFooter?: boolean;
 }
 
 /** The Job Details tab each usage module lives on. */
@@ -60,6 +63,7 @@ export default function JDEditBlockedModal({
   jdId,
   onOpenJobTab,
   atMaxVersions = false,
+  cancelInFooter = false,
 }: JDEditBlockedModalProps) {
   const router = useRouter();
 
@@ -104,16 +108,18 @@ export default function JDEditBlockedModal({
               modified to maintain data integrity.
             </p>
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={onClose}
-            disabled={creating}
-            className="px-2 -mt-0.5 -mr-0.5 shrink-0"
-            aria-label="Close"
-          >
-            <X className="w-5 h-5" />
-          </Button>
+          {!cancelInFooter && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={onClose}
+              disabled={creating}
+              className="px-2 -mt-0.5 -mr-0.5 shrink-0"
+              aria-label="Close"
+            >
+              <X className="w-5 h-5" />
+            </Button>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 sm:px-5 pb-4 space-y-3">
@@ -270,6 +276,11 @@ export default function JDEditBlockedModal({
 
         {/* Footer */}
         <div className="flex flex-col sm:flex-row gap-2 sm:justify-end px-4 sm:px-5 py-3 border-t border-gray-200 dark:border-slate-700 shrink-0">
+          {cancelInFooter && (
+            <Button variant="secondary" onClick={onClose} disabled={creating}>
+              Cancel
+            </Button>
+          )}
           <Button
             variant="secondary"
             onClick={handleCreateNewJD}

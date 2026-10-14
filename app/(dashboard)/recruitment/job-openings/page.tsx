@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Loader2, AlertTriangle, X, Clock, GraduationCap, Factory, FolderOpen, FileSearch, ClipboardCheck, Users, Video, Info, ShieldCheck } from 'lucide-react';
-import JobsListing from '@/components/JobsListing';
+import JobsListing, { type BulkStatusAction } from '@/components/JobsListing';
 import JDEditBlockedModal from '@/components/JDEditBlockedModal';
 import AITalentMatchConfirmModal from '@/components/AITalentMatchConfirmModal';
 import AITalentMatchProgressPanel from '@/components/AITalentMatchProgressPanel';
@@ -29,6 +29,7 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogAction,
+  AlertDialogCancel,
 } from '@/components/ui/alert-dialog';
 
 type FilterStatus = 'all' | 'published' | 'draft' | 'closed' | 'disabled' | 'archived';
@@ -609,6 +610,62 @@ export default function JobOpeningsPage() {
     }
   };
 
+  /* Bulk Disable / Re-enable / Archive / Unarchive from the Actions menu. The
+     same status writes as the per-row actions (Re-enable and Unarchive both
+     return a job to Published, exactly as their single-job versions do), run
+     one job at a time, then ONE summary toast instead of one per job. */
+  const BULK_STATUS: Record<BulkStatusAction, { status: string; done: string; verb: string }> = {
+    disable: { status: 'disabled', done: 'disabled', verb: 'disable' },
+    reenable: { status: 'published', done: 're-enabled', verb: 're-enable' },
+    archive: { status: 'archived', done: 'archived', verb: 'archive' },
+    unarchive: { status: 'published', done: 'unarchived and published', verb: 'unarchive' },
+  };
+
+  const handleBulkStatusChange = async (targets: Job[], action: BulkStatusAction) => {
+    const { status, done, verb } = BULK_STATUS[action];
+    const updatedIds: string[] = [];
+    let failed = 0;
+    for (const job of targets) {
+      try {
+        await jdService.updateStatus(job.id, status);
+        updatedIds.push(job.id);
+        markVersionStatus(job.id, status);
+      } catch {
+        failed++;
+      }
+    }
+    if (updatedIds.length > 0) {
+      const updated = new Set(updatedIds);
+      setJobs(prev => prev.map(job => updated.has(job.id) ? { ...job, status: mapStatus(status) } : job));
+    }
+    if (failed === 0) {
+      toast.success(updatedIds.length === 1
+        ? `"${targets.find(job => job.id === updatedIds[0])?.title}" has been ${done}`
+        : `${updatedIds.length} jobs ${done}`);
+    } else if (updatedIds.length > 0) {
+      toast.warning(`${updatedIds.length} ${done} · ${failed} failed`);
+    } else {
+      toast.error(`Failed to ${verb} ${failed === 1 ? 'job' : `${failed} jobs`}`);
+    }
+  };
+
+  /* Which of these jobs are in use — asked before the bulk Delete confirm
+     opens, so it can name what will be skipped. A job whose check fails is
+     not counted as in use; the delete itself re-checks and the backend
+     validates, as before. */
+  const handleCheckJobsInUse = async (jobsToCheck: Job[]): Promise<Set<string>> => {
+    const inUse = new Set<string>();
+    await Promise.all(jobsToCheck.map(async job => {
+      try {
+        const usageStatus = await jdService.getUsageStatus(job.id);
+        if (usageStatus?.is_used) inUse.add(job.id);
+      } catch (error) {
+        console.error('Failed to check JD usage status:', error);
+      }
+    }));
+    return inUse;
+  };
+
   // Bulk delete: JobsListing has already shown a single confirmation. Delete each
   // selected job, skipping any that are in use (same rule as single delete), and
   // report a summary. Runs sequentially to keep error handling clear.
@@ -699,6 +756,8 @@ export default function JobOpeningsPage() {
         onUnarchiveJob={handleUnarchiveJob}
         onDeleteJob={handleDeleteJob}
         onBulkDelete={handleBulkDeleteJobs}
+        onBulkStatusChange={handleBulkStatusChange}
+        onCheckJobsInUse={handleCheckJobsInUse}
         quotaInfo={quotaInfo}
         initialStatusFilter={activeFilter}
         forceListView={forceListView}
@@ -750,6 +809,7 @@ export default function JobOpeningsPage() {
           jobId={scoreResumesJob.id}
           jobShortId={scoreResumesJob.job_id}
           jobVersion={scoreResumesJob.versionNumber && scoreResumesJob.versionNumber > 0 ? scoreResumesJob.versionNumber : null}
+          cancelInFooter
           onClose={() => setScoreResumesJob(null)}
           onScoringFinished={() => {
             const job = scoreResumesJob;
@@ -773,13 +833,14 @@ export default function JobOpeningsPage() {
         jdId={editWarningDialog.jobId}
         creating={!!editWarningDialog.creating}
         atMaxVersions={(editWarningDialog.versionNumber ?? 1) >= 5}
+        cancelInFooter
         onClose={() => setEditWarningDialog({ open: false, jobTitle: '', modules: [] })}
         onCreateNewVersion={handleCreateNewVersion}
       />
 
       {/* Delete Warning Dialog - shown when JD is in use */}
       <AlertDialog open={deleteWarningDialog.open} onOpenChange={(open) => setDeleteWarningDialog(prev => ({ ...prev, open }))}>
-        <AlertDialogContent className="max-w-xl max-h-[90dvh] overflow-y-auto">
+        <AlertDialogContent hideClose className="max-w-xl max-h-[90dvh] overflow-y-auto">
           <AlertDialogHeader>
             <div className="flex items-start gap-4">
               <div className="flex-shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-red-100 ring-4 ring-red-50 flex items-center justify-center">
@@ -864,6 +925,8 @@ export default function JobOpeningsPage() {
           </div>
 
           <AlertDialogFooter className="mt-5 flex gap-2 sm:justify-end">
+            {/* Cancel just dismisses (onOpenChange above) — nothing is deleted. */}
+            <AlertDialogCancel className="w-full sm:w-auto text-sm">Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => setDeleteWarningDialog({ open: false, jobTitle: '', usageDetails: [] })}
               className="w-full sm:w-auto bg-gray-900 hover:bg-gray-800 text-white text-sm"

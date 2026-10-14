@@ -13,6 +13,9 @@ export interface DeleteJobModalProps {
   jobLabel: string;
   /** How many JDs this will delete — switches the copy to the plural. */
   count?: number;
+  /** Optional warning under the JD chip — e.g. which selected jobs a bulk
+   *  delete will skip because they are in use. */
+  note?: string;
   onConfirm: () => void;
   onCancel: () => void;
   isLoading?: boolean;
@@ -29,6 +32,7 @@ export default function DeleteJobModal({
   isOpen,
   jobLabel,
   count = 1,
+  note,
   onConfirm,
   onCancel,
   isLoading = false,
@@ -60,6 +64,11 @@ export default function DeleteJobModal({
                   {jobLabel}
                 </span>
               </span>
+              {note && (
+                <p className="mt-3 rounded-lg border border-warning-line bg-warning-subtle/60 px-3 py-2 text-sm text-gray-700 dark:text-slate-300">
+                  {note}
+                </p>
+              )}
             </div>
           </div>
         </div>

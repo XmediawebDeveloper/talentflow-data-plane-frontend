@@ -448,6 +448,12 @@ function JDCreationContent() {
   const [accessError, setAccessError] = useState<{ code: string; message: string } | null>(null);
   const [isJDInUse, setIsJDInUse] = useState(false);
   const [jdUsageMessage, setJdUsageMessage] = useState<string | undefined>(undefined);
+  /* The job title is the job's identity across its versions. A new version has
+     no activity of its own, so it is locked when any OTHER version of the job
+     has been used (scored, matched, assessed, interviewed). This version's own
+     use already locks the whole editor through isJDInUse. */
+  const [isTitleLocked, setIsTitleLocked] = useState(false);
+  const [titleLockedMessage, setTitleLockedMessage] = useState<string | undefined>(undefined);
 
   // Drop the retired latch so a value written by the previous build cannot
   // outlive it. Nothing reads the key any more.
@@ -485,6 +491,7 @@ function JDCreationContent() {
               status: jd.status
             });
 
+            let jdInUse = false;
             // Check usage status for published JDs - prevent editing if in use
             if (jd.status === 'published') {
               try {
@@ -493,6 +500,7 @@ function JDCreationContent() {
 
                 if (usageStatus && usageStatus.is_used) {
                   // JD is in use - set flag to show warning and disable editing
+                  jdInUse = true;
                   setIsJDInUse(true);
                   /* Derived from whatever the endpoint reports rather than a
                      hand-listed three — this used to omit AI Interview, so a JD
@@ -511,6 +519,39 @@ function JDCreationContent() {
               }
             }
 
+            // A later version (v2+): lock the title once another version of
+            // this job is in use. Checked per version through the same
+            // usage-status endpoint the editor lock uses.
+            let titleLocked = false;
+            if (!jdInUse && (jd.version_number ?? 1) > 1) {
+              try {
+                const lineage = await jdService.getLineageVersions(jdId);
+                const otherVersions = lineage.filter(version => version.id !== jdId);
+                const usages = await Promise.all(
+                  otherVersions.map(version => jdService.getUsageStatus(version.id).catch(() => null)),
+                );
+                const moduleTotals = new Map<string, number>();
+                usages.forEach(usage => {
+                  if (!usage?.is_used) return;
+                  titleLocked = true;
+                  getJDUsageModules(usage.usage).forEach(module => {
+                    moduleTotals.set(module.name, (moduleTotals.get(module.name) ?? 0) + module.count);
+                  });
+                });
+                if (titleLocked) {
+                  const details = Array.from(moduleTotals, ([name, count]) => `${name} (${count})`).join(', ');
+                  setTitleLockedMessage(
+                    `The job title cannot be changed because earlier versions of this job are already in use${details ? `: ${details}` : ''}.`,
+                  );
+                }
+              } catch (lineageError) {
+                console.error('[TalentFlow] Failed to check version usage for title lock:', lineageError);
+                // Leave the title editable if the check fails, as the editor lock does.
+              }
+            }
+            setIsTitleLocked(titleLocked);
+            if (!titleLocked) setTitleLockedMessage(undefined);
+
             setEditingJD(jd);
           } catch (error) {
             console.error('Failed to fetch JD:', error);
@@ -521,6 +562,8 @@ function JDCreationContent() {
           setEditingJD(null);
           setIsJDInUse(false);
           setJdUsageMessage('');
+          setIsTitleLocked(false);
+          setTitleLockedMessage(undefined);
         }
         setLoading(false);
       } catch (error) {
@@ -538,6 +581,8 @@ function JDCreationContent() {
           setEditingJD(null);
           setIsJDInUse(false);
           setJdUsageMessage('');
+          setIsTitleLocked(false);
+          setTitleLockedMessage(undefined);
         }
         setLoading(false);
       }
@@ -818,6 +863,8 @@ function JDCreationContent() {
           jdWorkflow={jdWorkflow}
           isJDInUse={isJDInUse}
           jdUsageMessage={jdUsageMessage}
+          isTitleLocked={isTitleLocked}
+          titleLockedMessage={titleLockedMessage}
           breadcrumbItems={breadcrumbItems}
           /* `setJdDisplayStep` is a state setter, so its identity is stable —
              passing it directly cannot re-fire the reporting effect inside

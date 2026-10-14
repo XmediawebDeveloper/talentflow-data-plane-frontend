@@ -15,12 +15,19 @@ import { tabPill } from './filter-pills';
  * The "select all" item renders only when `onSelectAll` is supplied, so a
  * server-paginated list that can't select beyond the current page simply omits
  * it and still matches the chrome.
+ *
+ * The menu items are checkboxes that mirror the real selection: unchecked until
+ * every row in their scope is ticked (by the item or row by row), and clicking a
+ * checked item unticks that scope — "select all" clears the selection, "this
+ * page" drops the page's rows (when `onDeselectPage` is supplied).
  */
 export default function ToolbarSelectAll({
   selectedCount,
   allSelected,
   pageCount,
+  pageSelected = false,
   onSelectPage,
+  onDeselectPage,
   totalCount,
   onSelectAll,
   onClear,
@@ -32,7 +39,11 @@ export default function ToolbarSelectAll({
   allSelected: boolean;
   /** Count shown on the "this page" item. */
   pageCount: number;
+  /** True when every row on the current page is selected (checks the "this page" item). */
+  pageSelected?: boolean;
   onSelectPage: () => void;
+  /** Unticks the current page's rows; without it the "this page" item only selects. */
+  onDeselectPage?: () => void;
   /** Count shown on the "select all" item; required with `onSelectAll`. */
   totalCount?: number;
   /** Omit to hide the "select all" item (e.g. a server-paginated list). */
@@ -42,6 +53,8 @@ export default function ToolbarSelectAll({
   itemLabel?: string;
 }) {
   const [open, setOpen] = React.useState(false);
+  const pageChecked = pageSelected && pageCount > 0 && !!onDeselectPage;
+  const allChecked = allSelected && selectedCount > 0;
 
   return (
     <div className="relative">
@@ -69,24 +82,40 @@ export default function ToolbarSelectAll({
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div className="absolute top-full left-0 mt-2 w-60 max-w-[calc(100vw-2rem)] bg-white dark:bg-slate-900 rounded-lg shadow-lg border border-gray-200 dark:border-slate-700 py-2 z-50">
             <button
+              type="button"
+              role="menuitemcheckbox"
+              aria-checked={pageChecked}
               onClick={() => {
-                onSelectPage();
+                if (pageChecked) onDeselectPage?.();
+                else onSelectPage();
                 setOpen(false);
               }}
               className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800"
             >
-              <Square className="w-4 h-4 text-gray-500" />
+              {pageChecked ? (
+                <CheckSquare className="w-4 h-4 text-brand-blue" />
+              ) : (
+                <Square className="w-4 h-4 text-gray-500" />
+              )}
               Select all on this page ({pageCount})
             </button>
             {onSelectAll && (
               <button
+                type="button"
+                role="menuitemcheckbox"
+                aria-checked={allChecked}
                 onClick={() => {
-                  onSelectAll();
+                  if (allChecked) onClear();
+                  else onSelectAll();
                   setOpen(false);
                 }}
                 className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800"
               >
-                <CheckSquare className="w-4 h-4 text-brand-blue" />
+                {allChecked ? (
+                  <CheckSquare className="w-4 h-4 text-brand-blue" />
+                ) : (
+                  <Square className="w-4 h-4 text-gray-500" />
+                )}
                 Select all {itemLabel} ({totalCount ?? 0})
               </button>
             )}

@@ -817,6 +817,11 @@ interface JDCreationProps {
   editingJD?: EditingJDData | null;  // JD data when editing a draft
   isJDInUse?: boolean;  // Whether JD is used in scoring/assessment/AI match
   jdUsageMessage?: string;  // Message explaining why JD can't be edited
+  /** The job title is fixed: this job (or, for a new version, an earlier
+   *  version of it) has already been used for resume scoring, assessments,
+   *  AI Talent Match or AI Interviews. Only the title is locked. */
+  isTitleLocked?: boolean;
+  titleLockedMessage?: string;
   breadcrumbItems?: BreadcrumbCrumb[];  // Optional breadcrumb shown above the header
   /** Which workflow the host opened: Step 1 reads "Create JD" (a new job),
    *  "Edit JD" (an existing job), "New Version" (a job version just created)
@@ -1790,7 +1795,7 @@ function jdContentKey(title: string, aiPrompt: string, manualJD: string, generat
   return JSON.stringify([title.trim(), aiPrompt.trim(), manualJD.trim(), generatedJD.trim()]);
 }
 
-export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, isJDInUse = false, jdUsageMessage, breadcrumbItems, onStepChange, editingJDId, onClose, onSuccess, isEmbedded, jdWorkflow = 'create' }: JDCreationProps = {}) {
+export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, isJDInUse = false, jdUsageMessage, isTitleLocked = false, titleLockedMessage, breadcrumbItems, onStepChange, editingJDId, onClose, onSuccess, isEmbedded, jdWorkflow = 'create' }: JDCreationProps = {}) {
   const router = useRouter();
   const [mode, setMode] = useState<CreationMode>('ai');
   const [step, setStep] = useState<Step>(editingJD?.creation_stage || 'create');
@@ -1883,6 +1888,20 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const [editingId, setEditingId] = useState<string | null>(null);
   // true when editingId was loaded from an existing JD (not created fresh in this session)
   const [isPreExistingDraft, setIsPreExistingDraft] = useState(false);
+  /* Discard vs Save as Draft. The Create step autosaves in the background and
+     moving on to Extract saves too, so a brand-new job already has a draft
+     record before the user has chosen anything. Discard must remove that
+     record — but only one this visit created (not a draft opened from the
+     list) and only while the user has not saved it themselves. */
+  const userSavedDraftRef = useRef(false);
+  // Read by the AI-generation callbacks, which close over an older render.
+  const titleLockedRef = useRef(isTitleLocked || isJDInUse);
+  useEffect(() => {
+    titleLockedRef.current = isTitleLocked || isJDInUse;
+  }, [isTitleLocked, isJDInUse]);
+  // Set once Discard is chosen, so an autosave already in flight cannot
+  // leave a fresh draft behind after the user has left.
+  const discardedRef = useRef(false);
   // sourceJdId tracks the original JD for reference
   const [sourceJdId, setSourceJdId] = useState<string | null>(null);
 
@@ -3619,7 +3638,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
     const autosaveTimer = setTimeout(async () => {
       // Don't autosave if currently saving via another action or already published
-      if (isSavingDraft || isPublishing || isPublished) return;
+      if (isSavingDraft || isPublishing || isPublished || discardedRef.current) return;
 
       setAutosaveStatus('saving');
 
@@ -3645,6 +3664,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         } else {
           // Create new draft
           savedJd = await jdService.create(jdData);
+          if (discardedRef.current) {
+            // Discarded while this create was in flight — remove it again.
+            await jdService.delete(savedJd.id).catch(() => undefined);
+            return;
+          }
           setEditingId(savedJd.id);
         }
 
@@ -4079,7 +4103,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         const response = await jdService.generate(generationInput);
 
         if (response?.description) {
-          if (response.title) {
+          if (response.title && !titleLockedRef.current) {
             setJobTitle(response.title);
         }
           setGeneratedJD(response.description);
@@ -4139,8 +4163,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           setGeneratedJD((prev) => prev + content);
         },
         onTitle: (title: string) => {
-          // Update title if provided
-          if (title) {
+          // Update title if provided (never over a locked title)
+          if (title && !titleLockedRef.current) {
             setJobTitle(title);
           }
         },
@@ -7035,8 +7059,23 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const handleDiscardAndNavigate = async () => {
     setShowUnsavedDialog(false);
     setHasUnsavedChanges(false);
+    discardedRef.current = true;
 
-    await revertExtractedDataToSnapshot();
+    if (editingId && !isPreExistingDraft && !userSavedDraftRef.current) {
+      // A new job this visit created (autosave / step save) and the user never
+      // saved: discarding it means deleting it, so it never reaches Drafts.
+      try {
+        await jdService.delete(editingId);
+      } catch (error) {
+        console.error('[Discard] Failed to delete the unsaved draft:', error);
+        toast.error({
+          title: 'Failed to discard job',
+          description: 'The job could not be removed and may still appear under Draft. Please delete it from Job Openings.',
+        });
+      }
+    } else {
+      await revertExtractedDataToSnapshot();
+    }
 
     // Navigate without saving
     resolvePendingNavigation(pendingNavigation);
@@ -7292,6 +7331,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
       setIsSavingDraft(false);
       setHasUnsavedChanges(false); // Clear unsaved changes after successful save
+      userSavedDraftRef.current = true; // The user kept this draft — Discard must not delete it
       savedContentKeyRef.current = currentContentKeyRef.current;
 
       // The backend silently refuses to move an already-Published JD to Draft
@@ -7354,8 +7394,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     ];
 
     return (
-      <div className="overflow-x-auto">
-        <div className="flex w-fit min-w-max mx-auto items-center gap-3 sm:gap-4 px-1">
+      /* Scrolls sideways on narrow screens only. `overflow-x: auto` makes the
+         browser treat the Y axis as `auto` too, so the current step's pulse
+         ring (scales to 2×) and shadow overflowed the 40px row — a vertical
+         scrollbar appeared and the ring was clipped. The negative margins +
+         equal padding give the scroll box room for them (out to the card's
+         border, the same footprint as AI Interview's unclipped indicator)
+         without moving the steps, and the Y axis is hidden explicitly. */
+      <div className="overflow-x-auto overflow-y-hidden -my-6 py-6 -mx-3 px-3 sm:-mx-5 sm:px-5">
+        <div className="flex w-fit min-w-max mx-auto items-center gap-3 sm:gap-4 px-2">
           {stepLabels.map((label, index) => {
             const stepNumber = index + 1;
             const isCurrent = displayStep === stepNumber;
@@ -7364,30 +7411,49 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             return (
               <Fragment key={label}>
                 {/* Connector BEFORE this step — filled once the step behind it
-                    is complete, which is the same test as that step's tick. */}
+                    is complete, which is the same test as that step's tick.
+                    Colours, circle and label styles below are the AI Interview
+                    step indicator's (AIInterviewStepIndicator), so both
+                    creation flows read as one component. */}
                 {index > 0 && (
                   <div
-                    className={`w-6 sm:w-12 lg:w-24 h-0.5 rounded-full ${
-                      displayStep > index ? 'bg-brand-cyan' : 'bg-gray-200 dark:bg-slate-700'
+                    className={`w-6 sm:w-12 lg:w-24 h-0.5 rounded-full transition-colors duration-500 ${
+                      displayStep > index ? 'bg-brand-blue' : 'bg-gray-200'
                     }`}
                   />
                 )}
 
                 <div className="flex items-center gap-2.5">
-                  <div
-                    className={`flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-full text-sm font-semibold shrink-0 ${
-                      isCurrent
-                        ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
-                        : isComplete
-                          ? 'bg-brand-cyan text-white shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10'
-                          : 'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 ring-1 ring-gray-200 dark:ring-slate-700'
-                    }`}
-                  >
-                    {isComplete ? <CheckCircle className="w-5 h-5" /> : stepNumber}
+                  <div className="relative">
+                    <div
+                      className={`flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-full text-sm font-semibold shrink-0 transition-all duration-300 z-10 relative ${
+                        isComplete
+                          ? 'bg-brand-blue text-white shadow-sm'
+                          : isCurrent
+                            ? 'bg-gradient-to-br from-brand-blue to-brand-blue-2 text-white shadow-lg shadow-brand-blue/40 ring-2 ring-brand-blue/10'
+                            : 'bg-gray-100 text-gray-400 ring-1 ring-gray-200'
+                      }`}
+                    >
+                      {isComplete ? (
+                        <CheckCircle className="w-5 h-5" />
+                      ) : (
+                        <span className="tabular-nums">{stepNumber}</span>
+                      )}
+                    </div>
+                    {isCurrent && (
+                      <span
+                        aria-hidden
+                        className="pointer-events-none absolute inset-0 rounded-full bg-brand-blue/25 tf-step-pulse"
+                      />
+                    )}
                   </div>
                   <div
-                    className={`hidden sm:block text-sm whitespace-nowrap font-medium ${
-                      isCurrent ? 'text-brand-blue' : 'text-gray-700 dark:text-slate-300'
+                    className={`hidden sm:block text-sm whitespace-nowrap font-medium transition-colors duration-300 ${
+                      isCurrent
+                        ? 'text-brand-blue-deep'
+                        : isComplete
+                          ? 'text-gray-700'
+                          : 'text-gray-400'
                     }`}
                   >
                     {label}
@@ -7835,15 +7901,21 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         onChange={(e) => setJobTitle(e.target.value)}
                         maxLength={VALIDATION.JOB_TITLE.max}
                         placeholder="e.g., Registered Nurse, CNC Machinist, Senior Java Developer"
-                        disabled={isJDInUse}
+                        disabled={isJDInUse || isTitleLocked}
+                        title={isTitleLocked && !isJDInUse ? titleLockedMessage : undefined}
                         className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black ${
-                          isJDInUse
+                          isJDInUse || isTitleLocked
                             ? 'bg-gray-100 cursor-not-allowed'
                             : hasJobTitleValidationError
                               ? 'border-destructive-line bg-destructive-subtle'
                               : 'border-gray-200'
                         }`}
                       />
+                      {isTitleLocked && !isJDInUse && (
+                        <p className="mt-1 text-xs text-warning">
+                          {titleLockedMessage || 'The job title cannot be changed because this job is already in use.'}
+                        </p>
+                      )}
                       <div className="flex justify-between mt-1">
                         <p className={`text-xs ${hasJobTitleValidationError ? 'text-destructive' : isJobTitlePendingValidation ? 'text-gray-500' : getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
                           {jobTitle.length === 0 && `Job Title is required (min ${VALIDATION.JOB_TITLE.min} characters)`}
@@ -8002,15 +8074,21 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         onChange={(e) => setJobTitle(e.target.value)}
                         maxLength={VALIDATION.JOB_TITLE.max}
                         placeholder="e.g., Registered Nurse, CNC Machinist, Senior Java Developer"
-                        disabled={isJDInUse}
+                        disabled={isJDInUse || isTitleLocked}
+                        title={isTitleLocked && !isJDInUse ? titleLockedMessage : undefined}
                         className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black ${
-                          isJDInUse
+                          isJDInUse || isTitleLocked
                             ? 'bg-gray-100 cursor-not-allowed'
                             : hasJobTitleValidationError
                               ? 'border-destructive-line bg-destructive-subtle'
                               : 'border-gray-200'
                         }`}
                       />
+                      {isTitleLocked && !isJDInUse && (
+                        <p className="mt-1 text-xs text-warning">
+                          {titleLockedMessage || 'The job title cannot be changed because this job is already in use.'}
+                        </p>
+                      )}
                       <div className="flex justify-between mt-1">
                         <p className={`text-xs ${hasJobTitleValidationError ? 'text-destructive' : isJobTitlePendingValidation ? 'text-gray-500' : getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
                           {jobTitle.length > 0 && jobTitleValidationError && jobTitleValidationError}
