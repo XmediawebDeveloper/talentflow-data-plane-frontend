@@ -8,16 +8,22 @@ export default function Loading() {
     <main className="flex-1 overflow-x-clip bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
         <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
-          {/* Header actions */}
-          <div className="mb-4 flex items-center justify-end gap-2">
-            <Skeleton className="h-9 w-28 rounded-lg" />
-            <Skeleton className="h-9 w-24 rounded-lg" />
+          {/* Title + actions */}
+          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-2">
+              <Skeleton className="h-6 w-44" />
+              <Skeleton className="h-3.5 w-80" />
+            </div>
+            <div className="flex gap-2">
+              <Skeleton className="h-10 w-28 rounded-xl" />
+              <Skeleton className="h-10 w-24 rounded-xl" />
+            </div>
           </div>
 
           {/* Stat cards */}
           <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
             {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="rounded-2xl border border-gray-100 bg-white p-5">
+              <div key={i} className="rounded-xl border border-gray-100 bg-white p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="space-y-2">
                     <Skeleton className="h-3 w-24" />
@@ -31,14 +37,14 @@ export default function Loading() {
           </div>
 
           {/* Table */}
-          <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white">
+          <div className="overflow-hidden rounded-xl border border-gray-100 bg-white">
             <div className="border-b border-gray-100 bg-gray-50 px-4 py-4 sm:px-6">
               <Skeleton className="h-4 w-20" />
               <Skeleton className="mt-1.5 h-3 w-32" />
             </div>
             <div className="overflow-x-auto">
               <div className="min-w-[800px]">
-                <div className="grid grid-cols-[160px_110px_150px_180px_110px_110px_140px] gap-4 border-b border-gray-100 px-4 py-4">
+                <div className="grid grid-cols-[160px_110px_150px_180px_110px_110px_140px] gap-4 border-b border-gray-100 px-5 py-4">
                   <Skeleton className="h-3 w-20" />
                   <Skeleton className="h-3 w-12" />
                   <Skeleton className="h-3 w-24" />
@@ -47,11 +53,11 @@ export default function Loading() {
                   <Skeleton className="mx-auto h-3 w-14" />
                   <Skeleton className="ml-auto h-3 w-16" />
                 </div>
-                <div className="divide-y divide-gray-100">
+                <div>
                   {Array.from({ length: 6 }).map((_, r) => (
-                    <div key={r} className="grid grid-cols-[160px_110px_150px_180px_110px_110px_140px] items-center gap-4 px-4 py-4">
-                      <div className="flex items-center gap-2">
-                        <Skeleton className="h-9 w-9 shrink-0 rounded-lg" />
+                    <div key={r} className="grid grid-cols-[160px_110px_150px_180px_110px_110px_140px] items-center gap-4 px-5 py-5 even:bg-gray-50/60">
+                      <div className="flex items-center gap-2.5">
+                        <Skeleton className="h-10 w-10 shrink-0 rounded-xl" />
                         <Skeleton className="h-4 w-24" />
                       </div>
                       <Skeleton className="h-4 w-20" />

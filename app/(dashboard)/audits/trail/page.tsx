@@ -42,7 +42,6 @@ import {
   type RefundFlag,
 } from '@/lib/types/auditSession';
 import { formatIST } from '@/lib/utils/dateUtils';
-import { useQuota } from '@/contexts/QuotaContext';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { TableSkeleton } from '@/components/ui/skeleton';
@@ -221,7 +220,6 @@ const entityIcons: Record<string, React.ElementType> = {
 };
 
 export default function AuditTrailPage() {
-  const { quotaData } = useQuota();
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [stats, setStats] = useState<AuditStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -823,11 +821,6 @@ export default function AuditTrailPage() {
           description="Track every system activity and change in real-time."
           actions={
             <div className="flex items-center gap-2 sm:gap-3">
-              {quotaData?.tenant_code && (
-                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-2xs sm:text-xs font-mono font-medium bg-gray-100 text-gray-600 ring-1 ring-gray-200">
-                  {quotaData.tenant_code}
-                </span>
-              )}
               <Button
                 variant="secondary"
                 onClick={() => { fetchAuditLogs(); fetchStats(); }}
@@ -1080,14 +1073,6 @@ export default function AuditTrailPage() {
 
         {pageView === 'list' && (
         <>
-        {/* justify-end, not justify-between: the Back to overview button that
-            used to hold the left slot is gone, and the tally belongs on the
-            right. */}
-        <div className="mb-4 flex items-center justify-end gap-2">
-          <span className="text-xs text-gray-500 dark:text-slate-400">
-            {filteredLogs.length} {filteredLogs.length === 1 ? 'record' : 'records'}
-          </span>
-        </div>
 
         {/* Combined Audit Log Card - Tabs, Filters & Table */}
         <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700/60 overflow-hidden">

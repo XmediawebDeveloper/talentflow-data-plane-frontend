@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { useAuth } from '@/lib/hooks/useAuth';
 import ListPagination from '@/components/ListPagination';
+import { RowActions } from '@/components/subscription/RowActionsMenu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
@@ -513,19 +514,19 @@ export default function UnitDisputesPage() {
         </div>
 
         {/* Stats Cards — clicking a card drills into the dispute list with the matching filter applied */}
-        <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
+        <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
           <button
             type="button"
             onClick={() => openListView('all')}
-            className={`text-left rounded-2xl border bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:shadow-md ${pageView === 'list' && statusFilter === 'all' ? 'border-brand-blue/40 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-blue/25'}`}
+            className={`h-full text-left rounded-xl border bg-white dark:bg-slate-900 p-4 sm:p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:shadow-md ${pageView === 'list' && statusFilter === 'all' ? 'border-brand-blue/40 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-blue/25'}`}
           >
             <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Total Disputes</p>
-                <p className="mt-2 text-2xl font-semibold tracking-tight text-brand-blue">{stats.total}</p>
+              <div className="min-w-0">
+                <p className="text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-slate-500">Total Disputes</p>
+                <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums break-words text-brand-blue">{stats.total}</p>
                 <p className="mt-1 text-xs text-gray-500 dark:text-slate-500">All time</p>
               </div>
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
                 <Shield className="h-5 w-5 text-brand-blue" />
               </span>
             </div>
@@ -533,15 +534,15 @@ export default function UnitDisputesPage() {
           <button
             type="button"
             onClick={() => openListView('PENDING_REVIEW')}
-            className={`text-left rounded-2xl border bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-orange/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:shadow-md ${pageView === 'list' && statusFilter === 'PENDING_REVIEW' ? 'border-brand-orange/40 ring-brand-orange/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-orange/25'}`}
+            className={`h-full text-left rounded-xl border bg-white dark:bg-slate-900 p-4 sm:p-5 shadow-sm shadow-brand-orange/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:shadow-md ${pageView === 'list' && statusFilter === 'PENDING_REVIEW' ? 'border-brand-orange/40 ring-brand-orange/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-orange/25'}`}
           >
             <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Pending Review</p>
-                <p className="mt-2 text-2xl font-semibold tracking-tight text-brand-orange-deep">{stats.pending}</p>
+              <div className="min-w-0">
+                <p className="text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-slate-500">Pending Review</p>
+                <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums break-words text-brand-orange-deep">{stats.pending}</p>
                 <p className="mt-1 text-xs text-gray-500 dark:text-slate-500">Awaiting decision</p>
               </div>
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/20 shadow-sm shadow-brand-orange/10">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/20 shadow-sm shadow-brand-orange/10">
                 <Clock className="h-5 w-5 text-brand-orange-deep" />
               </span>
             </div>
@@ -549,15 +550,15 @@ export default function UnitDisputesPage() {
           <button
             type="button"
             onClick={() => openListView('resolved')}
-            className={`text-left rounded-2xl border bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-teal/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:shadow-md ${pageView === 'list' && statusFilter === 'resolved' ? 'border-brand-teal/40 ring-brand-teal/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-teal/25'}`}
+            className={`h-full text-left rounded-xl border bg-white dark:bg-slate-900 p-4 sm:p-5 shadow-sm shadow-brand-teal/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:shadow-md ${pageView === 'list' && statusFilter === 'resolved' ? 'border-brand-teal/40 ring-brand-teal/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-teal/25'}`}
           >
             <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Resolved</p>
-                <p className="mt-2 text-2xl font-semibold tracking-tight text-brand-teal">{stats.resolved}</p>
+              <div className="min-w-0">
+                <p className="text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-slate-500">Resolved</p>
+                <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums break-words text-brand-teal">{stats.resolved}</p>
                 <p className="mt-1 text-xs text-gray-500 dark:text-slate-500">Approved or rejected</p>
               </div>
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-teal/10 ring-1 ring-brand-teal/15 shadow-sm shadow-brand-teal/10">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-teal/10 ring-1 ring-brand-teal/15 shadow-sm shadow-brand-teal/10">
                 <CheckCircle2 className="h-5 w-5 text-brand-teal" />
               </span>
             </div>
@@ -566,17 +567,6 @@ export default function UnitDisputesPage() {
 
         {pageView === 'list' && (
           <>
-            {/* justify-end, not justify-between: the Back to overview button
-                that used to hold the left slot is gone, and the status line
-                belongs on the right. */}
-            <div className="mb-4 flex items-center justify-end gap-2">
-              <span className="text-xs text-gray-500 dark:text-slate-400">
-                {statusFilter === 'PENDING_REVIEW' && 'Showing pending disputes'}
-                {statusFilter === 'resolved' && 'Showing resolved disputes'}
-                {statusFilter === 'all' && 'Showing all disputes'}
-              </span>
-            </div>
-
         {/* Filters */}
         <div className="mb-6 rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-5">
           <div className="mb-3 flex items-center gap-2">
@@ -593,7 +583,7 @@ export default function UnitDisputesPage() {
               </button>
             )}
           </div>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
               <input
@@ -737,26 +727,26 @@ export default function UnitDisputesPage() {
               <table className="w-full min-w-[900px]">
                 <thead className="bg-gray-50/80 dark:bg-slate-800/50">
                   <tr className="text-left">
-                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 w-[160px]">Dispute ID</th>
-                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 w-[110px]">Date</th>
-                    <th className="px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 w-[90px]">Unit Type</th>
-                    <th className="px-4 py-4 text-right text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 w-[90px]">Units</th>
-                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 w-[160px]">Reason</th>
-                    <th className="px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 w-[140px]">Status</th>
-                    <th className="px-4 py-4 text-right text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 w-[100px] tf-sticky-col">Actions</th>
+                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[160px]">Dispute ID</th>
+                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[110px]">Date</th>
+                    <th className="px-4 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[90px]">Unit Type</th>
+                    <th className="px-4 py-4 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[90px]">Units</th>
+                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[160px]">Reason</th>
+                    <th className="px-4 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[140px]">Status</th>
+                    <th className="px-4 py-4 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[100px] tf-sticky-col">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                   {paginatedDisputes.map((dispute) => (
                     <tr key={dispute.id} className="transition-colors hover:bg-brand-blue/[0.02]">
                       <td className="px-4 py-4">
-                        <div className="flex items-center gap-1.5">
-                          <span className="truncate font-mono text-sm font-semibold text-gray-900 dark:text-slate-50" title={dispute.id}>
+                        <div className="flex min-w-0 items-center gap-1.5">
+                          <span className="min-w-0 truncate font-mono text-sm font-semibold text-gray-900 dark:text-slate-50" title={dispute.id}>
                             {truncateId(dispute.id)}
                           </span>
                           <button
                             onClick={() => copyToClipboard(dispute.id)}
-                            className="inline-flex h-6 w-6 items-center justify-center rounded-md text-gray-400 dark:text-slate-500 transition-colors hover:bg-brand-blue/[0.06] hover:text-brand-blue"
+                            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-gray-400 dark:text-slate-500 transition-colors hover:bg-brand-blue/[0.06] hover:text-brand-blue"
                             aria-label="Copy full ID" title="Copy full ID"
                           >
                             <Copy className="h-3.5 w-3.5" />
@@ -784,14 +774,12 @@ export default function UnitDisputesPage() {
                         </Badge>
                       </td>
                       <td className="px-4 py-4 text-right tf-sticky-col">
-                        <button
-                          onClick={() => setSelectedDispute(dispute)}
-                          className="inline-flex items-center gap-1 rounded-lg border border-brand-blue/15 bg-brand-blue/[0.04] px-2.5 py-1.5 text-xs font-medium text-brand-blue transition-all hover:-translate-y-0.5 hover:bg-brand-blue/[0.08]"
-                          aria-label="View Details" title="View Details"
-                        >
-                          <ExternalLink className="h-3.5 w-3.5" />
-                          View
-                        </button>
+                        <RowActions
+                          menuLabel="Dispute actions"
+                          actions={[
+                            { key: 'view', label: 'View', icon: ExternalLink, variant: 'primary', onClick: () => setSelectedDispute(dispute) },
+                          ]}
+                        />
                       </td>
                     </tr>
                   ))}
@@ -822,18 +810,18 @@ export default function UnitDisputesPage() {
               <div className="flex-shrink-0 relative overflow-hidden bg-brand-blue px-5 py-4 text-white sm:px-6">
                 <div className="pointer-events-none absolute -top-10 right-0 h-32 w-32 rounded-full bg-white/10 blur-3xl" />
                 <div className="relative flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3">
+                  <div className="flex min-w-0 items-start gap-3">
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15">
                       <Shield className="h-5 w-5 text-white" />
                     </span>
-                    <div>
+                    <div className="min-w-0">
                       <h2 className="text-lg font-semibold">Dispute Details</h2>
                       <p className="mt-0.5 font-mono text-sm text-white/75">{truncateId(selectedDispute.id)}</p>
                     </div>
                   </div>
                   <button
                     onClick={() => setSelectedDispute(null)}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-white transition-colors hover:bg-white/15"
+                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white transition-colors hover:bg-white/15"
                     aria-label="Close"
                   >
                     <X className="h-5 w-5" />
@@ -844,22 +832,22 @@ export default function UnitDisputesPage() {
                 {/* Top info */}
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                    <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Created</p>
+                    <p className="text-2xs uppercase tracking-wider text-gray-400 dark:text-slate-500">Created</p>
                     <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-slate-50">{formatDateTime(selectedDispute.created_at)}</p>
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                    <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Unit Type</p>
+                    <p className="text-2xs uppercase tracking-wider text-gray-400 dark:text-slate-500">Unit Type</p>
                     <div className="mt-1">{getUnitTypeBadge(selectedDispute.unit_type)}</div>
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                    <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Status</p>
+                    <p className="text-2xs uppercase tracking-wider text-gray-400 dark:text-slate-500">Status</p>
                     <Badge variant={getStatusVariant(selectedDispute.status)} className="mt-1">
                       {getStatusIcon(selectedDispute.status)}
                       {getStatusLabel(selectedDispute.status)}
                     </Badge>
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                    <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Consumption Log ID</p>
+                    <p className="text-2xs uppercase tracking-wider text-gray-400 dark:text-slate-500">Consumption Log ID</p>
                     <div className="mt-1 flex items-center gap-1.5">
                       <p className="break-all font-mono text-sm font-semibold text-gray-900 dark:text-slate-50">{truncateId(selectedDispute.consumption_log_id)}</p>
                       <button onClick={() => copyToClipboard(selectedDispute.consumption_log_id ?? '')} className="inline-flex h-5 w-5 items-center justify-center rounded text-gray-400 dark:text-slate-500 hover:bg-brand-blue/[0.06] hover:text-brand-blue">
@@ -872,7 +860,7 @@ export default function UnitDisputesPage() {
                 {/* Reason & Description */}
                 <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
                   <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-2.5">
-                    <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500">Dispute Information</p>
+                    <p className="text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">Dispute Information</p>
                   </div>
                   <div className="space-y-3 p-4">
                     <div className="flex items-start justify-between gap-4">
@@ -908,7 +896,7 @@ export default function UnitDisputesPage() {
                 {(selectedDispute.resolution_notes || selectedDispute.resolved_by_email || selectedDispute.resolved_at) && (
                   <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
                     <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-2.5">
-                      <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500">Resolution</p>
+                      <p className="text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">Resolution</p>
                     </div>
                     <div className="space-y-3 p-4">
                       {selectedDispute.resolution_notes && (
@@ -935,7 +923,7 @@ export default function UnitDisputesPage() {
 
                 {/* Requested By */}
                 <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-800/50 p-4">
-                  <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500">Requested By</p>
+                  <p className="text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">Requested By</p>
                   <p className="mt-1 text-sm text-gray-900 dark:text-slate-50">{selectedDispute.requested_by_name} <span className="text-gray-500 dark:text-slate-500">({selectedDispute.requested_by_email})</span></p>
                 </div>
 
@@ -951,16 +939,16 @@ export default function UnitDisputesPage() {
               <div className="flex-shrink-0 relative overflow-hidden bg-brand-blue px-5 py-4 text-white sm:px-6">
                 <div className="pointer-events-none absolute -top-10 right-0 h-32 w-32 rounded-full bg-white/10 blur-3xl" />
                 <div className="relative flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3">
+                  <div className="flex min-w-0 items-start gap-3">
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15">
                       <Shield className="h-5 w-5 text-white" />
                     </span>
-                    <div>
+                    <div className="min-w-0">
                       <h2 className="text-lg font-semibold">File a Unit Dispute</h2>
                       <p className="mt-0.5 text-sm text-white/75">Step {fileStep} of 2 &middot; {fileStep === 1 ? 'Select consumption record' : 'Provide dispute details'}</p>
                     </div>
                   </div>
-                  <button onClick={closeFileModal} className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-white transition-colors hover:bg-white/15" aria-label="Close">
+                  <button onClick={closeFileModal} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white transition-colors hover:bg-white/15" aria-label="Close">
                     <X className="h-5 w-5" />
                   </button>
                 </div>
@@ -1098,7 +1086,7 @@ export default function UnitDisputesPage() {
                     {/* Selected log summary */}
                     <div className="mb-5 rounded-xl border border-brand-blue/20 bg-brand-blue/[0.04] p-4">
                       <div className="mb-2 flex items-center justify-between">
-                        <span className="text-2xs font-semibold uppercase tracking-[0.16em] text-brand-blue">Selected Record</span>
+                        <span className="text-2xs font-semibold uppercase tracking-wider text-brand-blue">Selected Record</span>
                         <button
                           onClick={() => setFileStep(1)}
                           className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-xs font-medium text-brand-blue ring-1 ring-brand-blue/15 transition-colors hover:bg-brand-blue/[0.06]"

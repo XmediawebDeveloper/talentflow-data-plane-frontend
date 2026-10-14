@@ -16,6 +16,7 @@ import api from '@/lib/services/api';
 import { useScrollRestoration } from '@/lib/hooks/useListViewPersistence';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 
 // Addon interface
@@ -624,7 +625,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
             <div className="space-y-6">
               {/* Subscription Summary Card */}
-              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 dark:border-slate-700/60 overflow-hidden">
+              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm shadow-gray-200/50 border border-gray-200 dark:border-slate-700/60 overflow-hidden">
                 <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 sm:px-6 py-3 sm:py-4">
                   <Skeleton className="h-4 w-40" />
                 </div>
@@ -647,7 +648,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
               </div>
 
               {/* Quota Overview */}
-              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 dark:border-slate-700/60 overflow-hidden">
+              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm shadow-gray-200/50 border border-gray-200 dark:border-slate-700/60 overflow-hidden">
                 <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 sm:px-6 py-3 sm:py-4">
                   <div className="flex items-center gap-2.5">
                     <Skeleton className="w-8 h-8 rounded-lg" />
@@ -683,7 +684,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
               </div>
 
               {/* Add-ons */}
-              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 dark:border-slate-700/60 overflow-hidden">
+              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm shadow-gray-200/50 border border-gray-200 dark:border-slate-700/60 overflow-hidden">
                 <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 sm:px-6 py-3 sm:py-4">
                   <div className="flex items-center gap-2.5">
                     <Skeleton className="w-8 h-8 rounded-lg" />
@@ -928,7 +929,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
         <div className="space-y-6">
         {/* Subscription Summary Card */}
         {subscriptionSummary && (
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 dark:border-slate-700/60 overflow-hidden">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm shadow-gray-200/50 border border-gray-200 dark:border-slate-700/60 overflow-hidden">
             {/* Card Header with gradient */}
             <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 sm:px-6 py-3 sm:py-4">
               <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
@@ -960,16 +961,20 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                       )}
                     </div>
                     <div className="flex items-center gap-3 mb-3">
-                      <span className={`px-3 py-1 text-xs font-bold rounded-full inline-flex items-center gap-1.5 ${
-                        subscriptionSummary.status === 'active'
-                          ? 'text-gray-700 dark:text-slate-300 bg-gray-200 dark:bg-slate-800'
-                          : subscriptionSummary.status === 'trialing'
-                          ? 'text-gray-600 dark:text-slate-400 bg-gray-100 dark:bg-slate-800'
-                          : 'text-gray-600 dark:text-slate-400 bg-gray-100 dark:bg-slate-800'
-                      }`}>
-                        <span className={`w-2 h-2 rounded-full ${subscriptionSummary.status === 'active' ? 'bg-gray-600' : 'bg-gray-400'}`}></span>
-                        {subscriptionSummary.status?.toUpperCase() || 'UNKNOWN'}
-                      </span>
+                      {(() => {
+                        const s = (subscriptionSummary.status || '').toLowerCase();
+                        const variant =
+                          s === 'active' ? 'success'
+                          : (s === 'trialing' || s === 'trial') ? 'warning'
+                          : (s === 'cancelled' || s === 'canceled' || s === 'suspended' || s === 'expired' || s === 'past_due') ? 'destructive'
+                          : 'muted';
+                        return (
+                          <Badge variant={variant} className="capitalize">
+                            <span className="size-1.5 shrink-0 rounded-full bg-current" />
+                            {subscriptionSummary.status || 'Unknown'}
+                          </Badge>
+                        );
+                      })()}
                       {subscriptionSummary.isolation_type && (
                         <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium text-gray-600 dark:text-slate-400 bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded-full">
                           <Package className="w-3 h-3" />
@@ -1063,7 +1068,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
         {/* id anchors the header plan-arrow deep link (?focus=quota-overview);
             scroll-mt keeps the card clear of the sticky breadcrumb band. */}
         {quotaSummary && (
-          <div id="quota-overview" className="scroll-mt-24 bg-white dark:bg-slate-900 rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 dark:border-slate-700/60 overflow-hidden">
+          <div id="quota-overview" className="scroll-mt-24 bg-white dark:bg-slate-900 rounded-2xl shadow-sm shadow-gray-200/50 border border-gray-200 dark:border-slate-700/60 overflow-hidden">
             {/* Section Header */}
             <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 sm:px-6 py-3 sm:py-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -1342,7 +1347,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
         {/* Add-ons Section */}
         {canPurchaseAddons && (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 dark:border-slate-700/60 overflow-hidden" data-section="addons">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm shadow-gray-200/50 border border-gray-200 dark:border-slate-700/60 overflow-hidden" data-section="addons">
           {/* Section Header */}
           <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 sm:px-6 py-3 sm:py-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -1703,8 +1708,8 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
             {/* Modal Header */}
             <div className="relative px-5 sm:px-7 py-5 sm:py-6 bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal flex-shrink-0 overflow-hidden">
               {/* Decorative circles */}
-              <div className="absolute -top-6 -right-6 w-32 h-32 bg-white/5 rounded-full" />
-              <div className="absolute -bottom-8 -left-4 w-24 h-24 bg-white/5 rounded-full" />
+              <div className="pointer-events-none absolute -top-6 -right-6 w-32 h-32 bg-white/5 rounded-full" />
+              <div className="pointer-events-none absolute -bottom-8 -left-4 w-24 h-24 bg-white/5 rounded-full" />
               <div className="relative flex items-center gap-4">
                 <div className="w-12 h-12 sm:w-14 sm:h-14 bg-white/15 backdrop-blur-sm rounded-2xl flex items-center justify-center flex-shrink-0 border border-white/20">
                   <ShoppingCart className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
@@ -1768,7 +1773,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
                 {/* Addon Details Card */}
                 <div className="relative overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-gradient-to-br from-brand-blue/[0.04] via-white to-brand-cyan/[0.04] p-4 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-5">
-                  <div className="absolute top-0 right-0 w-24 h-24 bg-gray-200/40 rounded-full -translate-y-8 translate-x-8" />
+                  <div className="pointer-events-none absolute top-0 right-0 w-24 h-24 bg-gray-200/40 rounded-full -translate-y-8 translate-x-8" />
                   <div className="relative flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3 sm:gap-4 min-w-0">
                       <div className="w-12 h-12 sm:w-14 sm:h-14 bg-white dark:bg-slate-900 rounded-2xl flex items-center justify-center shadow-sm border border-gray-200 dark:border-slate-700 flex-shrink-0">

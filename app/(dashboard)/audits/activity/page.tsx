@@ -22,6 +22,8 @@ import {
   Timer,
   AlertTriangle,
   CheckCircle2,
+  Calendar,
+  Globe,
   type LucideIcon,
 } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
@@ -41,7 +43,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip } from '@/components/ui/tooltip';
 import { EmptyState } from '@/components/ui/empty-state';
-import { PageHeader } from '@/components/ui/page-header';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -94,15 +95,15 @@ const entityIcons: Record<string, LucideIcon> = {
   subscription: CreditCard,
 };
 
-const actionColors: Record<string, string> = {
-  login: 'bg-brand-blue',
-  logout: 'bg-gradient-to-br from-gray-400 to-gray-500',
-  create: 'bg-brand-teal',
-  update: 'bg-brand-blue',
-  delete: 'bg-gradient-to-br from-destructive to-brand-orange-deep',
-  upload: 'bg-brand-cyan',
-  publish: 'bg-brand-orange',
-  default: 'bg-gradient-to-br from-brand-blue/70 to-brand-blue-2/70',
+// Soft-tinted icon tile per action — semantic colour, refined (not loud solid fills).
+const actionTone: Record<string, { tile: string; icon: string }> = {
+  login: { tile: 'bg-brand-blue/10 ring-brand-blue/15', icon: 'text-brand-blue' },
+  logout: { tile: 'bg-gray-100 dark:bg-slate-800 ring-gray-200 dark:ring-slate-700', icon: 'text-gray-500 dark:text-slate-400' },
+  create: { tile: 'bg-success/10 ring-success/20', icon: 'text-success' },
+  update: { tile: 'bg-brand-blue/10 ring-brand-blue/15', icon: 'text-brand-blue' },
+  delete: { tile: 'bg-destructive/10 ring-destructive/20', icon: 'text-destructive' },
+  publish: { tile: 'bg-brand-orange/10 ring-brand-orange/20', icon: 'text-brand-orange-deep' },
+  default: { tile: 'bg-brand-blue/10 ring-brand-blue/15', icon: 'text-brand-blue' },
 };
 
 type ActivityTab = 'activity' | 'audit';
@@ -193,14 +194,14 @@ export default function ActivityLogsPage() {
     return actionIcons.default;
   };
 
-  const getActionColor = (action: string): string => {
-    if (action.includes('login')) return actionColors.login;
-    if (action.includes('logout')) return actionColors.logout;
-    if (action.includes('create') || action.includes('upload')) return actionColors.create;
-    if (action.includes('update') || action.includes('change')) return actionColors.update;
-    if (action.includes('delete') || action.includes('remove')) return actionColors.delete;
-    if (action.includes('publish')) return actionColors.publish;
-    return actionColors.default;
+  const getActionTone = (action: string): { tile: string; icon: string } => {
+    if (action.includes('login')) return actionTone.login;
+    if (action.includes('logout')) return actionTone.logout;
+    if (action.includes('create') || action.includes('upload')) return actionTone.create;
+    if (action.includes('update') || action.includes('change')) return actionTone.update;
+    if (action.includes('delete') || action.includes('remove')) return actionTone.delete;
+    if (action.includes('publish')) return actionTone.publish;
+    return actionTone.default;
   };
 
   const getRelativeTime = (dateStr: string): string => {
@@ -219,68 +220,71 @@ export default function ActivityLogsPage() {
   };
 
   return (
-    <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
+    <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: activeTab === 'audit' ? 'Audit Logs' : 'Activity Logs' }]} />
-        <PageHeader
-          icon={<Activity className="h-5 w-5" />}
-          title={activeTab === 'audit' ? 'Audit Logs' : 'Activity Logs'}
-          description={activeTab === 'audit' ? 'A detailed record of audited actions across your organization.' : 'A real-time view of recent system activity across your organization.'}
-          actions={
-            activeTab === 'activity' ? (
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                <select
-                  value={limit}
-                  onChange={(e) => setLimit(parseInt(e.target.value))}
-                  className="h-10 px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+        <div className="mb-5 flex flex-col gap-4 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
+              <Activity className="h-5 w-5 text-brand-blue" />
+            </div>
+            <div>
+              <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">{activeTab === 'audit' ? 'Audit Logs' : 'Activity Logs'}</h1>
+              <p className="mt-0.5 text-sm text-gray-600 dark:text-slate-400">{activeTab === 'audit' ? 'A detailed record of audited actions across your organization.' : 'A real-time view of recent system activity across your organization.'}</p>
+            </div>
+          </div>
+          {activeTab === 'activity' && (
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={limit}
+                onChange={(e) => setLimit(parseInt(e.target.value))}
+                className="h-10 px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+              >
+                <option value="25">Last 25</option>
+                <option value="50">Last 50</option>
+                <option value="100">Last 100</option>
+              </select>
+              <Tooltip content="Refresh activity">
+                <Button
+                  variant="primary"
+                  onClick={fetchRecentActivity}
+                  aria-label="Refresh activity"
+                  icon={<RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />}
+                  className="px-3 sm:px-4"
                 >
-                  <option value="25">Last 25</option>
-                  <option value="50">Last 50</option>
-                  <option value="100">Last 100</option>
-                </select>
-                <Tooltip content="Refresh activity">
-                  <Button
-                    variant="primary"
-                    onClick={fetchRecentActivity}
-                    aria-label="Refresh activity"
-                    icon={<RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />}
-                    className="px-3 sm:px-4"
-                  >
-                    <span className="hidden sm:inline">Refresh</span>
-                  </Button>
-                </Tooltip>
-              </div>
-            ) : undefined
-          }
-        />
+                  <span className="hidden sm:inline">Refresh</span>
+                </Button>
+              </Tooltip>
+            </div>
+          )}
+        </div>
 
-        {/* Tab navigation */}
+        {/* Tab navigation — segmented control */}
         <section className="mb-5">
-          <div className="border-b border-gray-200 dark:border-slate-700">
-            <nav className="flex gap-1 overflow-x-auto scrollbar-hide -mb-px" aria-label="Activity tabs">
-              {([
-                { id: 'audit', label: 'Audit Log' },
-                { id: 'activity', label: 'Activity Log' },
-              ] as { id: ActivityTab; label: string }[]).map((tab) => {
-                const isActive = tab.id === activeTab;
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => setActiveTab(tab.id)}
-                    aria-current={isActive ? 'page' : undefined}
-                    className={`whitespace-nowrap px-3 sm:px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-                      isActive
-                        ? 'border-brand-blue text-brand-blue'
-                        : 'border-transparent text-gray-600 dark:text-slate-400 hover:text-brand-blue hover:border-brand-blue/40'
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                );
-              })}
-            </nav>
+          <div role="tablist" aria-label="Activity tabs" className="inline-flex w-full max-w-xs rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-100 dark:bg-slate-800/50 p-1">
+            {([
+              { id: 'audit', label: 'Audit Log' },
+              { id: 'activity', label: 'Activity Log' },
+            ] as { id: ActivityTab; label: string }[]).map((tab) => {
+              const isActive = tab.id === activeTab;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex-1 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-all ${
+                    isActive
+                      ? 'bg-white dark:bg-slate-900 text-brand-blue shadow-sm ring-1 ring-black/[0.03] dark:ring-white/[0.04]'
+                      : 'text-gray-600 dark:text-slate-400 hover:text-brand-blue'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
           </div>
         </section>
 
@@ -314,170 +318,159 @@ export default function ActivityLogsPage() {
         {activeTab === 'activity' && (
         <>
 
-        <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] overflow-hidden">
-          {loading ? (
-            <div>
-              {/* Date header */}
-              <div className="bg-gray-50 dark:bg-slate-800/50 px-3 sm:px-6 py-2.5 sm:py-3 border-b border-gray-100 dark:border-slate-700/60">
-                <Skeleton className="h-4 w-32" />
-              </div>
-              {/* Timeline rows: dot + content, with a running timeline line */}
-              <div className="relative">
-                <div className="absolute left-[1.4rem] sm:left-[2.75rem] top-0 bottom-0 w-0.5 bg-gray-200 dark:bg-slate-700" />
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="relative flex items-start gap-3 sm:gap-4 px-3 sm:px-6 py-3 sm:py-4">
-                    <Skeleton className="relative z-10 h-9 w-9 shrink-0 rounded-full" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="space-y-2">
-                          <Skeleton className="h-4 w-64" />
-                          <Skeleton className="h-3 w-40" />
-                        </div>
-                        <div className="text-right space-y-1.5">
-                          <Skeleton className="h-3 w-16" />
-                          <Skeleton className="h-3 w-20" />
-                        </div>
+        {loading ? (
+          <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+            <div className="flex items-center gap-2 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-3 sm:px-5 py-2.5">
+              <Skeleton className="h-3.5 w-3.5 rounded" />
+              <Skeleton className="h-3 w-28" />
+            </div>
+            <div className="divide-y divide-gray-100 dark:divide-slate-700/60">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="flex items-start gap-3 sm:gap-4 px-3 sm:px-5 py-4">
+                  <Skeleton className="h-10 w-10 shrink-0 rounded-xl" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-2">
+                        <Skeleton className="h-4 w-40 max-w-full" />
+                        <Skeleton className="h-3 w-56 max-w-full" />
                       </div>
+                      <Skeleton className="h-3 w-14 shrink-0" />
                     </div>
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
             </div>
-          ) : error ? (
-            <div className="p-12 text-center">
-              <p className="text-destructive">{error}</p>
-              <Button
-                variant="primary"
-                onClick={fetchRecentActivity}
-                className="mt-4"
-              >
-                Retry
-              </Button>
-            </div>
-          ) : logs.length === 0 ? (
+          </div>
+        ) : error ? (
+          <div className="flex items-center gap-3 rounded-xl border border-destructive-line bg-destructive-subtle/80 p-4 ring-1 ring-destructive-line">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-destructive-subtle text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+            </span>
+            <p className="flex-1 text-sm font-medium text-destructive">{error}</p>
+            <Button variant="primary" onClick={fetchRecentActivity}>Retry</Button>
+          </div>
+        ) : logs.length === 0 ? (
+          <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
             <EmptyState
               icon={Activity}
               title="No recent activity"
               description="There is no recent system activity to show yet."
             />
-          ) : (
-            <div className="divide-y divide-gray-100 dark:divide-slate-700/60">
-              {Object.entries(groupedLogs).map(([date, dayLogs]) => (
-                <div key={date}>
-                  {/* Date Header */}
-                  <div className="sticky top-0 bg-gray-50 dark:bg-slate-800/50 px-3 sm:px-6 py-2.5 sm:py-3 border-b border-gray-100 dark:border-slate-700/60 z-10">
-                    <h3 className="text-xs sm:text-sm font-semibold text-brand-blue">{date}</h3>
-                  </div>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {Object.entries(groupedLogs).map(([date, dayLogs]) => (
+              <div key={date}>
+                {/* Date divider */}
+                <div className="mb-3 flex items-center gap-2 px-1">
+                  <Calendar className="h-3.5 w-3.5 shrink-0 text-brand-blue" />
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400">{date}</h3>
+                  <span className="h-px flex-1 bg-gray-100 dark:bg-slate-700/60" />
+                  <span className="rounded-full bg-gray-100 dark:bg-slate-800 px-2 py-0.5 text-2xs font-medium tabular-nums text-gray-500 dark:text-slate-400">{dayLogs.length}</span>
+                </div>
 
-                  {/* Activities for this date */}
-                  <div className="relative">
-                    {/* Timeline line */}
-                    <div className="absolute left-[1.4rem] sm:left-[2.75rem] top-0 bottom-0 w-0.5 bg-gray-200" />
+                {/* Activity cards */}
+                <div className="space-y-2.5">
+                  {dayLogs.map((log) => {
+                    const ActionIcon = getActionIcon(log.action);
+                    const EntityIcon = log.entity_type ? entityIcons[log.entity_type] || FileText : null;
+                    const tone = getActionTone(log.action);
 
-                    {dayLogs.map((log, index) => {
-                      const ActionIcon = getActionIcon(log.action);
-                      const EntityIcon = log.entity_type ? entityIcons[log.entity_type] || FileText : null;
-
-                      return (
-                        <div
-                          key={log.id}
-                          className="relative flex items-start gap-3 sm:gap-4 px-3 sm:px-6 py-3 sm:py-4 hover:bg-brand-cyan/[0.04] transition-colors"
-                        >
-                          {/* Timeline dot */}
-                          <div className={`relative z-10 w-9 h-9 rounded-full ${getActionColor(log.action)} flex items-center justify-center shadow-sm`}>
-                            <ActionIcon className="w-4 h-4 text-white" />
-                          </div>
+                    return (
+                      <div
+                        key={log.id}
+                        className="group rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-3.5 sm:p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:border-brand-blue/20 hover:shadow-md"
+                      >
+                        <div className="flex items-start gap-3 sm:gap-4">
+                          {/* Action icon tile — soft tinted */}
+                          <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 ${tone.tile}`}>
+                            <ActionIcon className={`h-5 w-5 ${tone.icon}`} />
+                          </span>
 
                           {/* Content */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-start justify-between gap-4">
-                              <div>
-                                <p className="text-sm text-gray-900 dark:text-slate-50">
-                                  <span className="font-medium">{log.user_name}</span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                {/* Line 1 — actor + role */}
+                                <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+                                  <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">{log.user_name}</span>
                                   {log.actor_role && (
-                                    <span className="text-xs text-gray-400 dark:text-slate-500 ml-1 capitalize">({log.actor_role.replace(/_/g, ' ').toLowerCase()})</span>
+                                    <span className="inline-flex items-center rounded-full bg-gray-100 dark:bg-slate-800 px-1.5 py-0.5 text-2xs font-medium capitalize text-gray-500 dark:text-slate-400">{log.actor_role.replace(/_/g, ' ').toLowerCase()}</span>
                                   )}
-                                  {' '}
-                                  <span className="text-gray-600 dark:text-slate-400">{log.action_label.toLowerCase()}</span>
+                                </div>
+                                {/* Line 2 — action + entity */}
+                                <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-gray-600 dark:text-slate-400">
+                                  <span>{log.action_label.toLowerCase()}</span>
                                   {log.entity_type && (
-                                    <>
-                                      {' '}
-                                      <span className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-400">
-                                        {EntityIcon && <EntityIcon className="w-3.5 h-3.5" />}
-                                        {log.entity_type.replace(/_/g, ' ')}
-                                      </span>
-                                    </>
+                                    <span className="inline-flex items-center gap-1 rounded-md bg-brand-blue/5 px-1.5 py-0.5 text-xs font-medium text-brand-blue ring-1 ring-brand-blue/10">
+                                      {EntityIcon && <EntityIcon className="h-3 w-3" />}
+                                      {log.entity_type.replace(/_/g, ' ')}
+                                    </span>
                                   )}
                                 </p>
-
-                                {/* Details preview */}
-                                {log.details && Object.keys(log.details).length > 0 && (
-                                  <div className="mt-1">
-                                    {log.details.name && (
-                                      <p className="text-xs text-gray-500 dark:text-slate-500">
-                                        Name: {log.details.name}
-                                      </p>
-                                    )}
-                                    {log.details.email && (
-                                      <p className="text-xs text-gray-500 dark:text-slate-500">
-                                        Email: {log.details.email}
-                                      </p>
-                                    )}
-                                    {log.details.title && (
-                                      <p className="text-xs text-gray-500 dark:text-slate-500">
-                                        Title: {log.details.title}
-                                      </p>
-                                    )}
-                                  </div>
-                                )}
-
-                                {/* IP Address */}
-                                {log.ip_address && (
-                                  <p className="text-xs text-gray-400 dark:text-slate-500 mt-1 font-mono">
-                                    IP: {log.ip_address}
-                                  </p>
-                                )}
-
-                                {/* Session indicators */}
-                                {(log.total_session_duration != null || log.error_origin || log.refund_flag === 'YES') && (
-                                  <div className="mt-1.5 flex items-center gap-2 flex-wrap">
-                                    {log.total_session_duration != null && (
-                                      <Badge variant="muted">
-                                        <Timer className="w-3 h-3" />
-                                        {formatSessionDuration(log.total_session_duration)}
-                                      </Badge>
-                                    )}
-                                    {log.error_origin && log.error_origin !== 'NONE' && (
-                                      <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${ERROR_ORIGIN_COLORS[log.error_origin as ErrorOrigin]}`}>
-                                        {log.error_origin === 'SYSTEM' ? <AlertTriangle className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
-                                        {ERROR_ORIGIN_LABELS[log.error_origin as ErrorOrigin]}
-                                      </span>
-                                    )}
-                                    {log.refund_flag === 'YES' && (
-                                      <Badge variant="success">
-                                        <CheckCircle2 className="w-3 h-3" />
-                                        Refunded
-                                      </Badge>
-                                    )}
-                                  </div>
-                                )}
                               </div>
 
-                              <div className="text-right flex-shrink-0">
-                                <p className="text-xs text-gray-500 dark:text-slate-500">{formatISTTime(log.created_at)}</p>
-                                <p className="text-xs text-gray-400 dark:text-slate-500">{getRelativeTime(log.created_at)}</p>
+                              {/* Timestamp */}
+                              <div className="shrink-0 text-right">
+                                <p className="whitespace-nowrap text-xs font-medium text-gray-700 dark:text-slate-300">{getRelativeTime(log.created_at)}</p>
+                                <p className="whitespace-nowrap text-2xs text-gray-400 dark:text-slate-500">{formatISTTime(log.created_at)}</p>
                               </div>
                             </div>
+
+                            {/* Details preview */}
+                            {log.details && (log.details.name || log.details.email || log.details.title) && (
+                              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-gray-500 dark:text-slate-500">
+                                {log.details.name && (
+                                  <span>Name: <span className="font-medium text-gray-700 dark:text-slate-300">{log.details.name}</span></span>
+                                )}
+                                {log.details.email && (
+                                  <span>Email: <span className="font-medium text-gray-700 dark:text-slate-300">{log.details.email}</span></span>
+                                )}
+                                {log.details.title && (
+                                  <span>Title: <span className="font-medium text-gray-700 dark:text-slate-300">{log.details.title}</span></span>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Metadata chips — IP + session indicators */}
+                            {(log.ip_address || log.total_session_duration != null || (log.error_origin && log.error_origin !== 'NONE') || log.refund_flag === 'YES') && (
+                              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                                {log.ip_address && (
+                                  <span className="inline-flex items-center gap-1 rounded-md bg-gray-100 dark:bg-slate-800 px-1.5 py-0.5 font-mono text-2xs text-gray-500 dark:text-slate-400">
+                                    <Globe className="h-3 w-3" />
+                                    {log.ip_address}
+                                  </span>
+                                )}
+                                {log.total_session_duration != null && (
+                                  <Badge variant="muted">
+                                    <Timer className="w-3 h-3" />
+                                    {formatSessionDuration(log.total_session_duration)}
+                                  </Badge>
+                                )}
+                                {log.error_origin && log.error_origin !== 'NONE' && (
+                                  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs ${ERROR_ORIGIN_COLORS[log.error_origin as ErrorOrigin]}`}>
+                                    <AlertTriangle className="w-3 h-3" />
+                                    {ERROR_ORIGIN_LABELS[log.error_origin as ErrorOrigin]}
+                                  </span>
+                                )}
+                                {log.refund_flag === 'YES' && (
+                                  <Badge variant="success">
+                                    <CheckCircle2 className="w-3 h-3" />
+                                    Refunded
+                                  </Badge>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Load More */}
         {logs.length >= limit && (

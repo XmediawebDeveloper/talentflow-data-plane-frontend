@@ -14,7 +14,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip } from '@/components/ui/tooltip';
-import { PageHeader } from '@/components/ui/page-header';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 const POLL_INTERVAL_MS = 30_000; // 30 seconds
@@ -203,31 +202,31 @@ function CompanySizeField({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full rounded-lg border bg-white px-4 py-2.5 text-sm transition focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue text-left flex items-center justify-between"
+        className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10 text-left flex items-center justify-between"
       >
-        <span className={value ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}>
+        <span className={value ? 'text-gray-900 dark:text-slate-50' : 'text-gray-400 dark:text-slate-500'}>
           {value || 'Select company size'}
         </span>
-        <ChevronDown className="w-4 h-4 text-[var(--text-muted)]" />
+        <ChevronDown className="w-4 h-4 text-gray-400 dark:text-slate-500" />
       </button>
 
       {open && (
-        <div className="absolute z-20 mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl shadow-brand-blue/10 ring-1 ring-black/[0.02] max-h-60 overflow-y-auto">
+        <div className="absolute z-20 mt-1 w-full bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 rounded-xl shadow-xl shadow-brand-blue/10 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-h-60 overflow-y-auto">
           {COMPANY_SIZE_OPTIONS.map((opt) => (
             <button
               key={opt}
               type="button"
               onClick={() => { onChange(opt); setOpen(false); }}
-              className={`w-full text-left px-4 py-2 text-sm transition hover:bg-brand-cyan/[0.06] hover:text-brand-blue ${value === opt ? 'bg-brand-blue/[0.06] text-brand-blue font-medium' : 'text-[var(--text-secondary)]'}`}
+              className={`w-full text-left px-4 py-2 text-sm transition hover:bg-brand-blue/[0.06] hover:text-brand-blue ${value === opt ? 'bg-brand-blue/[0.06] text-brand-blue font-medium' : 'text-gray-700 dark:text-slate-300'}`}
             >
               {opt}
             </button>
           ))}
-          <div className="border-t border-gray-100">
+          <div className="border-t border-gray-100 dark:border-slate-700/60">
             <button
               type="button"
               onClick={() => { setMode('manual'); setOpen(false); onChange(''); }}
-              className="w-full text-left px-4 py-2 text-sm font-medium text-brand-blue hover:bg-brand-cyan/[0.06]"
+              className="w-full text-left px-4 py-2 text-sm font-medium text-brand-blue hover:bg-brand-blue/[0.06]"
             >
               Enter custom value...
             </button>
@@ -414,17 +413,23 @@ export default function CompanyProfilePage() {
   }
 
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50">
+    <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Company Profile' }]} />
 
-        <PageHeader
-          icon={<Building2 className="h-5 w-5" />}
-          title="Company Profile"
-          description="Maintain your organization's identity, contact info, and address — visible across your dashboard."
-          actions={
-            !isEditing ? (
+        <div className="mb-5 flex flex-col gap-4 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
+              <Building2 className="h-5 w-5 text-brand-blue" />
+            </div>
+            <div>
+              <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">Company Profile</h1>
+              <p className="mt-0.5 text-sm text-gray-600 dark:text-slate-400">Maintain your organization&apos;s identity, contact info, and address — visible across your dashboard.</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {!isEditing ? (
               <Button
                 variant="primary"
                 onClick={() => setIsEditing(true)}
@@ -433,7 +438,7 @@ export default function CompanyProfilePage() {
                 Edit Profile
               </Button>
             ) : (
-              <div className="flex flex-wrap items-center gap-2">
+              <>
                 <Button
                   variant="secondary"
                   onClick={handleCancel}
@@ -449,10 +454,10 @@ export default function CompanyProfilePage() {
                 >
                   {isSaving ? 'Saving...' : 'Save Changes'}
                 </Button>
-              </div>
-            )
-          }
-        />
+              </>
+            )}
+          </div>
+        </div>
 
         {successMessage && (
           <div className="mb-5 flex items-center gap-3 rounded-xl border border-brand-teal/20 bg-brand-teal/[0.06] p-4 ring-1 ring-brand-teal/10">
@@ -472,17 +477,17 @@ export default function CompanyProfilePage() {
         )}
 
         {/* Basic Information */}
-        <div className="mb-5 overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
-          <div className="flex items-center gap-3 border-b border-gray-100 bg-gray-50 px-5 py-4 sm:px-6">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
+        <div className="mb-5 overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+          <div className="flex items-center gap-3 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-5 py-4 sm:px-6">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
               <Building2 className="h-5 w-5 text-brand-blue" />
             </span>
-            <div>
-              <h2 className="text-base font-semibold text-gray-900">Basic Information</h2>
-              <p className="text-xs text-gray-500">Identity, contact, and industry details.</p>
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Basic Information</h2>
+              <p className="text-xs text-gray-500 dark:text-slate-400">Identity, contact, and industry details.</p>
             </div>
           </div>
-          <div className="p-5 sm:p-6">
+          <div className="p-4 sm:p-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
             {field('Company Name *', 'name', { placeholder: 'Acme Corp' })}
             {field('Website', 'website', { placeholder: 'https://example.com' })}
@@ -508,7 +513,7 @@ export default function CompanyProfilePage() {
                           setCompanyData({ ...companyData, industry: e.target.value });
                         }
                       }}
-                      className="w-full rounded-lg border bg-white px-4 py-2.5 text-sm transition focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+                      className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                     >
                       <option value="">Select industry</option>
                       {INDUSTRY_OPTIONS.map((opt) => (
@@ -555,17 +560,17 @@ export default function CompanyProfilePage() {
         </div>
 
         {/* Address */}
-        <div className="mb-5 overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
-          <div className="flex items-center gap-3 border-b border-gray-100 bg-gray-50 px-5 py-4 sm:px-6">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-teal/10 ring-1 ring-brand-teal/15 shadow-sm shadow-brand-teal/10">
-              <MapPin className="h-5 w-5 text-brand-teal" />
+        <div className="mb-5 overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+          <div className="flex items-center gap-3 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-5 py-4 sm:px-6">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
+              <MapPin className="h-5 w-5 text-brand-blue" />
             </span>
-            <div>
-              <h2 className="text-base font-semibold text-gray-900">Address</h2>
-              <p className="text-xs text-gray-500">Where your organization is headquartered.</p>
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Address</h2>
+              <p className="text-xs text-gray-500 dark:text-slate-400">Where your organization is headquartered.</p>
             </div>
           </div>
-          <div className="p-5 sm:p-6">
+          <div className="p-4 sm:p-5">
             <div className="space-y-4 sm:space-y-6">
               {field('Street Address', 'address', { placeholder: '123 Main Street' })}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
@@ -581,17 +586,17 @@ export default function CompanyProfilePage() {
         </div>
 
         {/* Description */}
-        <div className="mb-5 overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
-          <div className="flex items-center gap-3 border-b border-gray-100 bg-gray-50 px-5 py-4 sm:px-6">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-brand-blue-2/15 to-brand-blue/10 ring-1 ring-brand-blue-2/15 shadow-sm shadow-brand-blue/10">
-              <FileText className="h-5 w-5 text-brand-blue-2" />
+        <div className="mb-5 overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+          <div className="flex items-center gap-3 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-5 py-4 sm:px-6">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
+              <FileText className="h-5 w-5 text-brand-blue" />
             </span>
-            <div>
-              <h2 className="text-base font-semibold text-gray-900">Company Description</h2>
-              <p className="text-xs text-gray-500">A short summary of what your company does.</p>
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Company Description</h2>
+              <p className="text-xs text-gray-500 dark:text-slate-400">A short summary of what your company does.</p>
             </div>
           </div>
-          <div className="p-5 sm:p-6">
+          <div className="p-4 sm:p-5">
             <Textarea
               value={companyData.description}
               onChange={(e) => {
@@ -609,7 +614,7 @@ export default function CompanyProfilePage() {
                 ? <p className="text-xs font-medium text-destructive">{validationErrors.description}</p>
                 : <span />}
               {isEditing && (
-                <p className="text-xs text-gray-400 text-right">{companyData.description.length}/2000</p>
+                <p className="text-xs text-gray-400 dark:text-slate-500 text-right">{companyData.description.length}/2000</p>
               )}
             </div>
           </div>
