@@ -2244,9 +2244,13 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       console.log('[DEBUG] handleCompleteAssessment called');
       setStepSafe('completing');
 
+      // Keep the "finishing up" popup on screen for a moment even when the
+      // save returns at once, so it reads as a step rather than a flicker.
+      const minPopup = new Promise((r) => setTimeout(r, 1500));
+
       // Call complete endpoint to trigger scoring in background
       try {
-        await candidateService.completeAssessment(token);
+        await Promise.all([candidateService.completeAssessment(token), minPopup]);
         console.log('[DEBUG] completeAssessment API called successfully');
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err);
@@ -2753,17 +2757,29 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
 
     case 'completing':
       return (
-        <div className="relative">
-          <LoadingScreen
-            message="Submitting your assessment..."
-            subMessage={
-              completingStuck
-                ? 'This is taking longer than expected.'
-                : 'Please wait while we save your responses and process your submission.'
-            }
-          />
+        <div className="relative min-h-[100dvh] bg-gray-50">
+          <CandidateHeader />
+          {/* The AI interview's completion popup ("Finishing up…"), shown
+              while the submission saves and before the final page and its
+              feedback popup. No close action: leaving now could cut the save
+              short. */}
+          <div className="fixed inset-0 z-[110] bg-black/70 flex items-center justify-center backdrop-blur-sm animate-in fade-in duration-300" role="status" aria-live="polite">
+            <div className="bg-white ring-1 ring-sky-100 rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full mx-4 text-center shadow-2xl">
+              <div className="w-14 h-14 rounded-full bg-sky-50 flex items-center justify-center mx-auto mb-4">
+                <Loader2 className="w-7 h-7 text-brand-blue animate-spin" />
+              </div>
+              <h2 className="text-gray-900 font-bold mb-2" style={{ fontSize: 20 }}>
+                Assessment submitted — finishing up…
+              </h2>
+              <p className="text-slate-600" style={{ fontSize: 15, lineHeight: 1.6 }}>
+                {completingStuck
+                  ? 'This is taking longer than expected.'
+                  : <>Saving your assessment. Please don&apos;t close this window.</>}
+              </p>
+            </div>
+          </div>
           {completingStuck && (
-            <div className="fixed bottom-8 left-0 right-0 flex justify-center z-50">
+            <div className="fixed bottom-8 left-0 right-0 flex justify-center z-[120]">
               <button
                 onClick={() => {
                   // window.close() only works when the page was opened by
