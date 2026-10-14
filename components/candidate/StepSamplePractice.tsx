@@ -2896,6 +2896,17 @@ export default function StepSamplePractice({
                   <>Start Interview <ChevronRight className="w-4 h-4" /></>
                 )}
               </button>
+              {/* Close the popup and look back over the practice chat first.
+                  The footer's Start Interview stays, and closing scrolls it
+                  into view (see startPopupWasOpen above). */}
+              <button
+                type="button"
+                onClick={() => setShowStartPopup(false)}
+                disabled={submitting}
+                className="min-h-10 py-2.5 text-xs font-medium text-gray-500 hover:text-gray-800 underline-offset-2 hover:underline transition-colors disabled:opacity-50"
+              >
+                Review my practice first
+              </button>
             </div>
           </div>
         </div>

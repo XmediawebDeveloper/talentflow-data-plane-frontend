@@ -3806,12 +3806,15 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
         <StepConsent
           onAccept={handleConsentAccept}
           submitting={consentSubmitting}
+          candidateName={interview.candidate_name}
+          candidateEmail={interview.candidate_email}
           position={interview.position}
           jdTitle={interview.jd_title}
           jdExperienceLevel={interview.jd_experience_level}
           jdDescription={interview.jd_description}
           jdDepartment={interview.jd_department}
           jdLocation={interview.jd_location}
+          jdIndustryType={interview.jd_industry_type}
           jdEmploymentType={interview.jd_employment_type}
           jdRemoteType={interview.jd_remote_type}
           jdExperienceMin={interview.jd_experience_min}

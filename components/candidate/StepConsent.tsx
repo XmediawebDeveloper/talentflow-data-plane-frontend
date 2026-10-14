@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { Fragment, useState, useCallback, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -8,7 +8,7 @@ import {
   Video, Eye, Shield, Clock, Trash2, CheckCircle, AlertTriangle,
   MapPin, Building2, Award, ExternalLink, X,
   FileText, Timer, HelpCircle, ChevronRight, Smartphone, Wifi,
-  Lightbulb, Sparkles, Globe, SquareUser, Cpu, Laptop, ShieldCheck, Database,
+  Lightbulb, Globe, SquareUser, Cpu, Laptop, ShieldCheck, Database, TrendingUp, MessagesSquare, Factory,
 } from 'lucide-react';
 import { revealAfterPaint } from '@/lib/utils/candidateScroll';
 import { Button } from '@/components/ui/button';
@@ -23,12 +23,17 @@ interface StepConsentProps {
     consent_terms: boolean;
   }) => void;
   submitting?: boolean;
+  /** Shown top-right of the role card, as on the assessment's Job & Consent step. */
+  candidateName?: string | null;
+  candidateEmail?: string | null;
   position?: string;
   jdTitle?: string | null;
   jdExperienceLevel?: string | null;
   jdDescription?: string | null;
   jdDepartment?: string | null;
   jdLocation?: string | null;
+  /** Slug, e.g. "information_technology" — shown as words in the tagline. */
+  jdIndustryType?: string | null;
   jdEmploymentType?: string | null;
   jdRemoteType?: string | null;
   jdExperienceMin?: number | null;
@@ -100,15 +105,17 @@ export default function StepConsent({
   jdDescription,
   jdDepartment,
   jdLocation,
+  jdIndustryType,
   jdEmploymentType,
   jdRemoteType,
   jdExperienceMin,
   jdExperienceMax,
-  duration,
   interviewType,
   interviewMode,
   totalQuestions,
   environmentVerificationEnabled,
+  candidateName,
+  candidateEmail,
 }: StepConsentProps) {
   const [showFullDesc, setShowFullDesc] = useState(false);
   const [showConsentModal, setShowConsentModal] = useState(false);
@@ -192,26 +199,40 @@ export default function StepConsent({
   const metaItems: { icon: IconComponent; text: string }[] = [
     ...(jdDepartment ? [{ icon: Building2, text: jdDepartment }] : []),
     ...(jdLocation ? [{ icon: MapPin, text: jdLocation }] : []),
+    ...(jdIndustryType?.trim() ? [{ icon: Factory, text: humanize(jdIndustryType.trim()) }] : []),
     ...(expStr ? [{ icon: Award, text: `${expStr} experience` }] : []),
   ];
 
-  // Job facts first, then the interview's own (duration, questions/format) —
-  // one continuous row, each badge only when backed by real data.
-  const roleBadges: { key: string; icon: IconComponent; label: string }[] = [
-    ...(jdEmploymentType ? [{ key: 'employment', icon: Clock, label: humanize(jdEmploymentType) }] : []),
-    ...(jdRemoteType ? [{ key: 'remote', icon: Globe, label: humanize(jdRemoteType) }] : []),
-    ...(jdExperienceLevel ? [{ key: 'level', icon: Sparkles, label: humanize(jdExperienceLevel) }] : []),
-    ...(interviewMode === 'flexible'
-      ? [{ key: 'duration', icon: Timer, label: `${duration != null && duration > 0 ? duration : '~30'} min interview` }]
-      : duration != null && duration > 0
-        ? [{ key: 'duration', icon: Timer, label: `${duration} min interview` }]
-        : []),
-    ...(interviewMode === 'flexible'
-      ? [{ key: 'format', icon: Sparkles, label: 'Conversational' }]
-      : totalQuestions != null && totalQuestions > 0
-        ? [{ key: 'questions', icon: HelpCircle, label: `${totalQuestions} ${totalQuestions === 1 ? 'question' : 'questions'}` }]
-        : []),
-  ];
+  // Job facts first, then the interview's own (mode, questions) — each badge
+  // only when backed by real data. In groups split by a small divider, as on
+  // the assessment's Job & Consent step: the job (type, mode, level), the
+  // interview mode (timed or conversational), then the question count. An
+  // empty group is dropped so no divider stands alone.
+  type RoleBadge = { key: string; icon: IconComponent; label: string };
+  const roleBadgeGroups: RoleBadge[][] = [
+    [
+      ...(jdEmploymentType ? [{ key: 'employment', icon: Clock, label: humanize(jdEmploymentType) }] : []),
+      ...(jdRemoteType ? [{ key: 'remote', icon: Globe, label: humanize(jdRemoteType) }] : []),
+      ...(jdExperienceLevel ? [{ key: 'level', icon: TrendingUp, label: humanize(jdExperienceLevel) }] : []),
+    ],
+    /* 'flexible' interviews are conversational; every other mode ('fixed')
+       is timed. */
+    interviewMode === 'flexible'
+      ? [{ key: 'mode', icon: MessagesSquare, label: 'Conversational' }]
+      : [{ key: 'mode', icon: Timer, label: 'Timed' }],
+    interviewMode !== 'flexible' && totalQuestions != null && totalQuestions > 0
+      ? [{ key: 'questions', icon: HelpCircle, label: `${totalQuestions} ${totalQuestions === 1 ? 'question' : 'questions'}` }]
+      : [],
+  ].filter((group) => group.length > 0);
+
+  /* "Jarvis David" → "JD"; a single name gives one letter. */
+  const candidateInitials = (candidateName || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part, i, parts) => (i === 0 || i === parts.length - 1 ? part[0] : ''))
+    .join('')
+    .toUpperCase();
 
   return (
     <div className="w-full space-y-6">
@@ -226,7 +247,10 @@ export default function StepConsent({
               interview as one continuous run of badges. */}
           <div className="relative overflow-hidden bg-white border border-gray-200 rounded-2xl shadow-sm">
             <div className="p-5 sm:p-6">
-              <div>
+              {/* Title row: the role and its tagline on the left, the
+                  candidate (name and email) in its top-right corner — under
+                  them on a phone. */}
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-xs font-semibold uppercase tracking-wider text-brand-blue">You&apos;re interviewing for</p>
                   <h1 className="mt-1 text-2xl sm:text-3xl font-bold text-gray-900 leading-tight break-words">{title}</h1>
@@ -242,18 +266,45 @@ export default function StepConsent({
                     </div>
                   )}
                 </div>
+                {(candidateName || candidateEmail) && (
+                  /* No card: a thin rule on its left (desktop) sets it apart,
+                     then an initials avatar, the name and the email. */
+                  <div className="flex items-center gap-2.5 min-w-0 self-start sm:self-center sm:max-w-[45%] sm:border-l sm:border-gray-200 sm:pl-4 sm:py-0.5">
+                    <span
+                      aria-hidden
+                      className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 text-brand-blue text-xs font-semibold shrink-0"
+                    >
+                      {candidateInitials || '?'}
+                    </span>
+                    <div className="min-w-0">
+                      {candidateName && (
+                        <p className="text-sm font-semibold text-gray-900 truncate" title={candidateName}>{candidateName}</p>
+                      )}
+                      {candidateEmail && (
+                        <p className="text-xs text-gray-500 truncate" title={candidateEmail}>{candidateEmail}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {roleBadges.length > 0 && (
-                <div className="mt-5 pt-4 border-t border-dashed border-gray-200 flex flex-wrap gap-2">
-                  {roleBadges.map(badge => (
-                    <span
-                      key={badge.key}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-brand-blue/20 bg-brand-blue/10 px-3 py-1.5 text-xs font-medium text-brand-blue"
-                    >
-                      <badge.icon className="w-3.5 h-3.5 flex-shrink-0" />
-                      {badge.label}
-                    </span>
+              {roleBadgeGroups.length > 0 && (
+                <div className="mt-5 pt-4 border-t border-dashed border-gray-200 flex flex-wrap items-center gap-2">
+                  {roleBadgeGroups.map((group, groupIndex) => (
+                    <Fragment key={group[0].key}>
+                      {groupIndex > 0 && (
+                        <span aria-hidden className="mx-0.5 h-4 w-px bg-gray-300" />
+                      )}
+                      {group.map(badge => (
+                        <span
+                          key={badge.key}
+                          className="inline-flex items-center gap-1.5 rounded-full border border-brand-blue/20 bg-brand-blue/10 px-3 py-1.5 text-xs font-medium text-brand-blue"
+                        >
+                          <badge.icon className="w-3.5 h-3.5 flex-shrink-0" />
+                          {badge.label}
+                        </span>
+                      ))}
+                    </Fragment>
                   ))}
                 </div>
               )}
