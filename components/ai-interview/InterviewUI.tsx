@@ -267,6 +267,9 @@ function getErrorMessage(error: unknown): string {
  *  clickable. After this window it disables (so a candidate can't reset their
  *  answer clock by repeating mid/late answer). One repeat per question. */
 const REPEAT_WINDOW_MS = 30000;
+// Live-interview face identity check cadence, same for every device tier
+// (CPU cost — see the startVerification call). Revisit after R&D.
+const FACE_VERIFY_INTERVAL_MS = 30000;
 
 /** Returns current time formatted as IST with AM/PM (e.g. "2:34 PM") */
 function nowIST(): string {
@@ -684,6 +687,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // window (question_timer_started) — same lifecycle as nextSkipInFlight.
   const [repeatInFlight, setRepeatInFlight] = useState(false);
   const repeatInFlightRef = useRef(false);
+  // The question text being re-spoken by Repeat. The backend's re-speak sends
+  // audio only (handler._speak — no greeting / llm_token), and tokenBufferRef
+  // was already cleared when the original question was saved, so
+  // speaking_started fed TalkingHead "" → no viseme timeline → Bina's mouth
+  // stayed closed for the whole repeat. speaking_started falls back to this.
+  const repeatTextRef = useRef("");
   // Tracks whether the BACKEND already sent question_timer_expired for the current
   // question. When true, the client must NOT send its own skip_question — the
   // backend's _auto_skip already called handle_skip_question. Cleared when the
@@ -2883,16 +2892,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         console.error("[Recording] MediaRecorder not supported:", err);
       }
     }
-    // Start continuous face-identity verification. On weak (≤2-core) machines
-    // the face-api/TF.js loop is CPU-heavy, so instead of DISABLING it on
-    // low-tier (which meant identity swaps were never caught) we run it at a
-    // SLOWER 30s cadence — 3× fewer inferences keeps the main thread healthy
-    // while still catching a substituted candidate within ~30s. Full-tier keeps
-    // the default 10s cadence.
-    const lowTier = effectiveDeviceCapability?.tier === 'low';
+    // Start continuous face-identity verification at a 30s cadence on EVERY
+    // tier (2026-10-14, product decision pending R&D). face-api/TF.js runs on
+    // the CPU on the main thread (~0.5-1.5s per check on a 4-core laptop), and
+    // the old 10s cadence for non-low tiers tripled that load — noticeable
+    // once 4-core machines started classifying as 'mid'. 30s still catches a
+    // substituted candidate within ~30s.
     if (faceVerification?.hasBaseline()) {
-      faceVerification.startVerification(video, lowTier ? 30000 : undefined);
-      console.log(`[INTERVIEW-DEBUG] Continuous face verification started (${lowTier ? '30s low-tier' : '10s'} cadence)`);
+      faceVerification.startVerification(video, FACE_VERIFY_INTERVAL_MS);
+      console.log(`[INTERVIEW-DEBUG] Continuous face verification started (${FACE_VERIFY_INTERVAL_MS / 1000}s cadence)`);
     }
   }, [handDetection, faceDetection, objectDetection, faceVerification, effectiveDeviceCapability]);
 
@@ -3995,6 +4003,18 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // = timestamp of the most recent active frame within the current streak.
   const lastActiveFrameAtRef = useRef<number | null>(null);
   const STREAK_DIP_GRACE_MS = 400; // tolerate ~4-5 frames of inter-word gap
+  // "1.5s of voice within the last 3s" — the windowed rule the comment above
+  // mentions, now used ALONGSIDE the 3s-continuous streak to reset the silence
+  // clock. Natural speech pauses longer than STREAK_DIP_GRACE_MS between
+  // phrases, so on quiet wired/BT headsets the continuous streak alone never
+  // completed and "Are you done?" popped up mid-answer (staging 2026-10-13,
+  // moto buds: 4 popups in one interview, each closed ~5s later by the
+  // cumulative dismiss rule). Same kind of measure as the dismiss, so the
+  // popup can no longer open on speech that would immediately close it.
+  const activeFrameWindowRef = useRef<Array<{ at: number; ms: number }>>([]);
+  const lastVadFrameAtRef = useRef<number | null>(null);
+  const WINDOWED_ACTIVE_SPAN_MS = 3000;
+  const WINDOWED_ACTIVE_MIN_MS = 1500;
 
   // Pre-speech audio ring buffer. Captures PCM frames during the VAD warmup
   // (~600ms) and the speech-confirmation window (~280ms) so the candidate's
@@ -5736,6 +5756,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     lastStrongVoiceAtRef.current = null;
     activeStreakStartRef.current = null;
     lastActiveFrameAtRef.current = null;
+    activeFrameWindowRef.current = [];
+    lastVadFrameAtRef.current = null;
         speechPeakLevelRef.current = 0;
         ambientNoiseFloorRef.current = POSSIBLE_SPEECH_LEVEL * 0.5;
         // ALSO hard-stop the browser Web Speech API recognition AND clear any
@@ -5837,7 +5859,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         // races ahead of the role_intro message (else TalkingHead would get ""
         // and Bina's mouth would stay still — the "audio plays, Bina silent" bug).
         talkingHeadRef.current?.setText(
-          tokenBufferRef.current || (roleIntroActiveRef.current ? roleIntroTextRef.current : "")
+          tokenBufferRef.current
+            || (roleIntroActiveRef.current ? roleIntroTextRef.current : "")
+            // Repeat Question re-speak: no text arrives with it (see repeatTextRef).
+            || (repeatInFlightRef.current ? repeatTextRef.current : "")
         );
         // Defer streamStart until the first PCM chunk arrives (see pendingStreamStartRef).
         // Calling streamStart here (empty buffer) can cause TalkingHead to fire onAudioEnd
@@ -7185,6 +7210,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     lastStrongVoiceAtRef.current = null;
     activeStreakStartRef.current = null;
     lastActiveFrameAtRef.current = null;
+    activeFrameWindowRef.current = [];
+    lastVadFrameAtRef.current = null;
     speechPeakLevelRef.current = 0;
     inTurnSpeechFrameCountRef.current = 0;
     candidateAudioStreamingRef.current = false;
@@ -7316,6 +7343,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     lastStrongVoiceAtRef.current = null;
     activeStreakStartRef.current = null;
     lastActiveFrameAtRef.current = null;
+    activeFrameWindowRef.current = [];
+    lastVadFrameAtRef.current = null;
     speechPeakLevelRef.current = 0;
     inTurnSpeechFrameCountRef.current = 0;
     candidateAudioStreamingRef.current = false;
@@ -7426,6 +7455,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     lastStrongVoiceAtRef.current = null;
     activeStreakStartRef.current = null;
     lastActiveFrameAtRef.current = null;
+    activeFrameWindowRef.current = [];
+    lastVadFrameAtRef.current = null;
     setMicInputLevel(0);
     lastGoodMicAtRef.current = null;
     micInputLowRef.current = false;
@@ -7454,6 +7485,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     lastStrongVoiceAtRef.current = null;
     activeStreakStartRef.current = null;
     lastActiveFrameAtRef.current = null;
+    activeFrameWindowRef.current = [];
+    lastVadFrameAtRef.current = null;
     speechPeakLevelRef.current = 0;
     candidateAudioStreamingRef.current = false;
     candidateAudioFrameCountRef.current = 0;
@@ -7730,6 +7763,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     lastStrongVoiceAtRef.current = null;
     activeStreakStartRef.current = null;
     lastActiveFrameAtRef.current = null;
+    activeFrameWindowRef.current = [];
+    lastVadFrameAtRef.current = null;
       speechPeakLevelRef.current = 0;
       micRecentPeakRef.current = 0;
       inTurnSpeechFrameCountRef.current = 0;
@@ -8169,6 +8204,18 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               ? 0
               : (nowMs - activeStreakStartRef.current);
             const _sustained = _frameIsActive && _streakMs >= SUSTAINED_ACTIVE_MS;
+            // Rolling "voice within the last WINDOWED_ACTIVE_SPAN_MS" total
+            // (see activeFrameWindowRef). dt clamped like the popup accumulator.
+            const _prevVadFrameAt = lastVadFrameAtRef.current;
+            lastVadFrameAtRef.current = nowMs;
+            const _win = activeFrameWindowRef.current;
+            if (_frameIsActive && _prevVadFrameAt != null) {
+              _win.push({ at: nowMs, ms: Math.min(nowMs - _prevVadFrameAt, 250) });
+            }
+            while (_win.length && nowMs - _win[0].at > WINDOWED_ACTIVE_SPAN_MS) _win.shift();
+            let _windowActiveMs = 0;
+            for (const f of _win) _windowActiveMs += f.ms;
+            const _windowedActive = _frameIsActive && _windowActiveMs >= WINDOWED_ACTIVE_MIN_MS;
 
             // AII14 popup dismissal — counts SPEECH_RESUME_CONFIRM_MS of VAD
             // speech frames (cumulative, pauses allowed) straight from this
@@ -8216,7 +8263,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                   silenceStartRef.current = null;
                 }
               }
-            } else if (!transcriptLedTurn && _frameIsActive && _sustained) {
+            } else if (!transcriptLedTurn && _frameIsActive && (_sustained || _windowedActive)) {
               inTurnSpeechFrameCountRef.current = 0;
               if (!realtimeTranscriptPending || realtimeBootstrapActive) {
                 lastMeaningfulAudioAtRef.current = nowMs;
@@ -8435,20 +8482,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       avatarState.onUserStartSpeaking();
       setStatus(`Listening... (auto-stops after ${silenceDurationMsRef.current / 1000}s silence)`);
 
-      // No-response detection — LAST-RESORT fallback ONLY. The BACKEND owns the
-      // canonical silence nudge: its ladder fires "Are you there?" at 20s and
-      // skips at ~30-35s (WAIT_1 20s + nudge + WAIT_2 10s), then advances the
-      // turn (which clears this timer). The client used to ALSO fire at 20s,
-      // producing TWO "Are you there?" messages back-to-back (one from each).
-      // We now fire only at 45s — well AFTER the backend's whole ladder — so the
-      // backend always wins and this client nudge fires only if the backend
-      // never responded at all (e.g. silence detection disabled / stuck).
+      // No client-side "Are you there?" any more — the BACKEND's silence
+      // ladder is the only nudge. The old 45s client fallback (armed here)
+      // still collided with it whenever the mic opened early (e.g. after a TTS
+      // stall reset the speaking state): staging 2026-10-13 20:07:27 got the
+      // client and backend nudge in the same second → two "Are you there?"
+      // bubbles. handleNoResponse is left in place but is no longer triggered.
       clearNoResponseTimer();
-      noResponseTimerRef.current = setTimeout(() => {
-        if (!speechDetectedRef.current && isRecordingRef.current && !isSilencePromptRef.current) {
-          handleNoResponseRef.current();
-        }
-      }, 45000);
 
       // Hard cap on a single recording segment. Previously this was 30 s in
       // timed mode — which silently cut off candidates who tried to give a
@@ -9781,6 +9821,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     if (!lastQuestion) return;
 
     repeatInFlightRef.current = true;
+    repeatTextRef.current = lastQuestion;
     setRepeatInFlight(true);
     setTimeout(() => {
       if (repeatInFlightRef.current) {
