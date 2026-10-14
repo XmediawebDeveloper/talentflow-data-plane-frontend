@@ -1777,8 +1777,13 @@ Best regards`);
    *  by the table's Invite button and the grid card's Actions → Invite
    *  submenu, so the two can never offer different things. */
   const getRowInviteGate = (resume: ScoredResume) => {
-    const rowCanInviteAssessment = canCreateAssessments && resolveAssessmentConfigured(resume) !== false;
-    const rowCanInviteAIInterview = mayInviteAIInterview && resolveAIInterviewConfigured(resume) !== false;
+    /* With a host version popup (onOpenInviteDialog) the row's Invite opens
+       it just like the selection's Create / Send items, and is gated the same
+       way — permission only: the popup itself offers Create when this job has
+       no assessment / AI interview yet, so "none configured" no longer
+       greys it out. */
+    const rowCanInviteAssessment = canCreateAssessments && (!!onOpenInviteDialog || resolveAssessmentConfigured(resume) !== false);
+    const rowCanInviteAIInterview = mayInviteAIInterview && (!!onOpenInviteDialog || resolveAIInterviewConfigured(resume) !== false);
     return {
       rowCanInviteAssessment,
       rowCanInviteAIInterview,
@@ -1794,6 +1799,43 @@ Best regards`);
   /** The Invite menu's two entries — Assessment and AI Interview. */
   const renderInviteMenuItems = (resume: ScoredResume) => {
     const { rowCanInviteAssessment, rowCanInviteAIInterview } = getRowInviteGate(resume);
+    if (onOpenInviteDialog) {
+      /* Same two entries, but each opens the host's version popup for THIS
+         row's candidate — the very handler (and invitee shape) the selection
+         Actions menu's Create / Send Assessment | AI Interview use, so pick an
+         existing version, create the next one, come back and confirm the send
+         all run through the one flow. */
+      const invitee: InviteCandidate = {
+        id: resume.resumeId || resume.id,
+        name: resume.candidateName,
+        email: resume.email,
+        phone: resume.phone,
+        rating: Math.round(rowRating10(resume) * 10) / 10,
+        resumeId: resume.resumeId,
+      };
+      return (
+        <>
+          <DropdownMenuItem
+            className={scoredResumesMenuItemClass}
+            disabled={!rowCanInviteAssessment}
+            title={!rowCanInviteAssessment ? assessmentDeniedReason : undefined}
+            onSelect={() => onOpenInviteDialog('assessment', [invitee])}
+          >
+            <FileText className="w-4 h-4 text-menu-icon-view" />
+            <span className={MENU_ITEM_SCALE_CLASS}>Create / Send Assessment</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className={scoredResumesMenuItemClass}
+            disabled={!rowCanInviteAIInterview}
+            title={!rowCanInviteAIInterview ? aiInterviewDeniedReason : undefined}
+            onSelect={() => onOpenInviteDialog('interview', [invitee])}
+          >
+            <Video className="w-4 h-4 text-menu-icon-share" />
+            <span className={MENU_ITEM_SCALE_CLASS}>Create / Send AI Interview</span>
+          </DropdownMenuItem>
+        </>
+      );
+    }
     return (
       <>
           <DropdownMenuItem
@@ -1876,7 +1918,9 @@ Best regards`);
           <UserPlus className="w-4 h-4 text-menu-icon-share" />
           <span className={MENU_ITEM_SCALE_CLASS}>Invite</span>
         </DropdownMenuSubTrigger>
-        <DropdownMenuSubContent className="w-44 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
+        {/* w-64 with the "Create / Send …" labels (onOpenInviteDialog) — the
+            width the selection Actions menu gives the same two labels. */}
+        <DropdownMenuSubContent className={`${onOpenInviteDialog ? 'w-64' : 'w-44'} !rounded-lg !bg-white !py-1 !px-0 !shadow-xl`}>
           {renderInviteMenuItems(resume)}
         </DropdownMenuSubContent>
       </DropdownMenuSub>

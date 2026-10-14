@@ -28,7 +28,8 @@ export default function AIInterviewShareQueue({
   interviewVersions?: Record<string, number>;
   onClose: () => void;
   /** At least one invitation went out — reported once. */
-  onInvited?: () => void;
+  /** The number of invitations sent across the queue, once, when it ends. */
+  onInvited?: (sentCount: number) => void;
   /** Back to the popup the queue was opened from. */
   onBack?: () => void;
   /** Each interview's step renders inside the host popup (ShareAIInterviewModal
@@ -44,12 +45,12 @@ export default function AIInterviewShareQueue({
      `sentRef` / `reportedRef` report a send once, even if the recruiter
      cancels part-way through. */
   const advancingRef = useRef(false);
-  const sentRef = useRef(false);
+  const sentRef = useRef(0);
   const reportedRef = useRef(false);
   const finish = () => {
-    if (sentRef.current && !reportedRef.current) {
+    if (sentRef.current > 0 && !reportedRef.current) {
       reportedRef.current = true;
-      onInvited?.();
+      onInvited?.(sentRef.current);
     }
     onClose();
   };
@@ -76,8 +77,8 @@ export default function AIInterviewShareQueue({
         }
         finish();
       }}
-      onInviteSent={() => {
-        sentRef.current = true;
+      onInviteSent={(sent) => {
+        sentRef.current += sent;
         if (index + 1 < configs.length) {
           advancingRef.current = true;
           setIndex(index + 1);

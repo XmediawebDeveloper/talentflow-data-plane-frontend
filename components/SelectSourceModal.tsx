@@ -13,7 +13,7 @@ import { HTML5Backend } from 'react-dnd-html5-backend';
 import { resumeService, folderService, Resume, Folder as FolderType } from '@/lib/services/resumeService';
 import type { Folder as TableFolder } from '@/lib/types/types';
 import ResumeTable from './ResumeTable';
-import FolderTree from './FolderTree';
+import FolderTree, { FOLDER_NAME_MAX_LENGTH } from './FolderTree';
 import NoResumesEmptyState from '@/components/resumes/NoResumesEmptyState';
 import ResumeTextPreviewModal from './ResumeTextPreviewModal';
 import ApplyToJobModal from './ApplyToJobModal';
@@ -968,6 +968,47 @@ export default function SelectSourceModal({
     }
   };
 
+  /* Rename from a folder's (+) menu — the Resume Database page's rules:
+     no markup, the length cap, Archived Resumes keeps its name, and no two
+     folders of one parent share a name. */
+  const handleRenameFolder = async (id: string, name: string) => {
+    try {
+      if (/<[^>]+>/.test(name) || /javascript:|data:|vbscript:/i.test(name)) {
+        toast.error('Folder name must not contain HTML or script content');
+        return;
+      }
+      const trimmedName = name.trim();
+      if (!trimmedName) return;
+      if (trimmedName.length > FOLDER_NAME_MAX_LENGTH) {
+        toast.error(`Folder name must be ${FOLDER_NAME_MAX_LENGTH} characters or fewer`);
+        return;
+      }
+      const target = folders.find(f => f.id === id);
+      if (target && target.name === 'Archived Resumes' && !target.parent_id) {
+        toast.error('Archived Resumes folder cannot be renamed');
+        return;
+      }
+      const parentId = target?.parent_id || undefined;
+      if (folders.find(f =>
+        f.name.trim().toLowerCase() === trimmedName.toLowerCase() &&
+        (f.parent_id || undefined) === parentId &&
+        f.id !== id &&
+        f.id !== 'all'
+      )) {
+        const parentName = parentId ? folders.find(f => f.id === parentId)?.name : undefined;
+        toast.error(parentName
+          ? `"${trimmedName}" already exists inside "${parentName}"`
+          : `Folder "${trimmedName}" already exists`);
+        return;
+      }
+      await folderService.update(id, { name: trimmedName });
+      setFolders(prev => prev.map(f => (f.id === id ? { ...f, name: trimmedName } : f)));
+      toast.success('Folder renamed');
+    } catch {
+      toast.error('Failed to rename folder');
+    }
+  };
+
   const handleCreateFolder = async (name: string, parentId?: string) => {
     try {
       if (/<[^>]+>/.test(name) || /javascript:|data:|vbscript:/i.test(name)) {
@@ -1214,11 +1255,12 @@ export default function SelectSourceModal({
               colours, spacing and selected state are identical to that page
               rather than a second implementation of them.
 
-              Mostly browse-only — a folder here filters the list, and
-              rename/delete/upload-to-folder stay on the My Resumes page where
-              they belong — but "+ New" is still worth having: a recruiter
-              picking resumes to score for a fresh role shouldn't have to
-              leave this flow just to make the folder they'd file them under. */}
+              A folder here filters the list. "+ New" and each folder's (+)
+              menu — Upload to Folder, Create Subfolder, Rename Folder — work
+              as on the Resume Database page, so a recruiter picking resumes
+              to score doesn't have to leave this flow to file them. Delete
+              Folder stays on that page: it decides where the folder's resumes
+              go, which is no part of picking resumes to score. */}
           {activeTab === 'my-resumes' && (
             /* `flex` (not `block`) so the panel stretches to the row's height —
                FolderTree lays its content out with `md:absolute md:inset-0`
@@ -1228,12 +1270,23 @@ export default function SelectSourceModal({
                 folders={folderTree}
                 selectedFolder={selectedFolder}
                 onSelectFolder={setSelectedFolder}
-                onCreateFolder={canUploadResumes ? handleCreateFolder : undefined}
+                onCreateFolder={handleCreateFolder}
+                canCreateFolder={canUploadResumes}
+                onRenameFolder={handleRenameFolder}
+                canRenameFolder={canUpdateMyResumes}
+                onUploadToFolder={(folderId) => {
+                  if (!canUploadResumes) {
+                    toast.error('You do not have permission to upload resumes');
+                    return;
+                  }
+                  // The upload targets the selected folder (UploadModal's targetFolder).
+                  setSelectedFolder(folderId);
+                  setShowUploadModal(true);
+                }}
+                hideDeleteFolder
                 resumes={[]}
                 width={sidebarWidth}
                 onWidthChange={handleSidebarWidthChange}
-                readOnly
-                allowCreateFolder={canUploadResumes}
               />
             </div>
           )}

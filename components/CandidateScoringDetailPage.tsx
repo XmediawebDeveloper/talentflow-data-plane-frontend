@@ -1,13 +1,14 @@
 'use client';
 
 import { RESUME_EMAIL_SHARE_ENABLED } from '@/lib/constants/featureFlags';
-import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, Briefcase, GraduationCap, Star, Calendar, Zap, FileText, AlertCircle, Download, Clock, Building2, ChevronLeft, ChevronRight, ChevronDown, Code, Languages, BarChart3, CheckSquare, MessageSquare, Minus, BookOpen, ThumbsUp, ThumbsDown, Loader2, Sparkles, UserPlus, History, File, HardDrive, User, X, Eye, Share2, Paperclip, Send, Plus } from 'lucide-react';
+import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, Briefcase, GraduationCap, Star, Calendar, Zap, FileText, AlertCircle, Download, Clock, Building2, ChevronLeft, ChevronRight, ChevronDown, Code, Languages, BarChart3, CheckSquare, MessageSquare, Minus, ThumbsUp, ThumbsDown, Loader2, Sparkles, UserPlus, History, File, HardDrive, User, X, Eye, Share2, Paperclip, Send, Plus } from 'lucide-react';
 import DetailedScorecardTab from './DetailedScorecardTab';
 import { Button } from '@/components/ui/button';
 import { Tooltip } from '@/components/ui/tooltip';
 import ShareAssessmentModal from './ShareAssessmentModal';
 import InviteToAIInterviewFlow from './InviteToAIInterviewFlow';
 import InviteToAssessmentFlow from './InviteToAssessmentFlow';
+import type { InviteCandidate } from '@/components/talent-match-invite/inviteVersions';
 import type { Resume as ResumeRecord } from '@/lib/types/types';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
@@ -31,6 +32,7 @@ import { formatSalaryRange } from '@/lib/utils/salary';
 import { formatOverallScore } from '@/lib/utils/matchStatus';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import { criterionScoringLabel, requirementBadge } from '@/lib/utils/scoringCriteria';
+import ExtractedDataSummary from '@/components/jobs/ExtractedDataSummary';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface ScoredResume {
@@ -170,6 +172,15 @@ interface CandidateScoringDetailPageProps {
    */
   allowCreateInviteTarget?: boolean;
   /**
+   * The Invite menu's two entries open the host's Create / Send popup
+   * (VersionInviteDialog) for this one candidate — the flow Job Details'
+   * tables use: pick this job's assessment / AI interview version, or create
+   * the next. Given it, the entries are gated by permission and plan only
+   * (the popup offers Create when the job has none), replacing the
+   * assessment picker, the AI interview flow and "+ Create ...".
+   */
+  onOpenInviteDialog?: (kind: 'assessment' | 'interview', candidates: InviteCandidate[]) => void;
+  /**
    * Open another score of this candidate for this job — the Version
    * dropdown's pick of a resume version that was scored here. Hosts move
    * their own view to that score row (as Prev / Next do); without it the
@@ -196,7 +207,7 @@ function byNewestVersion(a: any, b: any): number {
   return bTime - aTime;
 }
 
-export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, onMinimize, currentIndex, totalCount, onPrev, onNext, jobPager, breadcrumbItems, assessmentConfigured, aiInterviewConfigured, allowCreateInviteTarget, onSelectScore }: CandidateScoringDetailPageProps) {
+export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, onMinimize, currentIndex, totalCount, onPrev, onNext, jobPager, breadcrumbItems, assessmentConfigured, aiInterviewConfigured, allowCreateInviteTarget, onOpenInviteDialog, onSelectScore }: CandidateScoringDetailPageProps) {
   const { isTenantAdmin, user, hasPermissionCode } = useAuth();
   const { hasPlanFeature, isPlanLocked } = usePlanLock();
   const canExport = isTenantAdmin || (user?.permissions?.canExport ?? false);
@@ -285,15 +296,18 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   const [publishedOnReturn, setPublishedOnReturn] = useState<{ assessment?: boolean; interview?: boolean }>({});
   const assessmentLive = inviteTargets.assessmentConfigured || !!publishedOnReturn.assessment;
   const aiInterviewLive = inviteTargets.aiInterviewConfigured || !!publishedOnReturn.interview;
+  // With the host's Create / Send popup, nothing published yet is no block —
+  // the popup offers Create.
+  const viaInviteDialog = !!onOpenInviteDialog;
   const canInviteAssessment =
-    mayInviteAssessment && !assessmentPlanLocked && (!inviteTargets.known || assessmentLive);
+    mayInviteAssessment && !assessmentPlanLocked && (viaInviteDialog || !inviteTargets.known || assessmentLive);
   const canInviteAIInterview =
-    mayInviteAIInterview && !aiInterviewPlanLocked && (!inviteTargets.known || aiInterviewLive);
+    mayInviteAIInterview && !aiInterviewPlanLocked && (viaInviteDialog || !inviteTargets.known || aiInterviewLive);
   /* Permitted, in the plan, and the job settled as having none yet -> the
      entry greys out with "+ Create ..." under it (Resume Scoring hosts only). */
   const inviteTargetsSettled = inviteTargets.known && !inviteTargets.loading;
-  const assessmentMissing = !!allowCreateInviteTarget && mayInviteAssessment && !assessmentPlanLocked && inviteTargetsSettled && !assessmentLive;
-  const aiInterviewMissing = !!allowCreateInviteTarget && mayInviteAIInterview && !aiInterviewPlanLocked && inviteTargetsSettled && !aiInterviewLive;
+  const assessmentMissing = !viaInviteDialog && !!allowCreateInviteTarget && mayInviteAssessment && !assessmentPlanLocked && inviteTargetsSettled && !assessmentLive;
+  const aiInterviewMissing = !viaInviteDialog && !!allowCreateInviteTarget && mayInviteAIInterview && !aiInterviewPlanLocked && inviteTargetsSettled && !aiInterviewLive;
   // Every option the user is permitted to pick is outside the plan.
   const invitePlanLocked = canInvite &&
     (!mayInviteAssessment || assessmentPlanLocked) && (!mayInviteAIInterview || aiInterviewPlanLocked);
@@ -1038,8 +1052,21 @@ Best regards`);
   /* Opens with this job's latest assessment version already ticked (the
      one tagged "Latest" — the only one when there is just one; after a
      create round trip, the one just published), so it is ready to send. */
+  /* This candidate, as the Create / Send popup lists it. */
+  const openInviteDialogFor = (kind: 'assessment' | 'interview') => {
+    setShowInviteMenu(false);
+    onOpenInviteDialog?.(kind, [{
+      id: resume.resumeId || resume.id,
+      name: resume.candidateName,
+      email: resume.email,
+      phone: resume.phone,
+      resumeId: resume.resumeId,
+    }]);
+  };
+
   const handleInviteForAssessment = async () => {
     setShowInviteMenu(false);
+    if (onOpenInviteDialog) { openInviteDialogFor('assessment'); return; }
 
     setPickedAssessments([]);
     setPickerAssessments([]);
@@ -1089,6 +1116,7 @@ Best regards`);
   // versions to pick from (the dialog says so when there are none).
   const handleInviteForAIInterview = () => {
     setShowInviteMenu(false);
+    if (onOpenInviteDialog) { openInviteDialogFor('interview'); return; }
     setShowAIInviteFlow(true);
   };
 
@@ -1605,7 +1633,7 @@ Best regards`);
                           <Mail className="w-4 h-4 text-brand-blue" />
                         </span>
                         <span className="min-w-0">
-                          <span className="block text-sm font-medium text-gray-900">Assessment</span>
+                          <span className="block text-sm font-medium text-gray-900">{viaInviteDialog ? 'Create / Send Assessment' : 'Assessment'}</span>
                         </span>
                       </button>
                     )}
@@ -1622,7 +1650,7 @@ Best regards`);
                           <Sparkles className="w-4 h-4 text-brand-cyan" />
                         </span>
                         <span className="min-w-0">
-                          <span className="block text-sm font-medium text-gray-900">AI Interview</span>
+                          <span className="block text-sm font-medium text-gray-900">{viaInviteDialog ? 'Create / Send AI Interview' : 'AI Interview'}</span>
                         </span>
                       </button>
                     )}
@@ -2928,180 +2956,35 @@ Best regards`);
                     )}
                   </div>
 
-                  {/* Extracted Data Summary */}
-                  <div className="flex items-center gap-2 pt-2">
-                    <BookOpen className="w-5 h-5 text-gray-700" />
-                    <h3 className="text-lg font-semibold text-gray-900">📊 Extracted Data Summary</h3>
-                  </div>
-
-                  {/* Skills & Requirements */}
-                  <div className="bg-gray-50 border border-gray-300 rounded-xl p-4 sm:p-6">
-                    <h4 className="text-base font-semibold text-gray-900 mb-4">Skills &amp; Requirements</h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                      {/* Left: Skills */}
-                      <div className="space-y-4 sm:space-y-6">
-                        <div>
-                          <h5 className="text-sm text-gray-700 mb-3">Must-Have Skills ({jdMustHaveSkills.length})</h5>
-                          {jdMustHaveSkills.length > 0 ? (
-                            <div className="space-y-2">
-                              {jdMustHaveSkills.map((skill, index) => (
-                                <div key={index} className="flex items-center gap-2 text-sm text-gray-700">
-                                  <CheckCircle className="w-4 h-4 text-destructive flex-shrink-0" />
-                                  {skill}
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <p className="text-gray-500 italic text-sm">None</p>
-                          )}
-                        </div>
-                        <div>
-                          <h5 className="text-sm text-gray-700 mb-3">Nice-to-Have Skills ({jdNiceToHaveSkills.length})</h5>
-                          {jdNiceToHaveSkills.length > 0 ? (
-                            <div className="space-y-2">
-                              {jdNiceToHaveSkills.map((skill, index) => (
-                                <div key={index} className="flex items-center gap-2 text-sm text-gray-600">
-                                  <CheckCircle className="w-4 h-4 text-gray-800 flex-shrink-0" />
-                                  {skill}
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <p className="text-gray-500 italic text-sm">None</p>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Right: Comments */}
-                      <div className="space-y-4 sm:space-y-6">
-                        <div>
-                          {/* Labelled Essential/Preferred: Education has no tile of its
-                              own, and `education_mandatory` decides which of these two
-                              lists a degree requirement lands in - so this label is the
-                              only place a Required degree is visible. */}
-                          <h5 className="text-sm text-gray-700 mb-3">
-                            Must-Have Additional Requirements ({jdMustHaveComments.length})
-                            {/* See JobDetailView: the badge is a scoring claim, so it
-                                only appears when there are lines for it to apply to. */}
-                            {jdMustHaveComments.length > 0 && (
-                              <span className="ml-2 text-xs font-normal text-gray-500">✓ Required (Essential)</span>
-                            )}
-                          </h5>
-                          {jdMustHaveComments.length > 0 ? (
-                            <div className="space-y-2">
-                              {jdMustHaveComments.map((comment, index) => (
-                                <div key={index} className="flex items-start gap-2 text-sm text-gray-700">
-                                  <CheckCircle className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" />
-                                  <span>{comment}</span>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <p className="text-gray-500 italic text-sm">None</p>
-                          )}
-                        </div>
-                        <div>
-                          <h5 className="text-sm text-gray-700 mb-3">
-                            Nice-to-Have Additional Requirements ({jdNiceToHaveComments.length})
-                            {jdNiceToHaveComments.length > 0 && (
-                              <span className="ml-2 text-xs font-normal text-gray-500">○ Preferred</span>
-                            )}
-                          </h5>
-                          {jdNiceToHaveComments.length > 0 ? (
-                            <div className="space-y-2">
-                              {jdNiceToHaveComments.map((comment, index) => (
-                                <div key={index} className="flex items-start gap-2 text-sm text-gray-600">
-                                  <CheckCircle className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
-                                  <span>{comment}</span>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <p className="text-gray-500 italic text-sm">None</p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Requirements */}
-                  <div className="bg-gray-50 border border-gray-300 rounded-xl p-4 sm:p-6">
-                    <h4 className="text-base font-semibold text-gray-900 mb-4">Requirements</h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-                      <div className="bg-white border border-gray-200 p-3 sm:p-4 rounded-lg">
-                        <h5 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Experience</h5>
-                        <p className="text-sm sm:text-base text-gray-900">{jdExperienceLabel}</p>
-                        {/* `jdExperienceLabel` falls back to the words "Not specified",
-                            so the badge is gated on the RANGE, not on the label. */}
-                        {(jdDetails?.experience_min != null || jdDetails?.experience_max != null) && (
-                          <p className="text-xs text-gray-500 mt-1">{jdRequirementLabel(jdDetails.experience_mandatory)}</p>
-                        )}
-                      </div>
-                      {/* Education tile REMOVED 2026-08-21 - see the chip note above.
-                          `education_mandatory` decides which of the two Additional
-                          Requirements lists the degree lands in, and those are labelled
-                          Required/Preferred above, so the distinction is still readable. */}
-                      {jdDetails.industry_type && (
-                        <div className="bg-white border border-gray-200 p-3 sm:p-4 rounded-lg">
-                          <h5 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Industry Type</h5>
-                          <p className="text-sm sm:text-base text-gray-900">{prettifyCode(jdDetails.industry_type)}</p>
-                          {/* See JobDetailView: "Others" is never scored. */}
-                          <p className="text-xs text-gray-500 mt-1">{criterionScoringLabel(jdDetails.industry_type, jdDetails.industry_mandatory, { isIndustry: true })}</p>
-                        </div>
-                      )}
-                      {jdLocation && (
-                        <div className="bg-white border border-gray-200 p-3 sm:p-4 rounded-lg">
-                          <h5 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Location</h5>
-                          <p className="text-sm sm:text-base text-gray-900">{jdLocation}</p>
-                          <p className="text-xs text-gray-500 mt-1">{criterionScoringLabel(jdLocation, jdDetails.location_mandatory)}</p>
-                        </div>
-                      )}
-                      <div className="bg-white border border-gray-200 p-3 sm:p-4 rounded-lg">
-                        <h5 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Employment Type</h5>
-                        <p className="text-sm sm:text-base text-gray-900">{employmentTypeLabel(jdDetails.employment_type)}</p>
-                      </div>
-                      <div className="bg-white border border-gray-200 p-3 sm:p-4 rounded-lg">
-                        <h5 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Work Mode</h5>
-                        <p className="text-sm sm:text-base text-gray-900">{workModeLabel(jdDetails.remote_type)}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Scoring Preferences - the recruiter answers that changed how THIS
-                      resume was graded. Most useful on this page of all: it is where
-                      someone asks why a candidate failed, and whether an over-qualified
-                      candidate is penalised is otherwise invisible. */}
-                  <div className="p-4 sm:p-6 border-b border-gray-200">
-                    <h4 className="text-base font-semibold text-gray-900 mb-4">Scoring Preferences</h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                      <div className="bg-white border border-gray-200 p-3 sm:p-4 rounded-lg">
-                        <h5 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Allow Over-Qualified Candidates</h5>
-                        <p className="text-sm sm:text-base text-gray-900">
-                          {jdDetails.allow_overqualified === null || jdDetails.allow_overqualified === undefined
-                            ? 'Not specified'
-                            : jdDetails.allow_overqualified ? 'Yes' : 'No'}
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          {jdDetails.allow_overqualified === false
-                            ? 'Experience above the maximum of the range fails Experience'
-                            : 'Extra relevant experience is not penalised'}
-                        </p>
-                      </div>
-                      <div className="bg-white border border-gray-200 p-3 sm:p-4 rounded-lg">
-                        <h5 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Job Hopping</h5>
-                        <p className="text-sm sm:text-base text-gray-900">
-                          {jdDetails.job_hopping_enabled === null || jdDetails.job_hopping_enabled === undefined
-                            ? 'Not specified'
-                            : jdDetails.job_hopping_enabled ? 'Evaluated' : 'Not evaluated'}
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          {jdDetails.job_hopping_enabled === false
-                            ? 'Tenure pattern is not scored for this role'
-                            : 'Scored as a Preferred criterion'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                  {/* Extracted Data Summary - the JD wizard Review step's format,
+                      shared with every surface that shows it. Open on arrival:
+                      this tab always showed it, and it is where someone asks why
+                      a candidate was graded as they were. */}
+                  <ExtractedDataSummary
+                    mustHaveSkills={jdMustHaveSkills}
+                    niceToHaveSkills={jdNiceToHaveSkills}
+                    mustHaveComments={jdMustHaveComments}
+                    niceToHaveComments={jdNiceToHaveComments}
+                    /* `jdExperienceLabel` falls back to the words "Not specified",
+                       so the value (and its badge) is gated on the RANGE. */
+                    experience={jdDetails?.experience_min != null || jdDetails?.experience_max != null ? jdExperienceLabel : null}
+                    experienceNote={jdRequirementLabel(jdDetails.experience_mandatory)}
+                    industry={jdDetails.industry_type ? prettifyCode(jdDetails.industry_type) : null}
+                    industryNote={jdDetails.industry_type
+                      ? criterionScoringLabel(jdDetails.industry_type, jdDetails.industry_mandatory, { isIndustry: true })
+                      : undefined}
+                    location={jdLocation || null}
+                    locationNote={jdLocation ? criterionScoringLabel(jdLocation, jdDetails.location_mandatory) : undefined}
+                    employmentType={employmentTypeLabel(jdDetails.employment_type)}
+                    workMode={workModeLabel(jdDetails.remote_type)}
+                    scoring={{
+                      allowOverqualified: jdDetails.allow_overqualified,
+                      jobHoppingEnabled: jdDetails.job_hopping_enabled,
+                      overqualifiedNoNote: 'Experience above the maximum of the range fails Experience',
+                    }}
+                    aiExtracted={jdDetails.creation_method === 'ai_generated'}
+                    defaultOpen
+                  />
                 </>
               )}
             </div>
