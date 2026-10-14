@@ -1280,6 +1280,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     segLastAt: null, segVoicedMs: 0, segStrongMs: 0, segCounted: false, ignoredSinceAnchor: 0,
   });
   const silenceClockRef = useRef<SilenceClock>(newSilenceClock(0, null));
+  // AII14 Plan B: true once the backend's Silero pause detector reports
+  // `ready` for the current answer — it then raises/closes "Are you done?"
+  // and the browser clock above is fallback only. Cleared on `unavailable`
+  // and when the WebSocket closes.
+  const serverVadActiveRef = useRef(false);
   // Total speech-like ms observed since the popup was raised. Reset when the
   // popup is raised (fresh cycle) and when it closes — never by a pause.
   const speechAccumMsRef = useRef(0);
@@ -5444,6 +5449,46 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         }
         break;
       }
+      case "server_vad": {
+        // AII14 Plan B — the backend measures the pause with Silero VAD on the
+        // answer audio and drives "Are you done?". While active, the client's
+        // own clock (silenceClockRef) only runs for logging/fallback.
+        const ev = data.event as string;
+        const sc = silenceClockRef.current;
+        if (ev === 'ready') {
+          serverVadActiveRef.current = true;
+          console.log('[INTERVIEW-DEBUG] AII14-server: pause detection active for this answer', {
+            turn: data.turn, doneAfterMs: data.done_after_ms, resumeSpeechMs: data.resume_speech_ms,
+          });
+        } else if (ev === 'unavailable') {
+          serverVadActiveRef.current = false;
+          console.warn('[INTERVIEW-DEBUG] AII14-server: unavailable — using the browser silence clock', { turn: data.turn });
+        } else if (ev === 'done_prompt') {
+          console.log('[INTERVIEW-DEBUG] AII14-server: "Are you done?" raised', {
+            turn: data.turn,
+            serverSilenceMs: data.silence_ms,
+            ignoredSoundsInPause: data.ignored_sounds_in_pause,
+            // Comparison with the browser clock (diagnostics only).
+            clientClockSilenceMs: Date.now() - sc.voiceAt,
+          });
+          if (serverVadActiveRef.current && isRecordingRef.current && !isAiSpeakingRef.current && !isProcessingRef.current
+              && !midSilenceConfirmRef.current) {
+            speechAccumMsRef.current = 0;
+            setMidSilenceConfirm_(true);
+          }
+        } else if (ev === 'speech_resumed') {
+          console.log('[INTERVIEW-DEBUG] AII14-server: popup closed after speech', { turn: data.turn, speechMs: data.speech_ms });
+          if (serverVadActiveRef.current && midSilenceConfirmRef.current) {
+            speechAccumMsRef.current = 0;
+            popupVadFrameAtRef.current = null;
+            sc.voiceAt = Date.now();
+            sc.source = 'popup_dismiss';
+            silenceHoldLoggedRef.current = false;
+            setMidSilenceConfirm_(false);
+          }
+        }
+        break;
+      }
       case "live_transcript": {
         // Any backend live-transcript provider can stream interim text while
         // the candidate speaks. Drive the live "You" bubble directly from
@@ -8300,7 +8345,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             // speech frames (cumulative, pauses allowed) straight from this
             // frame's decision, in the same window as the streak above rather
             // than after it. dt is clamped so a stalled tab can't credit a gap.
-            if (midSilenceConfirmRef.current) {
+            // Skipped while the server detector owns the popup (Plan B).
+            if (midSilenceConfirmRef.current && !serverVadActiveRef.current) {
               const _prev = popupVadFrameAtRef.current;
               popupVadFrameAtRef.current = nowMs;
               if (_frameIsActive && _prev != null) {
@@ -8390,6 +8436,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               if (sc.segCounted) {
                 sc.voiceAt = nowMs;
                 sc.source = 'voice';
+                silenceHoldLoggedRef.current = false;
               }
             } else if (sc.segLastAt != null && (nowMs - sc.segLastAt) > STREAK_DIP_GRACE_MS) {
               // Segment ended. Too-short sounds never touched the clock.
@@ -8678,6 +8725,19 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       // confirmed-speech path above, Submit/Next, or the turn ending (the
       // isAiSpeaking/isProcessing guard and the effect cleanup).
       if ((nowTs - start) >= DONE_CONFIRM_SILENCE_MS) {
+        // Plan B: the server's Silero detector owns the popup. Log once per
+        // pause what the browser clock would have done (comparison only).
+        if (serverVadActiveRef.current) {
+          if (!silenceHoldLoggedRef.current) {
+            silenceHoldLoggedRef.current = true;
+            console.log('[INTERVIEW-DEBUG] AII14-clock: browser clock reached 15s (server decides)', {
+              question: questionNumberRef.current,
+              silenceMs: nowTs - start,
+              popupUp: midSilenceConfirmRef.current,
+            });
+          }
+          return;
+        }
         if (!midSilenceConfirmRef.current) {
           // Fresh cycle — start the cumulative count from zero so leftover
           // credit from a previous popup cannot dismiss this one instantly.
@@ -8934,6 +8994,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     };
     ws.onclose = (event) => {
       const timestamp = new Date().toISOString();
+      // Server pause detection can't reach us any more — browser clock takes over.
+      serverVadActiveRef.current = false;
       console.log(`[IV-DIAG] WS CLOSE code=${event.code} reason="${event.reason}" wasClean=${event.wasClean} ts=${timestamp}`);
       console.log(`[WS ${timestamp}] WebSocket closed: code=${event.code}, reason=${event.reason}`);
       // Explicit, forwarded diagnostic line (the [INTERVIEW-DEBUG] prefix is on
