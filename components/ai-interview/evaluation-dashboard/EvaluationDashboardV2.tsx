@@ -520,7 +520,7 @@ export function QuestionsView({ data, renderAnswerAction }: {
               </span>
             ) : isHr ? (
               <span className="text-xs font-semibold px-2 py-0.5 rounded-full border bg-violet-50 text-violet-700 border-violet-200">
-                HR · Not Scored
+                HR · For Reference
               </span>
             ) : q.notDelivered ? (
               <span
@@ -1013,13 +1013,13 @@ export function QuestionsView({ data, renderAnswerAction }: {
       )}
       {viewMode === 'sections' && hrQs.length > 0 && (
         <>
-          {sectionHeader('HR Round', 'Not Scored', hrQs.length, 'bg-violet-50 text-violet-700')}
+          {sectionHeader('HR Round', 'For Reference', hrQs.length, 'bg-violet-50 text-violet-700')}
           {hrQs.map((q, i) => renderQCard(q, i))}
         </>
       )}
 
       {/* Section Score summary — spec §4 Step 4 + Step 5. HR appears as
-          a "Not Scored" info card so the recruiter knows the HR Qs were
+          a "For Reference" info card so the recruiter knows the HR Qs were
           asked but didn't affect the Pass/Fail decision. */}
       {!isPartialEvaluation && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">

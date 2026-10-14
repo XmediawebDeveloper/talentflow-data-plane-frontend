@@ -10,8 +10,7 @@ import {
   AssessmentResult,
   SubmitAnswerResponse
 } from '@/lib/services/candidateService';
-import { LandingScreen } from './LandingScreen';
-import { ConsentModal } from './ConsentModal';
+import { JobConsentScreen } from './JobConsentScreen';
 import { SystemCheck } from './SystemCheck';
 import { AssessmentInterface } from './AssessmentInterface';
 import { AssessmentErrorBoundary } from './AssessmentErrorBoundary';
@@ -1170,12 +1169,13 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   //   }
   // };
 
-  const handleConsentAccept = async () => {
+  const handleConsentAccept = async (): Promise<boolean> => {
     try {
       await candidateService.acceptConsent(token);
       setAssessmentInfo(prev => prev ? { ...prev, consent_accepted: true } : null);
       // After consent accepted, show landing/preview page
       setStepSafe('landing');
+      return true;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to accept consent';
       // Handle session already active error with user-friendly message
@@ -1185,7 +1185,20 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
         setError(errorMessage);
       }
       setStepSafe('error');
+      return false;
     }
+  };
+
+  // The merged "Job & Consent" screen's Continue: records consent first when
+  // it has not been given yet (same call and error handling as before), then
+  // takes the same route to System Check the old Assessment Details screen's
+  // Continue took. A failed consent stops on the error screen as it always did.
+  const handleJobConsentContinue = async () => {
+    if (!assessmentInfo?.consent_accepted) {
+      const accepted = await handleConsentAccept();
+      if (!accepted) return;
+    }
+    await handleBeginClick();
   };
 
   const getHRQuestions = useCallback(() => {
@@ -2510,10 +2523,17 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       //   );
 
     case 'landing':
+      // "Job & Consent" — consent already given (a refresh, or Back from
+      // System Check), so its panel shows as accepted.
       return (
-        <LandingScreen
+        <JobConsentScreen
           assessmentInfo={assessmentInfo!}
-          onBegin={handleBeginClick}
+          consentAccepted
+          onContinue={handleJobConsentContinue}
+          onDecline={() => {
+            setError('You must accept the terms and conditions to proceed with the assessment.');
+            setStepSafe('error');
+          }}
         />
       );
 
@@ -2534,10 +2554,13 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       );
 
     case 'consent':
+      // "Job & Consent" — terms and the role on one screen. Continue records
+      // consent, then moves on to System Check.
       return (
-        <ConsentModal
+        <JobConsentScreen
           assessmentInfo={assessmentInfo!}
-          onAccept={handleConsentAccept}
+          consentAccepted={false}
+          onContinue={handleJobConsentContinue}
           onDecline={() => {
             setError('You must accept the terms and conditions to proceed with the assessment.');
             setStepSafe('error');
@@ -2556,10 +2579,6 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
             }
             return registerAssessmentFaceBaseline(videoElement);
           }}
-          onBack={() => {
-            isFlowActiveRef.current = false;
-            setStepSafe('landing');
-          }}
         />
       );
 
@@ -2574,7 +2593,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
               used 32px dots and the Check glyph. No "No Timer" badge in the
               header: the page subtitle already says the questions are not timed. */}
           <CandidateHeader />
-          <CandidateStepper current={4} />
+          <CandidateStepper current={3} />
 
           {/* The recruiter page shell. */}
           <main className={RECRUITER_SHELL}>
@@ -2589,7 +2608,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
                 <div className="min-w-0">
                   <h1 className={T_PAGE_TITLE}>HR Questions</h1>
                   <p className={T_PAGE_SUBTITLE}>
-                    Please answer the following questions. These are optional and not timed.
+                    Please answer the following questions. All questions are optional and untimed.
                     Your responses will be shared with the recruiter.
                   </p>
                 </div>
