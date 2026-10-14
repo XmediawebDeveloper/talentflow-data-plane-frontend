@@ -162,6 +162,10 @@ export interface PerQuestionDetail {
   /** Chronological sort key the adapter ranks into `askedNum` (internal). */
   askedOrder?: number;
   section: 'mth' | 'nth' | 'hr';
+  /** HR rows matched to a selected HR question: its configured stage and its
+   *  position in the HR question list (same order as Question Distribution). */
+  hrStage?: 'opening' | 'closing';
+  hrBankIndex?: number;
   question: string;
   /** Candidate's transcribed response (ASR-corrected when available).
    *  Empty string when the candidate didn't answer (skipped / timed out / idk).

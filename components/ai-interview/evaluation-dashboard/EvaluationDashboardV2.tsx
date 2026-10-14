@@ -482,16 +482,19 @@ export function QuestionsView({ data, renderAnswerAction }: {
 
   // "All" view order follows the HR stage configured on the interview:
   // Opening HR questions (asked before the technical rounds) lead, Closing
-  // ones follow NHS. The stage isn't carried on the result rows, so it is
-  // read from the ask order — an HR question asked before the first MHS/NHS
-  // question was an Opening one. Un-reached HR rows fall to the Closing end.
+  // ones follow NHS — the Question Distribution order. A row matched to a
+  // selected HR question carries its configured stage (asked or not). Any
+  // other HR row falls back to the ask order: asked before the first MHS/NHS
+  // question = Opening; un-reached ones go to the Closing end.
   // (Shared with the Evaluation Report, so both list the same order.)
   const allOrder = orderQuestionsAsAsked(delivered);
   // The HR rows that lead the order are the Opening ones; the rest close it.
   const _firstNonHr = allOrder.findIndex(q => q.section !== 'hr');
   // (HR only: every HR question that was asked counts as Opening, as before.)
   const hrOpening = _firstNonHr === -1
-    ? hrQs.filter(q => !q.notDelivered && typeof q.askedNum === 'number')
+    ? hrQs.filter(q => q.hrStage
+      ? q.hrStage === 'opening'
+      : !q.notDelivered && typeof q.askedNum === 'number')
     : allOrder.slice(0, _firstNonHr);
   const hrClosing = hrQs.filter(q => !hrOpening.includes(q));
 

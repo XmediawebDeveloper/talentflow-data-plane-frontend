@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { X, Eye, Download, FileText } from 'lucide-react';
+import { X, Eye, Download, FileText, Loader2 } from 'lucide-react';
 import { resumeService } from '@/lib/services/resumeService';
 import { Skeleton } from '@/components/ui/skeleton';
 import { extractLocalResumeText } from '@/lib/utils/localResumeText';
@@ -114,6 +114,10 @@ export default function ResumeTextPreviewModal({
   const hasLocalFile = !!localFile;
   const isStoredResumeOnly = !text && !documentUrl && !localFile && !!resumeId;
   const [resolvedPdfUrl, setResolvedPdfUrl] = useState<string | null>(null);
+  // Tracked alongside the url so the minimum paint hold below can scale with
+  // it — a bigger/denser PDF takes the browser's native viewer visibly
+  // longer to actually paint than a one-page text resume.
+  const [resolvedPdfBytes, setResolvedPdfBytes] = useState(0);
   const [resolvedDocxBlob, setResolvedDocxBlob] = useState<Blob | null>(null);
   // Set when the fetched file turned out to be plain text (e.g. a .txt
   // upload) and its content was read directly — skips the extracted_text
@@ -129,6 +133,61 @@ export default function ResumeTextPreviewModal({
   const [content, setContent] = useState(text || '');
   const [loading, setLoading] = useState(!text && (hasLocalFile || isStoredResumeOnly));
   const docxContainerRef = useRef<HTMLDivElement>(null);
+  /* The PDF itself still has to paint once the iframe's src is set — the
+     browser's own PDF viewer renders a solid black frame for a beat before
+     the document appears. The skeleton above only covers the fetch; this
+     covers that second gap so the black frame is never the thing on screen.
+
+     The iframe's `onLoad` alone isn't enough: for a blob: URL it tends to
+     fire as soon as the outer frame document exists, before the embedded
+     PDF viewer has actually painted anything — so gating on it alone just
+     moved the black flash a few milliseconds later instead of removing it.
+     A short minimum hold (`pdfMinHoldElapsed`) covers that gap; the spinner
+     only clears once BOTH it and `onLoad` have fired, whichever is later —
+     so a slow network load still waits on the real `onLoad`. */
+  const [pdfIframeLoaded, setPdfIframeLoaded] = useState(false);
+  const [pdfMinHoldElapsed, setPdfMinHoldElapsed] = useState(false);
+  const pdfFrameLoaded = pdfIframeLoaded && pdfMinHoldElapsed;
+  const pdfIframeRef = useRef<HTMLIFrameElement>(null);
+  useEffect(() => {
+    setPdfIframeLoaded(false);
+    setPdfMinHoldElapsed(false);
+    if (!effectiveDocumentUrl) return;
+    // A fixed 600ms was only ever long enough for a short, simple resume —
+    // a denser or multi-page PDF can still be mid-paint well past that,
+    // which is exactly what let the black placeholder frame through for
+    // some résumés and not others. Scale the floor with the file size
+    // (resolvedPdfBytes is 0 for a caller-supplied documentUrl, which keeps
+    // the original 600ms there), capped so a huge file doesn't hold the
+    // spinner needlessly long.
+    const holdMs = Math.min(2400, 600 + Math.round(resolvedPdfBytes / 1024) * 2);
+    const timer = setTimeout(() => setPdfMinHoldElapsed(true), holdMs);
+    return () => clearTimeout(timer);
+  }, [effectiveDocumentUrl, resolvedPdfBytes]);
+  // The hold above is a best-effort estimate, not a real signal that the
+  // native viewer has painted — Chromium's built-in PDF viewer has a known
+  // quirk where it can still be showing its black placeholder after `onLoad`
+  // fires and the estimated hold elapses. Forcing one reflow once the frame
+  // is revealed nudges it to repaint, which is the documented workaround for
+  // that quirk.
+  useEffect(() => {
+    if (!pdfFrameLoaded) return;
+    const el = pdfIframeRef.current;
+    if (!el) return;
+    const prevWidth = el.style.width;
+    requestAnimationFrame(() => {
+      el.style.width = 'calc(100% - 1px)';
+      requestAnimationFrame(() => {
+        el.style.width = prevWidth;
+      });
+    });
+  }, [pdfFrameLoaded]);
+
+  /* Same gap, different renderer: docx-preview fills `docxContainerRef`
+     imperatively (its own async import plus a DOM render pass), so the
+     container sits empty — no skeleton, no spinner — until that finishes.
+     `docxReady` covers exactly that window. */
+  const [docxReady, setDocxReady] = useState(false);
 
   useEffect(() => {
     if (!isStoredResumeOnly) return;
@@ -140,6 +199,7 @@ export default function ResumeTextPreviewModal({
         objectUrl = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
         if (cancelled) return false;
         setResolvedPdfUrl(objectUrl);
+        setResolvedPdfBytes(blob.size);
         return true;
       }
       if (await isWordBlob(blob)) {
@@ -218,6 +278,7 @@ export default function ResumeTextPreviewModal({
      file is actually opened, in the browser, where it works. */
   const renderDocx = useCallback(async (blob: Blob) => {
     if (!docxContainerRef.current) return;
+    setDocxReady(false);
     docxContainerRef.current.innerHTML = '';
     try {
       const { renderAsync } = await import('docx-preview');
@@ -248,6 +309,8 @@ export default function ResumeTextPreviewModal({
       if (!docxContainerRef.current) return;
       docxContainerRef.current.innerHTML =
         '<p style="color:var(--raw-6b7280);font-size:14px;text-align:center;padding:24px">Could not render this document. Download it to view the original file.</p>';
+    } finally {
+      if (docxContainerRef.current) setDocxReady(true);
     }
   }, []);
 
@@ -361,11 +424,18 @@ export default function ResumeTextPreviewModal({
                    the card fills the mat exactly and the PDF scrolls inside it.
                  - the browser's own PDF chrome (grey bar, page thumbnails, zoom
                    controls), hidden with #toolbar=0&navpanes=0. */
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 max-w-2xl mx-auto h-full overflow-hidden">
+              <div className="relative bg-white rounded-lg shadow-sm border border-gray-200 max-w-2xl mx-auto h-full overflow-hidden">
+                {!pdfFrameLoaded && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-white">
+                    <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
+                  </div>
+                )}
                 <iframe
+                  ref={pdfIframeRef}
                   src={`${effectiveDocumentUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
-                  className="w-full h-full border-0"
+                  className={`w-full h-full border-0 ${pdfFrameLoaded ? '' : 'invisible'}`}
                   title={title}
+                  onLoad={() => setPdfIframeLoaded(true)}
                 />
               </div>
             ) : (
@@ -375,10 +445,17 @@ export default function ResumeTextPreviewModal({
                  the Word page geometry and docx-preview's own grey mat, so the
                  document reflows into this card instead of overflowing it at
                  its 8.5in print width. See app/globals.css. */
-              <div
-                ref={docxContainerRef}
-                className="tf-docx-preview bg-white rounded-lg shadow-sm border border-gray-200 p-6 sm:p-8 max-w-2xl mx-auto min-h-full"
-              />
+              <div className="relative max-w-2xl mx-auto h-full">
+                {!docxReady && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-white rounded-lg border border-gray-200">
+                    <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
+                  </div>
+                )}
+                <div
+                  ref={docxContainerRef}
+                  className={`tf-docx-preview bg-white rounded-lg shadow-sm border border-gray-200 p-6 sm:p-8 min-h-full ${docxReady ? '' : 'invisible'}`}
+                />
+              </div>
             )
           ) : loading ? (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 sm:p-8 max-w-2xl mx-auto min-h-full space-y-4">

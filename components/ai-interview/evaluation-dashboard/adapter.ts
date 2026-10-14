@@ -2090,7 +2090,13 @@ export function buildDashboardData(params: {
   /** Per-round budget from the session row. Used to derive plannedCounts
    *  (denominator for Section Score per spec). When absent, plannedCounts
    *  fall back to 0 and the consumer can use delivered count instead. */
-  rounds_config?: Array<{ type?: string; planned_questions?: number; enabled?: boolean }>;
+  rounds_config?: Array<{
+    type?: string;
+    planned_questions?: number;
+    enabled?: boolean;
+    hr_stage?: string;
+    hr_questions?: Array<{ question_text?: string; stage?: string | null } | string>;
+  }>;
   /** Raw chat log (assistant/user messages) — flows through to the Question
    *  Analysis builder as a fallback when question_history is sparse. Same
    *  source the Transcript view renders from. Caller should pass
@@ -2419,6 +2425,186 @@ export function buildDashboardData(params: {
     conversation_transcript || [],
   );
 
+  // ── HR alignment with the selected HR questions ────────────────────────
+  // Mirrors the Question Distribution popover: every selected HR question is
+  // one HR row, Opening ones first and Closing ones last, in list order.
+  //   * A Must-Have/Nice-to-Have row whose text IS a selected HR question
+  //     becomes that HR question. (The runtime files questions by plan
+  //     position, so the 2nd Opening HR question asked on Must-Have slot 1's
+  //     position arrived as a "Flask Framework" Must-Have row.)
+  //   * A selected HR question with no row at all gets a "Not Asked" row,
+  //     so ending the interview early never makes one disappear.
+  type HrBankEntry = { text: string; stage: 'opening' | 'closing' };
+  const hrBank: HrBankEntry[] = [];
+  for (const r of (rounds_config || [])) {
+    if (r?.enabled === false || String(r?.type || '').toLowerCase() !== 'hr') continue;
+    for (const q of (Array.isArray(r?.hr_questions) ? r.hr_questions : [])) {
+      const text = String((typeof q === 'string' ? q : q?.question_text) || '').trim();
+      if (!text) continue;
+      const rawStage = (typeof q === 'object' && q?.stage) || r?.hr_stage;
+      hrBank.push({ text, stage: rawStage === 'opening' ? 'opening' : 'closing' });
+    }
+  }
+  const hrToks = (s: string) =>
+    new Set(String(s || '').toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length > 2));
+  // Strong match only: the row covers >= 80% of the HR question's words, or
+  // the two texts are >= 45% alike overall (the runtime's HR match threshold).
+  const hrMatchScore = (rowText: string, bankText: string): number => {
+    const a = hrToks(rowText);
+    const b = hrToks(bankText);
+    if (!a.size || !b.size) return 0;
+    let inter = 0;
+    b.forEach(w => { if (a.has(w)) inter++; });
+    const coverage = inter / b.size;
+    const jaccard = inter / (a.size + b.size - inter);
+    return Math.max(coverage >= 0.8 ? coverage : 0, jaccard >= 0.45 ? jaccard : 0);
+  };
+  let perQuestionDetailsAligned: PerQuestionDetail[] = perQuestionDetailsRaw;
+  if (hrBank.length > 0) {
+    const claimed = new Map<number, PerQuestionDetail>();
+    const bankOf = new Map<PerQuestionDetail, number>();
+    // One-to-one, best score first, so two similar HR questions can't both be
+    // claimed by the one that was asked.
+    const claimGreedy = (rows: PerQuestionDetail[]) => {
+      const cands: Array<[number, PerQuestionDetail, number]> = [];
+      for (const row of rows) {
+        hrBank.forEach((b, i) => {
+          if (claimed.has(i)) return;
+          const s = hrMatchScore(row.question, b.text);
+          if (s > 0) cands.push([s, row, i]);
+        });
+      }
+      cands.sort((x, y) => y[0] - x[0]);
+      for (const [, row, i] of cands) {
+        if (claimed.has(i) || bankOf.has(row)) continue;
+        claimed.set(i, row);
+        bankOf.set(row, i);
+      }
+    };
+    claimGreedy(perQuestionDetailsRaw.filter(r => r.section === 'hr' && !r.notDelivered));
+    claimGreedy(perQuestionDetailsRaw.filter(r => r.section !== 'hr' && !r.notDelivered));
+    claimGreedy(perQuestionDetailsRaw.filter(r => r.section === 'hr' && r.notDelivered));
+
+    // Spoken but never recorded: End pressed after Bina asked a question but
+    // before its answer timer started, so no history row exists (the backend
+    // then reads it as un-reached). The transcript still holds Bina's turn —
+    // that question WAS asked, so show it as asked-but-not-answered, never
+    // "Not Asked".
+    const tx = (conversation_transcript || []).filter((m: any) =>
+      (m?.role === 'assistant' || m?.role === 'user')
+      && typeof m?.content === 'string'
+      && !m?.interstitial
+      && !m?.is_clarification);
+    const normTxt = (s: string) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const spoken = new Map<number, { txIdx: number; text: string; answer: string }>();
+    const usedTx = new Set<number>();
+    hrBank.forEach((b, i) => {
+      const owner = claimed.get(i);
+      if (owner && !owner.notDelivered) return; // already shown as asked
+      let best = -1;
+      let bestScore = 0;
+      tx.forEach((m: any, ti: number) => {
+        if (m.role !== 'assistant' || usedTx.has(ti)) return;
+        const s = hrMatchScore(m.content, b.text);
+        if (s > bestScore) { bestScore = s; best = ti; }
+      });
+      if (best < 0) return;
+      usedTx.add(best);
+      const parts: string[] = [];
+      for (let k = best + 1; k < tx.length && tx[k].role === 'user'; k++) {
+        const t = String(tx[k].content || '').trim();
+        if (t) parts.push(t);
+      }
+      spoken.set(i, { txIdx: best, text: String(tx[best].content).trim(), answer: parts.join(' ') });
+    });
+    const spokenRow = (i: number, base?: PerQuestionDetail): PerQuestionDetail => {
+      const sp = spoken.get(i)!;
+      return {
+        ...(base || {}),
+        qNum: base?.qNum ?? 10000 + i,
+        section: 'hr',
+        question: sp.text,
+        answer: sp.answer,
+        responseType: sp.answer ? 'answered' : 'not_answered',
+        skipSource: '',
+        skills: [],
+        questionScore: 0,
+        isUnscored: true,
+        notDelivered: false,
+        hrStage: hrBank[i].stage,
+        hrBankIndex: i,
+      };
+    };
+
+    const out: PerQuestionDetail[] = [];
+    for (const row of perQuestionDetailsRaw) {
+      const bi = bankOf.get(row);
+      if (row.section === 'hr' && row.notDelivered && bi !== undefined && spoken.has(bi)) {
+        out.push(spokenRow(bi, row));
+        continue;
+      }
+      if (row.section !== 'hr') {
+        if (bi === undefined) { out.push(row); continue; }
+        // HR is review-only: no plan skills, no score.
+        out.push({
+          ...row,
+          section: 'hr',
+          skills: [],
+          questionScore: 0,
+          isUnscored: true,
+          displayOnlyQuestionScore: undefined,
+          bundledFollowUp: undefined,
+          scoreRationale: '',
+          hrStage: hrBank[bi].stage,
+          hrBankIndex: bi,
+        });
+        continue;
+      }
+      if (bi === undefined) {
+        // An un-reached HR row whose question is already shown as asked.
+        if (row.notDelivered && hrBank.some((b, i) => claimed.has(i) && hrMatchScore(row.question, b.text) > 0)) {
+          continue;
+        }
+        out.push(row);
+        continue;
+      }
+      out.push({ ...row, hrStage: hrBank[bi].stage, hrBankIndex: bi });
+    }
+    hrBank.forEach((b, i) => {
+      if (claimed.has(i)) return;
+      if (spoken.has(i)) { out.push(spokenRow(i)); return; }
+      out.push({
+        qNum: 10000 + i,
+        section: 'hr',
+        question: b.text,
+        answer: '',
+        responseType: 'not_asked',
+        skipSource: '',
+        skills: [],
+        questionScore: 0,
+        isUnscored: true,
+        notDelivered: true,
+        hrStage: b.stage,
+        hrBankIndex: i,
+      });
+    });
+    // Ask-order slot for a transcript-recovered row: just after the last
+    // recorded question Bina spoke before it.
+    for (const r of out) {
+      if (r.notDelivered || typeof r.hrBankIndex !== 'number' || !spoken.has(r.hrBankIndex)) continue;
+      const at = spoken.get(r.hrBankIndex)!.txIdx;
+      let prev: number | undefined;
+      for (const o of out) {
+        if (o === r || o.notDelivered || typeof o.askedOrder !== 'number') continue;
+        const k = normTxt(o.question);
+        const oi = tx.findIndex((m: any) => m.role === 'assistant' && normTxt(m.content) === k);
+        if (oi >= 0 && oi < at && (prev === undefined || o.askedOrder > prev)) prev = o.askedOrder;
+      }
+      r.askedOrder = prev !== undefined ? prev + 0.5 : r.askedOrder;
+    }
+    perQuestionDetailsAligned = out;
+  }
+
   // ── Strict Question-Distribution alignment ─────────────────────────────
   // Recruiter spec (2026-05-20): the Question Analysis tab MUST show the
   // exact set of skills configured for each slot in the Question
@@ -2497,29 +2683,54 @@ export function buildDashboardData(params: {
     if (t === 'hr') return 'hr';
     return null;
   };
+  // SUM per section: HR is split into two rounds of the same type (Opening HR +
+  // Closing HR). Overwriting kept only the last round's count, so with 2
+  // opening + 1 closing the HR cap was 1 and the trim below dropped the
+  // second asked question and every "Not Asked" HR row.
+  const trackedCap: typeof sectionCap = { mth: null, nth: null, hr: null };
   for (const rt of (eval_?.round_tracking || [])) {
     const k = sectionKey(rt?.type);
     if (!k) continue;
     const pq = Number(rt?.planned_questions);
-    if (Number.isFinite(pq) && pq > 0) sectionCap[k] = pq;
+    if (Number.isFinite(pq) && pq > 0) trackedCap[k] = (trackedCap[k] ?? 0) + pq;
   }
+  const configCap: typeof sectionCap = { mth: null, nth: null, hr: null };
   for (const r of (rounds_config || [])) {
     if (r?.enabled === false) continue;
     const k = sectionKey(r?.type);
     if (!k) continue;
-    if (sectionCap[k] !== null) continue; // round_tracking already gave us one
     const pq = Number(r?.planned_questions);
-    if (Number.isFinite(pq) && pq > 0) sectionCap[k] = pq;
+    if (Number.isFinite(pq) && pq > 0) configCap[k] = (configCap[k] ?? 0) + pq;
   }
+  for (const k of ['mth', 'nth', 'hr'] as const) {
+    sectionCap[k] = trackedCap[k] ?? configCap[k]; // round_tracking wins when present
+  }
+  // HR rows are already one per selected HR question (alignment above) —
+  // trimming them could only drop a real question.
+  if (hrBank.length > 0) sectionCap.hr = null;
+  // HR order = Question Distribution order: Opening (list order), then rows
+  // not matched to the list (ask order), then Closing (list order).
+  const hrOrderKey = (r: PerQuestionDetail): [number, number] => {
+    if (typeof r.hrBankIndex !== 'number') return [1, r.qNum];
+    return [r.hrStage === 'opening' ? 0 : 2, r.hrBankIndex];
+  };
   const perQuestionDetails: PerQuestionDetail[] = (() => {
     const buckets: Record<'mth' | 'nth' | 'hr', PerQuestionDetail[]> = { mth: [], nth: [], hr: [] };
-    for (const row of perQuestionDetailsRaw) {
+    for (const row of perQuestionDetailsAligned) {
       buckets[row.section].push(row);
     }
     // Chronological order (qNum ascending) so the first N planned are kept,
     // not arbitrary tail entries from burst/duplicate noise.
     for (const key of ['mth', 'nth', 'hr'] as const) {
-      buckets[key].sort((a, b) => a.qNum - b.qNum);
+      if (key === 'hr' && hrBank.length > 0) {
+        buckets.hr.sort((a, b) => {
+          const [ga, ia] = hrOrderKey(a);
+          const [gb, ib] = hrOrderKey(b);
+          return ga - gb || ia - ib;
+        });
+      } else {
+        buckets[key].sort((a, b) => a.qNum - b.qNum);
+      }
       const cap = sectionCap[key];
       if (cap !== null && buckets[key].length > cap) {
         console.warn(
@@ -2553,7 +2764,8 @@ export function buildDashboardData(params: {
       // popover (which the recruiter confirms is correct) and cannot duplicate
       // or cross-pull a slot.
       const usedSlots = new Set<any>();
-      return rows.map((row) => {
+      const slotOfRow = new Map<PerQuestionDetail, number>();
+      const mapped = rows.map((row) => {
         // Pair each row with its plan slot by SKILL IDENTITY — NOT by positional
         // arithmetic. `row.qNum` is the backend GLOBAL ask-order question_number,
         // while the plan's `question_number` is the round-robin (P1/P2/P3)
@@ -2601,6 +2813,7 @@ export function buildDashboardData(params: {
         }
         if (!planRow) return row;
         usedSlots.add(planRow); // consume: never reuse this slot for another row
+        slotOfRow.set(row, planRows.indexOf(planRow));
         const planSkills = buildSkillsFromPlanRow(planRow);
         if (planSkills.length === 0) return row;
         // Index existing per-skill scores from the original row.
@@ -2648,6 +2861,43 @@ export function buildDashboardData(params: {
         // slot's skill rows never recomputes it.
         return { ...row, skills: replacedSkills };
       });
+      // Every planned slot is one row: a slot no row took (e.g. its position
+      // was used by an HR question, now moved back to HR) is shown "Not Asked"
+      // instead of disappearing, up to the section's planned count.
+      const slotIdx = new Map<PerQuestionDetail, number>();
+      mapped.forEach((r, i) => {
+        const s = slotOfRow.get(rows[i]);
+        if (s !== undefined) slotIdx.set(r, s);
+      });
+      const target = sectionCap[section] ?? planRows.length;
+      planRows.forEach((pr, i) => {
+        if (usedSlots.has(pr) || mapped.length >= target) return;
+        const planSkills = buildSkillsFromPlanRow(pr);
+        if (planSkills.length === 0) return;
+        const row: PerQuestionDetail = {
+          qNum: 10000 + i,
+          section,
+          question: `(Not asked — planned question on ${planSkills[0].name}; interview ended before it was reached)`,
+          answer: '',
+          responseType: 'not_asked',
+          skipSource: '',
+          skills: planSkills.map(ps => ({ ...ps, score: 0, not_delivered: true })),
+          questionScore: 0,
+          notDelivered: true,
+        };
+        slotIdx.set(row, i);
+        mapped.push(row);
+      });
+      // Asked rows keep ask order; un-reached rows follow in plan order, like
+      // the Question Distribution list.
+      const delivered = mapped.filter(r => !r.notDelivered);
+      const undelivered = mapped
+        .filter(r => r.notDelivered)
+        .map((r, i) => ({ r, i }))
+        .sort((a, b) =>
+          (slotIdx.get(a.r) ?? Infinity) - (slotIdx.get(b.r) ?? Infinity) || a.i - b.i)
+        .map(x => x.r);
+      return [...delivered, ...undelivered];
     };
     // MHS offset = 0 (starts at global Q1).
     // NHS offset = planned MHS count so slot 9 → section-local 1, etc.
@@ -2672,11 +2922,17 @@ export function buildDashboardData(params: {
     // Interview-wide ask order (askedNum) is ranked BEFORE the renumber, from
     // the history position when the builder stamped one, else the builder's
     // chronological qNum. Un-reached rows rank after every asked row.
+    // Un-reached rows follow in Question Distribution order: Opening HR, MHS,
+    // NHS, Closing HR (then each section's own order), not by raw qNum.
+    const distGroup = (r: PerQuestionDetail) =>
+      r.section === 'mth' ? 1 : r.section === 'nth' ? 2 : r.hrStage === 'opening' ? 0 : 3;
     const ranked = [...buckets.mth, ...buckets.nth, ...buckets.hr]
       .map((row, i) => ({ row, i }))
       .sort((a, b) =>
         Number(!!a.row.notDelivered) - Number(!!b.row.notDelivered)
-        || (a.row.askedOrder ?? a.row.qNum) - (b.row.askedOrder ?? b.row.qNum)
+        || (a.row.notDelivered
+          ? distGroup(a.row) - distGroup(b.row)
+          : (a.row.askedOrder ?? a.row.qNum) - (b.row.askedOrder ?? b.row.qNum))
         || a.i - b.i);
     const askedNumOf = new Map<PerQuestionDetail, number>();
     ranked.forEach(({ row }, rank) => askedNumOf.set(row, rank + 1));
