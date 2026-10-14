@@ -99,28 +99,43 @@ export function LandingScreen({ assessmentInfo, onBegin }: LandingScreenProps) {
     }
   ].filter(r => r.enabled);
 
-  /* The Job Description accordion — collapsed on arrival. Everything in it is
-     the assessment's own JD as the candidate endpoint returns it; a field that
-     is empty is left out, and with no JD content at all the section is not
-     drawn. */
-  const [jdOpen, setJdOpen] = useState(false);
+  /* The Job Description section — open on arrival so the candidate sees the
+     role they are being assessed for without hunting for it; the header still
+     collapses it. Everything in it is the assessment's own JD as
+     GET /candidate/assessment/{token} returns it; an empty field is left out,
+     and with no JD content at all the section is not drawn. */
+  const [jdOpen, setJdOpen] = useState(true);
+  const [jdDescriptionExpanded, setJdDescriptionExpanded] = useState(false);
   const jdDescription = assessmentInfo.jd_description?.trim() || '';
   const jdAdditionalDetails = assessmentInfo.jd_additional_details?.trim() || '';
   const mustHaveSkills = assessmentInfo.jd_must_have_skills?.filter(Boolean) ?? [];
   const niceToHaveSkills = assessmentInfo.jd_nice_to_have_skills?.filter(Boolean) ?? [];
   const { jd_experience_min: expMin, jd_experience_max: expMax } = assessmentInfo;
   const experience = expMin != null && expMax != null
-    ? `${expMin}–${expMax} yrs experience`
-    : expMin != null ? `${expMin}+ yrs experience`
-    : expMax != null ? `Up to ${expMax} yrs experience`
+    ? (expMin === expMax ? `${expMin} yrs` : `${expMin}–${expMax} yrs`)
+    : expMin != null ? `${expMin}+ yrs`
+    : expMax != null ? `Up to ${expMax} yrs`
     : null;
-  const jdMeta = [
-    { Icon: Building2, text: assessmentInfo.jd_department },
-    { Icon: MapPin, text: assessmentInfo.jd_location },
-    { Icon: Briefcase, text: [assessmentInfo.jd_employment_type, assessmentInfo.jd_remote_type].filter(Boolean).join(' · ') },
-    { Icon: Award, text: experience },
-  ].filter((m): m is { Icon: typeof Building2; text: string } => !!m.text);
-  const hasJd = !!jdDescription || !!jdAdditionalDetails || mustHaveSkills.length > 0 || niceToHaveSkills.length > 0;
+  /* Stored values are lower-case slugs ("full-time", "onsite") — shown as words. */
+  const asLabel = (value?: string | null) =>
+    value?.trim()
+      ? value.trim().replace(/[_]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+      : null;
+  const jdDetails = [
+    { label: 'Department', Icon: Building2, value: assessmentInfo.jd_department?.trim() || null },
+    { label: 'Location', Icon: MapPin, value: assessmentInfo.jd_location?.trim() || null },
+    { label: 'Employment Type', Icon: Briefcase, value: asLabel(assessmentInfo.jd_employment_type) },
+    { label: 'Work Mode', Icon: Monitor, value: asLabel(assessmentInfo.jd_remote_type) },
+    { label: 'Experience', Icon: Award, value: experience },
+    { label: 'Job Level', Icon: Users, value: asLabel(assessmentInfo.jd_job_level) },
+    { label: 'Industry', Icon: Building2, value: assessmentInfo.jd_industry_type?.trim() || null },
+  ].filter((d): d is { label: string; Icon: typeof Building2; value: string } => !!d.value);
+  /* A long description reads behind "Read more" so the rounds and requirements
+     below are not pushed off the page. */
+  const JD_DESCRIPTION_CLAMP = 1200;
+  const jdDescriptionLong = jdDescription.length > JD_DESCRIPTION_CLAMP;
+  const hasJd = !!jdDescription || !!jdAdditionalDetails || mustHaveSkills.length > 0
+    || niceToHaveSkills.length > 0 || jdDetails.length > 0;
 
   return (
     <div className={CANDIDATE_PAGE}>
@@ -174,27 +189,28 @@ export function LandingScreen({ assessmentInfo, onBegin }: LandingScreenProps) {
               </div>
             </div>
 
-            {/* Job Description — an accordion, collapsed by default. The header
-                is a real button (keyboard + screen reader via aria-expanded),
-                full width so it is an easy tap target on a phone. */}
+            {/* Job Description — open by default. The header is a real button
+                (keyboard + screen reader via aria-expanded), full width so it
+                is an easy tap target on a phone. */}
             {hasJd && (
               <div className="mb-5">
                 <h2 className={`${T_EYEBROW} mb-3`}>Job Description</h2>
-                <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] bg-slate-50 overflow-hidden">
+                <div className="rounded-xl border border-gray-200 ring-1 ring-black/[0.02] bg-white overflow-hidden">
                   <button
                     type="button"
                     onClick={() => setJdOpen((open) => !open)}
                     aria-expanded={jdOpen}
                     aria-controls="candidate-jd-panel"
-                    className="w-full flex items-center gap-3 p-3 sm:p-4 text-left hover:bg-slate-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40"
+                    className="w-full flex items-center gap-3 p-3 sm:p-4 text-left bg-slate-50 hover:bg-slate-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40"
                   >
                     <div className={`${ICON_TILE} ${TILE_BRAND}`}>
                       <Briefcase className={ICON} />
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className={`${T_CARD_TITLE} break-words`}>{assessmentInfo.jd_title || 'Job Description'}</p>
-                      <p className={T_HELP}>{jdOpen ? 'Hide the full job description' : 'View the full job description'}</p>
+                      <p className={T_HELP}>The role this assessment is for</p>
                     </div>
+                    <span className={`${T_HELP} hidden sm:inline whitespace-nowrap`}>{jdOpen ? 'Hide details' : 'Show details'}</span>
                     <ChevronDown
                       className={`${ICON_INLINE} text-gray-500 transition-transform duration-200 ${jdOpen ? 'rotate-180' : ''}`}
                       aria-hidden="true"
@@ -202,53 +218,80 @@ export function LandingScreen({ assessmentInfo, onBegin }: LandingScreenProps) {
                   </button>
 
                   {jdOpen && (
-                    <div id="candidate-jd-panel" className="border-t border-gray-100 bg-white p-3 sm:p-5 space-y-4 min-w-0">
-                      {jdMeta.length > 0 && (
-                        <div className={`${T_HELP} flex flex-wrap gap-x-4 gap-y-2`}>
-                          {jdMeta.map(({ Icon, text }) => (
-                            <span key={text} className="inline-flex items-center gap-1.5 min-w-0 break-words">
-                              <Icon className="w-3.5 h-3.5 shrink-0 text-gray-400" />
-                              {text}
-                            </span>
+                    <div id="candidate-jd-panel" className="border-t border-gray-200 p-3 sm:p-5 space-y-5 min-w-0">
+                      {/* Key facts, each with its own label, so "Hybrid" or
+                          "3–5 yrs" never has to be guessed at. */}
+                      {jdDetails.length > 0 && (
+                        <dl className="grid grid-cols-1 min-[400px]:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+                          {jdDetails.map(({ label, Icon, value }) => (
+                            <div key={label} className={`${CARD_MUTED} flex items-start gap-2.5 min-w-0`}>
+                              <Icon className="w-4 h-4 shrink-0 text-brand-blue mt-0.5" aria-hidden="true" />
+                              <div className="min-w-0">
+                                <dt className={T_HELP}>{label}</dt>
+                                <dd className={`${T_CARD_TITLE} break-words`}>{value}</dd>
+                              </div>
+                            </div>
                           ))}
-                        </div>
+                        </dl>
                       )}
 
                       {jdDescription && (
-                        /* Markdown, as the JD is stored and as the AI Interview
-                           candidate screen renders it. break-words + min-w-0 keep
-                           long lines and URLs inside the card at 320px. */
-                        <div className="prose prose-sm max-w-none min-w-0 break-words text-gray-700 leading-relaxed prose-headings:font-semibold prose-headings:text-gray-900 prose-strong:text-gray-900 prose-p:my-1.5 prose-li:my-0.5 prose-a:text-brand-blue prose-pre:overflow-x-auto">
-                          <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{jdDescription}</ReactMarkdown>
-                        </div>
-                      )}
-
-                      {/* The recruiter's own words, verbatim — kept apart from
-                          the description, as on the AI Interview JD screen. */}
-                      {jdAdditionalDetails && (
-                        <div>
-                          <h3 className={`${T_EYEBROW} mb-2`}>Additional Details</h3>
-                          <p className={`${T_BODY} whitespace-pre-wrap break-words`}>{jdAdditionalDetails}</p>
+                        <div className="min-w-0">
+                          <h3 className={`${T_EYEBROW} mb-2`}>About the Role</h3>
+                          {/* Markdown, as the JD is stored and as the AI Interview
+                              candidate screen renders it. break-words + min-w-0 keep
+                              long lines and URLs inside the card at 320px. */}
+                          <div className="relative">
+                            <div
+                              id="candidate-jd-description"
+                              className={`prose prose-sm max-w-none min-w-0 break-words text-gray-700 leading-relaxed prose-headings:font-semibold prose-headings:text-gray-900 prose-strong:text-gray-900 prose-p:my-1.5 prose-li:my-0.5 prose-a:text-brand-blue prose-pre:overflow-x-auto ${jdDescriptionLong && !jdDescriptionExpanded ? 'max-h-80 overflow-hidden' : ''}`}
+                            >
+                              <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{jdDescription}</ReactMarkdown>
+                            </div>
+                            {jdDescriptionLong && !jdDescriptionExpanded && (
+                              <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-white to-transparent" />
+                            )}
+                          </div>
+                          {jdDescriptionLong && (
+                            <button
+                              type="button"
+                              onClick={() => setJdDescriptionExpanded((expanded) => !expanded)}
+                              aria-expanded={jdDescriptionExpanded}
+                              aria-controls="candidate-jd-description"
+                              className="mt-2 text-sm font-medium text-brand-blue hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 rounded"
+                            >
+                              {jdDescriptionExpanded ? 'Show less' : 'Read more'}
+                            </button>
+                          )}
                         </div>
                       )}
 
                       {(mustHaveSkills.length > 0 || niceToHaveSkills.length > 0) && (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           {([
-                            { label: 'Required Skills', skills: mustHaveSkills },
-                            { label: 'Nice to Have', skills: niceToHaveSkills },
-                          ]).filter(({ skills }) => skills.length > 0).map(({ label, skills }) => (
+                            { label: 'Required Skills', skills: mustHaveSkills, chip: 'bg-brand-blue/5 text-brand-blue ring-brand-blue/20' },
+                            { label: 'Nice to Have', skills: niceToHaveSkills, chip: 'bg-slate-100 text-gray-700 ring-gray-200' },
+                          ]).filter(({ skills }) => skills.length > 0).map(({ label, skills, chip }) => (
                             <div key={label} className="min-w-0">
                               <h3 className={`${T_EYEBROW} mb-2`}>{label}</h3>
                               <div className="flex flex-wrap gap-1.5">
                                 {skills.map((skill) => (
-                                  <span key={skill} className="bg-slate-100 text-gray-700 text-xs px-2.5 py-1 rounded-full ring-1 ring-gray-200 break-words max-w-full">
+                                  <span key={skill} className={`${chip} text-xs font-medium px-2.5 py-1 rounded-full ring-1 break-words max-w-full`}>
                                     {skill}
                                   </span>
                                 ))}
                               </div>
                             </div>
                           ))}
+                        </div>
+                      )}
+
+                      {/* The recruiter's own words, verbatim — kept apart from
+                          the description, as on the AI Interview JD screen. */}
+                      {jdAdditionalDetails && (
+                        <div className={CARD_MUTED}>
+                          <h3 className={`${T_EYEBROW} mb-2`}>Additional Details</h3>
+                          <p className={`${T_BODY} whitespace-pre-wrap break-words`}>{jdAdditionalDetails}</p>
                         </div>
                       )}
                     </div>
