@@ -44,7 +44,7 @@ export default function TmpHrPreview() {
               No Timer
             </span>
           </CandidateHeader>
-          <CandidateStepper current={4} />
+          <CandidateStepper current={3} />
 
           {/* The recruiter page shell. */}
           <main className={RECRUITER_SHELL}>
@@ -59,7 +59,7 @@ export default function TmpHrPreview() {
                 <div className="min-w-0">
                   <h1 className={T_PAGE_TITLE}>HR Questions</h1>
                   <p className={T_PAGE_SUBTITLE}>
-                    Please answer the following questions. These are optional and not timed.
+                    Please answer the following questions. All questions are optional and untimed.
                     Your responses will be shared with the recruiter.
                   </p>
                 </div>
