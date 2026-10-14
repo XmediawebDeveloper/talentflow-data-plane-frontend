@@ -8,6 +8,7 @@ import { generateDisputeRecordPDF } from '@/lib/utils/pdfInvoice';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
 import ListPagination from '@/components/ListPagination';
+import { RowActions } from '@/components/subscription/RowActionsMenu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
@@ -319,7 +320,7 @@ export default function DisputeHistoryPage() {
 
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">Dispute History</h1>
+            <h1 className="text-base sm:text-lg font-semibold tracking-tight text-gray-900 dark:text-slate-50">Dispute History</h1>
             <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
               Track chargebacks and payment disputes raised against your account, monitor deadlines, and download dispute records.
             </p>
@@ -328,7 +329,7 @@ export default function DisputeHistoryPage() {
             <button
               onClick={() => setShowExportModal(true)}
               disabled={loading || filteredDisputes.length === 0}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 transition-[border-color,box-shadow,color,background-color] hover:border-brand-blue/25 hover:text-brand-blue disabled:opacity-60"
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 text-sm font-medium text-gray-700 dark:text-slate-300 transition-colors hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <Download className="h-4 w-4" />
               Export
@@ -344,7 +345,7 @@ export default function DisputeHistoryPage() {
             <button
               onClick={fetchDisputeData}
               disabled={loading}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:opacity-70"
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 text-sm font-medium text-gray-700 dark:text-slate-300 transition-colors hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-70"
             >
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               Refresh
@@ -354,19 +355,19 @@ export default function DisputeHistoryPage() {
 
         {/* Stats Cards — clicking a card drills into the dispute list with the matching filter applied */}
         {stats && (
-          <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
+          <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
             <button
               type="button"
               onClick={() => openListView('all')}
-              className={`text-left rounded-2xl border bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-orange/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:shadow-md ${pageView === 'list' && statusFilter === 'all' ? 'border-brand-orange/40 ring-brand-orange/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-orange/25'}`}
+              className={`h-full text-left rounded-xl border bg-white dark:bg-slate-900 p-4 sm:p-5 shadow-sm shadow-brand-orange/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:shadow-md ${pageView === 'list' && statusFilter === 'all' ? 'border-brand-orange/40 ring-brand-orange/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-orange/25'}`}
             >
               <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Total Disputed</p>
-                  <p className="mt-2 text-2xl font-semibold tracking-tight text-brand-orange-deep">{formatAmount(stats.total_amount)}</p>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-slate-500">Total Disputed</p>
+                  <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums break-words text-brand-orange-deep">{formatAmount(stats.total_amount)}</p>
                   <p className="mt-1 text-xs text-gray-500 dark:text-slate-500">{stats.total_disputes} dispute{stats.total_disputes !== 1 ? 's' : ''}</p>
                 </div>
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/15 shadow-sm shadow-brand-orange/10">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/15 shadow-sm shadow-brand-orange/10">
                   <AlertTriangle className="h-5 w-5 text-brand-orange-deep" />
                 </span>
               </div>
@@ -374,15 +375,15 @@ export default function DisputeHistoryPage() {
             <button
               type="button"
               onClick={() => openListView('open')}
-              className={`text-left rounded-2xl border bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-orange/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:shadow-md ${pageView === 'list' && statusFilter === 'open' ? 'border-brand-orange/40 ring-brand-orange/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-orange/25'}`}
+              className={`h-full text-left rounded-xl border bg-white dark:bg-slate-900 p-4 sm:p-5 shadow-sm shadow-brand-orange/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:shadow-md ${pageView === 'list' && statusFilter === 'open' ? 'border-brand-orange/40 ring-brand-orange/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-orange/25'}`}
             >
               <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Open Disputes</p>
-                  <p className="mt-2 text-2xl font-semibold tracking-tight text-brand-orange-deep">{stats.open_count}</p>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-slate-500">Open Disputes</p>
+                  <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums break-words text-brand-orange-deep">{stats.open_count}</p>
                   <p className="mt-1 text-xs text-gray-500 dark:text-slate-500">Under review</p>
                 </div>
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/20 shadow-sm shadow-brand-orange/10">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/20 shadow-sm shadow-brand-orange/10">
                   <Clock className="h-5 w-5 text-brand-orange-deep" />
                 </span>
               </div>
@@ -390,15 +391,15 @@ export default function DisputeHistoryPage() {
             <button
               type="button"
               onClick={() => openListView('resolved')}
-              className={`text-left rounded-2xl border bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-teal/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:shadow-md ${pageView === 'list' && statusFilter === 'resolved' ? 'border-brand-teal/40 ring-brand-teal/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-teal/25'}`}
+              className={`h-full text-left rounded-xl border bg-white dark:bg-slate-900 p-4 sm:p-5 shadow-sm shadow-brand-teal/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:shadow-md ${pageView === 'list' && statusFilter === 'resolved' ? 'border-brand-teal/40 ring-brand-teal/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-teal/25'}`}
             >
               <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Resolved</p>
-                  <p className="mt-2 text-2xl font-semibold tracking-tight text-brand-teal">{stats.resolved_count}</p>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-slate-500">Resolved</p>
+                  <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums break-words text-brand-teal">{stats.resolved_count}</p>
                   <p className="mt-1 text-xs text-gray-500 dark:text-slate-500">Completed disputes</p>
                 </div>
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-teal/10 ring-1 ring-brand-teal/15 shadow-sm shadow-brand-teal/10">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-teal/10 ring-1 ring-brand-teal/15 shadow-sm shadow-brand-teal/10">
                   <CheckCircle2 className="h-5 w-5 text-brand-teal" />
                 </span>
               </div>
@@ -408,19 +409,8 @@ export default function DisputeHistoryPage() {
 
         {pageView === 'list' && (
           <>
-            {/* justify-end, not justify-between: the Back to overview button
-                that used to hold the left slot is gone, and the status line
-                belongs on the right. */}
-            <div className="mb-4 flex items-center justify-end gap-2">
-              <span className="text-xs text-gray-500 dark:text-slate-400">
-                {statusFilter === 'open' && 'Showing open disputes'}
-                {statusFilter === 'resolved' && 'Showing resolved disputes'}
-                {statusFilter === 'all' && 'Showing all disputes'}
-              </span>
-            </div>
-
         {/* Filters Section */}
-        <div className="mb-6 rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-5">
+        <div className="mb-5 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-5">
           <div className="mb-3 flex items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
               <Filter className="h-3.5 w-3.5 text-brand-blue" />
@@ -435,7 +425,7 @@ export default function DisputeHistoryPage() {
               </button>
             )}
           </div>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
             {/* Search */}
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
@@ -444,7 +434,7 @@ export default function DisputeHistoryPage() {
                 placeholder="Search disputes"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-2.5 pl-9 pr-3 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-2.5 pl-9 pr-3 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
               />
             </div>
 
@@ -453,7 +443,7 @@ export default function DisputeHistoryPage() {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full appearance-none rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 pr-9 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                className="w-full appearance-none rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 pr-9 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
               >
                 {STATUS_OPTIONS.map(opt => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -482,7 +472,7 @@ export default function DisputeHistoryPage() {
 
         {/* Error State */}
         {error && (
-          <div className="mb-6 flex items-center gap-3 rounded-2xl border border-destructive-line bg-destructive-subtle/80 p-4 ring-1 ring-destructive-line">
+          <div className="mb-5 flex items-center gap-3 rounded-xl border border-destructive-line bg-destructive-subtle/80 p-4 ring-1 ring-destructive-line">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-destructive-subtle text-destructive">
               <AlertCircle className="h-5 w-5" />
             </span>
@@ -492,15 +482,15 @@ export default function DisputeHistoryPage() {
 
         {/* Loading State — mirrors the disputes table columns (Dispute #, Date, Original Invoice, Reason, Amount, Status, Actions) */}
         {loading && (
-          <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white">
-            <div className="border-b border-gray-100 bg-gray-50 px-4 py-4 sm:px-6">
+          <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+            <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-3.5 sm:px-6">
               <Skeleton className="h-4 w-20" />
               <Skeleton className="mt-1.5 h-3 w-32" />
             </div>
             <div className="overflow-x-auto">
               <div className="min-w-[800px]">
                 {/* Header */}
-                <div className="grid grid-cols-[160px_110px_150px_180px_110px_120px_140px] gap-4 border-b border-gray-100 px-4 py-4">
+                <div className="grid grid-cols-[160px_110px_150px_180px_110px_120px_140px] gap-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50/80 dark:bg-slate-800/50 px-4 py-3.5">
                   <Skeleton className="h-3 w-20" />
                   <Skeleton className="h-3 w-12" />
                   <Skeleton className="h-3 w-24" />
@@ -536,11 +526,11 @@ export default function DisputeHistoryPage() {
 
         {/* Empty State */}
         {!loading && !error && filteredDisputes.length === 0 && (
-          <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-12 text-center shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-teal/10 ring-1 ring-brand-teal/15">
+          <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-12 text-center shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-xl bg-brand-teal/10 ring-1 ring-brand-teal/15">
               <Shield className="h-7 w-7 text-brand-teal" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-50">No Disputes</h3>
+            <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50">No Disputes</h3>
             <p className="mx-auto mt-1 max-w-md text-sm text-gray-500 dark:text-slate-500">
               {hasActiveFilters
                 ? 'No disputes match your filter criteria. Try adjusting your filters.'
@@ -549,7 +539,7 @@ export default function DisputeHistoryPage() {
             {hasActiveFilters && (
               <button
                 onClick={clearFilters}
-                className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl border border-brand-blue/15 bg-brand-blue/[0.04] px-4 py-2 text-sm font-medium text-brand-blue transition-all hover:bg-brand-blue/[0.08]"
+                className="mt-5 inline-flex items-center justify-center gap-2 rounded-lg border border-brand-blue/15 bg-brand-blue/[0.04] px-4 py-2 text-sm font-medium text-brand-blue transition-all hover:bg-brand-blue/[0.08]"
               >
                 Clear all filters
               </button>
@@ -569,8 +559,8 @@ export default function DisputeHistoryPage() {
 
         {/* Disputes Table */}
         {!loading && !error && filteredDisputes.length > 0 && (
-          <div className="overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-            <div className="flex items-center justify-between gap-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-4 sm:px-6">
+          <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+            <div className="flex items-center justify-between gap-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-3.5 sm:px-6">
               <div>
                 <h2 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Disputes</h2>
                 <p className="text-xs text-gray-500 dark:text-slate-500">
@@ -580,74 +570,63 @@ export default function DisputeHistoryPage() {
               </div>
             </div>
             <div className="overflow-x-auto tf-table-shell">
-              <table className="w-full min-w-[800px]">
+              <table className="w-full min-w-[800px] tf-premium-table">
                 <thead className="bg-gray-50/80 dark:bg-slate-800/50">
                   <tr className="text-left">
-                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 w-[160px]">Dispute #</th>
-                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 w-[110px]">Date</th>
-                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 w-[150px]">Original Invoice</th>
-                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 w-[180px]">Reason</th>
-                    <th className="px-4 py-4 text-right text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 w-[110px]">Amount</th>
-                    <th className="px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 w-[120px]">Status</th>
-                    <th className="px-4 py-4 text-right text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 w-[140px] tf-sticky-col">Actions</th>
+                    <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[160px]">Dispute #</th>
+                    <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[110px]">Date</th>
+                    <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[150px]">Original Invoice</th>
+                    <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[180px]">Reason</th>
+                    <th className="px-5 py-4 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[110px]">Amount</th>
+                    <th className="px-5 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[120px]">Status</th>
+                    <th className="px-5 py-4 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[140px] tf-sticky-col">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
+                <tbody>
                   {paginatedDisputes.map((dispute) => (
-                    <tr key={dispute.id} className="transition-colors hover:bg-brand-blue/[0.02]">
-                      <td className="px-4 py-4">
-                        <div className="flex items-center gap-2">
-                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/15">
+                    <tr key={dispute.id}>
+                      <td className="px-5 py-5">
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/15">
                             <AlertTriangle className="h-4 w-4 text-brand-orange-deep" />
                           </span>
-                          <span className="truncate text-sm font-semibold text-gray-900 dark:text-slate-50" title={dispute.invoice_number || ''}>
+                          <span className="min-w-0 truncate text-sm font-semibold text-gray-900 dark:text-slate-50" title={dispute.invoice_number || ''}>
                             {dispute.invoice_number || '-'}
                           </span>
                         </div>
                       </td>
-                      <td className="whitespace-nowrap px-4 py-4 text-sm text-gray-700 dark:text-slate-300">
+                      <td className="whitespace-nowrap px-5 py-5 text-sm text-gray-700 dark:text-slate-300">
                         {formatISTDate(dispute.issue_date)}
                       </td>
-                      <td className="px-4 py-4">
+                      <td className="px-5 py-5">
                         <div className="truncate font-mono text-sm text-gray-900 dark:text-slate-50" title={dispute.metadata?.original_invoice_number || ''}>
                           {dispute.metadata?.original_invoice_number || '-'}
                         </div>
                       </td>
-                      <td className="px-4 py-4">
+                      <td className="px-5 py-5">
                         <div className="truncate text-sm text-gray-600 dark:text-slate-400" title={dispute.metadata?.reason || dispute.reason || dispute.line_items?.[0]?.description || ''}>
                           {dispute.metadata?.reason || dispute.reason || dispute.line_items?.[0]?.description || '-'}
                         </div>
                       </td>
-                      <td className="px-4 py-4 text-right">
+                      <td className="px-5 py-5 text-right">
                         <span className="text-sm font-semibold text-brand-orange-deep">
                           {formatAmount(dispute.total_amount_inr || 0)}
                         </span>
                       </td>
-                      <td className="px-4 py-4 text-center">
+                      <td className="px-5 py-5 text-center">
                         <Badge variant={getStatusVariant(dispute.metadata?.dispute_status || dispute.dispute_status || dispute.status || 'unknown')} className="capitalize">
                           {getStatusIcon(dispute.metadata?.dispute_status || dispute.dispute_status || dispute.status || 'unknown')}
                           {dispute.metadata?.dispute_status || dispute.dispute_status || dispute.status || '-'}
                         </Badge>
                       </td>
-                      <td className="px-4 py-4 text-right tf-sticky-col">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            onClick={() => setSelectedDispute(dispute)}
-                            className="inline-flex items-center gap-1 rounded-lg border border-brand-blue/15 bg-brand-blue/[0.04] px-2.5 py-1.5 text-xs font-medium text-brand-blue transition-all hover:-translate-y-0.5 hover:bg-brand-blue/[0.08]"
-                            aria-label="View Details" title="View Details"
-                          >
-                            <ExternalLink className="h-3.5 w-3.5" />
-                            View
-                          </button>
-                          <button
-                            onClick={() => handleDownloadDispute(dispute)}
-                            disabled={downloadingId === dispute.id}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-400 transition-[border-color,box-shadow,color,background-color] hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue disabled:opacity-50"
-                            aria-label="Download Record" title="Download Record"
-                          >
-                            {downloadingId === dispute.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                          </button>
-                        </div>
+                      <td className="px-5 py-5 text-right tf-sticky-col">
+                        <RowActions
+                          menuLabel="Dispute actions"
+                          actions={[
+                            { key: 'view', label: 'View', icon: ExternalLink, variant: 'primary', onClick: () => setSelectedDispute(dispute) },
+                            { key: 'download', label: 'Download Record', icon: Download, loading: downloadingId === dispute.id, onClick: () => handleDownloadDispute(dispute) },
+                          ]}
+                        />
                       </td>
                     </tr>
                   ))}
@@ -674,22 +653,22 @@ export default function DisputeHistoryPage() {
         {/* Dispute Detail Modal */}
         {selectedDispute && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
-            <div className="max-h-[90dvh] flex flex-col w-full max-w-[95vw] sm:max-w-2xl overflow-hidden rounded-3xl border border-white/40 bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-black/5">
+            <div className="max-h-[90dvh] flex flex-col w-full max-w-[95vw] sm:max-w-2xl overflow-hidden rounded-2xl border border-white/40 bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-black/5">
               <div className="flex-shrink-0 relative overflow-hidden bg-brand-blue px-5 py-4 text-white sm:px-6">
                 <div className="pointer-events-none absolute -top-10 right-0 h-32 w-32 rounded-full bg-white/10 blur-3xl" />
                 <div className="relative flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3">
+                  <div className="flex min-w-0 items-start gap-3">
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15">
                       <AlertTriangle className="h-5 w-5 text-white" />
                     </span>
-                    <div>
+                    <div className="min-w-0">
                       <h2 className="text-lg font-semibold">Dispute Details</h2>
-                      <p className="mt-0.5 font-mono text-sm text-white/75">{selectedDispute.invoice_number}</p>
+                      <p className="mt-0.5 break-all font-mono text-sm text-white/75">{selectedDispute.invoice_number}</p>
                     </div>
                   </div>
                   <button
                     onClick={() => setSelectedDispute(null)}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-white transition-colors hover:bg-white/15"
+                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white transition-colors hover:bg-white/15"
                     aria-label="Close"
                   >
                     <X className="h-5 w-5" />
@@ -699,33 +678,33 @@ export default function DisputeHistoryPage() {
               <div className="flex-1 min-h-0 space-y-5 overflow-y-auto p-5 sm:p-6">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                    <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Issue Date</p>
+                    <p className="text-2xs uppercase tracking-wider text-gray-400 dark:text-slate-500">Issue Date</p>
                     <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-slate-50">{formatISTDate(selectedDispute.issue_date)}</p>
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                    <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Deadline</p>
+                    <p className="text-2xs uppercase tracking-wider text-gray-400 dark:text-slate-500">Deadline</p>
                     <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-slate-50">{formatISTDate(selectedDispute.metadata?.deadline || selectedDispute.deadline || null)}</p>
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                    <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Dispute Status</p>
+                    <p className="text-2xs uppercase tracking-wider text-gray-400 dark:text-slate-500">Dispute Status</p>
                     <Badge variant={getStatusVariant(selectedDispute.metadata?.dispute_status || selectedDispute.dispute_status || selectedDispute.status)} className="mt-1 capitalize">
                       {getStatusIcon(selectedDispute.metadata?.dispute_status || selectedDispute.dispute_status || selectedDispute.status)}
                       {selectedDispute.metadata?.dispute_status || selectedDispute.dispute_status || selectedDispute.status}
                     </Badge>
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                    <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Original Invoice</p>
+                    <p className="text-2xs uppercase tracking-wider text-gray-400 dark:text-slate-500">Original Invoice</p>
                     <p className="mt-1 break-all font-mono text-sm font-semibold text-gray-900 dark:text-slate-50">{selectedDispute.metadata?.original_invoice_number || '-'}</p>
                   </div>
                   {selectedDispute.payment_method && (
                     <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                      <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Payment Method</p>
+                      <p className="text-2xs uppercase tracking-wider text-gray-400 dark:text-slate-500">Payment Method</p>
                       <p className="mt-1 text-sm font-semibold capitalize text-gray-900 dark:text-slate-50">{selectedDispute.payment_method}</p>
                     </div>
                   )}
                   {selectedDispute.paid_at && (
                     <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                      <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Paid At</p>
+                      <p className="text-2xs uppercase tracking-wider text-gray-400 dark:text-slate-500">Paid At</p>
                       <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-slate-50">{formatISTDate(selectedDispute.paid_at)}</p>
                     </div>
                   )}
@@ -733,7 +712,7 @@ export default function DisputeHistoryPage() {
 
                 <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
                   <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-2.5">
-                    <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500">Dispute Details</p>
+                    <p className="text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">Dispute Details</p>
                   </div>
                   <div className="space-y-3 p-4">
                     <div className="flex items-start justify-between gap-4">
@@ -771,7 +750,7 @@ export default function DisputeHistoryPage() {
 
                 {selectedDispute.metadata?.razorpay_dispute_id && (
                   <div className="rounded-xl border border-brand-cyan/20 bg-brand-cyan/[0.05] p-4">
-                    <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-brand-cyan">Razorpay Dispute ID</p>
+                    <p className="text-2xs font-semibold uppercase tracking-wider text-brand-cyan">Razorpay Dispute ID</p>
                     <p className="mt-1 break-all font-mono text-sm text-gray-900 dark:text-slate-50">{selectedDispute.metadata.razorpay_dispute_id}</p>
                   </div>
                 )}

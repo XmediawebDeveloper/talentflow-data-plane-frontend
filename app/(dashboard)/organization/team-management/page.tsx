@@ -434,7 +434,7 @@ export default function TeamManagementPage() {
       <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
           <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Teams' }]} />
           <OrganizationTabs />
-          <div className="w-full -mt-5 rounded-b-xl border border-t-0 border-gray-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 p-4 sm:p-5">
+          <div className="w-full -mt-5 rounded-b-xl border border-t-0 border-gray-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 p-4 sm:p-5">
             <PageHeader
               icon={<Users className="h-5 w-5" />}
               title="Team Management"

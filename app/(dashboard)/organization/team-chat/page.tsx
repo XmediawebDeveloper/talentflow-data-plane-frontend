@@ -520,7 +520,7 @@ export default function TeamChatPage() {
         <PageBreadcrumb className="mb-4" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Chat' }]} />
         <OrganizationTabs />
       </div>
-      <div className="flex flex-1 min-h-0 gap-3 md:gap-4 -mt-5 rounded-b-xl border border-t-0 border-gray-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 p-4 sm:p-5">
+      <div className="flex flex-1 min-h-0 gap-3 md:gap-4 -mt-5 rounded-b-xl border border-t-0 border-gray-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 p-4 sm:p-5">
         {/* Left Sidebar - Channels List */}
         <aside className="hidden md:flex md:w-72 lg:w-80 flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
           <div className="border-b border-gray-100 bg-gray-50 px-4 py-4">
