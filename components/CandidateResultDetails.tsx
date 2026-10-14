@@ -26,6 +26,14 @@ import AssessmentInfoPanel from '@/components/assessments/AssessmentInfoPanel';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatScore, toOneDecimalScore } from '@/lib/utils/score';
+import {
+  toInsightPoints,
+  getCodingEvaluationState,
+  getNormalizedQuestionPossiblePoints,
+  getDisplayedQuestionEarnedPoints,
+  getDisplaySectionPercentage,
+} from '@/lib/utils/assessmentResultScoring';
+import { exportAssessmentReportPDF } from '@/lib/reports/assessmentReportPdf';
 
 interface CandidateResultDetailsProps {
   onBack: () => void;
@@ -96,54 +104,12 @@ type CandidateDetailTab = {
   danger?: boolean;
 };
 
-/** AI insight text → bullet points. Explicit lines / bullets win; otherwise
- *  'sentences' splits prose at sentence ends and 'list' splits a
- *  comma-separated list ("Writing clarity, detailed explanation, …"). */
-function toInsightPoints(text: string, mode: 'sentences' | 'list'): string[] {
-  const clean = (t: string) => t.replace(/^\s*(?:[-*•]|\d+[.)])\s+/, '').trim();
-  const lines = text.split(/\n+/).map(clean).filter(Boolean);
-  if (lines.length > 1) return lines;
-  const parts = mode === 'list'
-    ? text.split(/\s*[,;]\s*/)
-    : text.split(/(?<=[.!?])\s+(?=[A-Z0-9])/);
-  return parts.map(clean).filter(Boolean);
-}
-
 function InsightPoints({ text, mode, markerClass }: { text: string; mode: 'sentences' | 'list'; markerClass: string }) {
   return (
     <ul className={`list-disc pl-5 space-y-1.5 text-sm text-gray-700 dark:text-slate-300 ${markerClass}`}>
       {toInsightPoints(text, mode).map((point, i) => <li key={i}>{point}</li>)}
     </ul>
   );
-}
-
-function getCodingEvaluationState(q: QuestionEvaluation) {
-  const judged = q.candidate_test_results;
-  const hasCode = !!q.candidate_code_submission?.trim();
-  const hasJudgedTests = !!judged?.details && judged.details.length > 0;
-  const marks = judged?.marks_breakdown;
-
-  if (!hasCode) {
-    return {
-      summary: 'No code submitted.',
-      warning: null as string | null,
-      marks,
-    };
-  }
-
-  if (!hasJudgedTests) {
-    return {
-      summary: 'Code submission exists, but judged test-case results are missing. Rescore required.',
-      warning: 'Saved run output may be visible below, but it is not authoritative judged evaluation.',
-      marks,
-    };
-  }
-
-  return {
-    summary: judged?.summary || q.feedback || 'Judged coding evaluation available.',
-    warning: null as string | null,
-    marks,
-  };
 }
 
 // Marks and percentages are shown at one decimal, never rounded to a whole
@@ -185,23 +151,6 @@ function getCandidateCodingOutput(q: QuestionEvaluation) {
   }
 
   return 'No candidate terminal output captured';
-}
-
-function getNormalizedQuestionPossiblePoints(q: QuestionEvaluation) {
-  return q.points_possible === 100 ? 10 : (q.points_possible || 10);
-}
-
-function getDisplayedQuestionEarnedPoints(q: QuestionEvaluation) {
-  const normalizedEarned = q.points_possible === 100 ? (q.points_earned || 0) / 10 : (q.points_earned || 0);
-  return toOneDecimalMark(normalizedEarned);
-}
-
-function getDisplaySectionPercentage(questions: QuestionEvaluation[]) {
-  const totalPossible = questions.reduce((sum, q) => sum + getNormalizedQuestionPossiblePoints(q), 0);
-  const totalDisplayedEarned = questions.reduce((sum, q) => sum + getDisplayedQuestionEarnedPoints(q), 0);
-  if (totalPossible <= 0) return 0;
-  // One decimal, like every other mark on this page: 17/180 reads 9.4%, not 9%.
-  return toOneDecimalMark((totalDisplayedEarned / totalPossible) * 100);
 }
 
 /** "HR Score" / "Code Score" / "Technical Score", from the round's own type. */
@@ -1308,13 +1257,29 @@ export default function CandidateResultDetails({
                     line up rather than merely sit beside each other. */}
                 <button
                   onClick={async () => {
-                    // Single-candidate export — emit a PDF report for this
-                    // attempt only. The previous Excel export pulled the whole
-                    // assessment's roster which wasn't useful from a single
-                    // candidate's detail page; recruiters wanted a printable
-                    // summary they could share. exportPDF accepts the
-                    // attempt_id and the backend scopes the report to that
-                    // candidate.
+                    // Single-candidate report PDF, built in the browser from the
+                    // result this page already loaded, in the AI interview
+                    // report's layout (lib/reports/assessmentReportPdf). Same
+                    // pass mark and score rules as the page, so the PDF and the
+                    // page agree.
+                    if (detailedResult) {
+                      try {
+                        await exportAssessmentReportPDF({
+                          result: detailedResult,
+                          fileName: buildResultPdfFilename(),
+                          passMark: Number(assessmentMeta?.passing_threshold) || 70,
+                          assessmentTitle: assessmentTitle || detailedResult.assessment_title,
+                          roleTitle: jdTitle || assessmentMeta?.jd_title || detailedResult.ai_generation_audit?.generation_params?.jd_title || null,
+                          candidateCid: candidateDisplayId || detailedResult.candidate_display_id || null,
+                          resultUrl: typeof window !== 'undefined' ? window.location.href : null,
+                        });
+                      } catch (error) {
+                        console.error('Failed to build result PDF:', error);
+                        toast.error('Failed to export result PDF. Please try again.');
+                      }
+                      return;
+                    }
+                    // Result not loaded yet: the backend's single-candidate PDF.
                     try {
                       const blob = await assessmentService.exportPDF(assessmentId, candidateId);
                       const url = window.URL.createObjectURL(blob);

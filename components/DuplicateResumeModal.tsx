@@ -1,6 +1,6 @@
 'use client';
 
-import { X, FileText, Trash2, RefreshCw, GitBranch, AlertTriangle, Eye, Calendar, Check, Ban, ShieldX, Info, Loader2, User, Mail, Folder, UserPlus } from 'lucide-react';
+import { FileText, Trash2, RefreshCw, GitBranch, AlertTriangle, Eye, Calendar, Check, Ban, ShieldX, Info, Loader2, User, Mail, Folder, UserPlus } from 'lucide-react';
 import { useState, useEffect, useMemo, ComponentType } from 'react';
 import { resumeService } from '@/lib/services';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -341,13 +341,6 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
                 </p>
               </div>
             </div>
-            <button
-              onClick={closeAsDiscarded}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
-              aria-label="Close"
-            >
-              <X className="w-6 h-6 text-gray-500 dark:text-slate-500" />
-            </button>
           </div>
 
           {/* The two records side by side: what is on file, and what was refused. */}
@@ -434,6 +427,15 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
             </div>
           </div>
 
+          {/* Footer — no X, this closes the same way. */}
+          <div className="flex-shrink-0 flex justify-end gap-3 p-6 pt-4 border-t border-gray-100 dark:border-slate-700/60">
+            <button
+              onClick={closeAsDiscarded}
+              className="px-5 py-2.5 bg-brand-blue text-white rounded-lg hover:bg-brand-blue-2 transition-colors font-medium"
+            >
+              Close
+            </button>
+          </div>
         </div>
       </div>
       {previewOverlay}
@@ -466,9 +468,6 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors" aria-label="Close">
-            <X className="w-5 h-5 text-gray-500 dark:text-slate-500" />
-          </button>
         </div>
 
         {/* File Counter */}
@@ -755,6 +754,13 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
         <div className="flex items-center justify-end p-6 border-t border-gray-200 bg-gray-50">
           {/* Actions */}
           <div className="flex items-center gap-3">
+            <button
+              onClick={onClose}
+              disabled={isSubmitting}
+              className="px-5 py-2.5 text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-brand-blue/30 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Cancel
+            </button>
             <button
               onClick={handleConfirm}
               disabled={!selectedAction || isSubmitting}

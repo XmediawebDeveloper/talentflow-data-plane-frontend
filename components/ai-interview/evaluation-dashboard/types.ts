@@ -300,3 +300,24 @@ export interface DashboardData {
    *  isn't available (older interviews). */
   plannedCounts: { mustHave: number; niceToHave: number };
 }
+
+/**
+ * The questions in the order the interview ran them — the Question Analysis
+ * tab's "All" order, shared so the Evaluation Report lists the same questions
+ * in the same order with the same 1..N numbers:
+ *   Opening HR (asked before the first skill question) → Must-Have →
+ *   Nice-to-Have → Closing HR (and any HR never reached).
+ * The HR stage isn't carried on the rows, so it is read from the ask order.
+ */
+export function orderQuestionsAsAsked(questions: PerQuestionDetail[]): PerQuestionDetail[] {
+  const mh = questions.filter(q => q.section === 'mth');
+  const nh = questions.filter(q => q.section === 'nth');
+  const hr = questions.filter(q => q.section === 'hr');
+  const skillAsked = [...mh, ...nh]
+    .filter(q => !q.notDelivered && typeof q.askedNum === 'number')
+    .map(q => q.askedNum as number);
+  const firstSkillAsked = skillAsked.length > 0 ? Math.min(...skillAsked) : Infinity;
+  const isOpeningHr = (q: PerQuestionDetail) =>
+    !q.notDelivered && typeof q.askedNum === 'number' && q.askedNum < firstSkillAsked;
+  return [...hr.filter(isOpeningHr), ...mh, ...nh, ...hr.filter(q => !isOpeningHr(q))];
+}
