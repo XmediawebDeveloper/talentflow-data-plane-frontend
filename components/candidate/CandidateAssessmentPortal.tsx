@@ -10,8 +10,7 @@ import {
   AssessmentResult,
   SubmitAnswerResponse
 } from '@/lib/services/candidateService';
-import { LandingScreen } from './LandingScreen';
-import { ConsentModal } from './ConsentModal';
+import { JobConsentScreen } from './JobConsentScreen';
 import { SystemCheck } from './SystemCheck';
 import { AssessmentInterface } from './AssessmentInterface';
 import { AssessmentErrorBoundary } from './AssessmentErrorBoundary';
@@ -1170,12 +1169,13 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   //   }
   // };
 
-  const handleConsentAccept = async () => {
+  const handleConsentAccept = async (): Promise<boolean> => {
     try {
       await candidateService.acceptConsent(token);
       setAssessmentInfo(prev => prev ? { ...prev, consent_accepted: true } : null);
       // After consent accepted, show landing/preview page
       setStepSafe('landing');
+      return true;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to accept consent';
       // Handle session already active error with user-friendly message
@@ -1185,7 +1185,20 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
         setError(errorMessage);
       }
       setStepSafe('error');
+      return false;
     }
+  };
+
+  // The merged "Job & Consent" screen's Continue: records consent first when
+  // it has not been given yet (same call and error handling as before), then
+  // takes the same route to System Check the old Assessment Details screen's
+  // Continue took. A failed consent stops on the error screen as it always did.
+  const handleJobConsentContinue = async () => {
+    if (!assessmentInfo?.consent_accepted) {
+      const accepted = await handleConsentAccept();
+      if (!accepted) return;
+    }
+    await handleBeginClick();
   };
 
   const getHRQuestions = useCallback(() => {
@@ -2244,9 +2257,13 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       console.log('[DEBUG] handleCompleteAssessment called');
       setStepSafe('completing');
 
+      // Keep the "finishing up" popup on screen for a moment even when the
+      // save returns at once, so it reads as a step rather than a flicker.
+      const minPopup = new Promise((r) => setTimeout(r, 1500));
+
       // Call complete endpoint to trigger scoring in background
       try {
-        await candidateService.completeAssessment(token);
+        await Promise.all([candidateService.completeAssessment(token), minPopup]);
         console.log('[DEBUG] completeAssessment API called successfully');
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err);
@@ -2506,10 +2523,17 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       //   );
 
     case 'landing':
+      // "Job & Consent" — consent already given (a refresh, or Back from
+      // System Check), so its panel shows as accepted.
       return (
-        <LandingScreen
+        <JobConsentScreen
           assessmentInfo={assessmentInfo!}
-          onBegin={handleBeginClick}
+          consentAccepted
+          onContinue={handleJobConsentContinue}
+          onDecline={() => {
+            setError('You must accept the terms and conditions to proceed with the assessment.');
+            setStepSafe('error');
+          }}
         />
       );
 
@@ -2530,10 +2554,13 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       );
 
     case 'consent':
+      // "Job & Consent" — terms and the role on one screen. Continue records
+      // consent, then moves on to System Check.
       return (
-        <ConsentModal
+        <JobConsentScreen
           assessmentInfo={assessmentInfo!}
-          onAccept={handleConsentAccept}
+          consentAccepted={false}
+          onContinue={handleJobConsentContinue}
           onDecline={() => {
             setError('You must accept the terms and conditions to proceed with the assessment.');
             setStepSafe('error');
@@ -2552,10 +2579,6 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
             }
             return registerAssessmentFaceBaseline(videoElement);
           }}
-          onBack={() => {
-            isFlowActiveRef.current = false;
-            setStepSafe('landing');
-          }}
         />
       );
 
@@ -2570,7 +2593,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
               used 32px dots and the Check glyph. No "No Timer" badge in the
               header: the page subtitle already says the questions are not timed. */}
           <CandidateHeader />
-          <CandidateStepper current={4} />
+          <CandidateStepper current={3} />
 
           {/* The recruiter page shell. */}
           <main className={RECRUITER_SHELL}>
@@ -2585,7 +2608,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
                 <div className="min-w-0">
                   <h1 className={T_PAGE_TITLE}>HR Questions</h1>
                   <p className={T_PAGE_SUBTITLE}>
-                    Please answer the following questions. These are optional and not timed.
+                    Please answer the following questions. All questions are optional and untimed.
                     Your responses will be shared with the recruiter.
                   </p>
                 </div>
@@ -2753,17 +2776,29 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
 
     case 'completing':
       return (
-        <div className="relative">
-          <LoadingScreen
-            message="Submitting your assessment..."
-            subMessage={
-              completingStuck
-                ? 'This is taking longer than expected.'
-                : 'Please wait while we save your responses and process your submission.'
-            }
-          />
+        <div className="relative min-h-[100dvh] bg-gray-50">
+          <CandidateHeader />
+          {/* The AI interview's completion popup ("Finishing up…"), shown
+              while the submission saves and before the final page and its
+              feedback popup. No close action: leaving now could cut the save
+              short. */}
+          <div className="fixed inset-0 z-[110] bg-black/70 flex items-center justify-center backdrop-blur-sm animate-in fade-in duration-300" role="status" aria-live="polite">
+            <div className="bg-white ring-1 ring-sky-100 rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full mx-4 text-center shadow-2xl">
+              <div className="w-14 h-14 rounded-full bg-sky-50 flex items-center justify-center mx-auto mb-4">
+                <Loader2 className="w-7 h-7 text-brand-blue animate-spin" />
+              </div>
+              <h2 className="text-gray-900 font-bold mb-2" style={{ fontSize: 20 }}>
+                Assessment submitted — finishing up…
+              </h2>
+              <p className="text-slate-600" style={{ fontSize: 15, lineHeight: 1.6 }}>
+                {completingStuck
+                  ? 'This is taking longer than expected.'
+                  : <>Saving your assessment. Please don&apos;t close this window.</>}
+              </p>
+            </div>
+          </div>
           {completingStuck && (
-            <div className="fixed bottom-8 left-0 right-0 flex justify-center z-50">
+            <div className="fixed bottom-8 left-0 right-0 flex justify-center z-[120]">
               <button
                 onClick={() => {
                   // window.close() only works when the page was opened by
@@ -2797,10 +2832,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       // NEW: Show completion message - scoring runs in background
       return (
         <>
-          <CompletedScreen
-            assessmentTitle={assessmentInfo?.assessment_title}
-            candidateName={assessmentInfo?.candidate_name}
-          />
+          <CompletedScreen />
           {/* Post-assessment feedback, layered OVER the completion screen so
               dismissing it leaves the candidate on the normal completion view.
               Shown only on genuine completion — never after a termination.

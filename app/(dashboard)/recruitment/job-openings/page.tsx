@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Loader2, AlertTriangle, X, Clock, GraduationCap, Factory, FolderOpen, FileSearch, ClipboardCheck, Users, Video, Info, ShieldCheck } from 'lucide-react';
 import JobsListing, { type BulkStatusAction } from '@/components/JobsListing';
 import JDEditBlockedModal from '@/components/JDEditBlockedModal';
@@ -138,7 +138,12 @@ export default function JobOpeningsPage() {
     open: boolean;
     jobTitle: string;
     usageDetails: string[];
+    /** Bulk Delete with several jobs, all in use: each job and where. */
+    jobs?: { title: string; usageDetails: string[] }[];
   }>({ open: false, jobTitle: '', usageDetails: [] });
+  /* Where each in-use job is used, from the bulk Delete check, so the
+     "Cannot Delete" popup can name it without asking again. */
+  const usageDetailsByJobId = useRef(new Map<string, string[]>());
   /* `disabling` keeps the confirmation on screen — buttons locked, spinner on
      the action — while the status write is in flight, rather than closing on
      click and leaving the row unchanged until the response lands. */
@@ -569,17 +574,20 @@ export default function JobOpeningsPage() {
     }
   };
 
+  /* "Resume Scoring (3)", "Assessments (1)"... where a JD is in use. */
+  const usageDetailsOf = (usageStatus: Awaited<ReturnType<typeof jdService.getUsageStatus>>): string[] => [
+    usageStatus?.usage?.resume_scores_count ? `Resume Scoring (${usageStatus.usage.resume_scores_count})` : '',
+    usageStatus?.usage?.assessments_count ? `Assessments (${usageStatus.usage.assessments_count})` : '',
+    usageStatus?.usage?.ai_matches_count ? `AI Talent Match (${usageStatus.usage.ai_matches_count})` : '',
+    usageStatus?.usage?.ai_interview_count ? `AI Interview (${usageStatus.usage.ai_interview_count})` : ''
+  ].filter(Boolean);
+
   const handleDeleteJob = async (job: Job) => {
     // Check if JD is in use before allowing delete
     try {
       const usageStatus = await jdService.getUsageStatus(job.id);
       if (usageStatus && usageStatus.is_used) {
-        const usageDetails = [
-          usageStatus.usage?.resume_scores_count ? `Resume Scoring (${usageStatus.usage.resume_scores_count})` : '',
-          usageStatus.usage?.assessments_count ? `Assessments (${usageStatus.usage.assessments_count})` : '',
-          usageStatus.usage?.ai_matches_count ? `AI Talent Match (${usageStatus.usage.ai_matches_count})` : '',
-          usageStatus.usage?.ai_interview_count ? `AI Interview (${usageStatus.usage.ai_interview_count})` : ''
-        ].filter(Boolean) as string[];
+        const usageDetails = usageDetailsOf(usageStatus);
         setDeleteWarningDialog({ open: true, jobTitle: job.title, usageDetails });
         return;
       }
@@ -658,12 +666,54 @@ export default function JobOpeningsPage() {
     await Promise.all(jobsToCheck.map(async job => {
       try {
         const usageStatus = await jdService.getUsageStatus(job.id);
-        if (usageStatus?.is_used) inUse.add(job.id);
+        if (usageStatus?.is_used) {
+          inUse.add(job.id);
+          usageDetailsByJobId.current.set(job.id, usageDetailsOf(usageStatus));
+        }
       } catch (error) {
         console.error('Failed to check JD usage status:', error);
       }
     }));
     return inUse;
+  };
+
+  /* The "Cannot Delete" popup's module chips: one job's "Active in" list. */
+  const renderUsageChips = (usageDetails: string[]) => (
+    <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+      {usageDetails.map((usage, index) => {
+        const UsageIcon = usageModuleIcon(usage);
+        return (
+          <span
+            key={index}
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-full text-sm font-semibold bg-white border border-red-200 text-red-700 shadow-sm"
+          >
+            <span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />
+            <UsageIcon className="w-4 h-4 flex-shrink-0" />
+            <span className="truncate">{usage}</span>
+          </span>
+        );
+      })}
+    </div>
+  );
+  const deleteWarningJobs = deleteWarningDialog.jobs && deleteWarningDialog.jobs.length > 1 ? deleteWarningDialog.jobs : null;
+
+  /* Bulk Delete found every selected job in use: the row Delete's "Cannot
+     Delete" popup, exactly it for one job, every job listed for several. */
+  const handleAllJobsInUse = (jobsInUse: Job[]) => {
+    const detailsOf = (job: Job) => usageDetailsByJobId.current.get(job.id) ?? [];
+    if (jobsInUse.length === 1) {
+      setDeleteWarningDialog({ open: true, jobTitle: jobsInUse[0].title, usageDetails: detailsOf(jobsInUse[0]) });
+      return;
+    }
+    setDeleteWarningDialog({
+      open: true,
+      jobTitle: '',
+      usageDetails: [],
+      jobs: jobsInUse.map(job => ({
+        title: [job.job_id, job.title].filter(Boolean).join(' - ') || job.title,
+        usageDetails: detailsOf(job),
+      })),
+    });
   };
 
   // Bulk delete: JobsListing has already shown a single confirmation. Delete each
@@ -758,6 +808,7 @@ export default function JobOpeningsPage() {
         onBulkDelete={handleBulkDeleteJobs}
         onBulkStatusChange={handleBulkStatusChange}
         onCheckJobsInUse={handleCheckJobsInUse}
+        onAllJobsInUse={handleAllJobsInUse}
         quotaInfo={quotaInfo}
         initialStatusFilter={activeFilter}
         forceListView={forceListView}
@@ -851,7 +902,9 @@ export default function JobOpeningsPage() {
                   Cannot Delete Job Description
                 </AlertDialogTitle>
                 <AlertDialogDescription className="mt-1 text-sm text-gray-500">
-                  This job description is actively used and cannot be deleted.
+                  {deleteWarningJobs
+                    ? `These ${deleteWarningJobs.length} job descriptions are actively used and cannot be deleted.`
+                    : 'This job description is actively used and cannot be deleted.'}
                 </AlertDialogDescription>
               </div>
             </div>
@@ -868,26 +921,25 @@ export default function JobOpeningsPage() {
                 <div className="min-w-0">
                   <p className="text-sm font-bold uppercase tracking-wide text-red-600">Active in</p>
                   <p className="text-sm text-gray-700">
-                    This job description is linked to the following active modules.
+                    {deleteWarningJobs
+                      ? 'Each job description is linked to the active modules listed under it.'
+                      : 'This job description is linked to the following active modules.'}
                   </p>
                 </div>
               </div>
 
-              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {deleteWarningDialog.usageDetails.map((usage, index) => {
-                  const UsageIcon = usageModuleIcon(usage);
-                  return (
-                    <span
-                      key={index}
-                      className="inline-flex items-center gap-2 px-3 py-2 rounded-full text-sm font-semibold bg-white border border-red-200 text-red-700 shadow-sm"
-                    >
-                      <span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />
-                      <UsageIcon className="w-4 h-4 flex-shrink-0" />
-                      <span className="truncate">{usage}</span>
-                    </span>
-                  );
-                })}
-              </div>
+              {deleteWarningJobs ? (
+                <ul className="mt-3 space-y-3 max-h-64 overflow-y-auto">
+                  {deleteWarningJobs.map((job, jobIndex) => (
+                    <li key={jobIndex} className="min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 [overflow-wrap:anywhere]">{job.title}</p>
+                      {renderUsageChips(job.usageDetails)}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                renderUsageChips(deleteWarningDialog.usageDetails)
+              )}
             </div>
 
             {/* What that means, and what to do instead. */}
@@ -898,7 +950,9 @@ export default function JobOpeningsPage() {
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm text-gray-700">
-                    <span className="font-bold text-brand-blue">&quot;{deleteWarningDialog.jobTitle}&quot;</span> is linked to the active modules above.
+                    {deleteWarningJobs
+                      ? <><span className="font-bold text-brand-blue">These {deleteWarningJobs.length} job descriptions</span> are linked to the active modules above.</>
+                      : <><span className="font-bold text-brand-blue">&quot;{deleteWarningDialog.jobTitle}&quot;</span> is linked to the active modules above.</>}
                   </p>
                   <p className="mt-1 text-sm text-gray-600">
                     Deleting it could affect existing data and processes.
@@ -914,7 +968,7 @@ export default function JobOpeningsPage() {
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm text-gray-700">
-                    <span className="font-bold text-brand-blue">We recommend disabling</span> the job description instead.
+                    <span className="font-bold text-brand-blue">We recommend disabling</span> {deleteWarningJobs ? 'them' : 'the job description'} instead.
                   </p>
                   <p className="mt-1 text-sm text-gray-600">
                     This will stop new applications while keeping existing data safe.

@@ -8,14 +8,15 @@ import {
   Mic,
   Monitor,
   Wifi,
+  Check,
   CheckCircle,
   XCircle,
   AlertCircle,
   AlertTriangle,
   RefreshCw,
-  ArrowLeft,
   ArrowRight,
   Loader2,
+  Play,
   Users
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -33,7 +34,6 @@ import {
   T_PAGE_SUBTITLE,
   T_SECTION,
   T_CARD_TITLE,
-  ICON_TILE,
   ICON,
   ICON_INLINE,
 } from '@/lib/constants/candidateLayout';
@@ -57,7 +57,6 @@ interface SystemCheckProps {
   token: string;
   onComplete: (stream?: MediaStream) => void; // Pass stream to parent to keep it alive
   onRegisterFace?: (videoElement: HTMLVideoElement) => Promise<boolean>;
-  onBack: () => void;
 }
 
 interface CheckStatus {
@@ -199,7 +198,20 @@ function analyzeSystemCheckFaceDetections<T>({
   };
 }
 
-export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: SystemCheckProps) {
+
+/** A check row's icon tile — the AI interview System Check's: one minimal
+ *  brand-blue tint for every row, turning red only when that check fails. */
+/** One fixed size for a row's status chips (Working / Warning / Failed) and
+ *  its Retry button, so they line up in a column whatever the label. */
+const STATUS_CHIP =
+  'inline-flex items-center justify-center gap-1.5 w-24 h-7 px-2 rounded-full text-xs font-semibold shrink-0';
+
+const checkTile = (status: string) =>
+  `w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+    status === 'error' ? 'bg-destructive/10 text-destructive' : 'bg-brand-blue/10 text-brand-blue'
+  }`;
+
+export function SystemCheck({ token, onComplete, onRegisterFace }: SystemCheckProps) {
   const [cameraCheck, setCameraCheck] = useState<CheckStatus>({ status: 'pending', message: 'Not checked' });
   // Its own row (AI interview parity): "is the candidate's face there" and
   // "is anyone ELSE there" are different questions. Folded into the Camera
@@ -220,6 +232,9 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
   // button is then the only thing the candidate can usefully do.
   const checksNotStarted = !isChecking
     && [browserCheck, internetCheck, cameraCheck, multipleCheck, micCheck].every((c) => c.status === 'pending');
+  // Set once the first full run finishes. Run Checks is then hidden, as on the
+  // AI interview — from there each failed row has its own Retry.
+  const [checksRan, setChecksRan] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -529,6 +544,40 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
     startNetworkPolling(); // keep re-checking so slow→fast transitions update immediately
     await checkCameraAndMicrophone();  // Combined to avoid permission conflicts
 
+    setIsChecking(false);
+    setChecksRan(true);
+  };
+
+  // Per-row Retry, as on the AI interview System Check: re-runs only the
+  // failed row's check. Camera, Multiple People and Microphone come from one
+  // shared media stream, so retrying any of them re-acquires it and re-runs
+  // those three together.
+  const retryCheck = async (kind: 'browser' | 'internet' | 'media') => {
+    setIsChecking(true);
+    if (kind === 'browser') {
+      setBrowserCheck({ status: 'checking', message: 'Checking...' });
+      browserInfoRef.current = null;
+      await checkBrowser();
+    } else if (kind === 'internet') {
+      stopNetworkPolling();
+      setInternetCheck({ status: 'checking', message: 'Checking...' });
+      networkSpeedMbpsRef.current = null;
+      networkLatencyMsRef.current = null;
+      await checkInternet();
+      startNetworkPolling();
+    } else {
+      stopFaceDetectionPolling();
+      stopMicMonitoring();
+      stopExistingStream();
+      setCameraCheck({ status: 'checking', message: 'Checking...' });
+      setMultipleCheck({ status: 'checking', message: 'Checking...' });
+      setMicCheck({ status: 'checking', message: 'Checking...' });
+      setCameraInUseError('');
+      noFaceCountRef.current = 0;
+      multiFaceCountRef.current = 0;
+      faceDetectionFailureCountRef.current = 0;
+      await checkCameraAndMicrophone();
+    }
     setIsChecking(false);
   };
 
@@ -1297,20 +1346,37 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
     }
   };
 
-  const StatusIcon = ({ status }: { status: CheckStatus['status'] }) => {
+  // A row's status, as the AI interview System Check shows it: a "Working"
+  // / "Failed" badge rather than a bare tick or cross.
+  const StatusBadge = ({ status }: { status: CheckStatus['status'] }) => {
     switch (status) {
       case 'pending':
-        return <div className="w-6 h-6 rounded-full bg-gray-200" />;
+        return <span className="text-xs font-medium text-gray-400">Pending</span>;
       case 'checking':
-        return (
-          <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
-        );
+        return <Loader2 className="w-5 h-5 text-brand-blue animate-spin" />;
       case 'success':
-        return <CheckCircle className="w-6 h-6 text-success" />;
+        return (
+          <span className={`${STATUS_CHIP} bg-success-subtle text-success`}>
+            <span className="w-5 h-5 rounded-full bg-success text-white flex items-center justify-center">
+              <Check className="w-3 h-3" strokeWidth={3} />
+            </span>
+            Working
+          </span>
+        );
       case 'warning':
-        return <AlertTriangle className="w-6 h-6 text-warning" />;
+        return (
+          <span className={`${STATUS_CHIP} bg-warning-subtle text-warning`}>
+            <AlertTriangle className="w-3.5 h-3.5" />
+            Warning
+          </span>
+        );
       case 'error':
-        return <XCircle className="w-6 h-6 text-destructive" />;
+        return (
+          <span className={`${STATUS_CHIP} bg-destructive/10 text-destructive`}>
+            <XCircle className="w-3.5 h-3.5" />
+            Failed
+          </span>
+        );
     }
   };
 
@@ -1321,7 +1387,7 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
       {/* Header + stepper: the shared pair. */}
       <div className="sticky top-0 z-50">
         <CandidateHeader />
-        <CandidateStepper current={3} />
+        <CandidateStepper current={2} />
       </div>
 
       {/* The recruiter page shell. */}
@@ -1331,7 +1397,7 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
 
             {/* Page header — the recruiter pattern, in place of the centred
                 blue hero band. */}
-            <div className="flex items-start gap-3 mb-5">
+            <div className="flex items-start gap-3 mb-4">
               <div className={PAGE_ICON_TILE}>
                 <Monitor className={`${ICON} text-brand-blue`} />
               </div>
@@ -1343,11 +1409,11 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
               </div>
             </div>
 
-          <div className="grid lg:grid-cols-2 gap-5">
+          <div className="grid lg:grid-cols-2 gap-4 lg:gap-5 items-start">
             {/* Camera Preview */}
             <div>
               <h2 className={`${T_SECTION} mb-3`}>Camera Preview</h2>
-              <div className="aspect-video bg-gray-900 rounded-2xl overflow-hidden relative">
+              <div className="aspect-video bg-gray-900 rounded-xl overflow-hidden relative">
                 <video
                   ref={videoRef}
                   autoPlay
@@ -1358,7 +1424,7 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
                 />
                 {!hasCameraPreview && (
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <Camera className="w-20 h-20 text-gray-600" />
+                    <Camera className="w-12 h-12 text-gray-600" />
                   </div>
                 )}
               </div>
@@ -1366,109 +1432,82 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
 
             {/* Checks */}
             <div>
-              <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                 <h2 className={T_SECTION}>System Requirements</h2>
-                {/* Nothing runs until this is clicked, so before the first run
-                    it is the filled brand button with a pulsing ring — the
-                    candidate's obvious next step — and settles back to the
-                    outline style once the checks have started. */}
+                {/* Green with a play icon, as the AI interview's Run Check
+                    button. Nothing runs until this is clicked, so before the
+                    first run it also carries a pulsing ring — the candidate's
+                    obvious next step. Gone once that first run has finished. */}
+                {!checksRan && (
                 <Button
-                  variant={checksNotStarted ? 'primary' : 'outline'}
-                  className={checksNotStarted ? 'tf-attention-pulse' : ''}
+                  size="sm"
+                  className={`!bg-success hover:!bg-success-strong text-white font-bold shadow-lg ${checksNotStarted ? 'tf-attention-pulse-success' : ''}`}
                   onClick={runAllChecks}
                   disabled={isChecking}
                 >
-                  <RefreshCw className={`w-4 h-4 mr-2 ${isChecking ? 'animate-spin' : ''}`} />
+                  {isChecking
+                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    : <Play className="w-3.5 h-3.5" />}
                   {isChecking ? 'Checking...' : 'Run Checks'}
                 </Button>
+                )}
               </div>
               {checksNotStarted && (
-                <p className="-mt-2 mb-4 text-sm font-medium text-brand-blue">
+                <p className="-mt-1 mb-3 text-xs sm:text-sm font-medium text-brand-blue">
                   Click &quot;Run Checks&quot; to test your camera, microphone and connection.
                 </p>
               )}
 
-              <div className="space-y-4">
-                {/* Browser */}
-                <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 sm:p-4">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className={`${ICON_TILE} bg-brand-blue/10 text-brand-blue`}>
-                      <Monitor className={ICON} />
+              {/* The rows, in the AI interview System Check's style: white
+                  card, small tile, compact label + detail, status badge on the
+                  right. `flex-wrap` drops the badge under the label when a
+                  narrow column runs out of room. */}
+              <div className="flex flex-col gap-2">
+                {([
+                  { label: 'Browser', check: browserCheck, Icon: Monitor, retry: 'browser' },
+                  { label: 'Internet Connection', check: internetCheck, Icon: Wifi, retry: 'internet' },
+                  { label: 'Camera', check: cameraCheck, Icon: Camera, retry: 'media' },
+                  { label: 'Multiple People Check', check: multipleCheck, Icon: Users, retry: 'media' },
+                  { label: 'Microphone', check: micCheck, Icon: Mic, retry: 'media' },
+                ] as const).map(({ label, check, Icon, retry }) => (
+                  <div
+                    key={label}
+                    className={`rounded-xl border px-3 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-2 min-w-0 ${
+                      check.status === 'error' ? 'border-destructive/30 bg-destructive/[0.04]' : 'border-gray-200 bg-white'
+                    }`}
+                  >
+                    <span className={checkTile(check.status)}>
+                      <Icon className="w-4.5 h-4.5" />
+                    </span>
+                    <div className="flex-1 min-w-[8rem]">
+                      <p className="text-sm font-semibold text-gray-900">{label}</p>
+                      <p className="text-xs text-gray-500 [overflow-wrap:anywhere]">{check.message}</p>
                     </div>
-                    <div className="min-w-0">
-                      <p className={T_CARD_TITLE}>Browser</p>
-                      <p className="text-sm text-gray-500 [overflow-wrap:anywhere]">{browserCheck.message}</p>
-                    </div>
-                  </div>
-                  <span className="flex shrink-0"><StatusIcon status={browserCheck.status} /></span>
-                </div>
-
-                {/* Internet */}
-                <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 sm:p-4">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className={`${ICON_TILE} bg-success-subtle text-success`}>
-                      <Wifi className={ICON} />
-                    </div>
-                    <div className="min-w-0">
-                      <p className={T_CARD_TITLE}>Internet Connection</p>
-                      <p className="text-sm text-gray-500 [overflow-wrap:anywhere]">{internetCheck.message}</p>
-                    </div>
-                  </div>
-                  <span className="flex shrink-0"><StatusIcon status={internetCheck.status} /></span>
-                </div>
-
-                {/* Camera */}
-                <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 sm:p-4">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className={`${ICON_TILE} bg-brand-cyan/10 text-brand-cyan`}>
-                      <Camera className={ICON} />
-                    </div>
-                    <div className="min-w-0">
-                      <p className={T_CARD_TITLE}>Camera</p>
-                      <p className="text-sm text-gray-500 [overflow-wrap:anywhere]">{cameraCheck.message}</p>
-                    </div>
-                  </div>
-                  <span className="flex shrink-0"><StatusIcon status={cameraCheck.status} /></span>
-                </div>
-
-                {/* Multiple People */}
-                <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 sm:p-4">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className={`${ICON_TILE} bg-destructive-subtle text-destructive`}>
-                      <Users className={ICON} />
-                    </div>
-                    <div className="min-w-0">
-                      <p className={T_CARD_TITLE}>Multiple People Check</p>
-                      <p className="text-sm text-gray-500 [overflow-wrap:anywhere]">{multipleCheck.message}</p>
+                    <div className="flex shrink-0 ml-auto items-center gap-2">
+                      <StatusBadge status={check.status} />
+                      {/* Hidden while any check is running, so a retry never
+                          races a full run on the same stream. */}
+                      {check.status === 'error' && !isChecking && (
+                        <button
+                          type="button"
+                          onClick={() => void retryCheck(retry)}
+                          className={`${STATUS_CHIP} text-brand-blue border border-brand-blue/30 hover:bg-brand-blue/5 transition-colors`}
+                          title={`Retry ${label}`}
+                        >
+                          <RefreshCw className="w-3 h-3" />
+                          Retry
+                        </button>
+                      )}
                     </div>
                   </div>
-                  <span className="flex shrink-0"><StatusIcon status={multipleCheck.status} /></span>
-                </div>
-
-                {/* Microphone */}
-                <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 sm:p-4">
-                  <div className="flex items-center gap-3 min-w-0">
-                    {/* The same bordered icon tile as Browser, Internet and
-                        Camera above (`ICON_TILE`), in the Microphone's own
-                        warning colour. */}
-                    <div className={`${ICON_TILE} bg-warning-subtle text-warning`}>
-                      <Mic className={ICON} />
-                    </div>
-                    <div className="min-w-0">
-                      <p className={T_CARD_TITLE}>Microphone</p>
-                      <p className="text-sm text-gray-500 [overflow-wrap:anywhere]">{micCheck.message}</p>
-                    </div>
-                  </div>
-                  <span className="flex shrink-0"><StatusIcon status={micCheck.status} /></span>
-                </div>
-
+                ))}
               </div>
 
               {/* Status Message */}
               {allChecksComplete && (
-                <div className="mt-6 p-5 bg-success-subtle rounded-xl flex items-center gap-4">
-                  <CheckCircle className="w-6 h-6 text-success" />
-                  <p className="text-success font-semibold">All checks passed! You&apos;re ready to start.</p>
+                <div className="mt-3 px-4 py-3 bg-success-subtle rounded-xl flex items-center gap-3">
+                  <CheckCircle className="w-5 h-5 shrink-0 text-success" />
+                  <p className="text-sm text-success font-semibold">All checks passed! You&apos;re ready to start.</p>
                 </div>
               )}
 
@@ -1488,15 +1527,15 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
                 const anyError = checks.some(c => c.status === 'error');
                 if (inProgress || !anyError) return null;
                 return (
-                  <div className="mt-6 p-5 bg-warning-subtle rounded-xl flex items-center gap-4">
-                    <AlertCircle className="w-6 h-6 text-warning" />
-                    <p className="text-warning font-medium">Some checks failed. Please resolve the issues above.</p>
+                  <div className="mt-3 px-4 py-3 bg-warning-subtle rounded-xl flex items-center gap-3">
+                    <AlertCircle className="w-5 h-5 shrink-0 text-warning" />
+                    <p className="text-sm text-warning font-medium">Some checks failed. Please resolve the issues above.</p>
                   </div>
                 );
               })()}
 
               {browserWarning && browserCheck.status === 'success' && (
-                <div className="mt-4 rounded-xl border border-brand-blue/20 bg-brand-blue/5 p-4 flex items-start gap-3">
+                <div className="mt-3 rounded-xl border border-brand-blue/20 bg-brand-blue/5 px-4 py-3 flex items-start gap-3">
                   <AlertTriangle className={`${ICON_INLINE} text-brand-blue mt-0.5`} />
                   <p className={`${T_CARD_TITLE} text-brand-blue`}>{browserWarning}</p>
                 </div>
@@ -1504,17 +1543,17 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
 
               {/* Prominent Camera In Use Error Box */}
               {cameraInUseError && (
-                <div className="mt-6 p-6 bg-destructive-subtle border-2 border-destructive-line rounded-xl">
-                  <div className="flex items-start gap-4">
+                <div className="mt-3 p-4 bg-destructive-subtle border border-destructive-line rounded-xl">
+                  <div className="flex items-start gap-3">
                     <div className="flex-shrink-0">
-                      <XCircle className="w-8 h-8 text-destructive" />
+                      <XCircle className="w-6 h-6 text-destructive" />
                     </div>
-                    <div className="flex-1">
-                      <h4 className="text-lg font-bold text-destructive-strong mb-2">Camera Is In Use</h4>
-                      <p className="text-destructive-strong mb-4">{cameraInUseError}</p>
-                      <div className="bg-white rounded-lg p-4 border border-destructive-line">
-                        <p className="font-semibold text-destructive-strong mb-2">How to fix this:</p>
-                        <ol className="list-decimal list-inside space-y-2 text-destructive-strong text-sm">
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-base font-bold text-destructive-strong mb-1">Camera Is In Use</h4>
+                      <p className="text-sm text-destructive-strong mb-3">{cameraInUseError}</p>
+                      <div className="bg-white rounded-lg p-3 border border-destructive-line">
+                        <p className="text-sm font-semibold text-destructive-strong mb-1.5">How to fix this:</p>
+                        <ol className="list-decimal list-inside space-y-1 text-destructive-strong text-xs sm:text-sm">
                           <li>Close any apps using your camera (Zoom, Teams, Skype, FaceTime, Google Meet)</li>
                           <li>Close other browser tabs that may be using your camera</li>
                           {isIOS && (
@@ -1538,13 +1577,9 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
           </div>
 
             {/* Action row — inside the page card, on the recruiter's footer
-                rule. `flex-wrap` so the two buttons drop to two lines rather
-                than colliding on a small phone. */}
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-4 mt-5 border-t border-gray-100">
-          <Button variant="secondary" size="md" onClick={onBack}>
-            <ArrowLeft className={`${ICON_INLINE} mr-2`} />
-            Go Back
-          </Button>
+                rule. Forward only: there is no going back to Job & Consent
+                from here. */}
+            <div className="flex flex-wrap items-center justify-end gap-3 pt-4 mt-4 border-t border-gray-100">
           <Button
             variant="primary"
             onClick={handleProceed}

@@ -1556,7 +1556,18 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                 <div className="flex items-center border-l border-gray-200 dark:border-slate-700/60 pl-2 ml-1 lg:border-l-0 lg:border-t lg:pl-0 lg:ml-0 lg:pt-2 lg:mt-1">
                   <button
                     type="button"
-                    onClick={() => router.push(`/recruitment/job-details?id=${config.jd_id}`)}
+                    onClick={() => {
+                      // Carry this interview along so the JD page's trail reads
+                      // AI Interviews › <interview> › job, as Go to JD on an
+                      // assessment's details page does.
+                      const params = new URLSearchParams({
+                        id: config.jd_id!,
+                        from: 'ai-interview-details',
+                        interview_id: config.id,
+                        interview_title: config.jd_title || config.position || '',
+                      });
+                      router.push(`/recruitment/job-details?${params.toString()}`);
+                    }}
                     className={`${tabPill(false)} whitespace-nowrap lg:w-full lg:justify-start lg:px-3 lg:py-2 lg:bg-transparent lg:font-medium lg:text-brand-blue lg:hover:bg-brand-blue/5 lg:hover:underline lg:underline-offset-2`}
                   >
                     Go to JD

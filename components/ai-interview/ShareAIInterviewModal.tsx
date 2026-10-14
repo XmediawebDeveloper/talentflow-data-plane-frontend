@@ -67,7 +67,8 @@ interface ShareAIInterviewModalProps {
   isOpen: boolean;
   onClose: () => void;
   config: AIInterviewResponse;
-  onInviteSent: () => void;
+  /** Called with the number of invitations that went out (at least 1). */
+  onInviteSent: (sentCount: number) => void;
   /** When true, render the share form inline (no backdrop / fixed overlay /
    *  close button) so it can live inside a tab on the interview details page. */
   embedded?: boolean;
@@ -960,7 +961,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
         setShowSuccess(true);
         setTimeout(() => {
           setShowSuccess(false);
-          onInviteSent();
+          onInviteSent(successCount);
           onClose();
         }, 2000);
       } else if (tenantUserEmails.length > 0 && successCount === 0) {

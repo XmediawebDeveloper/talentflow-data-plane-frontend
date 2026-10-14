@@ -53,7 +53,8 @@ import { Resume } from '@/lib/types/types';
 import { scoringService, normalizeScoringStatus } from '@/lib/services/scoringService';
 import { dispatchUnitsConsumed } from '@/lib/services/api';
 import { assessmentService } from '@/lib/services/assessmentService';
-import { listAllAssessments, loadJobAssessmentHierarchy, MAX_ASSESSMENT_VERSIONS } from '@/lib/utils/jobAssessmentHierarchy';
+import { listAllAssessments, MAX_ASSESSMENT_VERSIONS } from '@/lib/utils/jobAssessmentHierarchy';
+import { loadAssessmentVersions, nextVersionNumber } from '@/components/talent-match-invite/inviteVersions';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import DraftAssessmentExistsModal, { type ExistingDraftAssessment } from '@/components/assessments/DraftAssessmentExistsModal';
 import { parseAssessmentTitle, isAssessmentRevoked, getLocallyRevokedAssessmentIds } from '@/lib/utils/assessmentUtils';
@@ -766,7 +767,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   // bounce them back with "publish it first". False while still loading.
   const [hasPublishedAssessment, setHasPublishedAssessment] = useState(false);
   /* How many assessment versions THIS JOB VERSION holds (this JD row only,
-     archived excluded) - what Create's MAX_ASSESSMENT_VERSIONS cap reads, from
+     archived included) - what Create's MAX_ASSESSMENT_VERSIONS cap reads, from
      the same count the click re-runs. Null until it lands for the version on
      screen; `assessmentCountJdId` says which version a count belongs to, so a
      late reply for the version just left can never set this one's state. */
@@ -1087,7 +1088,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     : job.status === 'Disabled'
       ? 'JD is disabled'
       : atAssessmentVersionCap
-        ? `This job version has the maximum ${MAX_ASSESSMENT_VERSIONS} assessment versions — archive or delete one to create another`
+        ? `This job version has the maximum ${MAX_ASSESSMENT_VERSIONS} assessment versions — archived ones count too`
         : !assessmentExistenceChecked
           ? 'Checking this job’s assessment…'
           : null;
@@ -1292,15 +1293,19 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     handleShowAIInterviewResults();
   };
 
-  // Create Assessment, resolved on click against the job's real assessment
-  // versions - the same count, archived excluded, that the Assessments page's
-  // Duplicate is capped by (`loadJobAssessmentHierarchy`: every JD version of
-  // this job, every page of results):
-  //   MAX_ASSESSMENT_VERSIONS already → blocked, with the Duplicate cap message
+  // Create Assessment, resolved on click against this job version's real
+  // assessment versions - the same list, read the same way, as the Create /
+  // Send Assessment popup's "New version" (`loadAssessmentVersions`), so both
+  // buttons give one answer:
+  //   MAX_ASSESSMENT_VERSIONS already → blocked. Every version counts,
+  //                                     archived included: archiving does not
+  //                                     free a slot.
   //   a draft version exists          → publish prompt, in place on this page
-  //                                     (one unpublished version at a time)
-  //   this JD has a live assessment   → the NEXT version: a duplicate of its
-  //                                     newest one, opened straight in Configure
+  //                                     (one unpublished version at a time,
+  //                                     per job version)
+  //   this JD has an assessment       → the NEXT version: a duplicate of the
+  //                                     LATEST one (highest version number),
+  //                                     opened straight in Configure
   //   nothing for this JD yet         → /recruitment/assessments/create
   // The guard re-reads on every click and the button is held while it runs, so
   // a repeated click cannot slip a 6th version past it. AssessmentCreation
@@ -1311,24 +1316,14 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     setResolvingAssessmentTarget(true);
     const returnUrl = `/recruitment/job-details?id=${encodeURIComponent(job.id)}`;
     try {
-      const statusOf = (a: any) => String(a?.status || '').toLowerCase();
-      const newestFirst = (a: any, b: any) =>
-        new Date(b?.updated_at || b?.created_at || 0).getTime() -
-        new Date(a?.updated_at || a?.created_at || 0).getTime();
-      // The cap is per JOB VERSION: only this JD row's assessments, every page.
-      const [ownRows, hierarchy] = await Promise.all([
-        listAllAssessments({ jd_id: job.id }),
-        loadJobAssessmentHierarchy(job.id),
-      ]);
-      const ownVersions = ownRows.filter(a => a.jd_id === job.id && statusOf(a) !== 'archived');
-      setAssessmentVersionCount(ownVersions.length);
-      // The Draft rule reads the whole job, as it always has.
-      const versions = hierarchy.assessments.filter(a => statusOf(a) !== 'archived');
+      // Newest version first; this JD row only, every page, archived included.
+      const versions = await loadAssessmentVersions(job.id);
+      setAssessmentVersionCount(versions.length);
 
-      if (ownVersions.length >= MAX_ASSESSMENT_VERSIONS) {
+      if (versions.length >= MAX_ASSESSMENT_VERSIONS) {
         await dialog.alert({
           title: 'Maximum versions reached',
-          message: `This job version already has ${MAX_ASSESSMENT_VERSIONS} assessment versions (the maximum allowed). Archive or delete a version before creating another.`,
+          message: `This job version already has ${MAX_ASSESSMENT_VERSIONS} assessment versions (the maximum allowed). Archived versions count too, so manage the existing versions to continue.`,
           variant: 'warning',
         });
         return;
@@ -1336,23 +1331,21 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
 
       // An unpublished version already exists: it must be published before
       // another is created - the Assessments page's "Draft already exists" popup.
-      const draft = versions.filter(a => statusOf(a) === 'draft').sort(newestFirst)[0];
-      if (draft?.id) {
-        setDraftAssessmentConflict({
-          draft,
-          jobVersion: hierarchy.jobVersionByAssessmentId.get(draft.id) ?? job.versionNumber ?? 1,
-        });
+      const draft = versions.find(v => v.status === 'draft');
+      if (draft?.raw) {
+        setDraftAssessmentConflict({ draft: draft.raw, jobVersion: job.versionNumber ?? 1 });
         return;
       }
 
-      // This JD already has a live assessment: create its next version, the way
-      // Duplicate does - the same clone call - and open it in Configure.
-      const source = ownVersions.slice().sort(newestFirst)[0];
-      if (source?.id) {
-        const nextVersion = ownVersions.length + 1;
+      // This JD already has an assessment: create its next version, the way
+      // Duplicate does - the same clone call, from the latest version - and
+      // open it in Configure.
+      const source = versions[0];
+      if (source) {
+        const nextVersion = nextVersionNumber(versions);
         const confirmed = await dialog.confirm({
           title: 'Create a new assessment version',
-          message: `Create version ${nextVersion} of ${MAX_ASSESSMENT_VERSIONS} for this job version? It starts as a draft copy of the current assessment, ready to edit.`,
+          message: `Create version ${nextVersion} of ${MAX_ASSESSMENT_VERSIONS} for this job version? It starts as a draft copy of version ${source.version}, ready to edit. Version ${source.version} is not changed.`,
           confirmText: 'Create Version',
         });
         if (!confirmed) return;
@@ -1727,8 +1720,10 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
 
   // Fetch assessment results for this JD
   /** Assessment versions of ONE job version: rows on that JD id, archived excluded. */
-  const countAssessmentVersionsFor = (rows: { jd_id?: string | null; status?: string | null }[], jdId: string) =>
-    rows.filter(a => a.jd_id === jdId && String(a?.status || '').toLowerCase() !== 'archived').length;
+  /* Every version counts toward the cap, archived included — the Create /
+     Send Assessment popup's rule (archiving does not free a slot). */
+  const countAssessmentVersionsFor = (rows: { jd_id?: string | null }[], jdId: string) =>
+    rows.filter(a => a.jd_id === jdId).length;
 
   const fetchAssessmentResults = async () => {
     setLoadingAssessmentResults(true);
@@ -2585,9 +2580,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           }}
           /* Next → Send AI Interview via Email as the popup's own second
              step; a send counts here as this page's own Invite does. */
-          onInterviewsSent={() => {
-            setAiInterviewCount((prev) => Math.max(prev + 1, 1));
-            toast.success('AI interview invitation sent');
+          onInterviewsSent={(sent) => {
+            setAiInterviewCount((prev) => prev + sent);
+            toast.success(`${sent} AI interview invitation${sent === 1 ? '' : 's'} sent`);
           }}
           onSent={(kind, sent) => {
             if (kind === 'assessment') void fetchAssessmentResults();

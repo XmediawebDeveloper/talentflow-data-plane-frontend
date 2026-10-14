@@ -56,6 +56,21 @@ interface UseInterviewObjectDetectionConfig {
   onObjectDetected?: (eventType: ObjectEventType, details: DetectedObjectEvent) => void;
   /** Fired once if the detector can't start (no WebGPU, model 404, etc.). */
   onUnavailable?: (reason: string) => void;
+  /**
+   * Load the model and run ONE warm-up frame BEFORE the interview starts (the
+   * "Preparing your interview…" step) — model download, WebGPU session and
+   * the first, slowest inference otherwise all landed on Bina's
+   * introduction. Warm-up results are discarded; detection, flags and the
+   * onUnavailable report start once `enabled` is true. See `warmedUpRef`.
+   */
+  warmup?: boolean;
+  /**
+   * Skip inference while true (Bina speaking). One inference holds the GPU for
+   * seconds on integrated graphics (4 s on staging 2026-10-14), and the first
+   * live one landed on Bina's opening lines — her voice/3D lip-sync stuttered.
+   * Detection resumes the moment she stops (the candidate's answer window).
+   */
+  paused?: boolean;
 }
 
 const DETECT_INTERVAL = 3000;
@@ -224,20 +239,42 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
 
   const enabled = config?.enabled ?? true;
   const lowTier = config?.lowTier ?? false;
+  const warmup = config?.warmup ?? false;
+  // The worker/model live while EITHER is on; detections only count while
+  // `enabled`.
+  const active = enabled || warmup;
+  const enabledRef = useRef(enabled);
+  enabledRef.current = enabled;
+  const pausedRef = useRef(config?.paused ?? false);
+  pausedRef.current = config?.paused ?? false;
+  // True once the detector produced its first result, or is unavailable.
+  const warmedUpRef = useRef(false);
+  // An "unavailable" decided during warm-up is reported once the interview
+  // is live (the proctoring channel isn't connected before that).
+  const pendingUnavailableRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (enabled && pendingUnavailableRef.current !== null) {
+      const reason = pendingUnavailableRef.current;
+      pendingUnavailableRef.current = null;
+      callbacksRef.current?.onUnavailable?.(reason);
+    }
+  }, [enabled]);
 
   const setVideoElement = useCallback((video: HTMLVideoElement | null) => {
     videoRef.current = video;
   }, []);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!active) return;
     let mounted = true;
 
     const markUnavailable = (reason: string) => {
       if (!mounted || isUnavailableRef.current) return;
       isUnavailableRef.current = true;
+      warmedUpRef.current = true;
       console.warn("[INTERVIEW_OBJECT_DETECTION] Unavailable:", reason);
-      callbacksRef.current?.onUnavailable?.(reason);
+      if (enabledRef.current) callbacksRef.current?.onUnavailable?.(reason);
+      else pendingUnavailableRef.current = reason;
     };
 
     // Gate on WebGPU before spawning anything. On a browser without it the
@@ -438,6 +475,9 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
           consecutive_frames: 0,
           detector: DETECTOR_NAME,
         }));
+        warmedUpRef.current = true;
+        // Warm-up frame (interview not started) — don't flag anything.
+        if (!enabledRef.current) return;
         lastDetectionsRef.current = mapped;
         consider(mapped);
         return;
@@ -493,7 +533,10 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
         const now = performance.now();
         const video = videoRef.current;
 
-        const due = now - lastDetect >= effectiveInterval();
+        // Warm-up: one frame only, then idle until the interview starts.
+        const warmingIdle = !enabledRef.current && (warmedUpRef.current || inFlightRef.current);
+        const due = !warmingIdle && !(enabledRef.current && pausedRef.current)
+          && now - lastDetect >= effectiveInterval();
         const capturable = video && video.readyState >= 2 && video.videoWidth > 0;
 
         // Skip rather than queue when the previous frame is still running —
@@ -544,12 +587,13 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
       workerRef.current = null;
       classStateRef.current = {};
     };
-  }, [enabled, lowTier]);
+  }, [active, lowTier]);
 
   return {
     isReadyRef,
     isUnavailableRef,
     lastDetectionsRef,
+    warmedUpRef,
     setVideoElement,
   };
 }

@@ -70,8 +70,8 @@ export default function JobInviteDialogHost({
       candidates={candidates}
       disabledReason={disabledReason}
       onAssessmentsSent={() => onSent?.('assessment')}
-      onInterviewsSent={() => {
-        toast.success('AI interview invitation sent');
+      onInterviewsSent={(sent) => {
+        toast.success(`${sent} AI interview invitation${sent === 1 ? '' : 's'} sent`);
         onSent?.('interview');
       }}
       onSent={(sentKind) => onSent?.(sentKind)}

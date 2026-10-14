@@ -5,7 +5,7 @@ import { CheckCircle } from 'lucide-react';
 import { RECRUITER_BAR_ROW } from '@/lib/constants/candidateLayout';
 
 /**
- * The five-step progress bar across the top of the candidate assessment flow.
+ * The four-step progress bar across the top of the candidate assessment flow.
  *
  * Written out by hand on each of the four screens that show it, and drifted on
  * every axis that could drift: dots were `w-8` on three screens and `w-6` on
@@ -40,9 +40,10 @@ function CurrentPulse() {
   );
 }
 
+/* Terms & Consent and Assessment Details were two steps; they are one screen
+   now, "Job & Consent" (JobConsentScreen). */
 export const ASSESSMENT_STEPS = [
-  'Terms & Consent',
-  'Assessment Details',
+  'Job & Consent',
   'System Check',
   'HR Questions',
   'Assessment',
@@ -63,22 +64,24 @@ export const CandidateHrStepProvider = CandidateHrStepContext.Provider;
 interface CandidateStepperProps {
   /**
    * 1-based position of the step the candidate is on, counted in the FULL
-   * five-step list (1 = Terms & Consent … 5 = Assessment). When the attempt
+   * four-step list (1 = Job & Consent … 4 = Assessment). When the attempt
    * has no HR step the stepper drops it and renumbers, so callers never need
    * to know whether HR is on.
    */
   current: number;
   /**
-   * An explicit list, for a flow that is not the assessment's five steps.
+   * An explicit list, for a flow that is not the assessment's four steps.
    * When given, `current` indexes this list as-is and the HR context is not
    * consulted.
    */
   steps?: readonly string[];
-  /** Bottom rule. Step 5 turns it off: the card under it does the separating. */
+  /** Bottom rule. The Assessment step turns it off: the card under it does the separating. */
   bordered?: boolean;
+  /** Accessible name of the progress list. The AI interview passes its own. */
+  label?: string;
 }
 
-export default function CandidateStepper({ current: currentProp, steps: stepsProp, bordered = true }: CandidateStepperProps) {
+export default function CandidateStepper({ current: currentProp, steps: stepsProp, bordered = true, label: ariaLabel = 'Assessment progress' }: CandidateStepperProps) {
   const hasHrStep = useContext(CandidateHrStepContext);
   const steps: readonly string[] = stepsProp
     ?? (hasHrStep ? ASSESSMENT_STEPS : ASSESSMENT_STEPS.filter((step) => step !== 'HR Questions'));
@@ -104,7 +107,7 @@ export default function CandidateStepper({ current: currentProp, steps: stepsPro
         <ol
           className="xl:hidden grid"
           style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}
-          aria-label="Assessment progress"
+          aria-label={ariaLabel}
         >
           {steps.map((label, index) => {
             const stepNumber = index + 1;
@@ -145,7 +148,7 @@ export default function CandidateStepper({ current: currentProp, steps: stepsPro
         </ol>
 
         {/* Desktop (`xl` and up, where it fits on one line): the inline row, unchanged. */}
-        <div className="hidden xl:flex flex-wrap items-center justify-center gap-2" aria-label="Assessment progress">
+        <div className="hidden xl:flex flex-wrap items-center justify-center gap-2" aria-label={ariaLabel}>
           {steps.map((label, index) => {
             const stepNumber = index + 1;
             const isCompleted = stepNumber < current;
@@ -176,7 +179,12 @@ export default function CandidateStepper({ current: currentProp, steps: stepsPro
 
                 {index < steps.length - 1 && (
                   <div
-                    className={`w-6 sm:w-12 h-0.5 mx-2 shrink-0 ${isCompleted ? 'bg-brand-blue' : 'bg-gray-200'}`}
+                    className={`${
+                      /* Longer lists (the AI interview's six or seven steps)
+                         keep short connectors until 2xl, so the row stays on
+                         one line on a 1280px laptop. */
+                      steps.length > 5 ? 'w-6 2xl:w-12' : 'w-6 sm:w-12'
+                    } h-0.5 mx-2 shrink-0 ${isCompleted ? 'bg-brand-blue' : 'bg-gray-200'}`}
                   />
                 )}
               </div>

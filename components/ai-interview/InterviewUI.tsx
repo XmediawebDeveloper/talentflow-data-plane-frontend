@@ -267,6 +267,11 @@ function getErrorMessage(error: unknown): string {
  *  clickable. After this window it disables (so a candidate can't reset their
  *  answer clock by repeating mid/late answer). One repeat per question. */
 const REPEAT_WINDOW_MS = 30000;
+// Live-interview face identity check cadence, same for every device tier
+// (CPU cost — see the startVerification call). Revisit after R&D.
+const FACE_VERIFY_INTERVAL_MS = 30000;
+// Longest the "Preparing your interview…" warm-up may hold back the start.
+const PREPARE_MAX_WAIT_MS = 20000;
 
 /** Returns current time formatted as IST with AM/PM (e.g. "2:34 PM") */
 function nowIST(): string {
@@ -616,6 +621,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // without waiting for TTS playback to drain — if we show the modal
   // immediately it pops up while Bina is still speaking.
   const pendingCompletionModalRef = useRef(false);
+  // When the "Finishing up…" popup actually appeared, so the final page can
+  // wait until the candidate has seen it (see waitForCompletionPopup).
+  const completionShownAtRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (showCompletionModal && completionShownAtRef.current === null) {
+      completionShownAtRef.current = Date.now();
+    }
+  }, [showCompletionModal]);
 
   // 5-minute buffer state (MOM: buffer when allocated time expires)
   const [isInBuffer, setIsInBuffer] = useState(false);
@@ -684,6 +697,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // window (question_timer_started) — same lifecycle as nextSkipInFlight.
   const [repeatInFlight, setRepeatInFlight] = useState(false);
   const repeatInFlightRef = useRef(false);
+  // The question text being re-spoken by Repeat. The backend's re-speak sends
+  // audio only (handler._speak — no greeting / llm_token), and tokenBufferRef
+  // was already cleared when the original question was saved, so
+  // speaking_started fed TalkingHead "" → no viseme timeline → Bina's mouth
+  // stayed closed for the whole repeat. speaking_started falls back to this.
+  const repeatTextRef = useRef("");
   // Tracks whether the BACKEND already sent question_timer_expired for the current
   // question. When true, the client must NOT send its own skip_question — the
   // backend's _auto_skip already called handle_skip_question. Cleared when the
@@ -1028,12 +1047,53 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
   // WebSocket keepalive / reconnect refs
   const pingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // Network strength for the candidate's camera overlay — the round trip of
-  // the keepalive ping above (sent every 5s) to its pong. Display only:
-  // averaged over the last 3 samples; null until the first pong arrives.
-  const pingSentAtRef = useRef<number | null>(null);
+  // Network strength for the candidate's camera overlay. Display only:
+  // averaged over the last 3 samples; null until the first sample. Measured
+  // by an HTTP probe (see the network-probe effect), NOT the keepalive ping:
+  // the server answers that ping inside the receive loop that waits for Bina
+  // to finish speaking after a skip/Next, and the pong is only timed once
+  // this tab's main thread is free — so a slow TTS provider or a busy page
+  // showed "Poor" on a 250 Mbps line (staging 2026-10-13).
   const rttSamplesRef = useRef<number[]>([]);
   const [networkRttMs, setNetworkRttMs] = useState<number | null>(null);
+  // Network probe: every 5 s while connected, request an empty 204 from the
+  // API and read its duration from the browser's Resource Timing entry. Those
+  // timestamps are taken by the network stack, so a busy main thread can't
+  // inflate them (a performance.now() around the fetch would). A
+  // PerformanceObserver is used because the resource-timing buffer fills up
+  // over a long interview and getEntriesByName would stop seeing new probes.
+  useEffect(() => {
+    // Runs from mount — it's a plain HTTP probe, independent of the interview
+    // WebSocket — so the indicator has a real reading during "Preparing your
+    // interview…" instead of "Offline".
+    if (typeof window === 'undefined' || typeof PerformanceObserver === 'undefined') return;
+    const apiBase = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1').replace(/\/$/, '');
+    const probeBase = `${apiBase}/candidate/ai-interview-net-probe`;
+    let stopped = false;
+    const observer = new PerformanceObserver((list) => {
+      for (const e of list.getEntries() as PerformanceResourceTiming[]) {
+        if (stopped || !e.name.startsWith(probeBase)) continue;
+        // With Timing-Allow-Origin (sent by the endpoint) use request→response
+        // (pure network + trivial handler); otherwise the whole entry.
+        const ms = e.requestStart > 0 && e.responseStart > 0 ? e.responseStart - e.requestStart : e.duration;
+        if (!(ms > 0)) continue;
+        rttSamplesRef.current = [...rttSamplesRef.current, ms].slice(-3);
+        setNetworkRttMs(rttSamplesRef.current.reduce((a, b) => a + b, 0) / rttSamplesRef.current.length);
+      }
+    });
+    try { observer.observe({ type: 'resource', buffered: false }); } catch { return; }
+    const probe = () => {
+      if (stopped || (typeof navigator !== 'undefined' && navigator.onLine === false)) return;
+      // no-cors: only the timing is needed, never the (empty) body.
+      void fetch(`${probeBase}?_=${Date.now()}`, { cache: 'no-store', mode: 'no-cors', credentials: 'omit' }).catch(() => {});
+    };
+    probe();
+    const iv = setInterval(probe, 5000);
+    return () => { stopped = true; clearInterval(iv); observer.disconnect(); };
+  }, []);
+  // Set once the interview WebSocket has opened: before that, "not connected"
+  // just means "still starting", not offline.
+  const everConnectedRef = useRef(false);
   const reconnectAttemptsRef = useRef(0);
   // Separate fast-retry counter for the "WS connected before /start flipped the
   // interview to in_progress" race (backend rejects 4003 "not in progress").
@@ -1454,6 +1514,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
   // Avatar ready state — WebSocket connects only after avatar is loaded
   const [avatarReady, setAvatarReady] = useState(false);
+  // "Preparing your interview…" — the WebSocket (and so Bina) waits until the
+  // proctoring models have loaded and run once, or PREPARE_MAX_WAIT_MS passed.
+  const [preparingDone, setPreparingDone] = useState(false);
   // Fix #2: true when the 3D avatar (TalkingHead) fails to initialise OR is
   // taking too long to load. When set, we render a static Bina image over the
   // (blank) 3D canvas so the candidate sees a proper face. Audio still plays via
@@ -2581,6 +2644,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
   const objectDetection = useInterviewObjectDetection({
     enabled: isConnected && webcamReady,
+    // Load + warm up during "Preparing your interview…" (see preparingDone).
+    warmup: webcamReady,
+    // No GPU inference while Bina speaks (her audio + lip-sync stuttered).
+    paused: isAiSpeaking,
     lowTier: effectiveDeviceCapability?.tier === 'low',
     onObjectDetected: handleObjectDetected,
     onUnavailable: handleObjectDetectionUnavailable,
@@ -2601,6 +2668,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
   const faceDetection = useInterviewFaceDetection({
     enabled: isConnected && webcamReady,
+    warmup: webcamReady,
     enableGazeTracking: true,
     lowTier: effectiveDeviceCapability?.tier === 'low',
     onFaceMissing: handleFaceMissing,
@@ -2610,6 +2678,35 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     onGazeAway: handleGazeAway,
     onGazeRestored: handleGazeRestored,
   });
+
+  // ── Pre-interview warm-up gate ──────────────────────────────────────────
+  // Object detection (28.8 MB model + WebGPU session + a slow first
+  // inference) and MediaPipe face/gaze used to start loading the moment the
+  // WebSocket connected — exactly when Bina began her introduction. Staging
+  // 2026-10-13: page at 2.2 fps, detector ready only 22 s later, the intro
+  // stuttered until ~30-60 s in. Both now warm up first (results discarded)
+  // and the connect effect waits for this — never longer than the cap, so a
+  // slow machine still starts on time (anything unfinished keeps loading in
+  // the background, as before).
+  useEffect(() => {
+    if (preparingDone) return;
+    const startedAt = performance.now();
+    const iv = setInterval(() => {
+      const odWarm = objectDetection.warmedUpRef.current;
+      const fdWarm = faceDetection.warmedUpRef.current;
+      const waited = performance.now() - startedAt;
+      if ((odWarm && fdWarm) || waited >= PREPARE_MAX_WAIT_MS) {
+        clearInterval(iv);
+        console.log(
+          `[INTERVIEW-DEBUG] Preparing done in ${Math.round(waited)} ms ` +
+          `(objectDetection=${odWarm ? 'ready' : 'still loading'}, faceDetection=${fdWarm ? 'ready' : 'still loading'})`,
+        );
+        setPreparingDone(true);
+      }
+    }, 250);
+    return () => clearInterval(iv);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preparingDone]);
 
   // Close any open attention episode when detection stops (interview ending /
   // camera gone) or on unmount, so its duration is still logged.
@@ -2883,16 +2980,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         console.error("[Recording] MediaRecorder not supported:", err);
       }
     }
-    // Start continuous face-identity verification. On weak (≤2-core) machines
-    // the face-api/TF.js loop is CPU-heavy, so instead of DISABLING it on
-    // low-tier (which meant identity swaps were never caught) we run it at a
-    // SLOWER 30s cadence — 3× fewer inferences keeps the main thread healthy
-    // while still catching a substituted candidate within ~30s. Full-tier keeps
-    // the default 10s cadence.
-    const lowTier = effectiveDeviceCapability?.tier === 'low';
+    // Start continuous face-identity verification at a 30s cadence on EVERY
+    // tier (2026-10-14, product decision pending R&D). face-api/TF.js runs on
+    // the CPU on the main thread (~0.5-1.5s per check on a 4-core laptop), and
+    // the old 10s cadence for non-low tiers tripled that load — noticeable
+    // once 4-core machines started classifying as 'mid'. 30s still catches a
+    // substituted candidate within ~30s.
     if (faceVerification?.hasBaseline()) {
-      faceVerification.startVerification(video, lowTier ? 30000 : undefined);
-      console.log(`[INTERVIEW-DEBUG] Continuous face verification started (${lowTier ? '30s low-tier' : '10s'} cadence)`);
+      faceVerification.startVerification(video, FACE_VERIFY_INTERVAL_MS);
+      console.log(`[INTERVIEW-DEBUG] Continuous face verification started (${FACE_VERIFY_INTERVAL_MS / 1000}s cadence)`);
     }
   }, [handDetection, faceDetection, objectDetection, faceVerification, effectiveDeviceCapability]);
 
@@ -3995,6 +4091,23 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // = timestamp of the most recent active frame within the current streak.
   const lastActiveFrameAtRef = useRef<number | null>(null);
   const STREAK_DIP_GRACE_MS = 400; // tolerate ~4-5 frames of inter-word gap
+  // "1.5s of voice within the last 3s" — the windowed rule the comment above
+  // mentions, now used ALONGSIDE the 3s-continuous streak to reset the silence
+  // clock. Natural speech pauses longer than STREAK_DIP_GRACE_MS between
+  // phrases, so on quiet wired/BT headsets the continuous streak alone never
+  // completed and "Are you done?" popped up mid-answer (staging 2026-10-13,
+  // moto buds: 4 popups in one interview, each closed ~5s later by the
+  // cumulative dismiss rule). Same kind of measure as the dismiss, so the
+  // popup can no longer open on speech that would immediately close it.
+  const activeFrameWindowRef = useRef<Array<{ at: number; ms: number; strong: boolean }>>([]);
+  const lastVadFrameAtRef = useRef<number | null>(null);
+  const WINDOWED_ACTIVE_SPAN_MS = 3000;
+  const WINDOWED_ACTIVE_MIN_MS = 1500;
+  // ...of which at least this much must be STRONG voice. Real speech always
+  // has strong frames (word onsets/stress); light background noise that reads
+  // "voice-like" never does — without this it kept resetting the silence clock
+  // and "Are you done?" never appeared after 15 s of silence (2026-10-14).
+  const WINDOWED_STRONG_MIN_MS = 300;
 
   // Pre-speech audio ring buffer. Captures PCM frames during the VAD warmup
   // (~600ms) and the speech-confirmation window (~280ms) so the candidate's
@@ -5043,13 +5156,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     switch (data.type) {
       case "pong":
         console.log(`[WS ${timestamp}] Keepalive pong received`);
-        // Only used to show network strength — no other action.
-        if (pingSentAtRef.current !== null) {
-          const rtt = performance.now() - pingSentAtRef.current;
-          pingSentAtRef.current = null;
-          rttSamplesRef.current = [...rttSamplesRef.current, rtt].slice(-3);
-          setNetworkRttMs(rttSamplesRef.current.reduce((a, b) => a + b, 0) / rttSamplesRef.current.length);
-        }
+        // Keepalive only — network strength comes from the HTTP probe.
         break;
       case "concurrent_session_blocked":
         // The interview link is already open/active in another window/device.
@@ -5736,6 +5843,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     lastStrongVoiceAtRef.current = null;
     activeStreakStartRef.current = null;
     lastActiveFrameAtRef.current = null;
+    activeFrameWindowRef.current = [];
+    lastVadFrameAtRef.current = null;
         speechPeakLevelRef.current = 0;
         ambientNoiseFloorRef.current = POSSIBLE_SPEECH_LEVEL * 0.5;
         // ALSO hard-stop the browser Web Speech API recognition AND clear any
@@ -5837,7 +5946,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         // races ahead of the role_intro message (else TalkingHead would get ""
         // and Bina's mouth would stay still — the "audio plays, Bina silent" bug).
         talkingHeadRef.current?.setText(
-          tokenBufferRef.current || (roleIntroActiveRef.current ? roleIntroTextRef.current : "")
+          tokenBufferRef.current
+            || (roleIntroActiveRef.current ? roleIntroTextRef.current : "")
+            // Repeat Question re-speak: no text arrives with it (see repeatTextRef).
+            || (repeatInFlightRef.current ? repeatTextRef.current : "")
         );
         // Defer streamStart until the first PCM chunk arrives (see pendingStreamStartRef).
         // Calling streamStart here (empty buffer) can cause TalkingHead to fire onAudioEnd
@@ -5978,45 +6090,22 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             wsRef.current.send(JSON.stringify({ type: 'end_interview' }));
           }
         }
-        // Backend silently discarded the transcript (noise, non-English, hallucination).
-        // Clear processing and reopen mic. Resume the per-question timer (it was
-        // paused by question_timer_stopped on end_turn — since the response was
-        // discarded, the candidate is still on the same question and the answer
-        // window should keep ticking down from where it froze).
+        // Backend silently discarded the transcript (noise, non-English,
+        // hallucination). Since the backend's ADVANCE-ON-DISCARD rule
+        // (message_handler, 2026-05-25) a discard ALWAYS moves straight on to
+        // the next question — so do NOT reopen the mic or resume this
+        // question's timer here. Doing so (the pre-rule behaviour) briefly
+        // reopened the PREVIOUS question's recording until Bina's next
+        // question arrived ~2 s later (staging 2026-10-14, Q12 → Q13).
+        // Just clear the processing state; the "getting ready" banner covers
+        // the gap until the next question streams in.
         setIsProcessing(false);
         isProcessingRef.current = false;
         setIsCandidateTranscriptProcessing(false);
         setCurrentTranscript("");
         currentTranscriptRef.current = "";
         provisionalAnswerQnRef.current = null;
-        // Read the frozen value from state — stopRecording nulls the REF to
-        // prevent double-deduction of the global timer, but leaves React state
-        // intact so the banner stays visible. Without falling back to state
-        // here, the ref-null causes silent_discard's resume to no-op and the
-        // candidate's answer window appears stuck at the frozen value forever.
-        setQuestionTimerSeconds(prevSeconds => {
-          if (
-            prevSeconds !== null
-            && prevSeconds > 0
-            && !questionTimerExpiredRef.current
-            && questionTimerIntervalRef.current === null
-          ) {
-            // Re-sync ref so subsequent reads (heartbeat watchdog, tick interval)
-            // see the correct value, then resume the countdown from the freeze
-            // point — original anchor's pause accounting was torn down at
-            // question_timer_stopped.
-            questionTimerSecondsRef.current = prevSeconds;
-            ensureQuestionTimerRunning(prevSeconds);
-          }
-          return prevSeconds;
-        });
-        if (!isAiSpeakingRef.current && !isRecordingRef.current && !isFaceBlockedRef.current && !isMutedRef.current) {
-          setTimeout(() => {
-            if (wsRef.current?.readyState === WebSocket.OPEN && !isAiSpeakingRef.current) {
-              startRecordingInternalRef.current();
-            }
-          }, 300);
-        }
+        setStatus("Moving to the next question…");
         break;
       case "transcript_discarded":
         // Background timed-mode transcript was rejected after the backend had
@@ -7185,6 +7274,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     lastStrongVoiceAtRef.current = null;
     activeStreakStartRef.current = null;
     lastActiveFrameAtRef.current = null;
+    activeFrameWindowRef.current = [];
+    lastVadFrameAtRef.current = null;
     speechPeakLevelRef.current = 0;
     inTurnSpeechFrameCountRef.current = 0;
     candidateAudioStreamingRef.current = false;
@@ -7316,6 +7407,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     lastStrongVoiceAtRef.current = null;
     activeStreakStartRef.current = null;
     lastActiveFrameAtRef.current = null;
+    activeFrameWindowRef.current = [];
+    lastVadFrameAtRef.current = null;
     speechPeakLevelRef.current = 0;
     inTurnSpeechFrameCountRef.current = 0;
     candidateAudioStreamingRef.current = false;
@@ -7426,6 +7519,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     lastStrongVoiceAtRef.current = null;
     activeStreakStartRef.current = null;
     lastActiveFrameAtRef.current = null;
+    activeFrameWindowRef.current = [];
+    lastVadFrameAtRef.current = null;
     setMicInputLevel(0);
     lastGoodMicAtRef.current = null;
     micInputLowRef.current = false;
@@ -7454,6 +7549,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     lastStrongVoiceAtRef.current = null;
     activeStreakStartRef.current = null;
     lastActiveFrameAtRef.current = null;
+    activeFrameWindowRef.current = [];
+    lastVadFrameAtRef.current = null;
     speechPeakLevelRef.current = 0;
     candidateAudioStreamingRef.current = false;
     candidateAudioFrameCountRef.current = 0;
@@ -7730,6 +7827,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     lastStrongVoiceAtRef.current = null;
     activeStreakStartRef.current = null;
     lastActiveFrameAtRef.current = null;
+    activeFrameWindowRef.current = [];
+    lastVadFrameAtRef.current = null;
       speechPeakLevelRef.current = 0;
       micRecentPeakRef.current = 0;
       inTurnSpeechFrameCountRef.current = 0;
@@ -8169,6 +8268,21 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               ? 0
               : (nowMs - activeStreakStartRef.current);
             const _sustained = _frameIsActive && _streakMs >= SUSTAINED_ACTIVE_MS;
+            // Rolling "voice within the last WINDOWED_ACTIVE_SPAN_MS" total
+            // (see activeFrameWindowRef). dt clamped like the popup accumulator.
+            const _prevVadFrameAt = lastVadFrameAtRef.current;
+            lastVadFrameAtRef.current = nowMs;
+            const _win = activeFrameWindowRef.current;
+            if (_frameIsActive && _prevVadFrameAt != null) {
+              _win.push({ at: nowMs, ms: Math.min(nowMs - _prevVadFrameAt, 250), strong: _frameIsStrong });
+            }
+            while (_win.length && nowMs - _win[0].at > WINDOWED_ACTIVE_SPAN_MS) _win.shift();
+            let _windowActiveMs = 0;
+            let _windowStrongMs = 0;
+            for (const f of _win) { _windowActiveMs += f.ms; if (f.strong) _windowStrongMs += f.ms; }
+            const _windowedActive = _frameIsActive
+              && _windowActiveMs >= WINDOWED_ACTIVE_MIN_MS
+              && _windowStrongMs >= WINDOWED_STRONG_MIN_MS;
 
             // AII14 popup dismissal — counts SPEECH_RESUME_CONFIRM_MS of VAD
             // speech frames (cumulative, pauses allowed) straight from this
@@ -8216,7 +8330,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                   silenceStartRef.current = null;
                 }
               }
-            } else if (!transcriptLedTurn && _frameIsActive && _sustained) {
+            } else if (!transcriptLedTurn && _frameIsActive && (_sustained || _windowedActive)) {
               inTurnSpeechFrameCountRef.current = 0;
               if (!realtimeTranscriptPending || realtimeBootstrapActive) {
                 lastMeaningfulAudioAtRef.current = nowMs;
@@ -8329,7 +8443,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                       parkedServerEotFallbackMs: SERVER_EOT_SILENCE_FALLBACK_MS,
                     });
                   }
-                  return;
+                  // NO `return` here. It belonged to the parked stopRecording()
+                  // path; left behind, it skipped the PCM send at the bottom of
+                  // this handler for EVERY frame once 15 s of silence had passed
+                  // — i.e. the whole time "Are you done?" was up. The candidate's
+                  // RESUMED speech was dropped until the silence clock reset
+                  // (≥1.5-3 s of voice) and never reached the transcript
+                  // (staging 2026-10-14: ~24 s of a 120 s answer never arrived).
+                  // Fall through so the frame is streamed like any other.
                 }
               }
             }
@@ -8435,20 +8556,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       avatarState.onUserStartSpeaking();
       setStatus(`Listening... (auto-stops after ${silenceDurationMsRef.current / 1000}s silence)`);
 
-      // No-response detection — LAST-RESORT fallback ONLY. The BACKEND owns the
-      // canonical silence nudge: its ladder fires "Are you there?" at 20s and
-      // skips at ~30-35s (WAIT_1 20s + nudge + WAIT_2 10s), then advances the
-      // turn (which clears this timer). The client used to ALSO fire at 20s,
-      // producing TWO "Are you there?" messages back-to-back (one from each).
-      // We now fire only at 45s — well AFTER the backend's whole ladder — so the
-      // backend always wins and this client nudge fires only if the backend
-      // never responded at all (e.g. silence detection disabled / stuck).
+      // No client-side "Are you there?" any more — the BACKEND's silence
+      // ladder is the only nudge. The old 45s client fallback (armed here)
+      // still collided with it whenever the mic opened early (e.g. after a TTS
+      // stall reset the speaking state): staging 2026-10-13 20:07:27 got the
+      // client and backend nudge in the same second → two "Are you there?"
+      // bubbles. handleNoResponse is left in place but is no longer triggered.
       clearNoResponseTimer();
-      noResponseTimerRef.current = setTimeout(() => {
-        if (!speechDetectedRef.current && isRecordingRef.current && !isSilencePromptRef.current) {
-          handleNoResponseRef.current();
-        }
-      }, 45000);
 
       // Hard cap on a single recording segment. Previously this was 30 s in
       // timed mode — which silently cut off candidates who tried to give a
@@ -8815,6 +8929,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       console.log(`[IV-DIAG] WS OPEN (handshake completed) ts=${timestamp}`);
       console.log(`[WS ${timestamp}] WebSocket connected successfully`);
       setIsConnected(true);
+      everConnectedRef.current = true;
       // Immediate feedback so the candidate sees SOMETHING while the backend's
       // LLM greeting + TTS warms up (can take 2-4s). Without this the chat
       // sits blank and the candidate thinks the page is frozen — which is
@@ -8834,7 +8949,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
       pingIntervalRef.current = setInterval(() => {
         if (wsRef.current?.readyState === WebSocket.OPEN) {
-          pingSentAtRef.current = performance.now();
           wsRef.current.send(JSON.stringify({ type: 'ping' }));
         }
       }, 5000);
@@ -8859,13 +8973,32 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       if (pingIntervalRef.current) { clearInterval(pingIntervalRef.current); pingIntervalRef.current = null; }
       if (event.code === 1000 || shouldDisconnectAfterAudioRef.current || isClosingRef.current) {
         setStatus("Interview completed. Thank you!");
+        // The "Finishing up… Saving your interview" popup covers the save,
+        // as the assessment's does before its final page and feedback popup.
+        // It still waits for Bina's goodbye to finish if she is mid-sentence
+        // (the same deferral the completion message uses).
+        if (candidatePlaybackEndedRef.current) setShowCompletionModal(true);
+        else pendingCompletionModalRef.current = true;
+        // Hold the final page (and its feedback popup) until the popup has
+        // been visible for 1.5s, so it reads as a step rather than a flash.
+        // Never hold it more than 8s past the save, whatever happens.
+        const waitForCompletionPopup = () => new Promise<void>((resolve) => {
+          const waitStarted = Date.now();
+          const tick = () => {
+            const shownAt = completionShownAtRef.current;
+            if (shownAt !== null && Date.now() - shownAt >= 1500) return resolve();
+            if (Date.now() - waitStarted > 8000) return resolve();
+            setTimeout(tick, 150);
+          };
+          tick();
+        });
         // Flush proctoring events + upload recording before navigating away.
         // Both run concurrently — proctoring flush MUST complete before onInterviewComplete
         // otherwise camera_disabled, mic_disabled etc. events are lost.
         const flushProctoring = flushProctoringEventsRef.current?.() ?? Promise.resolve();
         Promise.all([flushProctoring, uploadRecording()])
           .catch(() => {})
-          .finally(() => { onInterviewComplete?.(); });
+          .finally(() => { void waitForCompletionPopup().then(() => onInterviewComplete?.()); });
       } else if (event.code === 4003 && /not in progress|not yet|system_check|status:/i.test(event.reason || "")) {
         // RACE: the WS connected BEFORE the candidate's /start call flipped the
         // interview to in_progress (backend reject: "Interview not in progress
@@ -9089,6 +9222,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // (audio + static visual), which is exactly the old-system case.
   useEffect(() => {
     if ((!avatarReady && !avatarFailed) || hasConnectedRef.current) return;
+    // Wait for the "Preparing your interview…" warm-up (capped at
+    // PREPARE_MAX_WAIT_MS) so the detection models' heavy start-up doesn't
+    // stutter Bina's introduction.
+    if (!preparingDone) return;
     console.log('[IV-DIAG] connect-trigger effect firing', {
       avatarReady, avatarFailed,
       deviceTier: effectiveDeviceCapability?.tier ?? 'none',
@@ -9123,7 +9260,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [avatarReady, avatarFailed]);
+  }, [avatarReady, avatarFailed, preparingDone]);
 
   // Cleanup on unmount only
   useEffect(() => {
@@ -9769,11 +9906,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     if (isAiSpeakingRef.current || isProcessingRef.current) return;
     if (wsRef.current?.readyState !== WebSocket.OPEN) return;
 
-    // Most recent question Bina asked (last non-action assistant bubble).
+    // Most recent question Bina asked (last non-action assistant bubble) —
+    // skipping her fixed silence lines. After an "Are you there?" nudge the
+    // last bubble IS that nudge; sending it made the server refuse it as a
+    // duplicate nudge and the interview hung ~20 s (staging 2026-10-14).
+    const isSilenceLine = (t: string) =>
+      t.startsWith("Are you there?") || t.startsWith("I didn't get any response from you");
     let lastQuestion = "";
     for (let i = messages.length - 1; i >= 0; i--) {
       const m = messages[i];
-      if (m.role === "assistant" && !m.isActionRequest && m.content.trim()) {
+      if (m.role === "assistant" && !m.isActionRequest && m.content.trim() && !isSilenceLine(m.content.trim())) {
         lastQuestion = m.content.trim();
         break;
       }
@@ -9781,6 +9923,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     if (!lastQuestion) return;
 
     repeatInFlightRef.current = true;
+    repeatTextRef.current = lastQuestion;
     setRepeatInFlight(true);
     setTimeout(() => {
       if (repeatInFlightRef.current) {
@@ -9843,8 +9986,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     // Text-based question has no buttons at all — it must show the normal
     // banner exactly like any other free-form question.
     if (structuredHrPrompt && structuredHrPrompt.questionNumber === questionNumber && structuredHrPrompt.answerType === 'yes_no' && !hrExplainMore) return null;
-    let variant: 'silence' | 'timesup' | 'hold' | 'turn' | 'prepare' | null = null;
-    if (showSilenceBanner) variant = 'silence';
+    let variant: 'starting' | 'silence' | 'timesup' | 'hold' | 'turn' | 'prepare' | null = null;
+    if (!preparingDone && !isConnected) variant = 'starting';   // pre-interview warm-up
+    else if (showSilenceBanner) variant = 'silence';
     else if (questionTimerExpired) variant = 'timesup';
     else if (isAiSpeaking) variant = 'hold';                 // ONLY while actually speaking
     else if (showNowSpeakBanner && candidatePlaybackEnded) variant = 'turn';
@@ -9874,6 +10018,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     const cfg = {
       turn:    { grad: 'from-emerald-400 to-teal-500', ring: 'ring-emerald-200/60 dark:ring-emerald-500/30', glow: 'shadow-emerald-500/30', title: 'Your turn — speak now',        subtitle: 'Microphone is active · Bina is listening',          icon: micIcon,      dismissible: false },
       hold:    { grad: 'from-rose-500 to-red-600',     ring: 'ring-rose-200/50 dark:ring-rose-500/30',    glow: 'shadow-red-600/30',     title: 'Hold on — Bina is speaking',  subtitle: 'Please wait until she finishes the question',        icon: pauseIcon,    dismissible: false },
+      starting: { grad: 'from-sky-500 to-blue-600',  ring: 'ring-sky-200/60 dark:ring-sky-500/30',    glow: 'shadow-blue-600/30',    title: 'Preparing your interview…',   subtitle: 'Loading everything so the interview runs smoothly — just a few seconds.', icon: spinnerIcon, dismissible: false },
       prepare: { grad: 'from-rose-500 to-red-600',     ring: 'ring-rose-200/50 dark:ring-rose-500/30',    glow: 'shadow-red-600/30',     title: 'Hold on — getting ready',      subtitle: 'Please wait a moment…',                              icon: spinnerIcon,  dismissible: false },
       timesup: { grad: 'from-rose-500 to-red-600',     ring: 'ring-rose-200/50 dark:ring-rose-500/30',    glow: 'shadow-red-600/30',     title: "Time's up!",                   subtitle: 'Moving to the next question…',                       icon: <Clock className="w-5 h-5 text-white" />, dismissible: false },
       silence: { grad: 'from-amber-700 to-amber-700', ring: 'ring-amber-300/50 dark:ring-amber-500/30',   glow: 'shadow-amber-700/30',   title: 'Are you still there?',         subtitle: 'Take your time — Bina will move on if there’s no response.', icon: micIcon, dismissible: true },
@@ -10360,19 +10505,26 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               )}
 
 
-              {/* Candidate mic health (left) — confirms which input the browser
+              {/* Candidate mic health (left) — which input the browser
                   selected and whether the level is usable — and network strength
-                  (right), side by side. */}
-              <div className="absolute bottom-3 left-3 right-3 z-10 pointer-events-none grid grid-cols-2 gap-2 items-end">
-                <div className="min-w-0 rounded-lg border border-black/20 bg-black/55 backdrop-blur-md px-3 py-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
+                  (right), side by side. Collapsed to icon + level bar so they
+                  cover as little of the candidate's video as possible; hovering
+                  either (or tabbing to them) opens BOTH to show the mic name and
+                  the network status. The low-mic warning never hides. */}
+              <div
+                tabIndex={0}
+                aria-label={`Microphone: ${activeMicLabel || 'Microphone'}${isMuted ? ' (muted)' : ''}. Network status.`}
+                className="group/health absolute bottom-3 left-3 right-3 z-10 flex flex-wrap items-end gap-2 pointer-events-none focus:outline-none"
+              >
+                <div className="pointer-events-auto max-w-full rounded-lg border border-black/20 bg-black/55 backdrop-blur-md px-2.5 py-2 group-focus-visible/health:ring-2 group-focus-visible/health:ring-white/60">
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center min-w-0">
                       {isMuted ? (
                         <MicOff className="w-3.5 h-3.5 text-red-300 shrink-0" />
                       ) : (
                         <Mic className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
                       )}
-                      <span className="text-white/80 text-2xs truncate">
+                      <span className="text-white/80 text-2xs truncate max-w-0 opacity-0 transition-all duration-300 ease-out group-hover/health:max-w-[11rem] group-hover/health:ml-2 group-hover/health:opacity-100 group-focus-visible/health:max-w-[11rem] group-focus-visible/health:ml-2 group-focus-visible/health:opacity-100">
                         {activeMicLabel || "Microphone"}
                       </span>
                     </div>
@@ -10386,7 +10538,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                     </div>
                   </div>
                   {isRecording && !isMuted && micInputLow && (
-                    <div className="mt-1 text-2xs leading-tight text-amber-200">
+                    <div className="mt-1 max-w-[14rem] text-2xs leading-tight text-amber-200">
                       Microphone input is low. Check headset mic or system input.
                     </div>
                   )}
@@ -10394,9 +10546,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 {(() => {
                   // Approximate strength from the ping round trip:
                   // ≤100ms → 100%, falling to 10% at ≥1s.
-                  const rtt = isConnected ? networkRttMs : null;
+                  // "Offline" only when the browser has no network, or the
+                  // interview connection DROPPED after being up — not while it
+                  // is still starting (it showed "Offline" during loading).
+                  const browserOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+                  const dropped = !isConnected && everConnectedRef.current;
+                  const rtt = browserOffline || dropped ? null : networkRttMs;
                   const pct = rtt === null ? null : Math.round(Math.min(100, Math.max(10, 100 - ((rtt - 100) / 900) * 90)));
-                  const level = !isConnected ? 'offline' : rtt === null ? 'checking' : rtt < 250 ? 'good' : rtt < 600 ? 'moderate' : 'poor';
+                  const level = browserOffline || dropped ? 'offline' : rtt === null ? 'checking' : rtt < 250 ? 'good' : rtt < 600 ? 'moderate' : 'poor';
                   const tone = {
                     good: { icon: 'text-emerald-300', bar: 'bg-emerald-300', label: 'Good' },
                     moderate: { icon: 'text-amber-300', bar: 'bg-amber-300', label: 'Moderate' },
@@ -10405,13 +10562,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                     offline: { icon: 'text-red-300', bar: 'bg-red-400', label: 'Offline' },
                   }[level];
                   return (
-                    <div className="min-w-0 rounded-lg border border-black/20 bg-black/55 backdrop-blur-md px-3 py-2" title={rtt !== null ? `Approx. ${Math.round(rtt)} ms round trip to the interview server` : undefined}>
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2 min-w-0">
+                    <div className="pointer-events-auto max-w-full rounded-lg border border-black/20 bg-black/55 backdrop-blur-md px-2.5 py-2 group-focus-visible/health:ring-2 group-focus-visible/health:ring-white/60" title={rtt !== null ? `Approx. ${Math.round(rtt)} ms round trip to the interview server` : undefined}>
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center min-w-0">
                           {level === 'offline'
                             ? <WifiOff className={`w-3.5 h-3.5 shrink-0 ${tone.icon}`} />
                             : <Wifi className={`w-3.5 h-3.5 shrink-0 ${tone.icon}`} />}
-                          <span className="text-white/80 text-2xs truncate">
+                          <span className="text-white/80 text-2xs whitespace-nowrap overflow-hidden max-w-0 opacity-0 transition-all duration-300 ease-out group-hover/health:max-w-[11rem] group-hover/health:ml-2 group-hover/health:opacity-100 group-focus-visible/health:max-w-[11rem] group-focus-visible/health:ml-2 group-focus-visible/health:opacity-100">
                             Network · <span className="font-semibold text-white">{tone.label}</span>{pct !== null ? ` ${pct}%` : ''}
                           </span>
                         </div>
@@ -10433,8 +10590,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         </div>
 
         {/* ════ RIGHT PANEL: Chat (fills remaining width) ════ */}
-        {/* Inset card with rounded corners, matching the webcam frame. */}
-        <div className="flex-1 flex flex-col min-w-0 bg-white my-3 mr-3 ml-0 rounded-xl overflow-hidden">
+        {/* Inset card with rounded corners, matching the webcam frame. Same
+            6px top/bottom inset as the left column (Bina card mt-1.5, webcam
+            mb-1.5), so both sides run the same height. */}
+        <div className="flex-1 flex flex-col min-w-0 bg-white my-1.5 mr-1.5 ml-0 rounded-xl overflow-hidden">
 
           {/* Header — white status bar: title on the left; LIVE, ID Verified,
               question progress and End on the right, separated by thin
@@ -10505,10 +10664,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               {/* Global timer removed from the top header per UX request — the
                   interview time still runs in the backend; it's just not shown here. */}
               {/* REC badge moved to the candidate video's top-right corner; LIVE
-                  moved to the front of the header (green) — see above / below. */}
-              <div className="hidden @2xl:block w-px h-7 bg-gray-200 dark:bg-slate-700" />
-              <div className="hidden md:block w-px h-7 bg-gray-200 dark:bg-slate-700" />
-              <div className="hidden @2xl:block w-px h-7 bg-gray-200 dark:bg-slate-700" />
+                  moved to the front of the header (green) — see above / below.
+                  (Their three separator lines were left behind with nothing
+                  between them and showed as stray "|||" before End — removed.) */}
               {/* Closing indicator */}
               {isClosing && (
                 <div className="px-3 py-1.5 bg-orange-100 dark:bg-orange-500/15 border border-orange-300 dark:border-orange-500/40 text-orange-700 rounded-lg text-xs font-medium animate-pulse">Ending...</div>

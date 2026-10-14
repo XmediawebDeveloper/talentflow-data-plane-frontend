@@ -1935,7 +1935,7 @@ export function AssessmentInterface({
 
         {/* Progress Stepper - the shared one, as on every other step. No
             bottom rule here: the card below is what separates it. */}
-        <CandidateStepper current={5} bordered={false} />
+        <CandidateStepper current={4} bordered={false} />
       </div>
 
       {/* Main Content — laid out like the assessment dashboard reference:

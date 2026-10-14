@@ -1563,8 +1563,13 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
         .flatMap(q => {
           const offsetSec = videoOffsetSeconds(questionAskedAt.get(questionKey(q.question)) || undefined, videoAnchor);
           if (offsetSec == null) return [];
-          return [{ seconds: Math.max(0, offsetSec - WATCH_LEAD_SEC), label: `Q${q.qNum}`, title: q.question }];
-        });
+          return [{ seconds: Math.max(0, offsetSec - WATCH_LEAD_SEC), label: '', title: q.question }];
+        })
+        // Label by position in the WHOLE interview, in the order asked. qNum is
+        // renumbered per SECTION (Question Analysis spec), so an HR-first
+        // interview read "Q1 Q2 Q3 Q1 … Q10 Q4 Q5" on the timeline.
+        .sort((a, b) => a.seconds - b.seconds)
+        .map((m, idx) => ({ ...m, label: `Q${idx + 1}` }));
     } catch {
       return [];
     }

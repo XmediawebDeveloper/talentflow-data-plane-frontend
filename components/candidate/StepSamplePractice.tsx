@@ -28,7 +28,7 @@ import { recordPcm16 } from '@/lib/utils/pcmEnroll';
 // reading the mic AnalyserNode), so practice looks identical.
 import { MicWaveform } from '@/components/ai-interview/MicWaveform';
 import { canOpenDevice } from '@/lib/utils/mediaDeviceProbe';
-import { revealAfterPaint } from '@/lib/utils/candidateScroll';
+import { revealAfterPaint, stickyOffset, candidateScrollBehavior } from '@/lib/utils/candidateScroll';
 
 // ── Component props ──────────────────────────────────────────────────────────
 
@@ -265,6 +265,34 @@ function PracticeTour({
   useEffect(() => {
     if (!stepId) return;
     revealAfterPaint(() => panelRef.current?.querySelector(`[data-tour="${stepId}"]`), 'center');
+    // Then make the TIP CARD visible too. The card is placed below/above the
+    // target only after the ring is measured, so revealing just the target
+    // routinely left the card (the explanation + Next) off-screen and the
+    // candidate had to scroll by hand to read it. Once the target scroll has
+    // settled, scroll the page so target + card both fit; when they can't
+    // (a tall target such as the chat area), the card wins.
+    const t = window.setTimeout(() => {
+      if (document.fullscreenElement) return; // panel fills the screen; nothing to scroll
+      const target = panelRef.current?.querySelector<HTMLElement>(`[data-tour="${stepId}"]`);
+      const card = cardRef.current;
+      if (!card) return;
+      const topLimit = stickyOffset() + 12;
+      const bottomLimit = window.innerHeight - 12;
+      const c = card.getBoundingClientRect();
+      const r = target?.getBoundingClientRect();
+      let top = r ? Math.min(r.top, c.top) : c.top;
+      let bottom = r ? Math.max(r.bottom, c.bottom) : c.bottom;
+      if (bottom - top > bottomLimit - topLimit) {
+        // Too tall for both — keep the card fully in view, with as much of
+        // the target as fits next to it.
+        top = c.top; bottom = c.bottom;
+      }
+      let delta = 0;
+      if (bottom > bottomLimit) delta = bottom - bottomLimit;
+      if (top - delta < topLimit) delta = top - topLimit;
+      if (Math.abs(delta) > 1) window.scrollBy({ top: delta, behavior: candidateScrollBehavior() });
+    }, 600);
+    return () => window.clearTimeout(t);
   }, [stepId, panelRef]);
 
   if (!step) return null;
@@ -2867,6 +2895,17 @@ export default function StepSamplePractice({
                 ) : (
                   <>Start Interview <ChevronRight className="w-4 h-4" /></>
                 )}
+              </button>
+              {/* Close the popup and look back over the practice chat first.
+                  The footer's Start Interview stays, and closing scrolls it
+                  into view (see startPopupWasOpen above). */}
+              <button
+                type="button"
+                onClick={() => setShowStartPopup(false)}
+                disabled={submitting}
+                className="min-h-10 py-2.5 text-xs font-medium text-gray-500 hover:text-gray-800 underline-offset-2 hover:underline transition-colors disabled:opacity-50"
+              >
+                Review my practice first
               </button>
             </div>
           </div>

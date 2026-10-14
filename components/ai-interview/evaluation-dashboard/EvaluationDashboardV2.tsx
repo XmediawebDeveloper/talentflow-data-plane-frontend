@@ -454,15 +454,18 @@ export function QuestionsView({ data, renderAnswerAction }: {
 
   // "All" view order follows the HR stage configured on the interview:
   // Opening HR questions (asked before the technical rounds) lead, Closing
-  // ones follow NHS. The stage isn't carried on the result rows, so it is
-  // read from the ask order — an HR question asked before the first MHS/NHS
-  // question was an Opening one. Un-reached HR rows fall to the Closing end.
+  // ones follow NHS — the Question Distribution order. A row matched to a
+  // selected HR question carries its configured stage (asked or not). Any
+  // other HR row falls back to the ask order: asked before the first MHS/NHS
+  // question = Opening; un-reached ones go to the Closing end.
   const _skillAsked = [...mhQs, ...nhQs]
     .filter(q => !q.notDelivered && typeof q.askedNum === 'number')
     .map(q => q.askedNum as number);
   const firstSkillAsked = _skillAsked.length > 0 ? Math.min(..._skillAsked) : Infinity;
   const isOpeningHr = (q: PerQuestionDetail) =>
-    !q.notDelivered && typeof q.askedNum === 'number' && q.askedNum < firstSkillAsked;
+    q.hrStage
+      ? q.hrStage === 'opening'
+      : !q.notDelivered && typeof q.askedNum === 'number' && q.askedNum < firstSkillAsked;
   const hrOpening = hrQs.filter(isOpeningHr);
   const hrClosing = hrQs.filter(q => !isOpeningHr(q));
   const allOrder = [...hrOpening, ...mhQs, ...nhQs, ...hrClosing];
@@ -520,7 +523,7 @@ export function QuestionsView({ data, renderAnswerAction }: {
               </span>
             ) : isHr ? (
               <span className="text-xs font-semibold px-2 py-0.5 rounded-full border bg-violet-50 text-violet-700 border-violet-200">
-                HR · Not Scored
+                HR · For Reference
               </span>
             ) : q.notDelivered ? (
               <span
@@ -1013,13 +1016,13 @@ export function QuestionsView({ data, renderAnswerAction }: {
       )}
       {viewMode === 'sections' && hrQs.length > 0 && (
         <>
-          {sectionHeader('HR Round', 'Not Scored', hrQs.length, 'bg-violet-50 text-violet-700')}
+          {sectionHeader('HR Round', 'For Reference', hrQs.length, 'bg-violet-50 text-violet-700')}
           {hrQs.map((q, i) => renderQCard(q, i))}
         </>
       )}
 
       {/* Section Score summary — spec §4 Step 4 + Step 5. HR appears as
-          a "Not Scored" info card so the recruiter knows the HR Qs were
+          a "For Reference" info card so the recruiter knows the HR Qs were
           asked but didn't affect the Pass/Fail decision. */}
       {!isPartialEvaluation && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
