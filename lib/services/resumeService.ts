@@ -831,11 +831,17 @@ export interface FolderDeleteResult {
 
 export const folderService = {
   /**
-   * List all folders
+   * List all folders.
+   *
+   * `uploaded_by_name` scopes each folder's `resume_count` to that uploader
+   * (same partial match the resume list's own Uploaded By filter uses) — so
+   * when that filter is active, a folder's badge equals what opening that
+   * folder under the same filter actually lists, instead of staying at the
+   * folder's unfiltered total.
    */
-  async list(): Promise<Folder[]> {
+  async list(params?: { uploaded_by_name?: string }): Promise<Folder[]> {
     try {
-      const response = await api.get<Folder[]>('/folders');
+      const response = await api.get<Folder[]>('/folders', { params });
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));

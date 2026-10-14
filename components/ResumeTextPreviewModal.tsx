@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { X, Eye, Download, FileText } from 'lucide-react';
+import { X, Eye, Download, FileText, Loader2 } from 'lucide-react';
 import { resumeService } from '@/lib/services/resumeService';
 import { Skeleton } from '@/components/ui/skeleton';
 import { extractLocalResumeText } from '@/lib/utils/localResumeText';
@@ -129,6 +129,34 @@ export default function ResumeTextPreviewModal({
   const [content, setContent] = useState(text || '');
   const [loading, setLoading] = useState(!text && (hasLocalFile || isStoredResumeOnly));
   const docxContainerRef = useRef<HTMLDivElement>(null);
+  /* The PDF itself still has to paint once the iframe's src is set — the
+     browser's own PDF viewer renders a solid black frame for a beat before
+     the document appears. The skeleton above only covers the fetch; this
+     covers that second gap so the black frame is never the thing on screen.
+
+     The iframe's `onLoad` alone isn't enough: for a blob: URL it tends to
+     fire as soon as the outer frame document exists, before the embedded
+     PDF viewer has actually painted anything — so gating on it alone just
+     moved the black flash a few milliseconds later instead of removing it.
+     A short minimum hold (`pdfMinHoldElapsed`) covers that gap; the spinner
+     only clears once BOTH it and `onLoad` have fired, whichever is later —
+     so a slow network load still waits on the real `onLoad`. */
+  const [pdfIframeLoaded, setPdfIframeLoaded] = useState(false);
+  const [pdfMinHoldElapsed, setPdfMinHoldElapsed] = useState(false);
+  const pdfFrameLoaded = pdfIframeLoaded && pdfMinHoldElapsed;
+  useEffect(() => {
+    setPdfIframeLoaded(false);
+    setPdfMinHoldElapsed(false);
+    if (!effectiveDocumentUrl) return;
+    const timer = setTimeout(() => setPdfMinHoldElapsed(true), 600);
+    return () => clearTimeout(timer);
+  }, [effectiveDocumentUrl]);
+
+  /* Same gap, different renderer: docx-preview fills `docxContainerRef`
+     imperatively (its own async import plus a DOM render pass), so the
+     container sits empty — no skeleton, no spinner — until that finishes.
+     `docxReady` covers exactly that window. */
+  const [docxReady, setDocxReady] = useState(false);
 
   useEffect(() => {
     if (!isStoredResumeOnly) return;
@@ -218,6 +246,7 @@ export default function ResumeTextPreviewModal({
      file is actually opened, in the browser, where it works. */
   const renderDocx = useCallback(async (blob: Blob) => {
     if (!docxContainerRef.current) return;
+    setDocxReady(false);
     docxContainerRef.current.innerHTML = '';
     try {
       const { renderAsync } = await import('docx-preview');
@@ -248,6 +277,8 @@ export default function ResumeTextPreviewModal({
       if (!docxContainerRef.current) return;
       docxContainerRef.current.innerHTML =
         '<p style="color:var(--raw-6b7280);font-size:14px;text-align:center;padding:24px">Could not render this document. Download it to view the original file.</p>';
+    } finally {
+      if (docxContainerRef.current) setDocxReady(true);
     }
   }, []);
 
@@ -361,11 +392,17 @@ export default function ResumeTextPreviewModal({
                    the card fills the mat exactly and the PDF scrolls inside it.
                  - the browser's own PDF chrome (grey bar, page thumbnails, zoom
                    controls), hidden with #toolbar=0&navpanes=0. */
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 max-w-2xl mx-auto h-full overflow-hidden">
+              <div className="relative bg-white rounded-lg shadow-sm border border-gray-200 max-w-2xl mx-auto h-full overflow-hidden">
+                {!pdfFrameLoaded && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-white">
+                    <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
+                  </div>
+                )}
                 <iframe
                   src={`${effectiveDocumentUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
-                  className="w-full h-full border-0"
+                  className={`w-full h-full border-0 ${pdfFrameLoaded ? '' : 'invisible'}`}
                   title={title}
+                  onLoad={() => setPdfIframeLoaded(true)}
                 />
               </div>
             ) : (
@@ -375,10 +412,17 @@ export default function ResumeTextPreviewModal({
                  the Word page geometry and docx-preview's own grey mat, so the
                  document reflows into this card instead of overflowing it at
                  its 8.5in print width. See app/globals.css. */
-              <div
-                ref={docxContainerRef}
-                className="tf-docx-preview bg-white rounded-lg shadow-sm border border-gray-200 p-6 sm:p-8 max-w-2xl mx-auto min-h-full"
-              />
+              <div className="relative max-w-2xl mx-auto h-full">
+                {!docxReady && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-white rounded-lg border border-gray-200">
+                    <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
+                  </div>
+                )}
+                <div
+                  ref={docxContainerRef}
+                  className={`tf-docx-preview bg-white rounded-lg shadow-sm border border-gray-200 p-6 sm:p-8 min-h-full ${docxReady ? '' : 'invisible'}`}
+                />
+              </div>
             )
           ) : loading ? (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 sm:p-8 max-w-2xl mx-auto min-h-full space-y-4">

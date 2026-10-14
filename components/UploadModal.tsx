@@ -821,12 +821,6 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 text-gray-400 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-200 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors flex-shrink-0"
-           aria-label="Close">
-            <X className="w-5 h-5" />
-          </button>
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
@@ -1348,6 +1342,13 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
         )}
 
         <div className="flex-shrink-0 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 p-4 sm:p-5 border-t border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-900">
+          <button
+            onClick={onClose}
+            disabled={isUploading}
+            className="px-5 py-2.5 rounded-xl border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 hover:border-brand-blue/30 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Cancel
+          </button>
           <button
             onClick={handleValidateAndUpload}
             disabled={isUploading || isCheckingQuota || (quotaInfo?.status === 'EXCEEDED') || selectedFiles.length === 0}

@@ -1,6 +1,6 @@
 'use client';
 
-import { X, Trash2, RefreshCw, GitBranch, Check, Loader2, FileText, AlertTriangle } from 'lucide-react';
+import { Trash2, RefreshCw, GitBranch, Check, Loader2, FileText, AlertTriangle } from 'lucide-react';
 import { useState } from 'react';
 import { resumeService } from '@/lib/services';
 import { toast } from 'sonner';
@@ -72,9 +72,6 @@ export default function BulkVersionResolutionModal({ items, onClose, onResolved 
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="p-1.5 text-gray-500 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-md transition-colors flex-shrink-0" aria-label="Close">
-            <X className="w-5 h-5" />
-          </button>
         </div>
 
         {/* Content */}
@@ -217,6 +214,13 @@ export default function BulkVersionResolutionModal({ items, onClose, onResolved 
 
         {/* Footer */}
         <div className="flex-shrink-0 flex items-center justify-end px-4 sm:px-6 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 gap-2 sm:gap-3">
+          <button
+            onClick={onClose}
+            disabled={isSubmitting}
+            className="px-4 py-2 text-sm text-gray-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 hover:border-brand-blue/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Cancel
+          </button>
           <button
             onClick={handleConfirm}
             disabled={!selectedAction || isSubmitting}
