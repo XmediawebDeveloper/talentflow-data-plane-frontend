@@ -31,6 +31,31 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
   const [previewTitle, setPreviewTitle] = useState<string>('');
   const [previewDocxBlob, setPreviewDocxBlob] = useState<Blob | null>(null);
   const docxContainerRef = useRef<HTMLDivElement>(null);
+  /* The PDF itself still has to paint once the iframe's src is set — the
+     browser's own PDF viewer renders a solid black frame for a beat before
+     the document appears. This covers that gap so the black frame is never
+     the thing on screen.
+
+     `onLoad` alone isn't enough: for a blob: URL it tends to fire as soon as
+     the outer frame document exists, before the embedded PDF viewer has
+     actually painted — so gating on it alone just moved the black flash a
+     few milliseconds later. A short minimum hold covers that gap; the
+     spinner only clears once BOTH it and `onLoad` have fired. */
+  const [pdfIframeLoaded, setPdfIframeLoaded] = useState(false);
+  const [pdfMinHoldElapsed, setPdfMinHoldElapsed] = useState(false);
+  const pdfFrameLoaded = pdfIframeLoaded && pdfMinHoldElapsed;
+  useEffect(() => {
+    setPdfIframeLoaded(false);
+    setPdfMinHoldElapsed(false);
+    if (!previewUrl) return;
+    const timer = setTimeout(() => setPdfMinHoldElapsed(true), 600);
+    return () => clearTimeout(timer);
+  }, [previewUrl]);
+
+  /* Same gap, different renderer: docx-preview fills `docxContainerRef`
+     imperatively, so the container sits empty — no spinner — until that
+     finishes. `docxReady` covers exactly that window. */
+  const [docxReady, setDocxReady] = useState(false);
 
   // Helper: check if a blob is actually a PDF by reading magic bytes
   const isPdfBlob = async (blob: Blob): Promise<boolean> => {
@@ -45,6 +70,7 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
   // Render DOCX blob into container
   const renderDocx = useCallback(async (blob: Blob) => {
     if (docxContainerRef.current) {
+      setDocxReady(false);
       docxContainerRef.current.innerHTML = '';
       try {
         await renderAsync(blob, docxContainerRef.current, undefined, {
@@ -61,6 +87,8 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
       } catch (err) {
         console.error('DOCX render error:', err);
         docxContainerRef.current.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--raw-666666);">Failed to render document</div>';
+      } finally {
+        setDocxReady(true);
       }
     }
   }, []);
@@ -519,13 +547,31 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
           </div>
           <div className="flex-1 overflow-hidden">
             {previewUrl ? (
-              <iframe
-                src={previewUrl}
-                className="w-full h-full border-0"
-                title={previewTitle}
-              />
+              <div className="relative w-full h-full">
+                {!pdfFrameLoaded && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-white dark:bg-slate-900">
+                    <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
+                  </div>
+                )}
+                <iframe
+                  src={previewUrl}
+                  className={`w-full h-full border-0 ${pdfFrameLoaded ? '' : 'invisible'}`}
+                  title={previewTitle}
+                  onLoad={() => setPdfIframeLoaded(true)}
+                />
+              </div>
             ) : (
-              <div ref={docxContainerRef} className="w-full h-full overflow-auto bg-white dark:bg-slate-900 p-4" />
+              <div className="relative w-full h-full">
+                {!docxReady && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-white dark:bg-slate-900">
+                    <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
+                  </div>
+                )}
+                <div
+                  ref={docxContainerRef}
+                  className={`w-full h-full overflow-auto bg-white dark:bg-slate-900 p-4 ${docxReady ? '' : 'invisible'}`}
+                />
+              </div>
             )}
           </div>
         </div>

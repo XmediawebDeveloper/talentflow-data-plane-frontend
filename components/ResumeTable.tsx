@@ -3,7 +3,7 @@
 // `Folder` is already taken by the type imported below, so the icon comes in
 // under an alias.
 import { RESUME_EMAIL_SHARE_ENABLED } from '@/lib/constants/featureFlags';
-import { Eye, Briefcase, Download, MoreVertical, Paperclip, Upload, Zap, FileSearch, Edit3, FolderOpen, Folder as FolderIcon, Trash2, Copy, Share2, Mail, Send, Star, Archive, ArchiveRestore, Clock, GripVertical, FileText, Loader2, X } from 'lucide-react';
+import { Eye, Briefcase, Download, MoreVertical, Paperclip, Upload, Zap, FileSearch, Edit3, FolderOpen, Folder as FolderIcon, Trash2, Copy, Share2, Mail, Send, Star, Archive, ArchiveRestore, Clock, GripVertical, FileText, Loader2 } from 'lucide-react';
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
@@ -396,6 +396,16 @@ export default function ResumeTable({
 
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
+  }, [openActionMenu, closeActionMenu]);
+
+  // Esc closes the menu the same way an outside click does.
+  useEffect(() => {
+    if (!openActionMenu) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeActionMenu();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
   }, [openActionMenu, closeActionMenu]);
 
   /* Right-aligned to the trigger, dropping below it when there's room and
@@ -1257,18 +1267,6 @@ export default function ResumeTable({
                   Update information for {selectedResumeForAction.name}
                 </p>
               </div>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => {
-                  setShowEditModal(false);
-                  setSelectedResumeForAction(null);
-                }}
-                className="px-2 flex-shrink-0 ml-2"
-                aria-label="Close"
-              >
-                <X className="w-5 h-5" />
-              </Button>
             </div>
             <div className="p-6 overflow-y-auto flex-1">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1332,6 +1330,17 @@ export default function ResumeTable({
             </div>
             <div className="flex gap-3 p-6 border-t border-gray-200 shrink-0">
               <Button
+                variant="secondary"
+                size="md"
+                onClick={() => {
+                  setShowEditModal(false);
+                  setSelectedResumeForAction(null);
+                }}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
                 variant="primary"
                 size="md"
                 onClick={() => {
@@ -1371,18 +1380,6 @@ export default function ResumeTable({
                   Archive {selectedResumeForAction.name}'s resume?
                 </p>
               </div>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => {
-                  setShowArchiveModal(false);
-                  setSelectedResumeForAction(null);
-                }}
-                className="px-2 flex-shrink-0 ml-2"
-                aria-label="Close"
-              >
-                <X className="w-5 h-5" />
-              </Button>
             </div>
             <div className="p-6 overflow-y-auto flex-1">
               <div className="bg-brand-orange/5 border border-brand-orange/20 rounded-lg p-4">
@@ -1398,6 +1395,17 @@ export default function ResumeTable({
               </div>
             </div>
             <div className="flex gap-3 p-6 border-t border-gray-200 shrink-0">
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={() => {
+                  setShowArchiveModal(false);
+                  setSelectedResumeForAction(null);
+                }}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
               <Button
                 variant="primary"
                 size="md"
