@@ -2638,6 +2638,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     enabled: isConnected && webcamReady,
     // Load + warm up during "Preparing your interview…" (see preparingDone).
     warmup: webcamReady,
+    // No GPU inference while Bina speaks (her audio + lip-sync stuttered).
+    paused: isAiSpeaking,
     lowTier: effectiveDeviceCapability?.tier === 'low',
     onObjectDetected: handleObjectDetected,
     onUnavailable: handleObjectDetectionUnavailable,
@@ -4089,10 +4091,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // moto buds: 4 popups in one interview, each closed ~5s later by the
   // cumulative dismiss rule). Same kind of measure as the dismiss, so the
   // popup can no longer open on speech that would immediately close it.
-  const activeFrameWindowRef = useRef<Array<{ at: number; ms: number }>>([]);
+  const activeFrameWindowRef = useRef<Array<{ at: number; ms: number; strong: boolean }>>([]);
   const lastVadFrameAtRef = useRef<number | null>(null);
   const WINDOWED_ACTIVE_SPAN_MS = 3000;
   const WINDOWED_ACTIVE_MIN_MS = 1500;
+  // ...of which at least this much must be STRONG voice. Real speech always
+  // has strong frames (word onsets/stress); light background noise that reads
+  // "voice-like" never does — without this it kept resetting the silence clock
+  // and "Are you done?" never appeared after 15 s of silence (2026-10-14).
+  const WINDOWED_STRONG_MIN_MS = 300;
 
   // Pre-speech audio ring buffer. Captures PCM frames during the VAD warmup
   // (~600ms) and the speech-confirmation window (~280ms) so the candidate's
@@ -8282,12 +8289,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             lastVadFrameAtRef.current = nowMs;
             const _win = activeFrameWindowRef.current;
             if (_frameIsActive && _prevVadFrameAt != null) {
-              _win.push({ at: nowMs, ms: Math.min(nowMs - _prevVadFrameAt, 250) });
+              _win.push({ at: nowMs, ms: Math.min(nowMs - _prevVadFrameAt, 250), strong: _frameIsStrong });
             }
             while (_win.length && nowMs - _win[0].at > WINDOWED_ACTIVE_SPAN_MS) _win.shift();
             let _windowActiveMs = 0;
-            for (const f of _win) _windowActiveMs += f.ms;
-            const _windowedActive = _frameIsActive && _windowActiveMs >= WINDOWED_ACTIVE_MIN_MS;
+            let _windowStrongMs = 0;
+            for (const f of _win) { _windowActiveMs += f.ms; if (f.strong) _windowStrongMs += f.ms; }
+            const _windowedActive = _frameIsActive
+              && _windowActiveMs >= WINDOWED_ACTIVE_MIN_MS
+              && _windowStrongMs >= WINDOWED_STRONG_MIN_MS;
 
             // AII14 popup dismissal — counts SPEECH_RESUME_CONFIRM_MS of VAD
             // speech frames (cumulative, pauses allowed) straight from this

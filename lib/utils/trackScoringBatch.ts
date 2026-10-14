@@ -14,6 +14,15 @@ type ScoringProgressApi = Pick<ReturnType<typeof useScoringProgress>, 'startScor
  * after (to the job's details page), and the poll has to outlive it. Stops when
  * the batch settles, or after 10 minutes as a circuit breaker.
  */
+/** Backend match_status ('exact_match', 'Partial Match', …) → the popup's verdict. */
+function toMatchResult(status?: string): 'Exact Match' | 'Partial Match' | 'No Match' | undefined {
+  if (!status) return undefined;
+  const s = status.toLowerCase().replace(/_/g, ' ').trim();
+  if (s === 'exact match' || s === 'excellent') return 'Exact Match';
+  if (s === 'partial match' || s === 'partial') return 'Partial Match';
+  return 'No Match';
+}
+
 export function trackScoringBatch(
   progress: ScoringProgressApi,
   batch: {
@@ -46,8 +55,12 @@ export function trackScoringBatch(
         const itemId = `${batchId}-${item.resume_id}`;
         const itemStatus = normalizeScoringStatus(item.status);
         if (itemStatus === 'completed') {
+          // Verdict + 0-10 rating too, so the popup shows Match Status and
+          // Score as Resume Scoring's does (it read "Pending" without them).
           progress.updateItemStatus(batchId, itemId, 'Scored successfully', {
             score: item.overall_score,
+            overallRating10: item.overall_rating_10,
+            matchResult: toMatchResult(item.match_status),
             scoredDateTime: new Date().toISOString(),
           });
         } else if (itemStatus === 'failed') {

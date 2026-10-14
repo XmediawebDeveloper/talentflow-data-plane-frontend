@@ -1,7 +1,7 @@
 'use client'
 
 import { RESUME_EMAIL_SHARE_ENABLED } from '@/lib/constants/featureFlags';
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useId } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import CreateInviteTargetModal from '@/components/resume-scoring/CreateInviteTargetModal';
 import { useJobInviteTargets } from '@/lib/hooks/useJobInviteTargets';
@@ -206,13 +206,14 @@ function FullResumeContent({ text }: { text: string }) {
 import { Resume, Job } from '@/lib/types/types';
 import { resumeService, Resume as ApiResume } from '@/lib/services/resumeService';
 import { jdService } from '@/lib/services/jdService';
-import { scoringService, BatchScoringStatus } from '@/lib/services/scoringService';
+import { scoringService } from '@/lib/services/scoringService';
 import ApplyToJobModal from '@/components/ApplyToJobModal';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 import { trackScoringBatch } from '@/lib/utils/trackScoringBatch';
 import AITalentMatchSelectJobModal from '@/components/AITalentMatchSelectJobModal';
 import AITalentMatchProgressPanel from '@/components/AITalentMatchProgressPanel';
-import ScoringJobProgressModal, { JobScoringProgress } from '@/components/ScoringJobProgressModal';
+import BulkScoringProgressModal, { type ScoringProgressItem as ModalProgressItem } from '@/components/BulkScoringProgressModal';
+import { scorecardUrl } from '@/components/GlobalScoringProgressIndicator';
 import ShareAssessmentModal from '@/components/ShareAssessmentModal';
 import ResumeTextPreviewModal from '@/components/ResumeTextPreviewModal';
 import InviteToAIInterviewFlow from '@/components/InviteToAIInterviewFlow';
@@ -322,11 +323,10 @@ export default function ResumeViewPage() {
   const [publishedJobs, setPublishedJobs] = useState<Job[]>([]);
   const [showAITalentMatchModal, setShowAITalentMatchModal] = useState(false);
   const [aiTalentMatchJob, setAiTalentMatchJob] = useState<Job | null>(null);
-  const [showScoringProgressModal, setShowScoringProgressModal] = useState(false);
-  const [isScoringProgressMinimized, setIsScoringProgressMinimized] = useState(false);
-  const [scoringProgressData, setScoringProgressData] = useState<JobScoringProgress[]>([]);
-  const [scoringProgressKey, setScoringProgressKey] = useState(0);
-  const scoringPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  /* The scoring run started here, shown in Resume Scoring's progress popup
+     (BulkScoringProgressModal) from the app-wide scoring context — the same
+     run the corner widget carries once minimised. */
+  const [scoringBatchId, setScoringBatchId] = useState<string | null>(null);
 
   // Version selection state for Apply to Job
   const [showVersionSelectModal, setShowVersionSelectModal] = useState(false);
@@ -1009,91 +1009,38 @@ Best regards`);
     setIsApplyToJobModalOpen(true);
   };
 
-  const clearScoringPoll = () => {
-    if (scoringPollRef.current) {
-      clearInterval(scoringPollRef.current);
-      scoringPollRef.current = null;
-    }
-  };
-
   const getCandidateName = () =>
     resume?.candidateName || resume?.candidate_name || resume?.name || 'Unknown Candidate';
 
-  const buildScoringProgress = (
-    jobId: string,
-    jobTitle: string,
-    resumeIdToScore: string,
-    candidateName: string,
-    status?: BatchScoringStatus
-  ): JobScoringProgress => {
-    const items: Array<{
-      resume_id: string;
-      candidate_name?: string;
-      status: 'queued' | 'processing' | 'completed' | 'failed';
-      overall_score?: number;
-      error_message?: string;
-    }> = status?.items?.length
-      ? status.items
-      : [{ resume_id: resumeIdToScore, candidate_name: candidateName, status: 'queued' as const }];
-
-    return {
-      jobId: status?.jd_id || jobId,
-      jobTitle: status?.jd_title || jobTitle,
-      total: status?.total || items.length || 1,
-      queued: status?.queued ?? items.filter(item => item.status === 'queued').length,
-      inProgress: status?.processing ?? items.filter(item => item.status === 'processing').length,
-      completed: status?.completed ?? items.filter(item => item.status === 'completed').length,
-      failed: status?.failed ?? items.filter(item => item.status === 'failed').length,
-      items: items.map(item => ({
-        resumeId: item.resume_id || resumeIdToScore,
-        candidateName: item.candidate_name || candidateName,
-        status: item.status,
-        score: item.overall_score,
-        errorMessage: item.error_message,
-      })),
-    };
-  };
-
-  const pollScoringBatch = (
-    batchId: string,
-    jobId: string,
-    jobTitle: string,
-    resumeIdToScore: string,
-    candidateName: string
-  ) => {
-    clearScoringPoll();
-
-    const poll = async () => {
-      try {
-        const status = await scoringService.getBatchStatus(batchId);
-        setScoringProgressData([buildScoringProgress(jobId, jobTitle, resumeIdToScore, candidateName, status)]);
-
-        const isComplete = status.total > 0 && status.queued === 0 && status.processing === 0;
-        if (isComplete) {
-          clearScoringPoll();
-          if (status.failed > 0 && status.completed === 0) {
-            toast.error('Resume scoring failed');
-          } else {
-            toast.success(`Resume scored for "${status.jd_title || jobTitle}"`);
-          }
-        }
-      } catch (pollError) {
-        console.error('[ResumeView] Failed to poll scoring batch:', pollError);
-      }
-    };
-
-    scoringPollRef.current = setInterval(poll, 2000);
-    void poll();
-  };
-
-  useEffect(() => () => clearScoringPoll(), []);
+  /* Panel visibility for the corner widget: hidden while this page's popup
+     is open, so the two never show at once. */
+  const scoringPanelOwner = useId();
+  useEffect(() => {
+    scoringProgress.setPanelVisibility(scoringPanelOwner, !!scoringBatchId);
+    return () => scoringProgress.setPanelVisibility(scoringPanelOwner, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scoringBatchId, scoringPanelOwner]);
+  const scoringRun = scoringBatchId ? scoringProgress.getJobProgress(scoringBatchId) : undefined;
+  const scoringModalItems: ModalProgressItem[] = (scoringRun?.items ?? []).map(item => ({
+    id: item.id,
+    resumeId: item.resumeId,
+    candidateName: item.candidateName,
+    jobTitle: item.jobTitle,
+    jobId: item.jobId,
+    source: item.source,
+    status: item.status,
+    errorReason: item.errorReason,
+    scoredDateTime: item.scoredDateTime ? new Date(item.scoredDateTime) : undefined,
+    matchResult: item.matchResult,
+    score: item.score,
+    overallRating10: item.overallRating10,
+  }));
 
   // Handle applying resume to selected job (scoring) - using async Celery
   const handleApplyToJobSubmit = async (resumeIds: string[], jobIds: string[], jobRecords?: Job[]) => {
     if (jobIds.length === 0 || resumeIds.length === 0) return;
 
     setIsApplyToJobModalOpen(false);
-    setIsScoringProgressMinimized(false);
 
     const jobId = jobIds[0];
     // Use selected version if available, otherwise use current resume
@@ -1104,84 +1051,45 @@ Best regards`);
     const fallbackJobTitle = selectedJob?.title || 'Selected Job';
     const candidateName = getCandidateName();
 
-    /* AI Talent Match flow: score, then land on the JOB's own page (its
-       Scored Resumes tab) — the same place the AI Talent Match results page's
-       Score goes. Progress rides the app-wide scoring popup, which follows. */
-    if (aiMatchScoringJob) {
-      const jobScoredResumesUrl = `/recruitment/job-details?id=${encodeURIComponent(jobId)}&tab=scored-resumes`;
-      try {
-        // Already scored against this JD → nothing to run; show it there.
+    /* Every Score Resume here runs the same way as Resume Scoring's: the run
+       is handed to the app-wide scoring context and shown in its full
+       progress popup (Match Status, Score, View) right on this page. The
+       recruiter stays here; minimising leaves it in the corner widget. */
+    try {
+      // AI Talent Match: already scored against this JD → open that scorecard.
+      if (aiMatchScoringJob) {
         try {
           const existing = await scoringService.checkExistingScores(jobId, [resumeIdToScore]);
           if (existing.existing_count > 0) {
             toast.info(`This resume is already scored for "${fallbackJobTitle}".`);
-            router.push(jobScoredResumesUrl);
+            router.push(scorecardUrl(jobId, resumeIdToScore));
             return;
           }
         } catch (checkError) {
           console.warn('[ResumeView] checkExistingScores failed, scoring anyway:', checkError);
         }
-
-        const response = await scoringService.startBulkScoringAsync(jobId, [resumeIdToScore]);
-        trackScoringBatch(scoringProgress, {
-          batchId: response.batch_id,
-          jobId: response.jd_id || jobId,
-          jobTitle: response.jd_title || fallbackJobTitle,
-          items: [{ resumeId: resumeIdToScore, candidateName }],
-          returnUrl: jobScoredResumesUrl,
-        });
-        toast.success(`Scoring started for ${candidateName}.`);
-        router.push(jobScoredResumesUrl);
-      } catch (error) {
-        console.error('[ResumeView] Failed to start scoring:', error);
-        toast.error(error instanceof Error ? error.message : 'Failed to start scoring');
-      } finally {
-        setSelectedVersionForApply(null);
       }
-      return;
-    }
 
-    try {
-      setScoringProgressKey(prev => prev + 1);
-      setScoringProgressData([buildScoringProgress(jobId, fallbackJobTitle, resumeIdToScore, candidateName)]);
-      setShowScoringProgressModal(true);
-
-      // Start async bulk scoring via Celery
       const response = await scoringService.startBulkScoringAsync(jobId, [resumeIdToScore]);
       const responseJobId = response.jd_id || jobId;
-      const responseJobTitle = response.jd_title || fallbackJobTitle;
-      setScoringProgressData([{
-        ...buildScoringProgress(responseJobId, responseJobTitle, resumeIdToScore, candidateName),
-        queued: 0,
-        inProgress: response.total_resumes || 1,
-        items: [{
-          resumeId: resumeIdToScore,
-          candidateName,
-          status: 'processing',
-        }],
-      }]);
-      pollScoringBatch(response.batch_id, responseJobId, responseJobTitle, resumeIdToScore, candidateName);
-      setSelectedVersionForApply(null);
+      trackScoringBatch(scoringProgress, {
+        batchId: response.batch_id,
+        jobId: responseJobId,
+        jobTitle: response.jd_title || fallbackJobTitle,
+        items: [{ resumeId: resumeIdToScore, candidateName }],
+        returnUrl: `/recruitment/job-details?id=${encodeURIComponent(responseJobId)}&tab=scored-resumes`,
+      });
+      setScoringBatchId(response.batch_id);
+      toast.success(`Scoring started for ${candidateName}.`);
     } catch (error: any) {
       console.error('Failed to start scoring:', error);
-
       if (error?.message?.includes('QUOTA') || error?.response?.status === 403) {
         toast.error('Resume scoring quota exhausted. Please upgrade your plan.');
       } else {
-        toast.error(error.message || 'Failed to start scoring');
+        toast.error(error?.message || 'Failed to start scoring');
       }
-      setScoringProgressData([{
-        ...buildScoringProgress(jobId, fallbackJobTitle, resumeIdToScore, candidateName),
-        queued: 0,
-        failed: 1,
-        items: [{
-          resumeId: resumeIdToScore,
-          candidateName,
-          status: 'failed',
-          errorMessage: error?.message || 'Failed to start scoring',
-        }],
-      }]);
-      setShowScoringProgressModal(true);
+    } finally {
+      setSelectedVersionForApply(null);
     }
   };
 
@@ -2504,17 +2412,27 @@ Best regards`);
         />
       )}
 
-      {showScoringProgressModal && (
-        <ScoringJobProgressModal
-          key={scoringProgressKey}
-          isOpen={showScoringProgressModal}
-          isMinimized={isScoringProgressMinimized}
-          jobProgressData={scoringProgressData}
-          onClose={() => {
-            setShowScoringProgressModal(false);
-            setIsScoringProgressMinimized(false);
+      {scoringBatchId && scoringRun && (
+        <BulkScoringProgressModal
+          progressData={scoringModalItems}
+          showScoreColumn
+          // A scored row's View: its scorecard; the name opens the resume here.
+          onViewResult={(item) => {
+            if (!item.jobId || !item.resumeId) return;
+            setScoringBatchId(null);
+            router.push(scorecardUrl(item.jobId, item.resumeId));
           }}
-          onMinimize={() => setIsScoringProgressMinimized(prev => !prev)}
+          onOpenResume={(id) => { setScoringBatchId(null); router.push(`/recruitment/resume-view/${id}`); }}
+          onMinimize={() => {
+            setScoringBatchId(null);
+            scoringProgress.setMinimized(true);
+          }}
+          onClose={() => {
+            // A finished run goes; one still going stays in the corner widget.
+            if (scoringRun.queued === 0 && scoringRun.processing === 0) scoringProgress.clearJob(scoringRun.jobId);
+            else scoringProgress.setMinimized(true);
+            setScoringBatchId(null);
+          }}
         />
       )}
 

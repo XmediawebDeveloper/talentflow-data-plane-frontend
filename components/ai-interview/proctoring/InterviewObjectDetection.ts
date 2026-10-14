@@ -64,6 +64,13 @@ interface UseInterviewObjectDetectionConfig {
    * onUnavailable report start once `enabled` is true. See `warmedUpRef`.
    */
   warmup?: boolean;
+  /**
+   * Skip inference while true (Bina speaking). One inference holds the GPU for
+   * seconds on integrated graphics (4 s on staging 2026-10-14), and the first
+   * live one landed on Bina's opening lines — her voice/3D lip-sync stuttered.
+   * Detection resumes the moment she stops (the candidate's answer window).
+   */
+  paused?: boolean;
 }
 
 const DETECT_INTERVAL = 3000;
@@ -238,6 +245,8 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
   const active = enabled || warmup;
   const enabledRef = useRef(enabled);
   enabledRef.current = enabled;
+  const pausedRef = useRef(config?.paused ?? false);
+  pausedRef.current = config?.paused ?? false;
   // True once the detector produced its first result, or is unavailable.
   const warmedUpRef = useRef(false);
   // An "unavailable" decided during warm-up is reported once the interview
@@ -526,7 +535,8 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
 
         // Warm-up: one frame only, then idle until the interview starts.
         const warmingIdle = !enabledRef.current && (warmedUpRef.current || inFlightRef.current);
-        const due = !warmingIdle && now - lastDetect >= effectiveInterval();
+        const due = !warmingIdle && !(enabledRef.current && pausedRef.current)
+          && now - lastDetect >= effectiveInterval();
         const capturable = video && video.readyState >= 2 && video.videoWidth > 0;
 
         // Skip rather than queue when the previous frame is still running —

@@ -7,6 +7,10 @@ import { useRouter } from 'next/navigation';
 import BulkScoringProgressModal, { ScoringProgressItem } from '@/components/BulkScoringProgressModal';
 import { Button } from '@/components/ui/button';
 
+/** One candidate's scorecard: the job page's Scored Resumes tab, opened on that resume. */
+export const scorecardUrl = (jobId: string, resumeId: string) =>
+  `/recruitment/job-details?id=${encodeURIComponent(jobId)}&tab=scored-resumes&resume=${encodeURIComponent(resumeId)}`;
+
 export default function GlobalScoringProgressIndicator() {
   const router = useRouter();
   const {
@@ -197,6 +201,14 @@ export default function GlobalScoringProgressIndicator() {
         }}
         // Same tab: this popup's run lives in context, so leaving the page
         // loses nothing — it shrinks to the corner widget and carries on.
+        // A scored row's View: that candidate's scorecard — the job page's
+        // Scored Resumes tab with the resume open (`?resume=`).
+        onViewResult={(item) => {
+          if (!item.jobId || !item.resumeId) return;
+          setShowGlobalModal(false);
+          setMinimized(true);
+          router.push(scorecardUrl(item.jobId, item.resumeId));
+        }}
         onOpenResume={(resumeId) => {
           setShowGlobalModal(false);
           setMinimized(true);
