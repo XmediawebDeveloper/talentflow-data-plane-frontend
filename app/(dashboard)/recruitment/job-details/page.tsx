@@ -497,7 +497,9 @@ function JobDetailsContent() {
       toast.success('New version created', {
         description: `Version ${(newJd as { version_number?: number }).version_number ?? ''} created as a new draft. Edit and publish it independently.`,
       });
-      router.push(`/recruitment/jd-creation?id=${newJd.id}&stage=create${fromAiInterview ? '&from=ai-interview' : ''}`);
+      // `new_version=1`: the editor names this "New Version" (reopening the
+      // draft later, without it, reads "Edit New Version").
+      router.push(`/recruitment/jd-creation?id=${newJd.id}&stage=create&new_version=1${fromAiInterview ? '&from=ai-interview' : ''}`);
     } catch (error) {
       console.error('Failed to create new JD version:', error);
       setCreatingVersion(false);

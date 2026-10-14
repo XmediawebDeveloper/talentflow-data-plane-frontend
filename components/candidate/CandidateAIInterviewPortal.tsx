@@ -40,6 +40,7 @@ import StepLanguageSelect from '@/components/candidate/StepLanguageSelect';
 import StepSamplePractice from '@/components/candidate/StepSamplePractice';
 import InterviewFeedbackModal from '@/components/candidate/InterviewFeedbackModal';
 import CandidateHeader from '@/components/candidate/CandidateHeader';
+import { CloseWindowPill } from '@/components/candidate/CloseWindowPill';
 import {
   readInterviewStep,
   writeInterviewStep,
@@ -2705,9 +2706,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
             </div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">Thank you for attending the interview</h1>
             <p className="mt-3 text-base text-gray-600">Your responses have been submitted successfully.</p>
-            <p className="mt-6 inline-flex items-center rounded-full bg-white px-4 py-2 text-sm font-medium text-gray-700 ring-1 ring-gray-200 shadow-sm">
-              You can now close this window.
-            </p>
+            <CloseWindowPill className="mt-6" />
           </div>
         </main>
         {/* AII17 — feedback popup layered OVER the completion card, so closing
@@ -3861,7 +3860,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
             return faceVerification.registerFace(video);
           }}
           onVerifyFace={faceVerification.baselineReady ? faceVerification.verifyCurrentFace : undefined}
-          onEnrollVoice={async (stream) => {
+          onEnrollVoice={async (stream, onPhase) => {
             // Primary enrollment: capture ~12 s of the candidate reading the
             // prompt and send raw 16 kHz PCM to the server, which computes an
             // ECAPA-TDNN voiceprint (accurate speaker verification). This is the
@@ -3872,6 +3871,10 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
             try {
               const cap = await recordPcm16(stream, 12000);
               if (!cap) return false; // nothing recorded at all
+              // Capture is over — the upload + server voiceprint check that
+              // follows can take seconds; tell the panel so it stops saying
+              // "keep speaking".
+              onPhase?.('verifying');
               // Send to the server. When server voice-ID is ENABLED, the server
               // enrolls the voiceprint and gates ONLY on whether the candidate
               // spoke (Silero VAD) — there is NO sentence/word matching. So `ok`
@@ -3898,6 +3901,9 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
               /* any other error: fall through to local baseline */
             }
             if (voiceVerification.hasBaseline()) return true;
+            // Local fallback records ANOTHER ~10 s — the candidate must keep
+            // speaking, so say so again.
+            onPhase?.('recording');
             return voiceVerification.enrollVoice(stream, 10000);
           }}
         />
