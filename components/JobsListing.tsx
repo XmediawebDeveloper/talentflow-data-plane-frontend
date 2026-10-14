@@ -1,12 +1,13 @@
 'use client'
 
-import { Plus, Search, MapPin, Eye, MoreVertical, Briefcase, Users, Clock, CheckCircle2, FileText, Sparkles, ChevronDown, Settings, Archive, XCircle, AlertCircle, ArrowUpRight, Edit, Ban, RefreshCw, ArrowUpDown, CheckSquare, Square, Trash2, Download, ChevronLeft, ChevronRight, X, Brain, ClipboardList, ClipboardCheck, Video } from 'lucide-react';
+import { Plus, Search, MapPin, Eye, MoreVertical, Briefcase, Users, Clock, CheckCircle2, FileText, Sparkles, ChevronDown, Settings, Archive, XCircle, AlertCircle, ArrowUpRight, Edit, Ban, RefreshCw, ArrowUpDown, CheckSquare, Square, Trash2, Download, ChevronLeft, ChevronRight, X, Brain, ClipboardList, ClipboardCheck, Video, Loader2 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Job } from '@/lib/types/types';
+import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
 import ArchiveJobModal from '@/components/ArchiveJobModal';
@@ -126,6 +127,12 @@ interface JobsListingProps {
   // Bulk delete: given the selected jobs, actually delete them (single confirm is
   // handled here in JobsListing before this is called).
   onBulkDelete?: (jobs: Job[]) => void | Promise<void>;
+  /** Bulk Disable / Re-enable / Archive / Unarchive: applies the status change to
+   *  every given job and reports one summary toast. */
+  onBulkStatusChange?: (jobs: Job[], action: BulkStatusAction) => Promise<void>;
+  /** Ids of the given jobs that are in use (scored, matched, assessed or
+   *  interviewed) — checked before the bulk Delete confirm opens. */
+  onCheckJobsInUse?: (jobs: Job[]) => Promise<Set<string>>;
   // Quota information for showing limit reached message
   quotaInfo?: {
     remaining: number;
@@ -168,7 +175,10 @@ const StatVersions = ({ count }: { count: number }) => (
   </span>
 );
 
-export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded = true, onCreateNew, onCreateNewDisabled = false, onViewJob, onViewApplicants, onAIMatch, onAIMatchDisabled = false, onAIMatchDisabledReason = 'You do not have permission to run AI Talent Match', onScoreResumes, onScoreResumesDisabled = false, onScoreResumesDisabledReason = 'You do not have permission to run resume scoring', onUpdateJobStatus, onEditJob, versionStatusOverrides, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, onBulkDelete, quotaInfo, initialStatusFilter, forceListView, configHref }: JobsListingProps) {
+/** The status transitions the bulk Actions menu can apply. */
+export type BulkStatusAction = 'disable' | 'reenable' | 'archive' | 'unarchive';
+
+export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded = true, onCreateNew, onCreateNewDisabled = false, onViewJob, onViewApplicants, onAIMatch, onAIMatchDisabled = false, onAIMatchDisabledReason = 'You do not have permission to run AI Talent Match', onScoreResumes, onScoreResumesDisabled = false, onScoreResumesDisabledReason = 'You do not have permission to run resume scoring', onUpdateJobStatus, onEditJob, versionStatusOverrides, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, onBulkDelete, onBulkStatusChange, onCheckJobsInUse, quotaInfo, initialStatusFilter, forceListView, configHref }: JobsListingProps) {
   const router = useRouter();
   const { isTenantAdmin, user, hasPermissionCode } = useAuth();
   // NOTE: canUpdateJD/canDeleteJD/canArchiveJD/canDisableJD (capital JD) are the
@@ -554,6 +564,12 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
       currentJobs.forEach(job => next.add(job.id));
       return next;
     });
+  const deselectCurrentPage = () =>
+    setSelectedJobs(prev => {
+      const next = new Set(prev);
+      currentJobs.forEach(job => next.delete(job.id));
+      return next;
+    });
   const selectAllPages = () => setSelectedJobs(new Set(sortedJobs.map(job => job.id)));
   const clearSelection = () => setSelectedJobs(new Set());
 
@@ -567,83 +583,136 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
     setSelectedJobs(newSelected);
   };
 
-  /* Bulk disable opens one shared DisableJobModal (showing the selected count),
-     the same way bulk archive opens one ArchiveJobModal — rather than firing the
-     per-row confirm once per job. It drives `onUpdateJobStatus` on confirm, the
-     same mechanism bulk archive uses. */
-  const [bulkDisableOpen, setBulkDisableOpen] = useState(false);
+  /* A selection belongs to the tab it was made on. Switching tabs clears it,
+     so the "N Selected" count, the confirm popups and the action itself all
+     describe the same jobs — rather than counting rows from another tab that
+     the action would then silently skip. */
+  const [selectionTab, setSelectionTab] = useState(statusFilter);
+  if (selectionTab !== statusFilter) {
+    setSelectionTab(statusFilter);
+    setSelectedJobs(new Set());
+    setShowBulkActions(false);
+  }
 
+  /* The selected jobs on screen, and the ones each bulk action applies to —
+     the same eligibility rules as each job's three-dot menu. */
+  const selectedVisibleJobs = sortedJobs.filter(job => selectedJobs.has(job.id));
+  const bulkDisableJobs = selectedVisibleJobs.filter(job => job.status === 'Published');
+  const bulkReenableJobs = selectedVisibleJobs.filter(job => job.status === 'Disabled');
+  const bulkArchiveJobs = selectedVisibleJobs.filter(job => job.status !== 'Draft' && job.status !== 'Archived');
+  const bulkUnarchiveJobs = selectedVisibleJobs.filter(job => job.status === 'Archived');
+  const bulkSelectionLabel = (count: number) => `${count} Job Description${count === 1 ? '' : 's'} Selected`;
+
+  const [bulkStatusBusy, setBulkStatusBusy] = useState(false);
+  const runBulkStatus = async (targets: Job[], action: BulkStatusAction) => {
+    if (!onBulkStatusChange || targets.length === 0) return;
+    setBulkStatusBusy(true);
+    try {
+      await onBulkStatusChange(targets, action);
+      setSelectedJobs(new Set());
+    } finally {
+      setBulkStatusBusy(false);
+    }
+  };
+
+  /* Bulk disable / archive open the shared DisableJobModal / ArchiveJobModal
+     (in their plural wording) — never a status change without being asked. */
+  const [bulkDisableOpen, setBulkDisableOpen] = useState(false);
   const handleBulkDisable = () => {
-    if (!onUpdateJobStatus || selectedJobs.size === 0) return;
+    if (bulkDisableJobs.length === 0) return;
+    setShowBulkActions(false);
     setBulkDisableOpen(true);
   };
-
-  const confirmBulkDisable = () => {
-    if (!onUpdateJobStatus) return;
-    // Only Published JDs can be disabled — same rule as the per-row Disable action.
-    const jobsToDisable = sortedJobs.filter(job => selectedJobs.has(job.id) && job.status === 'Published');
-    jobsToDisable.forEach(job => onUpdateJobStatus(job.id, 'Disabled'));
+  const confirmBulkDisable = async () => {
+    await runBulkStatus(bulkDisableJobs, 'disable');
     setBulkDisableOpen(false);
-    setSelectedJobs(new Set());
-    setShowBulkActions(false);
   };
 
-  // Bulk unarchive — mirrors the per-row Unarchive (onUnarchiveJob per selected
-  // Archived job); only the Archived tab surfaces it.
-  const handleBulkUnarchive = () => {
-    if (!onUnarchiveJob) return;
-    const jobsToUnarchive = sortedJobs.filter(job => selectedJobs.has(job.id) && job.status === 'Archived');
-    jobsToUnarchive.forEach(job => onUnarchiveJob(job));
-    setSelectedJobs(new Set());
-    setShowBulkActions(false);
-  };
-
-  /* Bulk archive is the one archive path that does NOT go through
-     `onArchiveJob` — it drives `onUpdateJobStatus` per id — so it would have
-     slipped past the confirm the parent wired to that prop. It opens the same
-     `ArchiveJobModal` itself, in its plural wording, rather than being the one
-     way to archive without being asked. */
   const [bulkArchiveOpen, setBulkArchiveOpen] = useState(false);
-
   const handleBulkArchive = () => {
-    if (!onUpdateJobStatus || selectedJobs.size === 0) return;
+    if (bulkArchiveJobs.length === 0) return;
+    setShowBulkActions(false);
     setBulkArchiveOpen(true);
   };
-
-  const confirmBulkArchive = () => {
-    if (!onUpdateJobStatus) return;
-    /* Same eligibility rule as the per-row Archive Job action: a Draft has
-       nothing published to retire, and an already-Archived job is a no-op. */
-    const jobsToArchive = sortedJobs.filter(
-      job => selectedJobs.has(job.id) && job.status !== 'Draft' && job.status !== 'Archived',
-    );
-    jobsToArchive.forEach(job => {
-      onUpdateJobStatus(job.id, 'Archived');
-    });
+  const confirmBulkArchive = async () => {
+    await runBulkStatus(bulkArchiveJobs, 'archive');
     setBulkArchiveOpen(false);
-    setSelectedJobs(new Set());
-    setShowBulkActions(false);
   };
 
-  /* Bulk delete opens its own DeleteJobModal (the same popup component as the
-     archive / disable confirms) rather than the generic global dialog, so the
-     delete confirm matches that family exactly. */
+  // Bulk re-enable mirrors the per-row "Re-enable JD", which has no confirm.
+  const handleBulkReenable = () => {
+    setShowBulkActions(false);
+    void runBulkStatus(bulkReenableJobs, 'reenable');
+  };
+
+  // Bulk unarchive puts the jobs back live, so it asks first.
+  const dialog = useGlobalDialog();
+  const handleBulkUnarchive = async () => {
+    const targets = bulkUnarchiveJobs;
+    if (targets.length === 0) return;
+    setShowBulkActions(false);
+    const many = targets.length > 1;
+    const confirmed = await dialog.confirm({
+      title: many ? 'Unarchive Job Openings' : 'Unarchive Job Opening',
+      message: many
+        ? `Are you sure you want to unarchive these ${targets.length} job openings?\nThey will be published again.`
+        : 'Are you sure you want to unarchive this job opening?\nIt will be published again.',
+      variant: 'confirm',
+      confirmText: 'Unarchive',
+      item: many
+        ? { label: 'JOB OPENINGS', name: bulkSelectionLabel(targets.length) }
+        : {
+            label: 'JOB OPENING',
+            name: [targets[0].job_id, targets[0].title].filter(Boolean).join(' – ') || targets[0].title,
+            badge: targets[0].versionNumber ? `V${targets[0].versionNumber}` : undefined,
+          },
+    });
+    if (!confirmed) return;
+    await runBulkStatus(targets, 'unarchive');
+  };
+
+  /* Bulk delete checks which selected jobs are in use BEFORE the confirm, so
+     the popup can say up front which ones will be skipped (the single-job
+     Delete checks first too). Then it opens its own DeleteJobModal. */
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [checkingBulkDelete, setCheckingBulkDelete] = useState(false);
+  const [bulkDeleteTargets, setBulkDeleteTargets] = useState<Job[]>([]);
+  const [bulkDeleteSkipped, setBulkDeleteSkipped] = useState(0);
 
-  const handleBulkDelete = () => {
-    if (!onBulkDelete || selectedJobs.size === 0) return;
+  const handleBulkDelete = async () => {
+    if (!onBulkDelete || selectedVisibleJobs.length === 0 || checkingBulkDelete) return;
+    const selected = selectedVisibleJobs;
+    let targets = selected;
+    if (onCheckJobsInUse) {
+      setCheckingBulkDelete(true);
+      try {
+        const inUse = await onCheckJobsInUse(selected);
+        targets = selected.filter(job => !inUse.has(job.id));
+      } finally {
+        setCheckingBulkDelete(false);
+      }
+    }
     setShowBulkActions(false);
+    const skipped = selected.length - targets.length;
+    if (targets.length === 0) {
+      toast.error(
+        skipped === 1
+          ? 'This job is in use and cannot be deleted. Archive it instead.'
+          : `All ${skipped} selected jobs are in use and cannot be deleted. Archive them instead.`,
+      );
+      return;
+    }
+    setBulkDeleteTargets(targets);
+    setBulkDeleteSkipped(skipped);
     setBulkDeleteOpen(true);
   };
 
   const confirmBulkDelete = async () => {
-    if (!onBulkDelete) return;
-    const selectedJobsData = sortedJobs.filter(job => selectedJobs.has(job.id));
-    if (selectedJobsData.length === 0) { setBulkDeleteOpen(false); return; }
+    if (!onBulkDelete || bulkDeleteTargets.length === 0) { setBulkDeleteOpen(false); return; }
     setBulkDeleting(true);
     try {
-      await onBulkDelete(selectedJobsData);
+      await onBulkDelete(bulkDeleteTargets);
       setSelectedJobs(new Set());
     } finally {
       setBulkDeleting(false);
@@ -804,14 +873,71 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
   /* Whether every matching job (across all pages) is selected — drives the
      Select All button's "fully checked" icon. */
   const allPagesSelected = sortedJobs.length > 0 && sortedJobs.every(job => selectedJobs.has(job.id));
+  /* Same for the active page — drives the "this page" menu checkbox. */
+  const currentPageSelected = currentJobs.length > 0 && currentJobs.every(job => selectedJobs.has(job.id));
 
   /* Which Actions-dropdown options apply to the active tab. Export and Delete
-     show on every tab; Disable only where disabling is meaningful (Published /
-     Disabled); Archive only on Published; Unarchive only on Archived. */
+     show on every tab. Status actions follow the job status flow:
+     Published → Disable / Archive; Disabled → Re-enable / Archive;
+     Archived → Unarchive; Draft → none (nothing is published).
+     All Jobs mixes statuses, so it offers every status action, each acting
+     only on the selected jobs it applies to and showing "(N of M)". */
   const actionsTab = statusFilter.toLowerCase();
-  const showDisableAction = actionsTab === 'published' || actionsTab === 'disabled';
-  const showArchiveAction = actionsTab === 'published';
-  const showUnarchiveAction = actionsTab === 'archived' && !!onUnarchiveJob;
+  const isAllJobsTab = actionsTab === 'all';
+  const canBulkStatus = !!onBulkStatusChange;
+  const showDisableAction = canBulkStatus && (isAllJobsTab || actionsTab === 'published');
+  const showReenableAction = canBulkStatus && (isAllJobsTab || actionsTab === 'disabled');
+  const showArchiveAction = canBulkStatus && (isAllJobsTab || actionsTab === 'published' || actionsTab === 'disabled');
+  const showUnarchiveAction = canBulkStatus && (isAllJobsTab || actionsTab === 'archived');
+  const hasStatusActions = showDisableAction || showReenableAction || showArchiveAction || showUnarchiveAction;
+
+  /* One status item in the Actions dropdown. Greyed out when the user lacks
+     the permission (click explains why) or when none of the selected jobs
+     can take this action. */
+  const renderBulkStatusItem = ({
+    label,
+    icon: Icon,
+    iconClass,
+    eligible,
+    allowed,
+    deniedMessage,
+    noneEligibleMessage,
+    onSelect,
+  }: {
+    label: string;
+    icon: LucideIcon;
+    iconClass: string;
+    eligible: number;
+    allowed: boolean;
+    deniedMessage: string;
+    noneEligibleMessage: string;
+    onSelect: () => void;
+  }) => {
+    const unavailable = !allowed || eligible === 0 || bulkStatusBusy;
+    const countSuffix = isAllJobsTab ? ` (${eligible} of ${selectedVisibleJobs.length})` : '';
+    return (
+      <button
+        key={label}
+        type="button"
+        onClick={() => {
+          if (!allowed) {
+            toast.error(deniedMessage);
+            return;
+          }
+          if (eligible === 0 || bulkStatusBusy) return;
+          onSelect();
+        }}
+        aria-disabled={unavailable}
+        title={!allowed ? deniedMessage : eligible === 0 ? noneEligibleMessage : ''}
+        className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 ${
+          unavailable ? 'text-gray-400 cursor-not-allowed opacity-60' : 'text-gray-700 hover:bg-gray-50'
+        }`}
+      >
+        <Icon className={`w-4 h-4 ${unavailable ? 'text-gray-400' : iconClass}`} />
+        <span className="tabular-nums">{label}{countSuffix}</span>
+      </button>
+    );
+  };
 
   // Reset to page 1 when filters change. Skipped on the mount pass: the
   // restored filters and the restored page arrive together, and resetting here
@@ -1094,18 +1220,43 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                       {/* Click-away layer so the menu closes on an outside click. */}
                       <div className="fixed inset-0 z-40" onClick={() => setShowSelectMenu(false)} />
                       <div className="absolute top-full left-0 mt-2 w-60 max-w-[calc(100vw-2rem)] bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                        {/* Checkbox items mirroring the real selection: unchecked
+                            until every job in scope is ticked; clicking a checked
+                            item unticks that scope. */}
                         <button
-                          onClick={() => { selectCurrentPage(); setShowSelectMenu(false); }}
+                          type="button"
+                          role="menuitemcheckbox"
+                          aria-checked={currentPageSelected}
+                          onClick={() => {
+                            if (currentPageSelected) deselectCurrentPage();
+                            else selectCurrentPage();
+                            setShowSelectMenu(false);
+                          }}
                           className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 text-gray-700 hover:bg-gray-50"
                         >
-                          <Square className="w-4 h-4 text-gray-500" />
+                          {currentPageSelected ? (
+                            <CheckSquare className="w-4 h-4 text-brand-blue" />
+                          ) : (
+                            <Square className="w-4 h-4 text-gray-500" />
+                          )}
                           Select all on this page ({currentJobs.length})
                         </button>
                         <button
-                          onClick={() => { selectAllPages(); setShowSelectMenu(false); }}
+                          type="button"
+                          role="menuitemcheckbox"
+                          aria-checked={allPagesSelected}
+                          onClick={() => {
+                            if (allPagesSelected) clearSelection();
+                            else selectAllPages();
+                            setShowSelectMenu(false);
+                          }}
                           className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 text-gray-700 hover:bg-gray-50"
                         >
-                          <CheckSquare className="w-4 h-4 text-brand-blue" />
+                          {allPagesSelected ? (
+                            <CheckSquare className="w-4 h-4 text-brand-blue" />
+                          ) : (
+                            <Square className="w-4 h-4 text-gray-500" />
+                          )}
                           Select all jobs ({sortedJobs.length})
                         </button>
                         <div className="border-t border-gray-200 my-1" />
@@ -1139,64 +1290,47 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                       // Right-aligned + width clamped to the viewport so the menu
                       // never runs off the right edge on narrow/mobile screens.
                       <div className="absolute top-full right-0 mt-2 w-64 max-w-[calc(100vw-2rem)] bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
-                        {showDisableAction && (
-                          <button
-                            onClick={() => {
-                              if (!canDisableJd) {
-                                toast.error('You do not have permission to disable job descriptions');
-                                return;
-                              }
-                              handleBulkDisable();
-                            }}
-                            aria-disabled={!canDisableJd}
-                            title={!canDisableJd ? 'You do not have permission to disable job descriptions' : ''}
-                            className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 ${
-                              canDisableJd ? 'text-gray-700 hover:bg-gray-50' : 'text-gray-400 cursor-not-allowed opacity-60'
-                            }`}
-                          >
-                            <Ban className={`w-4 h-4 ${canDisableJd ? 'text-destructive' : 'text-gray-400'}`} />
-                            Disable Selected (Published)
-                          </button>
-                        )}
-                        {showArchiveAction && (
-                          <button
-                            onClick={() => {
-                              if (!canArchiveJd) {
-                                toast.error('You do not have permission to archive job descriptions');
-                                return;
-                              }
-                              handleBulkArchive();
-                            }}
-                            aria-disabled={!canArchiveJd}
-                            title={!canArchiveJd ? 'You do not have permission to archive job descriptions' : ''}
-                            className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 ${
-                              canArchiveJd ? 'text-gray-700 hover:bg-gray-50' : 'text-gray-400 cursor-not-allowed opacity-60'
-                            }`}
-                          >
-                            <Archive className="w-4 h-4 text-gray-600" />
-                            Archive Selected
-                          </button>
-                        )}
-                        {showUnarchiveAction && (
-                          <button
-                            onClick={() => {
-                              if (!canArchiveJd) {
-                                toast.error('You do not have permission to archive job descriptions');
-                                return;
-                              }
-                              handleBulkUnarchive();
-                            }}
-                            aria-disabled={!canArchiveJd}
-                            title={!canArchiveJd ? 'You do not have permission to archive job descriptions' : ''}
-                            className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 ${
-                              canArchiveJd ? 'text-gray-700 hover:bg-gray-50' : 'text-gray-400 cursor-not-allowed opacity-60'
-                            }`}
-                          >
-                            <RefreshCw className={`w-4 h-4 ${canArchiveJd ? 'text-success' : 'text-gray-400'}`} />
-                            Unarchive Selected
-                          </button>
-                        )}
-                        {(showDisableAction || showArchiveAction || showUnarchiveAction) && (
+                        {showDisableAction && renderBulkStatusItem({
+                          label: 'Disable Selected',
+                          icon: Ban,
+                          iconClass: 'text-destructive',
+                          eligible: bulkDisableJobs.length,
+                          allowed: canDisableJd,
+                          deniedMessage: 'You do not have permission to disable job descriptions',
+                          noneEligibleMessage: 'Only Published jobs can be disabled',
+                          onSelect: handleBulkDisable,
+                        })}
+                        {showReenableAction && renderBulkStatusItem({
+                          label: 'Re-enable Selected',
+                          icon: CheckCircle2,
+                          iconClass: 'text-success',
+                          eligible: bulkReenableJobs.length,
+                          allowed: canUpdateJd,
+                          deniedMessage: 'You do not have permission to update job descriptions',
+                          noneEligibleMessage: 'Only Disabled jobs can be re-enabled',
+                          onSelect: handleBulkReenable,
+                        })}
+                        {showArchiveAction && renderBulkStatusItem({
+                          label: 'Archive Selected',
+                          icon: Archive,
+                          iconClass: 'text-gray-600',
+                          eligible: bulkArchiveJobs.length,
+                          allowed: canArchiveJd,
+                          deniedMessage: 'You do not have permission to archive job descriptions',
+                          noneEligibleMessage: 'Only Published or Disabled jobs can be archived',
+                          onSelect: handleBulkArchive,
+                        })}
+                        {showUnarchiveAction && renderBulkStatusItem({
+                          label: 'Unarchive Selected',
+                          icon: RefreshCw,
+                          iconClass: 'text-success',
+                          eligible: bulkUnarchiveJobs.length,
+                          allowed: canArchiveJd,
+                          deniedMessage: 'You do not have permission to archive job descriptions',
+                          noneEligibleMessage: 'Only Archived jobs can be unarchived',
+                          onSelect: () => { void handleBulkUnarchive(); },
+                        })}
+                        {hasStatusActions && (
                           <div className="border-t border-gray-200 my-2" />
                         )}
                         <button
@@ -1223,16 +1357,16 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                                 toast.error('You do not have permission to delete job descriptions');
                                 return;
                               }
-                              handleBulkDelete();
+                              void handleBulkDelete();
                             }}
-                            aria-disabled={!canDeleteJd}
+                            aria-disabled={!canDeleteJd || checkingBulkDelete}
                             title={!canDeleteJd ? 'You do not have permission to delete job descriptions' : ''}
                             className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 ${
                               canDeleteJd ? 'text-destructive hover:bg-destructive-subtle' : 'text-gray-400 cursor-not-allowed opacity-60'
                             }`}
                           >
-                            <Trash2 className="w-4 h-4" />
-                            Delete Selected
+                            {checkingBulkDelete ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                            {checkingBulkDelete ? 'Checking selected jobs…' : 'Delete Selected'}
                           </button>
                         )}
                       </div>
@@ -2039,25 +2173,31 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
       </div>
       </div>
 
+      {/* Counts are the jobs each action will actually change. */}
       <ArchiveJobModal
         isOpen={bulkArchiveOpen}
-        count={selectedJobs.size}
-        jobLabel={`${selectedJobs.size} Job Description Selected`}
-        onConfirm={confirmBulkArchive}
+        count={bulkArchiveJobs.length}
+        jobLabel={bulkSelectionLabel(bulkArchiveJobs.length)}
+        onConfirm={() => { void confirmBulkArchive(); }}
         onCancel={() => setBulkArchiveOpen(false)}
+        isLoading={bulkStatusBusy}
       />
 
       <DisableJobModal
         isOpen={bulkDisableOpen}
-        jobLabel={`${selectedJobs.size} Job Description Selected`}
-        onConfirm={confirmBulkDisable}
+        jobLabel={bulkSelectionLabel(bulkDisableJobs.length)}
+        onConfirm={() => { void confirmBulkDisable(); }}
         onCancel={() => setBulkDisableOpen(false)}
+        isLoading={bulkStatusBusy}
       />
 
       <DeleteJobModal
         isOpen={bulkDeleteOpen}
-        count={selectedJobs.size}
-        jobLabel={`${selectedJobs.size} Job Description Selected`}
+        count={bulkDeleteTargets.length}
+        jobLabel={bulkSelectionLabel(bulkDeleteTargets.length)}
+        note={bulkDeleteSkipped > 0
+          ? `${bulkDeleteSkipped} of ${bulkDeleteTargets.length + bulkDeleteSkipped} selected jobs ${bulkDeleteSkipped === 1 ? 'is' : 'are'} in use and will be skipped. Archive ${bulkDeleteSkipped === 1 ? 'it' : 'them'} instead.`
+          : undefined}
         onConfirm={confirmBulkDelete}
         onCancel={() => setBulkDeleteOpen(false)}
         isLoading={bulkDeleting}

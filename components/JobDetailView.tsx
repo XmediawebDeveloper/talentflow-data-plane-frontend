@@ -5464,10 +5464,18 @@ function AIMatchTabContent({
       paginatedCandidates.forEach((c) => next.add(c.resumeId));
       return next;
     });
+  const deselectCurrentPage = () =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      paginatedCandidates.forEach((c) => next.delete(c.resumeId));
+      return next;
+    });
   const selectAllCandidates = () => setSelectedIds(new Set(filteredCandidates.map((c) => c.resumeId)));
   const clearSelection = () => setSelectedIds(new Set());
   const allCandidatesSelected =
     filteredCandidates.length > 0 && filteredCandidates.every((c) => selectedIds.has(c.resumeId));
+  const currentPageSelected =
+    paginatedCandidates.length > 0 && paginatedCandidates.every((c) => selectedIds.has(c.resumeId));
 
   if (loading) {
     /* Mirrors this tab's real layout: a search + filters card, then the
@@ -5582,7 +5590,9 @@ function AIMatchTabContent({
                 selectedCount={selectedIds.size}
                 allSelected={allCandidatesSelected}
                 pageCount={paginatedCandidates.length}
+                pageSelected={currentPageSelected}
                 onSelectPage={selectCurrentPage}
+                onDeselectPage={deselectCurrentPage}
                 totalCount={filteredCandidates.length}
                 onSelectAll={selectAllCandidates}
                 onClear={clearSelection}
