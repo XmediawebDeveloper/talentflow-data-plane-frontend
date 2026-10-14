@@ -37,6 +37,15 @@ interface UseInterviewFaceDetectionConfig {
   onGazeRestored?: (reason: 'restored' | 'face_missing') => void;
   /** Low-tier device: check gaze every 2 s instead of every 1 s. */
   lowTier?: boolean;
+  /**
+   * Load the MediaPipe models and run ONE frame through each BEFORE the
+   * interview starts (the "Preparing your interview…" step), so their heavy
+   * first-run initialisation doesn't happen during Bina's introduction.
+   * While only warming up, results are discarded: no callbacks fire and no
+   * face/gaze state changes. Real processing starts once `enabled` is true —
+   * without reloading anything. See `warmedUpRef`.
+   */
+  warmup?: boolean;
 }
 
 export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConfig) {
@@ -57,6 +66,14 @@ export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConf
 
   const enabled = config?.enabled ?? true;
   const enableGazeTracking = config?.enableGazeTracking ?? true;
+  const warmup = config?.warmup ?? false;
+  // Models load when EITHER is on; results only count while `enabled`.
+  const active = enabled || warmup;
+  const enabledRef = useRef(enabled);
+  enabledRef.current = enabled;
+  // True once each model has completed a first frame (or failed) — the
+  // pre-interview gate in InterviewUI waits on this.
+  const warmedUpRef = useRef(false);
 
   // Stabilization counters
   const faceMissingCountRef = useRef(0);
@@ -117,7 +134,7 @@ export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConf
   // Initialize MediaPipe models + start processing loop (merged into one effect
   // so the loop starts immediately after models load — refs can't trigger effects)
   useEffect(() => {
-    if (!enabled) return;
+    if (!active) return;
     let mounted = true;
 
     const initialize = async () => {
@@ -144,6 +161,7 @@ export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConf
 
         faceDetection.onResults((results: any) => {
           if (!mounted) return;
+          if (!enabledRef.current) return; // warm-up frame — discard
           // Only count detections that are plausibly a real face: a bounding
           // box of meaningful size (≥ ~2.5% of the frame). Filters out small
           // spurious boxes. Combined with the higher confidence + the 2-frame
@@ -239,6 +257,7 @@ export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConf
 
             faceMesh.onResults((results: any) => {
               if (!mounted) return;
+              if (!enabledRef.current) return; // warm-up frame — discard
               const reading = gazeEstimatorRef.current?.read(
                 results.multiFaceLandmarks?.[0],
                 // Gaze is judged only while the face DETECTOR sees a face right
@@ -289,6 +308,7 @@ export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConf
       } catch (err) {
         console.error("[INTERVIEW_FACE_DETECTION] Init error:", err);
         if (mounted) isLoadingRef.current = false;
+        warmedUpRef.current = true; // nothing to wait for
       }
     };
 
@@ -319,17 +339,37 @@ export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConf
         const timestamp = performance.now();
 
         if (!videoRef.current) {
-          retryCount++;
+          // While only warming up the webcam <video> may not be handed over
+          // yet — keep waiting without spending the retry budget meant for
+          // the live interview.
+          if (enabledRef.current) retryCount++;
           if (retryCount < 30) {
             animationFrameRef.current = (setTimeout(processFrame, POLL_INTERVAL_MS) as unknown) as number;
           } else {
             processingRef.current = false;
+            warmedUpRef.current = true;
           }
           return;
         }
 
         const video = videoRef.current;
         if (video.readyState < 2 || video.videoWidth === 0) {
+          animationFrameRef.current = (setTimeout(processFrame, POLL_INTERVAL_MS) as unknown) as number;
+          return;
+        }
+
+        if (!enabledRef.current) {
+          // Warm-up only: one frame through each model (MediaPipe initialises
+          // its WASM/graph on the first send — the expensive part), then idle
+          // until the interview starts. Results are discarded in onResults.
+          if (!warmedUpRef.current) {
+            try { await faceDetectorRef.current?.send({ image: video }); } catch {}
+            if (enableGazeTracking && faceMeshRef.current) {
+              try { await faceMeshRef.current.send({ image: video }); } catch {}
+            }
+            warmedUpRef.current = true;
+            console.log(`[INTERVIEW_FACE_DETECTION] Warm-up done in ${Math.round(performance.now() - timestamp)} ms`);
+          }
           animationFrameRef.current = (setTimeout(processFrame, POLL_INTERVAL_MS) as unknown) as number;
           return;
         }
@@ -343,6 +383,7 @@ export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConf
           lastGazeTime = timestamp;
           try { await faceMeshRef.current.send({ image: video }); } catch {}
         }
+        warmedUpRef.current = true;
 
         animationFrameRef.current = (setTimeout(processFrame, POLL_INTERVAL_MS) as unknown) as number;
       };
@@ -369,13 +410,14 @@ export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConf
       faceMeshRef.current?.close();
       faceMeshRef.current = null;
     };
-  }, [enabled, enableGazeTracking]);
+  }, [active, enableGazeTracking]);
 
   return {
     // Refs — read .current, no re-renders
     isFaceDetectedRef,
     faceCountRef,
     isGazeOnScreenRef,
+    warmedUpRef,
     setVideoElement,
   };
 }

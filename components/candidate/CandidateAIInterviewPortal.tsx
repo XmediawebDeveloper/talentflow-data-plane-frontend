@@ -3861,7 +3861,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
             return faceVerification.registerFace(video);
           }}
           onVerifyFace={faceVerification.baselineReady ? faceVerification.verifyCurrentFace : undefined}
-          onEnrollVoice={async (stream) => {
+          onEnrollVoice={async (stream, onPhase) => {
             // Primary enrollment: capture ~12 s of the candidate reading the
             // prompt and send raw 16 kHz PCM to the server, which computes an
             // ECAPA-TDNN voiceprint (accurate speaker verification). This is the
@@ -3872,6 +3872,10 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
             try {
               const cap = await recordPcm16(stream, 12000);
               if (!cap) return false; // nothing recorded at all
+              // Capture is over — the upload + server voiceprint check that
+              // follows can take seconds; tell the panel so it stops saying
+              // "keep speaking".
+              onPhase?.('verifying');
               // Send to the server. When server voice-ID is ENABLED, the server
               // enrolls the voiceprint and gates ONLY on whether the candidate
               // spoke (Silero VAD) — there is NO sentence/word matching. So `ok`
@@ -3898,6 +3902,9 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
               /* any other error: fall through to local baseline */
             }
             if (voiceVerification.hasBaseline()) return true;
+            // Local fallback records ANOTHER ~10 s — the candidate must keep
+            // speaking, so say so again.
+            onPhase?.('recording');
             return voiceVerification.enrollVoice(stream, 10000);
           }}
         />

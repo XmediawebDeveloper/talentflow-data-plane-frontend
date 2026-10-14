@@ -270,6 +270,8 @@ const REPEAT_WINDOW_MS = 30000;
 // Live-interview face identity check cadence, same for every device tier
 // (CPU cost — see the startVerification call). Revisit after R&D.
 const FACE_VERIFY_INTERVAL_MS = 30000;
+// Longest the "Preparing your interview…" warm-up may hold back the start.
+const PREPARE_MAX_WAIT_MS = 20000;
 
 /** Returns current time formatted as IST with AM/PM (e.g. "2:34 PM") */
 function nowIST(): string {
@@ -1463,6 +1465,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
   // Avatar ready state — WebSocket connects only after avatar is loaded
   const [avatarReady, setAvatarReady] = useState(false);
+  // "Preparing your interview…" — the WebSocket (and so Bina) waits until the
+  // proctoring models have loaded and run once, or PREPARE_MAX_WAIT_MS passed.
+  const [preparingDone, setPreparingDone] = useState(false);
   // Fix #2: true when the 3D avatar (TalkingHead) fails to initialise OR is
   // taking too long to load. When set, we render a static Bina image over the
   // (blank) 3D canvas so the candidate sees a proper face. Audio still plays via
@@ -2590,6 +2595,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
   const objectDetection = useInterviewObjectDetection({
     enabled: isConnected && webcamReady,
+    // Load + warm up during "Preparing your interview…" (see preparingDone).
+    warmup: webcamReady,
     lowTier: effectiveDeviceCapability?.tier === 'low',
     onObjectDetected: handleObjectDetected,
     onUnavailable: handleObjectDetectionUnavailable,
@@ -2610,6 +2617,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
   const faceDetection = useInterviewFaceDetection({
     enabled: isConnected && webcamReady,
+    warmup: webcamReady,
     enableGazeTracking: true,
     lowTier: effectiveDeviceCapability?.tier === 'low',
     onFaceMissing: handleFaceMissing,
@@ -2619,6 +2627,35 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     onGazeAway: handleGazeAway,
     onGazeRestored: handleGazeRestored,
   });
+
+  // ── Pre-interview warm-up gate ──────────────────────────────────────────
+  // Object detection (28.8 MB model + WebGPU session + a slow first
+  // inference) and MediaPipe face/gaze used to start loading the moment the
+  // WebSocket connected — exactly when Bina began her introduction. Staging
+  // 2026-10-13: page at 2.2 fps, detector ready only 22 s later, the intro
+  // stuttered until ~30-60 s in. Both now warm up first (results discarded)
+  // and the connect effect waits for this — never longer than the cap, so a
+  // slow machine still starts on time (anything unfinished keeps loading in
+  // the background, as before).
+  useEffect(() => {
+    if (preparingDone) return;
+    const startedAt = performance.now();
+    const iv = setInterval(() => {
+      const odWarm = objectDetection.warmedUpRef.current;
+      const fdWarm = faceDetection.warmedUpRef.current;
+      const waited = performance.now() - startedAt;
+      if ((odWarm && fdWarm) || waited >= PREPARE_MAX_WAIT_MS) {
+        clearInterval(iv);
+        console.log(
+          `[INTERVIEW-DEBUG] Preparing done in ${Math.round(waited)} ms ` +
+          `(objectDetection=${odWarm ? 'ready' : 'still loading'}, faceDetection=${fdWarm ? 'ready' : 'still loading'})`,
+        );
+        setPreparingDone(true);
+      }
+    }, 250);
+    return () => clearInterval(iv);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preparingDone]);
 
   // Close any open attention episode when detection stops (interview ending /
   // camera gone) or on unmount, so its duration is still logged.
@@ -9129,6 +9166,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // (audio + static visual), which is exactly the old-system case.
   useEffect(() => {
     if ((!avatarReady && !avatarFailed) || hasConnectedRef.current) return;
+    // Wait for the "Preparing your interview…" warm-up (capped at
+    // PREPARE_MAX_WAIT_MS) so the detection models' heavy start-up doesn't
+    // stutter Bina's introduction.
+    if (!preparingDone) return;
     console.log('[IV-DIAG] connect-trigger effect firing', {
       avatarReady, avatarFailed,
       deviceTier: effectiveDeviceCapability?.tier ?? 'none',
@@ -9163,7 +9204,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [avatarReady, avatarFailed]);
+  }, [avatarReady, avatarFailed, preparingDone]);
 
   // Cleanup on unmount only
   useEffect(() => {
@@ -9884,8 +9925,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     // Text-based question has no buttons at all — it must show the normal
     // banner exactly like any other free-form question.
     if (structuredHrPrompt && structuredHrPrompt.questionNumber === questionNumber && structuredHrPrompt.answerType === 'yes_no' && !hrExplainMore) return null;
-    let variant: 'silence' | 'timesup' | 'hold' | 'turn' | 'prepare' | null = null;
-    if (showSilenceBanner) variant = 'silence';
+    let variant: 'starting' | 'silence' | 'timesup' | 'hold' | 'turn' | 'prepare' | null = null;
+    if (!preparingDone && !isConnected) variant = 'starting';   // pre-interview warm-up
+    else if (showSilenceBanner) variant = 'silence';
     else if (questionTimerExpired) variant = 'timesup';
     else if (isAiSpeaking) variant = 'hold';                 // ONLY while actually speaking
     else if (showNowSpeakBanner && candidatePlaybackEnded) variant = 'turn';
@@ -9915,6 +9957,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     const cfg = {
       turn:    { grad: 'from-emerald-400 to-teal-500', ring: 'ring-emerald-200/60 dark:ring-emerald-500/30', glow: 'shadow-emerald-500/30', title: 'Your turn — speak now',        subtitle: 'Microphone is active · Bina is listening',          icon: micIcon,      dismissible: false },
       hold:    { grad: 'from-rose-500 to-red-600',     ring: 'ring-rose-200/50 dark:ring-rose-500/30',    glow: 'shadow-red-600/30',     title: 'Hold on — Bina is speaking',  subtitle: 'Please wait until she finishes the question',        icon: pauseIcon,    dismissible: false },
+      starting: { grad: 'from-sky-500 to-blue-600',  ring: 'ring-sky-200/60 dark:ring-sky-500/30',    glow: 'shadow-blue-600/30',    title: 'Preparing your interview…',   subtitle: 'Loading everything so the interview runs smoothly — just a few seconds.', icon: spinnerIcon, dismissible: false },
       prepare: { grad: 'from-rose-500 to-red-600',     ring: 'ring-rose-200/50 dark:ring-rose-500/30',    glow: 'shadow-red-600/30',     title: 'Hold on — getting ready',      subtitle: 'Please wait a moment…',                              icon: spinnerIcon,  dismissible: false },
       timesup: { grad: 'from-rose-500 to-red-600',     ring: 'ring-rose-200/50 dark:ring-rose-500/30',    glow: 'shadow-red-600/30',     title: "Time's up!",                   subtitle: 'Moving to the next question…',                       icon: <Clock className="w-5 h-5 text-white" />, dismissible: false },
       silence: { grad: 'from-amber-700 to-amber-700', ring: 'ring-amber-300/50 dark:ring-amber-500/30',   glow: 'shadow-amber-700/30',   title: 'Are you still there?',         subtitle: 'Take your time — Bina will move on if there’s no response.', icon: micIcon, dismissible: true },
@@ -10546,10 +10589,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               {/* Global timer removed from the top header per UX request — the
                   interview time still runs in the backend; it's just not shown here. */}
               {/* REC badge moved to the candidate video's top-right corner; LIVE
-                  moved to the front of the header (green) — see above / below. */}
-              <div className="hidden @2xl:block w-px h-7 bg-gray-200 dark:bg-slate-700" />
-              <div className="hidden md:block w-px h-7 bg-gray-200 dark:bg-slate-700" />
-              <div className="hidden @2xl:block w-px h-7 bg-gray-200 dark:bg-slate-700" />
+                  moved to the front of the header (green) — see above / below.
+                  (Their three separator lines were left behind with nothing
+                  between them and showed as stray "|||" before End — removed.) */}
               {/* Closing indicator */}
               {isClosing && (
                 <div className="px-3 py-1.5 bg-orange-100 dark:bg-orange-500/15 border border-orange-300 dark:border-orange-500/40 text-orange-700 rounded-lg text-xs font-medium animate-pulse">Ending...</div>

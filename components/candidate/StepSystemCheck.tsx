@@ -70,7 +70,13 @@ interface StepSystemCheckProps {
    * the interview. Uses the same MediaStream already obtained for the noise
    * check, so no extra permission prompt is shown.
    */
-  onEnrollVoice?: (stream: MediaStream) => Promise<boolean>;
+  onEnrollVoice?: (
+    stream: MediaStream,
+    /** The capture finished and the sample is being checked (upload + server
+     *  voiceprint), or a fallback capture started again. Lets the panel stop
+     *  saying "keep speaking" while nothing is being recorded. */
+    onPhase?: (phase: 'recording' | 'verifying') => void,
+  ) => Promise<boolean>;
 }
 
 type Phase = 'browser_check' | 'browser_results' | 'system_checks';
@@ -392,7 +398,7 @@ export default function StepSystemCheck({
   // not that the candidate's speech was rejected — the messaging and gating
   // below intentionally differ.
   const [voiceEnrollStatus, setVoiceEnrollStatus] =
-    useState<'idle' | 'recording' | 'success' | 'failed' | 'disconnected'>('idle');
+    useState<'idle' | 'recording' | 'verifying' | 'success' | 'failed' | 'disconnected'>('idle');
   // Latches true the first time a voice sample succeeds. The environment
   // section (Device Settings, the checks, Continue) is unlocked by it, not by
   // the live status: a mic dropping after success flips the status to
@@ -840,7 +846,15 @@ export default function StepSystemCheck({
     const attemptId = ++voiceEnrollAttemptIdRef.current;
     setVoiceEnrollStatus('recording');
     setVoiceEnrollProgress(0);
-    voiceEnrollPromiseRef.current = onEnrollVoice(streamRef.current)
+    voiceEnrollPromiseRef.current = onEnrollVoice(streamRef.current, (phase) => {
+      // 12 s capture done → "Checking your voice sample…" while the sample is
+      // uploaded and verified. Before, the status stayed 'recording' for that
+      // whole wait, so the panel read "Recording — keep speaking… 00:12 / 00:12"
+      // for seconds after recording had actually stopped.
+      if (!mountedRef.current || voiceEnrollAttemptIdRef.current !== attemptId) return;
+      if (phase === 'verifying') setVoiceEnrollProgress(100);
+      setVoiceEnrollStatus(phase);
+    })
       .then((ok) => {
         if (mountedRef.current && voiceEnrollAttemptIdRef.current === attemptId) {
           setVoiceEnrollStatus(ok ? 'success' : 'failed');
@@ -2541,8 +2555,10 @@ export default function StepSystemCheck({
                         <span className="relative w-4 h-4 rounded-full bg-destructive animate-pulse" />
                       </span>
                     </FadePresence>
-                    <p className="text-sm font-semibold text-gray-900 text-center">
+                    <p className="text-sm font-semibold text-gray-900 text-center inline-flex items-center justify-center gap-2">
+                      {voiceEnrollStatus === 'verifying' && <Loader2 className="w-4 h-4 text-brand-blue animate-spin" />}
                       {voiceEnrollStatus === 'recording' ? 'Recording — keep speaking…'
+                        : voiceEnrollStatus === 'verifying' ? 'Checking your voice sample…'
                         : voiceEnrollStatus === 'success' ? 'Voice sample recorded'
                         : 'Record Voice Sample'}
                     </p>
@@ -2550,7 +2566,7 @@ export default function StepSystemCheck({
                         meter shaped like a waveform, not live audio levels. */}
                     <div className="w-full flex items-center gap-px sm:gap-[3px] h-8" aria-hidden>
                       {VOICE_WAVE_BARS.map((h, i) => {
-                        const filled = voiceEnrollStatus === 'success'
+                        const filled = voiceEnrollStatus === 'success' || voiceEnrollStatus === 'verifying'
                           || (i / VOICE_WAVE_BARS.length) * 100 < voiceEnrollProgress;
                         return (
                           <span
@@ -2562,7 +2578,7 @@ export default function StepSystemCheck({
                       })}
                     </div>
                     <span className="text-sm tabular-nums text-gray-600 whitespace-nowrap">
-                      {fmtClock(voiceEnrollStatus === 'success' ? VOICE_CAPTURE_SECONDS : recordSeconds)} / {fmtClock(VOICE_CAPTURE_SECONDS)}
+                      {fmtClock(voiceEnrollStatus === 'success' || voiceEnrollStatus === 'verifying' ? VOICE_CAPTURE_SECONDS : recordSeconds)} / {fmtClock(VOICE_CAPTURE_SECONDS)}
                     </span>
                     <div className="flex flex-wrap items-center justify-center gap-2">
                       {canStartRecording && (
