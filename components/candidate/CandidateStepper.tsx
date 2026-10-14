@@ -77,9 +77,11 @@ interface CandidateStepperProps {
   steps?: readonly string[];
   /** Bottom rule. The Assessment step turns it off: the card under it does the separating. */
   bordered?: boolean;
+  /** Accessible name of the progress list. The AI interview passes its own. */
+  label?: string;
 }
 
-export default function CandidateStepper({ current: currentProp, steps: stepsProp, bordered = true }: CandidateStepperProps) {
+export default function CandidateStepper({ current: currentProp, steps: stepsProp, bordered = true, label: ariaLabel = 'Assessment progress' }: CandidateStepperProps) {
   const hasHrStep = useContext(CandidateHrStepContext);
   const steps: readonly string[] = stepsProp
     ?? (hasHrStep ? ASSESSMENT_STEPS : ASSESSMENT_STEPS.filter((step) => step !== 'HR Questions'));
@@ -105,7 +107,7 @@ export default function CandidateStepper({ current: currentProp, steps: stepsPro
         <ol
           className="xl:hidden grid"
           style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}
-          aria-label="Assessment progress"
+          aria-label={ariaLabel}
         >
           {steps.map((label, index) => {
             const stepNumber = index + 1;
@@ -146,7 +148,7 @@ export default function CandidateStepper({ current: currentProp, steps: stepsPro
         </ol>
 
         {/* Desktop (`xl` and up, where it fits on one line): the inline row, unchanged. */}
-        <div className="hidden xl:flex flex-wrap items-center justify-center gap-2" aria-label="Assessment progress">
+        <div className="hidden xl:flex flex-wrap items-center justify-center gap-2" aria-label={ariaLabel}>
           {steps.map((label, index) => {
             const stepNumber = index + 1;
             const isCompleted = stepNumber < current;
@@ -177,7 +179,12 @@ export default function CandidateStepper({ current: currentProp, steps: stepsPro
 
                 {index < steps.length - 1 && (
                   <div
-                    className={`w-6 sm:w-12 h-0.5 mx-2 shrink-0 ${isCompleted ? 'bg-brand-blue' : 'bg-gray-200'}`}
+                    className={`${
+                      /* Longer lists (the AI interview's six or seven steps)
+                         keep short connectors until 2xl, so the row stays on
+                         one line on a 1280px laptop. */
+                      steps.length > 5 ? 'w-6 2xl:w-12' : 'w-6 sm:w-12'
+                    } h-0.5 mx-2 shrink-0 ${isCompleted ? 'bg-brand-blue' : 'bg-gray-200'}`}
                   />
                 )}
               </div>
