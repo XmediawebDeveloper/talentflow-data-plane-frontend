@@ -6082,45 +6082,22 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             wsRef.current.send(JSON.stringify({ type: 'end_interview' }));
           }
         }
-        // Backend silently discarded the transcript (noise, non-English, hallucination).
-        // Clear processing and reopen mic. Resume the per-question timer (it was
-        // paused by question_timer_stopped on end_turn — since the response was
-        // discarded, the candidate is still on the same question and the answer
-        // window should keep ticking down from where it froze).
+        // Backend silently discarded the transcript (noise, non-English,
+        // hallucination). Since the backend's ADVANCE-ON-DISCARD rule
+        // (message_handler, 2026-05-25) a discard ALWAYS moves straight on to
+        // the next question — so do NOT reopen the mic or resume this
+        // question's timer here. Doing so (the pre-rule behaviour) briefly
+        // reopened the PREVIOUS question's recording until Bina's next
+        // question arrived ~2 s later (staging 2026-10-14, Q12 → Q13).
+        // Just clear the processing state; the "getting ready" banner covers
+        // the gap until the next question streams in.
         setIsProcessing(false);
         isProcessingRef.current = false;
         setIsCandidateTranscriptProcessing(false);
         setCurrentTranscript("");
         currentTranscriptRef.current = "";
         provisionalAnswerQnRef.current = null;
-        // Read the frozen value from state — stopRecording nulls the REF to
-        // prevent double-deduction of the global timer, but leaves React state
-        // intact so the banner stays visible. Without falling back to state
-        // here, the ref-null causes silent_discard's resume to no-op and the
-        // candidate's answer window appears stuck at the frozen value forever.
-        setQuestionTimerSeconds(prevSeconds => {
-          if (
-            prevSeconds !== null
-            && prevSeconds > 0
-            && !questionTimerExpiredRef.current
-            && questionTimerIntervalRef.current === null
-          ) {
-            // Re-sync ref so subsequent reads (heartbeat watchdog, tick interval)
-            // see the correct value, then resume the countdown from the freeze
-            // point — original anchor's pause accounting was torn down at
-            // question_timer_stopped.
-            questionTimerSecondsRef.current = prevSeconds;
-            ensureQuestionTimerRunning(prevSeconds);
-          }
-          return prevSeconds;
-        });
-        if (!isAiSpeakingRef.current && !isRecordingRef.current && !isFaceBlockedRef.current && !isMutedRef.current) {
-          setTimeout(() => {
-            if (wsRef.current?.readyState === WebSocket.OPEN && !isAiSpeakingRef.current) {
-              startRecordingInternalRef.current();
-            }
-          }, 300);
-        }
+        setStatus("Moving to the next question…");
         break;
       case "transcript_discarded":
         // Background timed-mode transcript was rejected after the backend had
