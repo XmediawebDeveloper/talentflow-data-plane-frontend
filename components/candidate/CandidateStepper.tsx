@@ -5,7 +5,7 @@ import { CheckCircle } from 'lucide-react';
 import { RECRUITER_BAR_ROW } from '@/lib/constants/candidateLayout';
 
 /**
- * The five-step progress bar across the top of the candidate assessment flow.
+ * The four-step progress bar across the top of the candidate assessment flow.
  *
  * Written out by hand on each of the four screens that show it, and drifted on
  * every axis that could drift: dots were `w-8` on three screens and `w-6` on
@@ -40,9 +40,10 @@ function CurrentPulse() {
   );
 }
 
+/* Terms & Consent and Assessment Details were two steps; they are one screen
+   now, "Job & Consent" (JobConsentScreen). */
 export const ASSESSMENT_STEPS = [
-  'Terms & Consent',
-  'Assessment Details',
+  'Job & Consent',
   'System Check',
   'HR Questions',
   'Assessment',
@@ -63,18 +64,18 @@ export const CandidateHrStepProvider = CandidateHrStepContext.Provider;
 interface CandidateStepperProps {
   /**
    * 1-based position of the step the candidate is on, counted in the FULL
-   * five-step list (1 = Terms & Consent … 5 = Assessment). When the attempt
+   * four-step list (1 = Job & Consent … 4 = Assessment). When the attempt
    * has no HR step the stepper drops it and renumbers, so callers never need
    * to know whether HR is on.
    */
   current: number;
   /**
-   * An explicit list, for a flow that is not the assessment's five steps.
+   * An explicit list, for a flow that is not the assessment's four steps.
    * When given, `current` indexes this list as-is and the HR context is not
    * consulted.
    */
   steps?: readonly string[];
-  /** Bottom rule. Step 5 turns it off: the card under it does the separating. */
+  /** Bottom rule. The Assessment step turns it off: the card under it does the separating. */
   bordered?: boolean;
 }
 
