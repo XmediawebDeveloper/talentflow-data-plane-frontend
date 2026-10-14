@@ -309,6 +309,7 @@ function RecordingTabContent({
   interview,
   videoBlobUrl, videoBlobSize, videoDownloadUrl, videoLoading, videoError, setVideoError,
   screenBlobUrl, screenBlobSize, screenDownloadUrl, screenLoading, screenError,
+  onCandidatePlaybackError, onScreenPlaybackError,
   seekRequest,
   markers,
 }: {
@@ -324,6 +325,9 @@ function RecordingTabContent({
   screenDownloadUrl: string | null;
   screenLoading: boolean;
   screenError: boolean;
+  /** <video> failed — parent retries once via the backend, else shows the error. */
+  onCandidatePlaybackError?: () => void;
+  onScreenPlaybackError?: () => void;
   seekRequest?: { seconds: number; key: number } | null;
   /** Question markers for the timeline strip under the video. */
   markers?: VideoMarker[];
@@ -412,7 +416,7 @@ function RecordingTabContent({
               blobUrl={videoBlobUrl}
               loading={videoLoading}
               error={videoError}
-              onError={() => setVideoError(true)}
+              onError={() => (onCandidatePlaybackError ? onCandidatePlaybackError() : setVideoError(true))}
               onDuration={setCandidateDuration}
               seekTo={seekRequest?.seconds ?? null}
               seekKey={seekRequest?.key ?? 0}
@@ -425,7 +429,7 @@ function RecordingTabContent({
               blobUrl={screenBlobUrl}
               loading={screenLoading}
               error={screenError}
-              onError={() => {}}
+              onError={() => onScreenPlaybackError?.()}
               onDuration={setScreenDuration}
               seekTo={seekRequest?.seconds ?? null}
               seekKey={seekRequest?.key ?? 0}
@@ -609,6 +613,10 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
   const [screenDownloadUrl, setScreenDownloadUrl] = useState<string | null>(null);
   const [screenLoading, setScreenLoading] = useState(false);
   const [screenError, setScreenError] = useState(false);
+  // True while the <video> src is a presigned storage URL (not a backend blob)
+  // — gates the one-shot backend fallback in fallbackToBackend().
+  const videoStreamedRef = useRef(false);
+  const screenStreamedRef = useRef(false);
   const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(new Set());
   const [expandedSkills, setExpandedSkills] = useState<Set<string>>(new Set());
   const [violationPage, setViolationPage] = useState(1);
@@ -679,6 +687,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
         const streamUrl = meta?.data?.url;
         if (cancelled) return;
         if (streamUrl) {
+          videoStreamedRef.current = true;
           setVideoBlobUrl(streamUrl);   // presigned URL — <video> streams it directly
           // Size + a force-download URL (content-disposition: attachment) come
           // from the backend — the streaming path never downloads a blob, so
@@ -716,6 +725,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
         const streamUrl = meta?.data?.url;
         if (cancelled) return;
         if (streamUrl) {
+          screenStreamedRef.current = true;
           setScreenBlobUrl(streamUrl);
           if (meta?.data?.size != null) setScreenBlobSize(Number(meta.data.size));
           if (meta?.data?.download_url) setScreenDownloadUrl(meta.data.download_url);
@@ -736,6 +746,41 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
     })();
     return () => { cancelled = true; };
   }, [activeTab, liveSession.screen_recording_file_path, liveSession.id, screenBlobUrl, screenError]);
+
+  // STREAM FALLBACK: the presigned URL is fetched by the viewer's browser
+  // straight from object storage. On some networks (antivirus HTTPS scanning,
+  // VPN/proxy timeouts) that transfer is cut mid-file — Chrome reports
+  // ERR_CONTENT_LENGTH_MISMATCH and the <video> errors. Retry ONCE through the
+  // backend proxy (server ↔ storage on the internal network), which downloads
+  // the full file as a blob. The force-download URL also points at storage, so
+  // it is cleared — Download then uses the same-origin blob.
+  const fallbackToBackend = async (kind: 'candidate' | 'screen') => {
+    const isCandidate = kind === 'candidate';
+    const streamedRef = isCandidate ? videoStreamedRef : screenStreamedRef;
+    const setError = isCandidate ? setVideoError : setScreenError;
+    if (!streamedRef.current) { setError(true); return; }   // already the blob path → real failure
+    streamedRef.current = false;
+    const setLoading = isCandidate ? setVideoLoading : setScreenLoading;
+    setLoading(true);
+    try {
+      const res = await api.get(
+        `/ai-interview/${liveSession.id}/${isCandidate ? 'recording' : 'screen-recording'}`,
+        // proxy=true: the endpoint otherwise 307-redirects s3 files right back
+        // to the storage URL that just failed.
+        { responseType: 'blob', params: { proxy: true } },
+      );
+      const url = URL.createObjectURL(res.data);
+      if (isCandidate) {
+        setVideoBlobUrl(url); setVideoBlobSize(res.data?.size ?? null); setVideoDownloadUrl(null);
+      } else {
+        setScreenBlobUrl(url); setScreenBlobSize(res.data?.size ?? null); setScreenDownloadUrl(null);
+      }
+    } catch {
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Fetch identity photo if available
   useEffect(() => {
@@ -3335,6 +3380,8 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                   screenDownloadUrl={screenDownloadUrl}
                   screenLoading={screenLoading}
                   screenError={screenError}
+                  onCandidatePlaybackError={() => { void fallbackToBackend('candidate'); }}
+                  onScreenPlaybackError={() => { void fallbackToBackend('screen'); }}
                   seekRequest={recordingSeek}
                   markers={[...recordingQuestionMarkers(), ...recordingViolationMarkers()]}
                 />
