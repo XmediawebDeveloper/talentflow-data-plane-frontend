@@ -783,7 +783,7 @@ export function MultiLanguageCodeEditor({
               </h3>
               {problemText.intro && (
                 <div className="prose prose-sm max-w-none text-gray-600">
-                  <p className="whitespace-pre-wrap">{problemText.intro}</p>
+                  <p className="whitespace-pre-wrap italic">{problemText.intro}</p>
                 </div>
               )}
             </div>
@@ -921,10 +921,6 @@ export function MultiLanguageCodeEditor({
                 {/* Success Output */}
                 {executionOutput.success && executionOutput.output && (
                   <div className="p-3 rounded-lg bg-white border border-gray-200">
-                    <div className="flex items-center gap-2 mb-2">
-                      <CheckCircle className="w-4 h-4 text-green-600" />
-                      <span className="font-medium text-gray-800 text-sm">Your Output</span>
-                    </div>
                     <pre className="bg-gray-900 text-green-400 p-3 rounded-lg text-sm font-mono overflow-x-auto whitespace-pre-wrap">
                       {executionOutput.output}
                     </pre>

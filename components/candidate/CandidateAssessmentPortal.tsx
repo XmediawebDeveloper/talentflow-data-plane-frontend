@@ -2797,10 +2797,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       // NEW: Show completion message - scoring runs in background
       return (
         <>
-          <CompletedScreen
-            assessmentTitle={assessmentInfo?.assessment_title}
-            candidateName={assessmentInfo?.candidate_name}
-          />
+          <CompletedScreen />
           {/* Post-assessment feedback, layered OVER the completion screen so
               dismissing it leaves the candidate on the normal completion view.
               Shown only on genuine completion — never after a termination.

@@ -1098,6 +1098,23 @@ body {
   animation: caret-blink 1s steps(1) infinite;
 }
 
+/* Liquid fill wave for the "close this window" pill on the candidate
+   completed screen. The liquid sweeps in from the left, so the wave runs down
+   its leading (right) edge: the strip is twice the pill's height, and sliding
+   it up by half loops seamlessly. */
+@keyframes tf-liquid-wave {
+  from { transform: translateY(0); }
+  to   { transform: translateY(-50%); }
+}
+.tf-liquid-wave {
+  animation: tf-liquid-wave 1.4s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tf-liquid-wave {
+    animation: none !important;
+  }
+}
+
 /* Dark mode overrides for markdown-content */
 .dark .markdown-content h1 {
   color: var(--text-primary);

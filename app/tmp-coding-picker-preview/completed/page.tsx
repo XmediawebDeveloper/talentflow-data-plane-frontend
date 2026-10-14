@@ -4,5 +4,5 @@
 import { CompletedScreen } from '@/components/candidate/CompletedScreen';
 
 export default function TmpCompletedPreview() {
-  return <CompletedScreen assessmentTitle="Senior Frontend Engineer — Assessment" candidateName="Alex" />;
+  return <CompletedScreen />;
 }
