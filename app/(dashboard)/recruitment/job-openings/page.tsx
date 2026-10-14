@@ -441,7 +441,9 @@ export default function JobOpeningsPage() {
       // Start on Step 1 with ALL the source JD's data pre-filled (title, JD
       // text, extracted skills/experience/etc.). The no-change-no-LLM guard
       // keeps that data intact through the steps until the recruiter edits it.
-      router.push(`/recruitment/jd-creation?id=${newJd.id}&stage=create`);
+      // `new_version=1`: the editor names this "New Version" (reopening the
+      // draft later, without it, reads "Edit New Version").
+      router.push(`/recruitment/jd-creation?id=${newJd.id}&stage=create&new_version=1`);
     } catch (error) {
       console.error('Failed to create new JD version:', error);
       setEditWarningDialog(prev => ({ ...prev, creating: false }));

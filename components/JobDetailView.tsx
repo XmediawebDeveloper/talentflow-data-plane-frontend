@@ -1,7 +1,7 @@
 'use client'
 
-import { ArrowLeft, ChevronLeft, ChevronRight, MapPin, Calendar, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, BarChart3, MessageSquare, FileText, Search, Paperclip, Loader2, AlertCircle, Info, ArrowRight, Zap, ClipboardList, Video } from 'lucide-react';
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { ArrowLeft, ChevronLeft, ChevronRight, MapPin, Calendar, Users, Briefcase, X, CheckCircle, CheckCircle2, CheckSquare, Square, MoreVertical, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, BarChart3, MessageSquare, FileText, Search, Paperclip, Loader2, AlertCircle, Info, ArrowRight, Zap, ClipboardList, Video } from 'lucide-react';
+import { Fragment, useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { Job } from '@/lib/types/types';
@@ -3298,10 +3298,6 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                 {/* Job Description - Actual Content */}
                 {job.description ? (
                   <div>
-                    <h2 className="text-sm font-semibold text-gray-900 dark:text-slate-50 mb-3">
-                      Job Description
-                    </h2>
-                    <div className="h-px bg-gray-200 dark:bg-slate-700 mb-3"></div>
                     <div className="markdown-content prose prose-sm max-w-none text-gray-700 dark:text-slate-300">
                       <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{job.description
                         .replace(/#+\s*Certifications[\s\S]*?(?=\n#|\n\n#|$)/gi, (match) =>
@@ -4323,6 +4319,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               jobId={job.id}
               jobCode={job.job_id}
               availableUnits={15}
+              /* JD ID and Job Title are this page's header — not repeated per
+                 row (Resume Scoring's View by Job hides the same two). */
+              hiddenColumnIds={['jdId', 'jobTitle']}
               /* Actions ▸ AI Assessment / AI Interview Invite: the AI Talent
                  Match tab's version popups, with the ticked candidates. */
               onOpenInviteDialog={(kind, invitees) => openInviteDialog(kind, invitees, 'score-resume')}
@@ -5255,6 +5254,14 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   );
 }
 
+/* The AI Talent Match page's row-action button (AITalentMatchPage's
+   ROW_ACTION_BUTTON_CLASS, the same string) — the AI Match tab's ⋮. */
+const ROW_ACTION_BUTTON_CLASS =
+  'inline-flex items-center justify-center p-2.5 rounded-lg border transition-all bg-gray-100 border-gray-200 text-gray-600 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed';
+/* …and its open state (ROW_ACTION_BUTTON_ACTIVE_CLASS there) — the ▾ of an expanded row. */
+const ROW_ACTION_BUTTON_ACTIVE_CLASS =
+  'inline-flex items-center justify-center p-2.5 rounded-lg border transition-all bg-brand-blue/10 border-brand-blue/30 text-brand-blue';
+
 // ─── AI Match Tab Sub-component ──────────────────────────────────────────────
 function AIMatchTabContent({
   toolbarPortal,
@@ -5289,6 +5296,16 @@ function AIMatchTabContent({
   onOpenInviteDrawer: (kind: InviteKind, selected: MatchedCandidate[]) => void;
 }) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  /* Rows opened to show their remaining details (Phone, Location, Skills,
+     Uploaded By / Date, Attachments) — display only. */
+  const [expandedRowIds, setExpandedRowIds] = useState<Set<string>>(new Set());
+  const toggleRowExpanded = (resumeId: string) =>
+    setExpandedRowIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(resumeId)) next.delete(resumeId);
+      else next.add(resumeId);
+      return next;
+    });
   const [searchQuery, setSearchQuery] = useState('');
   const [filterThreshold, setFilterThreshold] = useState(0);
   const [filterPhone, setFilterPhone] = useState('');
@@ -5475,37 +5492,29 @@ function AIMatchTabContent({
         </div>
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full md:min-w-[1100px] table-auto">
+            <table className="w-full md:min-w-[880px] table-auto">
               <thead className="[&_th]:bg-gray-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                 <tr>
                   {/* Empty select-column header (no Select-All checkbox). */}
-                  <th className="px-4 py-3 w-10 align-middle" aria-label="Select" />
-                  {['Match Rating', 'Candidate Name', 'Email', 'Phone', 'Location', 'Skills', 'Experience', 'Uploaded By', 'Uploaded Date', 'Scored Status', 'Attachments'].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left align-middle"><Skeleton className="h-3 w-20" /></th>
+                  <th className="px-3 py-2.5 w-10 align-middle" aria-label="Select" />
+                  {['Rating', 'Candidate', 'Experience', 'Resume Version', 'Scored Status', 'Actions'].map((h) => (
+                    <th key={h} className="px-3 py-2.5 text-left align-middle"><Skeleton className="h-3 w-20" /></th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-slate-700">
+              <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
                 {Array.from({ length: 8 }).map((_, r) => (
                   <tr key={r}>
-                    <td className="px-4 py-4 align-middle"><Skeleton className="h-4 w-4 rounded" /></td>
-                    <td className="px-4 py-4 align-middle"><Skeleton className="h-5 w-16 rounded-full" /></td>
-                    <td className="px-4 py-4 align-middle"><Skeleton className="h-4 w-32" /></td>
-                    <td className="px-4 py-4 align-middle"><Skeleton className="h-4 w-40" /></td>
-                    <td className="px-4 py-4 align-middle"><Skeleton className="h-4 w-28" /></td>
-                    <td className="px-4 py-4 align-middle"><Skeleton className="h-4 w-24" /></td>
-                    <td className="px-4 py-4 align-middle">
-                      <div className="flex gap-1">
-                        <Skeleton className="h-5 w-12 rounded-full" />
-                        <Skeleton className="h-5 w-12 rounded-full" />
-                        <Skeleton className="h-5 w-10 rounded-full" />
-                      </div>
+                    <td className="px-3 py-2.5 align-middle"><Skeleton className="h-4 w-4 rounded" /></td>
+                    <td className="px-3 py-2.5 align-middle"><Skeleton className="h-7 w-7 rounded-full mx-auto" /></td>
+                    <td className="px-3 py-2.5 align-middle">
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-3 w-44 mt-1.5" />
                     </td>
-                    <td className="px-4 py-4 align-middle"><Skeleton className="h-4 w-10" /></td>
-                    <td className="px-4 py-4 align-middle"><Skeleton className="h-4 w-20" /></td>
-                    <td className="px-4 py-4 align-middle"><Skeleton className="h-4 w-24" /></td>
-                    <td className="px-4 py-4 align-middle"><Skeleton className="h-5 w-16 rounded-full" /></td>
-                    <td className="px-4 py-4 align-middle"><Skeleton className="h-7 w-7 rounded-md" /></td>
+                    <td className="px-3 py-2.5 align-middle"><Skeleton className="h-4 w-16" /></td>
+                    <td className="px-3 py-2.5 align-middle"><Skeleton className="h-5 w-8 rounded-full mx-auto" /></td>
+                    <td className="px-3 py-2.5 align-middle"><Skeleton className="h-5 w-20 rounded-full" /></td>
+                    <td className="px-3 py-2.5 align-middle"><Skeleton className="h-9 w-9 rounded-lg ml-auto" /></td>
                   </tr>
                 ))}
               </tbody>
@@ -5871,148 +5880,219 @@ function AIMatchTabContent({
               `TABLE_EMPTY_PANEL_CLASS`. A 1450px table centres its one empty cell across
               1450px, which put the message off the side of the shell behind a
               scrollbar that existed only to reach it. */}
-          <table className={`w-full table-auto ${filteredCandidates.length === 0 ? '' : 'min-w-[1450px]'}`}>
+          {/* The AI Talent Match page's candidate table (All → View by Job):
+              Rating · Candidate · Experience · Resume Version · Scored Status ·
+              Actions — its header type, row padding, rating circle, name over
+              email, pills, icon checkboxes and ⋮ row-action button. Same data,
+              same handlers: the row opens the candidate, ⋮ offers that and the
+              Attachments the old column held. */}
+          <table className={`w-full table-auto ${filteredCandidates.length === 0 ? '' : 'min-w-[880px]'}`}>
             {filteredCandidates.length > 0 && (
             <thead className="sticky top-0 z-10 [&_th]:bg-gray-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
               <tr>
-                {/* Leading select column — an EMPTY header cell: the per-row
-                    checkboxes below need the column to line up under, but there
-                    is deliberately NO Select-All checkbox here (that control
-                    lives in the toolbar above). It keeps the left-pinned slot so
-                    the column stays in view on horizontal scroll. */}
-                <th className="px-4 py-3 w-10 align-middle tf-sticky-col-left" aria-label="Select" />
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Match Rating</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Candidate Name</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Email</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Phone</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Location</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Skills</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Experience</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Uploaded By</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Uploaded Date</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Scored Status</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle tf-sticky-col">Attachments</th>
+                {/* Leading select column — an EMPTY header cell: no Select-All
+                    checkbox here (that control lives in the toolbar above). */}
+                <th className="w-10 px-3 py-2.5 align-middle tf-sticky-col-left" aria-label="Select" />
+                <th className="text-center py-2.5 px-3 text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide whitespace-nowrap align-middle">Rating</th>
+                <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide whitespace-nowrap align-middle">Candidate</th>
+                <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide whitespace-nowrap align-middle">Experience</th>
+                <th className="text-center py-2.5 px-3 text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide whitespace-nowrap align-middle">Resume Version</th>
+                <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide whitespace-nowrap align-middle">Scored Status</th>
+                <th className="text-right py-2.5 px-3 text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide whitespace-nowrap align-middle tf-sticky-col !bg-gray-50 dark:!bg-slate-800">Actions</th>
               </tr>
             </thead>
             )}
-            <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
+            <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
               {filteredCandidates.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="p-0">
+                  <td colSpan={7} className="p-0">
                     <div className={`${TABLE_EMPTY_PANEL_CLASS} text-sm text-gray-500 dark:text-slate-500`}>
                       No candidates match the current filters.
                     </div>
                   </td>
                 </tr>
               ) : (
-                paginatedCandidates.map((candidate, idx) => {
+                paginatedCandidates.map((candidate) => {
                   const isScored = scoredResumeIds.has(candidate.resumeId);
-                  const score = candidate.matchScore;
-                  const scoreColor = score >= 70 ? 'bg-success' : score >= 45 ? 'bg-warning' : 'bg-destructive';
+                  const isSelected = selectedIds.has(candidate.resumeId);
+                  const rank = candidate.rank || 0;
                   const uploadDate = candidate.uploadDate ? formatISTDate(candidate.uploadDate) : '—';
+                  /* Opens the candidate — the row click, and ⋮ › View Resume. */
+                  const openCandidate = () => {
+                    if (onViewCandidate) {
+                      try {
+                        sessionStorage.setItem('resumeNavList', JSON.stringify(filteredCandidates.map((c) => c.resumeId)));
+                        sessionStorage.setItem('resumeNavSource', 'job-details');
+                      } catch { /* ignore */ }
+                      onViewCandidate(candidate);
+                    }
+                  };
+
+                  const isExpanded = expandedRowIds.has(candidate.resumeId);
 
                   return (
+                    <Fragment key={candidate.resumeId}>
                     <tr
-                      key={candidate.resumeId}
-                      data-row-selected={selectedIds.has(candidate.resumeId)}
-                      className={`hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors cursor-pointer ${selectedIds.has(candidate.resumeId) ? 'bg-blue-50 dark:bg-slate-800/50' : ''}`}
-                      onClick={() => {
-                        if (onViewCandidate) {
-                          try {
-                            sessionStorage.setItem('resumeNavList', JSON.stringify(filteredCandidates.map((c) => c.resumeId)));
-                            sessionStorage.setItem('resumeNavSource', 'job-details');
-                          } catch { /* ignore */ }
-                          onViewCandidate(candidate);
-                        }
-                      }}
+                      data-row-selected={isSelected}
+                      aria-expanded={isExpanded}
+                      title={isExpanded ? 'Hide details' : 'Show details'}
+                      className={`transition-colors cursor-pointer ${isSelected ? 'bg-brand-blue/[0.04]' : 'hover:bg-gray-50/70 dark:hover:bg-slate-800/40'}`}
+                      onClick={() => toggleRowExpanded(candidate.resumeId)}
                     >
-                      {/* Per-row select checkbox — kept for individual
-                          selection; the header cell above it is intentionally
-                          empty. Same native checkbox chrome as the sibling
-                          tables. stopPropagation so ticking a row doesn't also
-                          open the candidate. */}
-                      <td className="px-4 py-3 tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.has(candidate.resumeId)}
-                          onChange={() => toggleSelect(candidate.resumeId)}
-                          className="rounded border-gray-300"
-                        />
+                      {/* Row checkbox — the reference's icon checkbox, same
+                          toggle; stopPropagation so ticking doesn't open it. */}
+                      <td className="px-3 py-2.5 align-middle tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={() => toggleSelect(candidate.resumeId)}
+                          aria-pressed={isSelected}
+                          aria-label={isSelected ? 'Deselect candidate' : 'Select candidate'}
+                          className="inline-flex p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded"
+                        >
+                          {isSelected ? <CheckSquare className="w-4 h-4 text-brand-blue" /> : <Square className="w-4 h-4 text-gray-400" />}
+                        </button>
                       </td>
-                      <td className="px-4 py-3">
-                        <div className={`inline-flex items-center justify-center px-3 py-1 rounded-md font-bold text-sm ${
-                          (candidate.rank || 0) >= 7 ? 'bg-success-subtle text-success-strong border border-success-line' :
-                          (candidate.rank || 0) >= 4 ? 'bg-warning-subtle text-warning-strong border border-warning-line' :
-                          (candidate.rank || 0) >= 1 ? 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 border border-gray-300 dark:border-slate-700' :
-                          'bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 border border-gray-200 dark:border-slate-700'
+                      {/* Rating — 10 green, 9–7 orange, below 7 red. */}
+                      <td className="text-center px-3 py-2.5 align-middle">
+                        <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold border ${
+                          !rank ? 'bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 border-gray-200 dark:border-slate-700'
+                          : rank >= 10 ? 'bg-success-subtle text-success border-success-line'
+                          : rank >= 7 ? 'bg-brand-orange/10 text-brand-orange-deep border-brand-orange/20'
+                          : 'bg-destructive-subtle text-destructive border-destructive-line'
                         }`}>
                           {candidate.rank || '-'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 align-middle">
+                        <div className="min-w-0">
+                          <p
+                            className="text-sm font-medium text-blue-600 dark:text-blue-400 truncate max-w-[16rem]"
+                            title={[formatCandidateFirstName(candidate.name), candidate.title].filter(Boolean).join(' · ')}
+                          >
+                            {formatCandidateFirstName(candidate.name)}
+                          </p>
+                          {candidate.email && <p className="text-xs text-gray-500 dark:text-slate-500 truncate max-w-[16rem]" title={candidate.email}>{candidate.email}</p>}
                         </div>
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-full bg-gray-200 dark:bg-slate-800 flex items-center justify-center text-sm text-gray-700 dark:text-slate-300 font-medium flex-shrink-0">
-                            {(candidate.name || 'U').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-gray-900 dark:text-slate-50">{formatCandidateFirstName(candidate.name)}</p>
-                            {candidate.title && <p className="text-xs text-gray-500 dark:text-slate-500">{candidate.title}</p>}
-                          </div>
-                        </div>
+                      <td className="px-3 py-2.5 align-middle text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">{candidate.experience || '-'}</td>
+                      <td className="text-center px-3 py-2.5 align-middle whitespace-nowrap">
+                        <span className="inline-flex px-2 py-0.5 rounded-full text-xs border bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700">
+                          v{candidate.resumeVersion ?? 1}
+                        </span>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">{candidate.email || '—'}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">
-                        {(() => {
-                          const numbers = splitPhoneNumbers(candidate.phone, 2);
-                          if (numbers.length === 0) return '—';
-                          return (
-                            <div className="flex flex-col gap-0.5">
-                              {numbers.map((num, i) => <span key={i}>{num}</span>)}
-                            </div>
-                          );
-                        })()}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">{candidate.location || '—'}</td>
-                      <td className="px-4 py-3 min-w-[220px] max-w-[260px]">
-                        {/* One chip shown in full, the rest collapse into "+N
-                            more" — the same treatment every skills column in
-                            a table uses, so no row reads taller than another. */}
-                        <div className="flex flex-nowrap items-center gap-1 overflow-hidden">
-                          <SkillsList
-                            skills={candidate.skills}
-                            max={1}
-                            chipClassName="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full border border-blue-200 min-w-0 shrink truncate max-w-[160px]"
-                            moreClassName="px-2 py-0.5 text-xs text-blue-600 font-medium rounded-full hover:bg-blue-50 transition-colors cursor-pointer whitespace-nowrap shrink-0"
-                          />
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">{candidate.experience || '—'}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">{candidate.uploadedByName || candidate.uploadedBy || '—'}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">{uploadDate}</td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-2.5 align-middle whitespace-nowrap">
                         {isScored ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-success-subtle text-success rounded-full text-xs font-medium">
-                            <CheckCircle className="w-3 h-3" />
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-success-subtle text-success border border-success/20">
+                            <CheckCircle2 className="w-3 h-3" />
                             Scored
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 rounded-full text-xs font-medium">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700">
                             <XCircle className="w-3 h-3" />
                             Not Scored
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-3 tf-sticky-col" onClick={(e) => e.stopPropagation()}>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => handleAttachmentsClick(candidate)}
-                          icon={<Paperclip className="w-3.5 h-3.5" />}
+                      <td className="px-3 py-2.5 align-middle text-right tf-sticky-col" onClick={(e) => e.stopPropagation()}>
+                        <div className="inline-flex items-center gap-1.5">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button type="button" aria-label="Actions" title="Actions" className={ROW_ACTION_BUTTON_CLASS}>
+                              <MoreVertical className="w-4 h-4" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-56 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
+                            {onViewCandidate && (
+                              <DropdownMenuItem className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer" onSelect={openCandidate}>
+                                <Eye className="w-4 h-4 text-menu-icon-view" />
+                                <span>View Resume</span>
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer" onSelect={() => handleAttachmentsClick(candidate)}>
+                              <Paperclip className="w-4 h-4 text-menu-icon-download" />
+                              <span>Attachments ({candidate.attachmentCount ?? 1})</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                        {/* ▾ — this row's details, open / closed (the row click does the same). */}
+                        <button
+                          type="button"
+                          onClick={() => toggleRowExpanded(candidate.resumeId)}
+                          aria-expanded={isExpanded}
+                          aria-label={isExpanded ? 'Hide details' : 'Show details'}
+                          title={isExpanded ? 'Hide details' : 'Show details'}
+                          className={isExpanded ? ROW_ACTION_BUTTON_ACTIVE_CLASS : ROW_ACTION_BUTTON_CLASS}
                         >
-                          {candidate.attachmentCount ?? 1}
-                        </Button>
+                          <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                        </button>
+                        </div>
                       </td>
                     </tr>
+                    {/* The row's remaining details — the original table's
+                        Phone, Location, Skills, Uploaded By / Date and
+                        Attachments cells — in a nested table under it, the
+                        AI Talent Match page's expanded-row panel. */}
+                    {isExpanded && (
+                      <tr className="bg-gray-50/60 dark:bg-slate-800/30">
+                        <td colSpan={7} className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                          <div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-x-auto">
+                            <table className="w-full min-w-[760px]">
+                              <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
+                                <tr>
+                                  <th className="py-2.5 px-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Phone</th>
+                                  <th className="py-2.5 px-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Location</th>
+                                  <th className="py-2.5 px-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Skills</th>
+                                  <th className="py-2.5 px-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Uploaded By</th>
+                                  <th className="py-2.5 px-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Uploaded Date</th>
+                                  <th className="py-2.5 px-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Attachments</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                <tr>
+                              <td className="px-3 py-2.5 align-middle text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">
+                                {(() => {
+                                  const numbers = splitPhoneNumbers(candidate.phone, 2);
+                                  if (numbers.length === 0) return '—';
+                                  return (
+                                    <div className="flex flex-col gap-0.5">
+                                      {numbers.map((num, i) => <span key={i}>{num}</span>)}
+                                    </div>
+                                  );
+                                })()}
+                              </td>
+                              <td className="px-3 py-2.5 align-middle text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">{candidate.location || '—'}</td>
+                              <td className="px-3 py-2.5 align-middle min-w-[220px] max-w-[260px]">
+                                <div className="flex flex-nowrap items-center gap-1 overflow-hidden">
+                                  <SkillsList
+                                    skills={candidate.skills}
+                                    max={1}
+                                    chipClassName="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full border border-blue-200 min-w-0 shrink truncate max-w-[160px]"
+                                    moreClassName="px-2 py-0.5 text-xs text-blue-600 font-medium rounded-full hover:bg-blue-50 transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                                  />
+                                </div>
+                              </td>
+                              <td className="px-3 py-2.5 align-middle text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">{candidate.uploadedByName || candidate.uploadedBy || '—'}</td>
+                              <td className="px-3 py-2.5 align-middle text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">{uploadDate}</td>
+                              <td className="px-3 py-2.5 align-middle" onClick={(e) => e.stopPropagation()}>
+                                <button
+                                  type="button"
+                                  onClick={() => handleAttachmentsClick(candidate)}
+                                  title="Attachments"
+                                  aria-label={`Attachments (${candidate.attachmentCount ?? 1})`}
+                                  className={`${ROW_ACTION_BUTTON_CLASS} gap-1.5 !py-2 !px-2.5 text-xs font-medium`}
+                                >
+                                  <Paperclip className="w-3.5 h-3.5" />
+                                  {candidate.attachmentCount ?? 1}
+                                </button>
+                              </td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
                   );
                 })
               )}

@@ -596,11 +596,44 @@ function JDCreationContent() {
   /* One short word per step. The trail already says "Job Descriptions" one crumb
      up, so repeating it in the leaf ("Create Job Description") only pushed the
      part that actually changes off the end of a narrow bar. */
+  /* Editing an EXISTING job: this page was opened on a JD's `?id=` (the Draft
+     list's Edit, a resumed or refreshed draft) — what `keyedJdId` records. A
+     job created in this session keeps 'new' even after its first save adds
+     `id=` to the URL, and "Create another" is `blank-after-*`; both are
+     creating. Step 1 then reads Edit, not Create. */
+  const isEditingExistingJD = keyedJdId !== 'new' && !keyedJdId.startsWith('blank-after-');
+  /* Which workflow this is — from the record and the route, so it survives
+     saving a draft, a refresh and back/forward:
+       • a version draft is a DRAFT whose lineage version is past v1 (what
+         "New Job Version" creates — its own JD row);
+       • "New Job Version" opens it with `new_version=1` (the URL syncing in
+         JDCreation only rewrites `id` / `stage`, so the marker stays for the
+         whole session and a refresh) → NEW VERSION;
+       • the same draft reopened later (the Draft list's Edit, no marker) →
+         EDIT NEW VERSION;
+       • any other existing job (a v1 draft, a published version) → EDIT;
+       • otherwise → CREATE. */
+  const isVersionDraft = editingJD?.status === 'draft' && (editingJD.version_number ?? 1) > 1;
+  const jdWorkflow: 'create' | 'edit' | 'new-version' | 'edit-new-version' = !isEditingExistingJD
+    ? 'create'
+    : isVersionDraft
+      ? (searchParams.get('new_version') === '1' ? 'new-version' : 'edit-new-version')
+      : 'edit';
+  /* Step 2 is "Extract" — the step indicator's own name for it. It read
+     "Edit" here, which put an Edit label on a brand-new job's Create flow. */
   const jdLeafLabel =
-    jdDisplayStep === 2 ? 'Edit'
+    jdDisplayStep === 2 ? 'Extract'
       : jdDisplayStep === 3 ? 'Review'
         : jdDisplayStep === 4 ? 'Publish'
-          : 'Create';
+          : jdWorkflow === 'edit' ? 'Edit' : 'Create';
+  /* The trail's tail. A version draft names its workflow on every step — the
+     leaf on Step 1, then the crumb before each later step's leaf. */
+  const versionCrumb = jdWorkflow === 'new-version' ? 'New Version'
+    : jdWorkflow === 'edit-new-version' ? 'Edit New Version'
+      : null;
+  const jdLeafCrumbs: { label: string }[] = versionCrumb
+    ? (jdDisplayStep === 1 ? [{ label: versionCrumb }] : [{ label: versionCrumb }, { label: jdLeafLabel }])
+    : [{ label: jdLeafLabel }];
 
   // The trail names where the recruiter actually came from. Entering from the
   // assessment flow used to reset it to Dashboard › Job Descriptions, which
@@ -616,19 +649,19 @@ function JDCreationContent() {
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Assessments', href: '/recruitment/assessments' },
           { label: 'Create AI Assessment', href: ASSESSMENT_CREATE_HREF },
-          { label: jdLeafLabel },
+          ...jdLeafCrumbs,
         ]
       : fromResumeScoring
         ? [
             { label: 'Dashboard', href: '/dashboard' },
             { label: 'Resume Scoring', href: '/recruitment/resume-scoring' },
             { label: 'Select Job Description', href: RESUME_SCORING_JD_SELECTION_HREF },
-            { label: jdLeafLabel },
+            ...jdLeafCrumbs,
           ]
         : [
             { label: 'Dashboard', href: '/dashboard' },
             { label: 'Job Descriptions', href: '/recruitment/job-openings' },
-            { label: jdLeafLabel },
+            ...jdLeafCrumbs,
           ];
 
   // Handle successful JD publish. Each entry point returns to the flow it
@@ -782,6 +815,7 @@ function JDCreationContent() {
           onBack={handleViewAllJobs}
           onPublish={handleJDPublish}
           editingJD={memoizedEditingJD}
+          jdWorkflow={jdWorkflow}
           isJDInUse={isJDInUse}
           jdUsageMessage={jdUsageMessage}
           breadcrumbItems={breadcrumbItems}
