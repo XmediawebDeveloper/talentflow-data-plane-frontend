@@ -263,7 +263,7 @@ export async function exportEvalReportPDF(
     doc.setFont('helvetica', 'bold'); doc.setFontSize(10); txt(white);
     doc.text(title, M + 3, y + 6);
     doc.setFontSize(9);
-    doc.text(scored ? `Section Score: ${formatScore1(scoreVal)}/10 · ${badge}` : 'Not Scored', pageW - M - 3, y + 6, { align: 'right' });
+    doc.text(scored ? `Section Score: ${formatScore1(scoreVal)}/10 · ${badge}` : 'For Reference', pageW - M - 3, y + 6, { align: 'right' });
     y += 12;
 
     qs.forEach((q) => {
@@ -282,7 +282,7 @@ export async function exportEvalReportPDF(
       const _nonEnglish = _hasAnswer && (NON_ENGLISH_TAG.test(_rawAns) || hasNonLatinScript(_rawAns));
 
       let status: { label: string; color: RGB; isScore: boolean };
-      if (key === 'hr') status = { label: 'Not Scored', color: faint, isScore: false };
+      if (key === 'hr') status = { label: 'For Reference', color: faint, isScore: false };
       else if (q.notDelivered) status = { label: `Not Delivered · ${formatScore1(q.questionScore)}/10`, color: scoreRGB(q.questionScore), isScore: false };
       else if (rt === 'skipped' || src === 'candidate') status = { label: 'Skipped', color: sub, isScore: false };
       else if (_nonEnglish) status = { label: 'Not Scored (non-English)', color: faint, isScore: false };
