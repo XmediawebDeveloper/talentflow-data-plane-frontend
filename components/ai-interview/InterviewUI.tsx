@@ -8435,7 +8435,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                       parkedServerEotFallbackMs: SERVER_EOT_SILENCE_FALLBACK_MS,
                     });
                   }
-                  return;
+                  // NO `return` here. It belonged to the parked stopRecording()
+                  // path; left behind, it skipped the PCM send at the bottom of
+                  // this handler for EVERY frame once 15 s of silence had passed
+                  // — i.e. the whole time "Are you done?" was up. The candidate's
+                  // RESUMED speech was dropped until the silence clock reset
+                  // (≥1.5-3 s of voice) and never reached the transcript
+                  // (staging 2026-10-14: ~24 s of a 120 s answer never arrived).
+                  // Fall through so the frame is streamed like any other.
                 }
               }
             }
