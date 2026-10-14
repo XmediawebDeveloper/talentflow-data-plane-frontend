@@ -33,6 +33,7 @@ import {
   runVersionAction,
   sendVersion,
   versionHref,
+  INVITE_SOURCE_BY_TAB,
   type DeliveryMethod,
   type InviteCandidate,
   type InviteKind,
@@ -95,7 +96,7 @@ export default function VersionInviteDialog({
    *  via Email IN this popup with the picked interview(s) — several (Browse
    *  all) go one after another — and the ticked candidates; that step sends,
    *  Back returns here. Called once when at least one invitation went out. */
-  onInterviewsSent?: () => void;
+  onInterviewsSent?: (sentCount: number) => void;
 }) {
   const { user, isTenantAdmin } = useAuth();
   const p = (user?.permissions || {}) as Record<string, boolean | undefined>;
@@ -193,10 +194,6 @@ export default function VersionInviteDialog({
     bodyRef.current?.scrollTo({ top: 0 });
   };
   const inStep2 = !!shareStep || !!interviewStep;
-  /* "Choose candidates in the next step": Next goes on with nobody ticked
-     (step 2 has Manual, Upload Excel and the Resume Database). Only where
-     Next leads to that step. */
-  const [chooseLater, setChooseLater] = useState(false);
   const browseCount = kind === 'assessment' ? browsePicked.length : browseIds.length;
   const browseNoun = kind === 'assessment' ? 'assessment' : 'AI interview';
   /* Switching between this job's versions and the full list starts the pick
@@ -230,10 +227,14 @@ export default function VersionInviteDialog({
   const [viewingInterviewId, setViewingInterviewId] = useState<string | null>(null);
   /* The Latest Active version is pre-ticked once, on the first load. */
   const preselected = useRef(false);
+  /* When the list was last read — coming back to the tab re-reads it, at
+     most this often unless this popup itself opened a Create / Edit. */
+  const lastLoadedAt = useRef(0);
 
   /* Reads the versions; every state write is in the reply's callbacks, after
      the request. Resolves to the new list, or null when the load failed. */
   const applyVersions = (next: InviteVersion[]) => {
+    lastLoadedAt.current = Date.now();
     setVersions(next);
     setLoaded(true);
     setLoading(false);
@@ -266,8 +267,17 @@ export default function VersionInviteDialog({
   const loadOnOpen = useEffectEvent(() => { if (!off) void fetchVersions(); });
   useEffect(() => { loadOnOpen(); }, []);
 
+  /* Coming back to this tab: the versions are re-read, so one created,
+     published or archived meanwhile — in the Assessments / AI Interviews
+     module, or a Create / Edit this popup opened — shows without reopening
+     the popup. Not while something here is running (a send, a confirmed
+     action, a create), and at most every 10 seconds unless this popup opened
+     the other tab itself. */
   const reloadAfterReturn = useEffectEvent(() => {
-    if (!reloadOnFocus.current) return;
+    if (off || sending || confirmBusy || creating || !loaded) return;
+    if (document.visibilityState === 'hidden') return;
+    const forced = reloadOnFocus.current;
+    if (!forced && Date.now() - lastLoadedAt.current < 10_000) return;
     reloadOnFocus.current = false;
     // Refreshed in place — the cards stay up while the new list loads.
     void fetchVersions();
@@ -290,19 +300,24 @@ export default function VersionInviteDialog({
     const onFocus = () => reloadAfterReturn();
     const onKey = (e: KeyboardEvent) => closeOnEscape(e);
     window.addEventListener('focus', onFocus);
+    // A tab switch does not always focus the window; visibility does fire.
+    document.addEventListener('visibilitychange', onFocus);
     // Capture phase: seen before a popup on top (the AI interview preview) or
     // an open ⋯ menu handles the same Escape and closes itself.
     window.addEventListener('keydown', onKey, true);
     return () => {
       window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
       window.removeEventListener('keydown', onKey, true);
     };
   }, []);
 
   const selected = versions.find((v) => v.id === versionId) ?? null;
   const recipients = candidates.filter((c) => c.email && candidateIds.includes(c.id));
-  /* Next: someone ticked, or candidates are to be chosen in step 2. */
-  const hasCandidatesForNext = recipients.length > 0 || (handsOff && chooseLater);
+  /* Next: someone ticked — or, where Next leads to the email step, always:
+     that step adds candidates itself (Manual, Upload Excel, Resume Database),
+     so an empty list here is not a dead end. */
+  const hasCandidatesForNext = recipients.length > 0 || handsOff;
   const blocked = createBlockedReason(versions, perms, kind);
   const returnUrl = `/recruitment/job-details?id=${encodeURIComponent(jdId)}`;
   const openInNewTab = (href: string) => window.open(href, '_blank', 'noopener');
@@ -455,13 +470,13 @@ export default function VersionInviteDialog({
     : browseAll
       ? (browseCount === 0
           ? `Select at least one ${browseNoun} to continue`
-          : recipients.length === 0 ? (chooseLater ? 'Choose candidates in the next step' : '') : null)
+          : recipients.length === 0 ? (handsOff ? 'No candidates ticked · add them in the next step' : '') : null)
     : view === 'results'
       ? (sending ? `Sending ${results.length} of ${sendTotal}…` : `${count('sent')} sent · ${count('skipped')} skipped · ${count('failed')} failed`)
       : !selected
         ? `Select ${label.singular === 'Assessment' ? 'an assessment' : 'an AI interview'} version to continue`
         : recipients.length === 0
-          ? (handsOff && chooseLater ? 'Choose candidates in the next step' : '')
+          ? (handsOff ? 'No candidates ticked · add them in the next step' : '')
           : null;
 
   const Icon = kind === 'assessment' ? ClipboardCheck : Brain;
@@ -560,9 +575,14 @@ export default function VersionInviteDialog({
                   phone: c.phone,
                   source: 'database' as const,
                   resumeId: c.resumeId,
+                  /* Recorded per candidate: the Job Details tab they were
+                     ticked on. Anyone added in this step (Manual, Excel,
+                     Select From) keeps Manual / Internal DB. */
+                  inviteSource: c.source ? INVITE_SOURCE_BY_TAB[c.source] : 'JD',
                 }))}
-                inviteSource="Resume Scoring"
-                onInviteSent={(count) => onAssessmentsSent?.(Math.max(count, 1))}
+                /* Only a real send counts: nothing is added when every
+                   invitation failed or was already sent. */
+                onInviteSent={(count) => { if (count > 0) onAssessmentsSent?.(count); }}
               />
             ) : browseAll ? (
               /* The original Browse all view: back to the cards, the shared
@@ -620,8 +640,7 @@ export default function VersionInviteDialog({
                     expiryDays={expiryDays}
                     onExpiry={setExpiryDays}
                     candidatesOnly
-                    chooseLater={chooseLater}
-                    onChooseLater={handsOff ? setChooseLater : undefined}
+                    addInNextStep={handsOff}
                   />
                 </section>
               </div>
@@ -669,8 +688,7 @@ export default function VersionInviteDialog({
                        step — Share Assessment via Email / Send AI Interview
                        via Email has its own delivery, message and expiry. */
                     candidatesOnly={handsOff}
-                    chooseLater={chooseLater}
-                    onChooseLater={handsOff ? setChooseLater : undefined}
+                    addInNextStep={handsOff}
                   />
                 </section>
               </div>
@@ -683,12 +701,12 @@ export default function VersionInviteDialog({
               {footerText ?? (browseAll ? (
                 <span className="inline-flex items-center gap-1.5 align-middle">
                   <CheckCircle className="w-4 h-4 text-brand-blue flex-shrink-0" />
-                  Ready to invite {recipients.length} candidate{recipients.length === 1 ? '' : 's'} to {browseCount} {browseNoun}{browseCount === 1 ? '' : 's'}
+                  Ready to invite {recipients.length} candidate{recipients.length === 1 ? '' : 's'} to {browseCount} {browseNoun}{browseCount === 1 ? '' : 's'}{handsOff ? ' · add more in the next step' : ''}
                 </span>
               ) : selected && (
                 <span className="inline-flex items-center gap-1.5 align-middle">
                   <CheckCircle className="w-4 h-4 text-brand-blue flex-shrink-0" />
-                  Ready to invite {recipients.length} candidate{recipients.length === 1 ? '' : 's'} to {label.singular} V{selected.version}
+                  Ready to invite {recipients.length} candidate{recipients.length === 1 ? '' : 's'} to {label.singular} V{selected.version}{handsOff ? ' · add more in the next step' : ''}
                 </span>
               ))}
             </div>

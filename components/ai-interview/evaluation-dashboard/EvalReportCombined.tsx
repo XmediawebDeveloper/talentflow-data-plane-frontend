@@ -16,12 +16,13 @@ import {
   Layers, ListChecks, ClipboardList, FileText, AlertTriangle, Lightbulb, Scale, ClipboardCheck,
 } from 'lucide-react';
 import type { DashboardData } from './types';
-import { buildRationaleLines } from './types';
+import { buildRationaleLines, orderQuestionsAsAsked } from './types';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import { labelOfViolation, recruiterSeverity, summarizeViolations, type ViolationRecord } from '../violationTaxonomy';
 import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 
 import { formatScore1, formatSkillScore } from '@/lib/utils/matchStatus';
+import { pdfSafe, hasNonLatinScript } from '@/lib/utils/pdfText';
 
 /** Session facts the PDF shows that aren't part of DashboardData. */
 export interface ReportSessionDetails {
@@ -36,29 +37,7 @@ export interface ReportSessionDetails {
   resultUrl?: string | null;
 }
 
-// jsPDF's built-in Helvetica only has WinAnsi (Latin-1 + cp1252) glyphs.
-// Anything else (Tamil, Hindi, ≥, ✓ …) prints as mojibake AND makes jsPDF
-// letter-space the whole line, so text is filtered before it is drawn.
-const CP1252_EXTRA = '€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ';
-const PDF_CHAR_SUBS: Record<string, string> = { '≥': '>=', '≤': '<=', '→': '->', '←': '<-', '×': 'x', '−': '-' };
-const isPdfSafeChar = (ch: string) => {
-  const c = ch.codePointAt(0) ?? 0;
-  return (c >= 0x20 && c <= 0x7e) || (c >= 0xa0 && c <= 0xff) || CP1252_EXTRA.includes(ch);
-};
-const pdfSafe = (value: string) =>
-  Array.from(value || '')
-    .map((ch) => (ch === '\n' || isPdfSafeChar(ch) ? ch : (PDF_CHAR_SUBS[ch] ?? '')))
-    .join('')
-    .replace(/[ \t]{2,}/g, ' ');
-/** True when a meaningful share (≥30%) of the letters are in a script
- *  Helvetica can't draw — a few stray words in an English answer are just
- *  dropped by pdfSafe instead of hiding the whole answer. */
-const hasNonLatinScript = (value: string) => {
-  const letters = Array.from(value || '').filter((ch) => /\p{L}/u.test(ch));
-  if (letters.length === 0) return false;
-  const nonLatin = letters.filter((ch) => !isPdfSafeChar(ch)).length;
-  return nonLatin / letters.length >= 0.3;
-};
+// pdfSafe / hasNonLatinScript: see lib/utils/pdfText (shared with the assessment report PDF).
 // The backend prefixes answers it couldn't score as English with this tag.
 const NON_ENGLISH_TAG = /^\s*\[non-English[^\]]*\]\s*/i;
 interface Props {
@@ -99,6 +78,13 @@ function summaryToPoints(summary: string | null | undefined): string[] {
     .map(sentence => sentence.charAt(0).toUpperCase() + sentence.slice(1));
 }
 
+/** A skill no question covered, so it has no score to show. A real score
+ *  always wins, so a stale `asked` flag can never hide a result. Same rule as
+ *  the Skill Breakdown tab. */
+function isNotAssessed(s: { asked?: boolean; score: number }): boolean {
+  return s.asked === false && !(s.score > 0);
+}
+
 function scoreColor(score: number) {
   if (score >= 8.0) return { text: 'text-success', bar: 'bg-success' };
   if (score >= MHS_THRESHOLD) return { text: 'text-warning', bar: 'bg-warning' };
@@ -126,7 +112,8 @@ export async function exportEvalReportPDF(
   // Same figures as the on-screen report's "Questions Answered" /
   // "Skills Evaluated" stat tiles.
   const allSkillsFlat = [...mustHaveClusters, ...niceToHaveClusters].flatMap((c) => c.skills);
-  const skillsEvaluated = allSkillsFlat.filter((s) => s.score > 0).length;
+  // Every skill a question covered — including one scored 0 — is evaluated.
+  const skillsEvaluated = allSkillsFlat.filter((s) => !isNotAssessed(s)).length;
   const isPassed = finalResult ? finalResult === 'Pass' : scores.mustHave >= MHS_THRESHOLD;
   const finalResultLabel = (finalResult ?? (isPassed ? 'Pass' : 'Fail')).toUpperCase();
   const confidence = Math.round(scores.mustHave * 10);
@@ -150,7 +137,9 @@ export async function exportEvalReportPDF(
   const amberBg: RGB = [255, 251, 235], amberBd: RGB = [253, 230, 138], amberDk: RGB = [146, 64, 14];
   const pass = isPassed;
   const verdict: RGB = isPartialEvaluation ? amber : (pass ? green : red);
-  const scoreRGB = (s: number): RGB => (s >= 8 ? green : s >= 5 ? teal : s >= 3 ? amber : red);
+  // Same bands as the on-screen report: green 8+, amber from the 6.0 pass
+  // line, red below it — so a bar never looks better than its status label.
+  const scoreRGB = (s: number): RGB => (s >= 8 ? green : s >= MHS_THRESHOLD ? amber : red);
   const fill = (c: RGB) => doc.setFillColor(c[0], c[1], c[2]);
   const txt = (c: RGB) => doc.setTextColor(c[0], c[1], c[2]);
   const stroke = (c: RGB) => doc.setDrawColor(c[0], c[1], c[2]);
@@ -255,6 +244,10 @@ export async function exportEvalReportPDF(
   // section bars' own scores, so it was removed.)
 
   // ── Per-section question + skill breakdown ────────────────────────
+  // Each question's number in the whole interview, in the order asked — the
+  // on-screen report's and Question Analysis's Q1..N. The sections below keep
+  // their grouping and print it beside the section's own number.
+  const askedNumber = new Map(orderQuestionsAsAsked(perQuestionDetails).map((q, i) => [q, i + 1]));
   const drawSection = (key: 'mth' | 'nth' | 'hr', title: string, scoreVal: number, scored: boolean, badge: string, badgeColor: RGB) => {
     const qs = perQuestionDetails.filter(q => q.section === key);
     if (qs.length === 0) return;
@@ -337,7 +330,11 @@ export async function exportEvalReportPDF(
 
       let cursorY = y;
       doc.setFont('helvetica', 'bold'); doc.setFontSize(9); txt(indigo);
-      doc.text(`Q${q.qNum}`, M, cursorY + 3);
+      const overallLabel = `Q${askedNumber.get(q) ?? q.qNum}`;
+      doc.text(overallLabel, M, cursorY + 3);
+      const overallW = doc.getTextWidth(overallLabel);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); txt(sub);
+      doc.text(` · ${key === 'mth' ? 'Must-Have' : key === 'nth' ? 'Nice-to-Have' : 'HR'} Q${q.qNum}`, M + overallW, cursorY + 3);
       doc.setFont('helvetica', 'bold'); doc.setFontSize(9); txt(status.color);
       doc.text(status.label, pageW - M, cursorY + 3, { align: 'right' });
       cursorY += 5;
@@ -648,7 +645,7 @@ export async function exportEvalReportPDF(
   // question-by-question pages.
   {
     const flatten = (clusters: typeof mustHaveClusters) => clusters.flatMap((c) =>
-      c.skills.map((s) => ({ name: s.name, score: s.score, cluster: c.name, ...priorityLabel(c.priority) })));
+      c.skills.map((s) => ({ name: s.name, score: s.score, asked: s.asked, cluster: c.name, ...priorityLabel(c.priority) })));
     const groups = [
       { title: 'Must-Have Skills', rows: sectionsPresent.mustHave ? flatten(mustHaveClusters) : [] },
       { title: 'Nice-to-Have Skills', rows: sectionsPresent.niceToHave ? flatten(niceToHaveClusters) : [] },
@@ -684,12 +681,15 @@ export async function exportEvalReportPDF(
           txt(r.tag === 'P1' ? indigo : r.tag === 'P2' ? amber : faint); doc.text(r.tag, cType, y + 3);
           doc.setFont('helvetica', 'normal'); doc.setFontSize(8); txt(sub);
           doc.text(String(r.weight), cWeight, y + 3, { align: 'right' });
-          bar(cBar, y + 1.3, barW, r.score, scoreRGB(r.score));
-          doc.setFont('helvetica', 'bold'); txt(scoreRGB(r.score));
-          doc.text(formatSkillScore(r.score), cScore, y + 3, { align: 'right' });
-          const status = r.score >= MHS_THRESHOLD
-            ? { label: 'Demonstrated', color: green }
-            : r.score > 0 ? { label: 'Weak', color: amber } : { label: 'Not demonstrated', color: faint };
+          const rowNotAssessed = isNotAssessed(r);
+          bar(cBar, y + 1.3, barW, rowNotAssessed ? 0 : r.score, rowNotAssessed ? faint : scoreRGB(r.score));
+          doc.setFont('helvetica', 'bold'); txt(rowNotAssessed ? faint : scoreRGB(r.score));
+          doc.text(rowNotAssessed ? '—' : formatSkillScore(r.score), cScore, y + 3, { align: 'right' });
+          const status = rowNotAssessed
+            ? { label: 'Not assessed', color: faint }
+            : r.score >= MHS_THRESHOLD
+              ? { label: 'Demonstrated', color: green }
+              : r.score > 0 ? { label: 'Weak', color: amber } : { label: 'Not demonstrated', color: faint };
           doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); txt(status.color);
           doc.text(status.label, cStatus, y + 3);
           y += h;
@@ -837,7 +837,7 @@ export async function exportEvalReportPDF(
 }
 
 type CoverageStats = { total: number; covered: number; demonstrated: number; pct: number };
-type FlatSkill = { name: string; score: number; tag: string; weight: number; cluster?: string };
+type FlatSkill = { name: string; score: number; tag: string; weight: number; cluster?: string; asked?: boolean };
 
 /** One Section Score row: the bar carries the pass threshold as a dashed marker. */
 function SectionRow({ label, value, Icon, bar, iconTone, badge }: {
@@ -892,7 +892,8 @@ function CoverageBlock({ label, cov, tone, Icon }: {
   );
 }
 
-function skillStatus(score: number): { label: string; cls: string } {
+function skillStatus(score: number, notAssessed = false): { label: string; cls: string } {
+  if (notAssessed) return { label: 'Not assessed', cls: 'bg-slate-100 text-slate-500 ring-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700' };
   if (score >= MHS_THRESHOLD) return { label: 'Demonstrated', cls: 'bg-success-subtle text-success-strong ring-success-line' };
   if (score > 0) return { label: 'Weak', cls: 'bg-warning-subtle text-warning-strong ring-warning-line' };
   return { label: 'Not demonstrated', cls: 'bg-slate-100 text-slate-500 ring-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700' };
@@ -930,16 +931,16 @@ function SkillTable({ title, rows, tagClass, wide = false }: {
                 <td className="px-4 py-2">
                   <div className="flex items-center gap-2.5">
                     <div className="flex-1 h-1.5 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden">
-                      <div className={`h-full rounded-full ${scoreColor(s.score).bar}`} style={{ width: `${Math.max(0, Math.min(100, (s.score / 10) * 100))}%` }} />
+                      <div className={`h-full rounded-full ${scoreColor(s.score).bar}`} style={{ width: `${isNotAssessed(s) ? 0 : Math.max(0, Math.min(100, (s.score / 10) * 100))}%` }} />
                     </div>
-                    <span className={`w-8 text-right font-bold tabular-nums ${scoreColor(s.score).text}`}>{formatSkillScore(s.score)}</span>
+                    <span className={`w-8 text-right font-bold tabular-nums ${isNotAssessed(s) ? 'text-gray-400' : scoreColor(s.score).text}`}>{isNotAssessed(s) ? '—' : formatSkillScore(s.score)}</span>
                   </div>
                 </td>
               ) : (
-                <td className={`px-4 py-2 text-right font-bold tabular-nums ${scoreColor(s.score).text}`}>{formatSkillScore(s.score)}</td>
+                <td className={`px-4 py-2 text-right font-bold tabular-nums ${isNotAssessed(s) ? 'text-gray-400' : scoreColor(s.score).text}`}>{isNotAssessed(s) ? '—' : formatSkillScore(s.score)}</td>
               )}
               {wide && (() => {
-                const st = skillStatus(s.score);
+                const st = skillStatus(s.score, isNotAssessed(s));
                 return <td className="px-4 py-2 hidden sm:table-cell"><span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ring-1 ${st.cls}`}>{st.label}</span></td>;
               })()}
             </tr>
@@ -981,10 +982,10 @@ export function EvalReportCombined({
 
   // ── Skills (flattened, with priority tag/weight) ──────────────────────
   const flatMustHave = mustHaveClusters.flatMap(c => c.skills.map(s => ({
-    name: s.name, score: s.score, cluster: c.name, ...priorityLabel(c.priority),
+    name: s.name, score: s.score, asked: s.asked, cluster: c.name, ...priorityLabel(c.priority),
   })));
   const flatNiceToHave = niceToHaveClusters.flatMap(c => c.skills.map(s => ({
-    name: s.name, score: s.score, cluster: c.name, ...priorityLabel(c.priority),
+    name: s.name, score: s.score, asked: s.asked, cluster: c.name, ...priorityLabel(c.priority),
   })));
   const allSkills = [...mustHaveClusters, ...niceToHaveClusters].flatMap(c => c.skills);
   // Skills Assessment Summary: which tables show, and whether one has the row to itself.
@@ -1039,7 +1040,7 @@ export function EvalReportCombined({
   const statTiles = [
     { label: 'Questions Answered', value: `${questionsAnswered} / ${questionsAsked}`, Icon: Play,
       icon: 'bg-brand-blue text-white' },
-    { label: 'Skills Evaluated', value: `${allSkills.filter(s => s.score > 0).length} / ${allSkills.length}`, Icon: CheckCircle,
+    { label: 'Skills Evaluated', value: `${allSkills.filter(s => !isNotAssessed(s)).length} / ${allSkills.length}`, Icon: CheckCircle,
       // Brand cyan, not green: green reads as "pass" and clashed with the
       // red Fail verdict beside it.
       icon: 'bg-brand-cyan text-white' },
@@ -1253,7 +1254,9 @@ export function EvalReportCombined({
         </div>
         {perQuestionDetails.length > 0 ? (
           <div className="divide-y divide-gray-200 dark:divide-slate-700">
-            {perQuestionDetails.map((q, i) => {
+            {/* Same order and 1..N numbering as the Question Analysis tab;
+                the chip keeps the section's own number (e.g. "Must-Have · Q1"). */}
+            {orderQuestionsAsAsked(perQuestionDetails).map((q, i) => {
               const isHR = q.section === 'hr';
               const sc = scoreColor(q.questionScore);
               const sectionLabel = q.section === 'mth' ? 'Must-Have' : q.section === 'nth' ? 'Nice-to-Have' : 'HR';
@@ -1286,8 +1289,8 @@ export function EvalReportCombined({
               return (
                 <div key={i} className="px-5 py-4 space-y-2" style={{ pageBreakInside: 'avoid' }}>
                   <div className="flex items-center gap-3 flex-wrap">
-                    <span className="text-sm font-bold text-brand-blue">Q{q.qNum}</span>
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ring-1 ${sectionClass}`}>{sectionLabel}</span>
+                    <span className="text-sm font-bold text-brand-blue">Q{i + 1}</span>
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ring-1 ${sectionClass}`}>{sectionLabel} · Q{q.qNum}</span>
                     {skillsText && <span className="text-xs text-gray-500 dark:text-slate-400 truncate min-w-0 flex-1">{skillsText}</span>}
                     <span className="ml-auto text-right">
                       {isHR

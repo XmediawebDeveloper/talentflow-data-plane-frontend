@@ -874,30 +874,19 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
         const totalInvites = allAssessments.length * validCandidates.length;
         let sentSoFar = 0;
         let failedCount = 0;
+        const alreadyInvited = new Set<string>();
 
         toast.loading(`Sending ${totalInvites} invitation${totalInvites > 1 ? 's' : ''}...`, { id: 'bulk-invite-multi' });
 
         for (const assessmentToInvite of allAssessments) {
           try {
-            const candidateData = validCandidates.map(c => ({
-              candidate_name: c.name,
-              candidate_email: c.email,
-              candidate_phone: c.phone,
-              invite_source: inviteSource || (c.source === 'database' ? 'Internal DB' : 'Manual'),
-              resume_id: c.resumeId,
-            }));
-
-            const results = await assessmentService.bulkInvite(assessmentToInvite.id, {
-              candidates: candidateData,
-              custom_message: customMessage,
-              expiry_days: expiryDays,
-            });
-
             // A 200 only means the call went through — a row can still have
             // failed (bad domain, SMTP rejection) with its own status 'failed'.
-            const failedHere = results.filter((r) => r.status === 'failed').length;
-            sentSoFar += validCandidates.length - failedHere;
-            failedCount += failedHere;
+            // Someone already invited to this assessment is skipped, not failed.
+            const r = await inviteMany(assessmentToInvite.id, validCandidates);
+            sentSoFar += r.sent;
+            failedCount += r.failed;
+            r.already.forEach((e) => alreadyInvited.add(e));
             toast.loading(`Sent ${sentSoFar}/${totalInvites} invitations...`, { id: 'bulk-invite-multi' });
           } catch (error: any) {
             console.error(`Failed to send invitations for assessment ${assessmentToInvite.title}:`, error);
@@ -909,8 +898,17 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
 
         // Nothing went out — say so and leave the form open to retry.
         if (sentSoFar === 0) {
+          if (alreadyInvited.size > 0 && failedCount === 0) {
+            toast.dismiss('bulk-invite-multi');
+            setDuplicateEmail([...alreadyInvited].join(', '));
+            setShowDuplicateError(true);
+            return;
+          }
           toast.error('Failed to send invitations. Please try again.', { id: 'bulk-invite-multi' });
           return;
+        }
+        if (alreadyInvited.size > 0) {
+          toast.warning(`Skipped — already invited: ${[...alreadyInvited].join(', ')}`);
         }
 
         if (failedCount === 0) {
@@ -977,17 +975,29 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
       }
 
       setIsSubmitting(false);
-      const successCount = validCandidates.length - failedHere;
+      const successCount = validCandidates.length - failedHere - alreadyHere.length;
       onInviteSent?.(successCount);
 
-      if (failedHere === validCandidates.length) {
+      // Everyone already had an invitation: the same notice a single
+      // duplicate gets, naming them all.
+      if (successCount === 0 && alreadyHere.length > 0 && failedHere === 0) {
+        setDuplicateEmail(alreadyHere.join(', '));
+        setShowDuplicateError(true);
+        return;
+      }
+      if (successCount === 0) {
         // Every candidate failed — never show the success screen for that.
         toast.error(
           validCandidates.length === 1
             ? `Invite Failed: ${validCandidates[0].email} could not be delivered — check the email address and domain, then edit and resend it from Invite Status Tracking.`
-            : `All ${validCandidates.length} invitations failed to deliver — check the email addresses, then edit and resend them from Invite Status Tracking.`
+            : alreadyHere.length > 0
+              ? `No invitations went out: ${failedHere} failed to deliver and ${alreadyHere.length} already invited (${alreadyHere.join(', ')}). Check Invite Status Tracking.`
+              : `All ${validCandidates.length} invitations failed to deliver — check the email addresses, then edit and resend them from Invite Status Tracking.`
         );
         return;
+      }
+      if (alreadyHere.length > 0) {
+        toast.warning(`Skipped ${alreadyHere.length} already invited: ${alreadyHere.join(', ')}`);
       }
       if (failedHere > 0) {
         toast.warning(`Sent ${successCount} invitation${successCount > 1 ? 's' : ''} successfully. ${failedHere} failed to deliver — check Invite Status Tracking.`);
@@ -1004,10 +1014,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
       setIsSubmitting(false);
 
       // Check for duplicate invitation error (409 Conflict)
-      const is409Error = error?.response?.status === 409 ||
-                         error?.message?.includes('status code 409') ||
-                         error?.message?.includes('already been invited') ||
-                         error?.message?.includes('DUPLICATE_INVITATION');
+      const is409Error = isDuplicateInviteError(error);
 
       if (is409Error) {
         const email = error?.response?.data?.detail?.candidate_email ||

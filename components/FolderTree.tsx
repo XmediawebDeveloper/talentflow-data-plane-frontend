@@ -255,6 +255,10 @@ interface FolderTreeProps {
   canCreateFolder?: boolean;
   canRenameFolder?: boolean;
   canDeleteFolder?: boolean;
+  /** Leaves "Delete Folder" out of the per-row (+) menu. For pickers that
+   *  offer the folder actions but keep deleting (and deciding where the
+   *  folder's resumes go) on the Resume Database page. */
+  hideDeleteFolder?: boolean;
 }
 
 export default function FolderTree({
@@ -275,6 +279,7 @@ export default function FolderTree({
   canCreateFolder = true,
   canRenameFolder = true,
   canDeleteFolder = true,
+  hideDeleteFolder = false,
 }: FolderTreeProps) {
   const [expandedFolders, setExpandedFolders] = useState<string[]>(['engineering']);
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
@@ -747,7 +752,7 @@ export default function FolderTree({
               </button>
             )}
             {/* Only show delete option if not root folder or Archived Resumes folder */}
-            {!(folder.name.toLowerCase() === 'root' && !folder.parentId) && !(folder.name === 'Archived Resumes' && !folder.parentId) && (
+            {!hideDeleteFolder && !(folder.name.toLowerCase() === 'root' && !folder.parentId) && !(folder.name === 'Archived Resumes' && !folder.parentId) && (
               <>
                 <div className="border-t border-gray-200 dark:border-slate-700 my-1" />
                 <button

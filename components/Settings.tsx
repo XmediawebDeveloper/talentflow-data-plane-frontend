@@ -1,6 +1,6 @@
 'use client';
 
-import { User, Bell, Shield, Palette, Mail, Save, Check, Lock, Phone, MapPin, Briefcase, Target, Filter, Calendar, Loader2, Eye, EyeOff, KeyRound, Sparkles, Key, ScrollText, ChevronRight } from 'lucide-react';
+import { User, Bell, Shield, Palette, Mail, Save, Check, Lock, Phone, MapPin, Briefcase, Target, Filter, Calendar, Loader2, Eye, EyeOff, KeyRound, Key, ScrollText, ChevronRight, SlidersHorizontal } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
@@ -264,9 +264,9 @@ export default function Settings() {
 
   if (isLoading) {
     return (
-      <main className="flex-1 overflow-x-clip bg-slate-50">
+      <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
         <div className="mx-auto w-full max-w-[1400px]">
-          <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+          <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
             {/* Breadcrumb */}
             <div className="mb-4 md:mb-6 flex items-center gap-2">
               <Skeleton className="h-3 w-20" />
@@ -275,13 +275,12 @@ export default function Settings() {
             </div>
 
             {/* Hero Header */}
-            <section className="relative mb-6 overflow-hidden rounded-xl bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-5 sm:p-6">
+            <section className="relative mb-5 overflow-hidden rounded-xl bg-gray-50 dark:bg-slate-800/50 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-5">
               <div className="flex items-start gap-3">
-                <Skeleton className="h-9 w-9 shrink-0 rounded-lg" />
+                <Skeleton className="h-10 w-10 shrink-0 rounded-xl" />
                 <div className="space-y-2">
-                  <Skeleton className="h-5 w-40 rounded-full" />
-                  <Skeleton className="h-8 w-64" />
-                  <Skeleton className="h-4 w-full max-w-2xl" />
+                  <Skeleton className="h-6 w-48" />
+                  <Skeleton className="h-4 w-full max-w-md" />
                 </div>
               </div>
             </section>
@@ -290,7 +289,7 @@ export default function Settings() {
             <div className="flex flex-col lg:flex-row gap-4 sm:gap-6">
               {/* Left Sidebar - Tabs */}
               <div className="w-full lg:w-64 flex-shrink-0">
-                <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] p-2">
+                <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-2">
                   <nav className="flex lg:flex-col gap-1">
                     {Array.from({ length: 5 }).map((_, i) => (
                       <div key={i} className="w-full flex items-center gap-3 px-4 py-2">
@@ -310,7 +309,7 @@ export default function Settings() {
 
               {/* Right Content Area */}
               <div className="flex-1">
-                <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] p-4 sm:p-6 lg:p-8">
+                <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-4 sm:p-5">
                   {/* Section heading */}
                   <div className="mb-6 space-y-2">
                     <Skeleton className="h-6 w-40" />
@@ -339,29 +338,26 @@ export default function Settings() {
   }
 
   return (
-    <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
+    <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Profile Settings' }]} />
 
-      {/* SaaS Hero Header */}
-      <section className="relative mb-6 overflow-hidden rounded-xl bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-5 sm:p-6">
-        <div className="relative flex items-start gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
-            <User className="h-5 w-5 text-brand-blue" />
+      {/* Header panel — design-flow gray header (icon tile + title + subtitle) */}
+      <div className="mb-5 flex flex-col gap-4 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-5 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
+            <SlidersHorizontal className="h-5 w-5 text-brand-blue" />
           </div>
           <div>
-            <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-brand-orange/5 ring-1 ring-brand-orange/20 px-2.5 py-0.5 text-2xs font-semibold text-brand-orange-deep">
-              <Sparkles className="h-3 w-3 text-brand-orange-deep" />
-              Personal preferences
-            </div>
-            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl text-gray-900 dark:text-slate-50">Recruiter Settings</h1>
-            <p className="mt-2 max-w-2xl text-sm text-gray-600 dark:text-slate-400 sm:text-base">Manage your personal preferences, notifications, and workflow defaults.</p>
+            <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">Profile Settings</h1>
+            <p className="mt-0.5 text-sm text-gray-600 dark:text-slate-400">Manage your personal preferences, notifications, and workflow defaults.</p>
           </div>
         </div>
-      </section>
+      </div>
 
-      {/* Tabs + Content Layout */}
+      {/* Tabs + Content Layout — wrapped in the design-flow gray content box */}
+      <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-5">
       <div className="flex flex-col lg:flex-row gap-4 sm:gap-6">
         {/* Left Sidebar - Tabs */}
         <div className="w-full lg:w-64 flex-shrink-0">
@@ -421,7 +417,7 @@ export default function Settings() {
 
         {/* Right Content Area */}
         <div className="flex-1">
-          <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-4 sm:p-6 lg:p-8">
+          <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-4 sm:p-5">
             {!canEditSettings && activeTab !== 'change-password' && (
               <div className="mb-6 rounded-lg ring-1 ring-brand-orange/20 bg-brand-orange/5 px-4 py-3 text-sm text-brand-orange-deep">
                 View-only access. You can review these settings, but you do not have permission to edit them.
@@ -443,7 +439,7 @@ export default function Settings() {
                   <div className="mb-8 pb-8 border-b border-gray-200 dark:border-slate-700">
                     <Label className="mb-3">Profile Picture</Label>
                     <div className="flex flex-col sm:flex-row items-center gap-4">
-                      <div className="w-20 h-20 rounded-full bg-brand-blue text-white flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/10 text-2xl flex-shrink-0">
+                      <div className="w-20 h-20 rounded-full bg-brand-blue/10 text-brand-blue flex items-center justify-center shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/15 text-2xl flex-shrink-0">
                         {profileData.full_name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U'}
                       </div>
                       <div className="text-center sm:text-left">
@@ -604,7 +600,7 @@ export default function Settings() {
                     {/* Digest Notifications */}
                     <div>
                       <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-4 flex items-center gap-2">
-                        <Calendar className="w-5 h-5 text-brand-cyan" />
+                        <Calendar className="w-5 h-5 text-brand-blue" />
                         Digest & Reports
                       </h3>
                       <div className="space-y-3">
@@ -901,7 +897,7 @@ export default function Settings() {
                           <div className={`w-full h-20 rounded-md mb-3 ${
                             theme.value === 'light' ? 'bg-white dark:bg-slate-900 border-2 border-gray-200 dark:border-slate-700' :
                             theme.value === 'dark' ? 'bg-gray-900' :
-                            'bg-gradient-to-br from-white to-gray-900'
+                            'bg-brand-blue'
                           }`}></div>
                           <div className="text-sm font-semibold text-gray-900 dark:text-slate-50">{theme.label}</div>
                           <div className="text-xs text-gray-600 dark:text-slate-400">{theme.desc}</div>
@@ -1115,6 +1111,7 @@ export default function Settings() {
             )}
           </div>
         </div>
+      </div>
       </div>
       </div>
       </div>

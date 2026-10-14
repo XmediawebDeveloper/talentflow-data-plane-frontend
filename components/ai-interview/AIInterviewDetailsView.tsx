@@ -10,6 +10,7 @@ import {
   Loader2, Briefcase, Globe, ChevronRight, ChevronDown, Check, Brain, Sparkles,
   Layers, Pencil, Zap, Timer, FileText, Settings, CheckCircle2, Download,
   QrCode, AlertCircle, ExternalLink, BarChart, UserRound, Eye, User as UserIcon,
+  Sliders, Info, Star,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
@@ -21,7 +22,7 @@ import { jdService, type JDLineageVersion, type JDResponse } from '@/lib/service
 import JDIdentityHeader from '@/components/jobs/JDIdentityHeader';
 import JDOverviewSections from '@/components/jobs/JDOverviewSections';
 import { Button } from '@/components/ui/button';
-import { SEGMENT_TOGGLE, segmentBtn, tabPill } from '@/components/ui/filter-pills';
+import { tabPill } from '@/components/ui/filter-pills';
 import ExportFormatModal from '@/components/ExportFormatModal';
 import { exportRows, type ExportFileFormat } from '@/lib/utils/exportUtils';
 import type {
@@ -1043,7 +1044,12 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   <div className="space-y-6">
                     {mthClusters.length > 0 && (
                       <div>
-                        <h4 className="text-xs font-semibold text-brand-blue uppercase tracking-wide mb-3">Must-To-Have Clusters</h4>
+                        {/* Star icons as on the Assessment Details page's
+                            Must-Have / Nice-to-Have Skills headings. */}
+                        <h4 className="flex items-center gap-1.5 text-xs font-semibold text-brand-blue uppercase tracking-wide mb-3">
+                          <Star className="w-4 h-4 text-brand-blue" aria-hidden="true" />
+                          Must-To-Have Clusters
+                        </h4>
                         <div className="space-y-3">
                           {mthClusters.map(cluster => (
                             <div key={cluster.id} className="border border-gray-100 ring-1 ring-black/[0.02] rounded-lg p-4 bg-white shadow-sm shadow-brand-blue/5 hover:ring-brand-blue/20 transition-shadow">
@@ -1064,7 +1070,10 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     )}
                     {nthClusters.length > 0 && (
                       <div>
-                        <h4 className="text-xs font-semibold text-brand-cyan uppercase tracking-wide mb-3">Nice-To-Have Clusters</h4>
+                        <h4 className="flex items-center gap-1.5 text-xs font-semibold text-brand-cyan uppercase tracking-wide mb-3">
+                          <Star className="w-4 h-4 text-brand-cyan" aria-hidden="true" />
+                          Nice-To-Have Clusters
+                        </h4>
                         <div className="space-y-3">
                           {nthClusters.map(cluster => (
                             <div key={cluster.id} className="border border-gray-100 ring-1 ring-black/[0.02] rounded-lg p-4 bg-white shadow-sm shadow-brand-blue/5 hover:ring-brand-cyan/20 transition-shadow">
@@ -1647,23 +1656,34 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
               {/* Interview Details' own sub-tabs — Configure Details (this
                   tab's original content) and Interview Info (folded in from
                   the sidebar's former "AI Interview Info" item). */}
-              {/* Shared Job Openings segmented-toggle chrome, so these sub-tabs
-                  match the list page's All / AI / Manual control. */}
-              <div className={SEGMENT_TOGGLE}>
+              {/* The Assessment Details page's own inner tabs, so the two
+                  details pages read alike: separate icon pills, the active one
+                  on a light brand-blue ground with a ring. */}
+              <div
+                role="tablist"
+                aria-label="Interview details views"
+                className="flex flex-wrap items-center gap-2"
+              >
                 {([
-                  { key: 'configure', label: 'Configure Details' },
-                  { key: 'info', label: 'Interview Info' },
+                  { key: 'configure', label: 'Configure Details', icon: Sliders },
+                  { key: 'info', label: 'Interview Info', icon: Info },
                 ] as const).map((tab) => {
                   const isActive = detailsSubTab === tab.key;
                   return (
                     <button
                       key={tab.key}
                       type="button"
-                      aria-pressed={isActive}
+                      role="tab"
+                      aria-selected={isActive}
                       onClick={() => setDetailsSubTab(tab.key)}
-                      className={`${segmentBtn(isActive)} whitespace-nowrap`}
+                      className={`rounded-lg px-3 py-1.5 text-xs sm:text-sm whitespace-nowrap transition-colors inline-flex items-center gap-1.5 ${
+                        isActive
+                          ? 'bg-brand-blue/5 text-brand-blue font-medium ring-1 ring-brand-blue/20'
+                          : 'text-gray-600 dark:text-slate-400 hover:bg-brand-blue/5 hover:text-brand-blue'
+                      }`}
                     >
-                      {tab.label}
+                      <tab.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                      <span className="leading-snug">{tab.label}</span>
                     </button>
                   );
                 })}

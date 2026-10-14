@@ -10555,7 +10555,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               <div
                 tabIndex={0}
                 aria-label={`Microphone: ${activeMicLabel || 'Microphone'}${isMuted ? ' (muted)' : ''}. Network status.`}
-                className="group/health absolute bottom-3 left-3 right-3 z-10 flex flex-wrap items-end gap-2 pointer-events-none focus:outline-none"
+                className="group/health absolute bottom-3 left-3 right-3 z-10 flex flex-wrap items-end justify-center gap-2 pointer-events-none focus:outline-none"
               >
                 <div className="pointer-events-auto max-w-full rounded-lg border border-black/20 bg-black/55 backdrop-blur-md px-2.5 py-2 group-focus-visible/health:ring-2 group-focus-visible/health:ring-white/60">
                   <div className="flex items-center gap-2">

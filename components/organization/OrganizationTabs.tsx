@@ -66,7 +66,7 @@ export default function OrganizationTabs() {
               aria-current={isActive ? 'page' : undefined}
               className={`${base} ${
                 isActive
-                  ? 'border-gray-200 dark:border-slate-700 border-b-slate-50 dark:border-b-slate-800 bg-slate-50 dark:bg-slate-800/40 text-brand-blue'
+                  ? 'border-gray-200 dark:border-slate-700 border-b-slate-100 dark:border-b-slate-800 bg-slate-100 dark:bg-slate-800/50 text-brand-blue'
                   : 'border-transparent text-gray-600 dark:text-slate-400 hover:text-brand-blue hover:bg-gray-50 dark:hover:bg-slate-800/40'
               }`}
             >
