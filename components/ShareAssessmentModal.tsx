@@ -1105,6 +1105,10 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
             })()}
           </div>
           <div className="flex items-center gap-3 ml-auto">
+            {/* Cancel — closes without sending, exactly as the X used to. */}
+            <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>
+              Cancel
+            </Button>
             {onBack && (
               <Button variant="secondary" onClick={onBack} disabled={isSubmitting} icon={<ArrowLeft className="w-4 h-4" />}>
                 Back
@@ -1900,13 +1904,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
               {headerMeta}
             </div>
           </div>
-          <button
-            onClick={onClose}
-            aria-label="Close dialog"
-            className="text-gray-500 dark:text-slate-400 hover:text-brand-blue hover:bg-brand-blue/5 p-1.5 sm:p-2 rounded-lg transition-colors flex-shrink-0"
-          >
-            <X className="w-4 h-4 sm:w-5 sm:h-5" />
-          </button>
+          {/* No X — the footer's Cancel closes, as on the other Invite popups. */}
         </div>
 
         {contentBlock}

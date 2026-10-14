@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ChevronDown, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, FileArchive, Users, Info, ClipboardCheck, UserPlus, Sparkles, RefreshCw, Ban, Brain, Edit2, Lightbulb, ShieldAlert, Lock, HelpCircle } from 'lucide-react';
+import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ChevronDown, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, FileArchive, Users, Info, ClipboardCheck, UserPlus, Sparkles, RefreshCw, Ban, Brain, Edit2, Lightbulb, HelpCircle } from 'lucide-react';
 import { DndProvider, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import dynamic from 'next/dynamic';
@@ -1764,6 +1764,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
         'oldest': 'date-asc',
         'name-asc': 'name-asc',
         'name-desc': 'name-desc',
+        'experience-high': 'experience-desc',
+        'experience-low': 'experience-asc',
       };
 
       // Everything a plain "show me my resumes" request carries. Any key beyond
@@ -1837,7 +1839,12 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
 
       const [resumeResponse, folderResponse] = await Promise.all([
         resumeService.list(searchParams),
-        folderService.list().catch(() => []),
+        // Same Uploaded By value the resume list was just sent — so a
+        // folder's badge always matches what opening that folder under the
+        // same filter actually lists (see folderService.list's own note).
+        folderService.list(
+          searchParams.uploaded_by_name ? { uploaded_by_name: searchParams.uploaded_by_name } : undefined,
+        ).catch(() => []),
       ]);
 
       // Convert API Resume to component Resume type. Shared with the
@@ -5080,14 +5087,6 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                     <p className="text-sm text-gray-500 mt-0.5">Multiple files selected</p>
                   </div>
                 </div>
-                <button
-                  onClick={() => !isDownloadingZip && setIsZipDownloadModalOpen(false)}
-                  disabled={isDownloadingZip}
-                  className="p-1 text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  aria-label="Close"
-                >
-                  <X className="w-5 h-5" />
-                </button>
               </div>
 
               {/* Content */}
@@ -5118,6 +5117,13 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
 
               {/* Footer */}
               <div className="flex items-center justify-end gap-3 px-6 py-4 bg-gray-50 rounded-b-2xl border-t border-gray-200">
+                <button
+                  onClick={() => setIsZipDownloadModalOpen(false)}
+                  disabled={isDownloadingZip}
+                  className="px-5 py-2.5 text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 hover:border-brand-blue/30 rounded-lg transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Cancel
+                </button>
                 <button
                   onClick={handleZipDownload}
                   disabled={isDownloadingZip}
@@ -5163,14 +5169,6 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                     <p className="text-sm text-gray-500 mt-0.5">Move selected resumes to archive</p>
                   </div>
                 </div>
-                <button
-                  onClick={() => !isArchivingResumes && setIsArchiveModalOpen(false)}
-                  disabled={isArchivingResumes}
-                  className="p-1 text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  aria-label="Close"
-                >
-                  <X className="w-5 h-5" />
-                </button>
               </div>
 
               {/* Content */}
@@ -5201,6 +5199,13 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
 
               {/* Footer */}
               <div className="flex items-center justify-end gap-3 px-6 py-4 bg-gray-50 rounded-b-2xl border-t border-gray-200">
+                <button
+                  onClick={() => setIsArchiveModalOpen(false)}
+                  disabled={isArchivingResumes}
+                  className="px-5 py-2.5 text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 hover:border-brand-blue/30 rounded-lg transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Cancel
+                </button>
                 <button
                   onClick={handleConfirmBulkArchive}
                   disabled={isArchivingResumes}
@@ -6228,15 +6233,6 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                     <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">Select candidates to invite for an assessment</p>
                   </div>
                 </div>
-                <button
-                  onClick={() => {
-                    setIsAssessmentModalOpen(false);
-                    setSelectedAssessments([]);
-                  }}
-                  className="p-1.5 text-gray-500 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-md transition-colors flex-shrink-0"
-                 aria-label="Close">
-                  <X className="w-5 h-5" />
-                </button>
               </div>
 
               {/* Content */}
@@ -6299,6 +6295,15 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   );
                 })()}
                 <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
+                  <button
+                    onClick={() => {
+                      setIsAssessmentModalOpen(false);
+                      setSelectedAssessments([]);
+                    }}
+                    className="flex-1 sm:flex-none px-4 py-2 text-sm whitespace-nowrap text-gray-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800 hover:border-brand-blue/30 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
                   <button
                     onClick={() => {
                       if (selectedAssessments.length === 0) {
@@ -6424,17 +6429,9 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
           if (!open) setCancelBatchConfirm({ isOpen: false, batchId: '', pendingCount: 0 });
         }}
       >
-        <AlertDialogContent className="max-w-md sm:max-w-lg">
-          <button
-            type="button"
-            onClick={() => setCancelBatchConfirm({ isOpen: false, batchId: '', pendingCount: 0 })}
-            className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700"
-            aria-label="Close"
-          >
-            <X className="h-4 w-4" />
-          </button>
+        <AlertDialogContent className="max-w-md sm:max-w-lg" hideClose>
           <AlertDialogHeader>
-            <div className="flex items-start gap-4 pr-8">
+            <div className="flex items-start gap-4">
               <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-red-100">
                 <Ban className="h-6 w-6 text-red-600" />
               </div>
@@ -6475,17 +6472,9 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
           if (!open) setCancelItemConfirm({ isOpen: false, batchId: '', itemId: '', fileName: '' });
         }}
       >
-        <AlertDialogContent className="max-w-md sm:max-w-lg">
-          <button
-            type="button"
-            onClick={() => setCancelItemConfirm({ isOpen: false, batchId: '', itemId: '', fileName: '' })}
-            className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700"
-            aria-label="Close"
-          >
-            <X className="h-4 w-4" />
-          </button>
+        <AlertDialogContent className="max-w-md sm:max-w-lg" hideClose>
           <AlertDialogHeader>
-            <div className="flex items-start gap-4 pr-8">
+            <div className="flex items-start gap-4">
               <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-red-100">
                 <Ban className="h-6 w-6 text-red-600" />
               </div>
@@ -6521,17 +6510,9 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
           if (!open) setDeleteResumeConfirm({ isOpen: false, ids: [], names: [] });
         }}
       >
-        <AlertDialogContent className="max-w-md sm:max-w-lg">
-          <button
-            type="button"
-            onClick={() => setDeleteResumeConfirm({ isOpen: false, ids: [], names: [] })}
-            className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700"
-            aria-label="Close"
-          >
-            <X className="h-4 w-4" />
-          </button>
+        <AlertDialogContent className="max-w-md sm:max-w-lg" hideClose>
           <AlertDialogHeader>
-            <div className="flex items-start gap-4 pr-8">
+            <div className="flex items-start gap-4">
               <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-red-100">
                 <Trash2 className="h-6 w-6 text-red-600" />
               </div>
@@ -6539,60 +6520,21 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                 <AlertDialogTitle className="text-2xl font-bold text-gray-900">
                   Delete {deleteResumeConfirm.ids.length === 1 ? 'Resume' : `${deleteResumeConfirm.ids.length} Resumes`}
                 </AlertDialogTitle>
-                <p className="mt-1 text-sm text-gray-500">This action is permanent and cannot be undone.</p>
               </div>
             </div>
             <AlertDialogDescription asChild>
-              <div className="mt-2 space-y-4">
-                <div className="space-y-4 rounded-xl border border-red-100 bg-red-50/60 p-4">
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-red-600 text-white">
-                      <ShieldAlert className="h-4 w-4" />
-                    </span>
-                    <span className="h-6 w-px flex-shrink-0 bg-red-200" aria-hidden="true" />
-                    <p className="text-sm text-gray-800">
-                      This action is <span className="font-semibold text-red-600">permanent</span> and{' '}
-                      <span className="font-semibold text-red-600">cannot be undone</span>.
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-red-600 text-white">
-                      <Lock className="h-4 w-4" />
-                    </span>
-                    <span className="h-6 w-px flex-shrink-0 bg-red-200" aria-hidden="true" />
-                    <p className="text-sm text-gray-800">
-                      Deleted {deleteResumeConfirm.ids.length === 1 ? 'resume' : 'resumes'}{' '}
-                      <span className="font-semibold text-red-600">cannot be recovered</span>.
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-red-600 text-white">
-                      <AlertCircle className="h-4 w-4" />
-                    </span>
-                    <span className="h-6 w-px flex-shrink-0 bg-red-200" aria-hidden="true" />
-                    <p className="text-sm text-gray-800">
-                      All associated data will be <span className="font-semibold text-red-600">permanently removed</span>.
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3 border-t border-gray-100 pt-4">
-                  <span className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border-2 border-brand-orange text-brand-orange">
-                    <HelpCircle className="h-4 w-4" />
-                  </span>
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">
-                      {deleteResumeConfirm.ids.length === 1
-                        ? 'Are you sure you want to delete this resume?'
-                        : <>Are you sure you want to delete <span className="font-semibold text-gray-900">{deleteResumeConfirm.ids.length} resumes</span>?</>
-                      }
-                    </p>
-                    <p className="mt-0.5 text-sm text-gray-500">This action cannot be reversed.</p>
-                  </div>
-                </div>
-              </div>
+              <p className="mt-2 text-sm text-gray-700">
+                {deleteResumeConfirm.ids.length === 1
+                  ? 'Are you sure you want to delete this resume? Once deleted, the resume will be permanently removed and cannot be recovered.'
+                  : <>Are you sure you want to delete <span className="font-semibold text-gray-900">{deleteResumeConfirm.ids.length} resumes</span>? Once deleted, they will be permanently removed and cannot be recovered.</>
+                }
+              </p>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="border-t border-gray-100 pt-4">
+            <AlertDialogCancel onClick={() => setDeleteResumeConfirm({ isOpen: false, ids: [], names: [] })}>
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDeleteResumes}
               className="gap-2 bg-red-600 text-white hover:bg-red-700"
@@ -6613,17 +6555,9 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
           }
         }}
       >
-        <AlertDialogContent className="max-w-md sm:max-w-lg">
-          <button
-            type="button"
-            onClick={() => setDeleteFolderConfirm({ isOpen: false, folderId: null, folderName: '', resumeCount: 0, parentFolderId: null, parentFolderName: '', contentAction: null, hasSubfolders: false, subfolderCount: 0, subfolderDetails: [], totalResumeCount: 0, subfolderResumeCount: 0, loading: false })}
-            className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700"
-            aria-label="Close"
-          >
-            <X className="h-4 w-4" />
-          </button>
+        <AlertDialogContent className="max-w-md sm:max-w-lg" hideClose>
           <AlertDialogHeader>
-            <div className="flex items-start gap-4 pr-8">
+            <div className="flex items-start gap-4">
               <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-red-100">
                 <Trash2 className="h-6 w-6 text-red-600" />
               </div>
@@ -6798,6 +6732,11 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => setDeleteFolderConfirm({ isOpen: false, folderId: null, folderName: '', resumeCount: 0, parentFolderId: null, parentFolderName: '', contentAction: null, hasSubfolders: false, subfolderCount: 0, subfolderDetails: [], totalResumeCount: 0, subfolderResumeCount: 0, loading: false })}
+            >
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDeleteFolder}
               disabled={deleteFolderConfirm.loading || (deleteFolderConfirm.totalResumeCount > 0 && !deleteFolderConfirm.contentAction)}

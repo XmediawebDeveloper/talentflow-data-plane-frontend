@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Eye, FileText, Loader2, Mail, Paperclip, Send, X } from 'lucide-react';
+import { Eye, FileText, Loader2, Mail, Paperclip, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { Resume } from '@/lib/types/types';
 import { resumeService } from '@/lib/services/resumeService';
@@ -106,13 +106,6 @@ Best regards`;
                   <p className="text-sm text-gray-500">The selected candidate&rsquo;s resume will be shared with the recipient via email.</p>
                 </div>
               </div>
-              <button
-                onClick={onClose}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                aria-label="Close"
-              >
-                <X className="w-5 h-5 text-gray-500" />
-              </button>
             </div>
 
             <div className="space-y-4">
@@ -183,6 +176,13 @@ Best regards`;
             </div>
 
             <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
+              <button
+                onClick={onClose}
+                disabled={isSendingEmail}
+                className="px-5 py-2 text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-brand-blue/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
               <button
                 onClick={handleSend}
                 disabled={isSendingEmail || !shareEmail.trim()}

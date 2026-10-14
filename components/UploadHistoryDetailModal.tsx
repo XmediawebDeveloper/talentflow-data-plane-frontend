@@ -1,6 +1,6 @@
 'use client';
 
-import { X, FileText, Copy, GitBranch, AlertTriangle, AlertCircle, CheckCircle, Calendar, User } from 'lucide-react';
+import { FileText, Copy, GitBranch, AlertTriangle, AlertCircle, CheckCircle, Calendar, User } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import ViewResumeButton from '@/components/ui/view-resume-button';
 
@@ -104,9 +104,6 @@ export default function UploadHistoryDetailModal({ item, onClose }: UploadHistor
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="p-1.5 sm:p-2 hover:bg-white/50 rounded-lg transition-colors flex-shrink-0" aria-label="Close">
-            <X className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500 dark:text-slate-500" />
-          </button>
         </div>
 
         {/* Content */}
@@ -202,6 +199,12 @@ export default function UploadHistoryDetailModal({ item, onClose }: UploadHistor
 
         {/* Footer */}
         <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 px-4 sm:px-6 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 shrink-0">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 hover:border-brand-blue/30 transition-colors"
+          >
+            Close
+          </button>
           {(item.status === 'completed' || item.status === 'versioned') && item.resumeId && (
             <ViewResumeButton onClick={handleViewResume} className="justify-center" />
           )}
