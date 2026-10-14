@@ -621,6 +621,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // without waiting for TTS playback to drain — if we show the modal
   // immediately it pops up while Bina is still speaking.
   const pendingCompletionModalRef = useRef(false);
+  // When the "Finishing up…" popup actually appeared, so the final page can
+  // wait until the candidate has seen it (see waitForCompletionPopup).
+  const completionShownAtRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (showCompletionModal && completionShownAtRef.current === null) {
+      completionShownAtRef.current = Date.now();
+    }
+  }, [showCompletionModal]);
 
   // 5-minute buffer state (MOM: buffer when allocated time expires)
   const [isInBuffer, setIsInBuffer] = useState(false);
@@ -6082,45 +6090,22 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             wsRef.current.send(JSON.stringify({ type: 'end_interview' }));
           }
         }
-        // Backend silently discarded the transcript (noise, non-English, hallucination).
-        // Clear processing and reopen mic. Resume the per-question timer (it was
-        // paused by question_timer_stopped on end_turn — since the response was
-        // discarded, the candidate is still on the same question and the answer
-        // window should keep ticking down from where it froze).
+        // Backend silently discarded the transcript (noise, non-English,
+        // hallucination). Since the backend's ADVANCE-ON-DISCARD rule
+        // (message_handler, 2026-05-25) a discard ALWAYS moves straight on to
+        // the next question — so do NOT reopen the mic or resume this
+        // question's timer here. Doing so (the pre-rule behaviour) briefly
+        // reopened the PREVIOUS question's recording until Bina's next
+        // question arrived ~2 s later (staging 2026-10-14, Q12 → Q13).
+        // Just clear the processing state; the "getting ready" banner covers
+        // the gap until the next question streams in.
         setIsProcessing(false);
         isProcessingRef.current = false;
         setIsCandidateTranscriptProcessing(false);
         setCurrentTranscript("");
         currentTranscriptRef.current = "";
         provisionalAnswerQnRef.current = null;
-        // Read the frozen value from state — stopRecording nulls the REF to
-        // prevent double-deduction of the global timer, but leaves React state
-        // intact so the banner stays visible. Without falling back to state
-        // here, the ref-null causes silent_discard's resume to no-op and the
-        // candidate's answer window appears stuck at the frozen value forever.
-        setQuestionTimerSeconds(prevSeconds => {
-          if (
-            prevSeconds !== null
-            && prevSeconds > 0
-            && !questionTimerExpiredRef.current
-            && questionTimerIntervalRef.current === null
-          ) {
-            // Re-sync ref so subsequent reads (heartbeat watchdog, tick interval)
-            // see the correct value, then resume the countdown from the freeze
-            // point — original anchor's pause accounting was torn down at
-            // question_timer_stopped.
-            questionTimerSecondsRef.current = prevSeconds;
-            ensureQuestionTimerRunning(prevSeconds);
-          }
-          return prevSeconds;
-        });
-        if (!isAiSpeakingRef.current && !isRecordingRef.current && !isFaceBlockedRef.current && !isMutedRef.current) {
-          setTimeout(() => {
-            if (wsRef.current?.readyState === WebSocket.OPEN && !isAiSpeakingRef.current) {
-              startRecordingInternalRef.current();
-            }
-          }, 300);
-        }
+        setStatus("Moving to the next question…");
         break;
       case "transcript_discarded":
         // Background timed-mode transcript was rejected after the backend had
@@ -8458,7 +8443,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                       parkedServerEotFallbackMs: SERVER_EOT_SILENCE_FALLBACK_MS,
                     });
                   }
-                  return;
+                  // NO `return` here. It belonged to the parked stopRecording()
+                  // path; left behind, it skipped the PCM send at the bottom of
+                  // this handler for EVERY frame once 15 s of silence had passed
+                  // — i.e. the whole time "Are you done?" was up. The candidate's
+                  // RESUMED speech was dropped until the silence clock reset
+                  // (≥1.5-3 s of voice) and never reached the transcript
+                  // (staging 2026-10-14: ~24 s of a 120 s answer never arrived).
+                  // Fall through so the frame is streamed like any other.
                 }
               }
             }
@@ -8981,13 +8973,32 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       if (pingIntervalRef.current) { clearInterval(pingIntervalRef.current); pingIntervalRef.current = null; }
       if (event.code === 1000 || shouldDisconnectAfterAudioRef.current || isClosingRef.current) {
         setStatus("Interview completed. Thank you!");
+        // The "Finishing up… Saving your interview" popup covers the save,
+        // as the assessment's does before its final page and feedback popup.
+        // It still waits for Bina's goodbye to finish if she is mid-sentence
+        // (the same deferral the completion message uses).
+        if (candidatePlaybackEndedRef.current) setShowCompletionModal(true);
+        else pendingCompletionModalRef.current = true;
+        // Hold the final page (and its feedback popup) until the popup has
+        // been visible for 1.5s, so it reads as a step rather than a flash.
+        // Never hold it more than 8s past the save, whatever happens.
+        const waitForCompletionPopup = () => new Promise<void>((resolve) => {
+          const waitStarted = Date.now();
+          const tick = () => {
+            const shownAt = completionShownAtRef.current;
+            if (shownAt !== null && Date.now() - shownAt >= 1500) return resolve();
+            if (Date.now() - waitStarted > 8000) return resolve();
+            setTimeout(tick, 150);
+          };
+          tick();
+        });
         // Flush proctoring events + upload recording before navigating away.
         // Both run concurrently — proctoring flush MUST complete before onInterviewComplete
         // otherwise camera_disabled, mic_disabled etc. events are lost.
         const flushProctoring = flushProctoringEventsRef.current?.() ?? Promise.resolve();
         Promise.all([flushProctoring, uploadRecording()])
           .catch(() => {})
-          .finally(() => { onInterviewComplete?.(); });
+          .finally(() => { void waitForCompletionPopup().then(() => onInterviewComplete?.()); });
       } else if (event.code === 4003 && /not in progress|not yet|system_check|status:/i.test(event.reason || "")) {
         // RACE: the WS connected BEFORE the candidate's /start call flipped the
         // interview to in_progress (backend reject: "Interview not in progress
@@ -10494,19 +10505,26 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               )}
 
 
-              {/* Candidate mic health (left) — confirms which input the browser
+              {/* Candidate mic health (left) — which input the browser
                   selected and whether the level is usable — and network strength
-                  (right), side by side. */}
-              <div className="absolute bottom-3 left-3 right-3 z-10 pointer-events-none grid grid-cols-2 gap-2 items-end">
-                <div className="min-w-0 rounded-lg border border-black/20 bg-black/55 backdrop-blur-md px-3 py-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
+                  (right), side by side. Collapsed to icon + level bar so they
+                  cover as little of the candidate's video as possible; hovering
+                  either (or tabbing to them) opens BOTH to show the mic name and
+                  the network status. The low-mic warning never hides. */}
+              <div
+                tabIndex={0}
+                aria-label={`Microphone: ${activeMicLabel || 'Microphone'}${isMuted ? ' (muted)' : ''}. Network status.`}
+                className="group/health absolute bottom-3 left-3 right-3 z-10 flex flex-wrap items-end gap-2 pointer-events-none focus:outline-none"
+              >
+                <div className="pointer-events-auto max-w-full rounded-lg border border-black/20 bg-black/55 backdrop-blur-md px-2.5 py-2 group-focus-visible/health:ring-2 group-focus-visible/health:ring-white/60">
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center min-w-0">
                       {isMuted ? (
                         <MicOff className="w-3.5 h-3.5 text-red-300 shrink-0" />
                       ) : (
                         <Mic className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
                       )}
-                      <span className="text-white/80 text-2xs truncate">
+                      <span className="text-white/80 text-2xs truncate max-w-0 opacity-0 transition-all duration-300 ease-out group-hover/health:max-w-[11rem] group-hover/health:ml-2 group-hover/health:opacity-100 group-focus-visible/health:max-w-[11rem] group-focus-visible/health:ml-2 group-focus-visible/health:opacity-100">
                         {activeMicLabel || "Microphone"}
                       </span>
                     </div>
@@ -10520,7 +10538,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                     </div>
                   </div>
                   {isRecording && !isMuted && micInputLow && (
-                    <div className="mt-1 text-2xs leading-tight text-amber-200">
+                    <div className="mt-1 max-w-[14rem] text-2xs leading-tight text-amber-200">
                       Microphone input is low. Check headset mic or system input.
                     </div>
                   )}
@@ -10544,13 +10562,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                     offline: { icon: 'text-red-300', bar: 'bg-red-400', label: 'Offline' },
                   }[level];
                   return (
-                    <div className="min-w-0 rounded-lg border border-black/20 bg-black/55 backdrop-blur-md px-3 py-2" title={rtt !== null ? `Approx. ${Math.round(rtt)} ms round trip to the interview server` : undefined}>
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2 min-w-0">
+                    <div className="pointer-events-auto max-w-full rounded-lg border border-black/20 bg-black/55 backdrop-blur-md px-2.5 py-2 group-focus-visible/health:ring-2 group-focus-visible/health:ring-white/60" title={rtt !== null ? `Approx. ${Math.round(rtt)} ms round trip to the interview server` : undefined}>
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center min-w-0">
                           {level === 'offline'
                             ? <WifiOff className={`w-3.5 h-3.5 shrink-0 ${tone.icon}`} />
                             : <Wifi className={`w-3.5 h-3.5 shrink-0 ${tone.icon}`} />}
-                          <span className="text-white/80 text-2xs truncate">
+                          <span className="text-white/80 text-2xs whitespace-nowrap overflow-hidden max-w-0 opacity-0 transition-all duration-300 ease-out group-hover/health:max-w-[11rem] group-hover/health:ml-2 group-hover/health:opacity-100 group-focus-visible/health:max-w-[11rem] group-focus-visible/health:ml-2 group-focus-visible/health:opacity-100">
                             Network · <span className="font-semibold text-white">{tone.label}</span>{pct !== null ? ` ${pct}%` : ''}
                           </span>
                         </div>
@@ -10572,8 +10590,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         </div>
 
         {/* ════ RIGHT PANEL: Chat (fills remaining width) ════ */}
-        {/* Inset card with rounded corners, matching the webcam frame. */}
-        <div className="flex-1 flex flex-col min-w-0 bg-white my-3 mr-3 ml-0 rounded-xl overflow-hidden">
+        {/* Inset card with rounded corners, matching the webcam frame. Same
+            6px top/bottom inset as the left column (Bina card mt-1.5, webcam
+            mb-1.5), so both sides run the same height. */}
+        <div className="flex-1 flex flex-col min-w-0 bg-white my-1.5 mr-1.5 ml-0 rounded-xl overflow-hidden">
 
           {/* Header — white status bar: title on the left; LIVE, ID Verified,
               question progress and End on the right, separated by thin

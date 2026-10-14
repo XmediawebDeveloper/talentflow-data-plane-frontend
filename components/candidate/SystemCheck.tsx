@@ -14,7 +14,6 @@ import {
   AlertCircle,
   AlertTriangle,
   RefreshCw,
-  ArrowLeft,
   ArrowRight,
   Loader2,
   Play,
@@ -58,7 +57,6 @@ interface SystemCheckProps {
   token: string;
   onComplete: (stream?: MediaStream) => void; // Pass stream to parent to keep it alive
   onRegisterFace?: (videoElement: HTMLVideoElement) => Promise<boolean>;
-  onBack: () => void;
 }
 
 interface CheckStatus {
@@ -213,7 +211,7 @@ const checkTile = (status: string) =>
     status === 'error' ? 'bg-destructive/10 text-destructive' : 'bg-brand-blue/10 text-brand-blue'
   }`;
 
-export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: SystemCheckProps) {
+export function SystemCheck({ token, onComplete, onRegisterFace }: SystemCheckProps) {
   const [cameraCheck, setCameraCheck] = useState<CheckStatus>({ status: 'pending', message: 'Not checked' });
   // Its own row (AI interview parity): "is the candidate's face there" and
   // "is anyone ELSE there" are different questions. Folded into the Camera
@@ -1389,7 +1387,7 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
       {/* Header + stepper: the shared pair. */}
       <div className="sticky top-0 z-50">
         <CandidateHeader />
-        <CandidateStepper current={3} />
+        <CandidateStepper current={2} />
       </div>
 
       {/* The recruiter page shell. */}
@@ -1579,13 +1577,9 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
           </div>
 
             {/* Action row — inside the page card, on the recruiter's footer
-                rule. `flex-wrap` so the two buttons drop to two lines rather
-                than colliding on a small phone. */}
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-4 mt-4 border-t border-gray-100">
-          <Button variant="secondary" size="md" onClick={onBack}>
-            <ArrowLeft className={`${ICON_INLINE} mr-2`} />
-            Go Back
-          </Button>
+                rule. Forward only: there is no going back to Job & Consent
+                from here. */}
+            <div className="flex flex-wrap items-center justify-end gap-3 pt-4 mt-4 border-t border-gray-100">
           <Button
             variant="primary"
             onClick={handleProceed}
