@@ -831,11 +831,6 @@ export default function StepIdentity({
 
         <div ref={formCardRef} className="w-full max-w-3xl mx-auto bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm flex flex-col lg:flex-row">
           <div className="p-4 sm:p-6 space-y-5 min-w-0 flex-1">
-            <div className="flex items-center gap-2 bg-warning-subtle text-warning-strong text-sm font-medium rounded-lg px-4 py-3">
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />
-              This is the name provided in your invitation.
-            </div>
-
             <div>
               <label htmlFor="identity-name" className="flex items-center gap-1.5 text-sm font-medium text-gray-900 mb-1.5">
                 <User className="w-4 h-4 text-gray-500" /> Full Name

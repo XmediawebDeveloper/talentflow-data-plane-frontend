@@ -22,10 +22,24 @@ export function stickyOffset(): number {
   return parseFloat(v) || 0;
 }
 
-/** True when the whole element sits between the pinned block and the bottom of the viewport. */
+/**
+ * True when the whole element sits between the pinned block and the bottom of
+ * the viewport, AND inside every scrolling/clipping ancestor. The second part
+ * matters for a sticky side panel with its own scroll (the consent panels): a
+ * button cut off by the panel's bottom edge is still "in the viewport", but
+ * the candidate cannot see it.
+ */
 export function isFullyVisible(el: Element): boolean {
   const r = el.getBoundingClientRect();
-  return r.top >= stickyOffset() && r.bottom <= window.innerHeight;
+  if (r.top < stickyOffset() || r.bottom > window.innerHeight) return false;
+  for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
+    const overflowY = getComputedStyle(a).overflowY;
+    if (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'hidden') {
+      const ar = a.getBoundingClientRect();
+      if (r.top < ar.top - 1 || r.bottom > ar.bottom + 1) return false;
+    }
+  }
+  return true;
 }
 
 /**

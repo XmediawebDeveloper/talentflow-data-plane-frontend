@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -34,6 +34,7 @@ import {
   X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { revealAfterPaint } from '@/lib/utils/candidateScroll';
 import CandidateHeader from './CandidateHeader';
 import CandidateStepper from './CandidateStepper';
 import { AssessmentInfo } from '@/lib/services/candidateService';
@@ -315,7 +316,17 @@ export function JobConsentScreen({ assessmentInfo, consentAccepted, onContinue, 
     .map((part, i, parts) => (i === 0 || i === parts.length - 1 ? part[0] : ''))
     .join('')
     .toUpperCase() || '?';
-  const toggleAgreed = () => { if (!consentAccepted) setAgreed((v) => !v); };
+  // Ticking consent brings Continue into view (only if it is hidden — below
+  // the fold or cut off by the consent panel's own scroll), as on the AI
+  // interview's consent step.
+  const continueRef = useRef<HTMLDivElement>(null);
+  const revealContinue = () => revealAfterPaint(() => continueRef.current, 'nearest');
+  const toggleAgreed = () => {
+    if (consentAccepted) return;
+    const next = !agreed;
+    setAgreed(next);
+    if (next) revealContinue();
+  };
 
   const handleContinue = async () => {
     if (!canContinue || isSubmitting) return;
@@ -591,7 +602,7 @@ export function JobConsentScreen({ assessmentInfo, consentAccepted, onContinue, 
                   {canContinue ? 'Consent accepted. You may now continue.' : 'Accept the consent and terms to continue.'}
                 </div>
 
-                <div className="px-5 pb-5">
+                <div ref={continueRef} className="px-5 pb-5">
                   <Button
                     onClick={handleContinue}
                     disabled={!canContinue || isSubmitting}
@@ -646,7 +657,7 @@ export function JobConsentScreen({ assessmentInfo, consentAccepted, onContinue, 
         <TermsDialog
           agreed={agreed}
           onClose={() => setShowTerms(false)}
-          onAgree={() => { setAgreed(true); setShowTerms(false); }}
+          onAgree={() => { setAgreed(true); setShowTerms(false); revealContinue(); }}
         />
       )}
     </div>
