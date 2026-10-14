@@ -24,6 +24,8 @@ import CandidateScoringDetailPage from './CandidateScoringDetailPage';
 import { toScoredResumeDetail } from '@/lib/utils/scoredResumeDetail';
 import SearchableSelect from '@/components/ui/searchable-select';
 import ScoredResumesTable, { renderInviteTargetItems, resolveInviteTargetState, type InviteTargetJob } from './ScoredResumesTable';
+import JobInviteDialogHost, { type InviteDialogJob, type InviteDialogRequest } from '@/components/talent-match-invite/JobInviteDialogHost';
+import type { InviteCandidate } from '@/components/talent-match-invite/inviteVersions';
 import CreateInviteTargetModal from './resume-scoring/CreateInviteTargetModal';
 import { useAllJobInviteTargets } from '@/lib/hooks/useAllJobInviteTargets';
 import { isInvitableAssessment } from '@/lib/hooks/useJobInviteTargets';
@@ -1227,17 +1229,13 @@ export default function AITalentMatchPage({
       toast.error('Candidate has no email on file');
       return;
     }
-    setPendingInviteRecipients([{
-      id: `row-invite-${candidate.key}-${job.resumeId ?? ''}`,
+    // Create / Send Assessment for THIS row's job — Job Details' popup.
+    openCreateSend('assessment', job.jobId, [{
+      id: job.resumeId || candidate.key,
       name: candidate.name || 'Candidate',
       email: candidate.email,
-      source: 'ai-match' as const,
-      candidateId: job.resumeId || candidate.key,
+      resumeId: job.resumeId,
     }]);
-    setPendingInviteJobId(job.jobId);
-    // handleAssessment only checks that something is selected; the override
-    // above is the real recipient list.
-    void handleAssessment(['__candidate_job_row__']);
   };
 
   // "Invite AI Interview" from the same list — scoped to THIS row's job, since
@@ -1259,10 +1257,13 @@ export default function AITalentMatchPage({
       setSelectedHistoryItem(item);
       setSelectedJob(item.jobId);
     }
-    handleInviteAIInterview(
-      [{ name: candidate.name || 'Candidate', email: candidate.email, resumeId: job.resumeId }],
-      job.jobId,
-    );
+    // Create / Send AI Interview for THIS row's job — Job Details' popup.
+    openCreateSend('interview', job.jobId, [{
+      id: job.resumeId || candidate.email,
+      name: candidate.name || 'Candidate',
+      email: candidate.email,
+      resumeId: job.resumeId,
+    }]);
   };
 
   const toggleCandidateChips = (e: React.MouseEvent, rowKey: string) => {
@@ -1664,6 +1665,8 @@ export default function AITalentMatchPage({
         assessmentConfigured={inviteTargets.hasAssessment(jdId)}
         aiInterviewConfigured={inviteTargets.hasAIInterview(jdId)}
         enableInternalAIInterviewInvite
+        /* Row Invite -> Create / Send for this job — Job Details' popup. */
+        onOpenInviteDialog={(kind, candidates) => openCreateSend(kind, jdId, candidates, jobTitle)}
         onViewCandidate={(r: any) => openScoreDetail(jdId, jobTitle, r.id, nav)}
         // The row above already names the candidate and the job.
         hiddenColumnIds={['candidateName', 'jdId', 'jobTitle', 'jobVersion']}
@@ -2473,6 +2476,25 @@ export default function AITalentMatchPage({
     const job = jobs.find(j => j.id === jdId);
     return { jdId, jdCode: job?.jobId || undefined, jdTitle: title || job?.title || 'Job' };
   };
+  /* Create / Send Assessment | AI Interview — Job Details' popup, for ONE job
+     per opening (a selection spanning jobs stays greyed: "one job at a time").
+     null = closed; rendered with aiInviteDialog in every view. */
+  const [createSendRequest, setCreateSendRequest] = useState<InviteDialogRequest | null>(null);
+  const inviteDialogJobOf = (jdId: string, title?: string): InviteDialogJob => {
+    const job = jobs.find(j => j.id === jdId);
+    return {
+      jdId,
+      jdTitle: title || job?.title || 'Job',
+      jdCode: job?.jobId || undefined,
+      versionNumber: job?.currentVersion,
+      status: job?.status,
+    };
+  };
+  const openCreateSend = (kind: InviteHandoffKind, jdId: string, candidates: InviteCandidate[], title?: string) =>
+    setCreateSendRequest({ kind, job: inviteDialogJobOf(jdId, title), candidates });
+  const createSendDialogEl = (
+    <JobInviteDialogHost request={createSendRequest} onClose={() => setCreateSendRequest(null)} />
+  );
   const [createInviteTarget, setCreateInviteTarget] = useState<{
     kind: InviteHandoffKind;
     job: InviteTargetJob;
@@ -2520,35 +2542,24 @@ export default function AITalentMatchPage({
     router.push(buildCreateUrl(t.kind, { id: t.job.jdId, title: t.job.jdTitle }, returnUrl, 'ai-talent-match'));
   };
 
-  /** Open the invite for `rows` (one job): the assessment picker scoped to
-   *  that job, or the Invite to AI Interview dialog. */
+  /** Open Create / Send for `rows` (one job) — Job Details' popup, with the
+   *  candidates who have an email (one per address). */
   const openInviteForRows = (kind: InviteHandoffKind, jdId: string, rows: MatchInviteRow[]) => {
-    const withEmail = rows.filter(r => r.email);
-    if (withEmail.length === 0) {
+    const seen = new Set<string>();
+    const candidates: InviteCandidate[] = rows
+      .filter(r => r.email)
+      .filter(r => {
+        const e = r.email!.toLowerCase();
+        if (seen.has(e)) return false;
+        seen.add(e);
+        return true;
+      })
+      .map(r => ({ id: r.resumeId || r.key, name: r.name, email: r.email!, phone: r.phone, resumeId: r.resumeId }));
+    if (candidates.length === 0) {
       toast.error('Selected candidates must have email addresses');
       return;
     }
-    if (kind === 'assessment') {
-      const seen = new Set<string>();
-      const recipients = withEmail
-        .filter(r => {
-          const e = r.email!.toLowerCase();
-          if (seen.has(e)) return false;
-          seen.add(e);
-          return true;
-        })
-        .map(r => ({ id: `invite-${r.key}`, name: r.name, email: r.email!, source: 'ai-match' as const, candidateId: r.resumeId || r.key }));
-      setPendingInviteRecipients(recipients);
-      setPendingInviteJobId(jdId);
-      // handleAssessment only checks that something is selected; the
-      // override above is the real recipient list.
-      void handleAssessment(['__invite_rows__']);
-      return;
-    }
-    handleInviteAIInterview(
-      withEmail.map(r => ({ name: r.name, email: r.email!, resumeId: r.resumeId, phone: r.phone, title: r.title })),
-      jdId,
-    );
+    openCreateSend(kind, jdId, candidates);
   };
 
   /** A candidate's invite items for its ⋮ menu — greyed with "＋ Create …"
@@ -2566,7 +2577,9 @@ export default function AITalentMatchPage({
       <>
         {renderInviteTargetItems({
           kind: 'assessment',
-          target: resolveInviteTargetState('assessment', [job], id => inviteTargets.hasAssessment(id)),
+          // The popup offers Create when this job has none.
+          target: { state: 'ready' },
+          label: 'Create / Send Assessment',
           itemClass: actionsMenuItemClass,
           allowed: canCreateAssessments,
           onInvite: (e) => {
@@ -2581,7 +2594,8 @@ export default function AITalentMatchPage({
         })}
         {renderInviteTargetItems({
           kind: 'interview',
-          target: resolveInviteTargetState('interview', [job], id => inviteTargets.hasAIInterview(id)),
+          target: { state: 'ready' },
+          label: 'Create / Send AI Interview',
           itemClass: actionsMenuItemClass,
           allowed: canCreateAIInterviews,
           onInvite: (e) => {
@@ -3076,10 +3090,14 @@ export default function AITalentMatchPage({
       );
     }
     return (
+      <>
+      {createSendDialogEl}
       <CandidateScoringDetailPage
         resume={detail}
         jobTitle={scoreDetailView.jobTitle}
         jobId={scoreDetailView.jdId}
+        /* Invite -> Create / Send for this score's job — Job Details' popup. */
+        onOpenInviteDialog={(kind, candidates) => openCreateSend(kind, scoreDetailView.jdId, candidates, scoreDetailView.jobTitle)}
         onBack={close}
         // Version dropdown: that version's score for this job, in place.
         onSelectScore={(scoreId) => {
@@ -3105,6 +3123,7 @@ export default function AITalentMatchPage({
           { label: detail.candidateName || 'Candidate' },
         ]}
       />
+      </>
     );
   }
 
@@ -3919,7 +3938,9 @@ export default function AITalentMatchPage({
               <DropdownMenuSeparator className="my-1 bg-gray-100" />
               {renderInviteTargetItems({
                 kind: 'assessment',
-                target: resolveInviteTargetState('assessment', targets, id => inviteTargets.hasAssessment(id)),
+                // One job -> the popup (it offers Create); several -> greyed.
+                target: resolveInviteTargetState('assessment', targets, () => true),
+                label: 'Create / Send Assessment',
                 itemClass: actionsMenuItemClass,
                 allowed: canCreateAssessments,
                 onInvite: (e) => {
@@ -3938,7 +3959,8 @@ export default function AITalentMatchPage({
                 kind: 'interview',
                 target: multiJob
                   ? { state: 'multi' }
-                  : resolveInviteTargetState('interview', targets, id => inviteTargets.hasAIInterview(id)),
+                  : { state: 'ready' },
+                label: 'Create / Send AI Interview',
                 itemClass: actionsMenuItemClass,
                 allowed: canCreateAIInterviews,
                 onInvite: (e) => {
@@ -5719,7 +5741,7 @@ export default function AITalentMatchPage({
                                   onSelect={() => inviteAssessmentForJobMatch(row, job)}
                                 >
                                   <FileText className="w-4 h-4 text-menu-icon-view" />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>Invite Assessment</span>
+                                  <span className={MENU_ITEM_SCALE_CLASS}>Create / Send Assessment</span>
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
                                   className={`${actionsMenuItemClass} ${!canCreateAIInterviews ? 'opacity-50' : ''}`}
@@ -5728,7 +5750,7 @@ export default function AITalentMatchPage({
                                   onSelect={() => inviteAIInterviewForJobMatch(row, job)}
                                 >
                                   <Video className="w-4 h-4 text-menu-icon-share" />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>Invite AI Interview</span>
+                                  <span className={MENU_ITEM_SCALE_CLASS}>Create / Send AI Interview</span>
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
@@ -7428,6 +7450,7 @@ export default function AITalentMatchPage({
       })()}
 
       {aiInviteDialog}
+      {createSendDialogEl}
       {scoringReviewDialog}
       {assessmentInviteDialogs}
       {createInviteTargetModal}
@@ -7638,6 +7661,7 @@ export default function AITalentMatchPage({
     return (
       <>
       {aiInviteDialog}
+      {createSendDialogEl}
       {scoringReviewDialog}
       {assessmentInviteDialogs}
       {createInviteTargetModal}
@@ -8032,7 +8056,8 @@ export default function AITalentMatchPage({
                           <>
                             {renderInviteTargetItems({
                               kind: 'assessment',
-                              target: resolveInviteTargetState('assessment', target, id => inviteTargets.hasAssessment(id)),
+                              target: resolveInviteTargetState('assessment', target, () => true),
+                              label: 'Create / Send Assessment',
                               itemClass: actionsMenuItemClass,
                               allowed: canCreateAssessments,
                               onInvite: (e) => {
@@ -8041,13 +8066,14 @@ export default function AITalentMatchPage({
                                   toast.error('You do not have permission to invite to an assessment');
                                   return;
                                 }
-                                handleAssessment();
+                                openInviteForRows('assessment', selectedJob, rows);
                               },
                               onCreate: create('assessment'),
                             })}
                             {renderInviteTargetItems({
                               kind: 'interview',
-                              target: resolveInviteTargetState('interview', target, id => inviteTargets.hasAIInterview(id)),
+                              target: resolveInviteTargetState('interview', target, () => true),
+                              label: 'Create / Send AI Interview',
                               itemClass: actionsMenuItemClass,
                               allowed: canCreateAIInterviews,
                               onInvite: (e) => {
@@ -8056,7 +8082,7 @@ export default function AITalentMatchPage({
                                   toast.error('You do not have permission to invite to an AI interview');
                                   return;
                                 }
-                                handleBulkInviteAIInterview();
+                                openInviteForRows('interview', selectedJob, rows);
                               },
                               onCreate: create('interview'),
                             })}
@@ -8751,6 +8777,7 @@ export default function AITalentMatchPage({
       )}
 
       {aiInviteDialog}
+      {createSendDialogEl}
       {scoringReviewDialog}
 
 

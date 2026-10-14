@@ -18,6 +18,7 @@ import ResumeScoringStatusPanel from './ResumeScoringStatusPanel';
 import BulkScoringProgressModal, { ScoringProgressItem } from './BulkScoringProgressModal';
 import { normalizeMatchResult } from '@/lib/utils/matchStatus';
 import CandidateScoringDetailPage from './CandidateScoringDetailPage';
+import JobInviteDialogHost, { type InviteDialogJob, type InviteDialogRequest } from '@/components/talent-match-invite/JobInviteDialogHost';
 import JDVersionHistoryModal from '@/components/JDVersionHistoryModal';
 import api, { dispatchUnitsConsumed } from '@/lib/services/api';
 import { scoringService, normalizeScoringStatus } from '@/lib/services/scoringService';
@@ -671,6 +672,19 @@ export default function ResumeScoringPage({
    *  full JD record's — some score records come back without it. */
   const jdCodeOf = (it: { jdJobId?: string; jobId: string }) =>
     it.jdJobId || jobRecordsById.get(it.jobId)?.job_id;
+  /* Create / Send Assessment | AI Interview — Job Details' popup, for the one
+     job the drill-in or a candidate view is on. null = closed. Rendered in
+     each of those views' returns via `inviteDialogEl`. */
+  const [inviteRequest, setInviteRequest] = useState<InviteDialogRequest | null>(null);
+  const inviteDialogEl = <JobInviteDialogHost request={inviteRequest} onClose={() => setInviteRequest(null)} />;
+  /** The drill-in job (`selectedHistoryItem`) as the popup names it. */
+  const inviteJobOf = (it: { jobId: string; jobTitle: string; jdJobId?: string; jdVersionNumber?: number; jdStatus?: string }, versionNumber?: number): InviteDialogJob => ({
+    jdId: it.jobId,
+    jdTitle: it.jobTitle,
+    jdCode: jdCodeOf(it),
+    versionNumber: versionNumber ?? it.jdVersionNumber,
+    status: mapJdStatusToJobStatus(it.jdStatus),
+  });
   // Scoring History popup's Match Breakdown donut — 'all' or one version, kept
   // per job (a different job reads as 'all' without needing a reset).
   const [historyBreakdown, setHistoryBreakdown] = useState<{ jobId: string; version: string }>({ jobId: '', version: 'all' });
@@ -2348,8 +2362,12 @@ export default function ResumeScoringPage({
     };
 
     return (
+      <>
+      {inviteDialogEl}
       <CandidateScoringDetailPage
         allowCreateInviteTarget
+        /* Invite ▾ → Create / Send for this job, this candidate. */
+        onOpenInviteDialog={(kind, candidates) => setInviteRequest({ kind, job: inviteJobOf(selectedHistoryItem), candidates })}
         // Version dropdown: that version's score for this job, in place.
         onSelectScore={(scoreId, resumeVersion) => {
           const row = _scoredList.find((r: any) => r.id === scoreId);
@@ -2402,6 +2420,7 @@ export default function ResumeScoringPage({
           router.push(`/recruitment/resume-scoring?jd_id=${selectedHistoryItem.jobId}`, { scroll: false });
         }}
       />
+      </>
     );
   }
 
@@ -2461,8 +2480,22 @@ export default function ResumeScoringPage({
       );
     };
     return (
+      <>
+      {inviteDialogEl}
       <CandidateScoringDetailPage
         allowCreateInviteTarget
+        /* Invite ▾ → Create / Send for this score's own job. A row with no
+           job ('global') keeps the older invite flow. */
+        onOpenInviteDialog={candidateJdId !== 'global' ? (kind, candidates) => setInviteRequest({
+          kind,
+          job: {
+            jdId: candidateJdId,
+            jdTitle: candidateJobTitle,
+            jdCode: selectedCandidateForView.jobCode,
+            versionNumber: selectedCandidateForView.jobVersion,
+          },
+          candidates,
+        }) : undefined}
         // Version dropdown: that version's score for this job, in place.
         onSelectScore={(scoreId, resumeVersion) => {
           const row = globalScoredResumesVersioned.find((r: any) => r.id === scoreId);
@@ -2510,6 +2543,7 @@ export default function ResumeScoringPage({
           router.push(`/recruitment/resume-scoring`, { scroll: false });
         }}
       />
+      </>
     );
   }
 
@@ -2853,9 +2887,13 @@ export default function ResumeScoringPage({
           goToJdTab="scored-resumes"
         />
 
+        {inviteDialogEl}
         {/* Scored Resumes Table */}
         <ScoredResumesTable
           resumes={scoredResumesData}
+          /* Row Invite ▸ and the selection's Actions → Create / Send
+             Assessment | AI Interview for this job — Job Details' popup. */
+          onOpenInviteDialog={(kind, candidates) => setInviteRequest({ kind, job: inviteJobOf(selectedHistoryItem, detailsVersionNumber), candidates })}
           displayMode={jobResumesDisplayMode}
           onDisplayModeChange={setJobResumesDisplayMode}
           jobTitle={selectedHistoryItem.jobTitle}

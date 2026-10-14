@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowLeft, ChevronLeft, ChevronRight, MapPin, Calendar, Users, Briefcase, X, CheckCircle, CheckCircle2, CheckSquare, Square, MoreVertical, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, BarChart3, MessageSquare, FileText, Search, Paperclip, Loader2, AlertCircle, Info, ArrowRight, Zap, ClipboardList, Video } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, MapPin, Calendar, Users, Briefcase, X, CheckCircle, CheckCircle2, CheckSquare, Square, MoreVertical, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, BarChart3, MessageSquare, FileText, Search, Paperclip, Loader2, AlertCircle, Info, ArrowRight, Zap, ClipboardList, Video, FileDown } from 'lucide-react';
 import { Fragment, useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
@@ -17,6 +17,7 @@ import { Tooltip } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ToolbarSelectAll from '@/components/ui/toolbar-select-all';
+import ExtractedDataSummary from '@/components/jobs/ExtractedDataSummary';
 import ToolbarFilterSelect from '@/components/ui/toolbar-filter-select';
 import { SortByControl } from '@/components/ui/select-all-menu';
 import ListPagination from '@/components/ListPagination';
@@ -76,6 +77,9 @@ import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
+import { exportData, type ExportColumn } from '@/lib/utils/exportUtils';
+import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
+import ExportFormatModal from '@/components/ExportFormatModal';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import RecordPager from '@/components/RecordPager';
 import { criterionScoringLabel, requirementBadge } from '@/lib/utils/scoringCriteria';
@@ -872,8 +876,6 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     () => [...lineageVersions].sort((a, b) => (b.version_number ?? 1) - (a.version_number ?? 1)),
     [lineageVersions]
   );
-  // Collapsible "Extracted Data Summary" (mirrors the Step 2/Review summary dropdown)
-  const [showExtractedSummary, setShowExtractedSummary] = useState(false);
 
   // Scored resumes state
   const [scoredResumes, setScoredResumes] = useState<any[]>([]);
@@ -925,6 +927,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   // AI Talent Match tab's Score Selected / Score All: reviewed in the shared
   // Candidates Selected dialog (this job fixed) before the batch starts.
   const [aiMatchScoreReview, setAiMatchScoreReview] = useState<MatchedCandidate[] | null>(null);
+  const aiMatchScoringStartingRef = useRef(false);
   /* Starts true, not false: the mount effect below always fetches this (when
      the plan has the feature) before the first paint settles, so a `false`
      default let the tab badge and empty state read "0 / No AI Talent Match
@@ -1269,8 +1272,18 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     // Only a real candidate list counts as a seed: the quick-action tile hands
     // this straight to onClick, so it can arrive as a click event, which must
     // open the dialog with nobody preset — not crash the page on `.map`.
-    setAiInviteSeed(Array.isArray(seed) ? seed : []);
+    // Opens Create / Send AI Interview — the popup the result tabs' Actions
+    // use — so every Invite on this page runs the one flow; with nobody
+    // preset its "Choose candidates in the next step" applies.
+    const list = Array.isArray(seed) ? seed : [];
+    setInviteDialog({
+      kind: 'interview',
+      candidates: list.map((c) => ({ id: c.resumeId || c.email, name: c.name, email: c.email, resumeId: c.resumeId })),
+    });
   };
+  /* Quick Actions › Assessment › Invite (and its deep link): Create / Send
+     Assessment with nobody preset — candidates are chosen in its email step. */
+  const openCreateSendAssessment = () => setInviteDialog({ kind: 'assessment', candidates: [] });
 
   const handleAIInterviewStatus = () => {
     // Open the AI Interview Result tab on this page rather than navigating.
@@ -1498,7 +1511,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       }
     } else if (initialAction === 'invite-assessment') {
       if (permissions.canCreateAssessments && hasPlanFeature('assessment') && features.assessment && job.status !== 'Disabled') {
-        handleOpenShareAssessment();
+        openCreateSendAssessment();
       }
     } else if (initialAction === 'assessment-status') {
       if (permissions.canViewAssessments && hasPlanFeature('assessment') && features.assessment) {
@@ -1936,6 +1949,41 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
      panel below it. Held in state (not a plain ref) so the children re-render
      and portal in once the node is actually mounted. */
   const [tabToolbarSlot, setTabToolbarSlot] = useState<HTMLDivElement | null>(null);
+  /* Overview right column (Quick Actions / Applicant Statistics / Recent
+     Activity) — sticky on lg+ with NO height cap or overflow of its own, so it
+     never grows inner scrollbars. Its `top` is measured instead: when the
+     column fits in the scroller below the sticky breadcrumb it pins there;
+     when it is taller, `top` goes negative so the column scrolls with the page
+     until its BOTTOM is in view and sticks there — every card stays reachable
+     through the page's own scroll. Below lg the class isn't sticky, so the
+     inline `top` is inert. */
+  const rightColumnRef = useRef<HTMLDivElement | null>(null);
+  const [rightColumnTop, setRightColumnTop] = useState<number | undefined>(undefined);
+  useEffect(() => {
+    if (activeTab !== 'overview') return;
+    const column = rightColumnRef.current;
+    if (!column) return;
+    // The dashboard layout's overflow-y-auto div is what scrolls this page.
+    let scroller: HTMLElement | null = column.parentElement;
+    while (scroller && !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)) {
+      scroller = scroller.parentElement;
+    }
+    const GAP = 16;
+    const measure = () => {
+      const viewportH = scroller ? scroller.clientHeight : window.innerHeight;
+      const pinnedTop = (breadcrumbBarRef.current?.offsetHeight ?? 0) + GAP;
+      const columnH = column.offsetHeight;
+      setRightColumnTop(
+        pinnedTop + columnH + GAP <= viewportH ? pinnedTop : viewportH - columnH - GAP
+      );
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(column);
+    if (scroller) ro.observe(scroller);
+    if (breadcrumbBarRef.current) ro.observe(breadcrumbBarRef.current);
+    return () => ro.disconnect();
+  }, [activeTab]);
   // Recent Activity panel — 10 events per page.
   const [activityPage, setActivityPage] = useState(1);
   const ACTIVITY_PAGE_SIZE = 10;
@@ -2184,10 +2232,19 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   // Score selected AI match candidates using async Celery bulk scoring
   const startAiMatchScoring = async (candidates: MatchedCandidate[]) => {
     if (candidates.length === 0) return;
+    // One start request at a time — a repeated confirm while the first is
+    // still in flight would otherwise queue the same resumes twice.
+    if (aiMatchScoringStartingRef.current) return;
     const resumeIds = candidates.map((c) => c.resumeId);
     const returnUrl = `/recruitment/job-details?id=${job.id}&tab=scored-resumes`;
     try {
-      const response = await scoringService.startBulkScoringAsync(job.id, resumeIds);
+      aiMatchScoringStartingRef.current = true;
+      let response;
+      try {
+        response = await scoringService.startBulkScoringAsync(job.id, resumeIds);
+      } finally {
+        aiMatchScoringStartingRef.current = false;
+      }
       const batchId = response.batch_id;
 
       // Register items in floating progress widget
@@ -2500,6 +2557,45 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   }
 
   // Show CandidateScoringDetailPage when viewing a scored resume (same as ResumeScoringPage)
+  /* Create / Send Assessment | AI Interview popup — one element for every
+     render path: the page's own return and the scored-candidate view's
+     early return (its Invite menu opens this too). */
+  const versionInviteDialogEl = inviteDialog ? (
+        <VersionInviteDialog
+          kind={inviteDialog.kind}
+          onClose={() => setInviteDialog(null)}
+          jdId={job.id}
+          jdCode={job.job_id}
+          jdTitle={job.title}
+          jobVersionNumber={job.versionNumber && job.versionNumber > 0 ? job.versionNumber : undefined}
+          candidates={inviteDialog.candidates}
+          disabledReason={
+            !(inviteDialog.kind === 'assessment' ? features.assessment : features.ai_interview)
+              ? `${inviteDialog.kind === 'assessment' ? 'Assessments are' : 'AI Interviews are'} not enabled for your workspace.`
+              : job.status === 'Disabled' ? 'This job description is disabled, so nothing can be sent for it.' : null
+          }
+          /* Send (the picked version) and Browse all → Share Assessment via
+             Email, pre-filled with the assessment(s) and the ticked
+             candidates; that step validates and sends. */
+          /* Next → Share Assessment via Email as the popup's own second step;
+             a send refreshes this page's assessment count and results. */
+          onAssessmentsSent={(sent) => {
+            setAssessmentInviteCount((prev) => prev + sent);
+            void fetchAssessmentResults();
+          }}
+          /* Next → Send AI Interview via Email as the popup's own second
+             step; a send counts here as this page's own Invite does. */
+          onInterviewsSent={() => {
+            setAiInterviewCount((prev) => Math.max(prev + 1, 1));
+            toast.success('AI interview invitation sent');
+          }}
+          onSent={(kind, sent) => {
+            if (kind === 'assessment') void fetchAssessmentResults();
+            else setAiInterviewCount((prev) => Math.max(prev + sent, 1));
+          }}
+        />
+  ) : null;
+
   if (viewingScoredResume) {
     const _scoredIdx = scoredResumes.findIndex(
       (r: any) => scoredResumeId(r) === scoredResumeId(viewingScoredResume),
@@ -2510,6 +2606,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       setViewingScoredResume(toCandidateDetail(r));
     };
     return (
+      <>
       <CandidateScoringDetailPage
         resume={viewingScoredResume}
         jobTitle={job.title}
@@ -2535,7 +2632,12 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
            opened from and as the sections above. */
         assessmentConfigured={canInviteToAssessment}
         aiInterviewConfigured={canInviteToAIInterview}
+        /* Invite ▾ → the same Create / Send popup as the Scored Resumes
+           tab's row and selection menus, for this candidate. */
+        onOpenInviteDialog={(kind, invitees) => openInviteDialog(kind, invitees, 'score-resume')}
       />
+      {versionInviteDialogEl}
+      </>
     );
   }
 
@@ -2711,7 +2813,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               {/* Row 1: JD ID + Job Title + Status */}
               <div className="flex flex-wrap items-center gap-2 mb-2">
                 {job.job_id && (
-                  <span className="inline-flex items-center px-2 py-0.5 bg-blue-600 text-white rounded-md text-xs font-semibold font-mono tracking-wide">
+                  <span className="inline-flex items-center px-2 py-0.5 bg-brand-blue text-white rounded-md text-xs font-semibold font-mono tracking-wide">
                     {job.job_id}
                   </span>
                 )}
@@ -2737,7 +2839,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                 {job.location && (
                   <>
                     <div className="flex items-center gap-1.5">
-                      <MapPin className="w-4 h-4 text-purple-600" />
+                      <MapPin className="w-4 h-4 text-brand-blue" />
                       <span>{job.location}</span>
                     </div>
                     <span className="text-gray-300">•</span>
@@ -3270,7 +3372,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                 )}
                 {job.location && (
                 <div className="flex items-center gap-1.5">
-                  <MapPin className="w-4 h-4 text-blue-600" />
+                  <MapPin className="w-4 h-4 text-brand-blue" />
                   <span>{job.location}</span>
                 </div>
                 )}
@@ -3404,212 +3506,44 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             )}
           </div>
 
-          {/* Extracted Data Summary - Collapsible (mirrors Step 2 / Review summary) */}
+          {/* Extracted Data Summary - the JD wizard Review step's format, shared
+              with every surface that shows it (components/jobs/ExtractedDataSummary). */}
           {hasAnyExtractedData && (
-            <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
-              {/* Header toggle */}
-              <button
-                onClick={() => setShowExtractedSummary(!showExtractedSummary)}
-                className="w-full bg-brand-blue/[0.04] px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between hover:bg-brand-blue/[0.07] transition-colors rounded-t-xl"
-              >
-                <div className="text-left">
-                  <h3 className="text-sm sm:text-lg text-gray-900 dark:text-slate-50 flex items-center gap-2 flex-wrap">
-                    📊 Extracted Data Summary
-                    <Eye className="w-5 h-5 text-gray-500 dark:text-slate-500" />
-                  </h3>
-                  <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">Click to {showExtractedSummary ? 'hide' : 'view'} structured requirements</p>
-                </div>
-                <div className={`transform transition-transform ${showExtractedSummary ? 'rotate-180' : ''}`}>
-                  <ChevronRight className="w-5 h-5 text-gray-500 dark:text-slate-500 rotate-90" />
-                </div>
-              </button>
-
-              {showExtractedSummary && (
-                <>
-                  {/* Skills & Comments */}
-                  <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-slate-700">
-                    <h3 className="text-sm sm:text-base text-gray-900 dark:text-slate-50 mb-3 sm:mb-4">Skills &amp; Requirements</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                      {/* Left: Skills */}
-                      <div className="space-y-4 sm:space-y-6">
-                        <div>
-                          <h4 className="text-sm text-gray-700 dark:text-slate-300 mb-3">Must-Have Skills ({mustHaveSkills.length})</h4>
-                          {mustHaveSkills.length > 0 ? (
-                            <div className="space-y-2">
-                              {mustHaveSkills.map((skill, index) => (
-                                <div key={index} className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300">
-                                  <CheckCircle className="w-4 h-4 text-destructive flex-shrink-0" />
-                                  {skill}
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <p className="text-gray-500 dark:text-slate-500 italic text-sm">None</p>
-                          )}
-                        </div>
-                        <div>
-                          <h4 className="text-sm text-gray-700 dark:text-slate-300 mb-3">Nice-to-Have Skills ({niceToHaveSkills.length})</h4>
-                          {niceToHaveSkills.length > 0 ? (
-                            <div className="space-y-2">
-                              {niceToHaveSkills.map((skill, index) => (
-                                <div key={index} className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
-                                  <CheckCircle className="w-4 h-4 text-gray-800 dark:text-slate-100 flex-shrink-0" />
-                                  {skill}
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <p className="text-gray-500 dark:text-slate-500 italic text-sm">None</p>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Right: Comments */}
-                      <div className="space-y-4 sm:space-y-6">
-                        <div>
-                          {/* Labelled Essential/Preferred because these two lists are
-                              where a degree requirement lands - Education has no tile of
-                              its own, and `education_mandatory` decides which list it
-                              goes in. Without the label there is no way to see on a
-                              published JD whether the degree is Required. */}
-                          <h4 className="text-sm text-gray-700 dark:text-slate-300 mb-3">
-                            Must-Have Additional Requirements ({mustHaveComments.length})
-                            {/* Only when the list HAS something. The badge is a claim about how these
-                                lines are SCORED - "Required (Essential)" on an empty section told the
-                                recruiter a rule was in force over nothing, right beside the word
-                                "None". A label with no subject is worse than no label. */}
-                            {mustHaveComments.length > 0 && (
-                              <span className="ml-2 text-xs font-normal text-gray-500 dark:text-slate-500">✓ Required (Essential)</span>
-                            )}
-                          </h4>
-                          {mustHaveComments.length > 0 ? (
-                            <div className="space-y-2">
-                              {mustHaveComments.map((comment, index) => (
-                                <div key={index} className="flex items-start gap-2 text-sm text-gray-700 dark:text-slate-300">
-                                  <CheckCircle className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" />
-                                  <span>{comment}</span>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <p className="text-gray-500 dark:text-slate-500 italic text-sm">None</p>
-                          )}
-                        </div>
-                        <div>
-                          <h4 className="text-sm text-gray-700 dark:text-slate-300 mb-3">
-                            Nice-to-Have Additional Requirements ({niceToHaveComments.length})
-                            {niceToHaveComments.length > 0 && (
-                              <span className="ml-2 text-xs font-normal text-gray-500 dark:text-slate-500">○ Preferred</span>
-                            )}
-                          </h4>
-                          {niceToHaveComments.length > 0 ? (
-                            <div className="space-y-2">
-                              {niceToHaveComments.map((comment, index) => (
-                                <div key={index} className="flex items-start gap-2 text-sm text-gray-600 dark:text-slate-400">
-                                  <CheckCircle className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
-                                  <span>{comment}</span>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <p className="text-gray-500 dark:text-slate-500 italic text-sm">None</p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Requirements Grid */}
-                  <div className="p-4 sm:p-6">
-                    <h3 className="text-sm sm:text-base text-gray-900 dark:text-slate-50 mb-3 sm:mb-4">Requirements</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-                      <div className="bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg">
-                        <h4 className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-1 sm:mb-2">Experience</h4>
-                        <p className="text-sm sm:text-base text-gray-900 dark:text-slate-50">{job.experience || 'Not specified'}</p>
-                        {/* Same rule as the two lists above: an unstated experience range
-                            is not Required or Preferred, it is simply absent. */}
-                        {job.experience && (
-                          <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">{requirementLabel(job.experienceMandatory)}</p>
-                        )}
-                      </div>
-                      {/* Education tile REMOVED 2026-08-21 - see the chip note above.
-                          The requirement is listed in Must-Have / Nice-to-Have
-                          Additional Requirements, in the recruiter's own words and
-                          with the field of study a bare level throws away. Which of
-                          those two lists it lands in IS the Required/Preferred
-                          answer, which is why the lists are labelled above. */}
-                      {job.industry_type && (
-                        <div className="bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg">
-                          <h4 className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-1 sm:mb-2">Industry Type</h4>
-                          <p className="text-sm sm:text-base text-gray-900 dark:text-slate-50">{prettifyCode(job.industry_type)}</p>
-                          {/* "Others" is the catch-all, and Resume Scoring skips it by
-                              name - so a Required/Preferred badge here would describe a
-                              criterion that is never graded. */}
-                          <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">{criterionScoringLabel(job.industry_type, job.industryMandatory, { isIndustry: true })}</p>
-                        </div>
-                      )}
-                      {job.location && (
-                        <div className="bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg">
-                          <h4 className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-1 sm:mb-2">Location</h4>
-                          <p className="text-sm sm:text-base text-gray-900 dark:text-slate-50">{job.location}</p>
-                          <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">{criterionScoringLabel(job.location, job.locationMandatory)}</p>
-                        </div>
-                      )}
-                      <div className="bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg">
-                        <h4 className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-1 sm:mb-2">Employment Type</h4>
-                        <p className="text-sm sm:text-base text-gray-900 dark:text-slate-50">{employmentTypeLabel(job.employmentType)}</p>
-                      </div>
-                      <div className="bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg">
-                        <h4 className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-1 sm:mb-2">Work Mode</h4>
-                        <p className="text-sm sm:text-base text-gray-900 dark:text-slate-50">{workModeLabel(job.workMode)}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Scoring Preferences. Recruiter answers that change how a resume is
-                      graded but appear nowhere else once the JD is published, so a
-                      recruiter reading a published JD could not tell whether an
-                      over-qualified candidate would be penalised or whether Job Hopping
-                      was even being scored. */}
-                  <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-slate-700">
-                    <h3 className="text-sm sm:text-base text-gray-900 dark:text-slate-50 mb-3 sm:mb-4">Scoring Preferences</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                      <div className="bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg">
-                        <h4 className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-1 sm:mb-2">Allow Over-Qualified Candidates</h4>
-                        <p className="text-sm sm:text-base text-gray-900 dark:text-slate-50">
-                          {job.allowOverqualified === null || job.allowOverqualified === undefined
-                            ? 'Not specified'
-                            : job.allowOverqualified ? 'Yes' : 'No'}
-                        </p>
-                        <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">
-                          {job.allowOverqualified === false
-                            ? 'Experience well above the range scores lower'
-                            : 'Extra relevant experience is not penalised'}
-                        </p>
-                      </div>
-                      <div className="bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg">
-                        <h4 className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-1 sm:mb-2">Job Hopping</h4>
-                        <p className="text-sm sm:text-base text-gray-900 dark:text-slate-50">
-                          {job.jobHoppingEnabled === null || job.jobHoppingEnabled === undefined
-                            ? 'Not specified'
-                            : job.jobHoppingEnabled ? 'Evaluated' : 'Not evaluated'}
-                        </p>
-                        <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">
-                          {job.jobHoppingEnabled === false
-                            ? 'Tenure pattern is not scored for this role'
-                            : 'Scored as a Preferred criterion'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
+            <ExtractedDataSummary
+              mustHaveSkills={mustHaveSkills}
+              niceToHaveSkills={niceToHaveSkills}
+              mustHaveComments={mustHaveComments}
+              niceToHaveComments={niceToHaveComments}
+              experience={job.experience}
+              experienceNote={requirementLabel(job.experienceMandatory)}
+              industry={job.industry_type ? prettifyCode(job.industry_type) : null}
+              industryNote={job.industry_type ? criterionScoringLabel(job.industry_type, job.industryMandatory, { isIndustry: true }) : undefined}
+              location={job.location}
+              locationNote={job.location ? criterionScoringLabel(job.location, job.locationMandatory) : undefined}
+              employmentType={employmentTypeLabel(job.employmentType)}
+              workMode={workModeLabel(job.workMode)}
+              scoring={{
+                allowOverqualified: job.allowOverqualified,
+                jobHoppingEnabled: job.jobHoppingEnabled,
+                overqualifiedNoNote: 'Experience well above the range scores lower',
+              }}
+              aiExtracted={job.creation_method === 'ai_generated'}
+            />
           )}
         </div>
 
-        {/* Right Column - Actions & Activity */}
-        <div className="lg:col-span-4 space-y-5">
+        {/* Right Column - Actions & Activity. Sticky on lg+ only; `top` comes
+            from rightColumnTop (see its comment) — no max-height/overflow here,
+            since overflow-y:auto also forces overflow-x to auto and that is
+            what produced the stray inner scrollbars. self-start stops the grid
+            stretching it to the left column's height, which would leave it
+            nothing to stick within. min-w-0 keeps wide content from pushing
+            the grid track past its 4/12. Below lg it stacks as before. */}
+        <div
+          ref={rightColumnRef}
+          className="lg:col-span-4 min-w-0 space-y-5 lg:sticky lg:self-start"
+          style={rightColumnTop !== undefined ? { top: rightColumnTop } : undefined}
+        >
           {/* Quick Actions */}
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4">
             <QuickActionHeader
@@ -3716,7 +3650,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                         label="Invite"
                         accent="cyan"
                         planLocked={assessmentPlanLocked}
-                        onClick={handleOpenShareAssessment}
+                        onClick={openCreateSendAssessment}
                         loading={isLoadingShareAssessments}
                         disabled={!canInviteJd || !canInviteToAssessment}
                         disabledTooltip={
@@ -4504,6 +4438,12 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           toolbarPortal={tabToolbarSlot}
           candidates={aiMatchCandidates}
           scoredResumes={scoredResumes}
+          scoredResumesLoaded={scoredResumesLoaded && !loadingScoredResumes}
+          jobTitle={job.title}
+          jobVersionNumber={job.versionNumber}
+          /* Same gate as the AI Talent Match page's Export — the granular
+             ai_match:export code, not the shared legacy can_export bucket. */
+          canExport={isTenantAdmin || hasPermissionCode('ai_match:export')}
           sessions={aiMatchSessions}
           loading={loadingAiMatch}
           canRunAiMatch={permissions.canRunAiMatch}
@@ -5185,41 +5125,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           Talent Match tab's two separate popups (one VersionInviteDialog per
           type). Up to 5 versions per type for this JD row; one version per
           send. Mounted only while open, so each opening starts fresh. */}
-      {inviteDialog && (
-        <VersionInviteDialog
-          kind={inviteDialog.kind}
-          onClose={() => setInviteDialog(null)}
-          jdId={job.id}
-          jdCode={job.job_id}
-          jdTitle={job.title}
-          jobVersionNumber={job.versionNumber && job.versionNumber > 0 ? job.versionNumber : undefined}
-          candidates={inviteDialog.candidates}
-          disabledReason={
-            !(inviteDialog.kind === 'assessment' ? features.assessment : features.ai_interview)
-              ? `${inviteDialog.kind === 'assessment' ? 'Assessments are' : 'AI Interviews are'} not enabled for your workspace.`
-              : job.status === 'Disabled' ? 'This job description is disabled, so nothing can be sent for it.' : null
-          }
-          /* Send (the picked version) and Browse all → Share Assessment via
-             Email, pre-filled with the assessment(s) and the ticked
-             candidates; that step validates and sends. */
-          /* Next → Share Assessment via Email as the popup's own second step;
-             a send refreshes this page's assessment count and results. */
-          onAssessmentsSent={(sent) => {
-            setAssessmentInviteCount((prev) => prev + sent);
-            void fetchAssessmentResults();
-          }}
-          /* Next → Send AI Interview via Email as the popup's own second
-             step; a send counts here as this page's own Invite does. */
-          onInterviewsSent={() => {
-            setAiInterviewCount((prev) => Math.max(prev + 1, 1));
-            toast.success('AI interview invitation sent');
-          }}
-          onSent={(kind, sent) => {
-            if (kind === 'assessment') void fetchAssessmentResults();
-            else setAiInterviewCount((prev) => Math.max(prev + sent, 1));
-          }}
-        />
-      )}
+      {versionInviteDialogEl}
 
       {/* Invite to AI Interview — the shared dialog, scoped to this job, with
           several interviews pickable (Select All), as the Invite to
@@ -5262,11 +5168,68 @@ const ROW_ACTION_BUTTON_CLASS =
 const ROW_ACTION_BUTTON_ACTIVE_CLASS =
   'inline-flex items-center justify-center p-2.5 rounded-lg border transition-all bg-brand-blue/10 border-brand-blue/30 text-brand-blue';
 
+/* The ⓘ beside Actions › Score Selected (N) when N is less than the selection:
+   says how many were picked, how many will score and how many are already
+   scored. A Radix Popover (as ScoredResumesTable's "+N more") rather than the
+   hover-only <Tooltip>, so a tap opens it on touch screens; a mouse also opens
+   it on hover. Styled as that <Tooltip>'s bubble. It lives INSIDE a menu item,
+   so its pointer/key events stop here — otherwise the item would take the
+   tap as "Score Selected" and start scoring. Keyboard and screen-reader users
+   get the same sentence through the item's aria-describedby. */
+function ScoreSelectedInfo({ message }: { message: string }) {
+  const [open, setOpen] = useState(false);
+  const stop = (e: React.SyntheticEvent) => e.stopPropagation();
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverAnchor asChild>
+        <button
+          type="button"
+          aria-label="Why is this count lower than the number selected?"
+          aria-expanded={open}
+          className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-gray-400 hover:text-brand-blue hover:bg-brand-blue/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 transition-colors cursor-help"
+          onPointerDown={stop}
+          onPointerUp={stop}
+          onKeyDown={stop}
+          onPointerEnter={(e) => { if (e.pointerType === 'mouse') setOpen(true); }}
+          onPointerLeave={(e) => { if (e.pointerType === 'mouse') setOpen(false); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            // A mouse already opened it on hover — keep it; a tap toggles.
+            const pointerType = (e.nativeEvent as PointerEvent).pointerType;
+            if (pointerType !== 'mouse') setOpen((o) => !o);
+          }}
+        >
+          <Info className="size-3.5" />
+        </button>
+      </PopoverAnchor>
+      <PopoverContent
+        side="top"
+        align="end"
+        role="tooltip"
+        className="z-[9999] w-max max-w-[min(18rem,calc(100vw-2rem))] p-0 border-0 bg-transparent shadow-none overflow-visible"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        onCloseAutoFocus={(e) => e.preventDefault()}
+        onPointerDown={stop}
+        onClick={stop}
+      >
+        <div className="bg-gray-700 text-white text-xs leading-snug px-3 py-2 rounded-lg shadow-lg whitespace-normal">
+          {message}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 // ─── AI Match Tab Sub-component ──────────────────────────────────────────────
 function AIMatchTabContent({
   toolbarPortal,
   candidates,
   scoredResumes,
+  scoredResumesLoaded,
+  jobTitle,
+  jobVersionNumber,
+  canExport,
   sessions,
   loading,
   canRunAiMatch,
@@ -5282,6 +5245,12 @@ function AIMatchTabContent({
   toolbarPortal?: HTMLElement | null;
   candidates: MatchedCandidate[];
   scoredResumes: any[];
+  /* False until this job's scored-resumes fetch has settled — until then an
+     empty `scoredResumes` can't be read as "nobody is scored". */
+  scoredResumesLoaded: boolean;
+  jobTitle: string;
+  jobVersionNumber?: number;
+  canExport: boolean;
   sessions: AIMatchSessionResponse[];
   loading: boolean;
   canRunAiMatch: boolean;
@@ -5449,6 +5418,64 @@ function AIMatchTabContent({
 
   const unscoredCount = candidates.filter((c) => !scoredResumeIds.has(c.resumeId)).length;
   const selectedCandidates = candidates.filter((c) => selectedIds.has(c.resumeId));
+  /* Score Selected runs only on the ticked candidates NOT yet scored against
+     this job version — the AI Talent Match page's Score Resumes rule
+     (`!scoreIdFor(jobId, resumeId)`), read here from this job's own scored
+     resumes, the same set Score All and the Scored Status column use. The
+     menu label's count is this list's length, so it is exactly what runs. */
+  const scoreEligibleCandidates = selectedCandidates.filter(
+    (c) => !!c.resumeId && !scoredResumeIds.has(c.resumeId),
+  );
+
+  /* Actions › Export — the AI Talent Match page's Export Matched Candidates:
+     same CSV / Excel picker, columns, saved column prefs and exportData
+     writer, on the ticked candidates. */
+  const [showExportModal, setShowExportModal] = useState(false);
+  const candidateExportColumns: ExportColumn[] = [
+    { key: 'rank', header: 'Matched Rating' },
+    { key: 'name', header: 'Candidate Name' },
+    { key: 'email', header: 'Email' },
+    { key: 'phone', header: 'Phone' },
+    { key: 'location', header: 'Location' },
+    { key: 'jobTitle', header: 'Job Title' },
+    { key: 'jobVersion', header: 'Job Version' },
+    { key: 'skills', header: 'Skills' },
+    { key: 'experience', header: 'Experience' },
+    { key: 'uploadedBy', header: 'Uploaded By' },
+    { key: 'uploadDate', header: 'Uploaded Date' },
+    { key: 'resumeVersion', header: 'Resume Version' },
+    { key: 'attachments', header: 'Attachments' },
+    { key: 'scoredStatus', header: 'Scored Status' },
+  ];
+  const handleExportCandidates = async (format: 'csv' | 'xlsx', picked?: string[]) => {
+    const title = jobTitle || 'Candidates';
+    const jobVersion = jobVersionNumber ? `v${jobVersionNumber}` : '-';
+    const rows = selectedCandidates.map((c) => ({
+      rank: c.rank ?? '-',
+      name: c.name || 'Unknown',
+      jobTitle: title,
+      jobVersion,
+      email: c.email || '-',
+      phone: c.phone || '-',
+      location: c.location || '-',
+      skills: (c.skills || []).join(', '),
+      experience: c.experience || '-',
+      // A bare user UUID isn't a name — the page's formatUploadedBy rule.
+      uploadedBy: c.uploadedByName && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(c.uploadedByName)
+        ? c.uploadedByName
+        : 'System',
+      uploadDate: c.uploadDate ? formatISTDate(c.uploadDate) : '-',
+      resumeVersion: `v${c.resumeVersion || 1}`,
+      attachments: c.attachmentCount || 1,
+      scoredStatus: scoredResumeIds.has(c.resumeId) ? 'Scored' : 'Not Scored',
+    }));
+    const cols = picked ? candidateExportColumns.filter((col) => picked.includes(col.header)) : candidateExportColumns;
+    await exportData(format, rows, cols, `AI_Talent_Match_${title.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}`, {
+      sheetName: 'AI Talent Match',
+      title: `${title} - AI Talent Match`,
+    });
+    toast.success(`Exported ${rows.length} candidate${rows.length !== 1 ? 's' : ''} to ${format === 'xlsx' ? 'Excel' : 'CSV'}`);
+  };
 
   /* Create / Send Assessment | AI Interview — the Scored Resumes tab's
      permission reads (`true`: this tab always has its own AI interview path,
@@ -5560,6 +5587,17 @@ function AIMatchTabContent({
        Result tab bodies end with, so the table / pagination isn't pressed
        against the page card's bottom edge. */
     <div className="space-y-4 mb-5">
+      <ExportFormatModal
+        open={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        title="Export Matched Candidates"
+        recordCount={selectedCandidates.length}
+        selected
+        columns={candidateExportColumns.map((c) => c.header)}
+        columnPrefsKey="aiTalentMatchResultsExportColumns"
+        defaultOffColumns={['Phone', 'Location', 'Skills', 'Attachments']}
+        onExport={handleExportCandidates}
+      />
       {/* Search & Filters — the shared ListToolbar. When a portal slot is given
           (the tab-navigation card's toolbar row) it renders there, so the
           controls read as the second row of the tab card rather than a detached
@@ -5619,14 +5657,77 @@ function AIMatchTabContent({
                     <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
                       {selectedIds.size.toLocaleString()} selected
                     </div>
+                    {/* (N) is the ticked candidates still unscored for this
+                        job version — not the selection size — and only they
+                        are sent. Nothing left to score (or the scored list
+                        still loading) greys it out with the reason, the AI
+                        Talent Match page's disabled Score Resumes row. */}
+                    {(() => {
+                      /* All three from the same lists the count and the run
+                         use — the selection and its unscored subset. */
+                      const selectedCount = selectedCandidates.length;
+                      const eligibleCount = scoreEligibleCandidates.length;
+                      const alreadyCount = selectedCount - eligibleCount;
+                      const plural = (n: number, one: string, many: string) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
+                      if (!scoredResumesLoaded || eligibleCount === 0) {
+                        // Disabled items take no pointer events, so the reason
+                        // is spelled out on the row itself, not behind an ⓘ.
+                        return (
+                          <DropdownMenuItem className="flex !items-start gap-2.5 px-4 py-2.5 text-sm text-gray-400" disabled>
+                            <ClipboardList className="w-4 h-4 text-gray-400 mt-0.5" />
+                            <span className="min-w-0">
+                              <span className="block">Score Selected{scoredResumesLoaded ? ' (0)' : ''}</span>
+                              <span className="block text-2xs text-gray-400 normal-case whitespace-normal">
+                                {!scoredResumesLoaded
+                                  ? 'Checking scored status…'
+                                  : selectedCount === 1
+                                    ? 'This candidate has already been scored for this job version, so there is no one to score.'
+                                    : `All ${selectedCount.toLocaleString()} selected candidates have already been scored for this job version, so none are eligible.`}
+                              </span>
+                            </span>
+                          </DropdownMenuItem>
+                        );
+                      }
+                      // Only when some of the selection is excluded — a fully
+                      // eligible selection needs no explanation.
+                      const explanation = alreadyCount > 0
+                        ? `You selected ${plural(selectedCount, 'candidate', 'candidates')}, but only ${eligibleCount.toLocaleString()} ${eligibleCount === 1 ? 'is' : 'are'} eligible for scoring. The remaining ${plural(alreadyCount, 'candidate has', 'candidates have')} already been scored for this job version.`
+                        : null;
+                      return (
+                        <DropdownMenuItem
+                          className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer"
+                          aria-describedby={explanation ? 'ai-match-score-selected-why' : undefined}
+                          onSelect={() => {
+                            if (alreadyCount > 0) toast.info(`${alreadyCount} already scored — scoring the other ${eligibleCount}.`);
+                            onScoreSelected(scoreEligibleCandidates);
+                          }}
+                        >
+                          <ClipboardList className="w-4 h-4 text-menu-icon-score" />
+                          <span>Score Selected ({eligibleCount.toLocaleString()})</span>
+                          {explanation && (
+                            <>
+                              <span id="ai-match-score-selected-why" className="sr-only">{explanation}</span>
+                              <ScoreSelectedInfo message={explanation} />
+                            </>
+                          )}
+                        </DropdownMenuItem>
+                      );
+                    })()}
+                    {/* Export — the ticked candidates, through the AI Talent
+                        Match page's CSV / Excel picker. */}
                     <DropdownMenuItem
-                      className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer"
-                      onSelect={() => onScoreSelected(selectedCandidates)}
+                      className={`flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer ${canExport ? '' : 'text-gray-400 opacity-60'}`}
+                      onSelect={(e) => {
+                        if (!canExport) {
+                          e.preventDefault();
+                          toast.error('You do not have permission to export');
+                          return;
+                        }
+                        setShowExportModal(true);
+                      }}
                     >
-                      <ClipboardList className="w-4 h-4 text-menu-icon-score" />
-                      {/* No count here — the menu's "N selected" header and the
-                          Select All pill already carry it. */}
-                      <span>Score Selected</span>
+                      <FileDown className="w-4 h-4 text-menu-icon-download" />
+                      <span>Export</span>
                     </DropdownMenuItem>
                     {/* Create / Send — the version drawer, on that type. The
                         same icons and permission reads the invite items used. */}
