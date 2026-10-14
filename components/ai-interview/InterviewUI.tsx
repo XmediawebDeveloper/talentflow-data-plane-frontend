@@ -1250,6 +1250,36 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // Closing the popup also resets the silence clock, so the next popup is a
   // full DONE_CONFIRM_SILENCE_MS after this speech.
   const SPEECH_RESUME_CONFIRM_MS = 3000;
+  // Silence clock (Option A) — see the "AII14 silence clock" block in the
+  // analyser loop. A speech segment resets the clock once it holds this much
+  // voice, of which this much is strong (clearly the candidate's own voice).
+  const SILENCE_RESET_MIN_VOICE_MS = 600;
+  const SILENCE_RESET_MIN_STRONG_MS = 200;
+  // Logging thresholds only: log a counted segment when the pause before it
+  // was at least this long, and an ignored sound when it was at least this long.
+  const SILENCE_CLOCK_LOG_PAUSE_MS = 3000;
+  const SILENCE_CLOCK_LOG_IGNORED_MS = 150;
+  type SilenceClock = {
+    /** speechDetectedAtRef value of the turn this clock belongs to. */
+    turnKey: number | null;
+    /** Silence anchor: end of the last counted speech. */
+    voiceAt: number;
+    source: 'speech_onset' | 'voice' | 'transcript_fallback' | 'popup_dismiss';
+    /** Any voice frame, counted or not (diagnostics). */
+    lastAnyVoiceAt: number | null;
+    /** True once the VAD counted a segment this turn — disables the transcript fallback. */
+    vadHeard: boolean;
+    segLastAt: number | null;
+    segVoicedMs: number;
+    segStrongMs: number;
+    segCounted: boolean;
+    ignoredSinceAnchor: number;
+  };
+  const newSilenceClock = (voiceAt: number, turnKey: number | null): SilenceClock => ({
+    turnKey, voiceAt, source: 'speech_onset', lastAnyVoiceAt: null, vadHeard: false,
+    segLastAt: null, segVoicedMs: 0, segStrongMs: 0, segCounted: false, ignoredSinceAnchor: 0,
+  });
+  const silenceClockRef = useRef<SilenceClock>(newSilenceClock(0, null));
   // Total speech-like ms observed since the popup was raised. Reset when the
   // popup is raised (fresh cycle) and when it closes — never by a pause.
   const speechAccumMsRef = useRef(0);
@@ -8196,18 +8226,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               speechFrameCountRef.current = 0;
             }
           } else {
-            const transcriptRecentlyAdvanced =
-              lastLiveTranscriptUpdateAtRef.current != null &&
-              nowMs - lastLiveTranscriptUpdateAtRef.current < TRANSCRIPT_ACTIVITY_GRACE_MS;
-            const transcriptLedTurn =
-              turnHasLiveTranscriptRef.current &&
-              lastLiveTranscriptUpdateAtRef.current != null;
-            const realtimeTranscriptPending =
-              realtimeTranscriptionEnabledRef.current && !transcriptLedTurn;
-            const realtimeBootstrapActive =
-              realtimeTranscriptPending &&
-              speechDetectedAtRef.current != null &&
-              (nowMs - speechDetectedAtRef.current) < REALTIME_TRANSCRIPT_BOOTSTRAP_GRACE_MS;
             speechPeakLevelRef.current = Math.max(avgLevel, speechPeakLevelRef.current * 0.99);
             // Peak-RELATIVE activity thresholds. The candidate's own close-mic
             // speech is much louder than background people talking in the room
@@ -8234,55 +8252,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             // A frame keeps the turn "active" (resets the silence clock) ONLY if
             // it is voice-like — loud background noise / music / hum no longer
             // holds the turn open, which is what let the interview idle to the
-            // 2-min hard cap. Live transcript advancing is authoritative and
-            // bypasses the voice-band check (ASR already confirmed real words).
-            // Is this frame "active" (loud enough + voice-like)? A single active
-            // frame is NOT enough to reset the countdown — we require a SUSTAINED
-            // run (see SUSTAINED_ACTIVE_MS) so a momentary blip can't restart the
-            // 8s clock. Track the unbroken active-streak start here.
+            // 2-min hard cap.
+            // Is this frame voice (loud enough + voice-like)? "Strong" = clearly
+            // the candidate's own close-mic voice, not quiet room sound.
             const _frameIsActive = (avgLevel > inTurnActivityThreshold) && voiceLike;
             const _frameIsStrong = (avgLevel > strongInTurnActivityThreshold) && voiceLike;
-            if (_frameIsActive) {
-              // Start a new streak only if the previous one has fully lapsed
-              // (gap since last active frame exceeded the dip grace). A brief
-              // inter-word dip keeps the SAME streak alive so it can reach
-              // SUSTAINED_ACTIVE_MS instead of restarting from zero every gap.
-              const _gapSinceActive = lastActiveFrameAtRef.current == null
-                ? Infinity
-                : (nowMs - lastActiveFrameAtRef.current);
-              if (activeStreakStartRef.current == null || _gapSinceActive > STREAK_DIP_GRACE_MS) {
-                activeStreakStartRef.current = nowMs;
-              }
-              lastActiveFrameAtRef.current = nowMs;
-            } else if (
-              activeStreakStartRef.current != null &&
-              lastActiveFrameAtRef.current != null &&
-              (nowMs - lastActiveFrameAtRef.current) > STREAK_DIP_GRACE_MS
-            ) {
-              // Sub-threshold for longer than the grace window — the speaker
-              // has genuinely stopped, so break the streak. Short dips fall
-              // through and keep the streak (and _sustained) alive.
-              activeStreakStartRef.current = null;
-            }
-            const _streakMs = activeStreakStartRef.current == null
-              ? 0
-              : (nowMs - activeStreakStartRef.current);
-            const _sustained = _frameIsActive && _streakMs >= SUSTAINED_ACTIVE_MS;
-            // Rolling "voice within the last WINDOWED_ACTIVE_SPAN_MS" total
-            // (see activeFrameWindowRef). dt clamped like the popup accumulator.
             const _prevVadFrameAt = lastVadFrameAtRef.current;
             lastVadFrameAtRef.current = nowMs;
-            const _win = activeFrameWindowRef.current;
-            if (_frameIsActive && _prevVadFrameAt != null) {
-              _win.push({ at: nowMs, ms: Math.min(nowMs - _prevVadFrameAt, 250), strong: _frameIsStrong });
-            }
-            while (_win.length && nowMs - _win[0].at > WINDOWED_ACTIVE_SPAN_MS) _win.shift();
-            let _windowActiveMs = 0;
-            let _windowStrongMs = 0;
-            for (const f of _win) { _windowActiveMs += f.ms; if (f.strong) _windowStrongMs += f.ms; }
-            const _windowedActive = _frameIsActive
-              && _windowActiveMs >= WINDOWED_ACTIVE_MIN_MS
-              && _windowStrongMs >= WINDOWED_STRONG_MIN_MS;
+            // dt clamped like the popup accumulator so a stalled tab can't credit a gap.
+            const _frameMs = _prevVadFrameAt == null ? 0 : Math.min(nowMs - _prevVadFrameAt, 250);
 
             // AII14 popup dismissal — counts SPEECH_RESUME_CONFIRM_MS of VAD
             // speech frames (cumulative, pauses allowed) straight from this
@@ -8303,6 +8281,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                   lastMeaningfulAudioAtRef.current = nowMs;
                   lastStrongVoiceAtRef.current = nowMs;
                   silenceStartRef.current = null;
+                  silenceClockRef.current.voiceAt = nowMs;
+                  silenceClockRef.current.source = 'popup_dismiss';
                   setMidSilenceConfirm_(false);
                   console.log('[INTERVIEW-DEBUG] AII14: popup closed after VAD speech', {
                     confirmMs: SPEECH_RESUME_CONFIRM_MS,
@@ -8313,147 +8293,100 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               popupVadFrameAtRef.current = null;
             }
 
-            if (transcriptRecentlyAdvanced) {
-              lastMeaningfulAudioAtRef.current = nowMs;
-              silenceStartRef.current = null;
-              inTurnSpeechFrameCountRef.current = 0;
-            } else if (_frameIsStrong && _sustained) {
-              // SUSTAINED strong voice — unambiguously real speech (steady mic/BT
-              // noise never reaches this level, and a blip never lasts this long).
-              // Stamp it so the soft-voice guard below only keeps the turn alive
-              // while real speech is recent, and reset the silence clock.
-              lastStrongVoiceAtRef.current = nowMs;
-              inTurnSpeechFrameCountRef.current++;
-              if (!transcriptLedTurn || inTurnSpeechFrameCountRef.current >= MIN_IN_TURN_SPEECH_FRAMES) {
-                if (!realtimeTranscriptPending || realtimeBootstrapActive) {
-                  lastMeaningfulAudioAtRef.current = nowMs;
-                  silenceStartRef.current = null;
-                }
-              }
-            } else if (!transcriptLedTurn && _frameIsActive && (_sustained || _windowedActive)) {
-              inTurnSpeechFrameCountRef.current = 0;
-              if (!realtimeTranscriptPending || realtimeBootstrapActive) {
-                lastMeaningfulAudioAtRef.current = nowMs;
-                silenceStartRef.current = null;
-              }
-            } else {
-              inTurnSpeechFrameCountRef.current = 0;
-              // Soft-voice guard: if audio is above ambient * 1.5 the candidate
-              // is still producing sound — just quieter than the adaptive
-              // in-turn threshold. Don't let the silence clock accumulate during
-              // live speech; only genuine silence (at/below ambient floor) counts.
-              // Without this, a voice consistently below inTurnActivityThreshold
-              // accumulates "silence" the whole time it's speaking, and a 2-second
-              // breath gap tips the total over silenceDurationMs → premature cut-off.
-              const softVoiceFloor = Math.max(POSSIBLE_SPEECH_LEVEL, ambientNoiseFloorRef.current * 1.5);
-              // The soft-voice guard keeps the turn alive for quiet TRAILING
-              // speech — but ONLY if a strong voice frame occurred recently.
-              // Steady mic/Bluetooth self-noise reads "voice-like" and sits just
-              // above ambient×1.5 (Realtek: Level≈0.0091 vs floor≈0.0083), so
-              // without this it reset the silence clock forever and the 8s
-              // end-turn never fired (turn idled to the 2-min cap). A real quiet
-              // speaker produces strong frames (word onsets/emphasis) within the
-              // window; pure noise never does — so noise now falls through to
-              // silence accumulation and the turn ends. Anchor the silence clock
-              // to the last strong voice frame so the turn ends the-window after
-              // real speech stopped, not the-window after the noise stops.
-              const strongSilenceMs = silenceDurationMsRef.current * micSilenceMultiplierRef.current;
-              const lastStrong = lastStrongVoiceAtRef.current ?? speechDetectedAtRef.current ?? nowMs;
-              const strongVoiceRecent = (nowMs - lastStrong) <= strongSilenceMs;
-              if (avgLevel > softVoiceFloor && voiceLike && strongVoiceRecent) {
-                lastMeaningfulAudioAtRef.current = nowMs;
-                silenceStartRef.current = null;
-              } else {
-                // Is this frame steady voice-like NOISE holding the turn open
-                // (above soft floor, voice-like, but no strong voice for the
-                // whole window)? If so, anchor the silence clock to the last
-                // STRONG voice frame so the turn ends one window after real
-                // speech actually stopped — not perpetually deferred by the
-                // noise. Genuine quiet (below soft floor / non-voice) keeps the
-                // original lastMeaningfulAudio anchor so a quiet speaker isn't
-                // cut early.
-                const noiseHoldingTurn =
-                  avgLevel > softVoiceFloor && voiceLike && !strongVoiceRecent;
-                // Anchor to the LATEST real speech: the last strong frame OR the
-                // last clock reset by real speech, whichever is newer. Using only
-                // lastStrong put the anchor >15s back during quiet (headset)
-                // speech that resets the clock without strong frames, so the
-                // first soft frame raised the popup instantly mid-answer.
-                const silenceSince =
-                  noiseHoldingTurn
-                    ? Math.max(lastStrong, lastMeaningfulAudioAtRef.current ?? lastStrong)
-                    : transcriptLedTurn
-                      ? (lastLiveTranscriptUpdateAtRef.current ?? lastMeaningfulAudioAtRef.current ?? speechDetectedAtRef.current ?? nowMs)
-                      : (lastMeaningfulAudioAtRef.current ?? speechDetectedAtRef.current ?? nowMs);
-                silenceStartRef.current = silenceSince;
-                // (4) Stretch the silence window for quiet/laggy devices
-                // (headphones, Bluetooth) so a real answer isn't cut off
-                // mid-sentence; built-in mic uses the base value (×1).
-                const effectiveSilenceMs = silenceDurationMsRef.current * micSilenceMultiplierRef.current;
-                if (nowMs - silenceSince > effectiveSilenceMs) {
-                  const speechAgeMs =
-                    speechDetectedAtRef.current == null ? 0 : nowMs - speechDetectedAtRef.current;
-                  if ((isFlexibleMode || isNewFlexibleMode) && speechAgeMs < 2000) {
-                    return;
-                  }
-                  // Server-side EOT mode: the SERVER (provider EndOfTurn) decides
-                  // when the turn ends — the client must not cut on its own silence
-                  // timer. Normally we just let the silence clock keep running and
-                  // wait for `server_end_turn`. SAFETY NET: if that signal never
-                  // arrives and TRUE silence has persisted far beyond when EndOfTurn
-                  // should have fired, force-end the turn here so the interview can't
-                  // sit idle until the 130 s hard cap (the "answer finished but stays
-                  // idle" bug). This threshold is generous so a normal pause is never
-                  // pre-empted — it only rescues a genuinely stuck turn.
-                  // ── AII14-PARKED: silence NO LONGER ends the turn ──────────
-                  // AC3: "The system shall not automatically move to the next
-                  // question based only on silence detection." The silence clock
-                  // still runs (the confirmation-popup driver reads
-                  // silenceStartRef), but neither branch below may call
-                  // stopRecording() any more — the candidate ends the turn via
-                  // Submit / Next. The per-question hard cap
-                  // (question_window_hard_cap) is untouched and remains the
-                  // backstop against a turn idling forever.
-                  //
-                  // Original code preserved verbatim in
-                  // ./parked/silence-auto-advance.parked.md — to restore, delete
-                  // the log below and un-comment both blocks.
-                  //
-                  // if (serverEotEnabledRef.current) {
-                  //   if (nowMs - silenceSince > SERVER_EOT_SILENCE_FALLBACK_MS) {
-                  //     console.warn('[INTERVIEW-DEBUG] server_end_turn missing — silence safety-net force-ending turn', {
-                  //       silenceMs: nowMs - silenceSince,
-                  //       fallbackMs: SERVER_EOT_SILENCE_FALLBACK_MS,
-                  //     });
-                  //     stopRecording();
-                  //   }
-                  //   return;
-                  // }
-                  // console.log('[INTERVIEW-DEBUG] Silence timeout -> stopRecording', { ... });
-                  // stopRecording();
-                  // return;
-                  if (!silenceHoldLoggedRef.current) {
-                    silenceHoldLoggedRef.current = true;
-                    console.log('[INTERVIEW-DEBUG] AII14: silence window elapsed — HOLDING turn open (awaiting Submit/Next)', {
-                      silenceMs: nowMs - silenceSince,
-                      effectiveSilenceMs,
-                      serverEot: serverEotEnabledRef.current,
-                      // Both thresholds are logged for diagnosis only — neither
-                      // ends the turn any more (see AII14-PARKED above).
-                      parkedServerEotFallbackMs: SERVER_EOT_SILENCE_FALLBACK_MS,
-                    });
-                  }
-                  // NO `return` here. It belonged to the parked stopRecording()
-                  // path; left behind, it skipped the PCM send at the bottom of
-                  // this handler for EVERY frame once 15 s of silence had passed
-                  // — i.e. the whole time "Are you done?" was up. The candidate's
-                  // RESUMED speech was dropped until the silence clock reset
-                  // (≥1.5-3 s of voice) and never reached the transcript
-                  // (staging 2026-10-14: ~24 s of a 120 s answer never arrived).
-                  // Fall through so the frame is streamed like any other.
-                }
-              }
+            // ── AII14 silence clock (Option A, 2026-10-14) ───────────────────
+            // ONE anchor: the last frame of REAL voice. "Are you done?" fires
+            // exactly DONE_CONFIRM_SILENCE_MS after it (see the driver effect).
+            //
+            // Replaces four overlapping reset rules (3 s continuous streak,
+            // 1.5 s-in-3 s window, soft-voice guard, live-transcript update).
+            // Each moved the anchor by a different amount, so the popup landed
+            // anywhere from ~11 s to ~30 s after the candidate stopped:
+            //   - soft-voice guard: fan/breath/mic hiss above ambient kept
+            //     resetting for up to 15 s after the last strong frame → late;
+            //   - transcript updates arrive 1-3 s after the words (and Chrome
+            //     re-finalises later) → late;
+            //   - a short closing phrase never met the 1.5 s/3 s rules, so the
+            //     anchor stayed on the speech before it → early.
+            //
+            // Speech is grouped into SEGMENTS (voice frames with gaps ≤
+            // STREAK_DIP_GRACE_MS). A segment counts once it holds
+            // SILENCE_RESET_MIN_VOICE_MS of voice incl. SILENCE_RESET_MIN_STRONG_MS
+            // of strong voice — a cough/click is shorter and is ignored. From
+            // then on every voice frame of that segment moves the anchor, so
+            // the anchor is the END of the speech, not when it qualified.
+            //
+            // Transcript fallback: only while the VAD has not counted ANY
+            // segment this turn (very quiet mic the energy VAD can't hear) —
+            // otherwise such a candidate would get the popup every 15 s while
+            // visibly answering.
+            let sc = silenceClockRef.current;
+            if (sc.turnKey !== speechDetectedAtRef.current) {
+              sc = silenceClockRef.current = newSilenceClock(speechDetectedAtRef.current ?? nowMs, speechDetectedAtRef.current);
             }
+            if (_frameIsActive) {
+              sc.lastAnyVoiceAt = nowMs;
+              if (sc.segLastAt == null) {
+                sc.segVoicedMs = 0;
+                sc.segStrongMs = 0;
+                sc.segCounted = false;
+              }
+              sc.segLastAt = nowMs;
+              sc.segVoicedMs += _frameMs;
+              if (_frameIsStrong) sc.segStrongMs += _frameMs;
+              if (
+                !sc.segCounted &&
+                sc.segVoicedMs >= SILENCE_RESET_MIN_VOICE_MS &&
+                sc.segStrongMs >= SILENCE_RESET_MIN_STRONG_MS
+              ) {
+                sc.segCounted = true;
+                sc.vadHeard = true;
+                const pauseMs = nowMs - sc.voiceAt;
+                // Only pauses worth seeing — every phrase would flood the log.
+                if (pauseMs >= SILENCE_CLOCK_LOG_PAUSE_MS) {
+                  console.log('[INTERVIEW-DEBUG] AII14-clock: speech counted → silence clock reset', {
+                    pauseBeforeMs: pauseMs,
+                    prevSource: sc.source,
+                    voicedMs: Math.round(sc.segVoicedMs),
+                    strongMs: Math.round(sc.segStrongMs),
+                    ignoredSoundsInPause: sc.ignoredSinceAnchor,
+                  });
+                }
+                sc.ignoredSinceAnchor = 0;
+              }
+              if (sc.segCounted) {
+                sc.voiceAt = nowMs;
+                sc.source = 'voice';
+              }
+            } else if (sc.segLastAt != null && (nowMs - sc.segLastAt) > STREAK_DIP_GRACE_MS) {
+              // Segment ended. Too-short sounds never touched the clock.
+              if (!sc.segCounted && sc.segVoicedMs > 0) {
+                sc.ignoredSinceAnchor++;
+                if (sc.segVoicedMs >= SILENCE_CLOCK_LOG_IGNORED_MS) {
+                  console.log('[INTERVIEW-DEBUG] AII14-clock: short sound ignored (clock NOT reset)', {
+                    voicedMs: Math.round(sc.segVoicedMs),
+                    strongMs: Math.round(sc.segStrongMs),
+                    silenceSoFarMs: nowMs - sc.voiceAt,
+                  });
+                }
+              }
+              sc.segLastAt = null;
+            }
+            const _transcriptAt = lastLiveTranscriptUpdateAtRef.current;
+            if (!sc.vadHeard && _transcriptAt != null && _transcriptAt > sc.voiceAt) {
+              if (sc.source !== 'transcript_fallback') {
+                console.log('[INTERVIEW-DEBUG] AII14-clock: VAD has not heard this candidate yet — using transcript updates', {
+                  sinceSpeechOnsetMs: speechDetectedAtRef.current == null ? null : nowMs - speechDetectedAtRef.current,
+                });
+              }
+              sc.voiceAt = _transcriptAt;
+              sc.source = 'transcript_fallback';
+            }
+            // Read by the "Are you done?" driver. Speech never ends the turn
+            // here — AII14 AC3; the parked auto-advance is preserved in
+            // ./parked/silence-auto-advance.parked.md. This handler must NOT
+            // `return` before the PCM send below (it once did, and resumed
+            // speech after the popup never reached the transcript).
+            silenceStartRef.current = sc.voiceAt;
           }
         }
 
@@ -8715,6 +8648,18 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           // Fresh cycle — start the cumulative count from zero so leftover
           // credit from a previous popup cannot dismiss this one instantly.
           speechAccumMsRef.current = 0;
+          const sc = silenceClockRef.current;
+          const lastTranscriptAt = lastLiveTranscriptUpdateAtRef.current;
+          console.log('[INTERVIEW-DEBUG] AII14-clock: "Are you done?" raised', {
+            question: questionNumberRef.current,
+            silenceMs: nowTs - start,
+            anchorSource: sc.source,
+            // Should be ≈ silenceMs (≥ it when only ignored sounds followed).
+            sinceAnyVoiceFrameMs: sc.lastAnyVoiceAt == null ? null : nowTs - sc.lastAnyVoiceAt,
+            sinceTranscriptUpdateMs: lastTranscriptAt == null ? null : nowTs - lastTranscriptAt,
+            ignoredSoundsInPause: sc.ignoredSinceAnchor,
+            vadHeard: sc.vadHeard,
+          });
         }
         setMidSilenceConfirm_(true);
       }
