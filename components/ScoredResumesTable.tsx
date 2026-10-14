@@ -1219,6 +1219,7 @@ Best regards`);
     return filteredResumes.filter((r) => tickedKeys.has(candidateGroupKey(r)));
   }, [selectedResumes, filteredResumes, isGrouped]);
   const allVisibleSelected = filteredResumes.length > 0 && effectiveSelectedRows.length === filteredResumes.length;
+  const effectiveSelectedIds = useMemo(() => new Set(effectiveSelectedRows.map((r) => r.id)), [effectiveSelectedRows]);
 
   /* The jobs the ticked rows belong to — a row's own JD, or this table's
      one job on a single-job host. */
@@ -2211,9 +2212,14 @@ Best regards`);
                       allSelected={allVisibleSelected}
                       pageCount={isGrouped ? paginatedGroups.length : paginatedResumes.length}
                       totalCount={isGrouped ? candidateGroups.length : filteredResumes.length}
+                      pageSelected={pageRows.length > 0 && pageRows.every((r) => effectiveSelectedIds.has(r.id))}
                       onSelectPage={() => {
                         const ids = Array.from(new Set([...effectiveSelectedRows.map((r) => r.id), ...pageRows.map((r) => r.id)]));
                         selectExactly(ids);
+                      }}
+                      onDeselectPage={() => {
+                        const pageIds = new Set(pageRows.map((r) => r.id));
+                        selectExactly(effectiveSelectedRows.map((r) => r.id).filter((id) => !pageIds.has(id)));
                       }}
                       onSelectAll={() => selectExactly(filteredResumes.map((r) => r.id))}
                       onClear={clearSelection}
@@ -2441,9 +2447,14 @@ Best regards`);
                   totalCount={isGrouped ? candidateGroups.length : filteredResumes.length}
                   noun={isGrouped ? 'candidates' : 'resumes'}
                   allSelected={allVisibleSelected}
+                  pageSelected={pageRows.length > 0 && pageRows.every((r) => effectiveSelectedIds.has(r.id))}
                   onSelectPage={() => {
                     const ids = Array.from(new Set([...effectiveSelectedRows.map((r) => r.id), ...pageRows.map((r) => r.id)]));
                     selectExactly(ids);
+                  }}
+                  onDeselectPage={() => {
+                    const pageIds = new Set(pageRows.map((r) => r.id));
+                    selectExactly(effectiveSelectedRows.map((r) => r.id).filter((id) => !pageIds.has(id)));
                   }}
                   onSelectAll={() => selectExactly(filteredResumes.map((r) => r.id))}
                   onClear={clearSelection}

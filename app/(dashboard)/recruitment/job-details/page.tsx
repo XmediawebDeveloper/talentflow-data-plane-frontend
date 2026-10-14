@@ -177,6 +177,11 @@ function JobDetailsContent() {
   /* Opened from an assessment's own details page (its Go to JD link): the
      trail is Assessments › <assessment> › this job. */
   const fromAssessmentDetails = searchParams.get('from') === 'assessment-details';
+  /* Opened from an AI interview's own details page (its Go to JD link): the
+     trail is AI Interviews › <interview> › this job. */
+  const fromAiInterviewDetails = searchParams.get('from') === 'ai-interview-details';
+  const interviewId = searchParams.get('interview_id') || '';
+  const interviewTitle = searchParams.get('interview_title') || '';
   const resultAssessmentId = searchParams.get('assessment_id') || '';
   const resultAssessmentTitle = searchParams.get('assessment_title') || '';
   const resultCandidateName = searchParams.get('candidate_name') || '';
@@ -671,6 +676,18 @@ function JobDetailsContent() {
           ? [{
               label: resultAssessmentTitle || 'Assessment',
               href: `/recruitment/assessments/${encodeURIComponent(resultAssessmentId)}`,
+            }]
+          : []),
+        { label: job.title || 'Job Details' },
+      ]
+    : fromAiInterviewDetails
+    ? [
+        { label: 'Dashboard', href: '/dashboard' },
+        { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
+        ...(interviewId
+          ? [{
+              label: interviewTitle || 'Interview Details',
+              href: `/recruitment/ai-interviews/${encodeURIComponent(interviewId)}`,
             }]
           : []),
         { label: job.title || 'Job Details' },

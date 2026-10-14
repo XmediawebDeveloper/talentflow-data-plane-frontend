@@ -49,7 +49,10 @@ export function CloseWindowPill({ className = '' }: { className?: string }) {
           on its leading (right) edge. */}
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 -translate-x-full transition-transform duration-500 ease-out group-hover:translate-x-0 group-focus-visible:translate-x-0"
+        /* Parked a wave-width (8px) further left than its own width, so the
+           crest — which overhangs the liquid's right edge — stays out of
+           sight until hover. */
+        className="pointer-events-none absolute inset-0 -translate-x-[calc(100%+8px)] transition-transform duration-500 ease-out group-hover:translate-x-0 group-focus-visible:translate-x-0"
       >
         <span className="absolute inset-0 bg-brand-blue" />
         <span className="absolute -right-[7px] top-0 h-full w-2 overflow-hidden">

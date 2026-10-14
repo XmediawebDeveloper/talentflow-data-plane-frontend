@@ -896,10 +896,18 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                 selectedCount={selected.size}
                 allSelected={allOnPageSelected}
                 pageCount={paginatedSessions.length}
+                pageSelected={allOnPageSelected}
                 onSelectPage={() =>
                   setSelected((prev) => {
                     const next = new Map(prev);
                     paginatedSessions.forEach((s) => next.set(s.id, s));
+                    return next;
+                  })
+                }
+                onDeselectPage={() =>
+                  setSelected((prev) => {
+                    const next = new Map(prev);
+                    paginatedSessions.forEach((s) => next.delete(s.id));
                     return next;
                   })
                 }

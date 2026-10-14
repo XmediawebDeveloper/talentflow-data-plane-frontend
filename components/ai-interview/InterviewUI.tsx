@@ -1055,7 +1055,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // PerformanceObserver is used because the resource-timing buffer fills up
   // over a long interview and getEntriesByName would stop seeing new probes.
   useEffect(() => {
-    if (!isConnected || typeof window === 'undefined' || typeof PerformanceObserver === 'undefined') return;
+    // Runs from mount — it's a plain HTTP probe, independent of the interview
+    // WebSocket — so the indicator has a real reading during "Preparing your
+    // interview…" instead of "Offline".
+    if (typeof window === 'undefined' || typeof PerformanceObserver === 'undefined') return;
     const apiBase = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1').replace(/\/$/, '');
     const probeBase = `${apiBase}/candidate/ai-interview-net-probe`;
     let stopped = false;
@@ -1079,7 +1082,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     probe();
     const iv = setInterval(probe, 5000);
     return () => { stopped = true; clearInterval(iv); observer.disconnect(); };
-  }, [isConnected]);
+  }, []);
+  // Set once the interview WebSocket has opened: before that, "not connected"
+  // just means "still starting", not offline.
+  const everConnectedRef = useRef(false);
   const reconnectAttemptsRef = useRef(0);
   // Separate fast-retry counter for the "WS connected before /start flipped the
   // interview to in_progress" race (backend rejects 4003 "not in progress").
@@ -8921,6 +8927,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       console.log(`[IV-DIAG] WS OPEN (handshake completed) ts=${timestamp}`);
       console.log(`[WS ${timestamp}] WebSocket connected successfully`);
       setIsConnected(true);
+      everConnectedRef.current = true;
       // Immediate feedback so the candidate sees SOMETHING while the backend's
       // LLM greeting + TTS warms up (can take 2-4s). Without this the chat
       // sits blank and the candidate thinks the page is frozen — which is
@@ -9878,11 +9885,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     if (isAiSpeakingRef.current || isProcessingRef.current) return;
     if (wsRef.current?.readyState !== WebSocket.OPEN) return;
 
-    // Most recent question Bina asked (last non-action assistant bubble).
+    // Most recent question Bina asked (last non-action assistant bubble) —
+    // skipping her fixed silence lines. After an "Are you there?" nudge the
+    // last bubble IS that nudge; sending it made the server refuse it as a
+    // duplicate nudge and the interview hung ~20 s (staging 2026-10-14).
+    const isSilenceLine = (t: string) =>
+      t.startsWith("Are you there?") || t.startsWith("I didn't get any response from you");
     let lastQuestion = "";
     for (let i = messages.length - 1; i >= 0; i--) {
       const m = messages[i];
-      if (m.role === "assistant" && !m.isActionRequest && m.content.trim()) {
+      if (m.role === "assistant" && !m.isActionRequest && m.content.trim() && !isSilenceLine(m.content.trim())) {
         lastQuestion = m.content.trim();
         break;
       }
@@ -10506,9 +10518,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 {(() => {
                   // Approximate strength from the ping round trip:
                   // ≤100ms → 100%, falling to 10% at ≥1s.
-                  const rtt = isConnected ? networkRttMs : null;
+                  // "Offline" only when the browser has no network, or the
+                  // interview connection DROPPED after being up — not while it
+                  // is still starting (it showed "Offline" during loading).
+                  const browserOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+                  const dropped = !isConnected && everConnectedRef.current;
+                  const rtt = browserOffline || dropped ? null : networkRttMs;
                   const pct = rtt === null ? null : Math.round(Math.min(100, Math.max(10, 100 - ((rtt - 100) / 900) * 90)));
-                  const level = !isConnected ? 'offline' : rtt === null ? 'checking' : rtt < 250 ? 'good' : rtt < 600 ? 'moderate' : 'poor';
+                  const level = browserOffline || dropped ? 'offline' : rtt === null ? 'checking' : rtt < 250 ? 'good' : rtt < 600 ? 'moderate' : 'poor';
                   const tone = {
                     good: { icon: 'text-emerald-300', bar: 'bg-emerald-300', label: 'Good' },
                     moderate: { icon: 'text-amber-300', bar: 'bg-amber-300', label: 'Moderate' },

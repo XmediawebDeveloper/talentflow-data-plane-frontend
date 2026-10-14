@@ -2025,8 +2025,12 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   selectedCount={selectedRows.length}
                   allSelected={filteredCandidates.length > 0 && filteredCandidates.every((c) => selectedRows.includes(c.id))}
                   pageCount={paginatedCandidates.length}
+                  pageSelected={paginatedCandidates.length > 0 && paginatedCandidates.every((c) => selectedRows.includes(c.id))}
                   onSelectPage={() =>
                     setSelectedRows((prev) => Array.from(new Set([...prev, ...paginatedCandidates.map((c) => c.id)])))
+                  }
+                  onDeselectPage={() =>
+                    setSelectedRows((prev) => prev.filter((id) => !paginatedCandidates.some((c) => c.id === id)))
                   }
                   totalCount={filteredCandidates.length}
                   onSelectAll={() => setSelectedRows(filteredCandidates.map((c) => c.id))}
