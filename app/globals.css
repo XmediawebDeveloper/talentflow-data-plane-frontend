@@ -167,6 +167,22 @@ html.tf-app-shell body {
   display: none;
 }
 
+/* Fully hide the native scrollbar — even against the global
+   `*, html, body { scrollbar-width: thin !important }` rule near the top of
+   this file. Plain `.scrollbar-hide` loses to that global (no `!important`),
+   so in modern Chrome a native thin bar still renders. Use this where we draw
+   our OWN scrollbar (e.g. ScrollableTabs) and must not show a second native
+   one — the `!important` + higher specificity beats the global. */
+.tf-hide-native-scrollbar {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+.tf-hide-native-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
 /* Auto-hiding scrollbar: thumb hidden by default, visible on hover/scroll.
    Width stays stable (no layout shift). Only thumb color toggles. */
 .scrollbar-auto-hide {
@@ -2651,6 +2667,31 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
 .dark tbody tr[data-row-selected="true"]:hover > .tf-sticky-col,
 .dark tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
   background-color: color-mix(in srgb, var(--brand-blue) 12%, oklch(0.208 0.042 265.755));
+}
+
+/* ── Premium zebra table ───────────────────────────────────────────────
+   Opt-in, scoped by `.tf-premium-table` on the <table>, for the airy
+   "spacious premium" list look (Billing / Refund / Dispute history): soft
+   alternating row tints with a subtle brand-blue hover.
+
+   Painted on `> td` (not `> tr`) on purpose. A sticky Actions column
+   (`.tf-sticky-col`) and a sticky `<thead>` each paint their own opaque
+   white above, so a row-level background would show through them as a white
+   stripe on tinted rows. Targeting the cells — and beating `.tf-sticky-col`'s
+   own specificity — keeps the pinned column in step with its row. `> td`
+   also leaves the white `<thead>` untouched, so the column-header row stays
+   crisp above the zebra body. */
+.tf-premium-table tbody tr:nth-child(even) > td {
+  background-color: #f9fafb; /* gray-50 — soft, barely-there stripe */
+}
+.dark .tf-premium-table tbody tr:nth-child(even) > td {
+  background-color: color-mix(in srgb, oklch(0.279 0.041 260.031) 30%, transparent); /* slate-800/30 */
+}
+.tf-premium-table tbody tr:hover > td {
+  background-color: color-mix(in srgb, var(--brand-blue) 4%, #ffffff);
+}
+.dark .tf-premium-table tbody tr:hover > td {
+  background-color: color-mix(in srgb, var(--brand-blue) 7%, oklch(0.208 0.042 265.755));
 }
 
 /* Compact shell — for tables inside a dialog. Keeps the sticky header and the

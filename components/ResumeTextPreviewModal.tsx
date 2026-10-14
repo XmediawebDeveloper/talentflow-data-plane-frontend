@@ -114,6 +114,10 @@ export default function ResumeTextPreviewModal({
   const hasLocalFile = !!localFile;
   const isStoredResumeOnly = !text && !documentUrl && !localFile && !!resumeId;
   const [resolvedPdfUrl, setResolvedPdfUrl] = useState<string | null>(null);
+  // Tracked alongside the url so the minimum paint hold below can scale with
+  // it — a bigger/denser PDF takes the browser's native viewer visibly
+  // longer to actually paint than a one-page text resume.
+  const [resolvedPdfBytes, setResolvedPdfBytes] = useState(0);
   const [resolvedDocxBlob, setResolvedDocxBlob] = useState<Blob | null>(null);
   // Set when the fetched file turned out to be plain text (e.g. a .txt
   // upload) and its content was read directly — skips the extracted_text
@@ -144,13 +148,40 @@ export default function ResumeTextPreviewModal({
   const [pdfIframeLoaded, setPdfIframeLoaded] = useState(false);
   const [pdfMinHoldElapsed, setPdfMinHoldElapsed] = useState(false);
   const pdfFrameLoaded = pdfIframeLoaded && pdfMinHoldElapsed;
+  const pdfIframeRef = useRef<HTMLIFrameElement>(null);
   useEffect(() => {
     setPdfIframeLoaded(false);
     setPdfMinHoldElapsed(false);
     if (!effectiveDocumentUrl) return;
-    const timer = setTimeout(() => setPdfMinHoldElapsed(true), 600);
+    // A fixed 600ms was only ever long enough for a short, simple resume —
+    // a denser or multi-page PDF can still be mid-paint well past that,
+    // which is exactly what let the black placeholder frame through for
+    // some résumés and not others. Scale the floor with the file size
+    // (resolvedPdfBytes is 0 for a caller-supplied documentUrl, which keeps
+    // the original 600ms there), capped so a huge file doesn't hold the
+    // spinner needlessly long.
+    const holdMs = Math.min(2400, 600 + Math.round(resolvedPdfBytes / 1024) * 2);
+    const timer = setTimeout(() => setPdfMinHoldElapsed(true), holdMs);
     return () => clearTimeout(timer);
-  }, [effectiveDocumentUrl]);
+  }, [effectiveDocumentUrl, resolvedPdfBytes]);
+  // The hold above is a best-effort estimate, not a real signal that the
+  // native viewer has painted — Chromium's built-in PDF viewer has a known
+  // quirk where it can still be showing its black placeholder after `onLoad`
+  // fires and the estimated hold elapses. Forcing one reflow once the frame
+  // is revealed nudges it to repaint, which is the documented workaround for
+  // that quirk.
+  useEffect(() => {
+    if (!pdfFrameLoaded) return;
+    const el = pdfIframeRef.current;
+    if (!el) return;
+    const prevWidth = el.style.width;
+    requestAnimationFrame(() => {
+      el.style.width = 'calc(100% - 1px)';
+      requestAnimationFrame(() => {
+        el.style.width = prevWidth;
+      });
+    });
+  }, [pdfFrameLoaded]);
 
   /* Same gap, different renderer: docx-preview fills `docxContainerRef`
      imperatively (its own async import plus a DOM render pass), so the
@@ -168,6 +199,7 @@ export default function ResumeTextPreviewModal({
         objectUrl = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
         if (cancelled) return false;
         setResolvedPdfUrl(objectUrl);
+        setResolvedPdfBytes(blob.size);
         return true;
       }
       if (await isWordBlob(blob)) {
@@ -399,6 +431,7 @@ export default function ResumeTextPreviewModal({
                   </div>
                 )}
                 <iframe
+                  ref={pdfIframeRef}
                   src={`${effectiveDocumentUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
                   className={`w-full h-full border-0 ${pdfFrameLoaded ? '' : 'invisible'}`}
                   title={title}

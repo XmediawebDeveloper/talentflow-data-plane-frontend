@@ -1,4 +1,4 @@
-import { RefreshCw, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Users, FileText, Award, Calendar, TrendingUp, Edit2, Eye, Mail, BarChart, Share2, Download, Copy, Archive, ArchiveRestore, Trash2, Play, PauseCircle, CheckCircle, XCircle, AlertCircle, Briefcase, Link2, Code, MessageSquare, Cpu, User, ExternalLink, Info, Layers, Loader2, Monitor, Ban, Sliders, Globe, Zap, Star, Shield } from 'lucide-react';
+import { RefreshCw, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Users, FileText, Award, Calendar, TrendingUp, Edit2, Eye, Mail, BarChart, Share2, Download, Copy, Archive, ArchiveRestore, Trash2, Play, PauseCircle, CheckCircle, XCircle, AlertCircle, Briefcase, Link2, Code, Cpu, User, ExternalLink, Info, Layers, Loader2, Monitor, Ban, Sliders, Globe, Zap, Star, Shield } from 'lucide-react';
 import { Fragment, useState, useMemo, useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
@@ -1399,7 +1399,7 @@ export default function AssessmentDetailsView({
         enabled: true,
         percentage: assessment.hr_percentage || 0,
         topics: assessment.hr_topics || [],
-        icon: MessageSquare
+        icon: Users
       });
     }
 
@@ -2340,8 +2340,36 @@ export default function AssessmentDetailsView({
                                     {section.type === 'coding' && 'Assesses programming skills through hands-on coding challenges.'}
                                   </p>
 
+                                  {/* HR: the selected questions as a numbered list,
+                                      as the AI interview's details page shows its
+                                      HR round — question first, its answer type
+                                      under it — rather than as topic pills. */}
+                                  {section.type === 'hr' && section.topics.length > 0 && (
+                                    <div>
+                                      <p className="text-xs font-semibold text-brand-cyan uppercase tracking-wide mb-2">Selected HR Questions</p>
+                                      <ol className="space-y-2">
+                                        {section.topics.map((topic: string | { text?: string; question_text?: string; type?: string; answer_type?: string }, i: number) => {
+                                          const text = typeof topic === 'string' ? topic : topic?.text || topic?.question_text || '';
+                                          const kind = typeof topic === 'string' ? null : (topic?.type || topic?.answer_type || null);
+                                          const isYesNo = typeof kind === 'string' && /yes/i.test(kind);
+                                          return (
+                                            <li key={i} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-gradient-to-br from-brand-cyan/5 to-brand-teal/5 border border-gray-100 ring-1 ring-brand-cyan/10">
+                                              <span className="flex-shrink-0 w-5 h-5 rounded-full bg-brand-cyan text-white text-2xs font-bold flex items-center justify-center mt-0.5 shadow-sm">{i + 1}</span>
+                                              <div className="flex-1 min-w-0">
+                                                <p className="text-sm text-gray-800 [overflow-wrap:anywhere]">{text}</p>
+                                                {kind && (
+                                                  <p className="mt-1 text-2xs text-gray-500">{isYesNo ? 'Yes / No' : 'Text answer'}</p>
+                                                )}
+                                              </div>
+                                            </li>
+                                          );
+                                        })}
+                                      </ol>
+                                    </div>
+                                  )}
+
                                   {/* Topics */}
-                                  {section.topics.length > 0 && (
+                                  {section.type !== 'hr' && section.topics.length > 0 && (
                                     <div>
                                       <div className="text-xs text-gray-600 mb-1.5 font-medium">Topics Covered</div>
                                       <div className="flex flex-wrap gap-1.5">
@@ -3051,7 +3079,7 @@ export default function AssessmentDetailsView({
             <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-200">
               <h3 className="text-sm sm:text-base lg:text-lg text-gray-900 tracking-tight flex items-center gap-2">
                 <div className="w-9 h-9 flex-shrink-0 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
-                  <BarChart className="w-4 h-4 sm:w-5 sm:h-5 text-brand-cyan" />
+                  <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-brand-cyan" />
                 </div>
                 Recent Activity
               </h3>
@@ -3248,7 +3276,7 @@ export default function AssessmentDetailsView({
             <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-200">
               <div className="flex items-center gap-2 mb-1">
                 <div className="w-9 h-9 flex-shrink-0 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
-                  <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-brand-cyan" />
+                  <Layers className="w-4 h-4 sm:w-5 sm:h-5 text-brand-cyan" />
                 </div>
                 <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">Version History</h3>
               </div>

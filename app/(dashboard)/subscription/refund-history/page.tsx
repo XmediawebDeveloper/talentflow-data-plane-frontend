@@ -9,6 +9,7 @@ import { formatISTDate } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/hooks/useAuth';
 import ListPagination from '@/components/ListPagination';
+import { RowActions } from '@/components/subscription/RowActionsMenu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
@@ -313,8 +314,15 @@ export default function RefundHistoryPage() {
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Current Plan', href: '/subscription/current-plan' }, { label: 'Refund History' }]} />
 
-        {/* Header — actions */}
-        <div className="flex flex-wrap items-center justify-end gap-2 mb-4">
+        {/* Header — title + actions (matches Dispute History) */}
+        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-base sm:text-lg font-semibold tracking-tight text-gray-900 dark:text-slate-50">Refund History</h1>
+            <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
+              Review refunds issued to your account, track their status, and download refund records.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => {
               if (!canExportRefundHistory) {
@@ -346,23 +354,24 @@ export default function RefundHistoryPage() {
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </button>
+          </div>
         </div>
 
         {/* Stats Cards — clicking a card drills into the refund list with the matching filter applied */}
         {stats && (
-          <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
+          <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
             <button
               type="button"
               onClick={() => openListView('all')}
-              className={`text-left rounded-2xl border bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-teal/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:shadow-md ${pageView === 'list' && statusFilter === 'all' ? 'border-brand-teal/40 ring-brand-teal/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-teal/25'}`}
+              className={`h-full text-left rounded-xl border bg-white dark:bg-slate-900 p-4 sm:p-5 shadow-sm shadow-brand-teal/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:shadow-md ${pageView === 'list' && statusFilter === 'all' ? 'border-brand-teal/40 ring-brand-teal/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-teal/25'}`}
             >
               <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Total Refunded</p>
-                  <p className="mt-2 text-2xl font-semibold tracking-tight text-brand-teal">{formatAmount(stats.total_amount)}</p>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-slate-500">Total Refunded</p>
+                  <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums break-words text-brand-teal">{formatAmount(stats.total_amount)}</p>
                   <p className="mt-1 text-xs text-gray-500 dark:text-slate-500">{stats.total_refunds} refund{stats.total_refunds !== 1 ? 's' : ''}</p>
                 </div>
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-teal/10 ring-1 ring-brand-teal/15 shadow-sm shadow-brand-teal/10">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-teal/10 ring-1 ring-brand-teal/15 shadow-sm shadow-brand-teal/10">
                   <RotateCcw className="h-5 w-5 text-brand-teal" />
                 </span>
               </div>
@@ -370,15 +379,15 @@ export default function RefundHistoryPage() {
             <button
               type="button"
               onClick={() => openListView('completed')}
-              className={`text-left rounded-2xl border bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:shadow-md ${pageView === 'list' && statusFilter === 'completed' ? 'border-brand-blue/40 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-blue/25'}`}
+              className={`h-full text-left rounded-xl border bg-white dark:bg-slate-900 p-4 sm:p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:shadow-md ${pageView === 'list' && statusFilter === 'completed' ? 'border-brand-blue/40 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-blue/25'}`}
             >
               <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Completed</p>
-                  <p className="mt-2 text-2xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">{stats.completed_count}</p>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-slate-500">Completed</p>
+                  <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums break-words text-gray-900 dark:text-slate-50">{stats.completed_count}</p>
                   <p className="mt-1 text-xs text-gray-500 dark:text-slate-500">Processed successfully</p>
                 </div>
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
                   <CheckCircle2 className="h-5 w-5 text-brand-blue" />
                 </span>
               </div>
@@ -386,15 +395,15 @@ export default function RefundHistoryPage() {
             <button
               type="button"
               onClick={() => openListView('pending')}
-              className={`text-left rounded-2xl border bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-orange/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:shadow-md ${pageView === 'list' && statusFilter === 'pending' ? 'border-brand-orange/40 ring-brand-orange/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-orange/25'}`}
+              className={`h-full text-left rounded-xl border bg-white dark:bg-slate-900 p-4 sm:p-5 shadow-sm shadow-brand-orange/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:shadow-md ${pageView === 'list' && statusFilter === 'pending' ? 'border-brand-orange/40 ring-brand-orange/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-orange/25'}`}
             >
               <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Pending</p>
-                  <p className="mt-2 text-2xl font-semibold tracking-tight text-brand-orange-deep">{stats.pending_count}</p>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-slate-500">Pending</p>
+                  <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums break-words text-brand-orange-deep">{stats.pending_count}</p>
                   <p className="mt-1 text-xs text-gray-500 dark:text-slate-500">Being processed</p>
                 </div>
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/15 shadow-sm shadow-brand-orange/10">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/15 shadow-sm shadow-brand-orange/10">
                   <Clock className="h-5 w-5 text-brand-orange-deep" />
                 </span>
               </div>
@@ -404,19 +413,8 @@ export default function RefundHistoryPage() {
 
         {pageView === 'list' && (
           <>
-            {/* justify-end, not justify-between: the Back to overview button
-                that used to hold the left slot is gone, and the status line
-                belongs on the right. */}
-            <div className="mb-4 flex items-center justify-end gap-2">
-              <span className="text-xs text-gray-500 dark:text-slate-400">
-                {statusFilter === 'completed' && 'Showing completed refunds'}
-                {statusFilter === 'pending' && 'Showing pending refunds'}
-                {statusFilter === 'all' && 'Showing all refunds'}
-              </span>
-            </div>
-
         {/* Filters Section */}
-        <div className="mb-6 rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-5">
+        <div className="mb-5 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-5">
           <div className="mb-3 flex items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
               <Filter className="h-3.5 w-3.5 text-brand-blue" />
@@ -431,7 +429,7 @@ export default function RefundHistoryPage() {
               </button>
             )}
           </div>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
             {/* Search */}
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
@@ -440,7 +438,7 @@ export default function RefundHistoryPage() {
                 placeholder="Search refunds"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-2.5 pl-9 pr-3 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-2.5 pl-9 pr-3 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
               />
             </div>
 
@@ -449,7 +447,7 @@ export default function RefundHistoryPage() {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full appearance-none rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 pr-9 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                className="w-full appearance-none rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 pr-9 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
               >
                 {STATUS_OPTIONS.map(opt => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -478,7 +476,7 @@ export default function RefundHistoryPage() {
 
         {/* Error State */}
         {error && (
-          <div className="mb-6 flex items-center gap-3 rounded-2xl border border-destructive-line bg-destructive-subtle/80 p-4 ring-1 ring-destructive-line">
+          <div className="mb-5 flex items-center gap-3 rounded-xl border border-destructive-line bg-destructive-subtle/80 p-4 ring-1 ring-destructive-line">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-destructive-subtle text-destructive">
               <AlertCircle className="h-5 w-5" />
             </span>
@@ -488,15 +486,15 @@ export default function RefundHistoryPage() {
 
         {/* Loading State — mirrors the refunds table columns (Refund #, Date, Original Invoice, Reason, Amount, Status, Actions) */}
         {loading && (
-          <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white">
-            <div className="border-b border-gray-100 bg-gray-50 px-4 py-4 sm:px-6">
+          <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+            <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-3.5 sm:px-6">
               <Skeleton className="h-4 w-20" />
               <Skeleton className="mt-1.5 h-3 w-32" />
             </div>
             <div className="overflow-x-auto">
               <div className="min-w-[800px]">
                 {/* Header */}
-                <div className="grid grid-cols-[160px_110px_150px_180px_110px_110px_140px] gap-4 border-b border-gray-100 px-4 py-4">
+                <div className="grid grid-cols-[160px_110px_150px_180px_110px_110px_140px] gap-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50/80 dark:bg-slate-800/50 px-4 py-3.5">
                   <Skeleton className="h-3 w-20" />
                   <Skeleton className="h-3 w-12" />
                   <Skeleton className="h-3 w-24" />
@@ -532,11 +530,11 @@ export default function RefundHistoryPage() {
 
         {/* Empty State */}
         {!loading && !error && filteredRefunds.length === 0 && (
-          <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-12 text-center shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-teal/10 ring-1 ring-brand-teal/15">
+          <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-12 text-center shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-xl bg-brand-teal/10 ring-1 ring-brand-teal/15">
               <RotateCcw className="h-7 w-7 text-brand-teal" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-50">No Refunds</h3>
+            <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50">No Refunds</h3>
             <p className="mx-auto mt-1 max-w-md text-sm text-gray-500 dark:text-slate-500">
               {hasActiveFilters
                 ? 'No refunds match your filter criteria. Try adjusting your filters.'
@@ -545,7 +543,7 @@ export default function RefundHistoryPage() {
             {hasActiveFilters && (
               <button
                 onClick={clearFilters}
-                className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl border border-brand-blue/15 bg-brand-blue/[0.04] px-4 py-2 text-sm font-medium text-brand-blue transition-all hover:bg-brand-blue/[0.08]"
+                className="mt-5 inline-flex items-center justify-center gap-2 rounded-lg border border-brand-blue/15 bg-brand-blue/[0.04] px-4 py-2 text-sm font-medium text-brand-blue transition-all hover:bg-brand-blue/[0.08]"
               >
                 Clear all filters
               </button>
@@ -555,8 +553,8 @@ export default function RefundHistoryPage() {
 
         {/* Refunds Table */}
         {!loading && !error && filteredRefunds.length > 0 && (
-          <div className="overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-            <div className="flex items-center justify-between gap-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-4 sm:px-6">
+          <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+            <div className="flex items-center justify-between gap-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-3.5 sm:px-6">
               <div>
                 <h2 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Refunds</h2>
                 <p className="text-xs text-gray-500 dark:text-slate-500">
@@ -566,74 +564,63 @@ export default function RefundHistoryPage() {
               </div>
             </div>
             <div className="overflow-x-auto tf-table-shell">
-              <table className="w-full min-w-[800px]">
+              <table className="w-full min-w-[800px] tf-premium-table">
                 <thead className="bg-gray-50/80 dark:bg-slate-800/50">
                   <tr className="text-left">
-                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 w-[160px]">Refund #</th>
-                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 w-[110px]">Date</th>
-                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 w-[150px]">Original Invoice</th>
-                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 w-[180px]">Reason</th>
-                    <th className="px-4 py-4 text-right text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 w-[110px]">Amount</th>
-                    <th className="px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 w-[110px]">Status</th>
-                    <th className="px-4 py-4 text-right text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 w-[140px] tf-sticky-col">Actions</th>
+                    <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[160px]">Refund #</th>
+                    <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[110px]">Date</th>
+                    <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[150px]">Original Invoice</th>
+                    <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[180px]">Reason</th>
+                    <th className="px-5 py-4 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[110px]">Amount</th>
+                    <th className="px-5 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[110px]">Status</th>
+                    <th className="px-5 py-4 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[140px] tf-sticky-col">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
+                <tbody>
                   {paginatedRefunds.map((refund) => (
-                    <tr key={refund.id} className="transition-colors hover:bg-brand-blue/[0.02]">
-                      <td className="px-4 py-4">
-                        <div className="flex items-center gap-2">
-                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-teal/10 ring-1 ring-brand-teal/15">
+                    <tr key={refund.id}>
+                      <td className="px-5 py-5">
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-teal/10 ring-1 ring-brand-teal/15">
                             <RotateCcw className="h-4 w-4 text-brand-teal" />
                           </span>
-                          <span className="truncate text-sm font-semibold text-gray-900 dark:text-slate-50" title={refund.invoice_number || ''}>
+                          <span className="min-w-0 truncate text-sm font-semibold text-gray-900 dark:text-slate-50" title={refund.invoice_number || ''}>
                             {refund.invoice_number || '-'}
                           </span>
                         </div>
                       </td>
-                      <td className="whitespace-nowrap px-4 py-4 text-sm text-gray-700 dark:text-slate-300">
+                      <td className="whitespace-nowrap px-5 py-5 text-sm text-gray-700 dark:text-slate-300">
                         {formatISTDate(refund.issue_date)}
                       </td>
-                      <td className="px-4 py-4">
+                      <td className="px-5 py-5">
                         <div className="truncate font-mono text-sm text-gray-900 dark:text-slate-50" title={refund.metadata?.original_invoice_number || ''}>
                           {refund.metadata?.original_invoice_number || '-'}
                         </div>
                       </td>
-                      <td className="px-4 py-4">
+                      <td className="px-5 py-5">
                         <div className="truncate text-sm text-gray-600 dark:text-slate-400" title={refund.metadata?.reason || refund.line_items?.[0]?.description || ''}>
                           {refund.metadata?.reason || refund.line_items?.[0]?.description || '-'}
                         </div>
                       </td>
-                      <td className="px-4 py-4 text-right">
+                      <td className="px-5 py-5 text-right">
                         <span className="text-sm font-semibold text-brand-teal">
                           +{formatAmount(Math.abs(refund.total_amount_inr || 0))}
                         </span>
                       </td>
-                      <td className="px-4 py-4 text-center">
+                      <td className="px-5 py-5 text-center">
                         <Badge variant={getStatusVariant(refund.status || 'unknown')} className="capitalize">
                           {getStatusIcon(refund.status || 'unknown')}
                           {refund.status || '-'}
                         </Badge>
                       </td>
-                      <td className="px-4 py-4 text-right tf-sticky-col">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            onClick={() => setSelectedRefund(refund)}
-                            className="inline-flex items-center gap-1 rounded-lg border border-brand-blue/15 bg-brand-blue/[0.04] px-2.5 py-1.5 text-xs font-medium text-brand-blue transition-all hover:-translate-y-0.5 hover:bg-brand-blue/[0.08]"
-                            aria-label="View Details" title="View Details"
-                          >
-                            <ExternalLink className="h-3.5 w-3.5" />
-                            View
-                          </button>
-                          <button
-                            onClick={() => handleDownloadRefund(refund)}
-                            disabled={downloadingId === refund.id}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-400 transition-[border-color,box-shadow,color,background-color] hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue disabled:opacity-50"
-                            aria-label="Download Receipt" title="Download Receipt"
-                          >
-                            {downloadingId === refund.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                          </button>
-                        </div>
+                      <td className="px-5 py-5 text-right tf-sticky-col">
+                        <RowActions
+                          menuLabel="Refund actions"
+                          actions={[
+                            { key: 'view', label: 'View', icon: ExternalLink, variant: 'primary', onClick: () => setSelectedRefund(refund) },
+                            { key: 'download', label: 'Download Receipt', icon: Download, loading: downloadingId === refund.id, onClick: () => handleDownloadRefund(refund) },
+                          ]}
+                        />
                       </td>
                     </tr>
                   ))}
@@ -660,22 +647,22 @@ export default function RefundHistoryPage() {
         {/* Refund Detail Modal */}
         {selectedRefund && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
-            <div className="max-h-[90dvh] flex flex-col w-full max-w-[95vw] sm:max-w-2xl overflow-hidden rounded-3xl border border-white/40 bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-black/5">
+            <div className="max-h-[90dvh] flex flex-col w-full max-w-[95vw] sm:max-w-2xl overflow-hidden rounded-2xl border border-white/40 bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-black/5">
               <div className="flex-shrink-0 relative overflow-hidden bg-brand-blue px-5 py-4 text-white sm:px-6">
                 <div className="pointer-events-none absolute -top-10 right-0 h-32 w-32 rounded-full bg-white/10 blur-3xl" />
                 <div className="relative flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3">
+                  <div className="flex min-w-0 items-start gap-3">
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15">
                       <RotateCcw className="h-5 w-5 text-white" />
                     </span>
-                    <div>
+                    <div className="min-w-0">
                       <h2 className="text-lg font-semibold">Refund Details</h2>
-                      <p className="mt-0.5 font-mono text-sm text-white/75">{selectedRefund.invoice_number}</p>
+                      <p className="mt-0.5 break-all font-mono text-sm text-white/75">{selectedRefund.invoice_number}</p>
                     </div>
                   </div>
                   <button
                     onClick={() => setSelectedRefund(null)}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-white transition-colors hover:bg-white/15"
+                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white transition-colors hover:bg-white/15"
                     aria-label="Close"
                   >
                     <X className="h-5 w-5" />
@@ -685,33 +672,33 @@ export default function RefundHistoryPage() {
               <div className="flex-1 min-h-0 space-y-5 overflow-y-auto p-5 sm:p-6">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                    <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Issue Date</p>
+                    <p className="text-2xs uppercase tracking-wider text-gray-400 dark:text-slate-500">Issue Date</p>
                     <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-slate-50">{formatISTDate(selectedRefund.issue_date)}</p>
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                    <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Original Invoice</p>
+                    <p className="text-2xs uppercase tracking-wider text-gray-400 dark:text-slate-500">Original Invoice</p>
                     <p className="mt-1 break-all font-mono text-sm font-semibold text-gray-900 dark:text-slate-50">{selectedRefund.metadata?.original_invoice_number || '-'}</p>
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                    <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Status</p>
+                    <p className="text-2xs uppercase tracking-wider text-gray-400 dark:text-slate-500">Status</p>
                     <Badge variant={getStatusVariant(selectedRefund.status)} className="mt-1 capitalize">
                       {getStatusIcon(selectedRefund.status)}
                       {selectedRefund.status}
                     </Badge>
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                    <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Refund Method</p>
+                    <p className="text-2xs uppercase tracking-wider text-gray-400 dark:text-slate-500">Refund Method</p>
                     <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-slate-50">{selectedRefund.metadata?.refund_method || '-'}</p>
                   </div>
                   {selectedRefund.payment_method && (
                     <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                      <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Payment Method</p>
+                      <p className="text-2xs uppercase tracking-wider text-gray-400 dark:text-slate-500">Payment Method</p>
                       <p className="mt-1 text-sm font-semibold capitalize text-gray-900 dark:text-slate-50">{selectedRefund.payment_method}</p>
                     </div>
                   )}
                   {selectedRefund.paid_at && (
                     <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                      <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Paid At</p>
+                      <p className="text-2xs uppercase tracking-wider text-gray-400 dark:text-slate-500">Paid At</p>
                       <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-slate-50">{formatISTDate(selectedRefund.paid_at)}</p>
                     </div>
                   )}
@@ -719,7 +706,7 @@ export default function RefundHistoryPage() {
 
                 <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
                   <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-2.5">
-                    <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500">Refund Details</p>
+                    <p className="text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">Refund Details</p>
                   </div>
                   <div className="space-y-3 p-4">
                     <div className="flex items-start justify-between gap-4">
@@ -757,14 +744,14 @@ export default function RefundHistoryPage() {
 
                 {selectedRefund.metadata?.notes && (
                   <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-800/50 p-4">
-                    <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500">Notes</p>
+                    <p className="text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">Notes</p>
                     <p className="mt-1 text-sm text-gray-800 dark:text-slate-100">{selectedRefund.metadata.notes}</p>
                   </div>
                 )}
 
                 {selectedRefund.metadata?.razorpay_refund_id && (
                   <div className="rounded-xl border border-brand-cyan/20 bg-brand-cyan/[0.05] p-4">
-                    <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-brand-cyan">Razorpay Refund ID</p>
+                    <p className="text-2xs font-semibold uppercase tracking-wider text-brand-cyan">Razorpay Refund ID</p>
                     <p className="mt-1 break-all font-mono text-sm text-gray-900 dark:text-slate-50">{selectedRefund.metadata.razorpay_refund_id}</p>
                   </div>
                 )}

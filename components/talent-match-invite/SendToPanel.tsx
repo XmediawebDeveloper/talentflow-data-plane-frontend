@@ -1,6 +1,6 @@
 'use client';
 
-import { Lightbulb } from 'lucide-react';
+import { AlertTriangle, Lightbulb } from 'lucide-react';
 import { CANDIDATE_SOURCE_LABEL, type DeliveryMethod, type InviteCandidate, type InviteCandidateSource, type InviteKind } from './inviteVersions';
 import { formatCandidateFirstName } from '@/lib/utils/candidateNameDisplay';
 
@@ -41,8 +41,7 @@ export default function SendToPanel({
   expiryDays,
   onExpiry,
   candidatesOnly = false,
-  chooseLater = false,
-  onChooseLater,
+  addInNextStep = false,
 }: {
   kind: InviteKind;
   candidates: InviteCandidate[];
@@ -57,11 +56,10 @@ export default function SendToPanel({
   /** Just the candidate list — the Browse all view, whose Send hands over to
    *  Share Assessment via Email (it has its own message and expiry). */
   candidatesOnly?: boolean;
-  /** "Choose candidates in the next step": Next goes on even with nobody
-   *  ticked — the next step has Manual, Upload Excel and the Resume Database. */
-  chooseLater?: boolean;
-  /** Given, the panel offers that checkbox. */
-  onChooseLater?: (on: boolean) => void;
+  /** Next leads to the email step, which adds candidates itself (Manual,
+   *  Upload Excel, Resume Database): nobody ticked is fine, and the panel
+   *  says where to add them. */
+  addInNextStep?: boolean;
 }) {
   /* The list, under the heading of where its candidates came from (the tab
      that opened the popup). */
@@ -72,6 +70,7 @@ export default function SendToPanel({
     else groups.push({ source: c.source, items: [c] });
   }
   const eligible = candidates.filter((c) => c.email);
+  const noEmail = candidates.length - eligible.length;
   const picked = eligible.filter((c) => selectedIds.includes(c.id)).length;
   const all = eligible.length > 0 && picked === eligible.length;
   const toggle = (id: string) =>
@@ -105,7 +104,9 @@ export default function SendToPanel({
         </div>
         {candidates.length === 0 ? (
           <p className="rounded-lg border border-dashed border-gray-200 dark:border-slate-700 px-3 py-4 text-center text-sm text-gray-600 dark:text-slate-400">
-            No candidates selected. Close this panel and tick candidates in the results table.
+            {addInNextStep
+              ? 'No candidates ticked. Add them in the next step: manually, by uploading an Excel file, or from the Resume Database.'
+              : 'No candidates selected. Close this panel and tick candidates in the results table.'}
           </p>
         ) : (
           <ul className="rounded-lg border border-gray-200 dark:border-slate-700 divide-y divide-gray-100 dark:divide-slate-700/60 max-h-64 overflow-y-auto">
@@ -150,27 +151,27 @@ export default function SendToPanel({
             ])}
           </ul>
         )}
+        {/* Said once, under the list: a candidate with no email is left out
+            silently otherwise, and the recruiter assumes everyone was invited. */}
+        {noEmail > 0 && (
+          <p role="note" className="mt-2 flex items-start gap-1.5 rounded-lg bg-warning-subtle border border-warning-line px-3 py-2 text-xs text-warning-strong">
+            <AlertTriangle className="w-3.5 h-3.5 mt-px shrink-0" aria-hidden="true" />
+            <span>
+              {noEmail === 1 ? '1 candidate has' : `${noEmail} candidates have`} no email address and won’t be invited.
+              Add an email to {noEmail === 1 ? 'their resume' : 'their resumes'} to include them.
+            </span>
+          </p>
+        )}
         {/* The app's tip card (Upload Resumes, My Resumes, JD Creation…):
-            brand-orange wash and border, lightbulb, "Tip:" lead — here with
-            the checkbox it explains. */}
-        {onChooseLater && (
-          <div className="mt-3 rounded-xl bg-brand-orange/[0.08] border border-brand-orange/20 px-3 py-2.5">
-            <label className="flex items-start gap-2.5 text-sm font-medium text-gray-900 dark:text-slate-50 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={chooseLater}
-                onChange={(e) => onChooseLater(e.target.checked)}
-                className="mt-0.5 w-4 h-4 shrink-0 rounded border-gray-300 cursor-pointer"
-              />
-              Choose candidates in the next step
-            </label>
-            <p className="mt-1.5 flex items-start gap-2.5 text-xs sm:text-sm text-gray-700 dark:text-slate-300">
-              <Lightbulb className="w-4 h-4 text-brand-orange flex-shrink-0 mt-0.5" aria-hidden="true" />
-              <span className="min-w-0">
-                <span className="font-semibold">Tip:</span> Add them there manually, upload an Excel file, or pick them from the Resume Database.
-              </span>
-            </p>
-          </div>
+            brand-orange wash and border, lightbulb, "Tip:" lead. Only beside a
+            list — an empty one already says where to add candidates. */}
+        {addInNextStep && candidates.length > 0 && (
+          <p className="mt-3 flex items-start gap-2.5 rounded-xl bg-brand-orange/[0.08] border border-brand-orange/20 px-3 py-2.5 text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+            <Lightbulb className="w-4 h-4 text-brand-orange flex-shrink-0 mt-0.5" aria-hidden="true" />
+            <span className="min-w-0">
+              <span className="font-semibold">Tip:</span> You can add more candidates in the next step: manually, by uploading an Excel file, or from the Resume Database.
+            </span>
+          </p>
         )}
       </section>
 

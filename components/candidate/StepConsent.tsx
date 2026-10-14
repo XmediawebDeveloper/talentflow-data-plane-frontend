@@ -6,7 +6,7 @@ import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import {
   Video, Eye, Shield, Clock, Trash2, CheckCircle, AlertTriangle,
-  MapPin, Building2, Award, ExternalLink, X,
+  MapPin, Award, ExternalLink, X,
   FileText, Timer, HelpCircle, ChevronRight, Smartphone, Wifi,
   Lightbulb, Globe, SquareUser, Cpu, Laptop, ShieldCheck, Database, TrendingUp, MessagesSquare, Factory,
 } from 'lucide-react';
@@ -103,7 +103,6 @@ export default function StepConsent({
   jdTitle,
   jdExperienceLevel,
   jdDescription,
-  jdDepartment,
   jdLocation,
   jdIndustryType,
   jdEmploymentType,
@@ -197,8 +196,8 @@ export default function StepConsent({
     value.replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
   const metaItems: { icon: IconComponent; text: string }[] = [
-    ...(jdDepartment ? [{ icon: Building2, text: jdDepartment }] : []),
     ...(jdLocation ? [{ icon: MapPin, text: jdLocation }] : []),
+    // The industry, not the department, describes the role here.
     ...(jdIndustryType?.trim() ? [{ icon: Factory, text: humanize(jdIndustryType.trim()) }] : []),
     ...(expStr ? [{ icon: Award, text: `${expStr} experience` }] : []),
   ];

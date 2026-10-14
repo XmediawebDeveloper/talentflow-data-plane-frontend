@@ -253,12 +253,14 @@ export function createBlockedReason(versions: InviteVersion[], perms: VersionPer
 export const nextVersionNumber = (versions: InviteVersion[]) =>
   versions.reduce((max, v) => Math.max(max, v.version), 0) + 1;
 
-/** Where the full create flow lives, for a job with no version yet. */
+/** Where the full create flow lives, for a job with no version yet. Both
+ *  carry `from=job-details`, so the create page's breadcrumb, Save as Draft,
+ *  Discard and Publish all land back on this job's Job Details page. */
 export function createPageHref(kind: InviteKind, jdId: string, jdTitle: string, returnUrl: string): string {
   return kind === 'assessment'
     ? `/recruitment/assessments/create?step=configure&jd_id=${encodeURIComponent(jdId)}` +
       `&from=job-details&jd_title=${encodeURIComponent(jdTitle)}&returnUrl=${encodeURIComponent(returnUrl)}`
-    : `/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${encodeURIComponent(jdId)}`;
+    : `/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${encodeURIComponent(jdId)}&from=job-details`;
 }
 
 /**
@@ -451,6 +453,16 @@ export const CANDIDATE_SOURCE_LABEL: Record<InviteCandidateSource, string> = {
   'score-resume': 'Score Resume Candidates',
   'assessment-result': 'Assessment Result Candidates',
   'interview-result': 'AI Interview Result Candidates',
+};
+
+/** The assessment invite_source recorded for a candidate ticked on that tab —
+ *  the values the other invite flows already write ("AI Talent Match" for the
+ *  direct send below, "Resume Scoring", and "JD" for Job Details' own invite). */
+export const INVITE_SOURCE_BY_TAB: Record<InviteCandidateSource, string> = {
+  'talent-match': 'AI Talent Match',
+  'score-resume': 'Resume Scoring',
+  'assessment-result': 'JD',
+  'interview-result': 'JD',
 };
 
 export interface InviteCandidate {
