@@ -1039,12 +1039,47 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
   // WebSocket keepalive / reconnect refs
   const pingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // Network strength for the candidate's camera overlay — the round trip of
-  // the keepalive ping above (sent every 5s) to its pong. Display only:
-  // averaged over the last 3 samples; null until the first pong arrives.
-  const pingSentAtRef = useRef<number | null>(null);
+  // Network strength for the candidate's camera overlay. Display only:
+  // averaged over the last 3 samples; null until the first sample. Measured
+  // by an HTTP probe (see the network-probe effect), NOT the keepalive ping:
+  // the server answers that ping inside the receive loop that waits for Bina
+  // to finish speaking after a skip/Next, and the pong is only timed once
+  // this tab's main thread is free — so a slow TTS provider or a busy page
+  // showed "Poor" on a 250 Mbps line (staging 2026-10-13).
   const rttSamplesRef = useRef<number[]>([]);
   const [networkRttMs, setNetworkRttMs] = useState<number | null>(null);
+  // Network probe: every 5 s while connected, request an empty 204 from the
+  // API and read its duration from the browser's Resource Timing entry. Those
+  // timestamps are taken by the network stack, so a busy main thread can't
+  // inflate them (a performance.now() around the fetch would). A
+  // PerformanceObserver is used because the resource-timing buffer fills up
+  // over a long interview and getEntriesByName would stop seeing new probes.
+  useEffect(() => {
+    if (!isConnected || typeof window === 'undefined' || typeof PerformanceObserver === 'undefined') return;
+    const apiBase = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1').replace(/\/$/, '');
+    const probeBase = `${apiBase}/candidate/ai-interview-net-probe`;
+    let stopped = false;
+    const observer = new PerformanceObserver((list) => {
+      for (const e of list.getEntries() as PerformanceResourceTiming[]) {
+        if (stopped || !e.name.startsWith(probeBase)) continue;
+        // With Timing-Allow-Origin (sent by the endpoint) use request→response
+        // (pure network + trivial handler); otherwise the whole entry.
+        const ms = e.requestStart > 0 && e.responseStart > 0 ? e.responseStart - e.requestStart : e.duration;
+        if (!(ms > 0)) continue;
+        rttSamplesRef.current = [...rttSamplesRef.current, ms].slice(-3);
+        setNetworkRttMs(rttSamplesRef.current.reduce((a, b) => a + b, 0) / rttSamplesRef.current.length);
+      }
+    });
+    try { observer.observe({ type: 'resource', buffered: false }); } catch { return; }
+    const probe = () => {
+      if (stopped || (typeof navigator !== 'undefined' && navigator.onLine === false)) return;
+      // no-cors: only the timing is needed, never the (empty) body.
+      void fetch(`${probeBase}?_=${Date.now()}`, { cache: 'no-store', mode: 'no-cors', credentials: 'omit' }).catch(() => {});
+    };
+    probe();
+    const iv = setInterval(probe, 5000);
+    return () => { stopped = true; clearInterval(iv); observer.disconnect(); };
+  }, [isConnected]);
   const reconnectAttemptsRef = useRef(0);
   // Separate fast-retry counter for the "WS connected before /start flipped the
   // interview to in_progress" race (backend rejects 4003 "not in progress").
@@ -5100,13 +5135,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     switch (data.type) {
       case "pong":
         console.log(`[WS ${timestamp}] Keepalive pong received`);
-        // Only used to show network strength — no other action.
-        if (pingSentAtRef.current !== null) {
-          const rtt = performance.now() - pingSentAtRef.current;
-          pingSentAtRef.current = null;
-          rttSamplesRef.current = [...rttSamplesRef.current, rtt].slice(-3);
-          setNetworkRttMs(rttSamplesRef.current.reduce((a, b) => a + b, 0) / rttSamplesRef.current.length);
-        }
+        // Keepalive only — network strength comes from the HTTP probe.
         break;
       case "concurrent_session_blocked":
         // The interview link is already open/active in another window/device.
@@ -8911,7 +8940,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
       pingIntervalRef.current = setInterval(() => {
         if (wsRef.current?.readyState === WebSocket.OPEN) {
-          pingSentAtRef.current = performance.now();
           wsRef.current.send(JSON.stringify({ type: 'ping' }));
         }
       }, 5000);
