@@ -1484,15 +1484,51 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
   const questionAskedAt = useMemo(() => {
     const map = new Map<string, string>();
     const convo = ((liveSession as any).conversation_transcript || (interview as any).conversation_transcript || []) as any[];
+    const history = (((liveSession as any).ai_evaluation || (interview as any).ai_evaluation || {}).question_history || []) as any[];
+
+    // Walk the questions IN THE ORDER ASKED (question_history order) and pair
+    // each with the next of Bina's messages that contains it, never looking
+    // back past the previous match. Matching only on an identical opening
+    // (the old rule) missed whenever Bina led in ("Great, thanks. Now, …"), and
+    // the miss fell through to a later timestamp — so a question asked first
+    // could seek near the end of the recording, and the timeline's Q-numbers
+    // (sorted by time) came out of order.
+    const norm = (t: unknown) =>
+      String(t || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+    const words = (t: string) => t.split(' ').filter((w) => w.length > 2);
+    const binaMsgs = convo
+      .filter((m) => m?.role === 'assistant' && m?.content && m?.timestamp)
+      .map((m) => ({ text: norm(m.content), words: new Set(words(norm(m.content))), ts: m.timestamp as string }));
+    const asksQuestion = (msg: { text: string; words: Set<string> }, q: string) => {
+      if (!q) return false;
+      // Its opening, anywhere in the message (after a lead-in) …
+      if (msg.text.includes(q.slice(0, 50))) return true;
+      // … or most of its words (the evaluator's copy can differ slightly).
+      const qw = words(q);
+      if (qw.length < 3) return false;
+      return qw.filter((w) => msg.words.has(w)).length / qw.length >= 0.7;
+    };
+    let cursor = 0;
+    for (const h of history) {
+      const k = questionKey(h?.question);
+      if (!k || map.has(k)) continue;
+      const q = norm(h?.question);
+      let found = -1;
+      for (let i = cursor; i < binaMsgs.length; i++) {
+        if (asksQuestion(binaMsgs[i], q)) { found = i; break; }
+      }
+      if (found >= 0) {
+        map.set(k, binaMsgs[found].ts);
+        cursor = found + 1;
+      } else if (h?.timestamp) {
+        map.set(k, h.timestamp);
+      }
+    }
+    // Sessions without question_history: the old identical-opening match.
     for (const m of convo) {
       if (m?.role !== 'assistant' || !m?.content || !m?.timestamp) continue;
       const k = questionKey(m.content);
       if (k && !map.has(k)) map.set(k, m.timestamp);
-    }
-    const history = (((liveSession as any).ai_evaluation || (interview as any).ai_evaluation || {}).question_history || []) as any[];
-    for (const h of history) {
-      const k = questionKey(h?.question);
-      if (k && h?.timestamp && !map.has(k)) map.set(k, h.timestamp);
     }
     return map;
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1647,9 +1683,8 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
       </div>
       <h3 className="text-base font-semibold text-gray-900 mb-1 tracking-tight">Generating Evaluation Results</h3>
       <p className="text-sm text-gray-500 max-w-xs text-center">
-        The AI is scoring every answer, analyzing sentiment, and verifying the
-        results. This typically takes 1–3 minutes — you can keep this page open;
-        it refreshes automatically when ready.
+        Please wait while the AI analyzes responses and verifies the results.
+        The page will refresh automatically when ready.
       </p>
       <div className="mt-6 flex items-start justify-center">
         {EVAL_STAGES.map((label, i) => {
