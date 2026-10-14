@@ -19,6 +19,9 @@ const TRIGGER_CLASS =
  * The Job Openings list's "Select All ▾" control: one button whose menu holds
  * both scopes — this page, every page — plus Clear selection. Shows
  * "N Selected" once anything is ticked.
+ *
+ * The scope items are checkboxes mirroring the real selection — unchecked until
+ * every row in scope is ticked; clicking a checked item unticks that scope.
  */
 export function SelectAllMenu({
   selectedCount,
@@ -26,7 +29,9 @@ export function SelectAllMenu({
   totalCount,
   noun,
   allSelected,
+  pageSelected = false,
   onSelectPage,
+  onDeselectPage,
   onSelectAll,
   onClear,
 }: {
@@ -39,11 +44,17 @@ export function SelectAllMenu({
   /** Plural, e.g. "jobs", "candidates". */
   noun: string;
   allSelected: boolean;
+  /** True when every row on the current page is selected (checks the "this page" item). */
+  pageSelected?: boolean;
   onSelectPage: () => void;
+  /** Unticks the current page's rows; without it the "this page" item only selects. */
+  onDeselectPage?: () => void;
   onSelectAll: () => void;
   onClear: () => void;
 }) {
   const active = selectedCount > 0;
+  const pageChecked = pageSelected && pageCount > 0 && !!onDeselectPage;
+  const allChecked = allSelected && active;
   return (
     // modal={false}: no scroll lock, so opening it never shifts the page.
     <DropdownMenu modal={false}>
@@ -57,7 +68,7 @@ export function SelectAllMenu({
               : 'bg-brand-blue/5 text-gray-700 border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue',
           )}
         >
-          {allSelected ? (
+          {allChecked ? (
             <CheckSquare className="w-4 h-4" />
           ) : active ? (
             <span className="h-2 w-2 rounded-full bg-current" />
@@ -69,12 +80,30 @@ export function SelectAllMenu({
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-64 max-w-[calc(100vw-2rem)] !rounded-lg !bg-white !py-1 !px-0 !shadow-lg">
-        <DropdownMenuItem className="!rounded-none !px-3 !py-2 text-sm text-gray-700" onSelect={onSelectPage}>
-          <Square className="w-4 h-4 text-gray-500" />
+        <DropdownMenuItem
+          className="!rounded-none !px-3 !py-2 text-sm text-gray-700"
+          role="menuitemcheckbox"
+          aria-checked={pageChecked}
+          onSelect={() => (pageChecked ? onDeselectPage?.() : onSelectPage())}
+        >
+          {pageChecked ? (
+            <CheckSquare className="w-4 h-4 text-brand-blue" />
+          ) : (
+            <Square className="w-4 h-4 text-gray-500" />
+          )}
           Select all on this page ({pageCount})
         </DropdownMenuItem>
-        <DropdownMenuItem className="!rounded-none !px-3 !py-2 text-sm text-gray-700" onSelect={onSelectAll}>
-          <CheckSquare className="w-4 h-4 text-brand-blue" />
+        <DropdownMenuItem
+          className="!rounded-none !px-3 !py-2 text-sm text-gray-700"
+          role="menuitemcheckbox"
+          aria-checked={allChecked}
+          onSelect={() => (allChecked ? onClear() : onSelectAll())}
+        >
+          {allChecked ? (
+            <CheckSquare className="w-4 h-4 text-brand-blue" />
+          ) : (
+            <Square className="w-4 h-4 text-gray-500" />
+          )}
           Select all {noun} ({totalCount})
         </DropdownMenuItem>
         <DropdownMenuSeparator />

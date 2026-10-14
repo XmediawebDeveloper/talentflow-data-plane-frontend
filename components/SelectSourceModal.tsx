@@ -107,6 +107,9 @@ interface SelectSourceModalProps {
    *  result. The run is dismissed first, exactly like Close; the page then
    *  unmounts this modal and shows the result. */
   onViewResult?: (item: ScoringProgressItem) => void;
+  /** Swap the header's Close (X) icon for a Cancel button beside Score
+   *  Resumes in the footer. Both just call `onClose` — nothing is scored. */
+  cancelInFooter?: boolean;
 }
 
 export default function SelectSourceModal({
@@ -118,7 +121,8 @@ export default function SelectSourceModal({
   job,
   onScoringFinished,
   onScoringComplete,
-  onViewResult
+  onViewResult,
+  cancelInFooter = false
 }: SelectSourceModalProps) {
   const router = useRouter();
 
@@ -1064,12 +1068,14 @@ export default function SelectSourceModal({
               </div>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 sm:p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors flex-shrink-0"
-           aria-label="Close">
-            <X className="w-5 h-5 text-gray-500 dark:text-slate-500" />
-          </button>
+          {!cancelInFooter && (
+            <button
+              onClick={onClose}
+              className="p-1.5 sm:p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors flex-shrink-0"
+             aria-label="Close">
+              <X className="w-5 h-5 text-gray-500 dark:text-slate-500" />
+            </button>
+          )}
         </div>
 
         {/* JOB VERSION - which version the selected resumes are scored
@@ -1451,6 +1457,16 @@ export default function SelectSourceModal({
               )}
             </div>
             <div className="flex items-center gap-2 sm:gap-3">
+              {cancelInFooter && (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  disabled={submitting}
+                  className="px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                >
+                  Cancel
+                </button>
+              )}
               <button
                 onClick={() => setShowScoreReview(true)}
                 disabled={(() => {

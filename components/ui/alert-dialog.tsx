@@ -47,8 +47,12 @@ function AlertDialogOverlay({
 function AlertDialogContent({
   className,
   children,
+  hideClose = false,
   ...props
-}: React.ComponentProps<typeof AlertDialogPrimitive.Content>) {
+}: React.ComponentProps<typeof AlertDialogPrimitive.Content> & {
+  /** Drop the top-right Close (X), for a dialog dismissed by its footer's Cancel. */
+  hideClose?: boolean;
+}) {
   return (
     <AlertDialogPortal>
       <AlertDialogOverlay />
@@ -61,12 +65,14 @@ function AlertDialogContent({
         {...props}
       >
         {children}
-        <AlertDialogPrimitive.Cancel
-          aria-label="Close"
-          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors rounded-lg p-1 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
-        >
-          <X className="w-5 h-5" />
-        </AlertDialogPrimitive.Cancel>
+        {!hideClose && (
+          <AlertDialogPrimitive.Cancel
+            aria-label="Close"
+            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors rounded-lg p-1 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+          >
+            <X className="w-5 h-5" />
+          </AlertDialogPrimitive.Cancel>
+        )}
       </AlertDialogPrimitive.Content>
     </AlertDialogPortal>
   );
