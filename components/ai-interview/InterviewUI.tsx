@@ -4467,6 +4467,23 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     }
   }, []);
 
+  // The opening instruction (role_intro) must always be in the chat ahead of
+  // the first question. Normally finalizePlayback commits it when its audio
+  // ends. If the first question arrives first (a playback timer or the
+  // server's fallback released it early), commit it now — otherwise the
+  // question's text replaced the live bubble and the instruction was never
+  // shown. `endIntro` false keeps the intro flag so its own finalizePlayback
+  // still skips the mic-open (used when only the text is being rescued).
+  const commitPendingRoleIntro = useCallback((endIntro: boolean) => {
+    if (!roleIntroActiveRef.current) return;
+    if (endIntro) roleIntroActiveRef.current = false;
+    if (!tokenBufferRef.current.trim() && roleIntroTextRef.current.trim()) {
+      tokenBufferRef.current = roleIntroTextRef.current;
+    }
+    saveAiMessage();
+    roleIntroTextRef.current = ""; // committed — never add it a second time
+  }, [saveAiMessage]);
+
   // Token reveal system — the live "Bina" bubble that reveals tokens as
   // they stream.
   //
@@ -5313,6 +5330,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         // other turn. (Nudges use interstitial_prompt, not greeting, so they
         // still correctly get NO countdown.)
         getReadyArmedRef.current = true;
+        // Keep the opening instruction in the chat ABOVE this first question,
+        // even if the question arrived before the instruction finished playing.
+        commitPendingRoleIntro(true);
         tokenBufferRef.current = data.text;
         revealedCharsRef.current = 0;
         isAiSpeakingRef.current = true;
@@ -5764,6 +5784,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         // clear the live token buffer so nothing is revealed and saveAiMessage()
         // on finalize commits no bubble. The audio_end that follows still opens
         // the mic; the backend's silence ladder handles the (rare) blank turn.
+        // The opening instruction is not a question: if its voice failed, still
+        // SHOW it (the candidate must read it before the first question) rather
+        // than suppressing it.
+        if (roleIntroActiveRef.current) {
+          console.warn(`[WS ${timestamp}] tts_failed on the opening instruction — showing its text`);
+          commitPendingRoleIntro(false);
+          break;
+        }
         console.warn(`[WS ${timestamp}] tts_failed — suppressing silent question text`);
         if (revealTimerRef.current) { clearInterval(revealTimerRef.current); revealTimerRef.current = null; }
         tokenBufferRef.current = "";
@@ -6229,6 +6257,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         const _signalDelayMs = Math.max(2000, currentTurnAudioMsRef.current + 1200);
         playbackCompleteSignalRef.current = setTimeout(() => {
           playbackCompleteSignalRef.current = null;
+          // The opening instruction's playback_complete is what releases the
+          // FIRST question. An estimate-based timer must not send it — if Bina
+          // is still speaking the instruction, the question would start on top
+          // of it. Its real end (finalizePlayback) or the audioEndFallback
+          // safety net commits the instruction and then sends it.
+          if (roleIntroActiveRef.current) return;
           sendPlaybackComplete();
         }, _signalDelayMs);
 
