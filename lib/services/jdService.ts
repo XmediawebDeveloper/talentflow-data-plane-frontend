@@ -1120,6 +1120,29 @@ export const jdService = {
   },
 
   /**
+   * JD row id → job version number for EVERY version of every job these ids
+   * belong to, in ONE request.
+   *
+   * The batched form of `getLineageVersions` for callers that hold rows from
+   * many jobs and only need to know which version each row is — one request in
+   * place of one per job. Asking with any one version's id answers for its
+   * siblings too.
+   */
+  async getVersionMap(jdIds: string[]): Promise<Record<string, number>> {
+    const ids = Array.from(new Set(jdIds.filter(Boolean)));
+    if (ids.length === 0) return {};
+    try {
+      const response = await api.get<{ versions: Record<string, number> }>(
+        '/jd/version-map',
+        { params: { ids: ids.join(',') } },
+      );
+      return response.data?.versions || {};
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
    * The "Download this version as a Word document" button in
    * JDVersionHistoryModal builds the .docx entirely in the browser - there's
    * no file-generation request for the backend to audit, so it calls this
