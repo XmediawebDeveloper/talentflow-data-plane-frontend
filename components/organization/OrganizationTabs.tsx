@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { usePlanFeaturesContext } from '@/components/providers/PlanFeaturesProvider';
 import { DISABLED_REASON_MESSAGE } from '@/lib/navigation/menuSections';
+import { ScrollableTabs } from '@/components/subscription/ScrollableTabs';
 
 /**
  * Shared tab bar for the organization / user-management area.
@@ -39,10 +40,45 @@ export default function OrganizationTabs() {
   if (tabs.length <= 1) return null;
 
   return (
-    <section className="mb-5">
+    <section className="mb-3 lg:mb-5">
+      {/* Mobile + tablet (< lg): scrollable pills with an always-visible scrollbar */}
+      <ScrollableTabs className="lg:hidden" ariaLabel="User management tabs">
+        {tabs.map((tab) => {
+          const isActive = pathname === tab.href || pathname.startsWith(`${tab.href}/`);
+          const pill = 'shrink-0 whitespace-nowrap rounded-full border px-4 py-2 text-sm font-medium transition-colors';
+          if (tab.planLocked) {
+            return (
+              <span
+                key={tab.id}
+                aria-disabled="true"
+                title={DISABLED_REASON_MESSAGE.plan}
+                className={`${pill} border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-400 dark:text-slate-600 cursor-not-allowed`}
+              >
+                {tab.label}
+              </span>
+            );
+          }
+          return (
+            <Link
+              key={tab.id}
+              href={tab.href}
+              aria-current={isActive ? 'page' : undefined}
+              className={`${pill} ${
+                isActive
+                  ? 'border-brand-blue bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
+                  : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-400 hover:border-brand-blue/30 hover:text-brand-blue'
+              }`}
+            >
+              {tab.label}
+            </Link>
+          );
+        })}
+      </ScrollableTabs>
+
+      {/* Desktop (lg+): folder tabs that merge into the panel below */}
       <nav
         aria-label="User management tabs"
-        className="flex max-w-full flex-wrap gap-1 border-b border-gray-200 dark:border-slate-700"
+        className="hidden max-w-full flex-wrap gap-1 border-b border-gray-200 dark:border-slate-700 lg:flex"
       >
         {tabs.map((tab) => {
           const isActive = pathname === tab.href || pathname.startsWith(`${tab.href}/`);

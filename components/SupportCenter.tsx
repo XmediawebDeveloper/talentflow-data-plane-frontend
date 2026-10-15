@@ -749,7 +749,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
     <div ref={rootRef} className="flex-1 bg-slate-50 overflow-x-clip">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
-      <PageBreadcrumb className="mb-0" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Support Tickets' }]} />
+      <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Support Tickets' }]} />
       <div className="mb-5 flex flex-col gap-4 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-5 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-start gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
@@ -858,11 +858,11 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 className="text-left w-full bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden hover:border-brand-blue/30 hover:shadow-md transition-all"
               >
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
-                  <span className="text-2xs sm:text-xs md:text-sm text-gray-600">Open Tickets</span>
-                  <Circle className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800 flex-shrink-0" />
+                  <span className="text-2xs sm:text-xs md:text-sm text-gray-600 dark:text-slate-400">Open Tickets</span>
+                  <Circle className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue flex-shrink-0" />
                 </div>
-                <div className="text-lg sm:text-2xl md:text-3xl text-gray-900 mb-0.5 sm:mb-1">{openTickets}</div>
-                <div className="text-2xs sm:text-xs text-gray-600">Awaiting response</div>
+                <div className="text-lg sm:text-2xl md:text-3xl font-semibold tracking-tight text-gray-900 dark:text-slate-50 mb-0.5 sm:mb-1">{openTickets}</div>
+                <div className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400">Awaiting response</div>
               </button>
 
               <button
@@ -871,11 +871,11 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 className="text-left w-full bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden hover:border-brand-blue/30 hover:shadow-md transition-all"
               >
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
-                  <span className="text-2xs sm:text-xs md:text-sm text-gray-600">In Progress</span>
+                  <span className="text-2xs sm:text-xs md:text-sm text-gray-600 dark:text-slate-400">In Progress</span>
                   <Clock3 className="w-4 h-4 sm:w-5 sm:h-5 text-warning flex-shrink-0" />
                 </div>
-                <div className="text-lg sm:text-2xl md:text-3xl text-gray-900 mb-0.5 sm:mb-1">{inProgressTickets}</div>
-                <div className="text-2xs sm:text-xs text-gray-600">Being worked on</div>
+                <div className="text-lg sm:text-2xl md:text-3xl font-semibold tracking-tight text-gray-900 dark:text-slate-50 mb-0.5 sm:mb-1">{inProgressTickets}</div>
+                <div className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400">Being worked on</div>
               </button>
 
               <button
@@ -884,11 +884,11 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 className="text-left w-full bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden hover:border-brand-blue/30 hover:shadow-md transition-all"
               >
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
-                  <span className="text-2xs sm:text-xs md:text-sm text-gray-600">Resolved</span>
+                  <span className="text-2xs sm:text-xs md:text-sm text-gray-600 dark:text-slate-400">Resolved</span>
                   <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-success flex-shrink-0" />
                 </div>
-                <div className="text-lg sm:text-2xl md:text-3xl text-gray-900 mb-0.5 sm:mb-1">{resolvedTickets}</div>
-                <div className="text-2xs sm:text-xs text-gray-600">Successfully solved</div>
+                <div className="text-lg sm:text-2xl md:text-3xl font-semibold tracking-tight text-gray-900 dark:text-slate-50 mb-0.5 sm:mb-1">{resolvedTickets}</div>
+                <div className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400">Successfully solved</div>
               </button>
 
               <button
@@ -897,11 +897,11 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 className="text-left w-full bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden hover:border-brand-blue/30 hover:shadow-md transition-all"
               >
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
-                  <span className="text-2xs sm:text-xs md:text-sm text-gray-600">Total Tickets</span>
-                  <Ticket className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 flex-shrink-0" />
+                  <span className="text-2xs sm:text-xs md:text-sm text-gray-600 dark:text-slate-400">Total Tickets</span>
+                  <Ticket className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue flex-shrink-0" />
                 </div>
-                <div className="text-lg sm:text-2xl md:text-3xl text-gray-900 mb-0.5 sm:mb-1">{totalTickets}</div>
-                <div className="text-2xs sm:text-xs text-gray-600">All time</div>
+                <div className="text-lg sm:text-2xl md:text-3xl font-semibold tracking-tight text-gray-900 dark:text-slate-50 mb-0.5 sm:mb-1">{totalTickets}</div>
+                <div className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400">All time</div>
               </button>
             </div>
 
@@ -933,10 +933,10 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
             {/* Recent Tickets */}
             <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6">
               <div className="flex items-center justify-between mb-3 sm:mb-4 md:mb-6">
-                <h3 className="text-sm sm:text-base text-gray-900 font-semibold">Recent Tickets</h3>
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Recent Tickets</h3>
                 <button
                   onClick={() => setView('tickets')}
-                  className="text-sm text-gray-800 hover:text-gray-900"
+                  className="text-sm font-medium text-brand-blue hover:text-brand-blue/80"
                 >
                   View All
                 </button>
@@ -944,7 +944,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
               {loading ? (
                 <div className="flex items-center justify-center py-8 sm:py-12 tf-loader-center">
-                  <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 animate-spin text-gray-800" />
+                  <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 animate-spin text-brand-blue" />
                 </div>
               ) : tickets.length === 0 ? (
                 <EmptyState
@@ -963,16 +963,16 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                         fetchTicketDetail(ticket.id);
                         setView('detail');
                       }}
-                      className="w-full text-left p-3 sm:p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200"
+                      className="w-full text-left p-3 sm:p-4 bg-gray-50 dark:bg-slate-800/50 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors border border-gray-200 dark:border-slate-700/60"
                     >
                       <div className="flex items-start justify-between mb-1.5 sm:mb-2 gap-2">
                         <div className="flex-1 min-w-0">
-                          <span className="text-2xs sm:text-xs text-gray-600 block mb-0.5 sm:mb-1">{ticket.ticketNumber}</span>
-                          <h4 className="text-xs sm:text-sm text-gray-900 truncate">{ticket.title}</h4>
+                          <span className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400 block mb-0.5 sm:mb-1">{ticket.ticketNumber}</span>
+                          <h4 className="text-xs sm:text-sm text-gray-900 dark:text-slate-50 truncate">{ticket.title}</h4>
                         </div>
                         {getStatusBadge(ticket.status)}
                       </div>
-                      <div className="flex items-center gap-2 sm:gap-3 text-2xs sm:text-xs text-gray-600 flex-wrap">
+                      <div className="flex items-center gap-2 sm:gap-3 text-2xs sm:text-xs text-gray-600 dark:text-slate-400 flex-wrap">
                         <span className="truncate max-w-[80px] sm:max-w-none">{getCategoryLabel(ticket.category)}</span>
                         <span className="hidden sm:inline">-</span>
                         {getPriorityBadge(ticket.priority)}
@@ -989,33 +989,33 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
               <button
                 onClick={() => setView('knowledge-base')}
-                className="bg-white border border-gray-200 rounded-xl shadow-sm p-3 sm:p-4 md:p-6 text-left hover:border-gray-300 hover:shadow-md transition-all"
+                className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] rounded-xl shadow-sm shadow-brand-blue/5 p-3 sm:p-4 md:p-6 text-left hover:border-brand-blue/30 hover:shadow-md transition-all"
               >
-                <Book className="w-5 h-5 sm:w-6 sm:h-6 text-gray-800 mb-2 sm:mb-3" />
-                <h4 className="text-sm sm:text-base text-gray-900 mb-1 sm:mb-2">Knowledge Base</h4>
-                <p className="text-xs sm:text-sm text-gray-600">
+                <Book className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue mb-2 sm:mb-3" />
+                <h4 className="text-sm sm:text-base text-gray-900 dark:text-slate-50 mb-1 sm:mb-2">Knowledge Base</h4>
+                <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
                   Browse articles and guides
                 </p>
               </button>
 
               <a
                 href="#"
-                className="bg-white border border-gray-200 rounded-xl shadow-sm p-3 sm:p-4 md:p-6 text-left hover:border-gray-300 hover:shadow-md transition-all"
+                className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] rounded-xl shadow-sm shadow-brand-blue/5 p-3 sm:p-4 md:p-6 text-left hover:border-brand-blue/30 hover:shadow-md transition-all"
               >
-                <Video className="w-5 h-5 sm:w-6 sm:h-6 text-gray-800 mb-2 sm:mb-3" />
-                <h4 className="text-sm sm:text-base text-gray-900 mb-1 sm:mb-2">Video Tutorials</h4>
-                <p className="text-xs sm:text-sm text-gray-600">
+                <Video className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue mb-2 sm:mb-3" />
+                <h4 className="text-sm sm:text-base text-gray-900 dark:text-slate-50 mb-1 sm:mb-2">Video Tutorials</h4>
+                <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
                   Watch step-by-step guides
                 </p>
               </a>
 
               <a
                 href="#"
-                className="bg-white border border-gray-200 rounded-xl shadow-sm p-3 sm:p-4 md:p-6 text-left hover:border-gray-300 hover:shadow-md transition-all"
+                className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] rounded-xl shadow-sm shadow-brand-blue/5 p-3 sm:p-4 md:p-6 text-left hover:border-brand-blue/30 hover:shadow-md transition-all"
               >
-                <FileQuestion className="w-5 h-5 sm:w-6 sm:h-6 text-gray-800 mb-2 sm:mb-3" />
-                <h4 className="text-sm sm:text-base text-gray-900 mb-1 sm:mb-2">FAQs</h4>
-                <p className="text-xs sm:text-sm text-gray-600">
+                <FileQuestion className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue mb-2 sm:mb-3" />
+                <h4 className="text-sm sm:text-base text-gray-900 dark:text-slate-50 mb-1 sm:mb-2">FAQs</h4>
+                <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
                   Find quick answers
                 </p>
               </a>
@@ -1023,27 +1023,27 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
             {/* Contact Information */}
             <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-3 sm:p-4 md:p-6">
-              <h3 className="text-sm sm:text-base text-gray-900 font-semibold mb-3 sm:mb-4">Need Immediate Help?</h3>
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50 mb-3 sm:mb-4">Need Immediate Help?</h3>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <Mail className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800 flex-shrink-0" />
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                  <Mail className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue flex-shrink-0" />
                   <div className="min-w-0">
-                    <div className="text-2xs sm:text-xs text-gray-600">Email</div>
-                    <div className="text-xs sm:text-sm text-gray-900 truncate">support@talentflow.com</div>
+                    <div className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400">Email</div>
+                    <div className="text-xs sm:text-sm text-gray-900 dark:text-slate-50 truncate">support@talentflow.com</div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <Phone className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800 flex-shrink-0" />
-                  <div>
-                    <div className="text-2xs sm:text-xs text-gray-600">Phone</div>
-                    <div className="text-xs sm:text-sm text-gray-900">1-800-TALENT-1</div>
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                  <Phone className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue flex-shrink-0" />
+                  <div className="min-w-0">
+                    <div className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400">Phone</div>
+                    <div className="text-xs sm:text-sm text-gray-900 dark:text-slate-50">1-800-TALENT-1</div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <Globe className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800 flex-shrink-0" />
-                  <div>
-                    <div className="text-2xs sm:text-xs text-gray-600">Hours</div>
-                    <div className="text-xs sm:text-sm text-gray-900">Mon-Fri, 9AM-6PM EST</div>
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                  <Globe className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue flex-shrink-0" />
+                  <div className="min-w-0">
+                    <div className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400">Hours</div>
+                    <div className="text-xs sm:text-sm text-gray-900 dark:text-slate-50">Mon-Fri, 9AM-6PM EST</div>
                   </div>
                 </div>
               </div>
@@ -1056,14 +1056,14 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
           <div className="max-w-3xl mx-auto">
             <button
               onClick={() => setView('overview')}
-              className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 hover:text-gray-900 mb-4 sm:mb-6"
+              className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue mb-4 sm:mb-6"
             >
               <ArrowLeft className="w-4 h-4" />
               Back to Overview
             </button>
 
             <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-4 sm:p-6 md:p-8">
-              <h2 className="text-sm sm:text-base md:text-lg text-gray-900 font-semibold mb-4 sm:mb-6">Submit Support Ticket</h2>
+              <h2 className="text-sm sm:text-base md:text-lg font-semibold text-gray-900 dark:text-slate-50 mb-4 sm:mb-6">Submit Support Ticket</h2>
 
               <div className="space-y-4 sm:space-y-6">
                 <div>
@@ -1126,7 +1126,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   <Label className="mb-1.5">
                     Attachments (Optional)
                   </Label>
-                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 sm:p-6 md:p-8 text-center hover:border-gray-400 transition-colors">
+                  <div className="border-2 border-dashed border-gray-300 dark:border-slate-700 rounded-lg p-4 sm:p-6 md:p-8 text-center hover:border-brand-blue/40 transition-colors">
                     <input
                       type="file"
                       id="file-upload"
@@ -1138,11 +1138,11 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       htmlFor="file-upload"
                       className="cursor-pointer flex flex-col items-center"
                     >
-                      <Upload className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 text-gray-400 mb-2 sm:mb-3" />
-                      <span className="text-xs sm:text-sm text-gray-900 mb-1">
+                      <Upload className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 text-brand-blue mb-2 sm:mb-3" />
+                      <span className="text-xs sm:text-sm text-gray-900 dark:text-slate-50 mb-1">
                         Click to upload files
                       </span>
-                      <span className="text-2xs sm:text-xs text-gray-600">
+                      <span className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400">
                         Screenshots, logs, or documents (Max 10MB each)
                       </span>
                     </label>
@@ -1151,12 +1151,12 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   {attachments.length > 0 && (
                     <div className="mt-3 sm:mt-4 space-y-2">
                       {attachments.map((file, index) => (
-                        <div key={index} className="flex items-center justify-between p-2.5 sm:p-3 bg-gray-50 rounded-lg">
+                        <div key={index} className="flex items-center justify-between p-2.5 sm:p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
                           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                            <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 flex-shrink-0" />
+                            <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 dark:text-slate-400 flex-shrink-0" />
                             <div className="min-w-0">
-                              <div className="text-xs sm:text-sm text-gray-900 truncate">{file.name}</div>
-                              <div className="text-2xs sm:text-xs text-gray-600">
+                              <div className="text-xs sm:text-sm text-gray-900 dark:text-slate-50 truncate">{file.name}</div>
+                              <div className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400">
                                 {(file.size / 1024).toFixed(1)} KB
                               </div>
                             </div>
@@ -1165,7 +1165,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                             <button
                               onClick={() => removeAttachment(index)}
                               aria-label="Remove attachment"
-                              className="p-1.5 sm:p-2 hover:bg-gray-200 rounded-lg transition-colors flex-shrink-0"
+                              className="p-1.5 sm:p-2 hover:bg-gray-200 dark:hover:bg-slate-700 rounded-lg transition-colors flex-shrink-0"
                             >
                               <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-destructive" />
                             </button>
@@ -1209,7 +1209,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
           <div>
             <button
               onClick={() => setView('overview')}
-              className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 hover:text-gray-900 mb-4 sm:mb-6"
+              className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue mb-4 sm:mb-6"
             >
               <ArrowLeft className="w-4 h-4" />
               Back to Overview
@@ -1217,7 +1217,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
             <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
               {/* Filters */}
-              <div className="p-3 sm:p-4 md:p-6 border-b border-gray-200">
+              <div className="p-3 sm:p-4 md:p-6 border-b border-gray-100 dark:border-slate-700/60">
                 <div className="flex flex-col gap-2 sm:gap-3 md:gap-4">
                   <div className="flex-1 relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-blue/60 z-10" />
@@ -1226,11 +1226,11 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder="Search tickets..."
-                      className="pl-9 pr-4"
+                      className="pl-9 pr-4 w-full"
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 sm:flex gap-2 sm:gap-3 md:gap-4">
+                  <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 sm:gap-3 md:gap-4">
                     <select
                       value={filterStatus}
                       onChange={(e) => setFilterStatus(e.target.value)}
@@ -1261,12 +1261,12 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               {/* Tickets */}
               {loading ? (
                 <div className="flex items-center justify-center py-8 sm:py-12 tf-loader-center">
-                  <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 animate-spin text-gray-800" />
+                  <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 animate-spin text-brand-blue" />
                 </div>
               ) : (
                 <>
                   {/* Mobile Card Layout */}
-                  <div className="md:hidden divide-y divide-gray-200">
+                  <div className="md:hidden divide-y divide-gray-100 dark:divide-slate-700/60">
                     {paginatedTickets.map(ticket => {
                       const CategoryIcon = getCategoryIcon(ticket.category);
                       return (
@@ -1277,22 +1277,22 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                             fetchTicketDetail(ticket.id);
                             setView('detail');
                           }}
-                          className="w-full text-left p-3 sm:p-4 hover:bg-gray-50 transition-colors"
+                          className="w-full text-left p-3 sm:p-4 hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors"
                         >
                           <div className="flex items-start justify-between gap-2 mb-1.5">
                             <div className="min-w-0 flex-1">
-                              <span className="text-2xs sm:text-xs text-gray-600 block mb-0.5">{ticket.ticketNumber}</span>
-                              <h4 className="text-xs sm:text-sm text-gray-900 font-medium truncate">{ticket.title}</h4>
+                              <span className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400 block mb-0.5">{ticket.ticketNumber}</span>
+                              <h4 className="text-xs sm:text-sm text-gray-900 dark:text-slate-50 font-medium truncate">{ticket.title}</h4>
                             </div>
                             {getStatusBadge(ticket.status)}
                           </div>
                           <div className="flex items-center gap-2 flex-wrap mt-1.5">
-                            <div className="flex items-center gap-1">
-                              <CategoryIcon className="w-3 h-3 text-gray-600 flex-shrink-0" />
-                              <span className="text-2xs sm:text-xs text-gray-600">{getCategoryLabel(ticket.category)}</span>
+                            <div className="flex items-center gap-1 min-w-0">
+                              <CategoryIcon className="w-3 h-3 text-gray-600 dark:text-slate-400 flex-shrink-0" />
+                              <span className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400 truncate">{getCategoryLabel(ticket.category)}</span>
                             </div>
                             {getPriorityBadge(ticket.priority)}
-                            <span className="text-2xs sm:text-xs text-gray-600">{formatISTDate(ticket.updatedAt)}</span>
+                            <span className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400">{formatISTDate(ticket.updatedAt)}</span>
                           </div>
                         </button>
                       );
@@ -1302,32 +1302,32 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   {/* Desktop Table */}
                   <div className="hidden md:block overflow-x-auto tf-table-shell">
                     <table className="w-full">
-                      <thead className="bg-gray-50 border-b border-gray-200">
+                      <thead className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60">
                         <tr>
-                          <th className="px-6 py-4 text-left text-xs text-gray-600">Ticket #</th>
-                          <th className="px-6 py-4 text-left text-xs text-gray-600">Title</th>
-                          <th className="px-6 py-4 text-left text-xs text-gray-600">Category</th>
-                          <th className="px-6 py-4 text-left text-xs text-gray-600">Priority</th>
-                          <th className="px-6 py-4 text-left text-xs text-gray-600">Status</th>
-                          <th className="px-6 py-4 text-left text-xs text-gray-600">Updated</th>
-                          <th className="px-6 py-4 text-left text-xs text-gray-600 tf-sticky-col">Actions</th>
+                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 dark:text-slate-400">Ticket #</th>
+                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 dark:text-slate-400">Title</th>
+                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 dark:text-slate-400">Category</th>
+                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 dark:text-slate-400">Priority</th>
+                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 dark:text-slate-400">Status</th>
+                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 dark:text-slate-400">Updated</th>
+                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 dark:text-slate-400 tf-sticky-col">Actions</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-200">
+                      <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                         {paginatedTickets.map(ticket => {
                           const CategoryIcon = getCategoryIcon(ticket.category);
                           return (
-                            <tr key={ticket.id} className="hover:bg-gray-50">
+                            <tr key={ticket.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/50">
                               <td className="px-6 py-4">
-                                <span className="text-sm text-gray-900">{ticket.ticketNumber}</span>
+                                <span className="text-sm text-gray-900 dark:text-slate-50">{ticket.ticketNumber}</span>
                               </td>
                               <td className="px-6 py-4">
-                                <div className="text-sm text-gray-900 max-w-md truncate">{ticket.title}</div>
+                                <div className="text-sm text-gray-900 dark:text-slate-50 max-w-md truncate">{ticket.title}</div>
                               </td>
                               <td className="px-6 py-4">
-                                <div className="flex items-center gap-2">
-                                  <CategoryIcon className="w-4 h-4 text-gray-600" />
-                                  <span className="text-sm text-gray-600">{getCategoryLabel(ticket.category)}</span>
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <CategoryIcon className="w-4 h-4 text-gray-600 dark:text-slate-400 flex-shrink-0" />
+                                  <span className="text-sm text-gray-600 dark:text-slate-400 truncate">{getCategoryLabel(ticket.category)}</span>
                                 </div>
                               </td>
                               <td className="px-6 py-4">
@@ -1337,7 +1337,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                                 {getStatusBadge(ticket.status)}
                               </td>
                               <td className="px-6 py-4">
-                                <span className="text-sm text-gray-600">{formatISTDate(ticket.updatedAt)}</span>
+                                <span className="text-sm text-gray-600 dark:text-slate-400">{formatISTDate(ticket.updatedAt)}</span>
                               </td>
                               <td className="px-6 py-4 tf-sticky-col">
                                 <button
@@ -1346,7 +1346,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                                     fetchTicketDetail(ticket.id);
                                     setView('detail');
                                   }}
-                                  className="text-sm text-gray-800 hover:text-gray-900"
+                                  className="text-sm font-medium text-brand-blue hover:text-brand-blue/80"
                                 >
                                   View Details
                                 </button>
@@ -1388,7 +1388,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
           <div className="max-w-5xl mx-auto">
             <button
               onClick={() => setView('tickets')}
-              className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 hover:text-gray-900 mb-4 sm:mb-6"
+              className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue mb-4 sm:mb-6"
             >
               <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               Back to All Tickets
@@ -1400,13 +1400,13 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 {/* Ticket Header */}
                 <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6">
                   <div className="flex items-start justify-between mb-3 sm:mb-4">
-                    <div>
-                      <span className="text-2xs sm:text-xs text-gray-600 block mb-1 sm:mb-2">{selectedTicket.ticketNumber}</span>
-                      <h2 className="text-sm sm:text-base md:text-lg text-gray-900 font-semibold mb-2 sm:mb-3">{selectedTicket.title}</h2>
+                    <div className="min-w-0">
+                      <span className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400 block mb-1 sm:mb-2">{selectedTicket.ticketNumber}</span>
+                      <h2 className="text-sm sm:text-base md:text-lg font-semibold text-gray-900 dark:text-slate-50 mb-2 sm:mb-3">{selectedTicket.title}</h2>
                       <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                         {getStatusBadge(selectedTicket.status)}
                         {getPriorityBadge(selectedTicket.priority)}
-                        <span className="text-2xs sm:text-xs text-gray-600">
+                        <span className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400">
                           {getCategoryLabel(selectedTicket.category)}
                         </span>
                       </div>
@@ -1416,7 +1416,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
                 {/* Conversation */}
                 <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6">
-                  <h3 className="text-sm sm:text-base text-gray-900 font-semibold mb-4 sm:mb-6">Conversation</h3>
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50 mb-4 sm:mb-6">Conversation</h3>
 
                   <div className="space-y-4 sm:space-y-6">
                     {selectedTicket.responses?.map((response) => (
@@ -1424,28 +1424,28 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                         key={response.id}
                         className={`${
                           response.from === 'user'
-                            ? 'bg-gray-50 border-gray-200'
-                            : 'bg-gray-50 border-gray-200'
+                            ? 'bg-gray-50 dark:bg-slate-800/50 border-gray-200 dark:border-slate-700/60'
+                            : 'bg-brand-blue/5 border-brand-blue/20'
                         } border rounded-lg p-3 sm:p-4 md:p-5`}
                       >
                         <div className="flex items-start gap-2.5 sm:gap-4 mb-2 sm:mb-3">
                           {response.from === 'user' ? (
-                            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-800 rounded-full flex items-center justify-center text-white text-xs sm:text-sm flex-shrink-0">
+                            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-700 dark:bg-slate-600 rounded-full flex items-center justify-center text-white text-xs sm:text-sm flex-shrink-0">
                               U
                             </div>
                           ) : (
-                            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-success rounded-full flex items-center justify-center text-white text-xs sm:text-sm flex-shrink-0">
+                            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-brand-blue rounded-full flex items-center justify-center text-white text-xs sm:text-sm flex-shrink-0">
                               S
                             </div>
                           )}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between mb-1 gap-2">
-                              <span className="text-xs sm:text-sm text-gray-900 font-medium truncate">
+                              <span className="text-xs sm:text-sm font-medium text-gray-900 dark:text-slate-50 truncate">
                                 {response.from === 'user' ? 'You' : response.agentName || 'Support Team'}
                               </span>
-                              <span className="text-2xs sm:text-xs text-gray-600 whitespace-nowrap flex-shrink-0">{formatISTDate(response.timestamp)}</span>
+                              <span className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400 whitespace-nowrap flex-shrink-0">{formatISTDate(response.timestamp)}</span>
                             </div>
-                            <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">{response.message}</p>
+                            <p className="text-xs sm:text-sm text-gray-700 dark:text-slate-300 leading-relaxed">{response.message}</p>
                           </div>
                         </div>
                       </div>
@@ -1454,7 +1454,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
                   {/* Reply Box */}
                   {selectedTicket.status !== 'closed' && (
-                    <div className="mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-gray-200">
+                    <div className="mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-gray-100 dark:border-slate-700/60">
                       <Label className="mb-1.5">Add Reply</Label>
                       <Textarea
                         value={replyMessage}
@@ -1481,34 +1481,34 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               <div className="space-y-4 sm:space-y-6">
                 {/* Ticket Info */}
                 <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6">
-                  <h4 className="text-xs sm:text-sm text-gray-900 font-semibold mb-3 sm:mb-4">Ticket Information</h4>
+                  <h4 className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-slate-50 mb-3 sm:mb-4">Ticket Information</h4>
 
                   <div className="space-y-3 sm:space-y-4">
                     <div>
-                      <div className="text-2xs sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Created</div>
-                      <div className="text-xs sm:text-sm text-gray-900">{formatIST(selectedTicket.createdAt)}</div>
+                      <div className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400 mb-0.5 sm:mb-1">Created</div>
+                      <div className="text-xs sm:text-sm text-gray-900 dark:text-slate-50">{formatIST(selectedTicket.createdAt)}</div>
                     </div>
 
                     <div>
-                      <div className="text-2xs sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Last Updated</div>
-                      <div className="text-xs sm:text-sm text-gray-900">{formatIST(selectedTicket.updatedAt)}</div>
+                      <div className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400 mb-0.5 sm:mb-1">Last Updated</div>
+                      <div className="text-xs sm:text-sm text-gray-900 dark:text-slate-50">{formatIST(selectedTicket.updatedAt)}</div>
                     </div>
 
                     {selectedTicket.assignedAgent && (
                       <div>
-                        <div className="text-2xs sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Assigned Agent</div>
-                        <div className="flex items-center gap-2">
-                          <div className="w-5 h-5 sm:w-6 sm:h-6 bg-success rounded-full flex items-center justify-center text-white text-2xs sm:text-xs flex-shrink-0">
+                        <div className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400 mb-0.5 sm:mb-1">Assigned Agent</div>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-5 h-5 sm:w-6 sm:h-6 bg-brand-blue rounded-full flex items-center justify-center text-white text-2xs sm:text-xs flex-shrink-0">
                             {selectedTicket.assignedAgent.split(' ').map(n => n[0]).join('')}
                           </div>
-                          <div className="text-xs sm:text-sm text-gray-900">{selectedTicket.assignedAgent}</div>
+                          <div className="text-xs sm:text-sm text-gray-900 dark:text-slate-50 truncate">{selectedTicket.assignedAgent}</div>
                         </div>
                       </div>
                     )}
 
                     <div>
-                      <div className="text-2xs sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Responses</div>
-                      <div className="text-xs sm:text-sm text-gray-900">{selectedTicket.responses?.length || 0} messages</div>
+                      <div className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400 mb-0.5 sm:mb-1">Responses</div>
+                      <div className="text-xs sm:text-sm text-gray-900 dark:text-slate-50">{selectedTicket.responses?.length || 0} messages</div>
                     </div>
                   </div>
                 </div>
@@ -1516,7 +1516,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 {/* Update Priority */}
                 {selectedTicket.status !== 'closed' && (
                   <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6">
-                    <h4 className="text-xs sm:text-sm text-gray-900 font-semibold mb-3 sm:mb-4">Update Priority</h4>
+                    <h4 className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-slate-50 mb-3 sm:mb-4">Update Priority</h4>
                     <select
                       value={selectedTicket.priority}
                       onChange={(e) => handleUpdateTicket({ priority: e.target.value })}
@@ -1531,10 +1531,10 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
                 {/* Actions */}
                 <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6">
-                  <h4 className="text-xs sm:text-sm text-gray-900 font-semibold mb-3 sm:mb-4">Actions</h4>
+                  <h4 className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-slate-50 mb-3 sm:mb-4">Actions</h4>
 
                   <div className="space-y-2">
-                    <button className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-xs sm:text-sm text-left flex items-center gap-1.5 sm:gap-2">
+                    <button className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-200 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors text-xs sm:text-sm text-left flex items-center gap-1.5 sm:gap-2">
                       <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                       Download Transcript
                     </button>
@@ -1542,7 +1542,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     {(selectedTicket.status === 'resolved' || selectedTicket.status === 'closed') && (
                       <button
                         onClick={handleReopenTicket}
-                        className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-gray-100 text-gray-900 rounded-lg hover:bg-gray-200 transition-colors text-xs sm:text-sm text-left flex items-center gap-1.5 sm:gap-2"
+                        className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-gray-100 dark:bg-slate-800 text-gray-900 dark:text-slate-100 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors text-xs sm:text-sm text-left flex items-center gap-1.5 sm:gap-2"
                       >
                         <ExternalLink className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                         Reopen Ticket
@@ -1563,16 +1563,16 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
                 {/* Related Articles */}
                 <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-3 sm:p-4 md:p-6">
-                  <h4 className="text-xs sm:text-sm text-gray-900 font-semibold mb-3 sm:mb-4">Related Help Articles</h4>
+                  <h4 className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-slate-50 mb-3 sm:mb-4">Related Help Articles</h4>
 
                   <div className="space-y-2">
-                    <a href="#" className="block text-xs sm:text-sm text-gray-800 hover:text-gray-900">
+                    <a href="#" className="block text-xs sm:text-sm text-brand-blue hover:text-brand-blue/80">
                       How to upload resumes
                     </a>
-                    <a href="#" className="block text-xs sm:text-sm text-gray-800 hover:text-gray-900">
+                    <a href="#" className="block text-xs sm:text-sm text-brand-blue hover:text-brand-blue/80">
                       Resume upload troubleshooting
                     </a>
-                    <a href="#" className="block text-xs sm:text-sm text-gray-800 hover:text-gray-900">
+                    <a href="#" className="block text-xs sm:text-sm text-brand-blue hover:text-brand-blue/80">
                       File format requirements
                     </a>
                   </div>
@@ -1587,14 +1587,14 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
           <div>
             <button
               onClick={() => setView('overview')}
-              className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 hover:text-gray-900 mb-4 sm:mb-6"
+              className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue mb-4 sm:mb-6"
             >
               <ArrowLeft className="w-4 h-4" />
               Back to Overview
             </button>
 
             <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-4 sm:p-6 md:p-8">
-              <h2 className="text-sm sm:text-base md:text-lg text-gray-900 font-semibold mb-4 sm:mb-6">Knowledge Base</h2>
+              <h2 className="text-sm sm:text-base md:text-lg font-semibold text-gray-900 dark:text-slate-50 mb-4 sm:mb-6">Knowledge Base</h2>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
                 {categories.slice(0, 6).map(cat => {
@@ -1603,11 +1603,11 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     <a
                       key={cat.value}
                       href="#"
-                      className="p-3 sm:p-4 md:p-6 border border-gray-200 rounded-lg hover:border-gray-300 hover:shadow-md transition-all"
+                      className="p-3 sm:p-4 md:p-6 border border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 rounded-lg hover:border-brand-blue/30 hover:shadow-md transition-all"
                     >
-                      <Icon className="w-6 h-6 sm:w-8 sm:h-8 text-gray-800 mb-2 sm:mb-3" />
-                      <h4 className="text-sm sm:text-base text-gray-900 mb-1 sm:mb-2">{cat.label}</h4>
-                      <p className="text-xs sm:text-sm text-gray-600">View articles and guides</p>
+                      <Icon className="w-6 h-6 sm:w-8 sm:h-8 text-brand-blue mb-2 sm:mb-3" />
+                      <h4 className="text-sm sm:text-base text-gray-900 dark:text-slate-50 mb-1 sm:mb-2">{cat.label}</h4>
+                      <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">View articles and guides</p>
                     </a>
                   );
                 })}
@@ -1622,66 +1622,66 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
         {activeTab === 'team' && isAdmin && view === 'overview' && (
           <div className="space-y-4 sm:space-y-6">
             {/* Stats Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4 md:gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4 md:gap-6">
               <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
-                  <span className="text-2xs sm:text-xs md:text-sm text-gray-600">Open</span>
+                  <span className="text-2xs sm:text-xs md:text-sm text-gray-600 dark:text-slate-400">Open</span>
                   <Circle className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue flex-shrink-0" />
                 </div>
-                <div className="text-lg sm:text-2xl md:text-3xl font-semibold text-gray-900 mb-0.5 sm:mb-1">{internalOpenTickets}</div>
-                <div className="text-2xs sm:text-xs text-gray-600">Awaiting action</div>
+                <div className="text-lg sm:text-2xl md:text-3xl font-semibold tracking-tight text-gray-900 dark:text-slate-50 mb-0.5 sm:mb-1">{internalOpenTickets}</div>
+                <div className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400">Awaiting action</div>
               </div>
 
               <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
-                  <span className="text-2xs sm:text-xs md:text-sm text-gray-600">In Progress</span>
+                  <span className="text-2xs sm:text-xs md:text-sm text-gray-600 dark:text-slate-400">In Progress</span>
                   <Clock3 className="w-4 h-4 sm:w-5 sm:h-5 text-warning flex-shrink-0" />
                 </div>
-                <div className="text-lg sm:text-2xl md:text-3xl font-semibold text-gray-900 mb-0.5 sm:mb-1">{internalInProgressTickets}</div>
-                <div className="text-2xs sm:text-xs text-gray-600">Being handled</div>
+                <div className="text-lg sm:text-2xl md:text-3xl font-semibold tracking-tight text-gray-900 dark:text-slate-50 mb-0.5 sm:mb-1">{internalInProgressTickets}</div>
+                <div className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400">Being handled</div>
               </div>
 
               <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
-                  <span className="text-2xs sm:text-xs md:text-sm text-gray-600">Resolved</span>
+                  <span className="text-2xs sm:text-xs md:text-sm text-gray-600 dark:text-slate-400">Resolved</span>
                   <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-success flex-shrink-0" />
                 </div>
-                <div className="text-lg sm:text-2xl md:text-3xl font-semibold text-gray-900 mb-0.5 sm:mb-1">{internalResolvedTickets}</div>
-                <div className="text-2xs sm:text-xs text-gray-600">Successfully resolved</div>
+                <div className="text-lg sm:text-2xl md:text-3xl font-semibold tracking-tight text-gray-900 dark:text-slate-50 mb-0.5 sm:mb-1">{internalResolvedTickets}</div>
+                <div className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400">Successfully resolved</div>
               </div>
 
               <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
-                  <span className="text-2xs sm:text-xs md:text-sm text-gray-600">Unassigned</span>
+                  <span className="text-2xs sm:text-xs md:text-sm text-gray-600 dark:text-slate-400">Unassigned</span>
                   <Users className="w-4 h-4 sm:w-5 sm:h-5 text-brand-orange flex-shrink-0" />
                 </div>
-                <div className="text-lg sm:text-2xl md:text-3xl font-semibold text-gray-900 mb-0.5 sm:mb-1">{internalUnassignedTickets}</div>
-                <div className="text-2xs sm:text-xs text-gray-600">Need assignment</div>
+                <div className="text-lg sm:text-2xl md:text-3xl font-semibold tracking-tight text-gray-900 dark:text-slate-50 mb-0.5 sm:mb-1">{internalUnassignedTickets}</div>
+                <div className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400">Need assignment</div>
               </div>
 
               <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
-                  <span className="text-2xs sm:text-xs md:text-sm text-gray-600">Total</span>
-                  <Ticket className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 flex-shrink-0" />
+                  <span className="text-2xs sm:text-xs md:text-sm text-gray-600 dark:text-slate-400">Total</span>
+                  <Ticket className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue flex-shrink-0" />
                 </div>
-                <div className="text-lg sm:text-2xl md:text-3xl font-semibold text-gray-900 mb-0.5 sm:mb-1">{internalTotalTickets}</div>
-                <div className="text-2xs sm:text-xs text-gray-600">All time</div>
+                <div className="text-lg sm:text-2xl md:text-3xl font-semibold tracking-tight text-gray-900 dark:text-slate-50 mb-0.5 sm:mb-1">{internalTotalTickets}</div>
+                <div className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400">All time</div>
               </div>
             </div>
 
             {/* Category Breakdown */}
             {internalStats?.tickets_by_category && Object.keys(internalStats.tickets_by_category).length > 0 && (
               <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6">
-                <h3 className="text-sm sm:text-base font-semibold text-gray-900 mb-3 sm:mb-4">Tickets by Category</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 md:gap-4">
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50 mb-3 sm:mb-4">Tickets by Category</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 md:gap-4">
                   {Object.entries(internalStats.tickets_by_category).map(([cat, count]) => {
                     const CategoryIcon = getInternalCategoryIcon(cat);
                     return (
-                      <div key={cat} className="flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3 bg-gray-50 rounded-lg">
-                        <CategoryIcon className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 flex-shrink-0" />
+                      <div key={cat} className="flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
+                        <CategoryIcon className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue flex-shrink-0" />
                         <div className="min-w-0">
-                          <div className="text-sm sm:text-lg font-semibold text-gray-900">{count}</div>
-                          <div className="text-2xs sm:text-xs text-gray-600 truncate">{getInternalCategoryLabel(cat)}</div>
+                          <div className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-slate-50">{count}</div>
+                          <div className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400 truncate">{getInternalCategoryLabel(cat)}</div>
                         </div>
                       </div>
                     );
@@ -1694,11 +1694,11 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
               <button
                 onClick={() => { setInternalFilterAssignment('unassigned'); setView('tickets'); }}
-                className="bg-warning text-white rounded-xl shadow-lg p-4 sm:p-6 text-left hover:opacity-90 transition-all"
+                className="bg-brand-orange/5 ring-1 ring-brand-orange/15 border border-brand-orange/10 rounded-xl shadow-sm shadow-brand-orange/5 p-4 sm:p-6 text-left hover:ring-brand-orange/30 hover:shadow-md transition-all"
               >
-                <Users className="w-6 h-6 sm:w-8 sm:h-8 mb-2 sm:mb-3" />
-                <h3 className="text-sm sm:text-lg font-semibold text-white mb-0.5 sm:mb-1">Unassigned Tickets</h3>
-                <p className="text-xs sm:text-sm text-white/80">
+                <Users className="w-6 h-6 sm:w-8 sm:h-8 text-brand-orange mb-2 sm:mb-3" />
+                <h3 className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-slate-50 mb-0.5 sm:mb-1">Unassigned Tickets</h3>
+                <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
                   {internalUnassignedTickets} tickets need attention
                 </p>
               </button>
@@ -1729,10 +1729,10 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
             {/* Recent Team Tickets */}
             <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6">
               <div className="flex items-center justify-between mb-3 sm:mb-4 md:mb-6">
-                <h3 className="text-sm sm:text-base font-semibold text-gray-900">Recent Team Tickets</h3>
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Recent Team Tickets</h3>
                 <button
                   onClick={() => setView('tickets')}
-                  className="text-xs sm:text-sm text-gray-700 hover:text-gray-900"
+                  className="text-xs sm:text-sm font-medium text-brand-blue hover:text-brand-blue/80"
                 >
                   View All
                 </button>
@@ -1740,12 +1740,12 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
               {internalLoading ? (
                 <div className="flex items-center justify-center py-8 sm:py-12 tf-loader-center">
-                  <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 animate-spin text-gray-600" />
+                  <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 animate-spin text-brand-blue" />
                 </div>
               ) : internalTickets.length === 0 ? (
                 <div className="text-center py-8 sm:py-12">
-                  <Inbox className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 sm:mb-4 text-gray-400" />
-                  <p className="text-xs sm:text-sm text-gray-600">No team tickets yet</p>
+                  <Inbox className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 sm:mb-4 text-gray-400 dark:text-slate-500" />
+                  <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">No team tickets yet</p>
                 </div>
               ) : (
                 <div className="space-y-2 sm:space-y-3">
@@ -1757,16 +1757,16 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                         fetchInternalTicketDetail(ticket.id);
                         setView('detail');
                       }}
-                      className="w-full text-left p-3 sm:p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200"
+                      className="w-full text-left p-3 sm:p-4 bg-gray-50 dark:bg-slate-800/50 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors border border-gray-200 dark:border-slate-700/60"
                     >
                       <div className="flex items-start justify-between mb-1.5 sm:mb-2 gap-2">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5 sm:gap-2 mb-0.5 sm:mb-1 flex-wrap">
-                            <span className="text-2xs sm:text-xs text-gray-600">{ticket.ticket_number}</span>
-                            <span className="text-2xs sm:text-xs text-gray-400 hidden sm:inline">-</span>
-                            <span className="text-2xs sm:text-xs text-gray-600 truncate">from {ticket.created_by?.name}</span>
+                            <span className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400">{ticket.ticket_number}</span>
+                            <span className="text-2xs sm:text-xs text-gray-400 dark:text-slate-500 hidden sm:inline">-</span>
+                            <span className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400 truncate">from {ticket.created_by?.name}</span>
                           </div>
-                          <h4 className="text-xs sm:text-sm font-medium text-gray-900 truncate">{ticket.title}</h4>
+                          <h4 className="text-xs sm:text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{ticket.title}</h4>
                         </div>
                         <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
                           {!ticket.assigned_to && (
@@ -1777,7 +1777,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                           {getInternalStatusBadge(ticket.status)}
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 sm:gap-3 text-2xs sm:text-xs text-gray-600 flex-wrap">
+                      <div className="flex items-center gap-2 sm:gap-3 text-2xs sm:text-xs text-gray-600 dark:text-slate-400 flex-wrap">
                         <span className="truncate max-w-[80px] sm:max-w-none">{getInternalCategoryLabel(ticket.category)}</span>
                         <span className="hidden sm:inline">-</span>
                         {getInternalPriorityBadge(ticket.priority)}
@@ -1797,7 +1797,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
           <div>
             <button
               onClick={() => { setInternalFilterAssignment('all'); setView('overview'); }}
-              className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 hover:text-gray-900 mb-4 sm:mb-6"
+              className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue mb-4 sm:mb-6"
             >
               <ArrowLeft className="w-4 h-4" />
               Back to Overview
@@ -1805,7 +1805,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
             <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
               {/* Filters */}
-              <div className="p-3 sm:p-4 md:p-6 border-b border-gray-200">
+              <div className="p-3 sm:p-4 md:p-6 border-b border-gray-100 dark:border-slate-700/60">
                 <div className="flex flex-col gap-2 sm:gap-3 md:gap-4">
                   <div className="flex-1 relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-blue/60 z-10" />
@@ -1814,7 +1814,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder="Search by ticket, title, or user..."
-                      className="pl-9 pr-4"
+                      className="pl-9 pr-4 w-full"
                     />
                   </div>
 
@@ -1858,12 +1858,12 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               {/* Tickets */}
               {internalLoading ? (
                 <div className="flex items-center justify-center py-8 sm:py-12 tf-loader-center">
-                  <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 animate-spin text-gray-600" />
+                  <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 animate-spin text-brand-blue" />
                 </div>
               ) : (
                 <>
                   {/* Mobile Card Layout */}
-                  <div className="md:hidden divide-y divide-gray-200">
+                  <div className="md:hidden divide-y divide-gray-100 dark:divide-slate-700/60">
                     {paginatedInternalTickets.map(ticket => {
                       const CategoryIcon = getInternalCategoryIcon(ticket.category);
                       return (
@@ -1874,15 +1874,15 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                             fetchInternalTicketDetail(ticket.id);
                             setView('detail');
                           }}
-                          className="w-full text-left p-3 sm:p-4 hover:bg-gray-50 transition-colors"
+                          className="w-full text-left p-3 sm:p-4 hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors"
                         >
                           <div className="flex items-start justify-between gap-2 mb-1.5">
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
-                                <span className="text-2xs sm:text-xs text-gray-600">{ticket.ticket_number}</span>
-                                <span className="text-2xs sm:text-xs text-gray-600 truncate">from {ticket.created_by?.name}</span>
+                                <span className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400">{ticket.ticket_number}</span>
+                                <span className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400 truncate">from {ticket.created_by?.name}</span>
                               </div>
-                              <h4 className="text-xs sm:text-sm text-gray-900 font-medium truncate">{ticket.title}</h4>
+                              <h4 className="text-xs sm:text-sm text-gray-900 dark:text-slate-50 font-medium truncate">{ticket.title}</h4>
                             </div>
                             <div className="flex flex-col items-end gap-1 flex-shrink-0">
                               {getInternalStatusBadge(ticket.status)}
@@ -1894,14 +1894,14 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                             </div>
                           </div>
                           <div className="flex items-center gap-2 flex-wrap mt-1.5">
-                            <div className="flex items-center gap-1">
-                              <CategoryIcon className="w-3 h-3 text-gray-600 flex-shrink-0" />
-                              <span className="text-2xs sm:text-xs text-gray-600">{getInternalCategoryLabel(ticket.category)}</span>
+                            <div className="flex items-center gap-1 min-w-0">
+                              <CategoryIcon className="w-3 h-3 text-gray-600 dark:text-slate-400 flex-shrink-0" />
+                              <span className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400 truncate">{getInternalCategoryLabel(ticket.category)}</span>
                             </div>
                             {getInternalPriorityBadge(ticket.priority)}
-                            <span className="text-2xs sm:text-xs text-gray-600">{formatISTDate(ticket.updated_at)}</span>
+                            <span className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400">{formatISTDate(ticket.updated_at)}</span>
                             {ticket.assigned_to && (
-                              <span className="text-2xs sm:text-xs text-gray-600 truncate max-w-[80px]">{ticket.assigned_to.name}</span>
+                              <span className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400 truncate max-w-[80px]">{ticket.assigned_to.name}</span>
                             )}
                           </div>
                         </button>
@@ -1912,42 +1912,42 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   {/* Desktop Table */}
                   <div className="hidden md:block overflow-x-auto tf-table-shell">
                     <table className="w-full">
-                      <thead className="bg-gray-50 border-b border-gray-200">
+                      <thead className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60">
                         <tr>
-                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">Ticket #</th>
-                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">Title</th>
-                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">From</th>
-                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">Category</th>
-                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">Priority</th>
-                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">Status</th>
-                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">Assigned</th>
-                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">Updated</th>
-                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 tf-sticky-col">Actions</th>
+                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 dark:text-slate-400">Ticket #</th>
+                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 dark:text-slate-400">Title</th>
+                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 dark:text-slate-400">From</th>
+                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 dark:text-slate-400">Category</th>
+                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 dark:text-slate-400">Priority</th>
+                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 dark:text-slate-400">Status</th>
+                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 dark:text-slate-400">Assigned</th>
+                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 dark:text-slate-400">Updated</th>
+                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 dark:text-slate-400 tf-sticky-col">Actions</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-200">
+                      <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                         {paginatedInternalTickets.map(ticket => {
                           const CategoryIcon = getInternalCategoryIcon(ticket.category);
                           return (
-                            <tr key={ticket.id} className="hover:bg-gray-50">
+                            <tr key={ticket.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/50">
                               <td className="px-6 py-4">
-                                <span className="text-sm font-medium text-gray-900">{ticket.ticket_number}</span>
+                                <span className="text-sm font-medium text-gray-900 dark:text-slate-50">{ticket.ticket_number}</span>
                               </td>
                               <td className="px-6 py-4">
-                                <div className="text-sm text-gray-900 max-w-xs truncate">{ticket.title}</div>
+                                <div className="text-sm text-gray-900 dark:text-slate-50 max-w-xs truncate">{ticket.title}</div>
                               </td>
                               <td className="px-6 py-4">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center text-xs font-medium text-gray-700">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <div className="w-6 h-6 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center text-xs font-medium text-brand-blue flex-shrink-0">
                                     {ticket.created_by?.name?.charAt(0) || 'U'}
                                   </div>
-                                  <span className="text-sm text-gray-600">{ticket.created_by?.name}</span>
+                                  <span className="text-sm text-gray-600 dark:text-slate-400 truncate">{ticket.created_by?.name}</span>
                                 </div>
                               </td>
                               <td className="px-6 py-4">
-                                <div className="flex items-center gap-2">
-                                  <CategoryIcon className="w-4 h-4 text-gray-600" />
-                                  <span className="text-sm text-gray-600">{getInternalCategoryLabel(ticket.category)}</span>
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <CategoryIcon className="w-4 h-4 text-gray-600 dark:text-slate-400 flex-shrink-0" />
+                                  <span className="text-sm text-gray-600 dark:text-slate-400 truncate">{getInternalCategoryLabel(ticket.category)}</span>
                                 </div>
                               </td>
                               <td className="px-6 py-4">
@@ -1958,13 +1958,13 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                               </td>
                               <td className="px-6 py-4">
                                 {ticket.assigned_to ? (
-                                  <span className="text-sm text-gray-600">{ticket.assigned_to.name}</span>
+                                  <span className="text-sm text-gray-600 dark:text-slate-400">{ticket.assigned_to.name}</span>
                                 ) : (
                                   <span className="text-xs text-warning-strong bg-warning-subtle px-2 py-1 rounded">Unassigned</span>
                                 )}
                               </td>
                               <td className="px-6 py-4">
-                                <span className="text-sm text-gray-600">{formatISTDate(ticket.updated_at)}</span>
+                                <span className="text-sm text-gray-600 dark:text-slate-400">{formatISTDate(ticket.updated_at)}</span>
                               </td>
                               <td className="px-6 py-4 tf-sticky-col">
                                 <button
@@ -1973,7 +1973,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                                     fetchInternalTicketDetail(ticket.id);
                                     setView('detail');
                                   }}
-                                  className="text-sm text-gray-700 hover:text-gray-900"
+                                  className="text-sm font-medium text-brand-blue hover:text-brand-blue/80"
                                 >
                                   View
                                 </button>
@@ -1987,8 +1987,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
                   {filteredInternalTickets.length === 0 && (
                     <div className="text-center py-8 sm:py-12">
-                      <Inbox className="w-10 h-10 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 text-gray-400" />
-                      <p className="text-xs sm:text-sm text-gray-600">No tickets found</p>
+                      <Inbox className="w-10 h-10 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 text-gray-400 dark:text-slate-500" />
+                      <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">No tickets found</p>
                     </div>
                   )}
                 </>
@@ -2014,7 +2014,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
           <div className="max-w-5xl mx-auto">
             <button
               onClick={() => setView('tickets')}
-              className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 hover:text-gray-900 mb-4 sm:mb-6"
+              className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue mb-4 sm:mb-6"
             >
               <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               Back to Tickets
@@ -2026,24 +2026,24 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 {/* Ticket Header */}
                 <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6">
                   <div className="flex items-start justify-between mb-3 sm:mb-4">
-                    <div>
-                      <span className="text-2xs sm:text-xs text-gray-600 block mb-1 sm:mb-2">{selectedInternalTicket.ticket_number}</span>
-                      <h2 className="text-sm sm:text-base md:text-lg font-semibold text-gray-900 mb-2 sm:mb-3">{selectedInternalTicket.title}</h2>
+                    <div className="min-w-0">
+                      <span className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400 block mb-1 sm:mb-2">{selectedInternalTicket.ticket_number}</span>
+                      <h2 className="text-sm sm:text-base md:text-lg font-semibold text-gray-900 dark:text-slate-50 mb-2 sm:mb-3">{selectedInternalTicket.title}</h2>
                       <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                         {getInternalStatusBadge(selectedInternalTicket.status)}
                         {getInternalPriorityBadge(selectedInternalTicket.priority)}
-                        <span className="text-2xs sm:text-xs text-gray-600">
+                        <span className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400">
                           {getInternalCategoryLabel(selectedInternalTicket.category)}
                         </span>
                       </div>
                     </div>
                   </div>
-                  <div className="pt-3 sm:pt-4 border-t border-gray-200">
-                    <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 flex-wrap">
-                      <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                      <span>Submitted by <strong>{selectedInternalTicket.created_by?.name}</strong></span>
+                  <div className="pt-3 sm:pt-4 border-t border-gray-100 dark:border-slate-700/60">
+                    <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 dark:text-slate-400 flex-wrap">
+                      <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-brand-blue flex-shrink-0" />
+                      <span>Submitted by <strong className="text-gray-900 dark:text-slate-100">{selectedInternalTicket.created_by?.name}</strong></span>
                       {selectedInternalTicket.created_by?.email && (
-                        <span className="text-gray-500 truncate text-2xs sm:text-xs">({selectedInternalTicket.created_by.email})</span>
+                        <span className="text-gray-500 dark:text-slate-500 truncate text-2xs sm:text-xs">({selectedInternalTicket.created_by.email})</span>
                       )}
                     </div>
                   </div>
@@ -2051,7 +2051,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
                 {/* Conversation */}
                 <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6">
-                  <h3 className="text-sm sm:text-base font-semibold text-gray-900 mb-4 sm:mb-6">Conversation</h3>
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50 mb-4 sm:mb-6">Conversation</h3>
 
                   <div className="space-y-4 sm:space-y-6">
                     {selectedInternalTicket.responses?.map((response) => (
@@ -2059,13 +2059,13 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                         key={response.id}
                         className={`${
                           response.user_role === 'admin'
-                            ? 'bg-gray-100 border-gray-300'
+                            ? 'bg-gray-50 dark:bg-slate-800/50 border-gray-200 dark:border-slate-700/60'
                             : 'bg-brand-blue/5 border-brand-blue/20'
                         } border rounded-lg p-3 sm:p-4 md:p-5`}
                       >
                         <div className="flex items-start gap-2.5 sm:gap-4 mb-2 sm:mb-3">
                           {response.user_role === 'admin' ? (
-                            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-700 rounded-full flex items-center justify-center text-white flex-shrink-0 text-xs sm:text-sm font-medium">
+                            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-700 dark:bg-slate-600 rounded-full flex items-center justify-center text-white flex-shrink-0 text-xs sm:text-sm font-medium">
                               A
                             </div>
                           ) : (
@@ -2075,12 +2075,12 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                           )}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between mb-1 gap-2">
-                              <span className="text-xs sm:text-sm font-medium text-gray-900 truncate">
+                              <span className="text-xs sm:text-sm font-medium text-gray-900 dark:text-slate-50 truncate">
                                 {response.user_role === 'admin' ? `${response.user_name} (Admin)` : response.user_name}
                               </span>
-                              <span className="text-2xs sm:text-xs text-gray-600 whitespace-nowrap flex-shrink-0">{formatISTDate(response.created_at)}</span>
+                              <span className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400 whitespace-nowrap flex-shrink-0">{formatISTDate(response.created_at)}</span>
                             </div>
-                            <p className="text-xs sm:text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{response.message}</p>
+                            <p className="text-xs sm:text-sm text-gray-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">{response.message}</p>
                           </div>
                         </div>
                       </div>
@@ -2089,7 +2089,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
                   {/* Reply Box */}
                   {selectedInternalTicket.status !== 'closed' && (
-                    <div className="mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-gray-200">
+                    <div className="mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-gray-100 dark:border-slate-700/60">
                       <Label className="mb-1.5">Reply to User</Label>
                       <Textarea
                         value={replyMessage}
@@ -2116,27 +2116,27 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               <div className="space-y-4 sm:space-y-6">
                 {/* Ticket Info */}
                 <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6">
-                  <h4 className="text-xs sm:text-sm font-semibold text-gray-900 mb-3 sm:mb-4">Ticket Information</h4>
+                  <h4 className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-slate-50 mb-3 sm:mb-4">Ticket Information</h4>
 
                   <div className="space-y-3 sm:space-y-4">
                     <div>
-                      <div className="text-2xs sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Created</div>
-                      <div className="text-xs sm:text-sm text-gray-900">{formatIST(selectedInternalTicket.created_at)}</div>
+                      <div className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400 mb-0.5 sm:mb-1">Created</div>
+                      <div className="text-xs sm:text-sm text-gray-900 dark:text-slate-50">{formatIST(selectedInternalTicket.created_at)}</div>
                     </div>
 
                     <div>
-                      <div className="text-2xs sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Last Updated</div>
-                      <div className="text-xs sm:text-sm text-gray-900">{formatIST(selectedInternalTicket.updated_at)}</div>
+                      <div className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400 mb-0.5 sm:mb-1">Last Updated</div>
+                      <div className="text-xs sm:text-sm text-gray-900 dark:text-slate-50">{formatIST(selectedInternalTicket.updated_at)}</div>
                     </div>
 
                     <div>
-                      <div className="text-2xs sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Assigned To</div>
+                      <div className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400 mb-0.5 sm:mb-1">Assigned To</div>
                       {selectedInternalTicket.assigned_to ? (
-                        <div className="flex items-center gap-2">
-                          <div className="w-5 h-5 sm:w-6 sm:h-6 bg-gray-700 rounded-full flex items-center justify-center text-white text-2xs sm:text-xs flex-shrink-0">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-5 h-5 sm:w-6 sm:h-6 bg-brand-blue rounded-full flex items-center justify-center text-white text-2xs sm:text-xs flex-shrink-0">
                             {selectedInternalTicket.assigned_to.name.charAt(0)}
                           </div>
-                          <div className="text-xs sm:text-sm text-gray-900">{selectedInternalTicket.assigned_to.name}</div>
+                          <div className="text-xs sm:text-sm text-gray-900 dark:text-slate-50 truncate">{selectedInternalTicket.assigned_to.name}</div>
                         </div>
                       ) : (
                         <span className="text-xs sm:text-sm text-warning-strong">Not assigned</span>
@@ -2144,8 +2144,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     </div>
 
                     <div>
-                      <div className="text-2xs sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Responses</div>
-                      <div className="text-xs sm:text-sm text-gray-900">{selectedInternalTicket.responses?.length || 0} messages</div>
+                      <div className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400 mb-0.5 sm:mb-1">Responses</div>
+                      <div className="text-xs sm:text-sm text-gray-900 dark:text-slate-50">{selectedInternalTicket.responses?.length || 0} messages</div>
                     </div>
                   </div>
                 </div>
@@ -2153,7 +2153,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 {/* Update Priority */}
                 {selectedInternalTicket.status !== 'closed' && (
                   <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6">
-                    <h4 className="text-xs sm:text-sm font-semibold text-gray-900 mb-3 sm:mb-4">Update Priority</h4>
+                    <h4 className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-slate-50 mb-3 sm:mb-4">Update Priority</h4>
                     <select
                       value={selectedInternalTicket.priority}
                       onChange={(e) => handleUpdateInternalPriority(selectedInternalTicket.id, e.target.value as InternalTicketPriority)}
@@ -2168,7 +2168,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
                 {/* Actions */}
                 <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6">
-                  <h4 className="text-xs sm:text-sm font-semibold text-gray-900 mb-3 sm:mb-4">Actions</h4>
+                  <h4 className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-slate-50 mb-3 sm:mb-4">Actions</h4>
 
                   <div className="space-y-2">
                     {!selectedInternalTicket.assigned_to && selectedInternalTicket.status !== 'closed' && (
@@ -2205,7 +2205,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       <button
                         onClick={() => handleReopenInternalTicket(selectedInternalTicket.id)}
                         disabled={internalActionLoading === selectedInternalTicket.id}
-                        className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-xs sm:text-sm text-left flex items-center gap-1.5 sm:gap-2 disabled:bg-gray-50"
+                        className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-200 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors text-xs sm:text-sm text-left flex items-center gap-1.5 sm:gap-2 disabled:bg-gray-50"
                       >
                         {internalActionLoading === selectedInternalTicket.id ? (
                           <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" />

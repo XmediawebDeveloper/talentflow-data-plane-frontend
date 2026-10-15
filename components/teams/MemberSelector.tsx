@@ -38,20 +38,20 @@ export default function MemberSelector({
   return (
     <div className="space-y-4">
       <div>
-        <label className="mb-2 block text-sm font-medium text-gray-700">Team Members</label>
+        <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">Team Members</label>
 
         <div className="relative mb-3">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search users by name or email..."
-            className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-10 pr-4 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+            className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-2.5 pl-10 pr-4 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
           />
         </div>
 
-        <div className="max-h-60 overflow-y-auto rounded-2xl border border-gray-200 bg-white">
+        <div className="max-h-60 overflow-y-auto rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900">
           {filteredUsers.length > 0 ? (
             filteredUsers.map((user) => {
               const isSelected = selectedMemberIds.includes(user.id);
@@ -68,25 +68,25 @@ export default function MemberSelector({
                       onToggleMember(user.id);
                     }
                   }}
-                  className={`flex cursor-pointer items-center gap-3 border-b border-gray-100 p-3 transition-colors last:border-b-0 ${
-                    isSelected ? 'bg-brand-blue/[0.04]' : 'hover:bg-gray-50'
+                  className={`flex cursor-pointer items-center gap-3 border-b border-gray-100 dark:border-slate-700/60 p-3 transition-colors last:border-b-0 ${
+                    isSelected ? 'bg-brand-blue/[0.04] dark:bg-brand-blue/10' : 'hover:bg-gray-50 dark:hover:bg-slate-800/50'
                   }`}
                 >
                   <div
-                    className={`flex h-5 w-5 items-center justify-center rounded border-2 transition-colors ${
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 transition-colors ${
                       isSelected
                         ? 'border-brand-blue bg-brand-blue'
-                        : 'border-gray-300'
+                        : 'border-gray-300 dark:border-slate-600'
                     }`}
                   >
                     {isSelected && <Check className="w-3 h-3 text-white" />}
                   </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-900">{user.name}</p>
-                    <p className="text-xs text-gray-500">{user.email}</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-gray-900 dark:text-slate-50">{user.name}</p>
+                    <p className="truncate text-xs text-gray-500 dark:text-slate-500">{user.email}</p>
                   </div>
                   {user.role && (
-                    <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs text-gray-700">
+                    <span className="shrink-0 rounded-full bg-gray-100 dark:bg-slate-800 px-2.5 py-1 text-xs text-gray-700 dark:text-slate-300">
                       {user.role}
                     </span>
                   )}
@@ -94,7 +94,7 @@ export default function MemberSelector({
               );
             })
           ) : (
-            <div className="p-6 text-center text-gray-500">
+            <div className="p-6 text-center text-gray-500 dark:text-slate-500">
               <p className="text-sm">
                 {searchQuery ? 'No users found matching your search' : 'No users available'}
               </p>
@@ -102,18 +102,18 @@ export default function MemberSelector({
           )}
         </div>
 
-        <p className="text-xs text-gray-500 mt-2">
+        <p className="mt-2 text-xs text-gray-500 dark:text-slate-500">
           {selectedMemberIds.length} member{selectedMemberIds.length !== 1 ? 's' : ''} selected
         </p>
       </div>
 
       {showTeamLeadSelector && selectedMemberIds.length > 0 && onTeamLeadChange && (
         <div>
-          <label className="mb-2 block text-sm font-medium text-gray-700">Team Lead (Optional)</label>
+          <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">Team Lead (Optional)</label>
           <select
             value={teamLeadId}
             onChange={(e) => onTeamLeadChange(e.target.value)}
-            className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+            className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
           >
             <option value="">No team lead</option>
             {selectedMembers.map((user) => (

@@ -75,6 +75,7 @@ export interface AIMatchSessionResponse {
   status: string;
   created_at: string;
   completed_at?: string;
+  created_by_name?: string | null;
   results: AIMatchResultItem[];
   // Fresh runs only. Each returned candidate costs one Resume Scoring unit, so
   // the backend caps a run at the remaining balance. quota_limited is true when
