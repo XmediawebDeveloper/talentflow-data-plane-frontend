@@ -34,7 +34,6 @@ import ScoredResumesTable, {
   useScoringActionPermissions,
 } from './ScoredResumesTable';
 import VersionInviteDialog from './talent-match-invite/VersionInviteDialog';
-import RowInviteSubmenu from './talent-match-invite/RowInviteSubmenu';
 import type { InviteCandidate, InviteCandidateSource, InviteKind } from './talent-match-invite/inviteVersions';
 import {
   DropdownMenu,
@@ -4456,7 +4455,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           onViewCandidate={(candidate) => {
             try {
               sessionStorage.setItem('resumeNavJobId', job.id);
-              sessionStorage.setItem('resumeNavJobTab', 'scored-resumes');
+              // Back lands on this tab; the resume page also reads it to offer
+              // this job's Score / View Scorecard and no AI Talent Match.
+              sessionStorage.setItem('resumeNavJobTab', 'ai-talent-match');
               // Names the job crumb on the resume page, so its trail reads
               // Job Descriptions › <job> › <candidate> rather than collapsing
               // the job the recruiter came from into a generic step.
@@ -6105,29 +6106,93 @@ function AIMatchTabContent({
                       </td>
                       <td className="px-3 py-2.5 align-middle text-right tf-sticky-col" onClick={(e) => e.stopPropagation()}>
                         <div className="inline-flex items-center gap-1.5">
+                        {/* Off while two or more candidates are ticked: those
+                            run from the toolbar's Actions (same `selectedIds`).
+                            The wrapper carries the reason — a disabled button
+                            shows no tooltip. */}
+                        <span className="inline-flex" title={selectedIds.size >= 2 ? 'Several candidates are selected — use Actions above, or clear the selection' : undefined}>
                         <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button type="button" aria-label="Actions" title="Actions" className={ROW_ACTION_BUTTON_CLASS}>
+                          <DropdownMenuTrigger asChild disabled={selectedIds.size >= 2}>
+                            <button
+                              type="button"
+                              aria-label="Actions"
+                              title={selectedIds.size >= 2 ? undefined : 'Actions'}
+                              disabled={selectedIds.size >= 2}
+                              className={ROW_ACTION_BUTTON_CLASS}
+                            >
                               <MoreVertical className="w-4 h-4" />
                             </button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-56 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
-                            {/* Invite ▸ Create / Send — the Scored Resumes row's
-                                Invite, first, for this row's candidate. */}
-                            <RowInviteSubmenu onInvite={(kind) => onOpenInviteDrawer(kind, [candidate])} />
-                            <DropdownMenuSeparator className="my-1 bg-gray-100" />
                             {onViewCandidate && (
                               <DropdownMenuItem className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer" onSelect={openCandidate}>
                                 <Eye className="w-4 h-4 text-menu-icon-view" />
                                 <span>View Resume</span>
                               </DropdownMenuItem>
                             )}
+                            {/* Score — Score Selected for this one candidate:
+                                off, with the reason, once scored for this job
+                                version (or while that is still being checked). */}
+                            {!scoredResumesLoaded || isScored ? (
+                              <DropdownMenuItem className="flex !items-start gap-2.5 px-4 py-2.5 text-sm text-gray-400" disabled>
+                                <ClipboardList className="w-4 h-4 text-gray-400 mt-0.5" />
+                                <span className="min-w-0">
+                                  <span className="block">Score</span>
+                                  <span className="block text-2xs text-gray-400 normal-case whitespace-normal">
+                                    {!scoredResumesLoaded
+                                      ? 'Checking scored status…'
+                                      : 'Already scored for this job version.'}
+                                  </span>
+                                </span>
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem
+                                className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer"
+                                onSelect={() => onScoreSelected([candidate])}
+                              >
+                                <ClipboardList className="w-4 h-4 text-menu-icon-score" />
+                                <span>Score</span>
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuItem className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer" onSelect={() => handleAttachmentsClick(candidate)}>
                               <Paperclip className="w-4 h-4 text-menu-icon-download" />
                               <span>Attachments ({candidate.attachmentCount ?? 1})</span>
                             </DropdownMenuItem>
+                            <DropdownMenuSeparator className="my-1 bg-gray-100" />
+                            {/* This row's candidate: the toolbar Actions' Create /
+                                Send items, for one — same handlers, icons and
+                                permission reads. */}
+                            <DropdownMenuItem
+                              className={`flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer ${canCreateAssessments ? '' : 'text-gray-400 opacity-60'}`}
+                              onSelect={(e) => {
+                                if (!canCreateAssessments) {
+                                  e.preventDefault();
+                                  toast.error(assessmentDeniedReason);
+                                  return;
+                                }
+                                onOpenInviteDrawer('assessment', [candidate]);
+                              }}
+                            >
+                              <FileText className="w-4 h-4 text-menu-icon-view" />
+                              <span>Create / Send Assessment</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className={`flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer ${mayInviteAIInterview ? '' : 'text-gray-400 opacity-60'}`}
+                              onSelect={(e) => {
+                                if (!mayInviteAIInterview) {
+                                  e.preventDefault();
+                                  toast.error(aiInterviewDeniedReason);
+                                  return;
+                                }
+                                onOpenInviteDrawer('interview', [candidate]);
+                              }}
+                            >
+                              <Video className="w-4 h-4 text-menu-icon-share" />
+                              <span>Create / Send AI Interview</span>
+                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
+                        </span>
                         {/* ▾ — this row's details, open / closed (the row click does the same). */}
                         <button
                           type="button"

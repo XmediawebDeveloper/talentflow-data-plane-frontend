@@ -1,7 +1,7 @@
 'use client';
 
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Brain, X } from 'lucide-react';
+import { Brain } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import AIInterviewConfig from './AIInterviewConfig';
@@ -51,6 +51,12 @@ export default function AIInterviewWizardDialog({
     onCloseRef.current = onClose;
   });
 
+  /* The sticky footer's two slots a step portals its actions into. */
+  const [footerStartEl, setFooterStartEl] = useState<HTMLElement | null>(null);
+  const [footerEndEl, setFooterEndEl] = useState<HTMLElement | null>(null);
+  /* A step's own Cancel (e.g. Configure asks to save its changes first). */
+  const cancelHandlerRef = useRef<(() => void) | null>(null);
+
   const nav = useMemo<EmbeddedWizardNav>(() => {
     const exit = () => onCloseRef.current();
     return {
@@ -59,8 +65,13 @@ export default function AIInterviewWizardDialog({
       replace: (to) => (stepOf(to) ? setStack((s) => [...s.slice(0, -1), to]) : exit()),
       back: () => (stack.length > 1 ? setStack((s) => s.slice(0, -1)) : exit()),
       exit,
+      footerStartEl,
+      footerEndEl,
+      setCancelHandler: (handler) => { cancelHandlerRef.current = handler; },
     };
-  }, [href, stack.length]);
+  }, [href, stack.length, footerStartEl, footerEndEl]);
+
+  const handleCancel = () => (cancelHandlerRef.current ?? onCloseRef.current)();
 
   return (
     <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6">
@@ -81,16 +92,6 @@ export default function AIInterviewWizardDialog({
               </p>
             </div>
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            type="button"
-            onClick={onClose}
-            aria-label="Close AI interview configuration"
-            className="px-2 flex-shrink-0"
-          >
-            <X className="w-5 h-5" />
-          </Button>
         </div>
 
         {/* The step itself. Its page shell (grey page, centred card, shadow,
@@ -103,6 +104,20 @@ export default function AIInterviewWizardDialog({
             {step === 'clusters' && <AIInterviewClusters key={href} />}
             {step === 'preview' && <AIInterviewPreview key={href} />}
           </EmbeddedWizardProvider>
+        </div>
+
+        {/* Footer — outside the scrolling body, so it stays in view; the
+            Invite popup's footer chrome. A step's leaving actions sit at the
+            start; Cancel, then its advancing actions, at the end. Cancel asks
+            the step first when it has its own answer (unsaved changes). */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 flex-shrink-0">
+          <div ref={setFooterStartEl} className="flex items-center gap-2 empty:hidden" />
+          <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3 sm:ml-auto">
+            <Button variant="secondary" type="button" onClick={handleCancel} className="flex-1 sm:flex-none !h-9">
+              Cancel
+            </Button>
+            <div ref={setFooterEndEl} className="contents" />
+          </div>
         </div>
       </div>
     </div>

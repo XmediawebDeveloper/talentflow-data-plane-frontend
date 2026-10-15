@@ -11,6 +11,8 @@ import {
 } from 'lucide-react';
 import { jdService, type JDResponse } from '@/lib/services/jdService';
 import JDOverviewSections from '@/components/jobs/JDOverviewSections';
+import JDHeaderCard from '@/components/jobs/JDHeaderCard';
+import { Button } from '@/components/ui/button';
 
 /**
  * ONE JD, in full, in a dialog.
@@ -42,8 +44,16 @@ export default function JDFullViewModal({
   jdTitle,
   onClose,
   onOpenFullPage,
+  showJobCard = false,
+  cancelInFooter = false,
 }: {
   jdId: string;
+  /** Open on the Job Details page's first card (JD ID, title, version, salary,
+   *  location…) above the description. Off by default. */
+  showJobCard?: boolean;
+  /** Close from a Cancel button in the footer instead of the header's X.
+   *  Off by default. */
+  cancelInFooter?: boolean;
   /** Shown in the header until the record lands, so the dialog opens named. */
   jdTitle?: string;
   onClose: () => void;
@@ -129,14 +139,16 @@ export default function JDFullViewModal({
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 text-gray-500 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-md transition-colors flex-shrink-0"
-            aria-label="Close"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          {!cancelInFooter && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 text-gray-500 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-md transition-colors flex-shrink-0"
+              aria-label="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
         </div>
 
         {/* Body — the one scrolling region, so the dialog is bounded by the
@@ -168,7 +180,10 @@ export default function JDFullViewModal({
                how a resume will be graded, so the Essential / Preferred
                badges, the Location tile and the Scoring Preferences block
                stay off here, as they always were. */
-            <JDOverviewSections jd={jd} showScoringDetail={false} />
+            <>
+              {showJobCard && <JDHeaderCard jd={jd} />}
+              <JDOverviewSections jd={jd} showScoringDetail={false} />
+            </>
           )}
         </div>
 
@@ -186,6 +201,11 @@ export default function JDFullViewModal({
             </button>
           ) : (
             <span />
+          )}
+          {cancelInFooter && (
+            <Button variant="secondary" onClick={onClose} className="!h-9">
+              Cancel
+            </Button>
           )}
         </div>
       </div>

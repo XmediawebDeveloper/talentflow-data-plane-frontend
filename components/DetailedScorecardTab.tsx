@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Clock, Calendar, User, BarChart3, CheckSquare, CheckCircle, XCircle, Briefcase, Award, Target, GraduationCap, MapPin, Building2, MessageSquare, TrendingUp, Info, Copy, Check, ChevronsUpDown, ChevronsDownUp } from 'lucide-react';
+import { Clock, Calendar, User, BarChart3, CheckSquare, CheckCircle, XCircle, Briefcase, Award, Target, GraduationCap, MapPin, Building2, MessageSquare, TrendingUp, Info, Copy, Check, ChevronsUpDown, ChevronsDownUp, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { Tooltip } from '@/components/ui/tooltip';
@@ -97,9 +97,13 @@ interface DetailedScorecardTabProps {
   getScoreColor: (score: number) => string;
   getScoreBgColor: (score: number) => string;
   getProgressBarColor: (score: number) => string;
+  /** Each criterion row opens and closes on its own (a ⌄ on the row), with
+   *  the header's Expand all / Collapse all over every row. Off by default:
+   *  the header alone switches the whole column. */
+  rowExpand?: boolean;
 }
 
-export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, getScoreColor, getScoreBgColor, getProgressBarColor }: DetailedScorecardTabProps) {
+export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, getScoreColor, getScoreBgColor, getProgressBarColor, rowExpand = false }: DetailedScorecardTabProps) {
   // The AI Reasoning pill's full-text hover box. Rendered through a portal
   // (see the end of this component) and positioned from real viewport
   // coordinates rather than CSS `absolute`/`group-hover` — the pill sits
@@ -157,11 +161,29 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
   // box still open when the column expands is dropped — the text it would
   // show is already on the page.
   const [reasoningExpanded, setReasoningExpanded] = useState(false);
+  /* `rowExpand`: the rows open, by index. Expand all opens every row,
+     Collapse all closes them. */
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   const toggleReasoningExpanded = () => {
     cancelHideReasoningTooltip();
     setReasoningTooltip(null);
+    if (rowExpand) {
+      setExpandedRows(allReasoningOpen ? new Set() : new Set(criteriaScores.map((_, i) => i)));
+      return;
+    }
     setReasoningExpanded(current => !current);
   };
+  const toggleRowExpanded = (index: number) => {
+    cancelHideReasoningTooltip();
+    setReasoningTooltip(null);
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  };
+  const isRowOpen = (index: number) => (rowExpand ? expandedRows.has(index) : reasoningExpanded);
 
   // Briefly swaps the copy icon for a checkmark on the row just copied —
   // cleared after a beat rather than left to the next click, so it always
@@ -605,6 +627,11 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
     return 'text-destructive font-semibold';
   };
 
+  /* The header's Expand all / Collapse all: in `rowExpand`, every row open. */
+  const allReasoningOpen = rowExpand
+    ? criteriaScores.length > 0 && criteriaScores.every((_, i) => expandedRows.has(i))
+    : reasoningExpanded;
+
   return (
     <div className="space-y-4">
       {/* Score Summary Header - Compact */}
@@ -733,7 +760,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
                   <th className="w-[12%] px-3 py-2.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
                     Criteria
                   </th>
-                  <th className="w-[32%] px-3 py-2.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                  <th className={`${rowExpand ? 'w-[27%]' : 'w-[32%]'} px-3 py-2.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider`}>
                     {/* The toggle sits right after the label, not pushed to the
                         column's far edge, so it reads as part of this header. */}
                     <div className="flex items-center gap-2">
@@ -742,25 +769,29 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
                         <button
                           type="button"
                           onClick={toggleReasoningExpanded}
-                          aria-pressed={reasoningExpanded}
-                          aria-label={reasoningExpanded ? 'Collapse all AI reasoning' : 'Expand all AI reasoning'}
-                          title={reasoningExpanded ? 'Collapse all reasoning' : 'Expand all reasoning'}
+                          aria-pressed={allReasoningOpen}
+                          aria-label={allReasoningOpen ? 'Collapse all AI reasoning' : 'Expand all AI reasoning'}
+                          title={allReasoningOpen ? 'Collapse all reasoning' : 'Expand all reasoning'}
                           className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium normal-case tracking-normal text-brand-blue hover:bg-brand-blue/10 transition-colors cursor-pointer"
                         >
-                          {reasoningExpanded
+                          {allReasoningOpen
                             ? <ChevronsDownUp className="w-3.5 h-3.5" />
                             : <ChevronsUpDown className="w-3.5 h-3.5" />}
-                          {reasoningExpanded ? 'Collapse all' : 'Expand all'}
+                          {allReasoningOpen ? 'Collapse all' : 'Expand all'}
                         </button>
                       )}
                     </div>
                   </th>
+                  {rowExpand && (
+                    <th className="w-[5%] px-3 py-2.5" aria-label="Show reasoning" />
+                  )}
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {criteriaScores.map((criteria, index) => {
                   const Icon = criteria.icon;
                   const eligibility = getEligibleStatus(criteria.rating);
+                  const rowOpen = isRowOpen(index);
                   return (
                     <tr key={index} className="hover:bg-gray-50">
                       <td className="px-3 py-3">
@@ -797,8 +828,8 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
                         </span>
                       </td>
                       <td className="px-3 py-3">
-                        <div className={`flex gap-1.5 ${reasoningExpanded ? 'items-start' : 'items-center'}`}>
-                          {reasoningExpanded ? (
+                        <div className={`flex gap-1.5 ${rowOpen ? 'items-start' : 'items-center'}`}>
+                          {rowOpen ? (
                             <p className="flex-1 min-w-0 text-sm text-gray-700 leading-relaxed whitespace-pre-line break-words">
                               {criteria.aiReasoning}
                             </p>
@@ -827,6 +858,23 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
                           </button>
                         </div>
                       </td>
+                      {/* ⌄ — this row's full reasoning, open / closed. */}
+                      {rowExpand && (
+                        <td className="px-3 py-3 text-center">
+                          <button
+                            type="button"
+                            onClick={() => toggleRowExpanded(index)}
+                            aria-expanded={rowOpen}
+                            aria-label={rowOpen ? `Hide ${criteria.name} reasoning` : `Show ${criteria.name} reasoning`}
+                            title={rowOpen ? 'Hide reasoning' : 'Show reasoning'}
+                            className={`inline-flex items-center justify-center p-1.5 rounded-md transition-colors ${
+                              rowOpen ? 'bg-brand-blue/10 text-brand-blue' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
+                            }`}
+                          >
+                            <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${rowOpen ? 'rotate-180' : ''}`} />
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
