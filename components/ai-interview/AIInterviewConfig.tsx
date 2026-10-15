@@ -12,7 +12,7 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import UnsavedChangesModal from '@/components/UnsavedChangesModal';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useEmbeddedWizard, useWizardRouter, useWizardSearchParams } from './embeddedWizardNav';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import { Button } from '@/components/ui/button';
 import type {
@@ -1344,8 +1344,10 @@ function HRSection({
 /* ─────────────────────────────────────────────────────────────────────── */
 
 export default function AIInterviewConfig() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
+  const router = useWizardRouter();
+  const searchParams = useWizardSearchParams();
+  /* Run inside the Create / Send AI Interview popup (AIInterviewWizardDialog). */
+  const embedded = !!useEmbeddedWizard();
   const jdId = searchParams.get('jd_id');
   const configId = searchParams.get('config_id'); // set when editing an existing config (any status)
   // Set when the flow was entered from a JD's Job Details page. Keeps the
@@ -2094,7 +2096,8 @@ export default function AIInterviewConfig() {
 
   /* ── Navigation guards ── */
   useEffect(() => {
-    if (!selectedJd) return;
+    /* In the popup the browser's history belongs to the page behind it. */
+    if (!selectedJd || embedded) return;
     window.history.pushState(null, '', window.location.href);
     const handlePopState = () => {
       if (isNavigatingRef.current) return;
@@ -2104,7 +2107,7 @@ export default function AIInterviewConfig() {
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [selectedJd]);
+  }, [selectedJd, embedded]);
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -3000,7 +3003,8 @@ export default function AIInterviewConfig() {
         <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
           <PageBreadcrumb
             barRef={breadcrumbBarRef}
-            className="mb-4 md:mb-6"
+            /* Inside the wizard popup the popup's header names the flow. */
+            className={`mb-4 md:mb-6${embedded ? ' hidden' : ''}`}
             items={
               fromInviteOrigin
                 ? [

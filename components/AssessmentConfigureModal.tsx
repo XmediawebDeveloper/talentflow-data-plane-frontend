@@ -1,7 +1,7 @@
 'use client';
 
 import { Eye, Shield, Sliders, X } from 'lucide-react';
-import { useRef } from 'react';
+import { useRef, type ComponentProps } from 'react';
 import AssessmentCreation, { type AssessmentCreationHandle } from './AssessmentCreation';
 import { Button } from '@/components/ui/button';
 import AssessmentJobBinding from '@/components/assessments/AssessmentJobBinding';
@@ -26,6 +26,14 @@ interface AssessmentConfigureModalProps {
    * Off by default: the Edit action opens this dialog unchanged.
    */
   readOnly?: boolean;
+  /**
+   * CREATE instead of edit: the job's first assessment, configured in this
+   * popup. `assessment` then carries the job only (`jd_id`, and the
+   * `jd_short_id` / `jd_title` / `jd_version` the header names) — no `id`.
+   */
+  create?: boolean;
+  /** Create only: the tenant's round defaults, as the create page passes them. */
+  topicSettings?: ComponentProps<typeof AssessmentCreation>['topicSettings'];
 }
 
 /**
@@ -60,6 +68,8 @@ export default function AssessmentConfigureModal({
   assessment,
   onSaved,
   readOnly = false,
+  create = false,
+  topicSettings,
 }: AssessmentConfigureModalProps) {
   /* `jd_id` is not optional here: the Configure step is scoped to a job — it
      reads the JD's skills, experience and coding requirements to lay itself
@@ -68,7 +78,7 @@ export default function AssessmentConfigureModal({
      details page's Draft gate does for its Activate. */
   const assessmentCreationRef = useRef<AssessmentCreationHandle>(null);
 
-  if (!isOpen || !assessment?.id || !assessment?.jd_id) return null;
+  if (!isOpen || (!create && !assessment?.id) || !assessment?.jd_id) return null;
 
   return (
     <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6">
@@ -157,8 +167,9 @@ export default function AssessmentConfigureModal({
             ref={assessmentCreationRef}
             embedded
             readOnly={readOnly}
-            editAssessmentId={assessment.id}
+            editAssessmentId={create ? undefined : assessment.id}
             preSelectedJobId={assessment.jd_id}
+            topicSettings={create ? topicSettings : undefined}
             /* The flow fetches every JD version itself on mount (and resolves
                a pre-selected one by id when the list does not carry it), so
                there is no seed list for the popup to pass. `topicSettings` and

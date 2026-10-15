@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Archive, ArchiveRestore, Calendar, ChevronDown, Clock, Copy, Eye, Layers, ListChecks, Loader2, Mail, MoreVertical, Pencil, Plus, RefreshCw, Send, Star, Timer, User } from 'lucide-react';
+import { Archive, ArchiveRestore, Trash2, Calendar, ChevronDown, Clock, Copy, Eye, Layers, ListChecks, Loader2, Mail, MoreVertical, Pencil, Plus, RefreshCw, Send, Star, Timer, User } from 'lucide-react';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { Button } from '@/components/ui/button';
 import {
@@ -43,6 +43,7 @@ const ACTION_ICON: Record<VersionAction, { Icon: typeof Eye; tone: string }> = {
   pause: { Icon: Archive, tone: 'text-menu-icon-archive' },
   archive: { Icon: Archive, tone: 'text-menu-icon-archive' },
   unarchive: { Icon: ArchiveRestore, tone: 'text-menu-icon-archive' },
+  delete: { Icon: Trash2, tone: 'text-destructive' },
 };
 
 /** Assessment versions listed before "+N more versions". */
@@ -91,6 +92,7 @@ export default function VersionList({
   perms,
   busyId,
   onAction,
+  hideDuplicate = false,
 }: {
   kind: InviteKind;
   /** The cards to list. */
@@ -111,15 +113,19 @@ export default function VersionList({
   perms: VersionPermissions;
   busyId: string | null;
   onAction: (version: InviteVersion, item: VersionActionItem) => void;
+  /** Leave Duplicate out of the ⋯ menu (Job Details' Create / Send AI Interview). */
+  hideDuplicate?: boolean;
 }) {
   const label = KIND_LABEL[kind];
   const every = allVersions ?? versions;
   const used = every.length;
   const atCap = used >= MAX_VERSIONS_PER_TYPE;
   const latestId = every[0]?.id;
-  /* The New version / Create button (and its cap and Draft-gate notes) is the
-     Invite to Assessment popup's only — the AI Interview popup has none. */
-  const showCreate = kind === 'assessment';
+  /* The New version / Create button (and its cap and Draft-gate notes): v1 is
+     configured in a popup, later versions are a draft copy of the latest
+     opened there. AI interviews have one version per job for now, so their
+     popup offers only the v1 Create. */
+  const showCreate = kind === 'assessment' || used === 0;
   /* Both popups show the newest INITIAL_VISIBLE versions; the rest sit
      behind "+N more versions". */
   const [expanded, setExpanded] = useState(false);
@@ -152,7 +158,13 @@ export default function VersionList({
           <div className="text-sm font-medium text-gray-700 dark:text-slate-300">
             {used === 0 ? `No ${label.singular.toLowerCase()} for this job yet` : `No live ${label.singular.toLowerCase()} for this job version`}
           </div>
-          {used === 0 && showCreate && <div className="text-xs text-gray-500 dark:text-slate-400">Create v1 — it opens in a new tab and appears here when you come back.</div>}
+          {used === 0 && showCreate && (
+            <div className="text-xs text-gray-500 dark:text-slate-400">
+              {kind === 'assessment'
+                ? 'Create v1 — configure it here, and it appears in this list.'
+                : 'Create v1 — set it up here, and it appears in this list.'}
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-2.5" role="radiogroup" aria-label={`${label.singular} versions`}>
@@ -160,7 +172,7 @@ export default function VersionList({
             const selected = selectedId === v.id;
             const why = v.sendable ? undefined : v.status === 'draft' ? 'Publish this version to send it' : `${v.statusLabel} versions cannot be sent`;
             const pick = () => { if (v.sendable) onSelect(selected ? null : v.id); };
-            const actions = versionActions(v, every, perms);
+            const actions = versionActions(v, every, perms).filter((a) => !(hideDuplicate && a.action === 'duplicate'));
             return (
               <div
                 key={v.id}
