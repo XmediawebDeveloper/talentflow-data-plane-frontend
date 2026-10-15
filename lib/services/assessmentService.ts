@@ -782,6 +782,25 @@ export const assessmentService = {
   },
 
   /**
+   * Completed candidates for MANY assessments, in ONE request — assessment id →
+   * count. The batched form of reading `completed_count` off each assessment's
+   * `listResults`. An id this user cannot see is simply absent from the answer.
+   */
+  async getCompletedCounts(assessmentIds: string[]): Promise<Record<string, number>> {
+    const ids = Array.from(new Set(assessmentIds.filter(Boolean)));
+    if (ids.length === 0) return {};
+    try {
+      const response = await api.get<{ counts: Record<string, number> }>(
+        '/assessments/completed-counts',
+        { params: { ids: ids.join(',') } },
+      );
+      return response.data?.counts || {};
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
    * Get detailed results for a specific candidate
    */
   /** Presigned stream/download URL for the candidate (webcam) recording; null url when none. */

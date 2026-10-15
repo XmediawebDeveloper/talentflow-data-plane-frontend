@@ -372,21 +372,32 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
     const rows = withInterviewVersions(merged);
 
     /* The list response carries no finished-sessions count, so read it off
-       each config's invitations aggregate (`completed`) — a page_size-1 probe,
-       only for configs that have sent at least one invite (the rest are 0),
-       ten at a time. A failed probe just leaves that row at 0. */
+       the batched `/invitation-counts` endpoint (`completed`) — one request per
+       200 configs, only for configs that have sent at least one invite (the
+       rest are 0). If a batch fails (older backend, transient error) fall back
+       to the per-config page_size-1 probe for that batch, ten at a time. A
+       failed probe just leaves that row at 0. */
     const withInvites = rows.filter((row) => row.invitations > 0);
-    for (let i = 0; i < withInvites.length; i += 10) {
-      await Promise.all(
-        withInvites.slice(i, i + 10).map(async (row) => {
-          try {
-            const res = await aiInterviewService.getConfigInvitations(row.id, { page: 1, page_size: 1, compact: true });
-            row.completed = res.completed || 0;
-          } catch {
-            /* leave at 0 */
-          }
-        }),
-      );
+    const COUNTS_BATCH = 200; // backend cap on ids per request
+    for (let start = 0; start < withInvites.length; start += COUNTS_BATCH) {
+      const batch = withInvites.slice(start, start + COUNTS_BATCH);
+      try {
+        const counts = await aiInterviewService.getInvitationCounts(batch.map((row) => row.id));
+        for (const row of batch) row.completed = counts[row.id]?.completed || 0;
+      } catch {
+        for (let i = 0; i < batch.length; i += 10) {
+          await Promise.all(
+            batch.slice(i, i + 10).map(async (row) => {
+              try {
+                const res = await aiInterviewService.getConfigInvitations(row.id, { page: 1, page_size: 1, compact: true });
+                row.completed = res.completed || 0;
+              } catch {
+                /* leave at 0 */
+              }
+            }),
+          );
+        }
+      }
     }
     return rows;
   }, []);

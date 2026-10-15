@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useRef, useState, type ReactNode } from 'react';
-import { Archive, AlertTriangle, CheckCircle2, FileText, X } from 'lucide-react';
+import { Archive, AlertTriangle, CheckCircle2, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 
@@ -58,19 +58,9 @@ export default function ArchiveAssessmentModal({ isOpen, target, onConfirm, onCa
         aria-labelledby="archive-assessment-title"
         className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-2xl w-full animate-scale-in max-h-[calc(100dvh-1.5rem)] flex flex-col tf-round-edges"
       >
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={onCancel}
-          aria-label="Close"
-          className="absolute top-4 right-4 px-2"
-        >
-          <X className="w-5 h-5" />
-        </Button>
-
         <div className="flex-1 min-h-0 px-4 sm:px-8 pt-7 sm:pt-8 pb-5 overflow-y-auto">
           {/* Header: tinted disc + title */}
-          <div className="flex items-start gap-3 sm:gap-4 pr-10">
+          <div className="flex items-start gap-3 sm:gap-4">
             <div className="w-10 h-10 sm:w-12 sm:h-12 shrink-0 rounded-full bg-brand-orange/10 dark:bg-orange-500/15 flex items-center justify-center">
               <Archive className="w-5 h-5 sm:w-6 sm:h-6 text-brand-orange-deep dark:text-orange-300" />
             </div>
@@ -131,6 +121,9 @@ export default function ArchiveAssessmentModal({ isOpen, target, onConfirm, onCa
             Are you sure you want to archive this assessment?
           </p>
           <div className="flex gap-3 justify-end">
+            <Button variant="secondary" onClick={onCancel} className="px-6">
+              Cancel
+            </Button>
             <Button variant="destructive" onClick={onConfirm} className="px-6">
               <span className="flex items-center justify-center gap-2">
                 <Archive className="w-4 h-4" />

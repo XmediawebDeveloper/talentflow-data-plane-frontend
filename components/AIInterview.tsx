@@ -144,7 +144,7 @@ const INVITATION_STATUS_TAB_OPTIONS: InviteStatusOption[] = [
   { value: 'terminated', label: 'Terminated' },
 ];
 const AI_INTERVIEWS_LIST_VIEW_REDIRECT_KEY = 'ai_interviews_open_list_view';
-const CONFIG_FETCH_PAGE_SIZE = 20;
+const CONFIG_FETCH_PAGE_SIZE = 100;
 
 /** One string for the list filters the page-reset effect watches. */
 const listFilterKey = (v: Record<string, unknown>) =>
@@ -1724,21 +1724,44 @@ export default function AIInterview() {
     jobRowTotals.set(key, entry);
   }
 
-  /** Fetch each given interview's invitation summary, once — the same
-   *  unfiltered page_size-1 call the Track popup uses for its cards, so
-   *  Invitations Sent (`total`) and Completed (`completed`) read the same
-   *  numbers there and here. */
+  /** Fetch each given interview's invitation summary, once — for all of them in
+   *  ONE request (`/ai-interview/invitation-counts`), which reports the same
+   *  unfiltered `total` / `completed` the Track popup's cards read from the
+   *  per-config call, so Invitations Sent and Completed read the same numbers
+   *  there and here. */
   const requestCompletedCounts = (list: AIInterviewResponse[]) => {
-    list.forEach((c) => {
-      if (completedCountsRequested.current.has(c.id)) return;
-      completedCountsRequested.current.add(c.id);
-      aiInterviewService.getConfigInvitations(c.id, { page: 1, page_size: 1 })
-        .then((res) => {
-          setCompletedCounts((prev) => ({ ...prev, [c.id]: res.completed || 0 }));
-          setInvitationTotals((prev) => ({ ...prev, [c.id]: res.total || 0 }));
+    const fresh = list.filter((c) => !completedCountsRequested.current.has(c.id));
+    if (fresh.length === 0) return;
+    for (const c of fresh) completedCountsRequested.current.add(c.id);
+
+    const apply = (id: string, total: number, completed: number) => {
+      setCompletedCounts((prev) => ({ ...prev, [id]: completed || 0 }));
+      setInvitationTotals((prev) => ({ ...prev, [id]: total || 0 }));
+    };
+
+    /* The backend caps a request at 200 ids. */
+    const BATCH = 200;
+    for (let start = 0; start < fresh.length; start += BATCH) {
+      const batch = fresh.slice(start, start + BATCH);
+      aiInterviewService.getInvitationCounts(batch.map((c) => c.id))
+        .then((counts) => {
+          for (const c of batch) {
+            const entry = counts[c.id];
+            if (entry) apply(c.id, entry.total, entry.completed);
+            else completedCountsRequested.current.delete(c.id);
+          }
         })
-        .catch(() => { completedCountsRequested.current.delete(c.id); });
-    });
+        .catch(() => {
+          /* The batched answer is unavailable (an older backend, a transient
+             failure) — ask per interview, the unfiltered page_size-1 call this
+             used to make, which reports the same two numbers. */
+          for (const c of batch) {
+            aiInterviewService.getConfigInvitations(c.id, { page: 1, page_size: 1 })
+              .then((res) => apply(c.id, res.total, res.completed))
+              .catch(() => { completedCountsRequested.current.delete(c.id); });
+          }
+        });
+    }
   };
   /**
    * How many versions this job has — the figure beside Layers on the row, and
@@ -4269,9 +4292,6 @@ export default function AIInterview() {
                       {isRefreshingInvites ? 'Refreshing...' : 'Refresh'}
                     </span>
                   </Button>
-                  <Button variant="secondary" size="sm" onClick={() => setViewInvitationsConfig(null)} aria-label="Close" className="px-2">
-                    <X className="w-4 h-4 sm:w-5 sm:h-5" />
-                  </Button>
                 </div>
               </div>
 
@@ -4516,6 +4536,9 @@ export default function AIInterview() {
                       </button>
                     </>
                   )}
+                  <Button variant="secondary" size="sm" onClick={() => setViewInvitationsConfig(null)}>
+                    Cancel
+                  </Button>
                   <Button
                     variant="primary"
                     size="sm"

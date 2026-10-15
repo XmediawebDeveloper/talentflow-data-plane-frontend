@@ -548,6 +548,9 @@ function buildClustersFromConfig(
         level: scoreToLevel(score010),
         feedback: lookupFeedback(sname, evaluations) || 'No specific feedback captured for this skill.',
         asked: lookupAsked(sname, score010),
+        // A real record of what was asked exists (the question_skill_map
+        // delivery flags or any authoritative source lookupAsked reads).
+        askedKnown: hasAuthoritativeAskedSource || qsmSeen.size > 0,
       };
     });
 
