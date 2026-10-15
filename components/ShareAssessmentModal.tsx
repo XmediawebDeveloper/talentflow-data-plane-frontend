@@ -1614,6 +1614,16 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                                       : 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/40 focus:border-transparent'
                                 }`}
                               />
+                            </div>
+                            {candidate.source !== 'database' && candidate.email.trim() && !isValidEmail(candidate.email) && (
+                              <p className="text-xs text-destructive mt-1">Please enter a valid email (e.g., user@example.com)</p>
+                            )}
+                            {candidate.source !== 'database' && candidate.email.trim() && isValidEmail(candidate.email) && isDuplicateEmail(candidate.id, candidate.email) && (
+                              <p className="text-xs text-destructive mt-1">This email is already in the list</p>
+                            )}
+                          </div>
+                        </div>
+                            <div className="flex items-center gap-2 self-end sm:self-start sm:mt-5 flex-shrink-0">
                               {/* Per-candidate Copy Link button — one assessment link, no email sent */}
                               {singleAssessmentOnly && candidate.source !== 'database' && (
                                 <button
@@ -1669,14 +1679,6 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                                 </button>
                               )}
                             </div>
-                            {candidate.source !== 'database' && candidate.email.trim() && !isValidEmail(candidate.email) && (
-                              <p className="text-xs text-destructive mt-1">Please enter a valid email (e.g., user@example.com)</p>
-                            )}
-                            {candidate.source !== 'database' && candidate.email.trim() && isValidEmail(candidate.email) && isDuplicateEmail(candidate.id, candidate.email) && (
-                              <p className="text-xs text-destructive mt-1">This email is already in the list</p>
-                            )}
-                          </div>
-                        </div>
                       </div>
                     </div>
                   ))}
