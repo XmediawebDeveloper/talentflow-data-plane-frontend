@@ -18,6 +18,8 @@ import type { InviteCandidate } from '@/components/talent-match-invite/inviteVer
 import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
 import TimelineStamps from '@/components/ui/timeline-stamps';
 import { DateField } from '@/components/ui/date-field';
+import SearchableSelect from '@/components/ui/searchable-select';
+import { tabPill } from '@/components/ui/filter-pills';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import ResultRowActions, { isPhoneWidth } from './ResultRowActions';
@@ -266,6 +268,8 @@ const RESULT_STATUS_OPTIONS = [
   { value: 'terminated', label: 'Terminated' },
 ];
 const DEFAULT_RESULT_STATUS = 'all';
+/** The More Filters score inputs — the shared h-9 filter chrome. */
+const SCORE_INPUT_CLASS = 'w-full min-w-0 h-9 px-3 text-sm text-black dark:text-slate-100 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg transition-colors hover:border-brand-blue/40 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue';
 /** What "All Statuses" combines (the server filters one status at a time). */
 const RESULT_STATUSES = new Set(['in_progress', 'completed', 'terminated']);
 const isResultStatus = (v: unknown) => RESULT_STATUS_OPTIONS.some((o) => o.value === v);
@@ -852,7 +856,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
   const portaled = !!toolbarPortal;
   /* Embedded, the More Filters labels take the Scored Resumes panel's class;
      standalone keeps its own. */
-  const filterLabelClass = portaled ? JOB_TAB_FILTER_LABEL_CLASS : 'block text-xs font-medium text-gray-600 mb-1.5';
+  const filterLabelClass = portaled ? JOB_TAB_FILTER_LABEL_CLASS : 'block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium';
   const body = (
     <>
       {/* Header — hidden when embedded as a tab (the details page already
@@ -912,8 +916,24 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
           chrome dropped so it reads as the tab card's second row; otherwise it
           renders inline inside its own card exactly as before. */}
       {!isUnstarted && (() => {
+        /* Sort by — field + direction drive sortSessions over the full
+           fetched set; a change returns to page 1. Row 1 embedded, row 2
+           standalone. */
+        const sortControl = (
+          <SortByControl<typeof sortField>
+            value={sortField}
+            order={sortDirection}
+            options={[
+              { value: 'name', label: 'Name' },
+              { value: 'score', label: 'Score' },
+              { value: 'date', label: 'Completed' },
+            ]}
+            onChange={(v) => { setSortField(v); setCurrentPage(1); }}
+            onToggleOrder={() => { setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc')); setCurrentPage(1); }}
+          />
+        );
         const toolbarBlock = (
-        <div className={toolbarPortal ? '' : 'bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 mb-4'}>
+        <div className={toolbarPortal ? '' : 'bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-4'}>
         <ListToolbar
           searchValue={search.query}
           onSearchChange={search.setQuery}
@@ -1068,6 +1088,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
           // than the screen. In Job Details it takes the AI Talent Match
           // row's own layout instead (List / Grid pinned right).
           fitToContainer={!portaled}
+          containerBreakpoint="4xl"
           trailing={portaled ? <ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-9" /> : undefined}
           onToggleFilters={() => setShowFilters((v) => !v)}
           filtersOpen={showFilters}
@@ -1077,14 +1098,15 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
              Resumes-style panel there carries no clear control either). */
           onClearFilters={portaled ? undefined : search.reset}
           compactButtons={portaled}
+          /* Standalone: the Job Openings (JD) page's two-row toolbar. Row 1
+             (this ListToolbar): Search → Result → More Filters → Customize
+             Columns → Export. Row 2 (below the panel): Select All → Actions →
+             status pills → Sort by → List / Grid. Embedded in Job Details:
+             the AI Talent Match row as before. */
           leadingActions={
             <>
               {toolbarActions}
-              {/* Status first (All Statuses by default), then Result, then More
-                  Filters. Embedded in Job Details both take the AI Talent Match
-                  reference's tinted "All Matches" pill chrome; standalone keeps
-                  the bordered boxes. Same state, same values either way. */}
-              {portaled ? (
+              {portaled && (
                 <ToolbarFilterSelect
                   value={statusFilter}
                   onChange={(value) => search.setFilter('status', value)}
@@ -1094,17 +1116,6 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
                   ))}
                 </ToolbarFilterSelect>
-              ) : (
-                <select
-                  value={statusFilter}
-                  onChange={(e) => search.setFilter('status', e.target.value)}
-                  aria-label="Status"
-                  className="w-36 py-2 px-3 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-black"
-                >
-                  {RESULT_STATUS_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
               )}
               {portaled ? (
                 <ToolbarFilterSelect
@@ -1118,32 +1129,20 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                   ))}
                 </ToolbarFilterSelect>
               ) : (
-                <select
+                /* Inline with Search, as Location / Industry are on the Job
+                   Openings page. */
+                <SearchableSelect
+                  className="w-full sm:w-44"
                   value={resultFilter}
-                  onChange={(e) => search.setFilter('result', e.target.value)}
-                  aria-label="Result"
-                  className="py-2 px-3 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-black"
-                >
-                  <option value="">All Results</option>
-                  {RESULT_FILTER_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
+                  onChange={(v) => search.setFilter('result', v)}
+                  options={RESULT_FILTER_OPTIONS.map((opt) => ({ value: String(opt.value), label: opt.label }))}
+                  allLabel="All Results"
+                  placeholder="All Results"
+                  searchPlaceholder="Search result..."
+                  ariaLabel="Filter by result"
+                />
               )}
-              {/* Sort by — the AI Talent Match reference's tinted control, so this
-                  tab matches the siblings. Field + direction drive sortSessions
-                  over the full fetched set; a change returns to page 1. */}
-              <SortByControl<typeof sortField>
-                value={sortField}
-                order={sortDirection}
-                options={[
-                  { value: 'name', label: 'Name' },
-                  { value: 'score', label: 'Score' },
-                  { value: 'date', label: 'Completed' },
-                ]}
-                onChange={(v) => { setSortField(v); setCurrentPage(1); }}
-                onToggleOrder={() => { setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc')); setCurrentPage(1); }}
-              />
+              {portaled && sortControl}
             </>
           }
           /* Embedded, the row keeps ListToolbar's own `mb-3` (the AI Talent
@@ -1151,37 +1150,6 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
              bottom edge — the Job Details toolbar slot has no bottom padding. */
           className={portaled ? undefined : 'mb-0'}
         >
-          {/* Revoke / Resend / Download PDF — standalone only here; embedded
-              in Job Details they moved into the Actions pill beside Select
-              All (see `beforeSearch` above), selection-gated the same way.
-              Customize Columns and Export are their own buttons below on the
-              standalone page only; embedded, they are Actions items too. */}
-          {!portaled && revocableSelected.length > 0 && (
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => setBulkAction('revoke')}
-              disabled={isBulkWorking}
-              title="Revoke the selected candidates' interview links"
-              icon={isBulkWorking ? <Loader2 className="w-4 h-4 animate-spin" /> : <Ban className="w-4 h-4" />}
-              className="whitespace-nowrap !h-[38px] !text-sm"
-            >
-              {isBulkWorking ? 'Revoking…' : `Revoke (${revocableSelected.length})`}
-            </Button>
-          )}
-          {!portaled && resendableSelected.length > 0 && (
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setBulkAction('resend')}
-              disabled={isBulkWorking}
-              title="Resend a fresh link to the selected expired invitations"
-              icon={isBulkWorking ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
-              className="whitespace-nowrap !h-[38px] !text-sm"
-            >
-              {isBulkWorking ? 'Sending…' : `Resend (${resendableSelected.length})`}
-            </Button>
-          )}
           {/* Customize Columns / Export — standalone only as buttons;
               embedded in Job Details they are items in the Actions pill. */}
           {!portaled && (
@@ -1190,25 +1158,10 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
               size="sm"
               onClick={() => setShowColumnModal(true)}
               icon={<SlidersHorizontal className="w-4 h-4" />}
-              className="hidden sm:flex whitespace-nowrap !h-[38px] !text-sm"
+              className="whitespace-nowrap !h-[38px] !text-sm"
             >
               <span className="hidden md:inline">Customize Columns</span>
               <span className="md:hidden">Columns</span>
-            </Button>
-          )}
-          {!portaled && (
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => handleDownloadSelectedPdfs()}
-              disabled={selected.size === 0 || !!downloadingPdfs}
-              title={selected.size === 0 ? 'Select candidates to download their reports' : undefined}
-              icon={downloadingPdfs ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              className="whitespace-nowrap !h-[38px] !text-sm"
-            >
-              {downloadingPdfs
-                ? (downloadingPdfs.total > 1 ? `Preparing ${downloadingPdfs.done}/${downloadingPdfs.total}…` : 'Preparing…')
-                : <span><span className="hidden sm:inline">Download </span>PDF{selected.size > 0 ? ` (${selected.size})` : ''}</span>}
             </Button>
           )}
           {!portaled && (
@@ -1222,7 +1175,6 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
               Export{selected.size > 0 ? ` (${selected.size})` : ''}
             </Button>
           )}
-          {!portaled && <ListViewToggle value={displayMode} onChange={setDisplayMode} />}
         </ListToolbar>
 
         {/* Bulk Revoke / Resend confirmations — the Track popup's wording and
@@ -1250,7 +1202,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
 
         {/* Expanded filters — each field filters the list the moment it
             changes (no Done step); Reset in the toolbar clears them all. */}
-        {showFilters && (
+        {showFilters && portaled && (
           /* pb-4 when embedded — the reference panel's bottom inset, off the
              tab card's border. Embedded it is the AI Talent Match tab's panel
              (JOB_TAB_FILTER_*): its 1 / 2 / 4-column grid, labels and 36px
@@ -1347,6 +1299,198 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             </div>
           </div>
 
+          </div>
+        )}
+        {/* Standalone: the Job Openings (JD) page's panel — a divider and a
+            1 / 2 / 4-column grid of its searchable selects and date fields,
+            between the two rows. Each field applies as it changes; the
+            toolbar's Reset clears them all. */}
+        {showFilters && !portaled && (
+          <div className="mt-3 pt-3 border-t border-brand-blue/10">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 [&>div]:min-w-0">
+              <div>
+                <label className={filterLabelClass}>Score Range (%)</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    placeholder="Min"
+                    min={0}
+                    max={100}
+                    value={search.filters.scoreMin}
+                    onChange={(e) => search.setFilter('scoreMin', e.target.value)}
+                    aria-label="Minimum score"
+                    className={SCORE_INPUT_CLASS}
+                  />
+                  <span className="text-gray-400 text-sm">to</span>
+                  <input
+                    type="number"
+                    placeholder="Max"
+                    min={0}
+                    max={100}
+                    value={search.filters.scoreMax}
+                    onChange={(e) => search.setFilter('scoreMax', e.target.value)}
+                    aria-label="Maximum score"
+                    className={SCORE_INPUT_CLASS}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className={filterLabelClass}>Completed From</label>
+                <DateField
+                  aria-label="Completed From"
+                  value={search.filters.dateFrom}
+                  max={search.filters.dateTo || undefined}
+                  onChange={(v) => search.setFilter('dateFrom', v)}
+                />
+              </div>
+              <div>
+                <label className={filterLabelClass}>Completed To</label>
+                <DateField
+                  aria-label="Completed To"
+                  value={search.filters.dateTo}
+                  min={search.filters.dateFrom || undefined}
+                  onChange={(v) => search.setFilter('dateTo', v)}
+                />
+              </div>
+              {!hideVersionDetails && !hideJobVersion && (
+                <div>
+                  <label className={filterLabelClass}>Job Version</label>
+                  <SearchableSelect
+                    value={search.filters.jobVersion}
+                    onChange={(v) => search.setFilter('jobVersion', v)}
+                    options={jobVersion != null ? [{ value: String(jobVersion), label: `V${jobVersion}` }] : []}
+                    allLabel="All job versions"
+                    placeholder="All job versions"
+                    searchPlaceholder="Search version..."
+                    ariaLabel="Job Version"
+                  />
+                </div>
+              )}
+              {!hideVersionDetails && (
+                <div>
+                  <label className={filterLabelClass}>Interview Version</label>
+                  <SearchableSelect
+                    value={search.filters.interviewVersion}
+                    onChange={(v) => search.setFilter('interviewVersion', v)}
+                    options={interviewVersion != null ? [{ value: String(interviewVersion), label: `V${interviewVersion}` }] : []}
+                    allLabel="All interview versions"
+                    placeholder="All interview versions"
+                    searchPlaceholder="Search version..."
+                    ariaLabel="Interview Version"
+                  />
+                </div>
+              )}
+              <div>
+                <label className={filterLabelClass}>Source</label>
+                <SearchableSelect
+                  value={search.filters.inviteSource}
+                  onChange={(v) => search.setFilter('inviteSource', v)}
+                  options={INVITE_SOURCE_FILTER_OPTIONS.map((o) => ({ value: String(o.value), label: o.label }))}
+                  allLabel="All sources"
+                  placeholder="All sources"
+                  searchPlaceholder="Search source..."
+                  ariaLabel="Source"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Standalone row 2 — the Job Openings page's: Select All, the bulk
+            Actions once a row is ticked, the status pills, then Sort by and
+            List / Grid at the row's end. */}
+        {!portaled && (
+          <div className="flex items-center gap-2 flex-wrap mt-3 pt-3 border-t border-gray-200 dark:border-slate-700">
+            <ToolbarSelectAll
+              selectedCount={selected.size}
+              allSelected={allOnPageSelected}
+              pageCount={paginatedSessions.length}
+              pageSelected={allOnPageSelected}
+              onSelectPage={() =>
+                setSelected((prev) => {
+                  const next = new Map(prev);
+                  paginatedSessions.forEach((s) => next.set(s.id, s));
+                  return next;
+                })
+              }
+              onDeselectPage={() =>
+                setSelected((prev) => {
+                  const next = new Map(prev);
+                  paginatedSessions.forEach((s) => next.delete(s.id));
+                  return next;
+                })
+              }
+              onClear={() => setSelected(new Map())}
+            />
+            {selected.size > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="rounded-full whitespace-nowrap"
+                    aria-label={`Actions for ${selected.size} selected`}
+                  >
+                    {isBulkWorking || downloadingPdfs ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                    Actions
+                    <ChevronDown className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-64 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
+                  <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
+                    {selected.size.toLocaleString()} selected
+                  </div>
+                  {revocableSelected.length > 0 && (
+                    <DropdownMenuItem
+                      className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer text-destructive"
+                      disabled={isBulkWorking}
+                      onSelect={() => setBulkAction('revoke')}
+                    >
+                      <Ban className="w-4 h-4" />
+                      <span>Revoke ({revocableSelected.length})</span>
+                    </DropdownMenuItem>
+                  )}
+                  {resendableSelected.length > 0 && (
+                    <DropdownMenuItem
+                      className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer"
+                      disabled={isBulkWorking}
+                      onSelect={() => setBulkAction('resend')}
+                    >
+                      <Mail className="w-4 h-4 text-menu-icon-score" />
+                      <span>Resend ({resendableSelected.length})</span>
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem
+                    className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer"
+                    disabled={!!downloadingPdfs}
+                    onSelect={() => handleDownloadSelectedPdfs()}
+                  >
+                    <Download className="w-4 h-4 text-menu-icon-download" />
+                    <span>
+                      {downloadingPdfs
+                        ? (downloadingPdfs.total > 1 ? `Preparing ${downloadingPdfs.done}/${downloadingPdfs.total}…` : 'Preparing…')
+                        : 'Download PDF Reports'}
+                    </span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+            {/* Status pills — as the Job Openings page's All Jobs /
+                Published / Draft … Same state the dropdown drove. */}
+            {RESULT_STATUS_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => search.setFilter('status', opt.value)}
+                className={tabPill(statusFilter === opt.value)}
+              >
+                {opt.label}
+              </button>
+            ))}
+            <div className="flex items-center gap-2 sm:ml-auto">
+              {sortControl}
+              <ListViewToggle value={displayMode} onChange={setDisplayMode} />
+            </div>
           </div>
         )}
         </div>

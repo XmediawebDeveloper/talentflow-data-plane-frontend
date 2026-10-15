@@ -1033,7 +1033,7 @@ export default function StepIdentity({
 
   // ── PHASES B-E: Live Photo Capture ──
   return (
-    <div className="w-full max-w-6xl mx-auto space-y-6">
+    <div className="w-full max-w-5xl mx-auto space-y-6">
       {progressStepper}
       <div className="text-center">
         <span className="inline-flex items-center gap-1.5 bg-success-subtle text-success text-xs font-semibold px-3 py-1.5 rounded-full mb-3">
@@ -1045,12 +1045,15 @@ export default function StepIdentity({
 
       <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
 
-        <div className="p-4 sm:p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="p-3 sm:p-4">
+          <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] gap-4 sm:gap-5">
             {/* Left: Video feed */}
-            {/* On short laptops the 4:3 box is capped (by width, from the
-                viewport height) so the capture controls stay above the fold. */}
-            <div ref={photoCardRef} className="relative bg-gray-900 rounded-xl aspect-[4/3] overflow-hidden flex items-center justify-center w-full md:mx-auto md:self-start md:max-w-[max(20rem,calc((100dvh-var(--tf-sticky-h,0px)-15rem)*4/3))]">
+            {/* 4:3 on phones; 16:9 from `md`, the webcam's own shape, at the
+                SAME height the 4:3 box had — the cap is the same height budget
+                (viewport height less the chrome) times 16/9 instead of 4/3, so
+                the box only grows wider. Sits at the column's start, so the
+                card has no empty band beside it. */}
+            <div ref={photoCardRef} className="relative bg-gray-900 rounded-xl aspect-[4/3] md:aspect-video overflow-hidden flex items-center justify-center w-full md:self-start md:max-w-[max(26.67rem,calc((100dvh-var(--tf-sticky-h,0px)-15rem)*16/9))]">
               {phase !== 'captured' && (
                 <video ref={videoRef} muted playsInline className="w-full h-full object-cover" style={{ transform: 'scaleX(-1)' }} />
               )}
