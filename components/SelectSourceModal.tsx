@@ -1287,6 +1287,7 @@ export default function SelectSourceModal({
                 resumes={[]}
                 width={sidebarWidth}
                 onWidthChange={handleSidebarWidthChange}
+                collapsible
               />
             </div>
           )}

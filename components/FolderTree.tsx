@@ -2,6 +2,7 @@
 
 import { ChevronRight, ChevronDown, Folder, FolderOpen, Plus, Upload, Edit2, Trash2, LayoutGrid, Archive, FolderRoot } from 'lucide-react';
 import { useState, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
+import { useFolderPanelCollapsed, folderColumnClasses, FolderCollapseButton, FolderPanelRail } from '@/components/ui/folder-panel-collapse';
 import { createPortal } from 'react-dom';
 import { useDrop } from 'react-dnd';
 import { Folder as FolderType, Resume } from '@/lib/types/types';
@@ -259,6 +260,10 @@ interface FolderTreeProps {
    *  offer the folder actions but keep deleting (and deciding where the
    *  folder's resumes go) on the Resume Database page. */
   hideDeleteFolder?: boolean;
+  /** Adds a collapse button beside the "System Folders" heading that folds
+   *  the whole column into a slim rail (md and up), remembered per browser
+   *  and shared with every other database view. */
+  collapsible?: boolean;
 }
 
 export default function FolderTree({
@@ -280,7 +285,12 @@ export default function FolderTree({
   canRenameFolder = true,
   canDeleteFolder = true,
   hideDeleteFolder = false,
+  collapsible = false,
 }: FolderTreeProps) {
+  // Collapsed folder column (md and up) — shared state, button and rail
+  // (components/ui/folder-panel-collapse), the same in every database view.
+  const { collapsed: isCollapsed, setCollapsed: setPanelCollapsed, animate: animateToggle } =
+    useFolderPanelCollapsed(collapsible);
   const [expandedFolders, setExpandedFolders] = useState<string[]>(['engineering']);
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [creatingSubFolderFor, setCreatingSubFolderFor] = useState<string | null>(null);
@@ -850,9 +860,16 @@ export default function FolderTree({
        with no intrinsic height, so the table decides the row height and the
        tree scrolls inside exactly that. `md:min-h-[360px]` keeps it usable
        when the table is short (a page of two rows, or an empty state). */
+    <>
+    {/* Collapsed: a slim rail in the column's place (md and up only — below
+        md the folders are a band above the table, so there is no column to
+        fold and the full tree stays). */}
+    {isCollapsed && (
+      <FolderPanelRail onExpand={() => setPanelCollapsed(false)} animate={animateToggle} from="md" />
+    )}
     <div
       ref={panelRef}
-      className="relative border-b md:border-b-0 md:border-r border-gray-200 bg-white max-md:!w-full max-md:!max-w-full max-md:!min-w-0 md:min-h-[360px]"
+      className={`relative border-b md:border-b-0 md:border-r border-gray-200 bg-white max-md:!w-full max-md:!max-w-full max-md:!min-w-0 md:min-h-[360px] ${folderColumnClasses(isCollapsed, animateToggle, 'md')}`}
       style={{ width: `${width}px`, minWidth: `${MIN_PANEL_WIDTH}px`, maxWidth: `${MAX_PANEL_WIDTH}px` }}
     >
       {/* Resize handle — sits on the panel's right edge, over the divider.
@@ -896,6 +913,8 @@ export default function FolderTree({
           <h3 className="text-gray-900 mb-2 flex shrink-0 items-center gap-2">
             System Folders
             <span className="h-1.5 w-1.5 rounded-full bg-brand-cyan" aria-hidden="true" />
+            {/* Fold the whole folder column away (md and up). */}
+            {collapsible && <FolderCollapseButton onCollapse={() => setPanelCollapsed(true)} from="md" />}
           </h3>
           {/* Outlined rather than filled: the rows carry their own hover and
               selection tints, and a section fill sat underneath them. The cyan
@@ -991,5 +1010,6 @@ export default function FolderTree({
       </div>
       </div>
     </div>
+    </>
   );
 }

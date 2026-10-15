@@ -15,6 +15,27 @@ export interface Skill {
    *  candidate didn't demonstrate it"). The Cluster Coverage view uses this
    *  for its primary classification; `score`/`level` are the sub-detail. */
   asked: boolean;
+  /** True when `asked` came from a real record of what was asked (the
+   *  question plan, the backend's assessed map or the at-ask-time skills).
+   *  False on old interviews with none of those, where `asked` can only be
+   *  guessed from score > 0 — so a 0 there can't be told apart from "asked
+   *  and scored 0". */
+  askedKnown?: boolean;
+}
+
+/** A skill no question covered, so it has no skill score to show. Only when
+ *  the record says so: on old interviews with no record (askedKnown false) a
+ *  0 keeps reading as a 0, as it always did. A real score always wins. */
+export function isSkillNotAssessed(s: { asked?: boolean; askedKnown?: boolean; score: number }): boolean {
+  return s.askedKnown === true && s.asked === false && !(s.score > 0);
+}
+
+/** Counted in "Skills Evaluated": every skill a question covered (even one
+ *  scored 0). On old interviews with no record, a score above 0 is the only
+ *  evidence, so the count falls back to that — as it was before. */
+export function isSkillEvaluated(s: { asked?: boolean; askedKnown?: boolean; score: number }): boolean {
+  if (s.askedKnown === true) return s.asked === true || s.score > 0;
+  return s.score > 0;
 }
 
 export interface Cluster {

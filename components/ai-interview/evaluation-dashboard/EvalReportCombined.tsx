@@ -16,7 +16,7 @@ import {
   Layers, ListChecks, ClipboardList, FileText, AlertTriangle, Lightbulb, Scale, ClipboardCheck,
 } from 'lucide-react';
 import type { DashboardData } from './types';
-import { buildRationaleLines, orderQuestionsAsAsked } from './types';
+import { buildRationaleLines, orderQuestionsAsAsked, isSkillNotAssessed, isSkillEvaluated } from './types';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import { labelOfViolation, recruiterSeverity, summarizeViolations, type ViolationRecord } from '../violationTaxonomy';
 import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
@@ -78,12 +78,9 @@ function summaryToPoints(summary: string | null | undefined): string[] {
     .map(sentence => sentence.charAt(0).toUpperCase() + sentence.slice(1));
 }
 
-/** A skill no question covered, so it has no score to show. A real score
- *  always wins, so a stale `asked` flag can never hide a result. Same rule as
- *  the Skill Breakdown tab. */
-function isNotAssessed(s: { asked?: boolean; score: number }): boolean {
-  return s.asked === false && !(s.score > 0);
-}
+// "Not assessed" / "evaluated" — the shared rules in types.ts, so this
+// report, its PDF, Skill Breakdown and Overview all agree.
+const isNotAssessed = isSkillNotAssessed;
 
 function scoreColor(score: number) {
   if (score >= 8.0) return { text: 'text-success', bar: 'bg-success' };
@@ -113,7 +110,7 @@ export async function exportEvalReportPDF(
   // "Skills Evaluated" stat tiles.
   const allSkillsFlat = [...mustHaveClusters, ...niceToHaveClusters].flatMap((c) => c.skills);
   // Every skill a question covered — including one scored 0 — is evaluated.
-  const skillsEvaluated = allSkillsFlat.filter((s) => !isNotAssessed(s)).length;
+  const skillsEvaluated = allSkillsFlat.filter(isSkillEvaluated).length;
   const isPassed = finalResult ? finalResult === 'Pass' : scores.mustHave >= MHS_THRESHOLD;
   const finalResultLabel = (finalResult ?? (isPassed ? 'Pass' : 'Fail')).toUpperCase();
   const confidence = Math.round(scores.mustHave * 10);
@@ -645,7 +642,7 @@ export async function exportEvalReportPDF(
   // question-by-question pages.
   {
     const flatten = (clusters: typeof mustHaveClusters) => clusters.flatMap((c) =>
-      c.skills.map((s) => ({ name: s.name, score: s.score, asked: s.asked, cluster: c.name, ...priorityLabel(c.priority) })));
+      c.skills.map((s) => ({ name: s.name, score: s.score, asked: s.asked, askedKnown: s.askedKnown, cluster: c.name, ...priorityLabel(c.priority) })));
     const groups = [
       { title: 'Must-Have Skills', rows: sectionsPresent.mustHave ? flatten(mustHaveClusters) : [] },
       { title: 'Nice-to-Have Skills', rows: sectionsPresent.niceToHave ? flatten(niceToHaveClusters) : [] },
@@ -837,7 +834,7 @@ export async function exportEvalReportPDF(
 }
 
 type CoverageStats = { total: number; covered: number; demonstrated: number; pct: number };
-type FlatSkill = { name: string; score: number; tag: string; weight: number; cluster?: string; asked?: boolean };
+type FlatSkill = { name: string; score: number; tag: string; weight: number; cluster?: string; asked?: boolean; askedKnown?: boolean };
 
 /** One Section Score row: the bar carries the pass threshold as a dashed marker. */
 function SectionRow({ label, value, Icon, bar, iconTone, badge }: {
@@ -982,10 +979,10 @@ export function EvalReportCombined({
 
   // ── Skills (flattened, with priority tag/weight) ──────────────────────
   const flatMustHave = mustHaveClusters.flatMap(c => c.skills.map(s => ({
-    name: s.name, score: s.score, asked: s.asked, cluster: c.name, ...priorityLabel(c.priority),
+    name: s.name, score: s.score, asked: s.asked, askedKnown: s.askedKnown, cluster: c.name, ...priorityLabel(c.priority),
   })));
   const flatNiceToHave = niceToHaveClusters.flatMap(c => c.skills.map(s => ({
-    name: s.name, score: s.score, asked: s.asked, cluster: c.name, ...priorityLabel(c.priority),
+    name: s.name, score: s.score, asked: s.asked, askedKnown: s.askedKnown, cluster: c.name, ...priorityLabel(c.priority),
   })));
   const allSkills = [...mustHaveClusters, ...niceToHaveClusters].flatMap(c => c.skills);
   // Skills Assessment Summary: which tables show, and whether one has the row to itself.
@@ -1040,7 +1037,7 @@ export function EvalReportCombined({
   const statTiles = [
     { label: 'Questions Answered', value: `${questionsAnswered} / ${questionsAsked}`, Icon: Play,
       icon: 'bg-brand-blue text-white' },
-    { label: 'Skills Evaluated', value: `${allSkills.filter(s => !isNotAssessed(s)).length} / ${allSkills.length}`, Icon: CheckCircle,
+    { label: 'Skills Evaluated', value: `${allSkills.filter(isSkillEvaluated).length} / ${allSkills.length}`, Icon: CheckCircle,
       // Brand cyan, not green: green reads as "pass" and clashed with the
       // red Fail verdict beside it.
       icon: 'bg-brand-cyan text-white' },
