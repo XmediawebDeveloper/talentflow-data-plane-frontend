@@ -5463,6 +5463,29 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         } else if (ev === 'unavailable') {
           serverVadActiveRef.current = false;
           console.warn('[INTERVIEW-DEBUG] AII14-server: unavailable — using the browser silence clock', { turn: data.turn });
+        } else if (ev === 'speech_onset') {
+          // Silero heard real speech. The browser's own onset check needs 3 s of
+          // unbroken voice (SPEECH_ONSET_CONFIRM_MS) and never fired for short
+          // answers like "30 days" (staging 2026-10-14: speech at 12:53:40,
+          // browser "Speech DETECTED" only at 12:55:08). Same bridge as the
+          // live-transcript one below.
+          console.log('[INTERVIEW-DEBUG] AII14-server: speech onset', {
+            turn: data.turn, browserAlreadyDetected: speechDetectedRef.current,
+          });
+          if (!speechDetectedRef.current && isRecordingRef.current && !isAiSpeakingRef.current) {
+            const nowMs = Date.now();
+            speechDetectedRef.current = true;
+            speechDetectedAtRef.current = nowMs;
+            lastMeaningfulAudioAtRef.current = nowMs;
+            speechPeakLevelRef.current = Math.max(speechPeakLevelRef.current, QUIET_SPEECH_ACTIVITY_LEVEL);
+            questionTimerAwaitingSpeechRef.current = false;
+            clearNoResponseTimer();
+            noResponseRetryRef.current = 0;
+            if (!speechStartSentRef.current) {
+              speechStartSentRef.current = true;
+              try { wsRef.current?.send(JSON.stringify({ type: 'speech_started' })); } catch {}
+            }
+          }
         } else if (ev === 'done_prompt') {
           console.log('[INTERVIEW-DEBUG] AII14-server: "Are you done?" raised', {
             turn: data.turn,
