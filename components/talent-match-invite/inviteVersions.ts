@@ -233,6 +233,8 @@ export interface VersionPermissions {
   canPublish: boolean;
   canArchive: boolean;
   canInvite: boolean;
+  /** AI interview Draft's Delete (the AI Interviews page's delete permission). */
+  canDelete?: boolean;
 }
 
 /** Why a new version cannot be made right now, or null when it can. */
@@ -268,14 +270,14 @@ export function createPageHref(kind: InviteKind, jdId: string, jdTitle: string, 
  * clone endpoint (Job Details' Create, the Assessments page's Duplicate); AI
  * interviews have no clone endpoint, so the source's full config is read and
  * created again on the same job, as the AI interview wizard creates one.
+ * Resolves to the new draft's id.
  */
-export async function duplicateVersion(source: InviteVersion): Promise<void> {
+export async function duplicateVersion(source: InviteVersion): Promise<string> {
   if (source.kind === 'assessment') {
-    await assessmentService.clone(source.id);
-    return;
+    return (await assessmentService.clone(source.id)).cloned_id;
   }
   const full = await aiInterviewService.get(source.id);
-  await aiInterviewService.create({
+  const created = await aiInterviewService.create({
     position: full.position,
     jd_id: full.jd_id,
     duration_minutes: full.duration_minutes,
@@ -289,11 +291,12 @@ export async function duplicateVersion(source: InviteVersion): Promise<void> {
     title: (full as { title?: string }).title || `${full.position || full.jd_title || 'AI Interview'} - AI Interview`,
     introduction_video_url: (full as { introduction_video_url?: string }).introduction_video_url,
   });
+  return created.id;
 }
 
 /* ── Version actions (the ⋯ menu) ───────────────────────────────────── */
 
-export type VersionAction = 'view' | 'edit' | 'publish' | 'duplicate' | 'pause' | 'archive' | 'unarchive';
+export type VersionAction = 'view' | 'edit' | 'publish' | 'duplicate' | 'pause' | 'archive' | 'unarchive' | 'delete';
 
 export interface VersionActionItem {
   action: VersionAction;
@@ -348,8 +351,9 @@ export function publishAction(v: InviteVersion, perms: VersionPermissions): Vers
  * No Pause and no Duplicate here — New version under the cards is how a
  * version is copied.
  *
- * AI interviews keep the AI Interviews page's set: View, Edit (draft),
- * Publish (draft), Duplicate, Archive.
+ * AI interviews: a Draft offers the AI Interviews page's draft actions —
+ * Continue Editing (the wizard popup, where it publishes), View Details,
+ * Delete; any other status View, Duplicate, Archive.
  */
 export function versionActions(v: InviteVersion, versions: InviteVersion[], perms: VersionPermissions): VersionActionItem[] {
   const noUpdate = 'You do not have permission to edit';
@@ -375,14 +379,25 @@ export function versionActions(v: InviteVersion, versions: InviteVersion[], perm
     return items;
   }
 
-  const items: VersionActionItem[] = [{ action: 'view', label: 'View' }];
   if (v.status === 'draft') {
-    items.push({ action: 'edit', label: 'Edit', disabledReason: perms.canUpdate ? undefined : noUpdate });
-    items.push({
-      ...(publishAction(v, { ...perms, canPublish: true }) as VersionActionItem),
-      disabledReason: perms.canPublish ? undefined : 'You do not have permission to publish',
-    });
+    return [
+      { action: 'edit', label: 'Continue Editing', disabledReason: perms.canUpdate ? undefined : noUpdate },
+      { action: 'view', label: 'View Details' },
+      {
+        action: 'delete',
+        label: 'Delete',
+        disabledReason: perms.canDelete ? undefined : 'You do not have permission to delete',
+        confirm: {
+          title: `Delete v${v.version}?`,
+          message: `The ${v.name} v${v.version} draft is deleted. This cannot be undone.`,
+          confirmText: 'Delete',
+          destructive: true,
+        },
+      },
+    ];
   }
+
+  const items: VersionActionItem[] = [{ action: 'view', label: 'View' }];
   const blocked = createBlockedReason(versions, perms, v.kind);
   items.push({
     action: 'duplicate',
@@ -396,6 +411,11 @@ export function versionActions(v: InviteVersion, versions: InviteVersion[], perm
   });
   if (v.status !== 'archived') items.push(archiveItem(v, perms));
   return items;
+}
+
+/** An AI interview Draft's Delete — the AI Interviews page's. */
+export async function deleteVersion(v: InviteVersion): Promise<void> {
+  await aiInterviewService.delete(v.id);
 }
 
 /** Runs a non-navigating action. */

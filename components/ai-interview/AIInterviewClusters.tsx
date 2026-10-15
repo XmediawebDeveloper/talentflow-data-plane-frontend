@@ -2,7 +2,7 @@
 
 import { handoffContinueLabel, resolveInviteHandoffOrigin, useHandoffCandidateCrumb } from '@/lib/utils/resumeScoringInviteHandoff';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useEmbeddedWizard, useWizardRouter, useWizardSearchParams } from './embeddedWizardNav';
 import {
   ArrowLeft, CheckCircle2, Loader2, Shield, Star, Plus, X,
   Sparkles, GripVertical, ChevronDown, ChevronUp, Layers, Clock,
@@ -1066,10 +1066,12 @@ function CategorySection({
 /* ─────────────────────────────────────────────────────────────────────── */
 
 export default function AIInterviewClusters() {
-  const router = useRouter();
+  const router = useWizardRouter();
+  /* Run inside the Create / Send AI Interview popup (AIInterviewWizardDialog). */
+  const embedded = !!useEmbeddedWizard();
   /* Step indicator pins below the sticky breadcrumb rather than under it. */
   const [breadcrumbBarRef, breadcrumbHeight] = useBreadcrumbOffset();
-  const searchParams = useSearchParams();
+  const searchParams = useWizardSearchParams();
   const id = searchParams.get('id') || '';
   // Carried from the Configure step when the flow started on a JD's Job Details
   // page — keeps the breadcrumb anchored to that job across the whole flow.
@@ -3072,7 +3074,8 @@ export default function AIInterviewClusters() {
           <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
             <PageBreadcrumb
               barRef={breadcrumbBarRef}
-              className="mb-4 md:mb-6"
+              /* Inside the wizard popup the popup's header names the flow. */
+              className={`mb-4 md:mb-6${embedded ? ' hidden' : ''}`}
               items={
                 fromInviteOrigin
                   ? [

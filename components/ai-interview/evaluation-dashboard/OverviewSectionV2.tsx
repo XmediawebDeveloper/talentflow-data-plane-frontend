@@ -3,6 +3,7 @@
 // MUI Box/Card/Typography → Tailwind. Wired to live DashboardData (no mocks).
 import { CheckCircle, XCircle, Play, TrendingUp } from 'lucide-react';
 import type { DashboardData } from './types';
+import { isSkillEvaluated } from './types';
 
 import { formatSkillScore, formatScore1 } from '@/lib/utils/matchStatus';
 interface Props {
@@ -116,7 +117,8 @@ export function OverviewSectionV2({
       // contradicts the Cluster Coverage tab (e.g. "30 evaluated" vs "14/30
       // covered"). Now both tabs agree.
       label: 'Skills Evaluated',
-      value: `${allSkills.filter(s => s.score > 0).length} / ${allSkills.length}`,
+      // Same rule as the Evaluation Report and its PDF (types.ts).
+      value: `${allSkills.filter(isSkillEvaluated).length} / ${allSkills.length}`,
       icon: <CheckCircle className="w-5 h-5" />,
     },
   ];

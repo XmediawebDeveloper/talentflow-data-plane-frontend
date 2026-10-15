@@ -167,6 +167,47 @@ export function useInterviewVoiceVerification(callbacks?: VoiceVerificationCallb
   const changedStreakRef = useRef(0);
 
   /**
+   * Enroll from audio that was ALREADY captured (e.g. the system-check
+   * read-aloud sample), so the fallback never has to record a second time.
+   *
+   * @param samples - mono Float32 PCM
+   * @param sampleRate - rate of `samples`
+   * @returns true if enrollment succeeded
+   */
+  const enrollFromSamples = useCallback(async (
+    samples: Float32Array,
+    sampleRate: number,
+  ): Promise<boolean> => {
+    if (samples.length === 0) {
+      console.warn('[VoiceVerification] No audio captured during enrollment');
+      return false;
+    }
+
+    // Reject a baseline captured from silence — otherwise it mismatches real
+    // speech later and false-flags the candidate. Enrollment must hear a voice.
+    let energyAcc = 0;
+    for (let i = 0; i < samples.length; i++) energyAcc += Math.abs(samples[i]);
+    const meanAbs = energyAcc / samples.length;
+    if (meanAbs < MIN_ENROLL_ENERGY) {
+      console.warn(`[VoiceVerification] Enrollment too quiet (meanAbs=${meanAbs.toFixed(4)}) — no voice baseline set; voice checks disabled`);
+      return false;
+    }
+
+    // Extract MFCC baseline — yield to main thread first to avoid UI freeze
+    await new Promise(resolve => setTimeout(resolve, 0));
+    const mfcc = extractMFCC(samples, sampleRate);
+    if (!mfcc) {
+      console.warn('[VoiceVerification] Failed to extract MFCC from enrollment audio');
+      return false;
+    }
+
+    baselineMFCCRef.current = mfcc;
+    isEnrolledRef.current = true;
+    console.log(`[VoiceVerification] Voice enrolled (${(samples.length / sampleRate).toFixed(1)}s, ${NUM_MFCC_COEFFICIENTS} coefficients)`);
+    return true;
+  }, []);
+
+  /**
    * Enroll the candidate's voice during system check.
    * Records audio from the stream for the specified duration, then extracts MFCC baseline.
    *
@@ -205,11 +246,6 @@ export function useInterviewVoiceVerification(callbacks?: VoiceVerificationCallb
 
       // Concatenate all chunks
       const totalLength = audioChunks.reduce((sum, chunk) => sum + chunk.length, 0);
-      if (totalLength === 0) {
-        console.warn('[VoiceVerification] No audio captured during enrollment');
-        return false;
-      }
-
       const combined = new Float32Array(totalLength);
       let offset = 0;
       for (const chunk of audioChunks) {
@@ -217,34 +253,12 @@ export function useInterviewVoiceVerification(callbacks?: VoiceVerificationCallb
         offset += chunk.length;
       }
 
-      // Reject a baseline captured from silence — otherwise it mismatches real
-      // speech later and false-flags the candidate. Enrollment must hear a voice.
-      let energyAcc = 0;
-      for (let i = 0; i < combined.length; i++) energyAcc += Math.abs(combined[i]);
-      const meanAbs = combined.length ? energyAcc / combined.length : 0;
-      if (meanAbs < MIN_ENROLL_ENERGY) {
-        console.warn(`[VoiceVerification] Enrollment too quiet (meanAbs=${meanAbs.toFixed(4)}) — no voice baseline set; voice checks disabled`);
-        return false;
-      }
-
-      // Extract MFCC baseline — yield to main thread first to avoid UI freeze
-      const sr = audioContext.sampleRate || 44100;
-      await new Promise(resolve => setTimeout(resolve, 0));
-      const mfcc = extractMFCC(combined, sr);
-      if (!mfcc) {
-        console.warn('[VoiceVerification] Failed to extract MFCC from enrollment audio');
-        return false;
-      }
-
-      baselineMFCCRef.current = mfcc;
-      isEnrolledRef.current = true;
-      console.log(`[VoiceVerification] Voice enrolled (${(totalLength / sr).toFixed(1)}s, ${NUM_MFCC_COEFFICIENTS} coefficients)`);
-      return true;
+      return await enrollFromSamples(combined, audioContext.sampleRate || 44100);
     } catch (err) {
       console.error('[VoiceVerification] Enrollment failed:', err);
       return false;
     }
-  }, []);
+  }, [enrollFromSamples]);
 
   /**
    * Verify a voice sample against the enrolled baseline.
@@ -302,6 +316,7 @@ export function useInterviewVoiceVerification(callbacks?: VoiceVerificationCallb
 
   return {
     enrollVoice,
+    enrollFromSamples,
     verifyVoice,
     hasBaseline,
     reset,

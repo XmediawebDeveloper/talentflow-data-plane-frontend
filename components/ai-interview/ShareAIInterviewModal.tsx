@@ -6,6 +6,7 @@ import { VersionPill } from './AllInterviewsTable';
 import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
 import { modeFromConfig } from '@/lib/constants/aiInterviewMode';
 import React, { useState, useEffect, useRef } from 'react';
+import { useFolderPanelCollapsed, folderColumnClasses, FolderCollapseButton, FolderPanelRail } from '@/components/ui/folder-panel-collapse';
 import { createPortal } from 'react-dom';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
@@ -191,6 +192,9 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
   const [folderResumes, setFolderResumes] = useState<Resume[]>([]);
   const [isLoadingFolder, setIsLoadingFolder] = useState(false);
   const [selectedFolder, setSelectedFolder] = useState<string>('all');
+  // Collapsible folder sidebar (sm and up) — the same remembered choice as
+  // every other resume-database view (components/ui/folder-panel-collapse).
+  const { collapsed: foldersCollapsed, setCollapsed: setFoldersCollapsed, animate: foldersAnimate } = useFolderPanelCollapsed();
   type SidebarFolder = { id: string; name: string; parentId?: string | null; count: number };
   // Open subfolder flyouts, one per depth — same cascading hover menu as "Move to Folder".
   const [openPath, setOpenPath] = useState<{ folder: SidebarFolder; anchor: DOMRect }[]>([]);
@@ -1395,7 +1399,9 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                         );
                       })()}
                       <div className="flex items-center gap-3">
-                        <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {/* Email column is wider: it also holds Copy Link / Add, which would
+                            otherwise squeeze the address input to half the name's width. */}
+                        <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-3 gap-3">
                           <div className="min-w-0">
                             <label className="text-xs text-gray-600 dark:text-slate-400 mb-1 block">Full Name *</label>
                             <input
@@ -1409,7 +1415,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                               }`}
                             />
                           </div>
-                          <div className="min-w-0">
+                          <div className="min-w-0 sm:col-span-2">
                             <label className="text-xs text-gray-600 dark:text-slate-400 mb-1 block">Email Address *</label>
                             <div className="flex items-center gap-2 min-w-0">
                               <input
@@ -1683,14 +1689,20 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                 <div className="flex flex-col sm:flex-row" style={{ minHeight: '300px', maxHeight: '380px' }}>
                   {/* Folder Sidebar (My Resumes only) — short scrollable strip on
                       top for mobile, fixed left column from sm up. */}
+                  {dbTab === 'my-resumes' && myFolders.length > 0 && foldersCollapsed && (
+                    <FolderPanelRail onExpand={() => setFoldersCollapsed(false)} animate={foldersAnimate} from="sm" />
+                  )}
                   {dbTab === 'my-resumes' && myFolders.length > 0 && (
                     <div
-                      className="w-full sm:w-56 max-h-28 sm:max-h-none border-b sm:border-b-0 sm:border-r border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 overflow-y-auto flex-shrink-0 p-2"
+                      className={`w-full sm:w-56 max-h-28 sm:max-h-none border-b sm:border-b-0 sm:border-r border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 overflow-y-auto flex-shrink-0 p-2 ${folderColumnClasses(foldersCollapsed, foldersAnimate, 'sm')}`}
                       onMouseLeave={() => scheduleOpenPath([])}
                       // Flyouts are pinned to row positions — scrolling would leave them adrift.
                       onScroll={() => { cancelScheduledClose(); setOpenPath([]); }}
                     >
-                      <p className="px-3 pb-1 text-2xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">System Folders</p>
+                      <div className="flex items-center pr-0.5">
+                        <p className="flex-1 px-3 pb-1 text-2xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">System Folders</p>
+                        <FolderCollapseButton onCollapse={() => setFoldersCollapsed(true)} from="sm" />
+                      </div>
                       <div className="space-y-0.5">
                         <button type="button" onClick={() => setSelectedFolder('all')} className={`${folderRowClass(selectedFolder === 'all')} pl-3`}>
                           <FolderOpen className="w-4 h-4 text-brand-blue flex-shrink-0" />
