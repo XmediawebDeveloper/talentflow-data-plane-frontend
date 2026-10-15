@@ -90,8 +90,13 @@ export interface JobAssessmentHierarchy {
  */
 const ASSESSMENTS_PAGE_SIZE = 100;
 
-/** How many lineage lookups run at once in `resolveJobVersionsByJdId`. */
+/** How many lineage lookups run at once in the per-job fallback of
+ *  `resolveJobVersionsByJdId`. */
 const LINEAGE_LOOKUP_CONCURRENCY = 6;
+
+/** Ids per `/jd/version-map` request. The backend caps a request at 200; staying
+ *  at it keeps a page of jobs to one request and a crafted list to a few. */
+const VERSION_MAP_BATCH = 200;
 
 /**
  * Every assessment matching `params`, following the pager to the end.
@@ -254,12 +259,42 @@ export async function loadJobAssessmentHierarchy(jdId: string): Promise<JobAsses
 export async function resolveJobVersionsByJdId(jdIds: (string | undefined | null)[]): Promise<Map<string, number>> {
   const resolved = new Map<string, number>();
   const queue = [...new Set(jdIds.filter((id): id is string => !!id))];
+
+  /* ONE request per VERSION_MAP_BATCH ids — `/jd/version-map` answers for every
+     version of every job the ids belong to, so a page of jobs costs a request
+     rather than one per job. A chunk is asked about only what an earlier chunk
+     has not already answered. */
+  for (let i = 0; i < queue.length; i += VERSION_MAP_BATCH) {
+    const chunk = queue.slice(i, i + VERSION_MAP_BATCH).filter((id) => !resolved.has(id));
+    if (chunk.length === 0) continue;
+    try {
+      const versions = await jdService.getVersionMap(chunk);
+      for (const [id, versionNumber] of Object.entries(versions)) {
+        resolved.set(id, versionNumber ?? 1);
+      }
+    } catch {
+      /* The batched answer is unavailable (an older backend, a transient
+         failure) — fall back to one lineage request per job for this chunk,
+         which is what this function did before the batch existed. */
+      await resolveViaLineage(chunk, resolved);
+    }
+  }
+
+  return resolved;
+}
+
+/**
+ * The pre-batch path: one `/jd/{id}/lineage` request per job, a few at a time.
+ * Kept as the fallback for `resolveJobVersionsByJdId`. Never throws — an id
+ * whose lineage could not be read is simply absent from `resolved`.
+ */
+async function resolveViaLineage(ids: string[], resolved: Map<string, number>): Promise<void> {
   /* Asked-for ids that a lineage answered for, so a later chunk does not ask
      again for something already known. */
   const asked = new Set<string>();
 
-  for (let i = 0; i < queue.length; i += LINEAGE_LOOKUP_CONCURRENCY) {
-    const chunk = queue.slice(i, i + LINEAGE_LOOKUP_CONCURRENCY).filter((id) => !resolved.has(id) && !asked.has(id));
+  for (let i = 0; i < ids.length; i += LINEAGE_LOOKUP_CONCURRENCY) {
+    const chunk = ids.slice(i, i + LINEAGE_LOOKUP_CONCURRENCY).filter((id) => !resolved.has(id) && !asked.has(id));
     if (chunk.length === 0) continue;
     for (const id of chunk) asked.add(id);
     const lineages = await Promise.all(
@@ -279,8 +314,6 @@ export async function resolveJobVersionsByJdId(jdIds: (string | undefined | null
       }
     }
   }
-
-  return resolved;
 }
 
 /**
