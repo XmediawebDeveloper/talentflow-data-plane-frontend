@@ -215,6 +215,9 @@ export interface AIInterviewResponse {
   resume_id?: string;
   config_id?: string;
   display_id?: string;
+  /** Position in the interview's lineage (V1, V2..), stored by the backend. Null on
+   *  candidate sessions and on rows that predate it. */
+  interview_version?: number | null;
   candidate_name?: string;
   candidate_email?: string;
   position?: string;
@@ -463,7 +466,9 @@ export const aiInterviewService = {
     page_size?: number;
   }): Promise<AIInterviewListResponse> {
     try {
-      const response = await api.get<AIInterviewListResponse>('/ai-interview', { params });
+      // Trailing slash on purpose: the list route is registered at "/", so the
+      // bare path is answered with a redirect and costs a second request.
+      const response = await api.get<AIInterviewListResponse>('/ai-interview/', { params });
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));
@@ -883,6 +888,26 @@ export const aiInterviewService = {
         { params }
       );
       return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Invitation total and completed count for MANY interview configs, in ONE
+   * request — config id → { total, completed }. The batched form of
+   * `getConfigInvitations(id, { page_size: 1 })`, whose `total` and `completed`
+   * the Interview list reads per config.
+   */
+  async getInvitationCounts(configIds: string[]): Promise<Record<string, { total: number; completed: number }>> {
+    const ids = Array.from(new Set(configIds.filter(Boolean)));
+    if (ids.length === 0) return {};
+    try {
+      const response = await api.get<{ counts: Record<string, { total: number; completed: number }> }>(
+        '/ai-interview/invitation-counts',
+        { params: { ids: ids.join(',') } },
+      );
+      return response.data?.counts || {};
     } catch (error) {
       throw new Error(handleApiError(error));
     }

@@ -2,7 +2,7 @@
 
 import { handoffContinueLabel, resolveInviteHandoffOrigin, useHandoffCandidateCrumb } from '@/lib/utils/resumeScoringInviteHandoff';
 import React, { useState, useEffect, useCallback } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useEmbeddedWizard, useWizardRouter, useWizardSearchParams } from './embeddedWizardNav';
 import {
   ArrowLeft, CheckCircle2, Loader2, Clock, Shield, Users,
   Brain, Video, Globe, Timer, Layers, Settings,
@@ -229,13 +229,16 @@ function HRQuestionStageBadge({ stage }: { stage?: string }) {
 /* ─────────────────────────────────────────────────────────────────────── */
 
 export default function AIInterviewPreview() {
-  const router = useRouter();
+  const router = useWizardRouter();
+  /* Run inside the Create / Send AI Interview popup (AIInterviewWizardDialog). */
+  const wizardNav = useEmbeddedWizard();
+  const embedded = !!wizardNav;
   /* Step indicator pins below the sticky breadcrumb rather than under it. */
   const [breadcrumbBarRef, breadcrumbHeight] = useBreadcrumbOffset();
   const { isTenantAdmin, hasPermissionCode } = useAuth();
   const canPublishAIInterview = isTenantAdmin || hasPermissionCode('ai_interview:publish');
   const canInviteAIInterview = isTenantAdmin || hasPermissionCode('ai_interview:invite');
-  const searchParams = useSearchParams();
+  const searchParams = useWizardSearchParams();
   const id = searchParams.get('id') || '';
   // Carried from Clusters when the flow started on a JD's Job Details page, so
   // stepping back keeps that page's breadcrumb instead of dropping to the
@@ -414,6 +417,13 @@ export default function AIInterviewPreview() {
     try {
       await aiInterviewService.publishConfig(id);
       setShowConfirm(false);
+      /* In the popup, publishing ends the flow there — as the Assessment
+         Configure popup does: the record goes back to the version list. */
+      if (wizardNav) {
+        toast.success('AI interview published successfully.');
+        wizardNav.exit();
+        return;
+      }
       /* Stay here and show the published screen — it is where the recruiter
          invites the first candidates from. The list page used to receive a
          `?published=1` redirect and raise a self-closing dialog, which read as
@@ -440,7 +450,7 @@ export default function AIInterviewPreview() {
      entry so Back triggers this listener instead of leaving the page, and
      send the user to the same place "Go to AI Interviews" does. */
   useEffect(() => {
-    if (!published) return;
+    if (!published || embedded) return;
     window.history.pushState(null, '', window.location.href);
     const handlePopState = () => {
       router.replace(listHref);
@@ -454,7 +464,7 @@ export default function AIInterviewPreview() {
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [published, listHref, router]);
+  }, [published, listHref, router, embedded]);
 
   const handleSaveAsDraft = async () => {
     toast.success('Draft saved!');
@@ -504,7 +514,8 @@ export default function AIInterviewPreview() {
             <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
               <PageBreadcrumb
                 barRef={breadcrumbBarRef}
-                className="mb-4 md:mb-6"
+                /* Inside the wizard popup the popup's header names the flow. */
+                className={`mb-4 md:mb-6${embedded ? ' hidden' : ''}`}
                 items={fromInviteOrigin
                   ? [
                       { label: 'Dashboard', href: '/dashboard' },
@@ -627,7 +638,8 @@ export default function AIInterviewPreview() {
           <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
             <PageBreadcrumb
               barRef={breadcrumbBarRef}
-              className="mb-4 md:mb-6"
+              /* Inside the wizard popup the popup's header names the flow. */
+              className={`mb-4 md:mb-6${embedded ? ' hidden' : ''}`}
               items={
                 fromInviteOrigin
                   ? [

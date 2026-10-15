@@ -167,20 +167,27 @@ export default function ResumeTextPreviewModal({
   // The hold above is a best-effort estimate, not a real signal that the
   // native viewer has painted — Chromium's built-in PDF viewer has a known
   // quirk where it can still be showing its black placeholder after `onLoad`
-  // fires and the estimated hold elapses. Forcing one reflow once the frame
-  // is revealed nudges it to repaint, which is the documented workaround for
-  // that quirk.
+  // fires and the estimated hold elapses, and observed in production, that gap
+  // can run several seconds past the hold for a dense resume, not just a beat.
+  // One reflow at the moment of reveal can land before the viewer is actually
+  // ready to repaint and do nothing, so it's repeated on a short schedule
+  // instead of fired once — cheap (a 1px width flicker, not a visible layout
+  // shift) and each attempt is a fresh chance to catch it.
   useEffect(() => {
     if (!pdfFrameLoaded) return;
     const el = pdfIframeRef.current;
     if (!el) return;
-    const prevWidth = el.style.width;
-    requestAnimationFrame(() => {
-      el.style.width = 'calc(100% - 1px)';
+    const nudge = () => {
+      const prevWidth = el.style.width;
       requestAnimationFrame(() => {
-        el.style.width = prevWidth;
+        el.style.width = 'calc(100% - 1px)';
+        requestAnimationFrame(() => {
+          el.style.width = prevWidth;
+        });
       });
-    });
+    };
+    const timers = [0, 500, 1200, 2200, 3500].map(delay => setTimeout(nudge, delay));
+    return () => timers.forEach(clearTimeout);
   }, [pdfFrameLoaded]);
 
   /* Same gap, different renderer: docx-preview fills `docxContainerRef`

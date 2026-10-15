@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  X, ClipboardList, MoreVertical, Eye, Pencil, History,
+  X, ClipboardList, MoreVertical, Eye, Pencil,
   ArrowUp, ArrowDown, ArrowUpDown, AlertTriangle, RefreshCw,
   Archive, ArchiveRestore, BarChart, Trash2,
 } from 'lucide-react';
@@ -84,7 +84,23 @@ interface AssessmentRow {
   updatedSort: number;
   jobKey: string;            // the job every version shares (jd_short_id, else jd_id)
   createdBy: string;         //                   -> column 8
+  /** The API record the row was built from — handed to the host's
+   *  `extraRowActions`, so its own handlers act on the same record. */
+  raw: AssessmentResponse;
 }
+
+/** One ⋮ menu item. Exported for the host's `extraRowActions`. */
+export type AssessmentRowAction = {
+  key: string;
+  label: string;
+  icon: typeof Eye;
+  iconClassName: string;
+  run: () => void;
+  destructive?: boolean;
+  /** Shown in the menu's own disabled state, reason on hover. */
+  disabled?: boolean;
+  title?: string;
+};
 
 /* The status a recruiter reads, from the status the backend stores. `published`
    is shown as Active because that is the word the rest of the product uses for
@@ -123,6 +139,7 @@ const toRow = (a: AssessmentResponse): AssessmentRow => {
     jobKey: a.jd_short_id || a.jd_id || `__unlinked__${a.id}`,
     updatedSort: (a.updated_at ? parseIST(a.updated_at).getTime() : 0) || parseIST(a.created_at).getTime() || 0,
     createdBy: a.created_by_name || 'System',
+    raw: a,
   };
 };
 
@@ -290,8 +307,7 @@ const hasAnyFilter = (f: Filters) => Object.values(f).some((v) => v !== '');
    job-grouped list it used to draw — and the table already knew the status in
    every other respect: `STATUS_LABEL` names it, `STATUS_BADGE` has its slate
    pill, the Status sort puts it last in lifecycle order, and `rowActions`
-   offers an archived row View but not Edit (nor, on the Archived tab,
-   View History). */
+   offers an archived row View but not Edit. */
 type FixedAssessmentStatus = 'published' | 'draft' | 'archived';
 
 interface AllAssessmentsTableProps {
@@ -306,6 +322,14 @@ interface AllAssessmentsTableProps {
   /** Told whether the sort is at its default, so Clear Sort can disable
    *  itself when there is nothing to clear. */
   onSortDefaultChange?: (isDefault: boolean) => void;
+  /** More ⋮ items for an Active (published) row, from the host page — its
+   *  Edit / Share / Track (`main`, after View) and Duplicate / Revoke
+   *  (`more`, after View Results), so the Active tab offers what the same
+   *  assessment's row offers on Total Jobs, through the same handlers. */
+  extraRowActions?: (raw: AssessmentResponse) => { main: AssessmentRowAction[]; more: AssessmentRowAction[] } | undefined;
+  /** Bumped by the host after one of those actions changes data (a share,
+   *  a duplicate, a revoke) — the table refetches its rows. */
+  reloadSignal?: number;
   /** Told how many rows this tab loaded (before search / filters), once a
    *  load settles — so the host's tab count is the same data as the list.
    *  `null` while loading or after a failed load. */
@@ -324,7 +348,7 @@ const fixedStatusLabel = (status?: FixedAssessmentStatus) =>
 const DEFAULT_SORT_KEY: SortKey = 'published';
 const DEFAULT_SORT_DIR: 'asc' | 'desc' = 'desc';
 
-export default function AllAssessmentsTable({ embedded = false, fixedStatus, title, description, clearSortSignal, onSortDefaultChange, onRowCountChange }: AllAssessmentsTableProps = {}) {
+export default function AllAssessmentsTable({ embedded = false, fixedStatus, title, description, clearSortSignal, onSortDefaultChange, onRowCountChange, extraRowActions, reloadSignal = 0 }: AllAssessmentsTableProps = {}) {
   const router = useRouter();
   const { isTenantAdmin, user } = useAuth();
   const canUpdateAssessment = isTenantAdmin || (user?.permissions?.canUpdateAssessments ?? false);
@@ -449,7 +473,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
     return () => {
       alive = false;
     };
-  }, [fetchAll, reloadToken]);
+  }, [fetchAll, reloadToken, reloadSignal]);
 
   /* Retry from the error state. Bumping the token re-runs the effect above,
      so the retry path and the mount path are the same code — a second
@@ -794,17 +818,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
     void runStatusAction(row, 'delete', () => assessmentService.delete(row.id), 'Assessment deleted');
   };
 
-  type RowAction = {
-    key: string;
-    label: string;
-    icon: typeof Eye;
-    iconClassName: string;
-    run: () => void;
-    destructive?: boolean;
-    /** Shown in the menu's own disabled state, reason on hover. */
-    disabled?: boolean;
-    title?: string;
-  };
+  type RowAction = AssessmentRowAction;
 
   /* Opens an assessment's details page, whose Prev / Next then walks THIS
      table - every record, in the order it is showing (`sorted`: its filters
@@ -837,20 +851,24 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
 
     const actions: RowAction[] = [];
     switch (row.rawStatus) {
-      case 'published':
-        actions.push(
-          { key: 'archive', label: 'Archive', icon: Archive, iconClassName: 'text-menu-icon-archive', run: () => void archiveRow(row) },
-          view,
-          results,
-        );
+      case 'published': {
+        const archive: RowAction = { key: 'archive', label: 'Archive', icon: Archive, iconClassName: 'text-menu-icon-archive', run: () => void archiveRow(row) };
+        /* With the host's extras (the Active tab), the Total Jobs order:
+           View, Edit, Share/Invite, Track, View Results, Duplicate, Revoke,
+           then Archive. Without them, the menu as it was. */
+        const extra = extraRowActions?.(row.raw);
+        if (extra) actions.push(view, ...extra.main, results, ...extra.more, archive);
+        else actions.push(archive, view, results);
         break;
+      }
       case 'draft':
         /* No Publish on any tab: a draft is published from the Configure
            page its Edit opens, the Total Jobs Edit's flow. */
         /* The All tab has its own Edit, on every row — added below. */
         if (fixedStatus && canUpdateAssessment) {
           actions.push({
-            key: 'edit', label: 'Edit', icon: Pencil, iconClassName: 'text-menu-icon-edit',
+            // A draft is unfinished — its Edit reads "Continue Editing".
+            key: 'edit', label: 'Continue Editing', icon: Pencil, iconClassName: 'text-menu-icon-edit',
             /* Straight to the Configure page for this assessment — the route
                the All tab's Edit and the page's own `handleEditAssessment`
                use. Without `step=configure&jd_id` the create flow opened on
@@ -887,23 +905,14 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
             ? 'Archived assessments cannot be edited'
             : '';
       actions.splice(actions.indexOf(view) + 1, 0, {
-        key: 'edit', label: 'Edit', icon: Pencil, iconClassName: 'text-menu-icon-edit',
+        // "Continue Editing" on a draft row, "Edit" on every other.
+        key: 'edit', label: row.rawStatus === 'draft' ? 'Continue Editing' : 'Edit', icon: Pencil, iconClassName: 'text-menu-icon-edit',
         disabled: !!editReason,
         title: editReason || undefined,
         /* The Total Jobs Edit's route (`handleEditAssessment` on the
            Assessments page), so both open the same Configure page with the
            same assessment loaded. */
         run: () => router.push(`/recruitment/assessments/create?step=configure&jd_id=${row.jdId}&edit=${row.id}`),
-      });
-    }
-    /* Not on the Archived tab: its menu never had it. Never on a Draft, on
-       any tab. Nor on an Active (`published`) or an Archived row on the All
-       tab — so of the All tab's rows only Completed keeps View History. */
-    if (fixedStatus !== 'archived' && row.rawStatus !== 'draft'
-      && (fixedStatus || !['published', 'archived'].includes(row.rawStatus))) {
-      actions.push({
-        key: 'history', label: 'View History', icon: History, iconClassName: 'text-menu-icon-secondary',
-        run: () => openAssessmentDetails(row, 'tab=versions'),
       });
     }
     /* Last, as on the page's own menu: the one action that cannot be undone.

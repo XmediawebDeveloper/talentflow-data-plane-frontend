@@ -4,8 +4,9 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   Shield, Camera, Lock, AlertCircle, Mail, User,
   CheckCircle, RefreshCw, Loader2, ArrowRight, KeyRound, Check,
-  Lightbulb, Sun, ScanFace, Ban, Info,
+  Lightbulb, Sun, Info,
 } from 'lucide-react';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
 import { loadFaceApiWithCpuBackend } from '@/lib/face-api-loader';
@@ -14,7 +15,6 @@ import { FACE_API_MODEL_URLS, loadFaceApiNetWithFallback, assessCandidateFaceVis
 import '@/lib/tfjs-rejection-guard';
 import { AUTH_THEME_CSS } from '@/components/auth/authTheme';
 import SuccessAnimation from '@/components/ui/success-animation';
-import type { IconComponent } from '@/lib/types/icon';
 import SubStepProgress from './SubStepProgress';
 import { candidateScrollBehavior, revealAfterPaint } from '@/lib/utils/candidateScroll';
 
@@ -63,24 +63,26 @@ const OTP_FLIP_CSS = `
 // Seconds counted down before the identity photo is auto-captured.
 const CAPTURE_COUNTDOWN_SECONDS = 3;
 
-// One row of the "How it works" panel — the number badge pops into an
-// animated checkmark the moment that step's own condition is met (face
-// correctly positioned, photo captured, photo verified).
-function HowItWorksStep({
-  num, done, icon: Icon, title, subtitle,
-}: { num: number; done: boolean; icon: IconComponent; title: string; subtitle: string }) {
+// One card of the "How it works" panel: an illustrated tile with the step's
+// number above it, then a title and a line under it. The number pops
+// into an animated tick the moment that step is met.
+function HowItWorksCard({
+  num, done, title, subtitle, children,
+}: { num: number; done: boolean; title: string; subtitle: string; children: React.ReactNode }) {
   return (
-    <div className={`flex items-center gap-3 ${num > 1 ? 'pt-3' : ''}`}>
-      <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 transition-colors duration-300 ${
-        done ? 'bg-success text-white' : 'bg-white border border-brand-blue/20 text-brand-blue'
+    <div className="flex-1 min-w-0 flex flex-col items-center text-center">
+      {/* The number sits ABOVE the picture, clear of it. */}
+      <span className={`w-7 h-7 mb-1.5 rounded-full flex items-center justify-center text-xs font-bold shadow-sm transition-colors duration-300 ${
+        done ? 'bg-success text-white' : 'bg-brand-blue text-white'
       }`}>
-        {done ? <CheckCircle className="w-4 h-4 animate-in zoom-in-50 duration-300" /> : num}
+        {done ? <Check className="w-4 h-4 animate-in zoom-in-50 duration-300" /> : num}
       </span>
-      <Icon className={`w-4 h-4 flex-shrink-0 transition-colors duration-300 ${done ? 'text-success' : 'text-gray-400'}`} />
-      <div>
-        <p className="text-sm font-medium text-gray-800">{title}</p>
-        <p className="text-xs text-gray-500">{subtitle}</p>
+      {/* Phones (cards stacked): a small picture, not the column's full width. */}
+      <div className="relative w-full max-w-[9rem] min-[380px]:max-w-none aspect-[156/123] rounded-xl bg-gradient-to-b from-brand-blue/5 to-brand-blue/10 border border-brand-blue/10 flex items-center justify-center overflow-hidden">
+        {children}
       </div>
+      <p className="mt-2 text-sm font-semibold text-gray-900 leading-tight">{title}</p>
+      <p className="mt-0.5 text-xs text-gray-600 leading-snug">{subtitle}</p>
     </div>
   );
 }
@@ -1033,7 +1035,7 @@ export default function StepIdentity({
 
   // ── PHASES B-E: Live Photo Capture ──
   return (
-    <div className="w-full max-w-6xl mx-auto space-y-6">
+    <div className="w-full max-w-5xl mx-auto space-y-6">
       {progressStepper}
       <div className="text-center">
         <span className="inline-flex items-center gap-1.5 bg-success-subtle text-success text-xs font-semibold px-3 py-1.5 rounded-full mb-3">
@@ -1045,12 +1047,18 @@ export default function StepIdentity({
 
       <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
 
-        <div className="p-4 sm:p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="p-3 sm:p-4">
+          <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] gap-4 sm:gap-5">
             {/* Left: Video feed */}
-            {/* On short laptops the 4:3 box is capped (by width, from the
-                viewport height) so the capture controls stay above the fold. */}
-            <div ref={photoCardRef} className="relative bg-gray-900 rounded-xl aspect-[4/3] overflow-hidden flex items-center justify-center w-full md:mx-auto md:self-start md:max-w-[max(20rem,calc((100dvh-var(--tf-sticky-h,0px)-15rem)*4/3))]">
+            {/* 4:3 on phones; 16:9 from `md`, the webcam's own shape, at the
+                SAME height the 4:3 box had — the cap is the same height budget
+                (viewport height less the chrome) times 16/9 instead of 4/3, so
+                the box only grows wider. Sits at the column's start, so the
+                card has no empty band beside it. */}
+            {/* The camera with the photo tips under it, the two as one column
+                (the cap on the camera's width caps the tips' too). */}
+            <div className="w-full min-w-0 md:self-start flex flex-col gap-3 md:max-w-[max(26.67rem,calc((100dvh-var(--tf-sticky-h,0px)-15rem)*16/9))]">
+            <div ref={photoCardRef} className="relative bg-gray-900 rounded-xl aspect-[4/3] md:aspect-video overflow-hidden flex items-center justify-center w-full">
               {phase !== 'captured' && (
                 <video ref={videoRef} muted playsInline className="w-full h-full object-cover" style={{ transform: 'scaleX(-1)' }} />
               )}
@@ -1143,6 +1151,26 @@ export default function StepIdentity({
               )}
             </div>
 
+              {/* Tips for a clear photo — under the camera: light and only you. */}
+              <div className="bg-brand-blue/5 border border-brand-blue/15 rounded-xl px-3 py-2.5 sm:px-4">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <Lightbulb className="w-4 h-4 text-brand-blue flex-shrink-0" />
+                  <h4 className="text-sm font-semibold text-gray-900">Tips for a clear photo</h4>
+                </div>
+                <div className="flex flex-col sm:flex-row divide-y sm:divide-y-0 sm:divide-x divide-brand-blue/15">
+                  {[
+                    { icon: Sun, text: 'Be in a well-lit place' },
+                    { icon: User, text: 'Keep only yourself in the frame' },
+                  ].map(({ icon: Icon, text }) => (
+                    <div key={text} className="flex items-center gap-2 text-sm text-gray-600 py-1.5 sm:py-0 sm:px-4 sm:first:pl-0">
+                      <Icon className="w-4 h-4 text-brand-blue flex-shrink-0" />
+                      {text}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
             {/* Right: Instructions / status */}
             <div className="h-full flex flex-col gap-4">
               {/* "How it works" — stays visible across the whole capture flow so
@@ -1151,40 +1179,54 @@ export default function StepIdentity({
                   absorb the column's extra height so the right side matches the
                   video panel instead of leaving a gap below the button. */}
               <div className="bg-brand-blue/5 border border-brand-blue/15 rounded-xl overflow-hidden flex-1 flex flex-col">
-                <div className="flex items-center gap-2 px-4 py-3 bg-brand-blue/5 border-b border-brand-blue/10">
-                  <Shield className="w-4 h-4 text-brand-blue" />
-                  <h4 className="text-sm font-semibold text-gray-900">How it works</h4>
+                <div className="flex items-center gap-3 px-4 py-3 bg-brand-blue/5 border-b border-brand-blue/10">
+                  <span className="w-8 h-8 rounded-lg bg-brand-blue text-white flex items-center justify-center flex-shrink-0">
+                    <Shield className="w-4 h-4" />
+                  </span>
+                  <div className="min-w-0">
+                    <h4 className="text-sm font-semibold text-gray-900 leading-tight">How it works</h4>
+                    <p className="text-xs text-gray-600">Follow the steps below to capture a clear photo.</p>
+                  </div>
                 </div>
-                <div className="px-4 py-3 space-y-3 divide-y divide-brand-blue/10 flex-1">
-                  {(() => {
-                    const positioned = liveFaceStatus === 'ok' || phase !== 'photo_ready';
-                    return (
-                      <>
-                        <HowItWorksStep
-                          num={1}
-                          done={positioned}
-                          icon={User}
-                          title="Position your face"
-                          subtitle="Center your face inside the oval, with only you in frame."
-                        />
-                        <HowItWorksStep
-                          num={2}
-                          done={positioned}
-                          icon={Camera}
-                          title="Capture"
-                          subtitle="Click “Capture Photo” when you're ready to take your photo."
-                        />
-                        <HowItWorksStep
-                          num={3}
-                          done={positioned}
-                          icon={CheckCircle}
-                          title="Verification"
-                          subtitle="Your photo will be securely verified for identity confirmation."
-                        />
-                      </>
-                    );
-                  })()}
-                </div>
+                {(() => {
+                  // Glasses off before the shot, the shot itself, glasses back on.
+                  const shotTaken = phase !== 'photo_ready';
+                  const captured = phase === 'captured';
+                  return (
+                    <div className="px-3 sm:px-4 py-4 flex-1 flex flex-col min-[380px]:flex-row items-stretch gap-4 min-[380px]:gap-2">
+                      <HowItWorksCard
+                        num={1}
+                        done={shotTaken}
+                        title="Remove Glasses"
+                        subtitle="Remove your glasses before capture."
+                      >
+                        <Image src="/images/identity/how-it-works-1.png" alt="Candidate holding their glasses, ready to take them off" fill sizes="(min-width: 768px) 160px, 33vw" className="object-cover select-none" draggable={false} />
+                      </HowItWorksCard>
+                      <div className="hidden min-[380px]:flex items-center flex-shrink-0 self-start mt-[4rem]" aria-hidden="true">
+                        <ArrowRight className="w-4 h-4 text-brand-blue" />
+                      </div>
+                      <HowItWorksCard
+                        num={2}
+                        done={captured}
+                        title="Capture Photo"
+                        subtitle="Center your face and capture the photo."
+                      >
+                        <Image src="/images/identity/how-it-works-2.png" alt="Candidate without glasses, face centred in the frame" fill sizes="(min-width: 768px) 160px, 33vw" className="object-cover select-none" draggable={false} />
+                      </HowItWorksCard>
+                      <div className="hidden min-[380px]:flex items-center flex-shrink-0 self-start mt-[4rem]" aria-hidden="true">
+                        <ArrowRight className="w-4 h-4 text-brand-blue" />
+                      </div>
+                      <HowItWorksCard
+                        num={3}
+                        done={captured}
+                        title="Wear Again"
+                        subtitle="Put your glasses back on after capture."
+                      >
+                        <Image src="/images/identity/how-it-works-3.png" alt="Candidate putting their glasses back on" fill sizes="(min-width: 768px) 160px, 33vw" className="object-cover select-none" draggable={false} />
+                      </HowItWorksCard>
+                    </div>
+                  );
+                })()}
               </div>
 
               {phase === 'photo_ready' && (
@@ -1224,13 +1266,11 @@ export default function StepIdentity({
                           {faceError ? 'Retake Photo' : 'Capture Photo'}
                           <ArrowRight className="w-4 h-4" />
                         </Button>
-                        {/* The reason Capture is disabled — a `title` never
-                            shows on touch screens. */}
-                        {!captureReady && (
+                        {/* Only a blocked camera is spelled out here — the face
+                            hints already show on the camera itself. */}
+                        {cameraError && (
                           <p role="status" className="text-xs text-gray-600 text-center">
-                            {cameraError
-                              ? 'Camera access is blocked — allow it in the address bar, then retry.'
-                              : blockedMsg || 'Starting camera…'}
+                            Camera access is blocked — allow it in the address bar, then retry.
                           </p>
                         )}
                       </>
@@ -1289,27 +1329,6 @@ export default function StepIdentity({
             </div>
           </div>
           <canvas ref={canvasRef} className="hidden" />
-        </div>
-      </div>
-
-      {/* Tips for a clear photo */}
-      <div className="bg-brand-blue/5 border border-brand-blue/15 rounded-2xl p-4 sm:p-5">
-        <div className="flex items-center gap-2 mb-3">
-          <Lightbulb className="w-4 h-4 text-brand-blue flex-shrink-0" />
-          <h4 className="text-sm font-semibold text-gray-900">Tips for a clear photo</h4>
-        </div>
-        <div className="flex flex-col sm:flex-row divide-y sm:divide-y-0 sm:divide-x divide-brand-blue/15">
-          {[
-            { icon: Sun, text: 'Be in a well-lit place' },
-            { icon: ScanFace, text: 'Face the camera directly' },
-            { icon: Ban, text: 'Remove sunglasses or mask' },
-            { icon: User, text: 'Keep only yourself in the frame' },
-          ].map(({ icon: Icon, text }) => (
-            <div key={text} className="flex items-center gap-2 text-sm text-gray-600 py-2 sm:py-0 sm:px-4 sm:first:pl-0">
-              <Icon className="w-4 h-4 text-brand-blue flex-shrink-0" />
-              {text}
-            </div>
-          ))}
         </div>
       </div>
 

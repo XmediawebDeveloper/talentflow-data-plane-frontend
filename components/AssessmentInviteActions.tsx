@@ -79,8 +79,12 @@ export const isInviteExpired = (inv: any): boolean => {
 /** Revoke — only while successfully sent and not yet engaged with. Matches
  *  the AI Interview rule: once expired, Resend is the only path back, not
  *  Revoke; once started/completed there is nothing left to revoke. */
-export const isRevocableInvitation = (inv: any): boolean =>
-  resolveInviteStatus(inv) === 'sent' && !inv.started_at && !inv.completed_at && !isInviteExpired(inv);
+export const isRevocableInvitation = (inv: any): boolean => {
+  const s = resolveInviteStatus(inv);
+  // 'pending' = a Copy Link invite: minted with no email send, so it has no
+  // sent_at and its link is live (the backend revoke accepts it).
+  return (s === 'sent' || s === 'pending') && !inv.started_at && !inv.completed_at && !isInviteExpired(inv);
+};
 
 /** Edit (name + email) only ever appears once revoked — same rule as AI
  *  Interview. This is distinct from the pre-existing failed/bounced "fix the
@@ -97,12 +101,13 @@ export const canResendInvite = (inv: any): boolean => {
   return (s === 'expired' || s === 'failed' || isInviteExpired(inv)) && !inv.started_at && !inv.completed_at;
 };
 
-/** Copy Link — available whenever the link is live: sent, system-check
- *  ('opened'), or in-progress. Disappears once revoked — Edit is the only
- *  action from there — mirroring AI Interview's isInterviewLinkLive. */
+/** Copy Link — available whenever the link is live: pending (a Copy Link
+ *  invite, minted with no email send), sent, system-check ('opened'), or
+ *  in-progress. Disappears once revoked — Edit is the only action from there —
+ *  mirroring AI Interview's isInterviewLinkLive. */
 export const isCopyLinkAvailable = (inv: any): boolean => {
   const s = resolveInviteStatus(inv);
-  return !!inv.invitation_link && !['completed', 'failed', 'bounced', 'abandoned', 'expired', 'revoked', 'pending'].includes(s) && !isInviteExpired(inv);
+  return !!inv.invitation_link && !['completed', 'failed', 'bounced', 'abandoned', 'expired', 'revoked'].includes(s) && !isInviteExpired(inv);
 };
 
 export const copyInvitationLink = async (inv: any) => {
