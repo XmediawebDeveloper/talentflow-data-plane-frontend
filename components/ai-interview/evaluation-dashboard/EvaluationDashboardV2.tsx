@@ -8,7 +8,7 @@ import {
   ChevronDown, ChevronUp, TrendingUp, TrendingDown, Minus, Clock, Brain, Calculator, X, MessageSquare, SkipForward,
 } from 'lucide-react';
 import type { DashboardData, PerQuestionDetail } from './types';
-import { orderQuestionsAsAsked } from './types';
+import { orderQuestionsAsAsked, isSkillNotAssessed } from './types';
 import { buildRationaleLines } from './types';
 import { IS_PRODUCTION_ENV } from '../../../lib/utils/env';
 
@@ -150,8 +150,9 @@ export function SkillsView({ data }: { data: DashboardData }) {
     // A skill no question covered has no score to show. Its 0 is "not
     // measured", not "measured and failed" — the Cluster Coverage tab makes
     // the same distinction from the same `asked` flag.
-    // A real score always wins, so a stale flag can never hide a result.
-    const notAssessed = s.asked === false && !(s.score > 0);
+    // Shared rule (types.ts): never on old interviews with no record of what
+    // was asked, and a real score always wins.
+    const notAssessed = isSkillNotAssessed(s);
     const contribution = +(s.score * tag.weight).toFixed(1);
     const isOpen = expanded === rowKey;
     const color = notAssessed ? 'var(--raw-9ca3af)' : scoreColor(s.score);
@@ -205,7 +206,7 @@ export function SkillsView({ data }: { data: DashboardData }) {
           <div className="px-4 sm:px-5 pb-5">
             <hr className="border-gray-200 mb-4" />
             <div className="p-4 rounded-xl bg-white border border-gray-200 text-sm text-gray-600 leading-relaxed">
-              No question in this interview covered this skill, so it has no score. It is not counted as a weak answer.
+              No question in this interview covered this skill, so it has no skill score. If its planned question was never reached (the interview ended early), that question still counts as 0 in the Section Score.
             </div>
           </div>
         )}
