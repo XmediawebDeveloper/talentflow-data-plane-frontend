@@ -2146,10 +2146,8 @@ export default function AITalentMatchPage({
       isMatchingInProgress.current = false;
     }, 500);
 
-    // Resume Scoring units for this run are checked and charged by the backend
-    // (POST /ai-match/run), capped at the tenant's remaining balance. Charging
-    // here as well would double-bill, and charging here instead is what let
-    // runs overshoot the quota.
+    // A match run is free — no units are charged, here or by the backend.
+    // Units are used only when matched resumes are scored.
 
     // Save to history
     if (selectedJobData) {
