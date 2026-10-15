@@ -9496,14 +9496,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     {isRefreshingTracking ? 'Refreshing...' : 'Refresh'}
                   </span>
                 </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={closeTrackInvitesModal}
-                  className="px-2"
-                 aria-label="Close">
-                  <X className="w-4 h-4 sm:w-5 sm:h-5" />
-                </Button>
               </div>
             </div>
 
@@ -10057,6 +10049,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     the Share dialog opens on the SAME assessment, and closing
                     Share brings this popup back (see `shareReturnToTracking`).
                     Gated exactly as every other Share on this page is. */}
+                <Button variant="secondary" size="sm" onClick={closeTrackInvitesModal}>
+                  Cancel
+                </Button>
                 {(() => {
                   const target = selectedAssessmentForTracking;
                   const canShare = isTenantAdmin || hasPermissionCode('assessments:share');
