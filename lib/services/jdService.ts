@@ -1095,6 +1095,30 @@ export const jdService = {
   },
 
   /**
+   * `getLineageVersions` for many jobs in ONE request (chunks of 200 ids).
+   *
+   * Keyed by the id asked with; each list is what the per-job call returns for
+   * that id. An id the server did not answer for is absent. Throws if a chunk
+   * fails, so the caller can fall back to the per-job call.
+   */
+  async getLineagesBatch(jdIds: string[]): Promise<Record<string, JDLineageVersion[]>> {
+    const ids = Array.from(new Set(jdIds.filter(Boolean)));
+    const out: Record<string, JDLineageVersion[]> = {};
+    try {
+      for (let i = 0; i < ids.length; i += 200) {
+        const response = await api.get<{ lineages: Record<string, JDLineageVersion[]> }>(
+          '/jd/lineages',
+          { params: { ids: ids.slice(i, i + 200).join(',') } },
+        );
+        Object.assign(out, response.data?.lineages || {});
+      }
+      return out;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
    * How many versions each of these jobs has, in ONE request.
    *
    * The authoritative source for the "Job Versions" figure on the Assessment

@@ -193,28 +193,59 @@ export function useJobVersionLineage(): JobVersionLineage {
 
   const ensureFilterLineages = useCallback(
     (targets: { key: string; jobId: string }[]) => {
-      targets.forEach(({ key, jobId }) => {
-        if (!key || !jobId) return;
-        if (filterLineages[key] || filterLineagesInFlight.current.has(key)) return;
+      const wanted = targets.filter(({ key, jobId }) => {
+        if (!key || !jobId) return false;
+        if (filterLineages[key] || filterLineagesInFlight.current.has(key)) return false;
         filterLineagesInFlight.current.add(key);
+        return true;
+      });
+      if (wanted.length === 0) return;
+
+      /* Every write is inside a promise callback, never synchronous with the
+         call — the caller runs this from an effect, and a synchronous
+         setState there would cascade renders. */
+      const store = (key: string, rows: JDLineageVersion[]) =>
+        setFilterLineages(prev => (prev[key] ? prev : { ...prev, [key]: rows }));
+      const release = (key: string) => filterLineagesInFlight.current.delete(key);
+
+      /* One per-job request: the original path, kept as the fallback. */
+      const fetchOne = ({ key, jobId }: { key: string; jobId: string }) =>
         jdService
           .getLineageVersions(jobId)
-          /* Every write is inside a promise callback, never synchronous with the
-             call — the caller runs this from an effect, and a synchronous
-             setState there would cascade renders. */
-          .then((rows) => {
-            setFilterLineages(prev => (prev[key] ? prev : { ...prev, [key]: rows || [] }));
-          })
+          .then((rows) => store(key, rows || []))
           .catch(() => {
             /* Cached as empty so a failing job does not re-request on every
                render. The pill then sees only what the main table gave it,
                which is the pre-existing behaviour rather than a blank list. */
-            setFilterLineages(prev => (prev[key] ? prev : { ...prev, [key]: [] }));
+            store(key, []);
           })
-          .finally(() => {
-            filterLineagesInFlight.current.delete(key);
+          .finally(() => release(key));
+
+      /* A single job gains nothing from batching. Otherwise ONE request answers
+         for every job (a page used to fire one `/jd/{id}/lineage` per job). */
+      if (wanted.length === 1) {
+        void fetchOne(wanted[0]);
+        return;
+      }
+      jdService
+        .getLineagesBatch(wanted.map((t) => t.jobId))
+        .then((byJobId) => {
+          wanted.forEach((t) => {
+            const rows = byJobId[t.jobId];
+            if (rows) {
+              store(t.key, rows);
+              release(t.key);
+            } else {
+              /* Not answered (e.g. the id no longer resolves): ask the per-job
+                 endpoint, so behaviour matches what it did before. */
+              void fetchOne(t);
+            }
           });
-      });
+        })
+        .catch(() => {
+          /* Batch endpoint unavailable (older backend, transient failure). */
+          wanted.forEach((t) => void fetchOne(t));
+        });
     },
     [filterLineages],
   );
