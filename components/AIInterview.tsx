@@ -144,7 +144,7 @@ const INVITATION_STATUS_TAB_OPTIONS: InviteStatusOption[] = [
   { value: 'terminated', label: 'Terminated' },
 ];
 const AI_INTERVIEWS_LIST_VIEW_REDIRECT_KEY = 'ai_interviews_open_list_view';
-const CONFIG_FETCH_PAGE_SIZE = 20;
+const CONFIG_FETCH_PAGE_SIZE = 100;
 
 /** One string for the list filters the page-reset effect watches. */
 const listFilterKey = (v: Record<string, unknown>) =>
