@@ -42,6 +42,7 @@ import { Resume, Folder as FolderType, Job } from '@/lib/types/types';
 import { resumeService, folderService, RESUMES_CHANGED_EVENT } from '@/lib/services/resumeService';
 import { Resume as ApiResume, Folder as ApiFolder, FolderDeletionInfo } from '@/lib/services/resumeService';
 import { convertApiResumeToRow, convertApiFolderToTree } from '@/lib/utils/resumeMappers';
+import { formatCandidateExperience } from '@/lib/utils/resumeExperience';
 import { jdService } from '@/lib/services/jdService';
 import { scoringService } from '@/lib/services/scoringService';
 import { assessmentService } from '@/lib/services';
@@ -3687,7 +3688,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     email: r.email || 'No email',
     phone: r.phone || 'No phone',
     title: r.current_title || 'N/A',
-    experience: r.experience_years ? `${r.experience_years} years` : 'N/A',
+    experience: formatCandidateExperience(r.experience_months, r.experience_years) || 'N/A',
     education: r.education?.[0]?.degree || 'N/A',
     location: r.location || 'N/A',
     skills: r.skills || [],
