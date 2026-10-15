@@ -11482,9 +11482,35 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                   // used to make Bina ask a clarification after End — then tell the
                   // backend to close. The backend cancels any in-flight generation
                   // and plays ONLY the farewell.
+                  //
+                  // EXCEPT when the candidate has already spoken an answer to the
+                  // current question (still recording, or submitted and awaiting
+                  // its transcript). Aborting then threw the answer away and the
+                  // question showed as Skipped in Question Analysis. Submit it
+                  // (end_turn) and hold end_interview until its transcript commits
+                  // (see pendingEndAfterTranscriptRef in the transcript /
+                  // silent_discard handlers); the backend files that transcript
+                  // as the question's answer when it closes.
                   setIsClosing(true);
                   isClosingRef.current = true;
                   setStatus("Ending interview…");
+                  const _speakingAnswer = isRecordingRef.current && speechDetectedRef.current
+                    && !hrVoiceBlockedForQidRef.current;
+                  const _awaitingTranscript = isCandidateTranscriptProcessingRef.current;
+                  if (_speakingAnswer || _awaitingTranscript) {
+                    pendingEndAfterTranscriptRef.current = true;
+                    if (_speakingAnswer) stopRecording();
+                    // Safety net: never leave the interview open if the
+                    // transcript never arrives.
+                    setTimeout(() => {
+                      if (!pendingEndAfterTranscriptRef.current) return;
+                      pendingEndAfterTranscriptRef.current = false;
+                      if (wsRef.current?.readyState === WebSocket.OPEN) {
+                        wsRef.current.send(JSON.stringify({ type: 'end_interview' }));
+                      }
+                    }, 12000);
+                    return;
+                  }
                   try { abortRecordingForSkipRef.current?.(); } catch { /* mic already stopped */ }
                   if (wsRef.current?.readyState === WebSocket.OPEN) {
                     wsRef.current.send(JSON.stringify({ type: 'end_interview' }));

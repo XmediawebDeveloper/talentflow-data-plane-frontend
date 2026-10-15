@@ -109,7 +109,8 @@ import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import QuotaBadge from '@/components/ui/quota-badge';
-import AllAssessmentsTable, { VersionPill } from '@/components/assessments/AllAssessmentsTable';
+import AllAssessmentsTable, { VersionPill, type AssessmentRowAction } from '@/components/assessments/AllAssessmentsTable';
+import type { AssessmentResponse } from '@/lib/services/assessmentService';
 import DraftAssessmentExistsModal from '@/components/assessments/DraftAssessmentExistsModal';
 import AssessmentVersionHistoryPanel, { type AssessmentVersionRow, VersionChip, jobVersionDisplayStatus } from '@/components/assessments/AssessmentVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
@@ -357,6 +358,10 @@ interface AssessmentsProps {
    * shows: an effect would flash the cards view for a frame first.
    */
   initialListTab?: AssessmentPageTab;
+  /** Open the Total Jobs tab (`jobs`) on this assessment: its job row's versions
+   *  expanded with it selected, on the right page, scrolled to. Used for a
+   *  draft just saved from the standalone create route. */
+  initialFocusAssessmentId?: string;
 }
 
 type AssessmentPageTab =
@@ -448,7 +453,7 @@ type CandidateResultRow = AssessmentAttemptResponse & {
 /** Session key holding the Total Jobs page a job's Results was opened from. */
 const RESULTS_RETURN_PAGE_KEY = 'assessments:resultsReturnPage';
 
-export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDCreation, autoOpenCreate, preSelectedJdId, preSelectedJdTitle, initialListTab }: AssessmentsProps) {
+export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDCreation, autoOpenCreate, preSelectedJdId, preSelectedJdTitle, initialListTab, initialFocusAssessmentId }: AssessmentsProps) {
   const router = useRouter();
   const dialog = useGlobalDialog();
   const { confirmArchive, archiveConfirmModal } = useArchiveAssessmentConfirm();
@@ -822,6 +827,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      cards of one lineage read and fill the same cache entry — expanding V2
      after V1 costs no second request. */
   const [openVersionsFor, setOpenVersionsFor] = useState<string | null>(null);
+  /** Bumped by `reloadAssessments`, so the flat tables (Active …) refetch
+   *  after a share, duplicate or revoke started from their menus. */
+  const [flatTableReloadSignal, setFlatTableReloadSignal] = useState(0);
+  /** An assessment the Total Jobs list should open on once it is loaded (a
+   *  draft just saved) — see the focus effect near `collapsedAssessments`. */
+  const [pendingFocusAssessmentId, setPendingFocusAssessmentId] = useState<string | null>(initialFocusAssessmentId ?? null);
+  /** The focused draft's JOB version still to expand in its row's panel —
+   *  waits for the job's lineage, the only reliable source of the number. */
+  const [pendingFocusExpand, setPendingFocusExpand] = useState<{ rowJdId: string; draftJdId: string; fallback?: number } | null>(null);
   /* The job the Version History popup is open on, and which version of it the
      popup should land on.
 
@@ -3506,6 +3520,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   };
 
   const reloadAssessments = async () => {
+    // The Active tab's table keeps its own rows — have it refetch too.
+    setFlatTableReloadSignal((n) => n + 1);
     try {
       /* The Completed metric is counted from candidate records, so a reload has
          to recount rather than redraw what it counted last time: a candidate
@@ -3592,22 +3608,21 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
        A publish goes to All Assessments — the same state the Total Assessments
        card selects, so that card reads as active too.
 
-       A DRAFT goes to Draft Assessments, because All Assessments cannot be
-       relied on to show it. That list collapses a job's assessments to one row
-       per lineage (`collapseByLineage`, keyed by `jobLineageKey` = the job's
-       `jd_short_id`, shared by every VERSION of the job), and its tie-break
-       rule makes a draft lose to any non-draft in the same lineage whatever
-       the version numbers say. So on a republished job whose earlier version
-       already carries a published/completed/archived assessment, a brand-new
-       draft is collapsed out of sight the moment it is saved — success toast,
-       empty-handed list. The Draft tab filters the non-drafts out first
-       (`filteredAssessments`), which leaves the new draft to represent its own
-       lineage, so it is the one cut of the list guaranteed to contain it.
+       A DRAFT goes to Total Jobs — the job list, one row per job with View
+       Versions. A draft loses to any non-draft version of the same job
+       (`collapseByLineage`), so it can sit behind its job's row rather than
+       be one; the focus effect finds that row, opens its View Versions with
+       the draft selected and its job version expanded, moves to its page and
+       scrolls to it.
 
        The standalone /assessments/create route arrives at the same place by
-       URL (`?tab=all` / `?tab=draft`) since it navigates rather than closing
-       in place. */
-    openAssessmentsList(String(assessment?.status || '').toLowerCase() === 'draft' ? 'draft' : 'all');
+       URL (`?tab=jobs&focus=<id>`) since it navigates rather than closing in
+       place. */
+    const isDraft = String(assessment?.status || '').toLowerCase() === 'draft';
+    openAssessmentsList(isDraft ? 'jobs' : 'all');
+    if (isDraft && assessment?.id) {
+      setPendingFocusAssessmentId(String(assessment.id));
+    }
 
     /* Reload the list to pick up the new assessment — and, with it, everything
        that decides a job version's action. The new assessment is what turns
@@ -4188,6 +4203,111 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     await Promise.all(pending);
   };
 
+  /* The Total Jobs list's rows (filter → one row per job), computed ABOVE the
+     early returns below so the focus effect that reads them is a hook called
+     on every render. Pure computations — their position changes nothing else. */
+  /* The key every version of one job collapses onto. Extracted because the
+     per-job totals below have to bucket by exactly the same rule the rows are
+     built with — two copies of `jd_short_id || jd_id || __unlinked__` would be
+     one edit away from a row whose counts belong to a different job.
+
+     Declared HERE, above `filteredAssessments`; it is a pure helper, so its
+     position is the only thing about it that matters to the row collapse below.
+
+     The rule itself now lives at module scope as `jobLineageKey`, because the
+     Send Invite picker groups its jobs by it too and a second copy of the
+     expression was exactly the drift this comment warns about. */
+  const lineageKeyOf = jobLineageKey;
+
+  const jobSearchTerm = assessmentSearchQuery.trim().toLowerCase();
+  const filteredAssessments = assessments.filter((assessment) => {
+    /* Search: Job ID (JD-014) or Job Name only. */
+    if (jobSearchTerm && !`${assessment.jd_short_id || ''} ${assessment.jd_title || ''}`.toLowerCase().includes(jobSearchTerm)) return false;
+    if (activeTab === 'active' && assessment.status !== 'Active') return false;
+    if (activeTab === 'draft' && assessment.status !== 'Draft') return false;
+    if (activeTab === 'completed' && assessment.status !== 'Completed') return false;
+    if (activeTab === 'archived' && assessment.status !== 'Archived') return false;
+
+    if (filterType !== 'all' && assessment.type !== filterType) return false;
+    if (filterCreatedBy !== 'all' && assessment.created_by_name !== filterCreatedBy) return false;
+    // `created` is the YYYY-MM-DD date, so the range compares as plain strings.
+    if (filterCreatedFrom && assessment.created < filterCreatedFrom) return false;
+    if (filterCreatedTo && assessment.created > filterCreatedTo) return false;
+
+    return true;
+  });
+
+  /* One row per job, picked and ordered by the Total Jobs rules in
+     lib/utils/assessmentJobOrder (`collapseByLineage`: a draft never
+     represents a job with a non-draft version; `orderTotalJobs`: latest
+     publish first, stable otherwise). Shared with the assessment details
+     page's Prev / Next, so the two cannot drift into different orders.
+     `collapseByLineage` stays a local name for the Send Invite picker's
+     call sites below. */
+  const collapseByLineage = (list: typeof assessments) => collapseJobLineages(list);
+
+  const collapsedAssessments = orderTotalJobs(filteredAssessments);
+
+  /* Open the Total Jobs list on a just-saved draft. Waits for the reload that
+     brings the draft in, then: the job row that holds it (the row may stand
+     for a published version of the same job), the page that row is on, its
+     versions opened with the draft selected and the draft's job version
+     expanded. `restoreScrollTargetRef` hands the scroll to the existing
+     scroll-to-card effect, which waits for the panel's rows before scrolling
+     to the selected version. One shot: cleared as soon as it is acted on. */
+  useEffect(() => {
+    // Total Jobs only: the job list with View Versions is what it opens.
+    if (!pendingFocusAssessmentId || isLoading || activeTab !== 'jobs') return;
+    const target = assessments.find((a) => a.id === pendingFocusAssessmentId);
+    if (!target) return; // not loaded yet — this re-runs as the list lands
+    const key = lineageKeyOf(target);
+    const index = collapsedAssessments.findIndex((row) => lineageKeyOf(row) === key);
+    // Acting on a one-shot request the list just made possible; not derived state.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPendingFocusAssessmentId(null);
+    if (index < 0) return;
+    const row = collapsedAssessments[index];
+    setPageView('list');
+    setAssessmentCurrentPage(Math.floor(index / assessmentItemsPerPage) + 1);
+    setOpenVersionsFor(row.id);
+    if (row.jd_id) {
+      const jdId = row.jd_id;
+      setSelectedAssessmentVersionByJob((current) => ({ ...current, [jdId]: String(target.id) }));
+      /* Expand the draft's JOB version once the job's lineage names its
+         number (see the effect below) — the record's own `jd_version` is a
+         snapshot that reads 1 for later versions, so it is only a fallback. */
+      if (target.jd_id) {
+        setPendingFocusExpand({
+          rowJdId: jdId,
+          draftJdId: String(target.jd_id),
+          fallback: (target as { jd_version?: number }).jd_version,
+        });
+      }
+      void loadAssessmentLineage(jdId);
+      jdLineage.ensureLoaded(jdId, jdId);
+    }
+    restoreScrollTargetRef.current = String(row.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingFocusAssessmentId, isLoading, activeTab, assessments, collapsedAssessments]);
+
+  /* The second half of the focus: expand the job version the draft belongs
+     to, once its number is known — from the versions this page has already
+     resolved, else the job's lineage as it lands. If the lineage arrives and
+     does not list it, the record's snapshot is the last resort. */
+  useEffect(() => {
+    if (!pendingFocusExpand) return;
+    const { rowJdId, draftJdId, fallback } = pendingFocusExpand;
+    const lineage = jdLineage.lineages[rowJdId];
+    const fromLineage = lineage?.find((v) => v.id === draftJdId)?.version_number;
+    const version = jobVersionByJdIdRef.current.get(draftJdId) ?? fromLineage ?? (lineage ? fallback : undefined);
+    if (version === undefined) return; // lineage still loading
+    setPendingFocusExpand(null);
+    setExpandedJobVersionsByJob((current) => ({
+      ...current,
+      [rowJdId]: Array.from(new Set([...(current[rowJdId] ?? []), version])),
+    }));
+  }, [pendingFocusExpand, jdLineage.lineages]);
+
   if (showCreation) {
     return (
       <AssessmentCreation
@@ -4311,18 +4431,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     );
   }
 
-  /* The key every version of one job collapses onto. Extracted because the
-     per-job totals below have to bucket by exactly the same rule the rows are
-     built with — two copies of `jd_short_id || jd_id || __unlinked__` would be
-     one edit away from a row whose counts belong to a different job.
-
-     Declared HERE, above `filteredAssessments`; it is a pure helper, so its
-     position is the only thing about it that matters to the row collapse below.
-
-     The rule itself now lives at module scope as `jobLineageKey`, because the
-     Send Invite picker groups its jobs by it too and a second copy of the
-     expression was exactly the drift this comment warns about. */
-  const lineageKeyOf = jobLineageKey;
 
   // Everyone who has created one of the loaded assessments, for the filter list.
   const assessmentCreators = Array.from(
@@ -4334,34 +4442,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const assessmentListNarrowed = assessmentListSearch.isNarrowed;
   const clearAssessmentFilters = assessmentListSearch.reset;
 
-  const jobSearchTerm = assessmentSearchQuery.trim().toLowerCase();
-  const filteredAssessments = assessments.filter((assessment) => {
-    /* Search: Job ID (JD-014) or Job Name only. */
-    if (jobSearchTerm && !`${assessment.jd_short_id || ''} ${assessment.jd_title || ''}`.toLowerCase().includes(jobSearchTerm)) return false;
-    if (activeTab === 'active' && assessment.status !== 'Active') return false;
-    if (activeTab === 'draft' && assessment.status !== 'Draft') return false;
-    if (activeTab === 'completed' && assessment.status !== 'Completed') return false;
-    if (activeTab === 'archived' && assessment.status !== 'Archived') return false;
-
-    if (filterType !== 'all' && assessment.type !== filterType) return false;
-    if (filterCreatedBy !== 'all' && assessment.created_by_name !== filterCreatedBy) return false;
-    // `created` is the YYYY-MM-DD date, so the range compares as plain strings.
-    if (filterCreatedFrom && assessment.created < filterCreatedFrom) return false;
-    if (filterCreatedTo && assessment.created > filterCreatedTo) return false;
-
-    return true;
-  });
-
-  /* One row per job, picked and ordered by the Total Jobs rules in
-     lib/utils/assessmentJobOrder (`collapseByLineage`: a draft never
-     represents a job with a non-draft version; `orderTotalJobs`: latest
-     publish first, stable otherwise). Shared with the assessment details
-     page's Prev / Next, so the two cannot drift into different orders.
-     `collapseByLineage` stays a local name for the Send Invite picker's
-     call sites below. */
-  const collapseByLineage = (list: typeof assessments) => collapseJobLineages(list);
-
-  const collapsedAssessments = orderTotalJobs(filteredAssessments);
 
   const assessmentResultCount = collapsedAssessments.length;
 
@@ -5771,6 +5851,82 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
    * item stays in the menu, disabled, with its reason on hover, as it did as a
    * button.
    */
+  /* The Active tab's extra ⋮ items: what the same assessment's row offers on
+     Total Jobs (`renderAssessmentRowMenuItems` + the menu's Duplicate and
+     Revoke), with the SAME rules and handlers, built as data for the flat
+     table's menu. View, View Results and Archive are the table's own. */
+  const buildActiveTabExtraActions = (raw: AssessmentResponse): { main: AssessmentRowAction[]; more: AssessmentRowAction[] } => {
+    const assessment = mapAssessmentFromApi(raw, 0);
+    const invitationsSent = assessment.invitations_count ?? assessment.candidates ?? 0;
+    const hasBeenShared = invitationsSent > 0;
+    const version = assessment.version ?? 1;
+
+    // Edit — open until an invitation has gone out; the version cap explains itself.
+    const atVersionCap = version >= MAX_ASSESSMENT_VERSIONS;
+    const editReason = !canUpdateAssessment
+      ? 'You do not have permission to edit assessments'
+      : hasBeenShared
+        ? 'Cannot edit — this assessment has already been sent to candidates'
+        : atVersionCap
+          ? `This assessment already has ${MAX_ASSESSMENT_VERSIONS} versions, the maximum allowed — it can’t be edited further.`
+          : '';
+    // Share/Invite — blocked once invites were revoked (duplicate to start fresh).
+    const canShare = isTenantAdmin || hasPermissionCode('assessments:share');
+    const shareReason = !canShare
+      ? 'You do not have permission to share assessments'
+      : assessment.has_revoked_invites
+        ? 'Invites for this assessment have been revoked. Duplicate it to start fresh.'
+        : '';
+    // Duplicate — blocked at the version cap.
+    const capReached = isVersionCapReached(assessment);
+    const duplicateReason = !canCreateAssessment
+      ? 'You do not have permission to create assessments'
+      : capReached
+        ? `Maximum ${MAX_ASSESSMENT_VERSIONS} versions reached. Archive a version to duplicate again.`
+        : '';
+    // Revoke — once there are invites, and only once.
+    const revokeReason = !canUpdateAssessment
+      ? 'You do not have permission to edit assessments'
+      : !hasBeenShared
+        ? 'No invites have been sent yet.'
+        : assessment.has_revoked_invites
+          ? 'Invites for this assessment have already been revoked.'
+          : '';
+
+    return {
+      main: [
+        {
+          key: 'edit', label: 'Edit', icon: Pencil, iconClassName: 'text-menu-icon-edit',
+          disabled: !!editReason, title: editReason || `Edit assessment V${version}`,
+          run: () => handleEditAssessment(assessment),
+        },
+        {
+          key: 'share', label: 'Share/Invite', icon: Send, iconClassName: 'text-menu-icon-share',
+          disabled: !!shareReason, title: shareReason || 'Share via email',
+          run: () => { setSelectedAssessmentForShare(assessment); setShowShareModal(true); },
+        },
+        {
+          key: 'track', label: 'Track', icon: Radar, iconClassName: 'text-menu-icon-secondary',
+          disabled: !hasBeenShared,
+          title: hasBeenShared ? `Track invitation status (${invitationsSent})` : 'Share the assessment to track invitations',
+          run: () => handleTrackInvites(assessment),
+        },
+      ],
+      more: [
+        {
+          key: 'duplicate', label: 'Duplicate', icon: Copy, iconClassName: 'text-menu-icon-download',
+          disabled: !!duplicateReason, title: duplicateReason || undefined,
+          run: () => void handleOpenCloneModal(assessment),
+        },
+        {
+          key: 'revoke', label: 'Revoke pending invites', icon: Ban, iconClassName: '',
+          destructive: true, disabled: !!revokeReason, title: revokeReason || undefined,
+          run: () => handleOpenRevokeModal(assessment),
+        },
+      ],
+    };
+  };
+
   const renderAssessmentRowMenuItems = (
     assessment: ReturnType<typeof mapAssessmentFromApi>,
     onView?: () => void,
@@ -5851,6 +6007,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             : '';
           const editDisabled = !canUpdateAssessment || hasBeenShared || assessment.status === 'Archived';
           const editGreyed = editDisabled || atVersionCap;
+          /* A draft isn't finished yet, so its Edit reads "Continue Editing" -
+             same action, same Configure page. Status is checked loosely: the
+             job row passes the list's 'Draft', a version row the API's 'draft'. */
+          const isDraftVersion = String(assessment.status || '').toLowerCase() === 'draft';
+          const editLabel = isDraftVersion ? 'Continue Editing' : 'Edit';
           return (
             <button
               onClick={() => {
@@ -5863,11 +6024,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 handleEditAssessment(assessment);
               }}
               disabled={editDisabled}
-              title={editReason || `Edit assessment V${assessment.version ?? 1}`}
+              title={editReason || `${isDraftVersion ? 'Continue editing' : 'Edit'} assessment V${assessment.version ?? 1}`}
               className={itemClass(editGreyed)}
             >
               <Pencil className={iconClass(editGreyed, 'text-menu-icon-edit')} />
-              <span className={MENU_ITEM_SCALE_CLASS}>Edit</span>
+              <span className={MENU_ITEM_SCALE_CLASS}>{editLabel}</span>
             </button>
           );
         })()}
@@ -6586,6 +6747,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   fixedStatus={config.fixedStatus}
                   clearSortSignal={clearAssessmentSortSignal}
                   onSortDefaultChange={(isDefault) => setSortedAssessmentTab(isDefault ? null : activeTab)}
+                  /* Active tab: the same ⋮ items an Active row has on Total Jobs. */
+                  extraRowActions={config.fixedStatus === 'published' ? buildActiveTabExtraActions : undefined}
+                  reloadSignal={flatTableReloadSignal}
                 />
               );
             })() : activeTab === 'completed-candidates' ? (() => {

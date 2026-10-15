@@ -118,17 +118,22 @@ export default function CreateAssessmentPage() {
          A publish opens All Assessments, with the Total Assessments card lit
          because that card selects this very tab.
 
-         A DRAFT opens Draft Assessments instead. All Assessments collapses a
-         job's assessments to one row per lineage and resolves ties by making a
-         draft lose to any non-draft version of the same job, so a new draft on
-         a republished job is hidden there the moment it is saved. The Draft tab
-         filters those non-drafts out first, so it is the cut of the list that
-         always contains it. Same rule as the in-place flow — see
-         `handleCreateAssessment` in components/Assessments.tsx.
+         A DRAFT opens Total Jobs (`tab=jobs`), with `focus` naming it: that
+         list is one row per job (a draft loses to a published version of the
+         same job), so it finds the draft's job row, opens its View Versions
+         with the draft selected and its job version expanded, and scrolls to
+         it. Same as the
+         in-place flow — see `handleCreateAssessment` in
+         components/Assessments.tsx.
 
-         The param is read on the first render there and stripped straight
+         The params are read on the first render there and stripped straight
          away, so a later reload of that page shows its normal cards view. */
-      router.replace(`/recruitment/assessments?tab=${published ? 'all' : 'draft'}`);
+      const draftId = !published && assessment?.id ? String(assessment.id) : null;
+      router.replace(
+        draftId
+          ? `/recruitment/assessments?tab=jobs&focus=${encodeURIComponent(draftId)}`
+          : '/recruitment/assessments?tab=all',
+      );
     }
   };
 
