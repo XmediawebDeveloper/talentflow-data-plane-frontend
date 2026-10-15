@@ -13,7 +13,16 @@ import AIInterviewDetailsView from './AIInterviewDetailsView';
  * page itself in `configureOnly` mode, so the preview is always exactly what
  * that tab shows. Stacks above the picker (z-60 over its z-50).
  */
-export default function ConfigurePreviewDialog({ configId, onClose }: { configId: string; onClose: () => void }) {
+export default function ConfigurePreviewDialog({
+  configId,
+  onClose,
+  cancelInFooter = false,
+}: {
+  configId: string;
+  onClose: () => void;
+  /** Close from a Cancel button in a footer instead of the header's X. Off by default. */
+  cancelInFooter?: boolean;
+}) {
   const [config, setConfig] = useState<AIInterviewResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,9 +64,11 @@ export default function ConfigurePreviewDialog({ configId, onClose }: { configId
               <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">Configure Details</p>
             </div>
           </div>
-          <Button variant="secondary" size="sm" onClick={onClose} aria-label="Close" className="px-2 flex-shrink-0">
-            <X className="w-5 h-5" />
-          </Button>
+          {!cancelInFooter && (
+            <Button variant="secondary" size="sm" onClick={onClose} aria-label="Close" className="px-2 flex-shrink-0">
+              <X className="w-5 h-5" />
+            </Button>
+          )}
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
@@ -71,6 +82,16 @@ export default function ConfigurePreviewDialog({ configId, onClose }: { configId
             <AIInterviewDetailsView config={config} onBack={onClose} configureOnly />
           )}
         </div>
+
+        {/* Footer — outside the scrolling body, so Cancel stays in view; the
+            Invite popup's footer chrome. */}
+        {cancelInFooter && (
+          <div className="flex-shrink-0 flex items-center justify-end gap-3 px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50">
+            <Button variant="secondary" onClick={onClose} className="flex-1 sm:flex-none !h-9">
+              Cancel
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

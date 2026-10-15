@@ -213,13 +213,12 @@ export async function loadInterviewVersions(jdId: string): Promise<InviteVersion
     .sort(byVersionDesc);
 }
 
-/** What Select AI Interview Version lists: only the job version's mapped
- *  interview (or, with no live one, its newest Draft) — never several
- *  versions for one job version. Assessments list every version. */
-export function listedVersions(kind: InviteKind, versions: InviteVersion[]): InviteVersion[] {
-  if (kind === 'assessment') return versions;
-  const mapped = versions.find((v) => v.mapped) ?? versions.find((v) => v.status === 'draft');
-  return mapped ? [mapped] : [];
+/** What the popup's version cards list: every version of this job version,
+ *  any status — Draft, Active and Archived — for both types, as the Invite
+ *  to Assessment popup always has. An archived AI interview stays on its
+ *  card (status Archived, with Unarchive) instead of leaving the list. */
+export function listedVersions(_kind: InviteKind, versions: InviteVersion[]): InviteVersion[] {
+  return versions;
 }
 
 export const loadVersions = (kind: InviteKind, jdId: string) =>
@@ -317,7 +316,10 @@ const archiveItem = (v: InviteVersion, perms: VersionPermissions): VersionAction
   disabledReason: perms.canArchive ? undefined : 'You do not have permission to archive',
   confirm: {
     title: `Archive v${v.version}?`,
-    message: `It is hidden from invite lists. It still counts toward the ${MAX_VERSIONS_PER_TYPE}-version limit.`,
+    /* AI interviews have one version per job for now, so no version limit to name. */
+    message: v.kind === 'interview'
+      ? 'It can no longer be sent to candidates. You can unarchive it later.'
+      : `It is hidden from invite lists. It still counts toward the ${MAX_VERSIONS_PER_TYPE}-version limit.`,
     confirmText: 'Archive',
     destructive: true,
   },
@@ -353,7 +355,8 @@ export function publishAction(v: InviteVersion, perms: VersionPermissions): Vers
  *
  * AI interviews: a Draft offers the AI Interviews page's draft actions —
  * Continue Editing (the wizard popup, where it publishes), View Details,
- * Delete; any other status View, Duplicate, Archive.
+ * Delete; any other status View, Duplicate, and Archive — or, once
+ * archived, Unarchive.
  */
 export function versionActions(v: InviteVersion, versions: InviteVersion[], perms: VersionPermissions): VersionActionItem[] {
   const noUpdate = 'You do not have permission to edit';
@@ -410,6 +413,20 @@ export function versionActions(v: InviteVersion, versions: InviteVersion[], perm
     },
   });
   if (v.status !== 'archived') items.push(archiveItem(v, perms));
+  else {
+    /* The AI Interviews page's Unarchive: the server restores it to Draft
+       or Active, whichever it was. */
+    items.push({
+      action: 'unarchive',
+      label: 'Unarchive',
+      disabledReason: perms.canArchive ? undefined : 'You do not have permission to unarchive',
+      confirm: {
+        title: `Unarchive v${v.version}?`,
+        message: 'It leaves the archive and is restored to Draft or Active, as it was before.',
+        confirmText: 'Unarchive',
+      },
+    });
+  }
   return items;
 }
 
@@ -430,6 +447,8 @@ export async function runVersionAction(v: InviteVersion, action: 'publish' | 'pa
   }
   if (action === 'publish') await aiInterviewService.publishConfig(v.id);
   else if (action === 'archive') await aiInterviewService.archive(v.id);
+  // The AI Interviews page's Unarchive.
+  else if (action === 'unarchive') await aiInterviewService.unarchive(v.id);
 }
 
 /** The assessment as it stands now, for the Invite to Assessment popup's

@@ -2,7 +2,7 @@
 
 import { handoffContinueLabel, resolveInviteHandoffOrigin, useHandoffCandidateCrumb } from '@/lib/utils/resumeScoringInviteHandoff';
 import React, { useState, useEffect, useCallback } from 'react';
-import { useEmbeddedWizard, useWizardRouter, useWizardSearchParams } from './embeddedWizardNav';
+import { useEmbeddedWizard, useWizardRouter, useWizardSearchParams, WizardLayer } from './embeddedWizardNav';
 import {
   ArrowLeft, CheckCircle2, Loader2, Clock, Shield, Users,
   Brain, Video, Globe, Timer, Layers, Settings,
@@ -1235,11 +1235,16 @@ export default function AIInterviewPreview() {
 
       {/* ── Job description, in place ── */}
       {jdViewOpen && interview.jd_id && (
-        <JDFullViewModal
-          jdId={interview.jd_id}
-          jdTitle={interview.jd_title ?? position}
-          onClose={() => setJdViewOpen(false)}
-        />
+        <WizardLayer>
+          <JDFullViewModal
+            jdId={interview.jd_id}
+            jdTitle={interview.jd_title ?? position}
+            onClose={() => setJdViewOpen(false)}
+            /* In the popup, the job's card opens the JD, as on Job Details. */
+            showJobCard={embedded}
+            cancelInFooter={embedded}
+          />
+        </WizardLayer>
       )}
 
       {/* ── Introduction video ── */}

@@ -13,7 +13,7 @@
  * own list shows — the interview cells reuse that list's helpers directly.
  */
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Activity, Target, Sparkles, ClipboardCheck, Bot, Loader2, ChevronRight, Lock,
@@ -28,6 +28,7 @@ import { formatIST } from '@/lib/utils/dateUtils';
 import { formatScore } from '@/lib/utils/score';
 import { formatOverallScoreValue, matchBadgeClass, normalizeMatchResult, MATCH_SCORE_TEXT_CLASS } from '@/lib/utils/matchStatus';
 import { usePlanLock } from '@/lib/hooks/usePlanFeature';
+import ListPagination from '@/components/ListPagination';
 import { PLAN_LOCKED_MESSAGE, type PlanFeatureKey } from '@/lib/types/planFeatures';
 import { AIInviteStatusBadge, displayInviteScore, inviteResult } from '@/components/AIInterviewInviteTable';
 import { rememberResumeActivityTrail, resumeViewFromQuery, type TrailCrumb } from '@/lib/utils/resumeActivityTrail';
@@ -41,8 +42,16 @@ const TABS: { key: TabKey; label: string; Icon: typeof Target; plan: PlanFeature
   { key: 'interviews', label: 'AI Interviews', Icon: Bot, plan: 'ai_interview' },
 ];
 
-/** Rows shown before "Show all". */
-const COLLAPSED_ROWS = 5;
+/** Rows per page to start with — ListPagination's smallest page size. */
+const DEFAULT_PAGE_SIZE = 5;
+
+/** What each tab's rows are, for the pagination's "Showing 1 to 5 of N …". */
+const ITEM_LABEL: Record<TabKey, string> = {
+  scores: 'scores',
+  talent_matches: 'matches',
+  assessments: 'assessments',
+  interviews: 'interviews',
+};
 
 const BADGE = 'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs sm:text-xs font-medium whitespace-nowrap ring-1';
 
@@ -175,7 +184,16 @@ function ColumnHeader({ tab }: { tab: TabKey }) {
   );
 }
 
-export default function CandidateActivityCard({ resumeId, trail }: { resumeId: string; trail: TrailCrumb[] }) {
+export default function CandidateActivityCard({
+  resumeId,
+  trail,
+  headerAction,
+}: {
+  resumeId: string;
+  trail: TrailCrumb[];
+  /** The host's own control at the right end of the card's header. */
+  headerAction?: ReactNode;
+}) {
   const router = useRouter();
   /* Every View goes through here: the destination shows THIS page's trail
      (Resume Database › My Resumes › <candidate>) instead of its own module's,
@@ -189,7 +207,13 @@ export default function CandidateActivityCard({ resumeId, trail }: { resumeId: s
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [active, setActive] = useState<TabKey | null>(null);
-  const [expanded, setExpanded] = useState(false);
+  /* Each tab keeps its own page; one page size for the card. */
+  const [pageByTab, setPageByTab] = useState<Partial<Record<TabKey, number>>>({});
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  /* The card itself as ListPagination's scroll target: it does not scroll,
+     so a page change leaves the reader where they are — at the card, the
+     page's last section — instead of taking the window back to the top. */
+  const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -216,9 +240,10 @@ export default function CandidateActivityCard({ resumeId, trail }: { resumeId: s
     setActive((withRows || usable[0])?.key ?? null);
   }, [data, usable, active]);
 
-  useEffect(() => { setExpanded(false); }, [active]);
-
-  if (!loading && !failed && tabs.length === 0) return null; // no module readable
+  // No module readable: nothing to show — unless the host put a control in the
+  // header, which then stays reachable on the card's header alone.
+  const noModules = !loading && !failed && tabs.length === 0;
+  if (noModules && !headerAction) return null;
 
   const total = data ? tabs.reduce((n, t) => n + (isPlanLocked(t.plan) ? 0 : data[t.key].items.length), 0) : 0;
 
@@ -238,7 +263,10 @@ export default function CandidateActivityCard({ resumeId, trail }: { resumeId: s
       };
       return <p className="text-sm text-gray-500 py-6 text-center">{empty[active]}</p>;
     }
-    const visible = expanded ? items : items.slice(0, COLLAPSED_ROWS);
+    const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
+    const page = Math.min(pageByTab[active] ?? 1, totalPages);
+    const visible = items.slice((page - 1) * pageSize, page * pageSize);
+    const tab = active;
 
     return (
       <div className="space-y-2">
@@ -357,20 +385,26 @@ export default function CandidateActivityCard({ resumeId, trail }: { resumeId: s
           );
         })}
 
-        {items.length > COLLAPSED_ROWS && (
-          <button
-            onClick={() => setExpanded(e => !e)}
-            className="w-full py-2 text-xs font-medium text-brand-blue hover:text-brand-blue-2"
-          >
-            {expanded ? 'Show less' : `Show all ${items.length}`}
-          </button>
-        )}
+        {/* The lists' ListPagination (Show … per page · Showing … · Go to ·
+            ‹ n / N ›); it hides itself while a tab fits on one 5-row page. */}
+        <ListPagination
+          currentPage={page}
+          itemsPerPage={pageSize}
+          totalItems={items.length}
+          itemLabel={ITEM_LABEL[tab]}
+          scrollContainerRef={cardRef}
+          onPageChange={(next) => setPageByTab((prev) => ({ ...prev, [tab]: next }))}
+          onItemsPerPageChange={(size) => {
+            setPageSize(size);
+            setPageByTab({});
+          }}
+        />
       </div>
     );
   };
 
   return (
-    <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
+    <div ref={cardRef} className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
       <div className="flex items-center gap-2 mb-4">
         <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
           <Activity className="w-4 h-4 text-brand-blue" />
@@ -381,9 +415,12 @@ export default function CandidateActivityCard({ resumeId, trail }: { resumeId: s
             {total} record{total !== 1 ? 's' : ''}
           </span>
         )}
-        {data && data.version_count > 1 && (
-          <span className="ml-auto text-xs text-gray-500">Across all {data.version_count} resume versions</span>
-        )}
+        <div className="ml-auto flex items-center gap-3">
+          {data && data.version_count > 1 && (
+            <span className="text-xs text-gray-500">Across all {data.version_count} resume versions</span>
+          )}
+          {headerAction}
+        </div>
       </div>
 
       {loading ? (
@@ -392,6 +429,8 @@ export default function CandidateActivityCard({ resumeId, trail }: { resumeId: s
         </div>
       ) : failed || !data ? (
         <p className="text-sm text-destructive py-6 text-center">Could not load candidate activity. Please refresh to try again.</p>
+      ) : noModules ? (
+        <p className="text-sm text-gray-500 py-6 text-center">You do not have access to this candidate&apos;s activity.</p>
       ) : (
         <>
           <div role="tablist" className="flex gap-1 overflow-x-auto overflow-y-hidden border-b border-gray-100 mb-4 -mx-1 px-1">
