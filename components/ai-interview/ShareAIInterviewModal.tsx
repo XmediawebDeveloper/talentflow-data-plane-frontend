@@ -1399,9 +1399,9 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                         );
                       })()}
                       <div className="flex items-center gap-3">
-                        {/* Email column is wider: it also holds Copy Link / Add, which would
-                            otherwise squeeze the address input to half the name's width. */}
-                        <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {/* Full Name and Email Address are equal-width columns; Copy Link / Add
+                            sit beside the grid, so they don't squeeze either input. */}
+                        <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div className="min-w-0">
                             <label className="text-xs text-gray-600 dark:text-slate-400 mb-1 block">Full Name *</label>
                             <input
@@ -1415,7 +1415,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                               }`}
                             />
                           </div>
-                          <div className="min-w-0 sm:col-span-2">
+                          <div className="min-w-0">
                             <label className="text-xs text-gray-600 dark:text-slate-400 mb-1 block">Email Address *</label>
                             <div className="flex items-center gap-2 min-w-0">
                               <input

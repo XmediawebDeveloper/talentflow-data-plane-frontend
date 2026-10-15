@@ -426,7 +426,7 @@ export default function VersionInviteDialog({
             toast.success(`v${v.version} deleted.`);
           } else if (item.action === 'duplicate') {
             const fresh = (await reload()) ?? versions;
-            const why = createBlockedReason(fresh, perms, kind);
+            const why = createBlockedReason(fresh, perms, kind, fresh.find((x) => x.id === v.id) ?? v);
             if (why) { toast.error(why); return; }
             await duplicateVersion(v);
             toast.success(`v${nextVersionNumber(fresh)} created as a draft copy of v${v.version}.`);

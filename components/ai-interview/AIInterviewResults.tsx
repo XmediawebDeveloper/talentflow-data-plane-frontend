@@ -170,6 +170,7 @@ export function getStatusBadge(status: string) {
     case 'expired': return 'bg-gray-100 text-gray-600 ring-1 ring-gray-200';
     case 'terminated': return 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line';
     case 'cancelled': return 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line';
+    case 'revoked': return 'bg-slate-200 text-gray-700 ring-1 ring-gray-300';
     default: return 'bg-gray-100 text-gray-600 ring-1 ring-gray-200';
   }
 }
@@ -196,6 +197,7 @@ export function getStatusLabel(status: string) {
     case 'expired': return 'Expired';
     case 'terminated': return 'Terminated';
     case 'cancelled': return 'Cancelled';
+    case 'revoked': return 'Revoked';
     default: return status;
   }
 }

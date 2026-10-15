@@ -1229,9 +1229,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
    *  row from opening a result it has no attempt for, and what the API takes as
    *  `status_filter=pending`. Renaming the value would have had to be matched in
    *  every one of those places and in the backend. What changes is the reading —
-   *  "Not Started", which is what the state means: invited, never begun. One
-   *  constant, so the card, the badge and the filter option cannot drift apart. */
-  const PENDING_STATUS_LABEL = 'Not Started';
+   *  "Invited", the word Invite Status Tracking uses for the same state
+   *  (invited, never begun). One constant, so the card, the badge and the
+   *  filter option cannot drift apart. */
+  const PENDING_STATUS_LABEL = 'Invited';
   const statusLabel = (status: CandidateResult['status']) =>
     status === 'Pending' ? PENDING_STATUS_LABEL : status;
 

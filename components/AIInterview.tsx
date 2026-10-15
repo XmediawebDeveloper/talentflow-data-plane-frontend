@@ -35,7 +35,11 @@ import InviteFilterBar, { EMPTY_INVITE_FILTERS, AI_INTERVIEW_INVITE_STATUS_OPTIO
 import InviteStatCards, { INVITE_CARD_TONES } from '@/components/InviteStatCards';
 import AIInterviewInviteTable, { isRevocableInvite, isExpiredForActions, resolveInviteStatus, displayInviteScore, matchesInviteResultFilter } from '@/components/AIInterviewInviteTable';
 import SearchableSelect from '@/components/ui/searchable-select';
-import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
+import {
+  interviewVersionOrdinal,
+  interviewDuplicateBlockedReason,
+  interviewEditBlockedReason,
+} from '@/lib/utils/aiInterviewVersion';
 import {
   FilterSelect,
   jobFilterOptions,
@@ -1328,15 +1332,29 @@ export default function AIInterview() {
     setOpenMenuId(null);
   };
 
+  /* Duplicate = mint the next VERSION of this interview (same AI-xxx ID, next V),
+     as Duplicate does on an assessment. The gate is the shared one the menu
+     item shows; the backend enforces the same three rules. */
   const handleCloneConfig = async (config: AIInterviewResponse) => {
+    setOpenMenuId(null);
+    const blocked = interviewDuplicateBlockedReason(
+      config,
+      [...configs, ...archivedConfigs],
+      canCreateAIInterviews,
+    );
+    if (blocked) {
+      toast.error(blocked);
+      return;
+    }
     try {
       const result = await aiInterviewService.clone(config.id);
-      toast.success(`Configuration duplicated: ${result.cloned_title}`);
+      toast.success(`New version created as a draft: ${result.cloned_title}`);
       loadData();
+      loadArchivedConfigs();
+      setRefreshSignal((n) => n + 1);
     } catch (error: any) {
       toast.error(error.message || 'Failed to duplicate');
     }
-    setOpenMenuId(null);
   };
 
   const handleCopyLink = async (config: AIInterviewResponse) => {
@@ -2047,6 +2065,34 @@ export default function AIInterview() {
                   <span className={MENU_ITEM_SCALE_CLASS}>Continue Editing</span>
                 </button>
               )}
+              {/* Edit — a published version nobody has been invited to can still
+                  be edited. Once any invite exists the version is locked (every
+                  candidate sits the same interview) and the tooltip says to
+                  duplicate it instead — the Assessments Edit rule. */}
+              {isPublished && config.jd_id && (() => {
+                const editBlocked = !canUpdateAIInterviews
+                  ? 'You do not have permission to edit AI interviews'
+                  : interviewEditBlockedReason(config);
+                return (
+                  <button
+                    onClick={() => {
+                      if (editBlocked) {
+                        if (!canUpdateAIInterviews) toast.error(editBlocked);
+                        return;
+                      }
+                      setOpenMenuId(null);
+                      void resolveAIInterviewDraftResumeHref(config.id, config.jd_id!).then((href) => router.push(href));
+                    }}
+                    disabled={!!editBlocked}
+                    aria-disabled={!!editBlocked}
+                    title={editBlocked || 'Edit this version'}
+                    className={editBlocked ? VERSION_MENU_ITEM_DISABLED_CLASS : VERSION_MENU_ITEM_CLASS}
+                  >
+                    <Pencil className={`w-4 h-4 flex-shrink-0 ${editBlocked ? '' : 'text-menu-icon-edit'}`} />
+                    <span className={MENU_ITEM_SCALE_CLASS}>Edit</span>
+                  </button>
+                );
+              })()}
               {isPublished && (
                 <button
                   onClick={() => {
@@ -2091,6 +2137,35 @@ export default function AIInterview() {
                 <BarChart2 className={`w-4 h-4 flex-shrink-0 ${hasBeenShared ? 'text-menu-icon-view' : ''}`} />
                 <span className={MENU_ITEM_SCALE_CLASS}>View Results</span>
               </button>
+              {/* Duplicate — creates the next version. Disabled (reason in the
+                  tooltip) for a draft, for a version nobody was invited to
+                  (edit it instead), while another draft is open in the lineage,
+                  and at the version cap: the Assessments Duplicate gate. */}
+              {normalizedStatus !== 'archived' && (() => {
+                const dupBlocked = interviewDuplicateBlockedReason(
+                  config,
+                  [...configs, ...archivedConfigs],
+                  canCreateAIInterviews,
+                );
+                return (
+                  <button
+                    onClick={() => {
+                      if (dupBlocked) {
+                        if (!canCreateAIInterviews) toast.error(dupBlocked);
+                        return;
+                      }
+                      void handleCloneConfig(config);
+                    }}
+                    disabled={!!dupBlocked}
+                    aria-disabled={!!dupBlocked}
+                    title={dupBlocked || 'Duplicate as a new version'}
+                    className={dupBlocked ? VERSION_MENU_ITEM_DISABLED_CLASS : VERSION_MENU_ITEM_CLASS}
+                  >
+                    <Copy className={`w-4 h-4 flex-shrink-0 ${dupBlocked ? '' : 'text-menu-icon-download'}`} />
+                    <span className={MENU_ITEM_SCALE_CLASS}>Duplicate</span>
+                  </button>
+                );
+              })()}
               <div className="my-1 h-px bg-gray-100 dark:bg-slate-800" />
               {normalizedStatus !== 'archived' && (
                 <button
