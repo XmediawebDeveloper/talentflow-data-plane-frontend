@@ -1292,6 +1292,9 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
       completed: 'Completed',
       in_progress: 'In Progress',
       invited: 'Invited',
+      expired: 'Expired',
+      terminated: 'Terminated',
+      revoked: 'Revoked',
       cancelled: 'Cancelled',
       draft: 'Draft',
     };

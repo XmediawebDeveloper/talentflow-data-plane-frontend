@@ -5642,6 +5642,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               // backend's clone_* flags a deployment happens to return.
               // Two reasons to disable, and only two:
               //   1. Draft → must publish this version first.
+              //   (added) Not invited → this version is still editable.
               //   2. Cap reached → the lineage already holds
               //      MAX_ASSESSMENT_VERSIONS versions, so there is no next
               //      sequential version to mint.
@@ -5659,11 +5660,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               //     record for other readers; they just do not gate here.
               const isDraft = assessment.status === 'Draft';
               const capReached = isVersionCapReached(assessment);
-              const buttonDisabled = !canCreateAssessment || isDraft || capReached;
+              // Judged on THIS version's own invitations (revoked ones count):
+              // a published version nobody was invited to is still editable,
+              // so it is edited, not duplicated.
+              const notInvited = (assessment.invitations_count || 0) === 0;
+              const buttonDisabled = !canCreateAssessment || isDraft || notInvited || capReached;
               const disabledReason = !canCreateAssessment
                 ? 'You do not have permission to create assessments'
                 : isDraft
                 ? 'Publish the assessment before duplicating.'
+                : notInvited
+                ? 'No candidates invited yet — edit this version instead.'
                 : capReached
                 ? `Maximum ${MAX_ASSESSMENT_VERSIONS} versions reached. Archive a version to duplicate again.`
                 : '';
