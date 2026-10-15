@@ -867,10 +867,34 @@ export default function AIInterview() {
           .forEach((config, index) => interviewVersionById.set(config.id, index + 1));
       });
 
+      /* Each config's invitation total in ONE request (batches of 200), so a
+         config with none is skipped outright and one with some is fetched in a
+         single call at its exact size — instead of a page_size=1 probe per
+         config followed by a second, sized request. A batch that fails leaves
+         its configs out of the map and they take the probe path below, as
+         before. */
+      const knownTotals = new Map<string, number>();
+      for (let start = 0; start < allConfigs.length; start += 200) {
+        const batch = allConfigs.slice(start, start + 200);
+        try {
+          const counts = await aiInterviewService.getInvitationCounts(batch.map((c) => c.id));
+          for (const c of batch) {
+            const entry = counts[c.id];
+            if (entry) knownTotals.set(c.id, entry.total || 0);
+          }
+        } catch {
+          /* fall back per config */
+        }
+      }
+
       const perConfig = await Promise.all(
         allConfigs.map(async (config) => {
           try {
-            const probe = await aiInterviewService.getConfigInvitations(config.id, { page: 1, page_size: 1 });
+            const known = knownTotals.get(config.id);
+            if (known === 0) return [];
+            const probe = known !== undefined
+              ? await aiInterviewService.getConfigInvitations(config.id, { page: 1, page_size: known })
+              : await aiInterviewService.getConfigInvitations(config.id, { page: 1, page_size: 1 });
             if (!probe.total) return [];
             const full = probe.total > probe.items.length
               ? await aiInterviewService.getConfigInvitations(config.id, { page: 1, page_size: probe.total })
