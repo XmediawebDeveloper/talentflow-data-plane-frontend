@@ -1460,7 +1460,7 @@ export default function UsageHistory() {
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Usage History' }]} />
         <div>
         <OrganizationTabs />
-        <div className="-mt-5 rounded-b-xl border border-t-0 border-gray-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 p-4 sm:p-5 space-y-6">
+        <div className="-mt-5 rounded-b-xl border border-t-0 border-gray-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 p-4 sm:p-5 space-y-6">
       {/* ── Page Header ── */}
       <PageHeader
         icon={<TrendingDown className="h-5 w-5" />}

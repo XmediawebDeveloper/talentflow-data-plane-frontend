@@ -3,6 +3,7 @@
 // MUI Card/Typography/Table → Tailwind. Wired to live DashboardData (no mocks).
 import { CheckCircle, XCircle } from 'lucide-react';
 import type { DashboardData } from './types';
+import { orderQuestionsAsAsked } from './types';
 
 import { formatScore1, formatSkillScore } from '@/lib/utils/matchStatus';
 interface Props {
@@ -339,7 +340,9 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
         </div>
         {perQuestionDetails.length > 0 ? (
           <div className="divide-y divide-gray-100">
-            {perQuestionDetails.map((q, i) => {
+            {/* Same order and 1..N numbering as the Question Analysis tab;
+                the chip keeps the section's own number (e.g. "Must-Have · Q1"). */}
+            {orderQuestionsAsAsked(perQuestionDetails).map((q, i) => {
               const isHR = q.section === 'hr';
               const sc = scoreColor(q.questionScore);
               const sectionLabel = q.section === 'mth' ? 'Must-Have' : q.section === 'nth' ? 'Nice-to-Have' : 'HR';
@@ -363,10 +366,10 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
                     i % 2 === 0 ? 'bg-white' : 'bg-gray-50'
                   }`}
                 >
-                  <div className="text-sm font-bold text-indigo-600">Q{q.qNum}</div>
+                  <div className="text-sm font-bold text-indigo-600">Q{i + 1}</div>
                   <div>
                     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${sectionClass}`}>
-                      {sectionLabel}
+                      {sectionLabel} · Q{q.qNum}
                     </span>
                   </div>
                   <div className="text-xs text-gray-500 truncate">

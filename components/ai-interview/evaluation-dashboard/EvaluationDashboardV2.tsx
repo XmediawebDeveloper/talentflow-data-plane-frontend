@@ -8,6 +8,7 @@ import {
   ChevronDown, ChevronUp, TrendingUp, TrendingDown, Minus, Clock, Brain, Calculator, X, MessageSquare, SkipForward,
 } from 'lucide-react';
 import type { DashboardData, PerQuestionDetail } from './types';
+import { orderQuestionsAsAsked, isSkillNotAssessed } from './types';
 import { buildRationaleLines } from './types';
 import { IS_PRODUCTION_ENV } from '../../../lib/utils/env';
 
@@ -146,33 +147,44 @@ export function SkillsView({ data }: { data: DashboardData }) {
     rowKey: string,
   ) => {
     const tag = priorityTag(s.clusterPriority);
+    // A skill no question covered has no score to show. Its 0 is "not
+    // measured", not "measured and failed" — the Cluster Coverage tab makes
+    // the same distinction from the same `asked` flag.
+    // Shared rule (types.ts): never on old interviews with no record of what
+    // was asked, and a real score always wins.
+    const notAssessed = isSkillNotAssessed(s);
     const contribution = +(s.score * tag.weight).toFixed(1);
     const isOpen = expanded === rowKey;
-    const color = scoreColor(s.score);
+    const color = notAssessed ? 'var(--raw-9ca3af)' : scoreColor(s.score);
     return (
       <div
         key={rowKey}
-        className={`rounded-2xl bg-white overflow-hidden transition-all ${
+        className={`rounded-2xl overflow-hidden transition-all ${notAssessed ? 'bg-gray-50' : 'bg-white'} ${
           isOpen ? 'border-2 border-indigo-600 shadow-sm' : 'border border-gray-200'
         }`}
       >
         <button
           type="button"
           onClick={() => setExpanded(isOpen ? null : rowKey)}
-          className="w-full text-left p-5 hover:bg-gray-50 transition-colors"
+          aria-expanded={isOpen}
+          className="w-full text-left p-4 sm:p-5 hover:bg-gray-50 transition-colors"
         >
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <div className="flex items-center gap-3">
-              <div className="text-base font-semibold text-gray-900">{s.name}</div>
+          {/* Wraps on narrow screens: the name and its chips take the first
+              line, the three figures drop under it rather than squeezing it. */}
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 mb-3">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0">
+              <div className={`text-base font-semibold break-words ${notAssessed ? 'text-gray-500' : 'text-gray-900'}`}>{s.name}</div>
               <span className={`text-xs font-semibold px-2 py-0.5 rounded ${tag.bg} ${tag.text}`}>
                 {tag.tag} • {s.clusterName}
               </span>
-              {trendIcon(s.score)}
+              {notAssessed ? (
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-200 text-gray-600">Not assessed</span>
+              ) : trendIcon(s.score)}
             </div>
-            <div className="flex items-center gap-5 shrink-0">
+            <div className="flex items-center gap-4 sm:gap-5 shrink-0 ml-auto">
               <div className="text-right">
                 <div className="text-xs text-gray-500">Score</div>
-                <div className="text-lg font-bold" style={{ color }}>{formatSkillScore(s.score)}</div>
+                <div className="text-lg font-bold" style={{ color }}>{notAssessed ? '—' : formatSkillScore(s.score)}</div>
               </div>
               <div className="text-right">
                 <div className="text-xs text-gray-500">Weight</div>
@@ -180,29 +192,43 @@ export function SkillsView({ data }: { data: DashboardData }) {
               </div>
               <div className="text-right">
                 <div className="text-xs text-gray-500">Contribution</div>
-                <div className="text-lg font-bold text-indigo-700">{contribution}</div>
+                <div className={`text-lg font-bold ${notAssessed ? 'text-gray-400' : 'text-indigo-700'}`}>{notAssessed ? '—' : contribution}</div>
               </div>
               {isOpen ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
             </div>
           </div>
           <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-            <div className="h-full rounded-full" style={{ width: `${(s.score / 10) * 100}%`, backgroundColor: color }} />
+            <div className="h-full rounded-full" style={{ width: `${notAssessed ? 0 : (s.score / 10) * 100}%`, backgroundColor: color }} />
           </div>
         </button>
 
-        {isOpen && (() => {
-          const { strengths, growth } = splitFeedback(s.feedback, s.score);
-          return (
-            <div className="px-5 pb-5">
-              <hr className="border-gray-200 mb-4" />
-              <div className="p-4 rounded-xl bg-gray-50 mb-4">
-                <div className="text-sm font-semibold text-gray-900 mb-1.5">AI Analysis:</div>
-                <div className="text-sm text-gray-700 leading-relaxed">
-                  {s.feedback || 'No specific feedback captured for this skill.'}
-                </div>
-              </div>
+        {isOpen && notAssessed && (
+          <div className="px-4 sm:px-5 pb-5">
+            <hr className="border-gray-200 mb-4" />
+            <div className="p-4 rounded-xl bg-white border border-gray-200 text-sm text-gray-600 leading-relaxed">
+              No question in this interview covered this skill, so it has no skill score. If its planned question was never reached (the interview ended early), that question still counts as 0 in the Section Score.
+            </div>
+          </div>
+        )}
 
-              {(strengths.length > 0 || growth.length > 0) && (
+        {isOpen && !notAssessed && (() => {
+          const { strengths, growth } = splitFeedback(s.feedback, s.score);
+          // The feedback is shown ONCE: split into Strengths / Areas for
+          // Growth when it splits, otherwise as one AI Analysis paragraph.
+          const hasSplit = strengths.length > 0 || growth.length > 0;
+          return (
+            <div className="px-4 sm:px-5 pb-5">
+              <hr className="border-gray-200 mb-4" />
+              {!hasSplit && (
+                <div className="p-4 rounded-xl bg-gray-50 mb-4">
+                  <div className="text-sm font-semibold text-gray-900 mb-1.5">AI Analysis:</div>
+                  <div className="text-sm text-gray-700 leading-relaxed">
+                    {s.feedback || 'No specific feedback captured for this skill.'}
+                  </div>
+                </div>
+              )}
+
+              {hasSplit && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
                   {strengths.length > 0 && (
                     <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200">
@@ -256,15 +282,18 @@ export function SkillsView({ data }: { data: DashboardData }) {
           {/* Must-Have Section — gate-blocking skills, MHS ≥ 6.0 = Pass */}
           {mhSkills.length > 0 && (
             <div className="space-y-3">
-              <div className="flex items-center justify-between gap-3 pt-1">
-                <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 pt-1">
+                <div className="flex flex-wrap items-center gap-2">
                   <div className="text-base font-bold text-gray-900">Must-Have Skills</div>
                   <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">
                     {isPartialEvaluation ? 'Evaluated from Attended Questions' : 'Scored for Pass/Fail'}
                   </span>
                 </div>
+                {/* The section score (question scores ÷ planned questions) —
+                    the number Pass/Fail and the report use, not an average of
+                    the skill cards below. */}
                 <div className="text-xs text-gray-500">
-                  {mhSkills.length} skill{mhSkills.length === 1 ? '' : 's'} · Avg{' '}
+                  {mhSkills.length} skill{mhSkills.length === 1 ? '' : 's'} · Section Score{' '}
                   <span className="font-semibold text-gray-900">{formatScore1(mhAvg)}</span>/10
                 </div>
               </div>
@@ -275,15 +304,15 @@ export function SkillsView({ data }: { data: DashboardData }) {
           {/* Nice-to-Have Section — informational only per spec */}
           {nhSkills.length > 0 && (
             <div className="space-y-3 pt-2">
-              <div className="flex items-center justify-between gap-3 pt-1">
-                <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 pt-1">
+                <div className="flex flex-wrap items-center gap-2">
                   <div className="text-base font-bold text-gray-900">Nice-to-Have Skills</div>
                   <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">
                     Information Only
                   </span>
                 </div>
                 <div className="text-xs text-gray-500">
-                  {nhSkills.length} skill{nhSkills.length === 1 ? '' : 's'} · Avg{' '}
+                  {nhSkills.length} skill{nhSkills.length === 1 ? '' : 's'} · Section Score{' '}
                   <span className="font-semibold text-gray-900">{formatScore1(nhAvg)}</span>/10
                 </div>
               </div>
@@ -304,7 +333,7 @@ export function SkillsView({ data }: { data: DashboardData }) {
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <div className="text-2xs text-gray-500 mb-0.5">Avg Score</div>
+                  <div className="text-2xs text-gray-500 mb-0.5">Section Score</div>
                   <div className="text-xl font-bold text-indigo-700">{formatScore1(mhAvg)}</div>
                 </div>
                 <div>
@@ -327,7 +356,7 @@ export function SkillsView({ data }: { data: DashboardData }) {
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <div className="text-2xs text-gray-500 mb-0.5">Avg Score</div>
+                  <div className="text-2xs text-gray-500 mb-0.5">Section Score</div>
                   <div className="text-xl font-bold text-amber-600">{formatScore1(nhAvg)}</div>
                 </div>
                 <div>
@@ -458,17 +487,17 @@ export function QuestionsView({ data, renderAnswerAction }: {
   // selected HR question carries its configured stage (asked or not). Any
   // other HR row falls back to the ask order: asked before the first MHS/NHS
   // question = Opening; un-reached ones go to the Closing end.
-  const _skillAsked = [...mhQs, ...nhQs]
-    .filter(q => !q.notDelivered && typeof q.askedNum === 'number')
-    .map(q => q.askedNum as number);
-  const firstSkillAsked = _skillAsked.length > 0 ? Math.min(..._skillAsked) : Infinity;
-  const isOpeningHr = (q: PerQuestionDetail) =>
-    q.hrStage
+  // (Shared with the Evaluation Report, so both list the same order.)
+  const allOrder = orderQuestionsAsAsked(delivered);
+  // The HR rows that lead the order are the Opening ones; the rest close it.
+  const _firstNonHr = allOrder.findIndex(q => q.section !== 'hr');
+  // (HR only: every HR question that was asked counts as Opening, as before.)
+  const hrOpening = _firstNonHr === -1
+    ? hrQs.filter(q => q.hrStage
       ? q.hrStage === 'opening'
-      : !q.notDelivered && typeof q.askedNum === 'number' && q.askedNum < firstSkillAsked;
-  const hrOpening = hrQs.filter(isOpeningHr);
-  const hrClosing = hrQs.filter(q => !isOpeningHr(q));
-  const allOrder = [...hrOpening, ...mhQs, ...nhQs, ...hrClosing];
+      : !q.notDelivered && typeof q.askedNum === 'number')
+    : allOrder.slice(0, _firstNonHr);
+  const hrClosing = hrQs.filter(q => !hrOpening.includes(q));
 
   // Per-Q card renderer (extracted so the grouped-by-section rendering
   // below stays readable).
@@ -954,11 +983,57 @@ export function QuestionsView({ data, renderAnswerAction }: {
 
   // Section header chip — small label + count badge so each block has a
   // visible divider between MHS / NHS / HR.
-  const sectionHeader = (label: string, chipText: string, count: number, chipCls: string) => (
-    <div className="flex items-center gap-2 pt-1 pb-1">
+  const sectionHeading = (label: string, chipText: string, count: number, chipCls: string) => (
+    <>
       <div className="text-base font-bold text-gray-900">{label}</div>
       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${chipCls}`}>{chipText}</span>
       <span className="text-xs text-gray-500">· {count} question{count === 1 ? '' : 's'}</span>
+    </>
+  );
+
+  // Which section heads the Sections view (MHS → NHS → HR, skipping empties).
+  // Its heading shares the top row with the toggle; the others draw their own.
+  const firstSection = mhQs.length > 0 ? 'mh' : nhQs.length > 0 ? 'nh' : hrQs.length > 0 ? 'hr' : null;
+  const mhHeading = () => sectionHeading(
+    'Must-Have Section',
+    isPartialEvaluation ? 'Evaluated from Attended Questions' : 'Scored for Pass/Fail',
+    mhQs.length,
+    'bg-indigo-50 text-indigo-700',
+  );
+  const nhHeading = () => sectionHeading('Nice-to-Have Section', 'Information Only', nhQs.length, 'bg-amber-50 text-amber-700');
+  const hrHeading = () => sectionHeading('HR Round', 'For Reference', hrQs.length, 'bg-violet-50 text-violet-700');
+  const totalQs = mhQs.length + nhQs.length + hrQs.length;
+
+  // All | Sections — the app's sliding tile toggle (as "View by" on Scored
+  // Resumes): two equal halves on one track, a white tile sliding under the
+  // active one. It stays mounted in the one top row whichever view is open,
+  // so the tile can slide rather than the control being redrawn.
+  const viewToggle = (
+    <div
+      role="radiogroup"
+      aria-label="Question view"
+      className="relative grid grid-cols-2 p-0.5 rounded-lg bg-brand-blue/5 ring-1 ring-brand-blue/10"
+    >
+      <span
+        aria-hidden
+        className={`absolute top-0.5 bottom-0.5 left-0.5 w-[calc(50%-0.125rem)] rounded-md bg-white shadow-sm shadow-brand-blue/15 ring-1 ring-brand-blue/10 transition-transform duration-300 ease-out ${
+          viewMode === 'sections' ? 'translate-x-full' : 'translate-x-0'
+        }`}
+      />
+      {([['all', 'All'], ['sections', 'Sections']] as const).map(([mode, label]) => (
+        <button
+          key={mode}
+          type="button"
+          role="radio"
+          aria-checked={viewMode === mode}
+          onClick={() => setViewMode(mode)}
+          className={`relative z-10 px-3 py-1 text-xs font-semibold rounded-md whitespace-nowrap transition-colors duration-300 ${
+            viewMode === mode ? 'text-brand-blue' : 'text-gray-500 hover:text-brand-blue'
+          }`}
+        >
+          {label}
+        </button>
+      ))}
     </div>
   );
 
@@ -969,54 +1044,41 @@ export function QuestionsView({ data, renderAnswerAction }: {
           This interview was terminated before completion. The scores below are for attended questions only; no overall pass/fail or final match score is generated.
         </div>
       )}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5">
-          {([['all', 'All'], ['sections', 'Sections']] as const).map(([mode, label]) => (
-            <button
-              key={mode}
-              type="button"
-              onClick={() => setViewMode(mode)}
-              className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
-                viewMode === mode ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+      <div className="flex items-center gap-2 pt-1 pb-1">
+        {viewMode === 'all' ? (
+          <>
+            <div className="text-base font-bold text-gray-900">All Questions</div>
+            <span className="text-xs text-gray-500">· {totalQs} question{totalQs === 1 ? '' : 's'}</span>
+          </>
+        ) : firstSection === 'mh' ? mhHeading()
+          : firstSection === 'nh' ? nhHeading()
+          : firstSection === 'hr' ? hrHeading()
+          : null}
+        <div className="ml-auto shrink-0">{viewToggle}</div>
       </div>
       {viewMode === 'all' && (
         <>
-          <div className="flex items-center gap-2 pt-1 pb-1">
-            <div className="text-base font-bold text-gray-900">All Questions</div>
-            <span className="text-xs text-gray-500">
-              · {mhQs.length + nhQs.length + hrQs.length} question{mhQs.length + nhQs.length + hrQs.length === 1 ? '' : 's'}
-            </span>
-          </div>
           {allOrder.map((q, i) => renderQCard(q, i, i + 1))}
         </>
       )}
       {/* Sections view keeps MHS → NHS → HR regardless of the HR stage. */}
       {viewMode === 'sections' && mhQs.length > 0 && (
         <>
-          {sectionHeader(
-            'Must-Have Section',
-            isPartialEvaluation ? 'Evaluated from Attended Questions' : 'Scored for Pass/Fail',
-            mhQs.length,
-            'bg-indigo-50 text-indigo-700',
+          {firstSection !== 'mh' && (
+            <div className="flex items-center gap-2 pt-1 pb-1">{mhHeading()}</div>
           )}
           {mhQs.map((q, i) => renderQCard(q, hrQs.length + i))}
         </>
       )}
       {viewMode === 'sections' && nhQs.length > 0 && (
         <>
-          {sectionHeader('Nice-to-Have Section', 'Information Only', nhQs.length, 'bg-amber-50 text-amber-700')}
+          {firstSection !== 'nh' && <div className="flex items-center gap-2 pt-1 pb-1">{nhHeading()}</div>}
           {nhQs.map((q, i) => renderQCard(q, hrQs.length + mhQs.length + i))}
         </>
       )}
       {viewMode === 'sections' && hrQs.length > 0 && (
         <>
-          {sectionHeader('HR Round', 'For Reference', hrQs.length, 'bg-violet-50 text-violet-700')}
+          {firstSection !== 'hr' && <div className="flex items-center gap-2 pt-1 pb-1">{hrHeading()}</div>}
           {hrQs.map((q, i) => renderQCard(q, i))}
         </>
       )}

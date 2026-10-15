@@ -1,6 +1,6 @@
 'use client'
 
-import { Plus, Search, MapPin, Eye, MoreVertical, Briefcase, Users, Clock, CheckCircle2, FileText, Sparkles, ChevronDown, Settings, Archive, XCircle, AlertCircle, ArrowUpRight, Edit, Ban, RefreshCw, ArrowUpDown, CheckSquare, Square, Trash2, Download, ChevronLeft, ChevronRight, X, Brain, ClipboardList, ClipboardCheck, Video, Loader2 } from 'lucide-react';
+import { Plus, Search, MapPin, Eye, MoreVertical, Briefcase, Users, Clock, CheckCircle2, FileText, Sparkles, ChevronDown, Settings, Archive, XCircle, AlertCircle, ArrowUpRight, Edit, Ban, RefreshCw, ArrowUpDown, CheckSquare, Square, Trash2, Download, ChevronLeft, ChevronRight, X, Brain, ClipboardList, ClipboardCheck, Video, Loader2, Info } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
@@ -41,6 +41,7 @@ import { tabPill, SEGMENT_TOGGLE, segmentBtn } from '@/components/ui/filter-pill
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import ExportFormatModal from '@/components/ExportFormatModal';
 import { exportRows, ExportFileFormat } from '@/lib/utils/exportUtils';
+import { Tooltip } from '@/components/ui/tooltip';
 /* Radix menu rather than the hand-rolled absolute dropdown the job rows use:
    the version table sits inside an overflow-x-auto shell, which would clip an
    absolutely positioned menu — Radix portals it out of the scroll container. */
@@ -133,6 +134,9 @@ interface JobsListingProps {
   /** Ids of the given jobs that are in use (scored, matched, assessed or
    *  interviewed) — checked before the bulk Delete confirm opens. */
   onCheckJobsInUse?: (jobs: Job[]) => Promise<Set<string>>;
+  /** Every selected job is in use: show the row Delete's "Cannot Delete"
+   *  popup for them (a toast is the fallback when not given). */
+  onAllJobsInUse?: (jobs: Job[]) => void;
   // Quota information for showing limit reached message
   quotaInfo?: {
     remaining: number;
@@ -178,7 +182,7 @@ const StatVersions = ({ count }: { count: number }) => (
 /** The status transitions the bulk Actions menu can apply. */
 export type BulkStatusAction = 'disable' | 'reenable' | 'archive' | 'unarchive';
 
-export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded = true, onCreateNew, onCreateNewDisabled = false, onViewJob, onViewApplicants, onAIMatch, onAIMatchDisabled = false, onAIMatchDisabledReason = 'You do not have permission to run AI Talent Match', onScoreResumes, onScoreResumesDisabled = false, onScoreResumesDisabledReason = 'You do not have permission to run resume scoring', onUpdateJobStatus, onEditJob, versionStatusOverrides, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, onBulkDelete, onBulkStatusChange, onCheckJobsInUse, quotaInfo, initialStatusFilter, forceListView, configHref }: JobsListingProps) {
+export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded = true, onCreateNew, onCreateNewDisabled = false, onViewJob, onViewApplicants, onAIMatch, onAIMatchDisabled = false, onAIMatchDisabledReason = 'You do not have permission to run AI Talent Match', onScoreResumes, onScoreResumesDisabled = false, onScoreResumesDisabledReason = 'You do not have permission to run resume scoring', onUpdateJobStatus, onEditJob, versionStatusOverrides, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, onBulkDelete, onBulkStatusChange, onCheckJobsInUse, onAllJobsInUse, quotaInfo, initialStatusFilter, forceListView, configHref }: JobsListingProps) {
   const router = useRouter();
   const { isTenantAdmin, user, hasPermissionCode } = useAuth();
   // NOTE: canUpdateJD/canDeleteJD/canArchiveJD/canDisableJD (capital JD) are the
@@ -696,6 +700,11 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
     setShowBulkActions(false);
     const skipped = selected.length - targets.length;
     if (targets.length === 0) {
+      // Nothing deletable: the same popup the row's Delete Job shows.
+      if (onAllJobsInUse) {
+        onAllJobsInUse(selected);
+        return;
+      }
       toast.error(
         skipped === 1
           ? 'This job is in use and cannot be deleted. Archive it instead.'
@@ -915,27 +924,48 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
   }) => {
     const unavailable = !allowed || eligible === 0 || bulkStatusBusy;
     const countSuffix = isAllJobsTab ? ` (${eligible} of ${selectedVisibleJobs.length})` : '';
+    /* Why the count is short — behind an ⓘ at the row's end, on hover.
+       Nothing when every selected job takes the action. */
+    const skipped = selectedVisibleJobs.length - eligible;
+    const reason = !allowed
+      ? null
+      : eligible === 0
+        ? noneEligibleMessage
+        : skipped > 0
+          ? `Applies to ${eligible} of ${selectedVisibleJobs.length} selected jobs. ${noneEligibleMessage}; the other ${skipped} will be skipped.`
+          : null;
     return (
-      <button
-        key={label}
-        type="button"
-        onClick={() => {
-          if (!allowed) {
-            toast.error(deniedMessage);
-            return;
-          }
-          if (eligible === 0 || bulkStatusBusy) return;
-          onSelect();
-        }}
-        aria-disabled={unavailable}
-        title={!allowed ? deniedMessage : eligible === 0 ? noneEligibleMessage : ''}
-        className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 ${
-          unavailable ? 'text-gray-400 cursor-not-allowed opacity-60' : 'text-gray-700 hover:bg-gray-50'
-        }`}
-      >
-        <Icon className={`w-4 h-4 ${unavailable ? 'text-gray-400' : iconClass}`} />
-        <span className="tabular-nums">{label}{countSuffix}</span>
-      </button>
+      <div key={label} className={`flex items-center pr-3 ${unavailable ? '' : 'hover:bg-gray-50'}`}>
+        <button
+          type="button"
+          onClick={() => {
+            if (!allowed) {
+              toast.error(deniedMessage);
+              return;
+            }
+            if (eligible === 0 || bulkStatusBusy) return;
+            onSelect();
+          }}
+          aria-disabled={unavailable}
+          title={!allowed ? deniedMessage : undefined}
+          className={`flex-1 min-w-0 pl-3 py-2 text-left text-sm flex items-center gap-2 ${
+            unavailable ? 'text-gray-400 cursor-not-allowed opacity-60' : 'text-gray-700'
+          }`}
+        >
+          <Icon className={`w-4 h-4 flex-shrink-0 ${unavailable ? 'text-gray-400' : iconClass}`} />
+          <span className="tabular-nums">{label}{countSuffix}</span>
+        </button>
+        {reason && (
+          <Tooltip content={reason} position="left">
+            <span
+              aria-label={reason}
+              className="flex w-5 h-5 items-center justify-center rounded-full text-gray-400 hover:text-brand-blue cursor-help"
+            >
+              <Info className="w-3.5 h-3.5" aria-hidden="true" />
+            </span>
+          </Tooltip>
+        )}
+      </div>
     );
   };
 

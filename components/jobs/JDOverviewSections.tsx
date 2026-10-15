@@ -1,15 +1,15 @@
 'use client';
 
-import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
-import { ChevronRight, Eye, CheckCircle, FileText, Lock } from 'lucide-react';
+import { FileText, Lock } from 'lucide-react';
 import type { JDResponse } from '@/lib/services/jdService';
 import { formatJobExperienceText } from '@/lib/utils/jobExperience';
 import { criterionScoringLabel, requirementBadge } from '@/lib/utils/scoringCriteria';
 import { usePlanLock } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
+import ExtractedDataSummary from '@/components/jobs/ExtractedDataSummary';
 
 /**
  * ONE JD's Overview sections, exactly as the Job Details page lays them out.
@@ -109,9 +109,6 @@ export default function JDOverviewSections({
 }: JDOverviewSectionsProps) {
   const { isPlanLocked } = usePlanLock();
   const assessmentLocked = isPlanLocked('assessment');
-  /* Collapsed on open, as it is on the Job Details page — the summary is the
-     structured cross-check, read after the description rather than with it. */
-  const [showExtractedSummary, setShowExtractedSummary] = useState(false);
 
   const mustHaveSkills = jd?.must_have_skills || [];
   const niceToHaveSkills = jd?.nice_to_have_skills || [];
@@ -219,202 +216,37 @@ export default function JDOverviewSections({
         )}
       </div>
 
-      {/* Extracted Data Summary — collapsible, mirroring the Job Details
-          page. Recruiters reviewing an assessment were seeing only the
-          JD prose here and had to open the full JD page to check the
-          structured requirements the questions were generated from. */}
+      {/* Extracted Data Summary - the JD wizard Review step's format, the same
+          component the Job Details page renders. Recruiters reviewing an
+          assessment were seeing only the JD prose here and had to open the full
+          JD page to check the structured requirements. The JD full-view dialog
+          (showScoringDetail off) leaves out the scoring reading: the
+          Essential / Preferred badges, the Location tile, the per-criterion
+          lines and the scoring answers. */}
       {hasAnyExtractedData && (
-        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
-          <button
-            onClick={() => setShowExtractedSummary(!showExtractedSummary)}
-            className="w-full bg-brand-blue/[0.04] px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 flex items-center justify-between hover:bg-brand-blue/[0.07] transition-colors rounded-t-xl"
-          >
-            <div className="text-left">
-              <h3 className="text-sm sm:text-lg text-gray-900 flex items-center gap-2 flex-wrap">
-                📊 Extracted Data Summary
-                <Eye className="w-5 h-5 text-gray-500" />
-              </h3>
-              <p className="text-sm text-gray-600 mt-1">
-                Click to {showExtractedSummary ? 'hide' : 'view'} structured requirements
-              </p>
-            </div>
-            <div className={`transform transition-transform ${showExtractedSummary ? 'rotate-180' : ''}`}>
-              <ChevronRight className="w-5 h-5 text-gray-500 rotate-90" />
-            </div>
-          </button>
-
-          {showExtractedSummary && (
-            <>
-              {/* Skills & Comments */}
-              <div className="p-4 sm:p-6 border-b border-gray-200">
-                <h3 className="text-sm sm:text-base text-gray-900 mb-3 sm:mb-4">Skills &amp; Requirements</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                  <div className="space-y-4 sm:space-y-6">
-                    <div>
-                      <h4 className="text-sm text-gray-700 mb-3">Must-Have Skills ({mustHaveSkills.length})</h4>
-                      {mustHaveSkills.length > 0 ? (
-                        <div className="space-y-2">
-                          {mustHaveSkills.map((skill, index) => (
-                            <div key={`ed-mh-${index}`} className="flex items-center gap-2 text-sm text-gray-700">
-                              <CheckCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
-                              {skill}
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-gray-500 italic text-sm">None</p>
-                      )}
-                    </div>
-                    <div>
-                      <h4 className="text-sm text-gray-700 mb-3">Nice-to-Have Skills ({niceToHaveSkills.length})</h4>
-                      {niceToHaveSkills.length > 0 ? (
-                        <div className="space-y-2">
-                          {niceToHaveSkills.map((skill, index) => (
-                            <div key={`ed-nh-${index}`} className="flex items-center gap-2 text-sm text-gray-600">
-                              <CheckCircle className="w-4 h-4 text-gray-800 flex-shrink-0" />
-                              {skill}
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-gray-500 italic text-sm">None</p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="space-y-4 sm:space-y-6">
-                    <div>
-                      {/* Labelled Essential/Preferred: Education has no tile of
-                          its own, so which list a degree lands in is the only
-                          place its Required status is visible. */}
-                      <h4 className="text-sm text-gray-700 mb-3">
-                        Must-Have Additional Requirements ({mustHaveComments.length})
-                        {/* See JobDetailView: the badge is a scoring claim, so it
-                            only appears when there are lines for it to apply to. */}
-                        {showScoringDetail && mustHaveComments.length > 0 && (
-                          <span className="ml-2 text-xs font-normal text-gray-500">✓ Required (Essential)</span>
-                        )}
-                      </h4>
-                      {mustHaveComments.length > 0 ? (
-                        <div className="space-y-2">
-                          {mustHaveComments.map((comment, index) => (
-                            <div key={`ed-mhc-${index}`} className="flex items-start gap-2 text-sm text-gray-700">
-                              <CheckCircle className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" />
-                              <span>{comment}</span>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-gray-500 italic text-sm">None</p>
-                      )}
-                    </div>
-                    <div>
-                      <h4 className="text-sm text-gray-700 mb-3">
-                        Nice-to-Have Additional Requirements ({niceToHaveComments.length})
-                        {showScoringDetail && niceToHaveComments.length > 0 && (
-                          <span className="ml-2 text-xs font-normal text-gray-500">○ Preferred</span>
-                        )}
-                      </h4>
-                      {niceToHaveComments.length > 0 ? (
-                        <div className="space-y-2">
-                          {niceToHaveComments.map((comment, index) => (
-                            <div key={`ed-nhc-${index}`} className="flex items-start gap-2 text-sm text-gray-600">
-                              <CheckCircle className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
-                              <span>{comment}</span>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-gray-500 italic text-sm">None</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Requirements Grid */}
-              <div className="p-4 sm:p-6">
-                <h3 className="text-sm sm:text-base text-gray-900 mb-3 sm:mb-4">Requirements</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-                  <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
-                    <h4 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Experience</h4>
-                    <p className="text-sm sm:text-base text-gray-900">{experienceText || 'Not specified'}</p>
-                    {showScoringDetail && experienceText && (
-                      <p className="text-xs text-gray-500 mt-1">{requirementBadge(jd.experience_mandatory)}</p>
-                    )}
-                  </div>
-                  {/* Education tile REMOVED 2026-08-21. Same Requirements grid
-                      as JobDetailView, same reason: education is a line inside
-                      the Must-Have / Nice-to-Have Additional Requirements shown
-                      directly above, so a tile here repeated it. */}
-                  {jd.industry_type && (
-                    <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
-                      <h4 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Industry Type</h4>
-                      <p className="text-sm sm:text-base text-gray-900">{prettifyCode(jd.industry_type)}</p>
-                      {/* See JobDetailView: "Others" is never scored. */}
-                      {showScoringDetail && (
-                        <p className="text-xs text-gray-500 mt-1">{criterionScoringLabel(jd.industry_type, jd.industry_mandatory, { isIndustry: true })}</p>
-                      )}
-                    </div>
-                  )}
-                  {showScoringDetail && jd.location && (
-                    <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
-                      <h4 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Location</h4>
-                      <p className="text-sm sm:text-base text-gray-900">{jd.location}</p>
-                      <p className="text-xs text-gray-500 mt-1">{criterionScoringLabel(jd.location, jd.location_mandatory)}</p>
-                    </div>
-                  )}
-                  <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
-                    <h4 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Employment Type</h4>
-                    <p className="text-sm sm:text-base text-gray-900">{employmentTypeLabel(jd.employment_type)}</p>
-                  </div>
-                  <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
-                    <h4 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Work Mode</h4>
-                    <p className="text-sm sm:text-base text-gray-900">{workModeLabel(jd.remote_type)}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Scoring Preferences - recruiter answers that change how a resume
-                  is graded against this JD but appear nowhere else once it is
-                  published. Same block as the JD view and the scored-resume View
-                  JD tab, so all three read the same. */}
-              {showScoringDetail && (
-              <div className="p-4 sm:p-6 border-b border-gray-200">
-                <h3 className="text-sm sm:text-base text-gray-900 mb-3 sm:mb-4">Scoring Preferences</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                  <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
-                    <h4 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Allow Over-Qualified Candidates</h4>
-                    <p className="text-sm sm:text-base text-gray-900">
-                      {jd.allow_overqualified === null || jd.allow_overqualified === undefined
-                        ? 'Not specified'
-                        : jd.allow_overqualified ? 'Yes' : 'No'}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {jd.allow_overqualified === false
-                        ? 'Experience well above the range scores lower'
-                        : 'Extra relevant experience is not penalised'}
-                    </p>
-                  </div>
-                  <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
-                    <h4 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Job Hopping</h4>
-                    <p className="text-sm sm:text-base text-gray-900">
-                      {jd.job_hopping_enabled === null || jd.job_hopping_enabled === undefined
-                        ? 'Not specified'
-                        : jd.job_hopping_enabled ? 'Evaluated' : 'Not evaluated'}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {jd.job_hopping_enabled === false
-                        ? 'Tenure pattern is not scored for this role'
-                        : 'Scored as a Preferred criterion'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              )}
-            </>
-          )}
-        </div>
+        <ExtractedDataSummary
+          mustHaveSkills={mustHaveSkills}
+          niceToHaveSkills={niceToHaveSkills}
+          mustHaveComments={mustHaveComments}
+          niceToHaveComments={niceToHaveComments}
+          showRequirementBadges={showScoringDetail}
+          experience={experienceText || null}
+          experienceNote={showScoringDetail ? requirementBadge(jd.experience_mandatory) : undefined}
+          industry={jd.industry_type ? prettifyCode(jd.industry_type) : null}
+          industryNote={showScoringDetail && jd.industry_type
+            ? criterionScoringLabel(jd.industry_type, jd.industry_mandatory, { isIndustry: true })
+            : undefined}
+          location={showScoringDetail ? jd.location : null}
+          locationNote={showScoringDetail && jd.location ? criterionScoringLabel(jd.location, jd.location_mandatory) : undefined}
+          employmentType={employmentTypeLabel(jd.employment_type)}
+          workMode={workModeLabel(jd.remote_type)}
+          scoring={showScoringDetail ? {
+            allowOverqualified: jd.allow_overqualified,
+            jobHoppingEnabled: jd.job_hopping_enabled,
+            overqualifiedNoNote: 'Experience well above the range scores lower',
+          } : undefined}
+          aiExtracted={jd.creation_method === 'ai_generated'}
+        />
       )}
 
     </div>

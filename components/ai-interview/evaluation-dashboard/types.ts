@@ -15,6 +15,27 @@ export interface Skill {
    *  candidate didn't demonstrate it"). The Cluster Coverage view uses this
    *  for its primary classification; `score`/`level` are the sub-detail. */
   asked: boolean;
+  /** True when `asked` came from a real record of what was asked (the
+   *  question plan, the backend's assessed map or the at-ask-time skills).
+   *  False on old interviews with none of those, where `asked` can only be
+   *  guessed from score > 0 — so a 0 there can't be told apart from "asked
+   *  and scored 0". */
+  askedKnown?: boolean;
+}
+
+/** A skill no question covered, so it has no skill score to show. Only when
+ *  the record says so: on old interviews with no record (askedKnown false) a
+ *  0 keeps reading as a 0, as it always did. A real score always wins. */
+export function isSkillNotAssessed(s: { asked?: boolean; askedKnown?: boolean; score: number }): boolean {
+  return s.askedKnown === true && s.asked === false && !(s.score > 0);
+}
+
+/** Counted in "Skills Evaluated": every skill a question covered (even one
+ *  scored 0). On old interviews with no record, a score above 0 is the only
+ *  evidence, so the count falls back to that — as it was before. */
+export function isSkillEvaluated(s: { asked?: boolean; askedKnown?: boolean; score: number }): boolean {
+  if (s.askedKnown === true) return s.asked === true || s.score > 0;
+  return s.score > 0;
 }
 
 export interface Cluster {
@@ -299,4 +320,25 @@ export interface DashboardData {
    *  delivered count in the calculation display when the planned count
    *  isn't available (older interviews). */
   plannedCounts: { mustHave: number; niceToHave: number };
+}
+
+/**
+ * The questions in the order the interview ran them — the Question Analysis
+ * tab's "All" order, shared so the Evaluation Report lists the same questions
+ * in the same order with the same 1..N numbers:
+ *   Opening HR (asked before the first skill question) → Must-Have →
+ *   Nice-to-Have → Closing HR (and any HR never reached).
+ * The HR stage isn't carried on the rows, so it is read from the ask order.
+ */
+export function orderQuestionsAsAsked(questions: PerQuestionDetail[]): PerQuestionDetail[] {
+  const mh = questions.filter(q => q.section === 'mth');
+  const nh = questions.filter(q => q.section === 'nth');
+  const hr = questions.filter(q => q.section === 'hr');
+  const skillAsked = [...mh, ...nh]
+    .filter(q => !q.notDelivered && typeof q.askedNum === 'number')
+    .map(q => q.askedNum as number);
+  const firstSkillAsked = skillAsked.length > 0 ? Math.min(...skillAsked) : Infinity;
+  const isOpeningHr = (q: PerQuestionDetail) =>
+    !q.notDelivered && typeof q.askedNum === 'number' && q.askedNum < firstSkillAsked;
+  return [...hr.filter(isOpeningHr), ...mh, ...nh, ...hr.filter(q => !isOpeningHr(q))];
 }

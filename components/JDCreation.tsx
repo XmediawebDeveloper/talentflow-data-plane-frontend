@@ -1,6 +1,6 @@
 'use client';
 
-import { Wand2, FileText, Copy, Download, Save, ChevronRight, ChevronDown, Plus, X, Edit2, CheckCircle, CheckCircle2, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, GripVertical, Info, Eye, Pencil, Lightbulb, Briefcase, MapPin, NotebookPen, ClipboardCheck, BarChart3, Clock, Building2, Wallet, Circle, ArrowLeftRight, Users, Lock, AlertTriangle, AlertCircle, Cloud, CloudOff, Loader2, Sparkles } from 'lucide-react';
+import { Wand2, FileText, Copy, Download, Save, ChevronRight, ChevronDown, Plus, X, Edit2, CheckCircle, CheckCircle2, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, GripVertical, Info, Eye, Pencil, Lightbulb, Briefcase, MapPin, NotebookPen, ClipboardCheck, Clock, Building2, Wallet, Circle, ArrowLeftRight, Users, Lock, AlertTriangle, AlertCircle, Cloud, CloudOff, Loader2, Sparkles } from 'lucide-react';
 import UnsavedChangesModal from '@/components/UnsavedChangesModal';
 import SuccessAnimation from '@/components/ui/success-animation';
 import ReactMarkdown, { type Components } from 'react-markdown';
@@ -17,6 +17,11 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useRouter } from 'next/navigation';
 import { useDrag, useDrop } from 'react-dnd';
+import { STEP2_CARD_CLASS, STEP2_SECTION_TONES, Step2SectionHeader } from '@/components/jobs/Step2Section';
+import {
+  ExtractedSummaryCard, SummarySectionHeading, SummaryItemList, SummaryYesNo,
+  SUMMARY_FIELD_LABEL, SUMMARY_FIELD_VALUE, SUMMARY_EMPTY_VALUE, SUMMARY_TILE,
+} from '@/components/jobs/ExtractedDataSummary';
 import { Job } from '@/lib/types/types';
 import { toast } from '@/components/ui/enhanced-toast';
 import { jdService, masterDataService, ExperienceLevel, EducationLevel, IndustryType } from '@/lib/services';
@@ -920,12 +925,8 @@ const PRIVATE_BADGE_CLASS =
 const CANDIDATE_VISIBLE_BADGE_CLASS =
   'inline-flex items-center gap-1 whitespace-nowrap text-xs font-medium text-success bg-success-subtle border border-success-line px-2 py-0.5 rounded';
 
-// Step 2's section cards: the step's white card with a 2px edge in the design
-// system's `--border` token (globals.css, dark value included) so each
-// section's boundary reads clearly, and the lighter bordered panel that groups
-// one field (or one pair of fields) inside a card.
-const STEP2_CARD_CLASS =
-  'bg-white dark:bg-slate-900 rounded-xl border-2 border-border ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6';
+// Step 2's section card (STEP2_CARD_CLASS), section tones and header are
+// shared with Job Details: components/jobs/Step2Section.
 // Step 2's required fields in the order they sit on the page - Next scrolls to
 // the first one that is missing. Each field's block carries a matching
 // `data-step2-field`.
@@ -939,49 +940,6 @@ const STEP2_REQUIRED_FIELD_ORDER = [
 ] as const;
 const STEP2_PANEL_CLASS =
   'min-w-0 rounded-lg border border-gray-100 dark:border-slate-700/60 p-3 sm:p-4';
-
-// One brand tone per Step 2 section, so the three cards are told apart at a
-// glance. Each pairs a tinted tile with its glyph colour, as the Assessment
-// configure step's fact tiles do; every value is a globals.css brand token.
-const STEP2_SECTION_TONES = {
-  blue: { tile: 'bg-brand-blue/10 ring-1 ring-brand-blue/15', icon: 'text-brand-blue' },
-  cyan: { tile: 'bg-brand-cyan/10 ring-1 ring-brand-cyan/15', icon: 'text-brand-cyan' },
-  orange: { tile: 'bg-brand-orange/10 ring-1 ring-brand-orange/15', icon: 'text-brand-orange-deep' },
-  success: { tile: 'bg-success-subtle ring-1 ring-success-line', icon: 'text-success' },
-} as const;
-
-/**
- * A Step 2 / Step 3 section card's heading row: toned icon tile, title, one-line
- * hint. `badge` sits beside the title, `actions` at the row's right end (wrapping
- * under it on a narrow screen); `spacing` replaces the default gap below.
- */
-const Step2SectionHeader = ({
-  icon: Icon, title, hint, tone = 'blue', badge, actions, spacing = 'mb-4 sm:mb-5',
-}: {
-  icon: typeof Info;
-  title: string;
-  hint: string;
-  tone?: keyof typeof STEP2_SECTION_TONES;
-  badge?: React.ReactNode;
-  actions?: React.ReactNode;
-  spacing?: string;
-}) => (
-  <div className={`flex flex-wrap items-start justify-between gap-3 ${spacing}`}>
-    <div className="flex items-start gap-3 min-w-0">
-      <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${STEP2_SECTION_TONES[tone].tile}`}>
-        <Icon className={`w-4 h-4 sm:w-5 sm:h-5 ${STEP2_SECTION_TONES[tone].icon}`} />
-      </div>
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
-          <h2 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 tracking-tight">{title}</h2>
-          {badge}
-        </div>
-        <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-400 mt-0.5">{hint}</p>
-      </div>
-    </div>
-    {actions && <div className="flex-shrink-0">{actions}</div>}
-  </div>
-);
 
 /**
  * Where a phrase from the "possibly missed" panel can go.
@@ -1296,6 +1254,85 @@ interface DraggableSkillProps {
   ) => void;
 }
 
+/**
+ * Drag-and-drop position handling for one skills / requirements list.
+ *
+ * The LIST is the drop target, not each card: it measures every card against
+ * the pointer, so a drop on a card, in the gap between two cards, or below
+ * the last one all resolve to one exact insert index - the number of cards
+ * whose midpoint is above the pointer. The same calculation draws the
+ * insertion line and performs the drop, so the line is where the item lands.
+ *
+ * `type` keeps the two flows apart: a SKILL never lands in a requirements
+ * list (COMMENT) or the other way round. Same-list drops reorder; a drop that
+ * would leave the item where it already is shows no line and does nothing.
+ * Cards are found by their `data-dnd-index` (their real index in the list,
+ * so a list folded behind "+N more" still inserts at the right position).
+ */
+function useListDropTarget<C extends string, T extends { category: C; index: number }>(
+  type: 'SKILL' | 'COMMENT',
+  category: C,
+  onDrop: (item: T, insertIndex: number) => void,
+) {
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const [lineTop, setLineTop] = useState<number | null>(null);
+
+  const locate = (clientY: number | undefined): { index: number; top: number | null } => {
+    const list = listRef.current;
+    const cards = list ? Array.from(list.querySelectorAll<HTMLElement>(':scope > [data-dnd-index]')) : [];
+    if (!list || cards.length === 0 || clientY == null) return { index: 0, top: null };
+    // Line offsets are relative to the list's padding box (inside its border).
+    const origin = list.getBoundingClientRect().top + list.clientTop;
+    for (const card of cards) {
+      const rect = card.getBoundingClientRect();
+      if (clientY < rect.top + rect.height / 2) {
+        // Centred in the 8px `space-y-2` gap above this card.
+        return { index: Number(card.dataset.dndIndex), top: rect.top - origin - 5 };
+      }
+    }
+    const last = cards[cards.length - 1];
+    const rect = last.getBoundingClientRect();
+    return { index: Number(last.dataset.dndIndex) + 1, top: rect.bottom - origin + 3 };
+  };
+
+  const isNoOp = (item: T, index: number) =>
+    item.category === category && (index === item.index || index === item.index + 1);
+
+  const [{ isOver, fromOtherList }, drop] = useDrop<T, unknown, { isOver: boolean; fromOtherList: boolean }>(() => ({
+    accept: type,
+    hover: (item, monitor) => {
+      const { index, top } = locate(monitor.getClientOffset()?.y);
+      const next = isNoOp(item, index) ? null : top;
+      setLineTop((prev) => (prev === next ? prev : next));
+    },
+    drop: (item, monitor) => {
+      const { index } = locate(monitor.getClientOffset()?.y);
+      if (!isNoOp(item, index)) onDrop(item, index);
+    },
+    collect: (monitor) => ({
+      isOver: monitor.isOver(),
+      fromOtherList: monitor.getItem<T | null>()?.category !== category,
+    }),
+  }), [type, category, onDrop]);
+
+  const setListRef = (node: HTMLDivElement | null) => {
+    listRef.current = node;
+    drop(node);
+  };
+  return { setListRef, isOver, fromOtherList, lineTop: isOver ? lineTop : null };
+}
+
+/** The insertion line. Rendered LAST in the list so `space-y-2` spacing on the
+ *  cards is untouched; absolutely positioned, so it never moves a card. */
+const ListInsertLine = ({ top }: { top: number | null }) =>
+  top == null ? null : (
+    <span
+      aria-hidden
+      style={{ top }}
+      className="pointer-events-none absolute left-0 right-0 h-0.5 rounded-full bg-brand-blue"
+    />
+  );
+
 const DraggableSkill = ({
   skill,
   index,
@@ -1325,7 +1362,7 @@ const DraggableSkill = ({
     collect: (monitor) => ({
       isDragging: monitor.isDragging(),
     }),
-  }));
+  }), [skill, category, index]);
 
   const isMustHave = category === 'mustHaveSkills';
   // One colour treatment for every skill / requirement card: the Must-Have
@@ -1336,6 +1373,7 @@ const DraggableSkill = ({
   return (
     <div
       ref={dragPreview as unknown as React.Ref<HTMLDivElement>}
+      data-dnd-index={index}
       className={`bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg group transition-opacity ${
         isDragging ? 'opacity-50' : 'opacity-100'
       }`}
@@ -1442,38 +1480,32 @@ const DraggableSkill = ({
   );
 };
 
+type SkillDragItem = { skill: string; category: 'mustHaveSkills' | 'niceToHaveSkills'; index: number };
+
 interface DroppableSkillsContainerProps {
   category: 'mustHaveSkills' | 'niceToHaveSkills';
-  onDrop: (skill: string, fromCategory: 'mustHaveSkills' | 'niceToHaveSkills') => void;
+  /** A skill was dropped; `insertIndex` is its exact position in this list. */
+  onDrop: (item: SkillDragItem, insertIndex: number) => void;
   children: React.ReactNode;
 }
 
 const DroppableSkillsContainer = ({ category, onDrop, children }: DroppableSkillsContainerProps) => {
-  const [{ isOver, canDrop }, drop] = useDrop(() => ({
-    accept: 'SKILL',
-    drop: (item: { skill: string; category: 'mustHaveSkills' | 'niceToHaveSkills' }) => {
-      if (item.category !== category) {
-        onDrop(item.skill, item.category);
-      }
-    },
-    collect: (monitor) => ({
-      isOver: monitor.isOver(),
-      canDrop: monitor.canDrop(),
-    }),
-  }));
+  const { setListRef, isOver, fromOtherList, lineTop } = useListDropTarget<SkillDragItem['category'], SkillDragItem>('SKILL', category, onDrop);
+  // The existing dashed highlight marks a list receiving from the other list;
+  // a reorder within the list shows only the insertion line.
+  const isActive = isOver && fromOtherList;
 
-  const isActive = isOver && canDrop;
-  
   return (
     <div
-      ref={drop as unknown as React.Ref<HTMLDivElement>}
-      className={`space-y-2 min-h-[100px] py-2 rounded-lg border-2 border-dashed transition-all ${
+      ref={setListRef}
+      className={`relative space-y-2 min-h-[100px] py-2 rounded-lg border-2 border-dashed transition-all ${
         isActive
           ? 'border-destructive-line bg-destructive-subtle'
           : 'border-transparent'
       }`}
     >
       {children}
+      <ListInsertLine top={lineTop} />
     </div>
   );
 };
@@ -1523,7 +1555,7 @@ const DraggableComment = ({
     collect: (monitor) => ({
       isDragging: monitor.isDragging(),
     }),
-  }));
+  }), [comment, category, index]);
 
   const isMustHave = category === 'mustHaveComments';
   // Same surface and tick as the Must-Have Skills card, for both lists.
@@ -1533,6 +1565,7 @@ const DraggableComment = ({
   return (
     <div
       ref={dragPreview as unknown as React.Ref<HTMLDivElement>}
+      data-dnd-index={index}
       className={`${bgColor} border rounded-lg group transition-opacity ${
         isDragging ? 'opacity-50' : 'opacity-100'
       }`}
@@ -1638,38 +1671,30 @@ const DraggableComment = ({
   );
 };
 
+type CommentDragItem = { comment: string; category: 'mustHaveComments' | 'niceToHaveComments'; index: number };
+
 interface DroppableCommentsContainerProps {
   category: 'mustHaveComments' | 'niceToHaveComments';
-  onDrop: (comment: string, fromCategory: 'mustHaveComments' | 'niceToHaveComments') => void;
+  /** A requirement was dropped; `insertIndex` is its exact position in this list. */
+  onDrop: (item: CommentDragItem, insertIndex: number) => void;
   children: React.ReactNode;
 }
 
 const DroppableCommentsContainer = ({ category, onDrop, children }: DroppableCommentsContainerProps) => {
-  const [{ isOver, canDrop }, drop] = useDrop(() => ({
-    accept: 'COMMENT',
-    drop: (item: { comment: string; category: 'mustHaveComments' | 'niceToHaveComments' }) => {
-      if (item.category !== category) {
-        onDrop(item.comment, item.category);
-      }
-    },
-    collect: (monitor) => ({
-      isOver: monitor.isOver(),
-      canDrop: monitor.canDrop(),
-    }),
-  }));
-
-  const isActive = isOver && canDrop;
+  const { setListRef, isOver, fromOtherList, lineTop } = useListDropTarget<CommentDragItem['category'], CommentDragItem>('COMMENT', category, onDrop);
+  const isActive = isOver && fromOtherList;
 
   return (
     <div
-      ref={drop as unknown as React.Ref<HTMLDivElement>}
-      className={`space-y-2 min-h-[100px] py-2 rounded-lg border-2 border-dashed transition-all ${
+      ref={setListRef}
+      className={`relative space-y-2 min-h-[100px] py-2 rounded-lg border-2 border-dashed transition-all ${
         isActive
           ? 'border-destructive-line bg-destructive-subtle'
           : 'border-transparent'
       }`}
     >
       {children}
+      <ListInsertLine top={lineTop} />
     </div>
   );
 };
@@ -5323,12 +5348,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }
   };
 
-  const handleMoveSkill = async (skill: string, from: 'mustHaveSkills' | 'niceToHaveSkills', to: 'mustHaveSkills' | 'niceToHaveSkills') => {
-    console.log('[Move] Moving skill:', skill, 'from', from, 'to', to);
+  // `toIndex`: where in the target list to insert (a drag-and-drop).
+  // Omitted (the arrow button) appends as before.
+  const handleMoveSkill = async (skill: string, from: 'mustHaveSkills' | 'niceToHaveSkills', to: 'mustHaveSkills' | 'niceToHaveSkills', toIndex?: number) => {
+    console.log('[Move] Moving skill:', skill, 'from', from, 'to', to, 'at', toIndex);
 
     // Calculate updated arrays
     const updatedFrom = extractedData[from].filter(s => s !== skill);
-    const updatedTo = [...extractedData[to], skill];
+    const updatedTo = [...extractedData[to]];
+    updatedTo.splice(Math.min(Math.max(toIndex ?? updatedTo.length, 0), updatedTo.length), 0, skill);
 
     const updatedMustHave = from === 'mustHaveSkills' ? updatedFrom : (to === 'mustHaveSkills' ? updatedTo : extractedData.mustHaveSkills);
     const updatedNiceToHave = from === 'niceToHaveSkills' ? updatedFrom : (to === 'niceToHaveSkills' ? updatedTo : extractedData.niceToHaveSkills);
@@ -5806,18 +5834,59 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }
   };
 
-  const handleDropSkill = (skill: string, fromCategory: 'mustHaveSkills' | 'niceToHaveSkills', toCategory: 'mustHaveSkills' | 'niceToHaveSkills') => {
-    if (fromCategory !== toCategory) {
-      handleMoveSkill(skill, fromCategory, toCategory);
+  /* Moves `item` within one list so it ends up at `insertIndex` (an index in
+     the list as it was BEFORE the move - what the drop target measured).
+     Returns null when it would not move. */
+  const reorderWithin = (list: string[], value: string, fromIndex: number, insertIndex: number): string[] | null => {
+    const current = list[fromIndex] === value ? fromIndex : list.indexOf(value);
+    if (current < 0) return null;
+    // Removing the item first shifts every later position up by one.
+    const target = current < insertIndex ? insertIndex - 1 : insertIndex;
+    if (target === current) return null;
+    const next = [...list];
+    next.splice(current, 1);
+    next.splice(Math.min(Math.max(target, 0), next.length), 0, value);
+    return next;
+  };
+
+  // A skill dropped at an exact position: across lists it moves there; within
+  // its own list it is reordered. Saved the same way as every skill move.
+  const handleDropSkill = async (item: { skill: string; category: 'mustHaveSkills' | 'niceToHaveSkills'; index: number }, toCategory: 'mustHaveSkills' | 'niceToHaveSkills', insertIndex: number) => {
+    if (item.category !== toCategory) {
+      handleMoveSkill(item.skill, item.category, toCategory, insertIndex);
+      return;
+    }
+    const reordered = reorderWithin(extractedData[toCategory], item.skill, item.index, insertIndex);
+    if (!reordered) return;
+    setExtractedData(prev => ({ ...prev, [toCategory]: reordered }));
+    markExtractedDataModified();
+    if (editingId) {
+      try {
+        await jdService.update(editingId, toCategory === 'mustHaveSkills'
+          ? { must_have_skills: reordered }
+          : { nice_to_have_skills: reordered });
+      } catch (error) {
+        console.error('[Reorder] Failed to save skill order:', error);
+        toast.error({
+          title: 'Failed to save',
+          description: 'Skill was reordered locally but could not be saved. Please try again.',
+        });
+      }
     }
   };
 
   // Comment move/drop handlers for drag and drop
-  const handleMoveComment = (comment: string, from: 'mustHaveComments' | 'niceToHaveComments', to: 'mustHaveComments' | 'niceToHaveComments') => {
+  // `toIndex` as for skills: a drag-and-drop inserts there; omitted appends.
+  const handleMoveComment = (comment: string, from: 'mustHaveComments' | 'niceToHaveComments', to: 'mustHaveComments' | 'niceToHaveComments', toIndex?: number) => {
+    const insertAt = (list: string[]) => {
+      const next = [...list];
+      next.splice(Math.min(Math.max(toIndex ?? next.length, 0), next.length), 0, comment);
+      return next;
+    };
     setExtractedData(prev => ({
       ...prev,
       [from]: (prev[from] || []).filter(c => c !== comment),
-      [to]: [...(prev[to] || []), comment],
+      [to]: insertAt(prev[to] || []),
       mergeTrail: trailAfterMove(
         prev.mergeTrail || [], comment,
         from === 'mustHaveComments' ? 'must_have_comments' : 'nice_to_have_comments',
@@ -5827,10 +5896,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     markExtractedDataModified();
   };
 
-  const handleDropComment = (comment: string, fromCategory: 'mustHaveComments' | 'niceToHaveComments', toCategory: 'mustHaveComments' | 'niceToHaveComments') => {
-    if (fromCategory !== toCategory) {
-      handleMoveComment(comment, fromCategory, toCategory);
+  // A requirement dropped at an exact position: across lists it moves there;
+  // within its own list it is reordered (kept with the step, as moves are).
+  const handleDropComment = (item: { comment: string; category: 'mustHaveComments' | 'niceToHaveComments'; index: number }, toCategory: 'mustHaveComments' | 'niceToHaveComments', insertIndex: number) => {
+    if (item.category !== toCategory) {
+      handleMoveComment(item.comment, item.category, toCategory, insertIndex);
+      return;
     }
+    const reordered = reorderWithin(extractedData[toCategory] || [], item.comment, item.index, insertIndex);
+    if (!reordered) return;
+    setExtractedData(prev => ({ ...prev, [toCategory]: reordered }));
+    markExtractedDataModified();
   };
 
   const handleRemoveCommentByCategory = async (category: 'mustHaveComments' | 'niceToHaveComments', index: number) => {
@@ -8626,7 +8702,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   )}
                   <DroppableSkillsContainer
                     category="mustHaveSkills"
-                    onDrop={(skill, fromCategory) => handleDropSkill(skill, fromCategory, 'mustHaveSkills')}
+                    onDrop={(item, at) => handleDropSkill(item, 'mustHaveSkills', at)}
                   >
                     {/* The required-skill error as the list's FIRST card: a skill
                         card's shape (rounded-lg, p-2.5, a 28px content row) in
@@ -8718,7 +8794,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   )}
                   <DroppableSkillsContainer
                     category="niceToHaveSkills"
-                    onDrop={(skill, fromCategory) => handleDropSkill(skill, fromCategory, 'niceToHaveSkills')}
+                    onDrop={(item, at) => handleDropSkill(item, 'niceToHaveSkills', at)}
                   >
                     {(expandedSkillCategories.niceToHaveSkills
                       ? extractedData.niceToHaveSkills
@@ -8796,7 +8872,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     )}
                     <DroppableCommentsContainer
                       category="mustHaveComments"
-                      onDrop={(comment, fromCategory) => handleDropComment(comment, fromCategory, 'mustHaveComments')}
+                      onDrop={(item, at) => handleDropComment(item, 'mustHaveComments', at)}
                     >
                       {/* Sliced from the front so each item keeps its real index —
                           remove/edit/drag all address the array by position. */}
@@ -8880,7 +8956,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     )}
                     <DroppableCommentsContainer
                       category="niceToHaveComments"
-                      onDrop={(comment, fromCategory) => handleDropComment(comment, fromCategory, 'niceToHaveComments')}
+                      onDrop={(item, at) => handleDropComment(item, 'niceToHaveComments', at)}
                     >
                       {(expandedSkillCategories.niceToHaveComments
                         ? (extractedData.niceToHaveComments || [])
@@ -11056,50 +11132,24 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               </div>
             </div>
 
-            {/* Extracted Data Summary Preview - Collapsible. A Step 2 card; the
-                whole heading row is still the toggle. */}
-            <div className={STEP2_CARD_CLASS}>
-              {/* Section Header with Toggle */}
-              <button
-                type="button"
-                onClick={() => setShowExtractedSummary(!showExtractedSummary)}
-                aria-expanded={showExtractedSummary}
-                className="w-full text-left rounded-lg"
-              >
-                <Step2SectionHeader
-                  icon={BarChart3}
-                  tone="orange"
-                  spacing="mb-0"
-                  title="Extracted Data Summary"
-                  hint={`Click to ${showExtractedSummary ? 'hide' : 'view'} structured requirements`}
-                  badge={mode === 'ai' ? (
-                    /* JD12: AI-Generated indicator for extracted parameters */
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">
-                      <Wand2 className="w-3 h-3" />
-                      AI Extracted
-                    </span>
-                  ) : undefined}
-                  actions={
-                    <span className={`inline-flex transform transition-transform ${showExtractedSummary ? 'rotate-180' : ''}`}>
-                      <ChevronRight className="w-5 h-5 text-gray-500 dark:text-slate-500 rotate-90" />
-                    </span>
-                  }
-                />
-              </button>
-
-              {/* Collapsible Content - the sections stacked under dividers inside
-                  the card's own padding, Step 2's divided-card treatment. */}
-              {showExtractedSummary && (
-                <div className="mt-4 sm:mt-5 pt-1 border-t border-gray-100 dark:border-slate-700/60 divide-y divide-gray-100 dark:divide-slate-700/60">
+            {/* Extracted Data Summary Preview - Collapsible. The shared summary
+                card (components/jobs/ExtractedDataSummary): the whole heading
+                row is the toggle, the sections sit under dividers. This step is
+                the reference every other surface's summary follows. */}
+            <ExtractedSummaryCard
+              open={showExtractedSummary}
+              onToggle={() => setShowExtractedSummary(!showExtractedSummary)}
+              aiExtracted={mode === 'ai'}
+            >
               {/* A read-only mirror of Step 2: every field the Skill Extraction
                   step shows, read from the same `extractedData`, grouped under
                   Step 2's own section names and icons. A field with no value says
                   so instead of disappearing, so the preview is complete. */}
               {(() => {
-                const fieldLabel = 'text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-1 sm:mb-2';
-                const fieldValue = 'text-sm sm:text-base text-gray-900 dark:text-slate-50 [overflow-wrap:anywhere]';
-                const emptyValue = 'text-sm text-gray-500 dark:text-slate-500 italic';
-                const tile = 'min-w-0 bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg';
+                const fieldLabel = SUMMARY_FIELD_LABEL;
+                const fieldValue = SUMMARY_FIELD_VALUE;
+                const emptyValue = SUMMARY_EMPTY_VALUE;
+                const tile = SUMMARY_TILE;
                 const requiredLine = (required?: boolean) => (
                   <p className="text-xs text-gray-500 dark:text-slate-500 mt-1 flex items-center gap-1">
                     {required
@@ -11108,33 +11158,23 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   </p>
                 );
                 const sectionHeading = (Icon: typeof Info, tone: keyof typeof STEP2_SECTION_TONES, title: string) => (
-                  <div className="flex items-center justify-between gap-3 mb-3 sm:mb-4">
-                    <h3 className="flex items-center gap-2 text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">
-                      <Icon className={`w-4 h-4 flex-shrink-0 ${STEP2_SECTION_TONES[tone].icon}`} />
-                      {title}
-                    </h3>
-                    <button
-                      onClick={() => setStep('extract')}
-                      className="flex items-center gap-1 text-sm text-gray-600 dark:text-slate-400 hover:text-gray-800 transition-colors"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                      Edit
-                    </button>
-                  </div>
+                  <SummarySectionHeading
+                    icon={Icon}
+                    tone={tone}
+                    title={title}
+                    actions={
+                      <button
+                        onClick={() => setStep('extract')}
+                        className="flex items-center gap-1 text-sm text-gray-600 dark:text-slate-400 hover:text-gray-800 transition-colors"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                        Edit
+                      </button>
+                    }
+                  />
                 );
                 const itemList = (items: string[], emptyMessage: string) => (
-                  items.length > 0 ? (
-                    <div className="space-y-2">
-                      {items.map((item, index) => (
-                        <div key={index} className="flex items-start gap-2 text-sm text-gray-700 dark:text-slate-300">
-                          <CheckCircle className="w-4 h-4 text-success flex-shrink-0 mt-0.5" />
-                          <span className="min-w-0 [overflow-wrap:anywhere]">{item}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className={emptyValue}>{emptyMessage}</p>
-                  )
+                  <SummaryItemList items={items} emptyMessage={emptyMessage} />
                 );
                 const salaryText = formatSalaryRange({
                   min: extractedData.salaryFrom,
@@ -11208,12 +11248,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   </div>
                   <div className={tile}>
                     <h4 className={fieldLabel}>Allow Overqualified Candidates</h4>
-                    <p className={`${fieldValue} flex items-center gap-1.5`}>
-                      {extractedData.allowOverqualified
-                        ? <CheckCircle className="w-4 h-4 text-success flex-shrink-0" />
-                        : <X className="w-4 h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />}
-                      {extractedData.allowOverqualified ? 'Yes' : 'No'}
-                    </p>
+                    <SummaryYesNo value={!!extractedData.allowOverqualified} />
                     <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">
                       {extractedData.allowOverqualified
                         ? 'Accepting candidates who exceed requirements'
@@ -11322,9 +11357,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   </>
                 );
               })()}
-                </div>
-              )}
-            </div>
+            </ExtractedSummaryCard>
 
             {/* DOWNLOAD FORMAT - the house dialog (overlay, panel, slate header
                 with tile, title and close) around three option rows in the

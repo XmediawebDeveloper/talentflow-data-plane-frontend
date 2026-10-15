@@ -6,6 +6,7 @@ import { VersionPill } from './AllInterviewsTable';
 import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
 import { modeFromConfig } from '@/lib/constants/aiInterviewMode';
 import React, { useState, useEffect, useRef } from 'react';
+import { useFolderPanelCollapsed, folderColumnClasses, FolderCollapseButton, FolderPanelRail } from '@/components/ui/folder-panel-collapse';
 import { createPortal } from 'react-dom';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
@@ -67,7 +68,8 @@ interface ShareAIInterviewModalProps {
   isOpen: boolean;
   onClose: () => void;
   config: AIInterviewResponse;
-  onInviteSent: () => void;
+  /** Called with the number of invitations that went out (at least 1). */
+  onInviteSent: (sentCount: number) => void;
   /** When true, render the share form inline (no backdrop / fixed overlay /
    *  close button) so it can live inside a tab on the interview details page. */
   embedded?: boolean;
@@ -190,6 +192,9 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
   const [folderResumes, setFolderResumes] = useState<Resume[]>([]);
   const [isLoadingFolder, setIsLoadingFolder] = useState(false);
   const [selectedFolder, setSelectedFolder] = useState<string>('all');
+  // Collapsible folder sidebar (sm and up) — the same remembered choice as
+  // every other resume-database view (components/ui/folder-panel-collapse).
+  const { collapsed: foldersCollapsed, setCollapsed: setFoldersCollapsed, animate: foldersAnimate } = useFolderPanelCollapsed();
   type SidebarFolder = { id: string; name: string; parentId?: string | null; count: number };
   // Open subfolder flyouts, one per depth — same cascading hover menu as "Move to Folder".
   const [openPath, setOpenPath] = useState<{ folder: SidebarFolder; anchor: DOMRect }[]>([]);
@@ -960,7 +965,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
         setShowSuccess(true);
         setTimeout(() => {
           setShowSuccess(false);
-          onInviteSent();
+          onInviteSent(successCount);
           onClose();
         }, 2000);
       } else if (tenantUserEmails.length > 0 && successCount === 0) {
@@ -1394,7 +1399,9 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                         );
                       })()}
                       <div className="flex items-center gap-3">
-                        <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {/* Email column is wider: it also holds Copy Link / Add, which would
+                            otherwise squeeze the address input to half the name's width. */}
+                        <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-3 gap-3">
                           <div className="min-w-0">
                             <label className="text-xs text-gray-600 dark:text-slate-400 mb-1 block">Full Name *</label>
                             <input
@@ -1403,12 +1410,12 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                               onChange={(e) => updateCandidate(candidate.id, 'name', e.target.value)}
                               placeholder="e.g., John Doe"
                               readOnly={candidate.source === 'database'}
-                              className={`w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-transparent ${
+                              className={`w-full h-10 px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-blue/40 focus:border-transparent ${
                                 candidate.source === 'database' ? 'bg-gray-100 dark:bg-slate-800 cursor-not-allowed' : ''
                               }`}
                             />
                           </div>
-                          <div className="min-w-0">
+                          <div className="min-w-0 sm:col-span-2">
                             <label className="text-xs text-gray-600 dark:text-slate-400 mb-1 block">Email Address *</label>
                             <div className="flex items-center gap-2 min-w-0">
                               <input
@@ -1417,7 +1424,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                                 onChange={(e) => updateCandidate(candidate.id, 'email', e.target.value)}
                                 placeholder="e.g., john.doe@example.com"
                                 readOnly={candidate.source === 'database'}
-                                className={`flex-1 min-w-0 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 ${
+                                className={`flex-1 min-w-0 h-10 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-inset ${
                                   candidate.source === 'database'
                                     ? 'bg-gray-100 dark:bg-slate-800 cursor-not-allowed border-gray-200 dark:border-slate-700'
                                     : candidate.email.trim() && (!isValidEmail(candidate.email) || isDuplicateEmail(candidate.id, candidate.email))
@@ -1425,56 +1432,6 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                                       : 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/40 focus:border-transparent'
                                 }`}
                               />
-                              {/* Per-candidate Copy Link button */}
-                              <button
-                                onClick={() => handleCopyLinkForCandidate(candidate.id)}
-                                disabled={
-                                  generatingLinkFor === candidate.id ||
-                                  (!candidate.generatedLink &&
-                                    isDuplicateEmail(candidate.id, candidate.email))
-                                }
-                                title={
-                                  candidate.generatedLink
-                                    ? 'Link generated — click to copy again'
-                                    : isDuplicateEmail(candidate.id, candidate.email)
-                                      ? 'This email is already in the list'
-                                      : 'Generate & copy interview link'
-                                }
-                                className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs border transition-colors whitespace-nowrap flex-shrink-0 ${
-                                  candidate.generatedLink
-                                    ? 'bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:border-emerald-500/30 dark:text-emerald-300 dark:hover:bg-emerald-500/20'
-                                    : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-                                } disabled:opacity-50`}
-                              >
-                                {generatingLinkFor === candidate.id
-                                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                  : candidate.generatedLink
-                                    ? <><CheckCircle className="w-3.5 h-3.5" /><span>Copied</span></>
-                                    : <><Copy className="w-3.5 h-3.5" /><span>Copy Link</span></>
-                                }
-                              </button>
-                              {candidate.source !== 'database' && (
-                                <button
-                                  type="button"
-                                  onClick={() => addEntry(candidate.id)}
-                                  disabled={!canAddEntry(candidate)}
-                                  title="Add to the candidate list"
-                                  className="flex-shrink-0 inline-flex items-center gap-1 px-3 py-2 text-sm font-medium text-brand-blue border border-brand-blue/30 rounded-lg hover:bg-brand-blue/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                  <Plus className="w-4 h-4" />
-                                  Add
-                                </button>
-                              )}
-                              {(candidates.length > 1 || candidate.source === 'database') && (
-                                <button
-                                  onClick={() => removeCandidate(candidate.id)}
-                                  title="Remove candidate"
-                                  aria-label="Remove candidate"
-                                  className="flex-shrink-0 p-2 text-destructive hover:bg-destructive-subtle rounded-lg transition-colors"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              )}
                             </div>
                             {candidate.source !== 'database' && candidate.email.trim() && !isValidEmail(candidate.email) && (
                               <p className="text-xs text-destructive mt-1">Please enter a valid email (e.g., user@example.com)</p>
@@ -1541,6 +1498,58 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                             )}
                           </div>
                         </div>
+                            <div className="flex items-center gap-2 self-end sm:self-start sm:mt-5 flex-shrink-0">
+                              {/* Per-candidate Copy Link button */}
+                              <button
+                                onClick={() => handleCopyLinkForCandidate(candidate.id)}
+                                disabled={
+                                  generatingLinkFor === candidate.id ||
+                                  (!candidate.generatedLink &&
+                                    isDuplicateEmail(candidate.id, candidate.email))
+                                }
+                                title={
+                                  candidate.generatedLink
+                                    ? 'Link generated — click to copy again'
+                                    : isDuplicateEmail(candidate.id, candidate.email)
+                                      ? 'This email is already in the list'
+                                      : 'Generate & copy interview link'
+                                }
+                                className={`flex items-center gap-1.5 h-10 px-2.5 py-2 rounded-lg text-xs border transition-colors whitespace-nowrap flex-shrink-0 ${
+                                  candidate.generatedLink
+                                    ? 'bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:border-emerald-500/30 dark:text-emerald-300 dark:hover:bg-emerald-500/20'
+                                    : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                } disabled:opacity-50`}
+                              >
+                                {generatingLinkFor === candidate.id
+                                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  : candidate.generatedLink
+                                    ? <><CheckCircle className="w-3.5 h-3.5" /><span>Copied</span></>
+                                    : <><Copy className="w-3.5 h-3.5" /><span>Copy Link</span></>
+                                }
+                              </button>
+                              {candidate.source !== 'database' && (
+                                <button
+                                  type="button"
+                                  onClick={() => addEntry(candidate.id)}
+                                  disabled={!canAddEntry(candidate)}
+                                  title="Add to the candidate list"
+                                  className="flex-shrink-0 inline-flex items-center gap-1 px-3 py-2 text-sm font-medium text-brand-blue border border-brand-blue/30 rounded-lg hover:bg-brand-blue/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  <Plus className="w-4 h-4" />
+                                  Add
+                                </button>
+                              )}
+                              {(candidates.length > 1 || candidate.source === 'database') && (
+                                <button
+                                  onClick={() => removeCandidate(candidate.id)}
+                                  title="Remove candidate"
+                                  aria-label="Remove candidate"
+                                  className="flex-shrink-0 p-2 text-destructive hover:bg-destructive-subtle rounded-lg transition-colors"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
                       </div>
                       {/* Schedule row - commented out for now, uncomment when schedule feature is needed */}
                       {/* <div className="grid grid-cols-2 gap-3 mt-3">
@@ -1680,14 +1689,20 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                 <div className="flex flex-col sm:flex-row" style={{ minHeight: '300px', maxHeight: '380px' }}>
                   {/* Folder Sidebar (My Resumes only) — short scrollable strip on
                       top for mobile, fixed left column from sm up. */}
+                  {dbTab === 'my-resumes' && myFolders.length > 0 && foldersCollapsed && (
+                    <FolderPanelRail onExpand={() => setFoldersCollapsed(false)} animate={foldersAnimate} from="sm" />
+                  )}
                   {dbTab === 'my-resumes' && myFolders.length > 0 && (
                     <div
-                      className="w-full sm:w-56 max-h-28 sm:max-h-none border-b sm:border-b-0 sm:border-r border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 overflow-y-auto flex-shrink-0 p-2"
+                      className={`w-full sm:w-56 max-h-28 sm:max-h-none border-b sm:border-b-0 sm:border-r border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 overflow-y-auto flex-shrink-0 p-2 ${folderColumnClasses(foldersCollapsed, foldersAnimate, 'sm')}`}
                       onMouseLeave={() => scheduleOpenPath([])}
                       // Flyouts are pinned to row positions — scrolling would leave them adrift.
                       onScroll={() => { cancelScheduledClose(); setOpenPath([]); }}
                     >
-                      <p className="px-3 pb-1 text-2xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">System Folders</p>
+                      <div className="flex items-center pr-0.5">
+                        <p className="flex-1 px-3 pb-1 text-2xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">System Folders</p>
+                        <FolderCollapseButton onCollapse={() => setFoldersCollapsed(true)} from="sm" />
+                      </div>
                       <div className="space-y-0.5">
                         <button type="button" onClick={() => setSelectedFolder('all')} className={`${folderRowClass(selectedFolder === 'all')} pl-3`}>
                           <FolderOpen className="w-4 h-4 text-brand-blue flex-shrink-0" />

@@ -3892,22 +3892,22 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
               // Server DISABLED → no content check available, so fall back to the
               // client energy guard + local MFCC baseline (old behavior).
               if (!cap.speechDetected) return false;
+              if (voiceVerification.hasBaseline()) return true;
+              // Build the local baseline from the sample just captured. Never
+              // record a second time here: that silently restarted the
+              // recording in the panel instead of offering Retry, and a second
+              // pass could then succeed on ambient noise alone.
+              return voiceVerification.enrollFromSamples(cap.samples, cap.sampleRate);
             } catch (err) {
               // The headset died mid-recording — recordPcm16 already discarded
               // the partial capture. Re-throw so StepSystemCheck resets the
               // whole enrollment panel and makes the candidate restart from
-              // scratch once the mic is back, instead of silently falling
-              // through to the local-baseline path below with a now-dead
-              // `stream` (which would just fail confusingly, or worse, record
-              // silence off a stale device).
+              // scratch once the mic is back.
               if (err instanceof MicDisconnectedDuringRecordingError) throw err;
-              /* any other error: fall through to local baseline */
+              // Any other error: fail this attempt so the panel shows Retry.
+              console.error('[VoiceEnroll] enrollment failed:', err);
+              return false;
             }
-            if (voiceVerification.hasBaseline()) return true;
-            // Local fallback records ANOTHER ~10 s — the candidate must keep
-            // speaking, so say so again.
-            onPhase?.('recording');
-            return voiceVerification.enrollVoice(stream, 10000);
           }}
         />
       </PreInterviewLayout>

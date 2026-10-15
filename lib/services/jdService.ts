@@ -1095,6 +1095,30 @@ export const jdService = {
   },
 
   /**
+   * `getLineageVersions` for many jobs in ONE request (chunks of 200 ids).
+   *
+   * Keyed by the id asked with; each list is what the per-job call returns for
+   * that id. An id the server did not answer for is absent. Throws if a chunk
+   * fails, so the caller can fall back to the per-job call.
+   */
+  async getLineagesBatch(jdIds: string[]): Promise<Record<string, JDLineageVersion[]>> {
+    const ids = Array.from(new Set(jdIds.filter(Boolean)));
+    const out: Record<string, JDLineageVersion[]> = {};
+    try {
+      for (let i = 0; i < ids.length; i += 200) {
+        const response = await api.get<{ lineages: Record<string, JDLineageVersion[]> }>(
+          '/jd/lineages',
+          { params: { ids: ids.slice(i, i + 200).join(',') } },
+        );
+        Object.assign(out, response.data?.lineages || {});
+      }
+      return out;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
    * How many versions each of these jobs has, in ONE request.
    *
    * The authoritative source for the "Job Versions" figure on the Assessment
@@ -1114,6 +1138,29 @@ export const jdService = {
         { params: { ids: ids.join(',') } },
       );
       return response.data?.counts || {};
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * JD row id → job version number for EVERY version of every job these ids
+   * belong to, in ONE request.
+   *
+   * The batched form of `getLineageVersions` for callers that hold rows from
+   * many jobs and only need to know which version each row is — one request in
+   * place of one per job. Asking with any one version's id answers for its
+   * siblings too.
+   */
+  async getVersionMap(jdIds: string[]): Promise<Record<string, number>> {
+    const ids = Array.from(new Set(jdIds.filter(Boolean)));
+    if (ids.length === 0) return {};
+    try {
+      const response = await api.get<{ versions: Record<string, number> }>(
+        '/jd/version-map',
+        { params: { ids: ids.join(',') } },
+      );
+      return response.data?.versions || {};
     } catch (error) {
       throw new Error(handleApiError(error));
     }

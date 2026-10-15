@@ -782,6 +782,25 @@ export const assessmentService = {
   },
 
   /**
+   * Completed candidates for MANY assessments, in ONE request — assessment id →
+   * count. The batched form of reading `completed_count` off each assessment's
+   * `listResults`. An id this user cannot see is simply absent from the answer.
+   */
+  async getCompletedCounts(assessmentIds: string[]): Promise<Record<string, number>> {
+    const ids = Array.from(new Set(assessmentIds.filter(Boolean)));
+    if (ids.length === 0) return {};
+    try {
+      const response = await api.get<{ counts: Record<string, number> }>(
+        '/assessments/completed-counts',
+        { params: { ids: ids.join(',') } },
+      );
+      return response.data?.counts || {};
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
    * Get detailed results for a specific candidate
    */
   /** Presigned stream/download URL for the candidate (webcam) recording; null url when none. */
@@ -935,12 +954,36 @@ export const assessmentService = {
   },
 
   /**
+   * Create an assessment invitation for a candidate WITHOUT sending an
+   * email. Returns the assessment link so the caller can copy/share it
+   * manually — mirrors aiInterviewService.createInviteLink. No quota unit
+   * is consumed (Assessment units are deducted when the candidate starts,
+   * not at invite time), so no dispatchUnitsConsumed() here.
+   */
+  async createInviteLink(assessmentId: string, data: {
+    candidate_name: string;
+    candidate_email: string;
+    expiry_days?: number;
+  }): Promise<{ invitation_id: string; link: string; expires_at: string | null }> {
+    const response = await api.post(`/assessments/${assessmentId}/create-invite-link`, {
+      ...data,
+      base_url: typeof window !== 'undefined' ? window.location.origin : undefined,
+    });
+    return response.data;
+  },
+
+  /**
    * Revoke the current link and send a fresh invitation — same endpoint
    * whether the invitation is plain SENT or reactivating a REVOKED one.
+   *
+   * `keep_link: true` emails the invitation's CURRENT link instead of
+   * rotating it — used when Copy Link already minted the link and the
+   * recruiter now also wants it emailed (mirrors aiInterviewService's
+   * sendSessionEmail keep_link option).
    */
-  async resendInvitation(assessmentId: string, invitationId: string): Promise<any> {
+  async resendInvitation(assessmentId: string, invitationId: string, data?: { keep_link?: boolean }): Promise<any> {
     try {
-      const response = await api.post(`/assessments/${assessmentId}/invitations/${invitationId}/resend`);
+      const response = await api.post(`/assessments/${assessmentId}/invitations/${invitationId}/resend`, data);
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));

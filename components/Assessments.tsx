@@ -235,9 +235,8 @@ function InlinePageNav({ page, totalPages, onPageChange }: { page: number; total
 
 /**
  * Counts the completed candidates of the assessments it is handed, and reports
- * them back — one request per assessment, from the endpoint that reports on the
- * candidate records themselves (`/assessments/{id}/results` with `page_size: 1`:
- * the summary is what is wanted, not the rows).
+ * them back — one request for the whole set (`/assessments/completed-counts`),
+ * which tallies the candidate records themselves, not a request per assessment.
  *
  * A component rather than an effect inside the page, because the page returns
  * early (Creation, Results, Details) above every derivation these ids come
@@ -269,31 +268,25 @@ function JobCompletedCandidateCounts({
     const pending = (idsKey ? idsKey.split(',') : []).filter((id) => !requestedRef.current.has(id));
     if (pending.length === 0) return;
     for (const id of pending) requestedRef.current.add(id);
-    /* In small batches rather than all at once: a page of jobs can hold a few
-       dozen assessments and the list is already fetching beside this. */
-    const CONCURRENCY = 6;
+    /* One request per COUNT_BATCH assessments — `/assessments/completed-counts`
+       answers for all of them at once, where this used to ask once per
+       assessment. The backend caps a request at 200 ids, hence the batch. */
+    const COUNT_BATCH = 200;
     void (async () => {
-      for (let start = 0; start < pending.length; start += CONCURRENCY) {
-        const batch = pending.slice(start, start + CONCURRENCY);
-        const counted = await Promise.all(
-          batch.map(async (id) => {
-            try {
-              const response = await assessmentService.listResults(id, { page: 1, page_size: 1 });
-              return [id, response.completed_count ?? 0] as const;
-            } catch (error) {
-              /* One assessment failing must not stop the others, and must not
-                 be remembered as a zero — the row keeps the listed figure and
-                 the id is released, so paging to another set of jobs and back,
-                 or a refresh, asks again rather than being told no. */
-              console.log('[TalentFlow] Failed to count completed candidates for an assessment:', error);
-              requestedRef.current.delete(id);
-              return null;
-            }
-          }),
-        );
-        const landed = counted.filter(Boolean) as (readonly [string, number])[];
-        if (landed.length > 0) {
-          onCounted((previous) => ({ ...previous, ...Object.fromEntries(landed) }));
+      for (let start = 0; start < pending.length; start += COUNT_BATCH) {
+        const batch = pending.slice(start, start + COUNT_BATCH);
+        try {
+          const counts = await assessmentService.getCompletedCounts(batch);
+          if (Object.keys(counts).length > 0) {
+            onCounted((previous) => ({ ...previous, ...counts }));
+          }
+        } catch (error) {
+          /* A failed batch must not stop the others, and must not be remembered
+             as a zero — the rows keep the listed figure and the ids are
+             released, so paging to another set of jobs and back, or a refresh,
+             asks again rather than being told no. */
+          console.log('[TalentFlow] Failed to count completed candidates for assessments:', error);
+          for (const id of batch) requestedRef.current.delete(id);
         }
       }
     })();
@@ -2730,10 +2723,29 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       const jobVersionByJdId = rememberJobVersions(
         await resolveJobVersionsByJdId(items.map((a) => a.jd_id)),
       );
+      /* Skip assessments with no completed candidates: one batched
+         `/assessments/completed-counts` request (200 ids max) tells us which,
+         instead of paging every assessment's results only to get an empty
+         list. An id missing from the answer, or a failed batch, is fetched
+         as before, so nothing is dropped on a count error. */
+      const knownEmpty = new Set<string>();
+      const COUNT_BATCH = 200;
+      for (let start = 0; start < items.length; start += COUNT_BATCH) {
+        const batch = items.slice(start, start + COUNT_BATCH).map((a: any) => a.id);
+        try {
+          const counts = await assessmentService.getCompletedCounts(batch);
+          for (const id of batch) {
+            if (counts[id] === 0) knownEmpty.add(id);
+          }
+        } catch {
+          /* fall back to fetching this batch */
+        }
+      }
       // Results rather than invitations: the attempt carries the scores and the
       // pass/fail verdict this tab is about.
       const results = await Promise.all(
         items.map(async (a: any) => {
+          if (knownEmpty.has(a.id)) return [];
           try {
             const attempts = await collectAllPages((page, page_size) =>
               assessmentService.listResults(a.id, { status_filter: 'completed', page, page_size }),

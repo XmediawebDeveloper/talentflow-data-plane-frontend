@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useEffectEvent, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useRef, useState, type ComponentProps } from 'react';
 import { ArrowLeft, ArrowRight, Brain, CheckCircle, ClipboardCheck, Link2, Loader2, Mail } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { useAuth } from '@/lib/hooks/useAuth';
+import api from '@/lib/services/api';
 import VersionList, { VersionUsage } from './VersionList';
 import SendToPanel from './SendToPanel';
 import ResultsStep from './ResultsStep';
@@ -14,6 +15,7 @@ import AssessmentPreviewModal from '@/components/AssessmentPreviewModal';
 import AssessmentConfigureModal from '@/components/AssessmentConfigureModal';
 import AIInterviewPicker from '@/components/ai-interview/AIInterviewPicker';
 import ConfigurePreviewDialog from '@/components/ai-interview/ConfigurePreviewDialog';
+import AIInterviewWizardDialog from '@/components/ai-interview/AIInterviewWizardDialog';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import type { AssessmentResponse } from '@/lib/services/assessmentService';
 import ShareAssessmentModal from '@/components/ShareAssessmentModal';
@@ -23,6 +25,7 @@ import {
   KIND_LABEL,
   createBlockedReason,
   createPageHref,
+  deleteVersion,
   duplicateVersion,
   loadAllInterviewConfigs,
   loadAssessmentForPopup,
@@ -33,6 +36,7 @@ import {
   runVersionAction,
   sendVersion,
   versionHref,
+  INVITE_SOURCE_BY_TAB,
   type DeliveryMethod,
   type InviteCandidate,
   type InviteKind,
@@ -72,6 +76,7 @@ export default function VersionInviteDialog({
   onSent,
   onAssessmentsSent,
   onInterviewsSent,
+  hideDuplicate = false,
 }: {
   kind: InviteKind;
   onClose: () => void;
@@ -95,7 +100,9 @@ export default function VersionInviteDialog({
    *  via Email IN this popup with the picked interview(s) — several (Browse
    *  all) go one after another — and the ticked candidates; that step sends,
    *  Back returns here. Called once when at least one invitation went out. */
-  onInterviewsSent?: () => void;
+  onInterviewsSent?: (sentCount: number) => void;
+  /** Leave Duplicate out of the version cards' ⋯ menu. */
+  hideDuplicate?: boolean;
 }) {
   const { user, isTenantAdmin } = useAuth();
   const p = (user?.permissions || {}) as Record<string, boolean | undefined>;
@@ -115,6 +122,7 @@ export default function VersionInviteDialog({
         canPublish: can('canPublishAIInterviews'),
         canArchive: can('canArchiveAIInterviews'),
         canInvite: can('canInviteAIInterviews'),
+        canDelete: can('canDeleteAIInterviews'),
       };
   const label = KIND_LABEL[kind];
   const off = disabledReason || null;
@@ -135,6 +143,10 @@ export default function VersionInviteDialog({
   const [confirm, setConfirm] = useState<PendingConfirm | null>(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [creating, setCreating] = useState(false);
+  /* The job's first assessment, being configured in the Configure popup. */
+  const [creatingFirst, setCreatingFirst] = useState<{ topics: ComponentProps<typeof AssessmentConfigureModal>['topicSettings'] | null } | null>(null);
+  /* AI interview create / edit: the wizard, in its popup, from this address. */
+  const [wizardHref, setWizardHref] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   /* A create / edit opened in another tab: re-read on coming back. */
   const reloadOnFocus = useRef(false);
@@ -193,10 +205,6 @@ export default function VersionInviteDialog({
     bodyRef.current?.scrollTo({ top: 0 });
   };
   const inStep2 = !!shareStep || !!interviewStep;
-  /* "Choose candidates in the next step": Next goes on with nobody ticked
-     (step 2 has Manual, Upload Excel and the Resume Database). Only where
-     Next leads to that step. */
-  const [chooseLater, setChooseLater] = useState(false);
   const browseCount = kind === 'assessment' ? browsePicked.length : browseIds.length;
   const browseNoun = kind === 'assessment' ? 'assessment' : 'AI interview';
   /* Switching between this job's versions and the full list starts the pick
@@ -230,10 +238,14 @@ export default function VersionInviteDialog({
   const [viewingInterviewId, setViewingInterviewId] = useState<string | null>(null);
   /* The Latest Active version is pre-ticked once, on the first load. */
   const preselected = useRef(false);
+  /* When the list was last read — coming back to the tab re-reads it, at
+     most this often unless this popup itself opened a Create / Edit. */
+  const lastLoadedAt = useRef(0);
 
   /* Reads the versions; every state write is in the reply's callbacks, after
      the request. Resolves to the new list, or null when the load failed. */
   const applyVersions = (next: InviteVersion[]) => {
+    lastLoadedAt.current = Date.now();
     setVersions(next);
     setLoaded(true);
     setLoading(false);
@@ -266,8 +278,17 @@ export default function VersionInviteDialog({
   const loadOnOpen = useEffectEvent(() => { if (!off) void fetchVersions(); });
   useEffect(() => { loadOnOpen(); }, []);
 
+  /* Coming back to this tab: the versions are re-read, so one created,
+     published or archived meanwhile — in the Assessments / AI Interviews
+     module, or a Create / Edit this popup opened — shows without reopening
+     the popup. Not while something here is running (a send, a confirmed
+     action, a create), and at most every 10 seconds unless this popup opened
+     the other tab itself. */
   const reloadAfterReturn = useEffectEvent(() => {
-    if (!reloadOnFocus.current) return;
+    if (off || sending || confirmBusy || creating || !loaded) return;
+    if (document.visibilityState === 'hidden') return;
+    const forced = reloadOnFocus.current;
+    if (!forced && Date.now() - lastLoadedAt.current < 10_000) return;
     reloadOnFocus.current = false;
     // Refreshed in place — the cards stay up while the new list loads.
     void fetchVersions();
@@ -282,7 +303,7 @@ export default function VersionInviteDialog({
     if (viewing) { setViewing(null); return; }
     // The AI interview preview closes itself on Escape.
     if (viewingInterviewId) return;
-    if (editing) return;
+    if (editing || creatingFirst || wizardHref) return;
     if (confirm && !confirmBusy) setConfirm(null);
     else if (!sending && !confirmBusy) onClose();
   });
@@ -290,31 +311,46 @@ export default function VersionInviteDialog({
     const onFocus = () => reloadAfterReturn();
     const onKey = (e: KeyboardEvent) => closeOnEscape(e);
     window.addEventListener('focus', onFocus);
+    // A tab switch does not always focus the window; visibility does fire.
+    document.addEventListener('visibilitychange', onFocus);
     // Capture phase: seen before a popup on top (the AI interview preview) or
     // an open ⋯ menu handles the same Escape and closes itself.
     window.addEventListener('keydown', onKey, true);
     return () => {
       window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
       window.removeEventListener('keydown', onKey, true);
     };
   }, []);
 
   const selected = versions.find((v) => v.id === versionId) ?? null;
   const recipients = candidates.filter((c) => c.email && candidateIds.includes(c.id));
-  /* Next: someone ticked, or candidates are to be chosen in step 2. */
-  const hasCandidatesForNext = recipients.length > 0 || (handsOff && chooseLater);
+  /* Next: someone ticked — or, where Next leads to the email step, always:
+     that step adds candidates itself (Manual, Upload Excel, Resume Database),
+     so an empty list here is not a dead end. */
+  const hasCandidatesForNext = recipients.length > 0 || handsOff;
   const blocked = createBlockedReason(versions, perms, kind);
   const returnUrl = `/recruitment/job-details?id=${encodeURIComponent(jdId)}`;
-  const openInNewTab = (href: string) => window.open(href, '_blank', 'noopener');
   const close = () => { if (!sending && !confirmBusy) onClose(); };
 
-  /* New version — v1 opens the full create flow; after that the latest
-     version is duplicated as the next Draft, never overwriting one. */
+  /* New version — v1 is configured in the Configure popup in create mode;
+     after that the latest version is duplicated as the next Draft, never
+     overwriting one: an assessment draft opens in the Configure popup, an AI
+     interview draft in the wizard popup (v1 there too, from Configure). */
   const handleCreate = () => {
+    if (versions.length === 0 && kind === 'assessment') {
+      /* The tenant's round defaults first, as the create page reads them;
+         its own defaults if they cannot be read. */
+      setCreating(true);
+      void api.get('/assessments/settings/topics')
+        .then((res) => res?.data ?? null, () => null)
+        .then((topics) => setCreatingFirst({ topics }))
+        .finally(() => setCreating(false));
+      return;
+    }
     if (versions.length === 0) {
-      reloadOnFocus.current = true;
-      openInNewTab(createPageHref(kind, jdId, jdTitle, returnUrl));
-      toast.info(`${label.singular} creation opened in a new tab. Come back here when it is published.`);
+      /* AI interview v1: the wizard, in its popup, from Configure. */
+      setWizardHref(createPageHref(kind, jdId, jdTitle, returnUrl));
       return;
     }
     const latest = versions[0];
@@ -329,9 +365,22 @@ export default function VersionInviteDialog({
           const fresh = (await reload()) ?? versions;
           const why = createBlockedReason(fresh, perms, kind);
           if (why) { toast.error(why); return; }
-          await duplicateVersion(fresh[0]);
+          const draftId = await duplicateVersion(fresh[0]);
           toast.success(`v${nextVersionNumber(fresh)} created as a draft.`);
-          await reload();
+          const listed = await reload();
+          /* The new draft opens straight in the Configure popup — ⋯ › Edit's
+             popup — so it is edited and published here, with no navigation. */
+          const draft = listed?.find((v) => v.id === draftId);
+          if (kind === 'assessment' && draft) {
+            try {
+              setEditing(await loadAssessmentForPopup(draft, 'edit'));
+            } catch (err) {
+              toast.error((err as Error)?.message || 'Could not load the assessment. Please try again.');
+            }
+          } else if (draft) {
+            /* An AI interview draft opens in the wizard popup, where it left off. */
+            setWizardHref(await versionHref(draft, 'edit', jdTitle, returnUrl));
+          }
         } finally {
           setCreating(false);
         }
@@ -357,12 +406,13 @@ export default function VersionInviteDialog({
       setViewingInterviewId(v.id);
       return;
     }
-    /* AI interview Edit is the full create / edit wizard, a page of its own
-       (there is no edit popup for it): a new tab, so this popup keeps its
-       picks, and the list is re-read on coming back. */
+    /* AI interview Edit is the full create / edit wizard — in its popup, over
+       this one, so this popup keeps its picks; the list is re-read on close. */
     if (item.action === 'view' || item.action === 'edit') {
-      if (item.action === 'edit') reloadOnFocus.current = true;
-      void versionHref(v, item.action, jdTitle, returnUrl).then(openInNewTab);
+      setBusyId(v.id);
+      void versionHref(v, item.action, jdTitle, returnUrl)
+        .then(setWizardHref)
+        .finally(() => setBusyId(null));
       return;
     }
     if (!item.confirm) return;
@@ -371,7 +421,10 @@ export default function VersionInviteDialog({
       run: async () => {
         setBusyId(v.id);
         try {
-          if (item.action === 'duplicate') {
+          if (item.action === 'delete') {
+            await deleteVersion(v);
+            toast.success(`v${v.version} deleted.`);
+          } else if (item.action === 'duplicate') {
             const fresh = (await reload()) ?? versions;
             const why = createBlockedReason(fresh, perms, kind);
             if (why) { toast.error(why); return; }
@@ -455,13 +508,13 @@ export default function VersionInviteDialog({
     : browseAll
       ? (browseCount === 0
           ? `Select at least one ${browseNoun} to continue`
-          : recipients.length === 0 ? (chooseLater ? 'Choose candidates in the next step' : '') : null)
+          : recipients.length === 0 ? (handsOff ? 'No candidates ticked · add them in the next step' : '') : null)
     : view === 'results'
       ? (sending ? `Sending ${results.length} of ${sendTotal}…` : `${count('sent')} sent · ${count('skipped')} skipped · ${count('failed')} failed`)
       : !selected
         ? `Select ${label.singular === 'Assessment' ? 'an assessment' : 'an AI interview'} version to continue`
         : recipients.length === 0
-          ? (handsOff && chooseLater ? 'Choose candidates in the next step' : '')
+          ? (handsOff ? 'No candidates ticked · add them in the next step' : '')
           : null;
 
   const Icon = kind === 'assessment' ? ClipboardCheck : Brain;
@@ -560,9 +613,14 @@ export default function VersionInviteDialog({
                   phone: c.phone,
                   source: 'database' as const,
                   resumeId: c.resumeId,
+                  /* Recorded per candidate: the Job Details tab they were
+                     ticked on. Anyone added in this step (Manual, Excel,
+                     Select From) keeps Manual / Internal DB. */
+                  inviteSource: c.source ? INVITE_SOURCE_BY_TAB[c.source] : 'JD',
                 }))}
-                inviteSource="Resume Scoring"
-                onInviteSent={(count) => onAssessmentsSent?.(Math.max(count, 1))}
+                /* Only a real send counts: nothing is added when every
+                   invitation failed or was already sent. */
+                onInviteSent={(count) => { if (count > 0) onAssessmentsSent?.(count); }}
               />
             ) : browseAll ? (
               /* The original Browse all view: back to the cards, the shared
@@ -620,8 +678,7 @@ export default function VersionInviteDialog({
                     expiryDays={expiryDays}
                     onExpiry={setExpiryDays}
                     candidatesOnly
-                    chooseLater={chooseLater}
-                    onChooseLater={handsOff ? setChooseLater : undefined}
+                    addInNextStep={handsOff}
                   />
                 </section>
               </div>
@@ -651,6 +708,7 @@ export default function VersionInviteDialog({
                     perms={perms}
                     busyId={busyId}
                     onAction={handleAction}
+                    hideDuplicate={hideDuplicate}
                   />
                 </section>
                 <section aria-label="Send to" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/30 p-3 sm:p-4">
@@ -669,8 +727,7 @@ export default function VersionInviteDialog({
                        step — Share Assessment via Email / Send AI Interview
                        via Email has its own delivery, message and expiry. */
                     candidatesOnly={handsOff}
-                    chooseLater={chooseLater}
-                    onChooseLater={handsOff ? setChooseLater : undefined}
+                    addInNextStep={handsOff}
                   />
                 </section>
               </div>
@@ -683,12 +740,12 @@ export default function VersionInviteDialog({
               {footerText ?? (browseAll ? (
                 <span className="inline-flex items-center gap-1.5 align-middle">
                   <CheckCircle className="w-4 h-4 text-brand-blue flex-shrink-0" />
-                  Ready to invite {recipients.length} candidate{recipients.length === 1 ? '' : 's'} to {browseCount} {browseNoun}{browseCount === 1 ? '' : 's'}
+                  Ready to invite {recipients.length} candidate{recipients.length === 1 ? '' : 's'} to {browseCount} {browseNoun}{browseCount === 1 ? '' : 's'}{handsOff ? ' · add more in the next step' : ''}
                 </span>
               ) : selected && (
                 <span className="inline-flex items-center gap-1.5 align-middle">
                   <CheckCircle className="w-4 h-4 text-brand-blue flex-shrink-0" />
-                  Ready to invite {recipients.length} candidate{recipients.length === 1 ? '' : 's'} to {label.singular} V{selected.version}
+                  Ready to invite {recipients.length} candidate{recipients.length === 1 ? '' : 's'} to {label.singular} V{selected.version}{handsOff ? ' · add more in the next step' : ''}
                 </span>
               ))}
             </div>
@@ -792,6 +849,30 @@ export default function VersionInviteDialog({
           /* Saved as a draft or published: the cards are re-read in place,
              keeping the picked version (while it can still be sent) and the
              ticked candidates. */
+          onSaved={() => void fetchVersions()}
+        />
+      )}
+      {/* AI interview create / edit: the wizard in its popup. Closing it —
+          or Save as Draft, Discard, Publish — re-reads the versions. */}
+      {wizardHref && (
+        <AIInterviewWizardDialog
+          startHref={wizardHref}
+          jdCode={jdCode}
+          jdTitle={jdTitle}
+          onClose={() => {
+            setWizardHref(null);
+            void fetchVersions();
+          }}
+        />
+      )}
+      {/* v1: the same Configure popup, creating the job's first assessment. */}
+      {creatingFirst && (
+        <AssessmentConfigureModal
+          isOpen
+          create
+          topicSettings={creatingFirst.topics ?? undefined}
+          onClose={() => setCreatingFirst(null)}
+          assessment={{ jd_id: jdId, jd_short_id: jdCode, jd_title: jdTitle, jd_version: jobVersionNumber }}
           onSaved={() => void fetchVersions()}
         />
       )}

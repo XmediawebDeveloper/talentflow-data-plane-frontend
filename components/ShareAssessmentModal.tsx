@@ -1,5 +1,6 @@
-import { X, ArrowLeft, Mail, Plus, Trash2, Send, CheckCircle, Clock, Users, Upload, Database, AlertTriangle, ShieldAlert, Info, FolderOpen, ChevronRight, ChevronDown, Loader2, FileSpreadsheet, Eye, Layers, FolderRoot, FolderInput, ClipboardCheck } from 'lucide-react';
+import { X, ArrowLeft, Mail, Plus, Trash2, Send, CheckCircle, Clock, Users, Upload, Database, AlertTriangle, ShieldAlert, Info, FolderOpen, ChevronRight, ChevronDown, Loader2, FileSpreadsheet, Eye, Layers, FolderRoot, FolderInput, ClipboardCheck, Copy } from 'lucide-react';
 import React, { useState, useEffect, useRef } from 'react';
+import { useFolderPanelCollapsed, folderColumnClasses, FolderCollapseButton, FolderPanelRail } from '@/components/ui/folder-panel-collapse';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -31,9 +32,13 @@ import { togglePick, toggleAllPicks, partitionPicks, countBySource, sourceBreakd
    invite needs and an interview one does not: several assessments in one
    send, the invite source, the phone number, and the assessment endpoints.
 
-   The interview dialog's per-row Copy Link (and the share buttons under it)
-   has no counterpart here: it calls an interview-only endpoint that mints a
-   link without sending, and assessments have none. */
+   The interview dialog's per-row Copy Link is mirrored here too — a Copy
+   Link button next to the email field that mints an assessment invitation
+   without emailing it (assessmentService.createInviteLink) and copies its
+   link. Only shown for a single-assessment send (not alongside
+   additionalAssessments — a copied link is for one assessment, not several),
+   and without the row of social-share icons the interview dialog adds under
+   it, since only Copy Link itself was asked for here. */
 
 // Delegates to the one shared, comprehensive format rule (lib/utils/email),
 // used everywhere else a candidate email is entered or edited, rather than
@@ -99,7 +104,29 @@ interface CandidateEmail {
   resumeId?: string; // Link to resume if from database
   /** A typed row moved into the candidate list with Add. */
   added?: boolean;
+  /** Pre-filled rows only: the invite_source to record for this candidate
+   *  (the page / tab they were picked on). Rows added here — Manual, Excel,
+   *  Select From — keep Manual / Internal DB. A modal-wide `inviteSource`
+   *  still wins over it. */
+  inviteSource?: string;
+  /** Set once Copy Link mints this row's invitation — its assessment link. */
+  generatedLink?: string | null;
+  /** The invitation Copy Link created, so Send can email that same one
+   *  (via resendInvitation keep_link) instead of creating a duplicate. */
+  generatedInvitationId?: string | null;
 }
+
+/* An invite the backend refused because this email already has one for the
+   assessment (409 / DUPLICATE_INVITATION). The service wraps API errors in a
+   plain Error, so the message is read too. */
+const isDuplicateInviteError = (error: unknown): boolean => {
+  const e = error as { response?: { status?: number }; message?: string } | null;
+  const message = e?.message || '';
+  return e?.response?.status === 409 ||
+    message.includes('status code 409') ||
+    message.includes('already been invited') ||
+    message.includes('DUPLICATE_INVITATION');
+};
 
 interface Resume {
   id: string;
@@ -169,6 +196,9 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
      this dialog's folder counts read 0 and picking a folder emptied the list. */
   const [folderFetch, setFolderFetch] = useState<{ folderId: string; rows: Resume[] } | null>(null);
   const [selectedFolder, setSelectedFolder] = useState<string>('all');
+  // Collapsible folder sidebar (sm and up) — the same remembered choice as
+  // every other resume-database view (components/ui/folder-panel-collapse).
+  const { collapsed: foldersCollapsed, setCollapsed: setFoldersCollapsed, animate: foldersAnimate } = useFolderPanelCollapsed();
   // Derived from the fetch held for the folder now selected, so switching
   // folders shows the loader rather than the previous folder's rows.
   const folderResumes = folderFetch && folderFetch.folderId === selectedFolder ? folderFetch.rows : [];
@@ -335,6 +365,10 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
   );
   const [expiryDays, setExpiryDays] = useState(1);
   const [sendCopy, setSendCopy] = useState(true);
+
+  // Per-candidate link generation state (Copy Link)
+  const [generatingLinkFor, setGeneratingLinkFor] = useState<string | null>(null); // candidateId
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [sentCount, setSentCount] = useState(0);
@@ -738,6 +772,117 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
   const shownPickedCount = filteredResumes.filter((r) => picks[r.id]).length;
   const allShownPicked = filteredResumes.length > 0 && shownPickedCount === filteredResumes.length;
 
+  /* The invite_source recorded for a row: the modal-wide source, else the
+     row's own (pre-filled rows), else how it was added here. */
+  const sourceOf = (c: CandidateEmail) =>
+    inviteSource || c.inviteSource || (c.source === 'database' ? 'Internal DB' : 'Manual');
+
+  /* One assessment to several candidates: the bulk endpoint, and — when it
+     refuses the batch because someone already has an invitation — each
+     candidate on their own, so only those are skipped and the rest still go
+     out (as the AI interview share step does). A duplicate is refused by the
+     backend, so nobody already sent gets a second email. */
+  const inviteMany = async (assessmentId: string, list: CandidateEmail[]) => {
+    const rows = list.map((c) => ({
+      candidate_name: c.name,
+      candidate_email: c.email,
+      candidate_phone: c.phone,
+      invite_source: sourceOf(c),
+      resume_id: c.resumeId,
+    }));
+    try {
+      const results = await assessmentService.bulkInvite(assessmentId, {
+        candidates: rows,
+        custom_message: customMessage,
+        expiry_days: expiryDays,
+      });
+      const failed = results.filter((r) => r.status === 'failed').length;
+      return { sent: list.length - failed, failed, already: [] as string[] };
+    } catch (error) {
+      if (!isDuplicateInviteError(error)) throw error;
+      let sent = 0;
+      let failed = 0;
+      const already: string[] = [];
+      for (const row of rows) {
+        try {
+          const r = await assessmentService.invite(assessmentId, { ...row, custom_message: customMessage, expiry_days: expiryDays });
+          if (r.status === 'failed') failed++;
+          else sent++;
+        } catch (err) {
+          if (isDuplicateInviteError(err)) already.push(row.candidate_email);
+          else failed++;
+        }
+      }
+      return { sent, failed, already };
+    }
+  };
+
+  // Copy Link mints a link for ONE assessment — with additionalAssessments
+  // selected there's no single link to copy, so the button is hidden there.
+  const singleAssessmentOnly = allAssessments.length === 1;
+
+  const handleCopyLinkForCandidate = async (candidateId: string) => {
+    const candidate = candidates.find(c => c.id === candidateId);
+    if (!candidate) return;
+
+    if (!candidate.name.trim() || !candidate.email.trim()) {
+      toast.error('Please fill in candidate name and email first');
+      return;
+    }
+    if (!isValidEmail(candidate.email)) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+    // Copy Link creates a real invitation server-side, so it has to respect the
+    // same in-list duplicate rule that disables Send Invitations. Without this,
+    // clicking it on two rows holding one address minted two invitations.
+    if (isDuplicateEmail(candidate.id, candidate.email)) {
+      toast.error('This email is already in the list — remove the duplicate row first');
+      return;
+    }
+
+    // If link already generated, just copy it again (same session, no new invitation).
+    if (candidate.generatedLink) {
+      await navigator.clipboard.writeText(candidate.generatedLink);
+      toast.success('Link copied! Share on WhatsApp, SMS, or any platform.');
+      return;
+    }
+
+    setGeneratingLinkFor(candidateId);
+    try {
+      const result = await assessmentService.createInviteLink(assessment.id, {
+        candidate_name: candidate.name.trim(),
+        candidate_email: candidate.email.trim(),
+        expiry_days: expiryDays,
+      });
+
+      setCandidates(prev => prev.map(c =>
+        c.id === candidateId
+          ? { ...c, generatedLink: result.link, generatedInvitationId: result.invitation_id }
+          : c
+      ));
+
+      await navigator.clipboard.writeText(result.link);
+      toast.success(`Link copied for ${candidate.name}! Expires in ${expiryDays} day${expiryDays !== 1 ? 's' : ''}. Share via WhatsApp, SMS, or send via email.`);
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail;
+      // Team-member emails are blocked here exactly as on Send Invitation —
+      // no link is minted, so a later Send hits the same check.
+      if (err?.response?.status === 400 && detail?.error === 'TENANT_USER_EMAIL') {
+        toast.error(detail.message || `Cannot invite '${candidate.email.trim()}' — this email belongs to an existing team member. Assessment invitations are for external candidates only.`);
+        return;
+      }
+      if (err?.response?.status === 409) {
+        toast.error(detail?.message || `${candidate.email.trim()} has already been invited to this assessment.`);
+        return;
+      }
+      const msg = detail?.message || detail || err?.message || 'Failed to generate link';
+      toast.error(typeof msg === 'string' ? msg : 'Failed to generate link');
+    } finally {
+      setGeneratingLinkFor(null);
+    }
+  };
+
   const handleSend = async () => {
     setIsSubmitting(true);
     try {
@@ -795,30 +940,19 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
         const totalInvites = allAssessments.length * validCandidates.length;
         let sentSoFar = 0;
         let failedCount = 0;
+        const alreadyInvited = new Set<string>();
 
         toast.loading(`Sending ${totalInvites} invitation${totalInvites > 1 ? 's' : ''}...`, { id: 'bulk-invite-multi' });
 
         for (const assessmentToInvite of allAssessments) {
           try {
-            const candidateData = validCandidates.map(c => ({
-              candidate_name: c.name,
-              candidate_email: c.email,
-              candidate_phone: c.phone,
-              invite_source: inviteSource || (c.source === 'database' ? 'Internal DB' : 'Manual'),
-              resume_id: c.resumeId,
-            }));
-
-            const results = await assessmentService.bulkInvite(assessmentToInvite.id, {
-              candidates: candidateData,
-              custom_message: customMessage,
-              expiry_days: expiryDays,
-            });
-
             // A 200 only means the call went through — a row can still have
             // failed (bad domain, SMTP rejection) with its own status 'failed'.
-            const failedHere = results.filter((r) => r.status === 'failed').length;
-            sentSoFar += validCandidates.length - failedHere;
-            failedCount += failedHere;
+            // Someone already invited to this assessment is skipped, not failed.
+            const r = await inviteMany(assessmentToInvite.id, validCandidates);
+            sentSoFar += r.sent;
+            failedCount += r.failed;
+            r.already.forEach((e) => alreadyInvited.add(e));
             toast.loading(`Sent ${sentSoFar}/${totalInvites} invitations...`, { id: 'bulk-invite-multi' });
           } catch (error: any) {
             console.error(`Failed to send invitations for assessment ${assessmentToInvite.title}:`, error);
@@ -830,8 +964,17 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
 
         // Nothing went out — say so and leave the form open to retry.
         if (sentSoFar === 0) {
+          if (alreadyInvited.size > 0 && failedCount === 0) {
+            toast.dismiss('bulk-invite-multi');
+            setDuplicateEmail([...alreadyInvited].join(', '));
+            setShowDuplicateError(true);
+            return;
+          }
           toast.error('Failed to send invitations. Please try again.', { id: 'bulk-invite-multi' });
           return;
+        }
+        if (alreadyInvited.size > 0) {
+          toast.warning(`Skipped — already invited: ${[...alreadyInvited].join(', ')}`);
         }
 
         if (failedCount === 0) {
@@ -841,10 +984,12 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
         }
 
         setSentCount(sentSoFar);
-        onInviteSent?.(sentSoFar);
         setShowSuccess(true);
+        // As in the AI Interview modal: the host is told AFTER the success popup
+        // has had its moment, so a refresh it kicks off cannot disturb the popup.
         setTimeout(() => {
           setShowSuccess(false);
+          onInviteSent?.(sentSoFar);
           onClose();
         }, 2000);
         return;
@@ -853,45 +998,69 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
       // Single assessment. Each result's own status is read: a request that
       // did not throw can still carry a candidate whose send failed.
       let failedHere = 0;
-      if (validCandidates.length === 1) {
+      let alreadyHere: string[] = [];
+
+      // Rows already carrying a Copy-Link invitation must be EMAILED, not
+      // re-invited — invite()/bulkInvite() would 409 as a duplicate against
+      // the invitation Copy Link already created. Emailing it keeps that
+      // same link alive (keep_link) rather than rotating it.
+      const withLink = validCandidates.filter(c => c.generatedInvitationId);
+      const withoutLink = validCandidates.filter(c => !c.generatedInvitationId);
+
+      for (const c of withLink) {
+        try {
+          await assessmentService.resendInvitation(assessment.id, c.generatedInvitationId!, { keep_link: true });
+        } catch (err) {
+          console.error(`Failed to email existing link for ${c.email}:`, err);
+          failedHere += 1;
+        }
+      }
+
+      if (withoutLink.length === 1) {
         const result = await assessmentService.invite(assessment.id, {
-          candidate_name: validCandidates[0].name,
-          candidate_email: validCandidates[0].email,
-          candidate_phone: validCandidates[0].phone,
-          invite_source: inviteSource || (validCandidates[0].source === 'database' ? 'Internal DB' : 'Manual'),
-          resume_id: validCandidates[0].resumeId,
+          candidate_name: withoutLink[0].name,
+          candidate_email: withoutLink[0].email,
+          candidate_phone: withoutLink[0].phone,
+          invite_source: sourceOf(withoutLink[0]),
+          resume_id: withoutLink[0].resumeId,
           custom_message: customMessage,
           expiry_days: expiryDays,
         });
-        if (result.status === 'failed') failedHere = 1;
-      } else {
-        const candidateData = validCandidates.map(c => ({
-          candidate_name: c.name,
-          candidate_email: c.email,
-          candidate_phone: c.phone,
-          invite_source: inviteSource || (c.source === 'database' ? 'Internal DB' : 'Manual'),
-          resume_id: c.resumeId,
-        }));
-        const results = await assessmentService.bulkInvite(assessment.id, {
-          candidates: candidateData,
-          custom_message: customMessage,
-          expiry_days: expiryDays,
-        });
-        failedHere = results.filter((r) => r.status === 'failed').length;
+        if (result.status === 'failed') failedHere += 1;
+      } else if (withoutLink.length > 1) {
+        const r = await inviteMany(assessment.id, withoutLink);
+        failedHere += r.failed;
+        alreadyHere = r.already;
       }
 
       setIsSubmitting(false);
-      const successCount = validCandidates.length - failedHere;
-      onInviteSent?.(successCount);
+      const successCount = validCandidates.length - failedHere - alreadyHere.length;
+      // When something went out, the success popup follows and the host is told
+      // after it (below), as the AI Interview modal does. Otherwise no popup is
+      // coming, so tell the host now — failed sends still need to show up in
+      // its tracker.
+      if (successCount <= 0) onInviteSent?.(successCount);
 
-      if (failedHere === validCandidates.length) {
+      // Everyone already had an invitation: the same notice a single
+      // duplicate gets, naming them all.
+      if (successCount === 0 && alreadyHere.length > 0 && failedHere === 0) {
+        setDuplicateEmail(alreadyHere.join(', '));
+        setShowDuplicateError(true);
+        return;
+      }
+      if (successCount === 0) {
         // Every candidate failed — never show the success screen for that.
         toast.error(
           validCandidates.length === 1
             ? `Invite Failed: ${validCandidates[0].email} could not be delivered — check the email address and domain, then edit and resend it from Invite Status Tracking.`
-            : `All ${validCandidates.length} invitations failed to deliver — check the email addresses, then edit and resend them from Invite Status Tracking.`
+            : alreadyHere.length > 0
+              ? `No invitations went out: ${failedHere} failed to deliver and ${alreadyHere.length} already invited (${alreadyHere.join(', ')}). Check Invite Status Tracking.`
+              : `All ${validCandidates.length} invitations failed to deliver — check the email addresses, then edit and resend them from Invite Status Tracking.`
         );
         return;
+      }
+      if (alreadyHere.length > 0) {
+        toast.warning(`Skipped ${alreadyHere.length} already invited: ${alreadyHere.join(', ')}`);
       }
       if (failedHere > 0) {
         toast.warning(`Sent ${successCount} invitation${successCount > 1 ? 's' : ''} successfully. ${failedHere} failed to deliver — check Invite Status Tracking.`);
@@ -901,6 +1070,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
       setShowSuccess(true);
       setTimeout(() => {
         setShowSuccess(false);
+        onInviteSent?.(successCount);
         onClose();
       }, 2000);
     } catch (error: any) {
@@ -908,10 +1078,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
       setIsSubmitting(false);
 
       // Check for duplicate invitation error (409 Conflict)
-      const is409Error = error?.response?.status === 409 ||
-                         error?.message?.includes('status code 409') ||
-                         error?.message?.includes('already been invited') ||
-                         error?.message?.includes('DUPLICATE_INVITATION');
+      const is409Error = isDuplicateInviteError(error);
 
       if (is409Error) {
         const email = error?.response?.data?.detail?.candidate_email ||
@@ -1425,7 +1592,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                               onChange={(e) => updateCandidate(candidate.id, 'name', e.target.value)}
                               placeholder="e.g., John Doe"
                               readOnly={candidate.source === 'database'}
-                              className={`w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-transparent ${
+                              className={`w-full h-10 px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-blue/40 focus:border-transparent ${
                                 candidate.source === 'database' ? 'bg-gray-100 dark:bg-slate-800 cursor-not-allowed' : ''
                               }`}
                             />
@@ -1439,7 +1606,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                                 onChange={(e) => updateCandidate(candidate.id, 'email', e.target.value)}
                                 placeholder="e.g., john.doe@example.com"
                                 readOnly={candidate.source === 'database'}
-                                className={`flex-1 min-w-0 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 ${
+                                className={`flex-1 min-w-0 h-10 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-inset ${
                                   candidate.source === 'database'
                                     ? 'bg-gray-100 dark:bg-slate-800 cursor-not-allowed border-gray-200 dark:border-slate-700'
                                     : candidate.email.trim() && (!isValidEmail(candidate.email) || isDuplicateEmail(candidate.id, candidate.email))
@@ -1447,6 +1614,47 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                                       : 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/40 focus:border-transparent'
                                 }`}
                               />
+                            </div>
+                            {candidate.source !== 'database' && candidate.email.trim() && !isValidEmail(candidate.email) && (
+                              <p className="text-xs text-destructive mt-1">Please enter a valid email (e.g., user@example.com)</p>
+                            )}
+                            {candidate.source !== 'database' && candidate.email.trim() && isValidEmail(candidate.email) && isDuplicateEmail(candidate.id, candidate.email) && (
+                              <p className="text-xs text-destructive mt-1">This email is already in the list</p>
+                            )}
+                          </div>
+                        </div>
+                            <div className="flex items-center gap-2 self-end sm:self-start sm:mt-5 flex-shrink-0">
+                              {/* Per-candidate Copy Link button — one assessment link, no email sent */}
+                              {singleAssessmentOnly && candidate.source !== 'database' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyLinkForCandidate(candidate.id)}
+                                  disabled={
+                                    generatingLinkFor === candidate.id ||
+                                    (!candidate.generatedLink &&
+                                      isDuplicateEmail(candidate.id, candidate.email))
+                                  }
+                                  title={
+                                    candidate.generatedLink
+                                      ? 'Link generated — click to copy again'
+                                      : isDuplicateEmail(candidate.id, candidate.email)
+                                        ? 'This email is already in the list'
+                                        : 'Generate & copy assessment link'
+                                  }
+                                  className={`flex items-center gap-1.5 h-10 px-2.5 py-2 rounded-lg text-xs border transition-colors whitespace-nowrap flex-shrink-0 ${
+                                    candidate.generatedLink
+                                      ? 'bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:border-emerald-500/30 dark:text-emerald-300 dark:hover:bg-emerald-500/20'
+                                      : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                  } disabled:opacity-50`}
+                                >
+                                  {generatingLinkFor === candidate.id
+                                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    : candidate.generatedLink
+                                      ? <><CheckCircle className="w-3.5 h-3.5" /><span>Copied</span></>
+                                      : <><Copy className="w-3.5 h-3.5" /><span>Copy Link</span></>
+                                  }
+                                </button>
+                              )}
                               {candidate.source !== 'database' && (
                                 <button
                                   type="button"
@@ -1471,14 +1679,6 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                                 </button>
                               )}
                             </div>
-                            {candidate.source !== 'database' && candidate.email.trim() && !isValidEmail(candidate.email) && (
-                              <p className="text-xs text-destructive mt-1">Please enter a valid email (e.g., user@example.com)</p>
-                            )}
-                            {candidate.source !== 'database' && candidate.email.trim() && isValidEmail(candidate.email) && isDuplicateEmail(candidate.id, candidate.email) && (
-                              <p className="text-xs text-destructive mt-1">This email is already in the list</p>
-                            )}
-                          </div>
-                        </div>
                       </div>
                     </div>
                   ))}
@@ -1515,6 +1715,27 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                             <span className={`shrink-0 inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-2xs font-semibold ring-1 ${badge.cls}`}>
                               {badge.label}
                             </span>
+                            {/* The row's per-candidate Copy Link, as on the entry rows. */}
+                            {singleAssessmentOnly && (
+                              <button
+                                type="button"
+                                onClick={() => handleCopyLinkForCandidate(candidate.id)}
+                                disabled={generatingLinkFor === candidate.id || (!candidate.generatedLink && isDuplicateEmail(candidate.id, candidate.email))}
+                                title={candidate.generatedLink ? 'Link generated — click to copy again' : 'Generate & copy assessment link'}
+                                aria-label={`Copy assessment link for ${candidate.name}`}
+                                className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs border transition-colors whitespace-nowrap flex-shrink-0 ${
+                                  candidate.generatedLink
+                                    ? 'bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:border-emerald-500/30 dark:text-emerald-300 dark:hover:bg-emerald-500/20'
+                                    : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                } disabled:opacity-50`}
+                              >
+                                {generatingLinkFor === candidate.id
+                                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  : candidate.generatedLink
+                                    ? <><CheckCircle className="w-3.5 h-3.5" /><span className="hidden sm:inline">Copied</span></>
+                                    : <><Copy className="w-3.5 h-3.5" /><span className="hidden sm:inline">Copy Link</span></>}
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => removeCandidate(candidate.id)}
@@ -1580,14 +1801,20 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                 <div className="flex flex-col sm:flex-row" style={{ minHeight: '300px', maxHeight: '380px' }}>
                   {/* Folder Sidebar (My Resumes only) — short scrollable strip on
                       top for mobile, fixed left column from sm up. */}
+                  {dbTab === 'my-resumes' && myFolders.length > 0 && foldersCollapsed && (
+                    <FolderPanelRail onExpand={() => setFoldersCollapsed(false)} animate={foldersAnimate} from="sm" />
+                  )}
                   {dbTab === 'my-resumes' && myFolders.length > 0 && (
                     <div
-                      className="w-full sm:w-56 max-h-28 sm:max-h-none border-b sm:border-b-0 sm:border-r border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 overflow-y-auto flex-shrink-0 p-2"
+                      className={`w-full sm:w-56 max-h-28 sm:max-h-none border-b sm:border-b-0 sm:border-r border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 overflow-y-auto flex-shrink-0 p-2 ${folderColumnClasses(foldersCollapsed, foldersAnimate, 'sm')}`}
                       onMouseLeave={() => scheduleOpenPath([])}
                       // Flyouts are pinned to row positions — scrolling would leave them adrift.
                       onScroll={() => { cancelScheduledClose(); setOpenPath([]); }}
                     >
-                      <p className="px-3 pb-1 text-2xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">System Folders</p>
+                      <div className="flex items-center pr-0.5">
+                        <p className="flex-1 px-3 pb-1 text-2xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">System Folders</p>
+                        <FolderCollapseButton onCollapse={() => setFoldersCollapsed(true)} from="sm" />
+                      </div>
                       <div className="space-y-0.5">
                         <button type="button" onClick={() => setSelectedFolder('all')} className={`${folderRowClass(selectedFolder === 'all')} pl-3`}>
                           <FolderOpen className="w-4 h-4 text-brand-blue flex-shrink-0" />

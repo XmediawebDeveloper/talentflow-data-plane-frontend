@@ -4212,6 +4212,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
               resumes={resumes}
               width={folderTreeWidth}
               onWidthChange={setFolderTreeWidth}
+              collapsible
             />
 
             <div className="flex-1 flex flex-col min-w-0">

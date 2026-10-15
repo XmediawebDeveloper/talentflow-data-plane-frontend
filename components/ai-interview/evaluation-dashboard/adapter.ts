@@ -548,6 +548,9 @@ function buildClustersFromConfig(
         level: scoreToLevel(score010),
         feedback: lookupFeedback(sname, evaluations) || 'No specific feedback captured for this skill.',
         asked: lookupAsked(sname, score010),
+        // A real record of what was asked exists (the question_skill_map
+        // delivery flags or any authoritative source lookupAsked reads).
+        askedKnown: hasAuthoritativeAskedSource || qsmSeen.size > 0,
       };
     });
 
@@ -2485,9 +2488,64 @@ export function buildDashboardData(params: {
     claimGreedy(perQuestionDetailsRaw.filter(r => r.section !== 'hr' && !r.notDelivered));
     claimGreedy(perQuestionDetailsRaw.filter(r => r.section === 'hr' && r.notDelivered));
 
+    // Spoken but never recorded: End pressed after Bina asked a question but
+    // before its answer timer started, so no history row exists (the backend
+    // then reads it as un-reached). The transcript still holds Bina's turn —
+    // that question WAS asked, so show it as asked-but-not-answered, never
+    // "Not Asked".
+    const tx = (conversation_transcript || []).filter((m: any) =>
+      (m?.role === 'assistant' || m?.role === 'user')
+      && typeof m?.content === 'string'
+      && !m?.interstitial
+      && !m?.is_clarification);
+    const normTxt = (s: string) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const spoken = new Map<number, { txIdx: number; text: string; answer: string }>();
+    const usedTx = new Set<number>();
+    hrBank.forEach((b, i) => {
+      const owner = claimed.get(i);
+      if (owner && !owner.notDelivered) return; // already shown as asked
+      let best = -1;
+      let bestScore = 0;
+      tx.forEach((m: any, ti: number) => {
+        if (m.role !== 'assistant' || usedTx.has(ti)) return;
+        const s = hrMatchScore(m.content, b.text);
+        if (s > bestScore) { bestScore = s; best = ti; }
+      });
+      if (best < 0) return;
+      usedTx.add(best);
+      const parts: string[] = [];
+      for (let k = best + 1; k < tx.length && tx[k].role === 'user'; k++) {
+        const t = String(tx[k].content || '').trim();
+        if (t) parts.push(t);
+      }
+      spoken.set(i, { txIdx: best, text: String(tx[best].content).trim(), answer: parts.join(' ') });
+    });
+    const spokenRow = (i: number, base?: PerQuestionDetail): PerQuestionDetail => {
+      const sp = spoken.get(i)!;
+      return {
+        ...(base || {}),
+        qNum: base?.qNum ?? 10000 + i,
+        section: 'hr',
+        question: sp.text,
+        answer: sp.answer,
+        responseType: sp.answer ? 'answered' : 'not_answered',
+        skipSource: '',
+        skills: [],
+        questionScore: 0,
+        isUnscored: true,
+        notDelivered: false,
+        hrStage: hrBank[i].stage,
+        hrBankIndex: i,
+      };
+    };
+
     const out: PerQuestionDetail[] = [];
     for (const row of perQuestionDetailsRaw) {
       const bi = bankOf.get(row);
+      if (row.section === 'hr' && row.notDelivered && bi !== undefined && spoken.has(bi)) {
+        out.push(spokenRow(bi, row));
+        continue;
+      }
       if (row.section !== 'hr') {
         if (bi === undefined) { out.push(row); continue; }
         // HR is review-only: no plan skills, no score.
@@ -2517,6 +2575,7 @@ export function buildDashboardData(params: {
     }
     hrBank.forEach((b, i) => {
       if (claimed.has(i)) return;
+      if (spoken.has(i)) { out.push(spokenRow(i)); return; }
       out.push({
         qNum: 10000 + i,
         section: 'hr',
@@ -2532,6 +2591,20 @@ export function buildDashboardData(params: {
         hrBankIndex: i,
       });
     });
+    // Ask-order slot for a transcript-recovered row: just after the last
+    // recorded question Bina spoke before it.
+    for (const r of out) {
+      if (r.notDelivered || typeof r.hrBankIndex !== 'number' || !spoken.has(r.hrBankIndex)) continue;
+      const at = spoken.get(r.hrBankIndex)!.txIdx;
+      let prev: number | undefined;
+      for (const o of out) {
+        if (o === r || o.notDelivered || typeof o.askedOrder !== 'number') continue;
+        const k = normTxt(o.question);
+        const oi = tx.findIndex((m: any) => m.role === 'assistant' && normTxt(m.content) === k);
+        if (oi >= 0 && oi < at && (prev === undefined || o.askedOrder > prev)) prev = o.askedOrder;
+      }
+      r.askedOrder = prev !== undefined ? prev + 0.5 : r.askedOrder;
+    }
     perQuestionDetailsAligned = out;
   }
 
