@@ -34,11 +34,13 @@ import ScoredResumesTable, {
   useScoringActionPermissions,
 } from './ScoredResumesTable';
 import VersionInviteDialog from './talent-match-invite/VersionInviteDialog';
+import RowInviteSubmenu from './talent-match-invite/RowInviteSubmenu';
 import type { InviteCandidate, InviteCandidateSource, InviteKind } from './talent-match-invite/inviteVersions';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import InviteToAssessmentModal from './InviteToAssessmentModal';
@@ -2564,6 +2566,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           jdTitle={job.title}
           jobVersionNumber={job.versionNumber && job.versionNumber > 0 ? job.versionNumber : undefined}
           candidates={inviteDialog.candidates}
+          /* Create / Send AI Interview: no Duplicate in the version ⋯ menu. */
+          hideDuplicate={inviteDialog.kind === 'interview'}
           disabledReason={
             !(inviteDialog.kind === 'assessment' ? features.assessment : features.ai_interview)
               ? `${inviteDialog.kind === 'assessment' ? 'Assessments are' : 'AI Interviews are'} not enabled for your workspace.`
@@ -6108,6 +6112,10 @@ function AIMatchTabContent({
                             </button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-56 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
+                            {/* Invite ▸ Create / Send — the Scored Resumes row's
+                                Invite, first, for this row's candidate. */}
+                            <RowInviteSubmenu onInvite={(kind) => onOpenInviteDrawer(kind, [candidate])} />
+                            <DropdownMenuSeparator className="my-1 bg-gray-100" />
                             {onViewCandidate && (
                               <DropdownMenuItem className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer" onSelect={openCandidate}>
                                 <Eye className="w-4 h-4 text-menu-icon-view" />
