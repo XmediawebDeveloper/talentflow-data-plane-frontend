@@ -2215,7 +2215,7 @@ export default function UserManagement() {
 
       {/* Active tab + its data enclosed together in one bordered panel that
           connects to the tab bar's baseline (-mt-5 cancels the tab bar's mb-5). */}
-      <div className="-mt-5 rounded-b-xl border border-t-0 border-gray-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 p-4 sm:p-5">
+      <div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 p-4 sm:p-5 lg:-mt-5 lg:rounded-t-none lg:border-t-0">
       {/* Header */}
       <PageHeader
         icon={<UserCog className="h-5 w-5" />}
