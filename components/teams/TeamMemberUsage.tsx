@@ -172,15 +172,15 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
         </div>
 
         {/* Table Skeleton */}
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="bg-gray-50 px-6 py-3">
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] overflow-hidden">
+          <div className="bg-gray-50 dark:bg-slate-800/50 px-6 py-3">
             <div className="flex gap-4">
               {[1, 2, 3, 4, 5, 6].map((i) => (
                 <Skeleton key={i} className="h-4 w-20" />
               ))}
             </div>
           </div>
-          <div className="divide-y divide-gray-200">
+          <div className="divide-y divide-gray-200 dark:divide-slate-700/60">
             {[1, 2, 3, 4, 5].map((i) => (
               <div key={i} className="px-6 py-4 flex items-center gap-4">
                 <Skeleton className="w-8 h-8 rounded-full" />
@@ -222,33 +222,33 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center">
-            <TrendingUp className="w-5 h-5 text-white" />
+      <div className="flex flex-col gap-4 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 p-5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
+            <TrendingUp className="w-5 h-5 text-brand-blue" />
           </div>
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900">{team.name} - Member Usage</h3>
-            <p className="text-sm text-gray-600">Individual usage breakdown</p>
+          <div className="min-w-0">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-50 truncate">{team.name} - Member Usage</h3>
+            <p className="text-sm text-gray-600 dark:text-slate-400">Individual usage breakdown</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-2 min-w-0">
             <DateField
               aria-label="From date"
               value={fromDate}
               max={toDate}
               onChange={setFromDate}
-              className="w-auto"
+              className="min-w-0 flex-1 sm:flex-none sm:w-[150px]"
             />
-            <span className="text-sm text-gray-500">to</span>
+            <span className="shrink-0 text-xs font-medium text-gray-400 dark:text-slate-500">to</span>
             <DateField
               aria-label="To date"
               value={toDate}
               min={fromDate}
               max={new Date().toISOString().split('T')[0]}
               onChange={setToDate}
-              className="w-auto"
+              className="min-w-0 flex-1 sm:flex-none sm:w-[150px]"
             />
           </div>
           {membersUsage?.members && membersUsage.members.length > 0 && (
@@ -262,10 +262,10 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
               }}
               aria-disabled={!canExport}
               title={!canExport ? 'You do not have permission to export' : ''}
-              className={`flex items-center gap-2 px-3 py-1.5 border rounded-lg text-sm transition-colors ${
+              className={`flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-900 border rounded-lg text-sm font-medium transition-colors ${
                 canExport
-                  ? 'border-gray-300 hover:bg-gray-50'
-                  : 'border-gray-200 text-gray-400 cursor-not-allowed opacity-60'
+                  ? 'border-gray-300 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800'
+                  : 'border-gray-200 dark:border-slate-700 text-gray-400 dark:text-slate-500 cursor-not-allowed opacity-60'
               }`}
             >
               <Download className="w-4 h-4" />
@@ -285,9 +285,9 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
 
       {/* Members Table */}
       {members.length > 0 ? (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden tf-table-shell">
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] overflow-hidden tf-table-shell">
           <table className="w-full" role="table" aria-label="Team member usage statistics">
-            <thead className="bg-gray-50">
+            <thead className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-700">
               <tr>
                 <th
                   onClick={() => toggleSort('name')}
@@ -295,29 +295,29 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
                   tabIndex={0}
                   role="columnheader"
                   aria-sort={sortBy === 'name' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-gray-800"
+                  className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-blue/40"
                 >
                   <div className="flex items-center gap-1">
                     Member
                     {sortBy === 'name' && (sortOrder === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />)}
                   </div>
                 </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-center text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">
                   Resume Scoring
                 </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-center text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">
                   Assessment
                 </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-center text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">
                   AI Interview
                 </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-center text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">
                   Resume Storage
                 </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-center text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">
                   JDs
                 </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-center text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">
                   Assessments
                 </th>
                 <th
@@ -326,7 +326,7 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
                   tabIndex={0}
                   role="columnheader"
                   aria-sort={sortBy === 'total' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}
-                  className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-gray-800"
+                  className="px-6 py-3 text-center text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-blue/40"
                 >
                   <div className="flex items-center justify-center gap-1">
                     Total
@@ -339,7 +339,7 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
                   tabIndex={0}
                   role="columnheader"
                   aria-sort={sortBy === 'recent' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}
-                  className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-gray-800"
+                  className="px-6 py-3 text-right text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-blue/40"
                 >
                   <div className="flex items-center justify-end gap-1">
                     Last Active
@@ -348,74 +348,74 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+            <tbody className="divide-y divide-gray-200 dark:divide-slate-700/60">
               {members.map((member, index) => (
-                <tr key={member.user_id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                <tr key={member.user_id} className={index % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-gray-50 dark:bg-slate-800/50'}>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-gray-800 text-white flex items-center justify-center text-sm font-medium">
+                      <div className="w-8 h-8 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 text-brand-blue flex items-center justify-center text-sm font-semibold shrink-0">
                         {member.user_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                       </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">{member.user_name}</p>
-                        <p className="text-xs text-gray-500">{member.user_email}</p>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{member.user_name}</p>
+                        <p className="text-xs text-gray-500 dark:text-slate-500 truncate">{member.user_email}</p>
                       </div>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
-                    <div className="text-sm font-medium text-blue-600">
+                    <div className="text-sm font-medium text-blue-600 dark:text-blue-400 tabular-nums">
                       {Math.round(member.by_type.RS?.total_consumed || 0)}
                     </div>
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-gray-500 dark:text-slate-500">
                       {member.by_type.RS?.consumption_count || 0} actions
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
-                    <div className="text-sm font-medium text-success">
+                    <div className="text-sm font-medium text-success tabular-nums">
                       {(member.by_type.AS?.total_consumed || 0).toFixed(1)}
                     </div>
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-gray-500 dark:text-slate-500">
                       {member.by_type.AS?.consumption_count || 0} actions
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
-                    <div className="text-sm font-medium text-purple-600">
+                    <div className="text-sm font-medium text-purple-600 dark:text-purple-400 tabular-nums">
                       {Math.round(member.by_type.AIU?.total_consumed || 0)}
                     </div>
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-gray-500 dark:text-slate-500">
                       {member.by_type.AIU?.consumption_count || 0} actions
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
-                    <div className="text-sm font-medium text-orange-600">
+                    <div className="text-sm font-medium text-orange-600 dark:text-orange-400 tabular-nums">
                       {Math.round(member.by_type.RU?.total_consumed || 0)}
                     </div>
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-gray-500 dark:text-slate-500">
                       {member.by_type.RU?.consumption_count || 0} actions
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
-                    <div className="text-sm font-medium text-indigo-600">
+                    <div className="text-sm font-medium text-indigo-600 dark:text-indigo-400 tabular-nums">
                       {member.jds_created || 0}
                     </div>
-                    <div className="text-xs text-gray-500">created</div>
+                    <div className="text-xs text-gray-500 dark:text-slate-500">created</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
-                    <div className="text-sm font-medium text-teal-600">
+                    <div className="text-sm font-medium text-teal-600 dark:text-teal-400 tabular-nums">
                       {member.assessments_created || 0}
                     </div>
-                    <div className="text-xs text-gray-500">created</div>
+                    <div className="text-xs text-gray-500 dark:text-slate-500">created</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
-                    <div className="text-sm font-bold text-gray-900">
+                    <div className="text-sm font-semibold text-gray-900 dark:text-slate-50 tabular-nums">
                       {member.total_consumed.toFixed(1)}
                     </div>
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-gray-500 dark:text-slate-500">
                       {member.total_actions} total
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <div className="flex items-center justify-end gap-1 text-sm text-gray-600">
+                    <div className="flex items-center justify-end gap-1 text-sm text-gray-600 dark:text-slate-400">
                       <Clock className="w-3.5 h-3.5" />
                       {formatLastActivity(member.last_activity)}
                     </div>
@@ -426,10 +426,10 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
           </table>
         </div>
       ) : (
-        <div className="bg-gray-50 rounded-xl p-8 text-center">
-          <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-gray-700 mb-2">No Team Members</h3>
-          <p className="text-gray-600">
+        <div className="rounded-xl border border-dashed border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 p-8 text-center">
+          <Users className="w-12 h-12 text-gray-400 dark:text-slate-500 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-gray-700 dark:text-slate-300 mb-2">No Team Members</h3>
+          <p className="text-gray-600 dark:text-slate-400">
             This team has no members yet. Add members to see their usage data.
           </p>
         </div>

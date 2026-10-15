@@ -837,10 +837,12 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
                             <span
                               onMouseEnter={(e) => showReasoningTooltip(e, criteria.aiReasoning)}
                               onMouseLeave={hideReasoningTooltip}
-                              className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 border border-gray-300 whitespace-nowrap cursor-default"
+                              /* Fills the column (copy button after it) and cuts the
+                                 full reasoning off with an ellipsis where the cell
+                                 ends, instead of a fixed first-four-words stub. */
+                              className="flex-1 min-w-0 block truncate px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 border border-gray-300 cursor-default"
                             >
-                              {criteria.aiReasoning.split(' ').slice(0, 4).join(' ')}
-                              {criteria.aiReasoning.split(' ').length > 4 ? '…' : ''}
+                              {criteria.aiReasoning}
                             </span>
                           )}
                           <button
@@ -882,35 +884,70 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
         </div>
       )}
 
-      {/* Summary Stats - Only show if real API data exists */}
-      {criteriaScores.length > 0 && (
-        <div className="grid grid-cols-4 gap-4">
-          <div className="bg-success-subtle border border-success-line rounded-lg p-4">
-            <div className="text-2xl font-bold text-success">
-              {criteriaScores.filter(c => c.rating >= RATING_PASS_THRESHOLD).length}
-            </div>
-            <div className="text-sm font-medium text-gray-800 mt-1">Eligible Criteria</div>
+      {/* Summary Stats - Only show if real API data exists.
+          One white card per count: a tinted icon tile, the label, the count
+          out of every criterion, and a bar showing that share. */}
+      {criteriaScores.length > 0 && (() => {
+        const total = criteriaScores.length;
+        const stats = [
+          {
+            label: 'Eligible Criteria',
+            count: criteriaScores.filter(c => c.rating >= RATING_PASS_THRESHOLD).length,
+            icon: CheckCircle,
+            tile: 'bg-success-subtle text-success',
+            value: 'text-success',
+            bar: 'bg-success',
+          },
+          {
+            label: 'Not Eligible Criteria',
+            count: criteriaScores.filter(c => c.rating < RATING_PASS_THRESHOLD).length,
+            icon: XCircle,
+            tile: 'bg-destructive-subtle text-destructive',
+            value: 'text-destructive',
+            bar: 'bg-destructive',
+          },
+          {
+            label: 'Required Criteria',
+            count: criteriaScores.filter(c => c.criteriaType === 'Required').length,
+            icon: Target,
+            tile: 'bg-brand-blue/10 text-brand-blue',
+            value: 'text-gray-900',
+            bar: 'bg-brand-blue',
+          },
+          {
+            label: 'Preferred Criteria',
+            count: criteriaScores.filter(c => c.criteriaType === 'Preferred').length,
+            icon: Award,
+            tile: 'bg-gray-100 text-gray-600',
+            value: 'text-gray-900',
+            bar: 'bg-gray-400',
+          },
+        ];
+        return (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            {stats.map(({ label, count, icon: Icon, tile, value, bar }) => (
+              <div
+                key={label}
+                className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm shadow-brand-blue/5 flex flex-col gap-3"
+              >
+                <div className="flex items-center gap-3">
+                  <span className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${tile}`}>
+                    <Icon className="w-[18px] h-[18px]" />
+                  </span>
+                  <span className="text-sm font-medium text-gray-700 leading-tight">{label}</span>
+                </div>
+                <div className="flex items-baseline gap-1.5">
+                  <span className={`text-2xl font-bold leading-none ${value}`}>{count}</span>
+                  <span className="text-xs text-gray-500">of {total}</span>
+                </div>
+                <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden" aria-hidden="true">
+                  <div className={`h-full rounded-full ${bar}`} style={{ width: `${total ? (count / total) * 100 : 0}%` }} />
+                </div>
+              </div>
+            ))}
           </div>
-          <div className="bg-destructive-subtle border border-destructive-line rounded-lg p-4">
-            <div className="text-2xl font-bold text-destructive">
-              {criteriaScores.filter(c => c.rating < RATING_PASS_THRESHOLD).length}
-            </div>
-            <div className="text-sm font-medium text-gray-800 mt-1">Not Eligible Criteria</div>
-          </div>
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-            <div className="text-2xl font-bold text-gray-900">
-              {criteriaScores.filter(c => c.criteriaType === 'Required').length}
-            </div>
-            <div className="text-sm font-medium text-gray-800 mt-1">Required Criteria</div>
-          </div>
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-            <div className="text-2xl font-bold text-gray-900">
-              {criteriaScores.filter(c => c.criteriaType === 'Preferred').length}
-            </div>
-            <div className="text-sm font-medium text-gray-800 mt-1">Preferred Criteria</div>
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* AI Reasoning pill's full-text hover box — see reasoningTooltip
           above for why this is a portal instead of a CSS-positioned child. */}

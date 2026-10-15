@@ -1460,7 +1460,7 @@ export default function UsageHistory() {
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Usage History' }]} />
         <div>
         <OrganizationTabs />
-        <div className="-mt-5 rounded-b-xl border border-t-0 border-gray-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 p-4 sm:p-5 space-y-6">
+        <div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 p-4 sm:p-5 lg:-mt-5 lg:rounded-t-none lg:border-t-0 space-y-6">
       {/* ── Page Header ── */}
       <PageHeader
         icon={<TrendingDown className="h-5 w-5" />}
@@ -1506,9 +1506,9 @@ export default function UsageHistory() {
             <p className="text-xs text-gray-500">Refine your usage data view</p>
           </div>
         </div>
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap">
           {/* Quick Period */}
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1.5 w-full lg:w-auto">
             <label className="text-xs font-medium text-gray-600">Period</label>
             <select
               value={quickPeriod}
@@ -1535,7 +1535,7 @@ export default function UsageHistory() {
                 setStartDateInput(start);
                 setEndDateInput(end);
               }}
-              className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all hover:border-brand-blue/40"
+              className="w-full lg:w-auto text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all hover:border-brand-blue/40"
             >
               <option value="">All Time</option>
               <option value="last_week">Last Week</option>
@@ -1546,32 +1546,36 @@ export default function UsageHistory() {
           </div>
 
           {/* Date Range */}
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1.5 w-full lg:w-auto">
             <label className="text-xs font-medium text-gray-600">From</label>
             <DateField
+              aria-label="From date"
               value={startDateInput}
               max={endDateInput || defaultEndDate}
               onChange={(v) => { setStartDateInput(v); setQuickPeriod(''); }}
+              className="w-full lg:w-[150px]"
             />
           </div>
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1.5 w-full lg:w-auto">
             <label className="text-xs font-medium text-gray-600">To</label>
             <DateField
+              aria-label="To date"
               value={endDateInput}
               min={startDateInput || undefined}
               max={defaultEndDate}
               onChange={(v) => { setEndDateInput(v); setQuickPeriod(''); }}
+              className="w-full lg:w-[150px]"
             />
           </div>
 
           {/* Status */}
           {(activeTab === 'feature') && (
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-1.5 w-full lg:w-auto">
               <label className="text-xs font-medium text-gray-600">Status</label>
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
-                className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all hover:border-brand-blue/40"
+                className="w-full lg:w-auto text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all hover:border-brand-blue/40"
               >
                 <option value="all">All Statuses</option>
                 <option value="SUCCESS">Success</option>

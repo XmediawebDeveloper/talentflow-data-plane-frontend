@@ -315,6 +315,21 @@ function isUndeliveredHistoryRow(q: any): boolean {
     || rt === 'auto_skipped_by_coverage';
 }
 
+/** The row's response type, except a skip label is overridden when the row
+ *  holds the candidate's REAL answer. Ending the interview right after
+ *  answering filed the question as not_answered / skipped while the answer was
+ *  in the transcript (and restored into `answer`), so Question Analysis showed
+ *  an answered question as "Skipped". Placeholders ("[SKIPPED]", "[NOT ASKED]")
+ *  and the End-Interview control line are not answers. */
+function effectiveResponseType(responseType: unknown, answer: unknown): string {
+  const rt = String(responseType || '').toLowerCase();
+  if (rt !== 'skipped' && rt !== 'not_answered' && rt !== 'timeout') return rt;
+  const ans = String(answer || '').trim();
+  if (!ans || ans.startsWith('[')) return rt;
+  if (/wrap up the interview|end (the )?interview/i.test(ans)) return rt;
+  return 'answered';
+}
+
 /** Build cluster data from config (authoritative) + scores from ai_evaluation. */
 function buildClustersFromConfig(
   configClusters: ClusterConfigDef[],
@@ -364,6 +379,9 @@ function buildClustersFromConfig(
   const assignedSkillSet = new Set<string>();
   for (const q of questionHistory) {
     if (isUndeliveredHistoryRow(q)) continue;
+    // HR questions never probe technical skills — an HR row can carry the next
+    // Must-Have slot's skills when the HR round closes on its last question.
+    if (String(q?.round_type || '').toLowerCase() === 'hr' || q?.hr_question_id) continue;
     const a = q?.assigned_skills;
     if (Array.isArray(a)) {
       for (const s of a) {
@@ -1084,7 +1102,7 @@ function buildPerQuestionDetailsFromGroups(
       // Without these an un-reached question (a selected HR question the
       // candidate never got to — HR rows carry no assigned_skills, so this
       // builder is the one picked) rendered as answered with "[NOT ASKED]".
-      responseType: String(g?.response_type || matched?.response_type || '').toLowerCase(),
+      responseType: effectiveResponseType(g?.response_type || matched?.response_type, mainA),
       skipSource: String(matched?.skip_source || '').toLowerCase(),
       notDelivered: isUndeliveredHistoryRow(g) || isUndeliveredHistoryRow(matched) || !!matched?.not_delivered,
       skills: mainSkills,
@@ -1611,7 +1629,7 @@ function buildPerQuestionDetailsFromHistory(
       // Carry the response type + skip source so the UI can distinguish
       // "Skipped" (candidate pressed Skip → skip_source='candidate') from
       // "Not Answered" (silence / timer / auto advance with no reply).
-      responseType: String(q?.response_type || '').toLowerCase(),
+      responseType: effectiveResponseType(q?.response_type, q?.answer),
       skipSource: String(q?.skip_source || '').toLowerCase(),
       skills,
       questionScore,

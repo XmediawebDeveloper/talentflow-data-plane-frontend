@@ -142,6 +142,11 @@ export interface Resume {
   experience: any[] | string;
   experience_details?: any[];
   experience_years?: number;
+  // Total experience in whole months — computed server-side the same way the
+  // scorer computes it (overlapping roles merged, both boundary months
+  // counted), so it never goes stale against a role still marked "Present"
+  // the way a stored decimal would. Prefer this over experience_years for display.
+  experience_months?: number;
   certifications?: any[];
   languages?: any[];
   location?: string;

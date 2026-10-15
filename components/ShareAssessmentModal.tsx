@@ -4,7 +4,7 @@ import { useFolderPanelCollapsed, folderColumnClasses, FolderCollapseButton, Fol
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { assessmentService } from '@/lib/services';
+import { assessmentService, userService } from '@/lib/services';
 import api from '@/lib/services/api';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
 import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
@@ -128,6 +128,17 @@ const isDuplicateInviteError = (error: unknown): boolean => {
     message.includes('DUPLICATE_INVITATION');
 };
 
+/* The email a refused invite named when it belongs to a team member (backend
+   TENANT_USER_EMAIL, "Cannot invite 'x@y.com' — ... existing team member").
+   The service wraps API errors in a plain Error, so the message is read too. */
+const teamMemberEmailFromError = (error: unknown): string | null => {
+  const e = error as { response?: { data?: { detail?: { error?: string; message?: string } } }; message?: string } | null;
+  const detail = e?.response?.data?.detail;
+  const message = detail?.message || e?.message || '';
+  if (detail?.error !== 'TENANT_USER_EMAIL' && !message.includes('existing team member')) return null;
+  return /'([^']+)'/.exec(message)?.[1]?.trim().toLowerCase() ?? null;
+};
+
 interface Resume {
   id: string;
   name: string;
@@ -146,6 +157,17 @@ type SidebarFolder = { id: string; name: string; parentId?: string | null; count
    row is ignored by Send and the counts. */
 const withEntryRow = (list: CandidateEmail[]): CandidateEmail[] =>
   list.some((c) => c.source !== 'database') ? list : [...list, { id: 'manual-entry', name: '', email: '', source: 'manual' }];
+
+/** A 409 Conflict (or its message) means the candidate was already invited to
+ *  this assessment — surfaced to the user as a duplicate notice, not a failure. */
+const isDuplicateInviteError = (error: unknown): boolean => {
+  const e = error as { response?: { status?: number }; message?: string } | null;
+  const message = e?.message || '';
+  return e?.response?.status === 409 ||
+    message.includes('status code 409') ||
+    message.includes('already been invited') ||
+    message.includes('DUPLICATE_INVITATION');
+};
 
 export default function ShareAssessmentModal({ isOpen, onClose, assessment, prefilledCandidates, inviteSource, onInviteSent, additionalAssessments, onBack, embedded = false, footerTarget = null }: ShareAssessmentModalProps) {
   const router = useRouter();
@@ -883,9 +905,85 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
     }
   };
 
+  /* Every team-member email, read before a send so one can be stopped here
+     instead of failing the whole batch. Best effort: if the list cannot be
+     read this is empty and the backend's own check (which stays) decides. */
+  const loadTeamEmails = async (): Promise<Set<string>> => {
+    const emails = new Set<string>();
+    try {
+      for (let page = 1; page <= 20; page++) {
+        const rows = await userService.listUsers({ page, page_size: 100 });
+        rows.forEach((u) => { if (u.email) emails.add(u.email.trim().toLowerCase()); });
+        if (rows.length < 100) break;
+      }
+    } catch { /* backend check still applies */ }
+    return emails;
+  };
+
+  /* Drop these emails from the candidate list AND the ticked resumes, so the
+     send list, the footer count and the next send no longer carry them. */
+  const removeBlockedEmails = (blocked: Set<string>) => {
+    const isBlocked = (email: string) => blocked.has(email.trim().toLowerCase());
+    setCandidates((prev) => {
+      const kept = prev.filter((c) => !isBlocked(c.email));
+      return kept.length > 0 ? kept : [{ id: '1', name: '', email: '', source: 'manual' }];
+    });
+    setPicks((prev) => Object.fromEntries(Object.entries(prev).filter(([, p]) => !isBlocked(p.email))));
+  };
+
+  /** Invite a whole list to one assessment, returning per-outcome counts.
+   *  Tries the bulk endpoint first; on a duplicate (409) it falls back to
+   *  one-by-one so already-invited rows are skipped (not failed) and named. */
+  const inviteMany = async (assessmentId: string, list: CandidateEmail[]) => {
+    const rows = list.map((c) => ({
+      candidate_name: c.name,
+      candidate_email: c.email,
+      candidate_phone: c.phone,
+      invite_source: inviteSource || (c.source === 'database' ? 'Internal DB' : 'Manual'),
+      resume_id: c.resumeId,
+    }));
+    try {
+      const results = await assessmentService.bulkInvite(assessmentId, {
+        candidates: rows,
+        custom_message: customMessage,
+        expiry_days: expiryDays,
+      });
+      const failed = results.filter((r) => r.status === 'failed').length;
+      return { sent: list.length - failed, failed, already: [] as string[] };
+    } catch (error) {
+      if (!isDuplicateInviteError(error)) throw error;
+      let sent = 0;
+      let failed = 0;
+      const already: string[] = [];
+      for (const row of rows) {
+        try {
+          const r = await assessmentService.invite(assessmentId, { ...row, custom_message: customMessage, expiry_days: expiryDays });
+          if (r.status === 'failed') failed++;
+          else sent++;
+        } catch (err) {
+          if (isDuplicateInviteError(err)) already.push(row.candidate_email);
+          else failed++;
+        }
+      }
+      return { sent, failed, already };
+    }
+  };
+
   const handleSend = async () => {
     setIsSubmitting(true);
     try {
+      // Stop team-member emails before anything is sent or committed to the
+      // list; the rest stay, and the footer count follows the cleaned list.
+      const teamEmails = await loadTeamEmails();
+      const teamRows = sendCandidates.filter((c) => c.email.trim() && teamEmails.has(c.email.trim().toLowerCase()));
+      if (teamRows.length > 0) {
+        removeBlockedEmails(new Set(teamRows.map((c) => c.email.trim().toLowerCase())));
+        toast.error(
+          `Cannot invite ${teamRows.map((c) => `'${c.email.trim()}'`).join(', ')} — ${teamRows.length > 1 ? 'these emails belong' : 'this email belongs'} to an existing team member. Assessment invitations are for external candidates only. ${teamRows.length > 1 ? 'They were' : 'It was'} removed from the list.`,
+        );
+        setIsSubmitting(false);
+        return;
+      }
       // Fold the ticked resumes into the list so it matches what was sent.
       if (pendingDbSelection) {
         setCandidates(sendCandidates);
@@ -956,6 +1054,14 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
             toast.loading(`Sent ${sentSoFar}/${totalInvites} invitations...`, { id: 'bulk-invite-multi' });
           } catch (error: any) {
             console.error(`Failed to send invitations for assessment ${assessmentToInvite.title}:`, error);
+            const teamEmail = teamMemberEmailFromError(error);
+            if (teamEmail) {
+              removeBlockedEmails(new Set([teamEmail]));
+              toast.dismiss('bulk-invite-multi');
+              toast.error(`Cannot invite '${teamEmail}' — this email belongs to an existing team member. Assessment invitations are for external candidates only. It was removed from the list.`);
+              setIsSubmitting(false);
+              return;
+            }
             failedCount += validCandidates.length;
           }
         }
@@ -999,6 +1105,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
       // did not throw can still carry a candidate whose send failed.
       let failedHere = 0;
       let alreadyHere: string[] = [];
+      const alreadyHere: string[] = [];
 
       // Rows already carrying a Copy-Link invitation must be EMAILED, not
       // re-invited — invite()/bulkInvite() would 409 as a duplicate against
@@ -1087,6 +1194,15 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                       'this candidate';
         setDuplicateEmail(email);
         setShowDuplicateError(true);
+        return;
+      }
+
+      // The backend refused a team-member email the pre-check could not see:
+      // take it off the list so the retry does not carry it again.
+      const teamEmail = teamMemberEmailFromError(error);
+      if (teamEmail) {
+        removeBlockedEmails(new Set([teamEmail]));
+        toast.error(`Cannot invite '${teamEmail}' — this email belongs to an existing team member. Assessment invitations are for external candidates only. It was removed from the list.`);
         return;
       }
 
@@ -1614,6 +1730,16 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                                       : 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/40 focus:border-transparent'
                                 }`}
                               />
+                            </div>
+                            {candidate.source !== 'database' && candidate.email.trim() && !isValidEmail(candidate.email) && (
+                              <p className="text-xs text-destructive mt-1">Please enter a valid email (e.g., user@example.com)</p>
+                            )}
+                            {candidate.source !== 'database' && candidate.email.trim() && isValidEmail(candidate.email) && isDuplicateEmail(candidate.id, candidate.email) && (
+                              <p className="text-xs text-destructive mt-1">This email is already in the list</p>
+                            )}
+                          </div>
+                        </div>
+                            <div className="flex items-center gap-2 self-end sm:self-start sm:mt-5 flex-shrink-0">
                               {/* Per-candidate Copy Link button — one assessment link, no email sent */}
                               {singleAssessmentOnly && candidate.source !== 'database' && (
                                 <button
@@ -1669,14 +1795,6 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                                 </button>
                               )}
                             </div>
-                            {candidate.source !== 'database' && candidate.email.trim() && !isValidEmail(candidate.email) && (
-                              <p className="text-xs text-destructive mt-1">Please enter a valid email (e.g., user@example.com)</p>
-                            )}
-                            {candidate.source !== 'database' && candidate.email.trim() && isValidEmail(candidate.email) && isDuplicateEmail(candidate.id, candidate.email) && (
-                              <p className="text-xs text-destructive mt-1">This email is already in the list</p>
-                            )}
-                          </div>
-                        </div>
                       </div>
                     </div>
                   ))}

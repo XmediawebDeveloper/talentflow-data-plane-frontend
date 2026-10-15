@@ -34,7 +34,11 @@ export default function AssessmentsRoute() {
      it is documented to accept and ignores everything else. */
   const tabParam = searchParams.get('tab');
   const listTabFromUrl =
-    tabParam === 'all' ? ('all' as const) : tabParam === 'draft' ? ('draft' as const) : undefined;
+    tabParam === 'all' ? ('all' as const)
+      : tabParam === 'draft' ? ('draft' as const)
+        // Total Jobs — where a saved draft lands (with `?focus=`).
+        : tabParam === 'jobs' ? ('jobs' as const)
+          : undefined;
 
   // Capture create-flow params on first mount so they survive the URL strip
   // below. Without this, the loading spinner blocks <Assessments> from mounting
@@ -51,6 +55,10 @@ export default function AssessmentsRoute() {
      during render, which is what `react-hooks/refs` objects to in the three
      lines above. */
   const [initialListTab] = useState(listTabFromUrl);
+  /* `?focus=<assessment id>` (a draft just saved from the create route): the
+     list opens on that assessment's job row. Captured like `initialListTab`,
+     before the strip below clears it; only honoured with a named tab. */
+  const [initialFocusAssessmentId] = useState(() => (listTabFromUrl ? searchParams.get('focus') : null));
 
   // Handle deep link to specific assessment from notifications
   useEffect(() => {
@@ -208,6 +216,7 @@ export default function AssessmentsRoute() {
           preSelectedJdId={initialPreSelectedJdId.current || undefined}
           preSelectedJdTitle={initialPreSelectedJdTitle.current ? decodeURIComponent(initialPreSelectedJdTitle.current) : undefined}
           initialListTab={initialListTab}
+          initialFocusAssessmentId={initialFocusAssessmentId || undefined}
         />
       </div>
     </FeatureGate>

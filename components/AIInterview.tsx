@@ -35,7 +35,11 @@ import InviteFilterBar, { EMPTY_INVITE_FILTERS, AI_INTERVIEW_INVITE_STATUS_OPTIO
 import InviteStatCards, { INVITE_CARD_TONES } from '@/components/InviteStatCards';
 import AIInterviewInviteTable, { isRevocableInvite, isExpiredForActions, resolveInviteStatus, displayInviteScore, matchesInviteResultFilter } from '@/components/AIInterviewInviteTable';
 import SearchableSelect from '@/components/ui/searchable-select';
-import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
+import {
+  interviewVersionOrdinal,
+  interviewDuplicateBlockedReason,
+  interviewEditBlockedReason,
+} from '@/lib/utils/aiInterviewVersion';
 import {
   FilterSelect,
   jobFilterOptions,
@@ -144,7 +148,7 @@ const INVITATION_STATUS_TAB_OPTIONS: InviteStatusOption[] = [
   { value: 'terminated', label: 'Terminated' },
 ];
 const AI_INTERVIEWS_LIST_VIEW_REDIRECT_KEY = 'ai_interviews_open_list_view';
-const CONFIG_FETCH_PAGE_SIZE = 20;
+const CONFIG_FETCH_PAGE_SIZE = 100;
 
 /** One string for the list filters the page-reset effect watches. */
 const listFilterKey = (v: Record<string, unknown>) =>
@@ -867,10 +871,34 @@ export default function AIInterview() {
           .forEach((config, index) => interviewVersionById.set(config.id, index + 1));
       });
 
+      /* Each config's invitation total in ONE request (batches of 200), so a
+         config with none is skipped outright and one with some is fetched in a
+         single call at its exact size — instead of a page_size=1 probe per
+         config followed by a second, sized request. A batch that fails leaves
+         its configs out of the map and they take the probe path below, as
+         before. */
+      const knownTotals = new Map<string, number>();
+      for (let start = 0; start < allConfigs.length; start += 200) {
+        const batch = allConfigs.slice(start, start + 200);
+        try {
+          const counts = await aiInterviewService.getInvitationCounts(batch.map((c) => c.id));
+          for (const c of batch) {
+            const entry = counts[c.id];
+            if (entry) knownTotals.set(c.id, entry.total || 0);
+          }
+        } catch {
+          /* fall back per config */
+        }
+      }
+
       const perConfig = await Promise.all(
         allConfigs.map(async (config) => {
           try {
-            const probe = await aiInterviewService.getConfigInvitations(config.id, { page: 1, page_size: 1 });
+            const known = knownTotals.get(config.id);
+            if (known === 0) return [];
+            const probe = known !== undefined
+              ? await aiInterviewService.getConfigInvitations(config.id, { page: 1, page_size: known })
+              : await aiInterviewService.getConfigInvitations(config.id, { page: 1, page_size: 1 });
             if (!probe.total) return [];
             const full = probe.total > probe.items.length
               ? await aiInterviewService.getConfigInvitations(config.id, { page: 1, page_size: probe.total })
@@ -1304,15 +1332,29 @@ export default function AIInterview() {
     setOpenMenuId(null);
   };
 
+  /* Duplicate = mint the next VERSION of this interview (same AI-xxx ID, next V),
+     as Duplicate does on an assessment. The gate is the shared one the menu
+     item shows; the backend enforces the same three rules. */
   const handleCloneConfig = async (config: AIInterviewResponse) => {
+    setOpenMenuId(null);
+    const blocked = interviewDuplicateBlockedReason(
+      config,
+      [...configs, ...archivedConfigs],
+      canCreateAIInterviews,
+    );
+    if (blocked) {
+      toast.error(blocked);
+      return;
+    }
     try {
       const result = await aiInterviewService.clone(config.id);
-      toast.success(`Configuration duplicated: ${result.cloned_title}`);
+      toast.success(`New version created as a draft: ${result.cloned_title}`);
       loadData();
+      loadArchivedConfigs();
+      setRefreshSignal((n) => n + 1);
     } catch (error: any) {
       toast.error(error.message || 'Failed to duplicate');
     }
-    setOpenMenuId(null);
   };
 
   const handleCopyLink = async (config: AIInterviewResponse) => {
@@ -2023,6 +2065,34 @@ export default function AIInterview() {
                   <span className={MENU_ITEM_SCALE_CLASS}>Continue Editing</span>
                 </button>
               )}
+              {/* Edit — a published version nobody has been invited to can still
+                  be edited. Once any invite exists the version is locked (every
+                  candidate sits the same interview) and the tooltip says to
+                  duplicate it instead — the Assessments Edit rule. */}
+              {isPublished && config.jd_id && (() => {
+                const editBlocked = !canUpdateAIInterviews
+                  ? 'You do not have permission to edit AI interviews'
+                  : interviewEditBlockedReason(config);
+                return (
+                  <button
+                    onClick={() => {
+                      if (editBlocked) {
+                        if (!canUpdateAIInterviews) toast.error(editBlocked);
+                        return;
+                      }
+                      setOpenMenuId(null);
+                      void resolveAIInterviewDraftResumeHref(config.id, config.jd_id!).then((href) => router.push(href));
+                    }}
+                    disabled={!!editBlocked}
+                    aria-disabled={!!editBlocked}
+                    title={editBlocked || 'Edit this version'}
+                    className={editBlocked ? VERSION_MENU_ITEM_DISABLED_CLASS : VERSION_MENU_ITEM_CLASS}
+                  >
+                    <Pencil className={`w-4 h-4 flex-shrink-0 ${editBlocked ? '' : 'text-menu-icon-edit'}`} />
+                    <span className={MENU_ITEM_SCALE_CLASS}>Edit</span>
+                  </button>
+                );
+              })()}
               {isPublished && (
                 <button
                   onClick={() => {
@@ -2067,6 +2137,35 @@ export default function AIInterview() {
                 <BarChart2 className={`w-4 h-4 flex-shrink-0 ${hasBeenShared ? 'text-menu-icon-view' : ''}`} />
                 <span className={MENU_ITEM_SCALE_CLASS}>View Results</span>
               </button>
+              {/* Duplicate — creates the next version. Disabled (reason in the
+                  tooltip) for a draft, for a version nobody was invited to
+                  (edit it instead), while another draft is open in the lineage,
+                  and at the version cap: the Assessments Duplicate gate. */}
+              {normalizedStatus !== 'archived' && (() => {
+                const dupBlocked = interviewDuplicateBlockedReason(
+                  config,
+                  [...configs, ...archivedConfigs],
+                  canCreateAIInterviews,
+                );
+                return (
+                  <button
+                    onClick={() => {
+                      if (dupBlocked) {
+                        if (!canCreateAIInterviews) toast.error(dupBlocked);
+                        return;
+                      }
+                      void handleCloneConfig(config);
+                    }}
+                    disabled={!!dupBlocked}
+                    aria-disabled={!!dupBlocked}
+                    title={dupBlocked || 'Duplicate as a new version'}
+                    className={dupBlocked ? VERSION_MENU_ITEM_DISABLED_CLASS : VERSION_MENU_ITEM_CLASS}
+                  >
+                    <Copy className={`w-4 h-4 flex-shrink-0 ${dupBlocked ? '' : 'text-menu-icon-download'}`} />
+                    <span className={MENU_ITEM_SCALE_CLASS}>Duplicate</span>
+                  </button>
+                );
+              })()}
               <div className="my-1 h-px bg-gray-100 dark:bg-slate-800" />
               {normalizedStatus !== 'archived' && (
                 <button
@@ -4292,9 +4391,6 @@ export default function AIInterview() {
                       {isRefreshingInvites ? 'Refreshing...' : 'Refresh'}
                     </span>
                   </Button>
-                  <Button variant="secondary" size="sm" onClick={() => setViewInvitationsConfig(null)} aria-label="Close" className="px-2">
-                    <X className="w-4 h-4 sm:w-5 sm:h-5" />
-                  </Button>
                 </div>
               </div>
 
@@ -4539,6 +4635,9 @@ export default function AIInterview() {
                       </button>
                     </>
                   )}
+                  <Button variant="secondary" size="sm" onClick={() => setViewInvitationsConfig(null)}>
+                    Cancel
+                  </Button>
                   <Button
                     variant="primary"
                     size="sm"

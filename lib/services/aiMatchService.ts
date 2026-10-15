@@ -75,13 +75,11 @@ export interface AIMatchSessionResponse {
   status: string;
   created_at: string;
   completed_at?: string;
+  created_by_name?: string | null;
   results: AIMatchResultItem[];
-  // Fresh runs only. Each returned candidate costs one Resume Scoring unit, so
-  // the backend caps a run at the remaining balance. quota_limited is true when
-  // fewer than matches_found candidates were kept.
+  // Fresh runs only: how many candidates passed the similarity threshold.
+  // AI Talent Match is free (no Resume Scoring units), so all are returned.
   matches_found?: number;
-  quota_limited?: boolean;
-  units_charged?: number;
   // Joined from job_descriptions server-side so the job's identity is always
   // available, even when the job isn't in the caller's separately-paginated
   // JD list (e.g. an older/superseded republished version).

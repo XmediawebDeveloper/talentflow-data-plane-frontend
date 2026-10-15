@@ -233,6 +233,7 @@ import { usePlanLock } from '@/lib/hooks/usePlanFeature';
 import CandidateActivityCard from '@/components/resumes/CandidateActivityCard';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import { formatCandidateExperience } from '@/lib/utils/resumeExperience';
 
 export default function ResumeViewPage() {
   const params = useParams();
@@ -752,7 +753,7 @@ export default function ResumeViewPage() {
     email: r.email || 'No email',
     phone: r.phone || 'No phone',
     title: r.current_title || 'N/A',
-    experience: r.experience_years ? `${r.experience_years} years` : 'N/A',
+    experience: formatCandidateExperience(r.experience_months, r.experience_years) || 'N/A',
     education: r.education?.[0]?.degree || 'N/A',
     location: r.location || 'N/A',
     skills: r.skills || [],
