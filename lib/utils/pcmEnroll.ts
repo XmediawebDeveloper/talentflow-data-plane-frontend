@@ -15,6 +15,7 @@
 
 export interface Pcm16Capture {
   blob: Blob;          // raw little-endian Int16 PCM bytes
+  samples: Float32Array; // the same audio as Float32 (for the local MFCC fallback)
   sampleRate: 16000;
   noiseFloor: number;  // mean-abs energy of the quietest ~10% of frames (0..1)
   durationSec: number;
@@ -25,6 +26,9 @@ export interface Pcm16Capture {
 
 // Minimum genuine speech required for a valid enrollment capture.
 const MIN_SPEECH_SECONDS = 1.5;
+// Speech-check settle window after the capture constraints land (see recordPcm16).
+const SETTLE_MARGIN_SECONDS = 0.3;
+const MAX_SETTLE_SKIP_SECONDS = 3;
 
 // Thrown when the microphone track dies (headset unplugged, Bluetooth drop,
 // etc.) partway through recordPcm16's capture window. Callers must treat this
@@ -199,6 +203,13 @@ export async function recordPcm16(
   // cancel — EC would only DUCK/attenuate the candidate's own (often quiet, on a
   // headset) speech. AGC stays off (distorts levels for ASR); light noise
   // suppression stays on. Best-effort — some devices reject this.
+  //
+  // The system-check stream opens with browser defaults (AGC ON), so until the
+  // switch lands, AGC pumps room noise up; when it turns off the level drops.
+  // That loud-then-quiet start looks like peaky "speech" to analyzeSpeech and
+  // let a SILENT read pass — so remember where the switch landed and run the
+  // speech check only on audio captured after it.
+  let settledAtSample = -1;
   void Promise.all(
     audioTracks.map((t) => t.applyConstraints({
       channelCount: { ideal: 1 },
@@ -206,7 +217,9 @@ export async function recordPcm16(
       noiseSuppression: true,
       autoGainControl: false,
     }).catch(() => {})),
-  );
+  ).then(() => {
+    settledAtSample = chunks.reduce((s, c) => s + c.length, 0);
+  });
 
   // Race the fixed capture window against the mic dying mid-recording, so a
   // headset pull aborts immediately instead of silently finishing out the
@@ -253,7 +266,17 @@ export async function recordPcm16(
   // disabled — when it's enabled, the SERVER content check (transcript must match
   // the sentence) is the authoritative gate, so the caller does NOT block on this
   // (that previously false-rejected quiet headset reads). Measured pre-gain.
-  const h = analyzeSpeech(down, noiseFloor);
+  // Skip the pre-switch audio plus a short margin for the gain to settle,
+  // capped so a slow applyConstraints can't eat most of the read. If it never
+  // resolved, analyze everything (old behavior).
+  const settleSkip = settledAtSample < 0
+    ? 0
+    : Math.min(
+        Math.floor((settledAtSample / nativeRate + SETTLE_MARGIN_SECONDS) * TARGET_RATE),
+        MAX_SETTLE_SKIP_SECONDS * TARGET_RATE,
+        down.length,
+      );
+  const h = analyzeSpeech(down.subarray(settleSkip), noiseFloor);
   const speechSeconds = h.speechSeconds;
   const speechDetected = h.speechSeconds >= MIN_SPEECH_SECONDS && h.dynamic;
 
@@ -281,6 +304,7 @@ export async function recordPcm16(
     // `.buffer` is ArrayBufferLike (could be a SharedArrayBuffer per the type), which is
     // not a BlobPart. It is always a plain ArrayBuffer here - floatToInt16 allocates it.
     blob: new Blob([pcm16.buffer as ArrayBuffer], { type: 'application/octet-stream' }),
+    samples: down,
     sampleRate: TARGET_RATE,
     noiseFloor,
     durationSec: down.length / TARGET_RATE,
