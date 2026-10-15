@@ -4316,9 +4316,6 @@ export default function AIInterview() {
                       {isRefreshingInvites ? 'Refreshing...' : 'Refresh'}
                     </span>
                   </Button>
-                  <Button variant="secondary" size="sm" onClick={() => setViewInvitationsConfig(null)} aria-label="Close" className="px-2">
-                    <X className="w-4 h-4 sm:w-5 sm:h-5" />
-                  </Button>
                 </div>
               </div>
 
@@ -4563,6 +4560,9 @@ export default function AIInterview() {
                       </button>
                     </>
                   )}
+                  <Button variant="secondary" size="sm" onClick={() => setViewInvitationsConfig(null)}>
+                    Cancel
+                  </Button>
                   <Button
                     variant="primary"
                     size="sm"
