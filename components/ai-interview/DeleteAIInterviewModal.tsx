@@ -1,6 +1,6 @@
 'use client';
 
-import { Trash2, AlertCircle, Loader2, X } from 'lucide-react';
+import { Trash2, AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import AIInterviewConfigSummaryCard from '@/components/ai-interview/AIInterviewConfigSummaryCard';
 
@@ -38,17 +38,6 @@ export default function DeleteAIInterviewModal({
   return (
     <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 sm:p-6">
       <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-2xl w-full animate-scale-in max-h-[calc(100dvh-2rem)] flex flex-col tf-round-edges">
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={onCancel}
-          disabled={isLoading}
-          aria-label="Close"
-          className="absolute top-4 right-4 px-2"
-        >
-          <X className="w-5 h-5" />
-        </Button>
-
         <div className="px-5 sm:px-8 pt-8 sm:pt-10 pb-5 overflow-y-auto text-center">
           <div className="w-16 h-16 mx-auto rounded-full bg-destructive-subtle flex items-center justify-center">
             <Trash2 className="w-7 h-7 text-destructive" />
@@ -82,6 +71,9 @@ export default function DeleteAIInterviewModal({
         </div>
 
         <div className="px-5 sm:px-8 py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col-reverse sm:flex-row sm:justify-end gap-3 shrink-0">
+          <Button variant="secondary" onClick={onCancel} disabled={isLoading} className="px-6">
+            Cancel
+          </Button>
           <Button variant="destructive" onClick={onConfirm} disabled={isLoading} className="px-6">
             {isLoading ? (
               <span className="flex items-center justify-center gap-2">

@@ -1399,7 +1399,9 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                         );
                       })()}
                       <div className="flex items-center gap-3">
-                        <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {/* Email column is wider: it also holds Copy Link / Add, which would
+                            otherwise squeeze the address input to half the name's width. */}
+                        <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-3 gap-3">
                           <div className="min-w-0">
                             <label className="text-xs text-gray-600 dark:text-slate-400 mb-1 block">Full Name *</label>
                             <input
@@ -1413,7 +1415,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                               }`}
                             />
                           </div>
-                          <div className="min-w-0">
+                          <div className="min-w-0 sm:col-span-2">
                             <label className="text-xs text-gray-600 dark:text-slate-400 mb-1 block">Email Address *</label>
                             <div className="flex items-center gap-2 min-w-0">
                               <input
@@ -1430,56 +1432,6 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                                       : 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/40 focus:border-transparent'
                                 }`}
                               />
-                              {/* Per-candidate Copy Link button */}
-                              <button
-                                onClick={() => handleCopyLinkForCandidate(candidate.id)}
-                                disabled={
-                                  generatingLinkFor === candidate.id ||
-                                  (!candidate.generatedLink &&
-                                    isDuplicateEmail(candidate.id, candidate.email))
-                                }
-                                title={
-                                  candidate.generatedLink
-                                    ? 'Link generated — click to copy again'
-                                    : isDuplicateEmail(candidate.id, candidate.email)
-                                      ? 'This email is already in the list'
-                                      : 'Generate & copy interview link'
-                                }
-                                className={`flex items-center gap-1.5 h-10 px-2.5 py-2 rounded-lg text-xs border transition-colors whitespace-nowrap flex-shrink-0 ${
-                                  candidate.generatedLink
-                                    ? 'bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:border-emerald-500/30 dark:text-emerald-300 dark:hover:bg-emerald-500/20'
-                                    : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-                                } disabled:opacity-50`}
-                              >
-                                {generatingLinkFor === candidate.id
-                                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                  : candidate.generatedLink
-                                    ? <><CheckCircle className="w-3.5 h-3.5" /><span>Copied</span></>
-                                    : <><Copy className="w-3.5 h-3.5" /><span>Copy Link</span></>
-                                }
-                              </button>
-                              {candidate.source !== 'database' && (
-                                <button
-                                  type="button"
-                                  onClick={() => addEntry(candidate.id)}
-                                  disabled={!canAddEntry(candidate)}
-                                  title="Add to the candidate list"
-                                  className="flex-shrink-0 inline-flex items-center gap-1 px-3 py-2 text-sm font-medium text-brand-blue border border-brand-blue/30 rounded-lg hover:bg-brand-blue/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                  <Plus className="w-4 h-4" />
-                                  Add
-                                </button>
-                              )}
-                              {(candidates.length > 1 || candidate.source === 'database') && (
-                                <button
-                                  onClick={() => removeCandidate(candidate.id)}
-                                  title="Remove candidate"
-                                  aria-label="Remove candidate"
-                                  className="flex-shrink-0 p-2 text-destructive hover:bg-destructive-subtle rounded-lg transition-colors"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              )}
                             </div>
                             {candidate.source !== 'database' && candidate.email.trim() && !isValidEmail(candidate.email) && (
                               <p className="text-xs text-destructive mt-1">Please enter a valid email (e.g., user@example.com)</p>
@@ -1546,6 +1498,58 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                             )}
                           </div>
                         </div>
+                            <div className="flex items-center gap-2 self-end sm:self-start sm:mt-5 flex-shrink-0">
+                              {/* Per-candidate Copy Link button */}
+                              <button
+                                onClick={() => handleCopyLinkForCandidate(candidate.id)}
+                                disabled={
+                                  generatingLinkFor === candidate.id ||
+                                  (!candidate.generatedLink &&
+                                    isDuplicateEmail(candidate.id, candidate.email))
+                                }
+                                title={
+                                  candidate.generatedLink
+                                    ? 'Link generated — click to copy again'
+                                    : isDuplicateEmail(candidate.id, candidate.email)
+                                      ? 'This email is already in the list'
+                                      : 'Generate & copy interview link'
+                                }
+                                className={`flex items-center gap-1.5 h-10 px-2.5 py-2 rounded-lg text-xs border transition-colors whitespace-nowrap flex-shrink-0 ${
+                                  candidate.generatedLink
+                                    ? 'bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:border-emerald-500/30 dark:text-emerald-300 dark:hover:bg-emerald-500/20'
+                                    : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                } disabled:opacity-50`}
+                              >
+                                {generatingLinkFor === candidate.id
+                                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  : candidate.generatedLink
+                                    ? <><CheckCircle className="w-3.5 h-3.5" /><span>Copied</span></>
+                                    : <><Copy className="w-3.5 h-3.5" /><span>Copy Link</span></>
+                                }
+                              </button>
+                              {candidate.source !== 'database' && (
+                                <button
+                                  type="button"
+                                  onClick={() => addEntry(candidate.id)}
+                                  disabled={!canAddEntry(candidate)}
+                                  title="Add to the candidate list"
+                                  className="flex-shrink-0 inline-flex items-center gap-1 px-3 py-2 text-sm font-medium text-brand-blue border border-brand-blue/30 rounded-lg hover:bg-brand-blue/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  <Plus className="w-4 h-4" />
+                                  Add
+                                </button>
+                              )}
+                              {(candidates.length > 1 || candidate.source === 'database') && (
+                                <button
+                                  onClick={() => removeCandidate(candidate.id)}
+                                  title="Remove candidate"
+                                  aria-label="Remove candidate"
+                                  className="flex-shrink-0 p-2 text-destructive hover:bg-destructive-subtle rounded-lg transition-colors"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
                       </div>
                       {/* Schedule row - commented out for now, uncomment when schedule feature is needed */}
                       {/* <div className="grid grid-cols-2 gap-3 mt-3">

@@ -144,7 +144,7 @@ const INVITATION_STATUS_TAB_OPTIONS: InviteStatusOption[] = [
   { value: 'terminated', label: 'Terminated' },
 ];
 const AI_INTERVIEWS_LIST_VIEW_REDIRECT_KEY = 'ai_interviews_open_list_view';
-const CONFIG_FETCH_PAGE_SIZE = 20;
+const CONFIG_FETCH_PAGE_SIZE = 100;
 
 /** One string for the list filters the page-reset effect watches. */
 const listFilterKey = (v: Record<string, unknown>) =>
@@ -4292,9 +4292,6 @@ export default function AIInterview() {
                       {isRefreshingInvites ? 'Refreshing...' : 'Refresh'}
                     </span>
                   </Button>
-                  <Button variant="secondary" size="sm" onClick={() => setViewInvitationsConfig(null)} aria-label="Close" className="px-2">
-                    <X className="w-4 h-4 sm:w-5 sm:h-5" />
-                  </Button>
                 </div>
               </div>
 
@@ -4539,6 +4536,9 @@ export default function AIInterview() {
                       </button>
                     </>
                   )}
+                  <Button variant="secondary" size="sm" onClick={() => setViewInvitationsConfig(null)}>
+                    Cancel
+                  </Button>
                   <Button
                     variant="primary"
                     size="sm"

@@ -2737,10 +2737,29 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       const jobVersionByJdId = rememberJobVersions(
         await resolveJobVersionsByJdId(items.map((a) => a.jd_id)),
       );
+      /* Skip assessments with no completed candidates: one batched
+         `/assessments/completed-counts` request (200 ids max) tells us which,
+         instead of paging every assessment's results only to get an empty
+         list. An id missing from the answer, or a failed batch, is fetched
+         as before, so nothing is dropped on a count error. */
+      const knownEmpty = new Set<string>();
+      const COUNT_BATCH = 200;
+      for (let start = 0; start < items.length; start += COUNT_BATCH) {
+        const batch = items.slice(start, start + COUNT_BATCH).map((a: any) => a.id);
+        try {
+          const counts = await assessmentService.getCompletedCounts(batch);
+          for (const id of batch) {
+            if (counts[id] === 0) knownEmpty.add(id);
+          }
+        } catch {
+          /* fall back to fetching this batch */
+        }
+      }
       // Results rather than invitations: the attempt carries the scores and the
       // pass/fail verdict this tab is about.
       const results = await Promise.all(
         items.map(async (a: any) => {
+          if (knownEmpty.has(a.id)) return [];
           try {
             const attempts = await collectAllPages((page, page_size) =>
               assessmentService.listResults(a.id, { status_filter: 'completed', page, page_size }),
@@ -9641,14 +9660,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     {isRefreshingTracking ? 'Refreshing...' : 'Refresh'}
                   </span>
                 </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={closeTrackInvitesModal}
-                  className="px-2"
-                 aria-label="Close">
-                  <X className="w-4 h-4 sm:w-5 sm:h-5" />
-                </Button>
               </div>
             </div>
 
@@ -10202,6 +10213,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     the Share dialog opens on the SAME assessment, and closing
                     Share brings this popup back (see `shareReturnToTracking`).
                     Gated exactly as every other Share on this page is. */}
+                <Button variant="secondary" size="sm" onClick={closeTrackInvitesModal}>
+                  Cancel
+                </Button>
                 {(() => {
                   const target = selectedAssessmentForTracking;
                   const canShare = isTenantAdmin || hasPermissionCode('assessments:share');

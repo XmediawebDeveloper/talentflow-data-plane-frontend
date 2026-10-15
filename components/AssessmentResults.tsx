@@ -1,5 +1,5 @@
 import { User, Clock, Timer, Award, XCircle, ChevronUp, ChevronDown, FileText, FileSpreadsheet, TrendingUp, AlertCircle, Filter, ArrowUpDown, Loader2, BarChart3, SlidersHorizontal, Columns3, Trash2, Users, Download, Play, Eye, ArrowUp, ArrowDown, MoreVertical, Video } from 'lucide-react';
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { Fragment, useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { assessmentService, jdService } from '@/lib/services';
@@ -12,8 +12,11 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import RowInviteSubmenu from '@/components/talent-match-invite/RowInviteSubmenu';
+import { ROW_ACTION_BUTTON_CLASS, ROW_MENU_CONTENT_CLASS, ROW_MENU_ITEM_CLASS, RowDetailsPanel, RowDetailsToggle } from '@/components/ResultRowDetails';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import CandidateResultCard, { CANDIDATE_RESULT_CARD_ICON_ACTION_CLASS } from '@/components/assessments/CandidateResultCard';
 import { toast } from 'sonner';
@@ -324,6 +327,16 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const [showExportModal, setShowExportModal] = useState(false);
   /** The row whose Timeline "View History" is open. */
   const [historyFor, setHistoryFor] = useState<CandidateResult | null>(null);
+  /* Embedded in Job Details: rows opened to show their remaining columns
+     (the AI Talent Match table's expanded rows). */
+  const [expandedRowIds, setExpandedRowIds] = useState<Set<string>>(new Set());
+  const toggleRowExpanded = (id: string) =>
+    setExpandedRowIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   const [selectedFormat, setSelectedFormat] = useState<'csv' | 'excel'>('excel');
   // In-flight feedback so the recruiter sees a spinner while a large
   // server-side export streams down. Toast.loading is used to surface a
@@ -1653,6 +1666,75 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
      padding, header rule and native checkbox; the standalone results page
      keeps the All Assessments table's own. */
   const cellPad = portaled ? 'px-4 py-3' : 'px-3 py-2.5';
+  /* Embedded in Job Details the table follows the AI Talent Match table:
+     these columns leave the main row for the row's expanded details panel
+     (row click / ▾), so the table fits without a sideways scroll. */
+  const DETAIL_COLUMN_IDS = ['timeline', 'inviteSource', 'phone', 'cid', 'jobVersion'];
+  const DETAIL_COLUMN_LABEL: Record<string, string> = {
+    timeline: 'Timeline', inviteSource: 'Invite Source', phone: 'Phone', cid: 'CID', jobVersion: 'Job Version',
+  };
+  /* JD ID and Job Title are not shown in Job Details (the page is that job). */
+  const JOB_DETAILS_HIDDEN_COLUMN_IDS = ['jdId', 'jdTitle'];
+  const inMain = (id: string) =>
+    isColumnEnabled(id) && !(portaled && (DETAIL_COLUMN_IDS.includes(id) || JOB_DETAILS_HIDDEN_COLUMN_IDS.includes(id)));
+  const detailColumnIds = portaled ? DETAIL_COLUMN_IDS.filter((id) => isColumnEnabled(id)) : [];
+  const mainColumnCount = 2
+    + ['candidate', 'status', 'assessmentVersion'].filter((id) => isColumnEnabled(id)).length
+    + (isColumnEnabled('techScore') && assessmentDetails?.technical_enabled ? 1 : 0)
+    + (isColumnEnabled('codingScore') && assessmentDetails?.coding_enabled ? 1 : 0);
+  /* A row's Timeline cell — in the main row, or in its details panel. */
+  const renderTimeline = (candidate: CandidateResult) => (
+    <div className="flex min-w-0 flex-col gap-1 overflow-hidden" title={getTimelineSummary(candidate)}>
+      {/* Same trail as Track Invites (Invited / System Check /
+          Started / Completed …), from the shared builder. */}
+      {timelineEvents(candidate.timelineSource, RESULTS_TIMELINE_LIMIT).map(({ label, at, Icon, tone }, i) => (
+        <div key={`${label}-${i}`} className="flex min-w-0 items-center gap-2">
+          <Icon className={`w-3 h-3 shrink-0 ${tone}`} />
+          <span className="truncate">{label}: {formatTimelineDate(at)}</span>
+        </div>
+      ))}
+      {timelineEvents(candidate.timelineSource, RESULTS_TIMELINE_LIMIT).length === 0 && (
+        <div className="flex min-w-0 items-center gap-2">
+          <Clock className="w-3 h-3 shrink-0 text-gray-400" />
+          <span className="truncate">-</span>
+        </div>
+      )}
+      {/* Duration is the Timeline's last line, not a column
+          of its own — the AI Interview results' layout. */}
+      {candidate.duration && candidate.duration !== '-' && (
+        <div className="flex min-w-0 items-center gap-2">
+          <Timer className="w-3 h-3 shrink-0 text-gray-400" />
+          <span className="truncate"><span className="text-gray-400 dark:text-slate-500">Duration:</span> {candidate.duration}</span>
+        </div>
+      )}
+      {/* The two latest events above; the whole trail
+          behind View History. */}
+      {hasMoreTimelineHistory(candidate.timelineSource, RESULTS_TIMELINE_LIMIT) && (
+        <ViewHistoryButton onClick={() => setHistoryFor(candidate)} />
+      )}
+    </div>
+  );
+  /* The details panel's value for a moved column (the main row's cell content). */
+  const renderDetailValue = (id: string, candidate: CandidateResult) => {
+    switch (id) {
+      case 'timeline':
+        return <div className="text-xs text-gray-500 dark:text-slate-400">{renderTimeline(candidate)}</div>;
+      case 'inviteSource':
+        return <InviteSourceValue inv={{ invite_source: candidate.inviteSource }} iconClassName="w-3.5 h-3.5" />;
+      case 'phone':
+        return candidate.phone || '-';
+      case 'cid':
+        return (
+          <span className="inline-flex items-center whitespace-nowrap text-xs font-mono font-medium bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 px-2 py-1 rounded">
+            {candidate.candidateDisplayId || '-'}
+          </span>
+        );
+      case 'jobVersion':
+        return candidate.jobVersion != null ? <VersionPill kind="job" version={candidate.jobVersion} /> : <span className="text-xs text-gray-400">—</span>;
+      default:
+        return null;
+    }
+  };
   const rowCheckboxClass = portaled
     ? 'rounded border-gray-300'
     : 'w-4 h-4 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40';
@@ -2462,8 +2544,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 as the shell, `TABLE_EMPTY_PANEL_CLASS` centres in it, and the scrollbar
                 goes away. */}
             <table
-              className={`w-full text-sm border-collapse [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap [&_td]:align-middle ${paginatedCandidates.length === 0 ? '' : 'table-fixed'}`}
-              style={paginatedCandidates.length === 0 ? undefined : { minWidth: listTableMinWidth }}
+              className={`w-full text-sm border-collapse [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap [&_td]:align-middle ${paginatedCandidates.length === 0 ? '' : portaled ? 'table-auto' : 'table-fixed'}`}
+              style={paginatedCandidates.length === 0 || portaled ? undefined : { minWidth: listTableMinWidth }}
             >
               {/* The All Assessments header: white, one rule under it,
                   uppercase semibold labels, each sortable column a button
@@ -2515,7 +2597,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       })()}
                     </th>
                   )}
-                  {isColumnEnabled('timeline') && (
+                  {inMain('timeline') && (
                     <th
                       scope="col"
                       aria-sort={sortField === 'date' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
@@ -2603,22 +2685,22 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       })()}
                     </th>
                   )}
-                  {isColumnEnabled('inviteSource') && (
+                  {inMain('inviteSource') && (
                     <th scope="col" className={`w-36 text-left ${cellPad} text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}>Invite Source</th>
                   )}
-                  {isColumnEnabled('phone') && (
+                  {inMain('phone') && (
                     <th scope="col" className={`w-36 text-left ${cellPad} text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}>Phone</th>
                   )}
-                  {isColumnEnabled('cid') && (
+                  {inMain('cid') && (
                     <th scope="col" className={`w-24 text-left ${cellPad} text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}>CID</th>
                   )}
-                  {isColumnEnabled('jdId') && (
+                  {inMain('jdId') && (
                     <th scope="col" className={`w-28 text-left ${cellPad} text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}>JD ID</th>
                   )}
-                  {isColumnEnabled('jdTitle') && (
+                  {inMain('jdTitle') && (
                     <th scope="col" className={`w-56 text-left ${cellPad} text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}>Job Title</th>
                   )}
-                  {isColumnEnabled('jobVersion') && (
+                  {inMain('jobVersion') && (
                     <th scope="col" className={`w-28 text-left ${cellPad} text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}>Job Version</th>
                   )}
                   {isColumnEnabled('assessmentVersion') && (
@@ -2662,10 +2744,16 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     </td>
                   </tr>
                 ) : (
-                  paginatedCandidates.map((candidate) => (
+                  paginatedCandidates.map((candidate) => {
+                    const isExpanded = expandedRowIds.has(candidate.id);
+                    return (
+                    <Fragment key={candidate.id}>
                     <tr
-                      key={candidate.id}
-                      onClick={() => viewCandidateDetails(candidate)}
+                      /* Job Details: the row opens / closes its details, as on
+                         the AI Talent Match table; ⋮ › View Details opens it. */
+                      onClick={() => (portaled ? toggleRowExpanded(candidate.id) : viewCandidateDetails(candidate))}
+                      aria-expanded={portaled ? isExpanded : undefined}
+                      title={portaled ? (isExpanded ? 'Hide details' : 'Show details') : undefined}
                       data-row-selected={selectedRows.includes(candidate.id)}
                       /* Row styled to the AI Talent Match reference table:
                          plain white/dark rows (no zebra), hover:bg-gray-50,
@@ -2685,6 +2773,13 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       </td>
                       {isColumnEnabled('candidate') && (
                         <td className={`${cellPad}`}>
+                          {portaled ? (
+                            /* The AI Talent Match table's name over email, no avatar. */
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-blue-600 dark:text-blue-400 truncate max-w-[16rem]" title={showName(candidate.name) || 'Unknown'}>{showName(candidate.name) || 'Unknown'}</p>
+                              {candidate.email && <p className="text-xs text-gray-500 dark:text-slate-500 truncate max-w-[16rem]" title={candidate.email}>{candidate.email}</p>}
+                            </div>
+                          ) : (
                           <div className="flex min-w-0 items-center gap-2">
                             <div className="h-6 w-6 rounded-full bg-brand-blue ring-1 ring-white/10 shadow-sm shadow-brand-blue/25 flex shrink-0 items-center justify-center text-white text-2xs font-semibold">
                               {(candidate.name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2)}
@@ -2697,41 +2792,14 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                               <div className="truncate text-xs text-gray-500 dark:text-slate-400" title={candidate.email || ''}>{candidate.email || '-'}</div>
                             </div>
                           </div>
+                          )}
                         </td>
                       )}
-                      {isColumnEnabled('timeline') && (
+                      {inMain('timeline') && (
                         <td className={`${cellPad} overflow-hidden text-xs text-gray-500 dark:text-slate-400`}>
                           {/* One event per line, in chronological order — the events
                               read as a timeline rather than a single run-on row. */}
-                          <div className="flex min-w-0 flex-col gap-1 overflow-hidden" title={getTimelineSummary(candidate)}>
-                            {/* Same trail as Track Invites (Invited / System Check /
-                                Started / Completed …), from the shared builder. */}
-                            {timelineEvents(candidate.timelineSource, RESULTS_TIMELINE_LIMIT).map(({ label, at, Icon, tone }, i) => (
-                              <div key={`${label}-${i}`} className="flex min-w-0 items-center gap-2">
-                                <Icon className={`w-3 h-3 shrink-0 ${tone}`} />
-                                <span className="truncate">{label}: {formatTimelineDate(at)}</span>
-                              </div>
-                            ))}
-                            {timelineEvents(candidate.timelineSource, RESULTS_TIMELINE_LIMIT).length === 0 && (
-                              <div className="flex min-w-0 items-center gap-2">
-                                <Clock className="w-3 h-3 shrink-0 text-gray-400" />
-                                <span className="truncate">-</span>
-                              </div>
-                            )}
-                            {/* Duration is the Timeline's last line, not a column
-                                of its own — the AI Interview results' layout. */}
-                            {candidate.duration && candidate.duration !== '-' && (
-                              <div className="flex min-w-0 items-center gap-2">
-                                <Timer className="w-3 h-3 shrink-0 text-gray-400" />
-                                <span className="truncate"><span className="text-gray-400 dark:text-slate-500">Duration:</span> {candidate.duration}</span>
-                              </div>
-                            )}
-                            {/* The two latest events above; the whole trail
-                                behind View History. */}
-                            {hasMoreTimelineHistory(candidate.timelineSource, RESULTS_TIMELINE_LIMIT) && (
-                              <ViewHistoryButton onClick={() => setHistoryFor(candidate)} />
-                            )}
-                          </div>
+                          {renderTimeline(candidate)}
                         </td>
                       )}
                       {isColumnEnabled('status') && (
@@ -2774,24 +2842,24 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           </div>
                         </td>
                       )}
-                      {isColumnEnabled('inviteSource') && (
+                      {inMain('inviteSource') && (
                         <td className={`${cellPad} text-gray-700 dark:text-slate-300 whitespace-nowrap`}>
                           <InviteSourceValue inv={{ invite_source: candidate.inviteSource }} iconClassName="w-3.5 h-3.5" />
                         </td>
                       )}
-                      {isColumnEnabled('phone') && (
+                      {inMain('phone') && (
                         <td className={`${cellPad}`}>
                           <div className="truncate text-gray-600 dark:text-slate-400" title={candidate.phone || '-'}>{candidate.phone || '-'}</div>
                         </td>
                       )}
-                      {isColumnEnabled('cid') && (
+                      {inMain('cid') && (
                         <td className={`${cellPad} whitespace-nowrap`}>
                           <span className="inline-flex items-center whitespace-nowrap text-xs font-mono font-medium bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 px-2 py-1 rounded">
                             {candidate.candidateDisplayId || '-'}
                           </span>
                         </td>
                       )}
-                      {isColumnEnabled('jdId') && (
+                      {inMain('jdId') && (
                         /* Every version of a job shares one Job ID, so the
                            page's own is every row's — under All Versions too. */
                         <td className={`${cellPad}`}>
@@ -2802,14 +2870,14 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           )}
                         </td>
                       )}
-                      {isColumnEnabled('jdTitle') && (
+                      {inMain('jdTitle') && (
                         <td className={`${cellPad}`}>
                           <div className="truncate font-medium text-gray-900 dark:text-slate-50" title={jdTitle || 'N/A'}>
                             {jdTitle || 'N/A'}
                           </div>
                         </td>
                       )}
-                      {isColumnEnabled('jobVersion') && (
+                      {inMain('jobVersion') && (
                         /* The version of the assessment this attempt came from —
                            stamped per row, so All Versions shows a mix. */
                         <td className={`${cellPad}`}>
@@ -2840,24 +2908,41 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           menu (it escapes the scroll shell), the row's two
                           actions as its items. */}
                       <td className={`${cellPad} text-right tf-sticky-col`} onClick={(e) => e.stopPropagation()}>
+                        <div className="inline-flex items-center gap-1.5">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <button
                               type="button"
-                              className="h-8 w-8 inline-flex items-center justify-center rounded-md text-gray-500 dark:text-slate-400 hover:bg-brand-blue/10 hover:text-brand-blue transition-colors focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+                              className={portaled ? ROW_ACTION_BUTTON_CLASS : 'h-8 w-8 inline-flex items-center justify-center rounded-md text-gray-500 dark:text-slate-400 hover:bg-brand-blue/10 hover:text-brand-blue transition-colors focus:outline-none focus:ring-2 focus:ring-brand-blue/30'}
                               aria-label={`Actions for ${candidate.name || 'candidate'}`}
                               title="Actions"
                             >
                               <MoreVertical className="w-4 h-4" />
                             </button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-48">
-                            <DropdownMenuItem className="gap-2" onClick={() => viewCandidateDetails(candidate)}>
+                          <DropdownMenuContent align="end" className={portaled ? ROW_MENU_CONTENT_CLASS : 'w-48'}>
+                            {/* Invite ▸ Create / Send — the Scored Resumes row's
+                                Invite, first, for this row's candidate. */}
+                            {onOpenInviteDialog && (
+                              <>
+                                <RowInviteSubmenu
+                                  onInvite={(kind) => onOpenInviteDialog(kind, [{
+                                    id: candidate.resumeId || candidate.id,
+                                    name: candidate.name,
+                                    email: candidate.email,
+                                    phone: candidate.phone,
+                                    resumeId: candidate.resumeId,
+                                  }])}
+                                />
+                                <DropdownMenuSeparator className="my-1 bg-gray-100" />
+                              </>
+                            )}
+                            <DropdownMenuItem className={portaled ? ROW_MENU_ITEM_CLASS : 'gap-2'} onClick={() => viewCandidateDetails(candidate)}>
                               <Eye className="w-4 h-4 text-menu-icon-view" />
                               <span className={MENU_ITEM_SCALE_CLASS}>View Details</span>
                             </DropdownMenuItem>
                             <DropdownMenuItem
-                              className="gap-2"
+                              className={portaled ? ROW_MENU_ITEM_CLASS : 'gap-2'}
                               disabled={downloadingPDF === candidate.id}
                               onClick={() => handleDownloadPDF(candidate.id, candidate.candidateDisplayId)}
                             >
@@ -2870,9 +2955,23 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
+                        {detailColumnIds.length > 0 && (
+                          <RowDetailsToggle expanded={isExpanded} onToggle={() => toggleRowExpanded(candidate.id)} />
+                        )}
+                        </div>
                       </td>
                     </tr>
-                  ))
+                    {/* The row's moved columns, in a nested table under it —
+                        the AI Talent Match table's expanded-row panel. */}
+                    {isExpanded && detailColumnIds.length > 0 && (
+                      <RowDetailsPanel
+                        colSpan={mainColumnCount}
+                        fields={detailColumnIds.map((id) => ({ label: DETAIL_COLUMN_LABEL[id], value: renderDetailValue(id, candidate) }))}
+                      />
+                    )}
+                    </Fragment>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -2913,9 +3012,14 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           page's button and the Job Details Actions item. */}
       {showColumnSelector && (
         <ColumnCustomizationModal
-          columns={columns}
+          columns={portaled ? columns.filter((c) => !JOB_DETAILS_HIDDEN_COLUMN_IDS.includes(c.id)) : columns}
           onClose={() => setShowColumnSelector(false)}
-          onApply={(ids) => setColumns((prev) => prev.map((c) => ({ ...c, enabled: ids.includes(c.id) })))}
+          /* Columns hidden in Job Details keep their saved setting (shared
+             with the standalone results page). */
+          onApply={(ids) => setColumns((prev) => prev.map((c) => ({
+            ...c,
+            enabled: portaled && JOB_DETAILS_HIDDEN_COLUMN_IDS.includes(c.id) ? c.enabled : ids.includes(c.id),
+          })))}
         />
       )}
 
