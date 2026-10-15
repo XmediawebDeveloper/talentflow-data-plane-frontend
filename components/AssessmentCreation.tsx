@@ -3032,7 +3032,9 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
         }
       } else {
         toast.success('Assessment saved as draft. You can publish it later.');
-        onCreateAssessment(assessmentDefinition);
+        // The id lets the Assessments list open on this draft (Total Jobs,
+        // its job's versions expanded, scrolled to it).
+        onCreateAssessment({ ...assessmentDefinition, id: resultAssessment.id });
       }
     } catch (error) {
       console.error('Failed to create/update assessment:', error);
