@@ -734,8 +734,8 @@ export default function AIInterview() {
     }
   }, []);
 
-  const loadInvitations = useCallback(async (configId: string, page: number, filters: InviteFilterState, source = '', resultFilter = '') => {
-    setLoadingInvitations(true);
+  const loadInvitations = useCallback(async (configId: string, page: number, filters: InviteFilterState, source = '', resultFilter = '', silent = false) => {
+    if (!silent) setLoadingInvitations(true);
     try {
       /* Source (email / resume) and Result (the Score column's Pass / Fail)
          have no server-side filter, so with either set the whole matching
@@ -820,9 +820,9 @@ export default function AIInterview() {
       }
     } catch (error) {
       console.error('Failed to load invitations:', error);
-      toast.error('Failed to load invitations');
+      if (!silent) toast.error('Failed to load invitations');
     } finally {
-      setLoadingInvitations(false);
+      if (!silent) setLoadingInvitations(false);
     }
   }, []);
 
@@ -842,9 +842,9 @@ export default function AIInterview() {
      request: the stat cards must keep counting the whole set while the
      table is narrowed, so narrowing happens client-side over these rows —
      same rule the Assessments page's own cross-assessment tab follows. */
-  const loadAllInviteStatuses = useCallback(async () => {
-    setIsLoadingInviteStatus(true);
-    setInviteStatusError(null);
+  const loadAllInviteStatuses = useCallback(async (silent = false) => {
+    if (!silent) setIsLoadingInviteStatus(true);
+    if (!silent) setInviteStatusError(null);
     try {
       const allConfigs = [...configs, ...archivedConfigs];
       if (allConfigs.length === 0) {
@@ -930,13 +930,24 @@ export default function AIInterview() {
       // coming back from a candidate / job page, and the render clamps it
       // (safePage) if the reload left fewer pages.
     } catch (err: any) {
+      if (silent) return;
       console.error('Failed to load invitation statuses:', err);
       setInviteStatusError(err?.message || 'Failed to load invitation statuses');
       setInviteStatusRows([]);
     } finally {
-      setIsLoadingInviteStatus(false);
+      if (!silent) setIsLoadingInviteStatus(false);
     }
   }, [configs, archivedConfigs]);
+
+  /* Candidates open, start and finish on their own — poll quietly so the tab
+     doesn't need a page refresh. Paused while the browser tab is hidden. */
+  useEffect(() => {
+    if (activeTab !== 'invitation-status') return;
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') loadAllInviteStatuses(true);
+    }, 15000);
+    return () => clearInterval(timer);
+  }, [activeTab, loadAllInviteStatuses]);
 
   useEffect(() => {
     // Also re-fires as `configs`/`archivedConfigs` finish loading (both
@@ -1121,7 +1132,13 @@ export default function AIInterview() {
   useEffect(() => {
     if (!viewInvitationsConfig) return;
     loadInvitations(viewInvitationsConfig.id, invitationPage, inviteFilters, trackerSourceFilter, trackerResultFilter);
-  }, [viewInvitationsConfig, trackerJobScope, trackerJobVersionFilter, trackerVersionFilter, invitationPage, inviteFilters, trackerSourceFilter, trackerResultFilter, loadInvitations]);
+    const timer = setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      loadInvitations(viewInvitationsConfig.id, invitationPage, inviteFilters, trackerSourceFilter, trackerResultFilter, true);
+      loadInvitationOverview(viewInvitationsConfig.id);
+    }, 15000);
+    return () => clearInterval(timer);
+  }, [viewInvitationsConfig, trackerJobScope, trackerJobVersionFilter, trackerVersionFilter, invitationPage, inviteFilters, trackerSourceFilter, trackerResultFilter, loadInvitations, loadInvitationOverview]);
 
   // Bulk-revoke selection is scoped to the current invitations page — clear it
   // whenever the page, filters, or the open config changes so a stale selection
@@ -1134,7 +1151,18 @@ export default function AIInterview() {
   // list, so a selection made on the old one is dropped.
   useEffect(() => {
     setSelectedStatusInviteIds(new Set());
-  }, [inviteStatusFilters, inviteStatusColumnFilters, inviteStatusRows]);
+  }, [inviteStatusFilters, inviteStatusColumnFilters]);
+
+  // A background refresh swaps the rows but must not drop the recruiter's
+  // selection — only forget ids that no longer exist.
+  useEffect(() => {
+    setSelectedStatusInviteIds((prev) => {
+      if (prev.size === 0) return prev;
+      const live = new Set(inviteStatusRows.map((r: any) => r.id));
+      const next = new Set([...prev].filter((id) => live.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [inviteStatusRows]);
 
   useEffect(() => {
     if (!viewInvitationsConfig) return;
@@ -3458,7 +3486,7 @@ export default function AIInterview() {
               ) : inviteStatusError ? (
                 <div className="text-center py-12">
                   <p className="text-sm text-destructive mb-3">{inviteStatusError}</p>
-                  <Button variant="primary" size="sm" onClick={loadAllInviteStatuses}>
+                  <Button variant="primary" size="sm" onClick={() => loadAllInviteStatuses()}>
                     Retry
                   </Button>
                 </div>
