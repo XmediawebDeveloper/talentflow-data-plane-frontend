@@ -2649,6 +2649,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         /* Invite ▾ → the same Create / Send popup as the Scored Resumes
            tab's row and selection menus, for this candidate. */
         onOpenInviteDialog={(kind, invitees) => openInviteDialog(kind, invitees, 'score-resume')}
+        /* Create / Send Assessment | AI Interview as their own buttons (no
+           Invite ▾), an icon-only View Resume and "Scorecard". */
+        inlineHeaderActions
       />
       {versionInviteDialogEl}
       </>
@@ -3618,7 +3621,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             {(permissions.canCreateAssessments || permissions.canViewAssessments) && (
               <div className="pt-4 mt-4 border-t border-gray-100 dark:border-slate-800">
                 <QuickActionHeader
-                  icon={<BarChart3 className="w-4 h-4" />}
+                  icon={<ClipboardList className="w-4 h-4" />}
                   title="Assessment"
                   accent="cyan"
                   titleAction={
@@ -5750,7 +5753,7 @@ function AIMatchTabContent({
                         onOpenInviteDrawer('assessment', selectedCandidates);
                       }}
                     >
-                      <FileText className="w-4 h-4 text-menu-icon-view" />
+                      <ClipboardList className="w-4 h-4 text-menu-icon-view" />
                       <span>Create / Send Assessment</span>
                     </DropdownMenuItem>
                     <DropdownMenuItem
@@ -5764,7 +5767,7 @@ function AIMatchTabContent({
                         onOpenInviteDrawer('interview', selectedCandidates);
                       }}
                     >
-                      <Video className="w-4 h-4 text-menu-icon-share" />
+                      <Video className="w-4 h-4 text-menu-icon-ai" />
                       <span>Create / Send AI Interview</span>
                     </DropdownMenuItem>
                     {/* Export, last — the ticked candidates, through the AI
@@ -6197,7 +6200,7 @@ function AIMatchTabContent({
                                 onOpenInviteDrawer('assessment', [candidate]);
                               }}
                             >
-                              <FileText className="w-4 h-4 text-menu-icon-view" />
+                              <ClipboardList className="w-4 h-4 text-menu-icon-view" />
                               <span>Create / Send Assessment</span>
                             </DropdownMenuItem>
                             <DropdownMenuItem
@@ -6211,7 +6214,7 @@ function AIMatchTabContent({
                                 onOpenInviteDrawer('interview', [candidate]);
                               }}
                             >
-                              <Video className="w-4 h-4 text-menu-icon-share" />
+                              <Video className="w-4 h-4 text-menu-icon-ai" />
                               <span>Create / Send AI Interview</span>
                             </DropdownMenuItem>
                           </DropdownMenuContent>

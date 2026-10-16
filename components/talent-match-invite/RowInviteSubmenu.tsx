@@ -1,6 +1,6 @@
 'use client';
 
-import { FileText, UserPlus, Video } from 'lucide-react';
+import { ClipboardList, UserPlus, Video } from 'lucide-react';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import {
   DropdownMenuItem,
@@ -43,7 +43,7 @@ export default function RowInviteSubmenu({ onInvite }: { onInvite: (kind: Invite
           title={!canCreateAssessments ? assessmentDeniedReason : undefined}
           onSelect={() => onInvite('assessment')}
         >
-          <FileText className="w-4 h-4 text-menu-icon-view" />
+          <ClipboardList className="w-4 h-4 text-menu-icon-view" />
           <span className={MENU_ITEM_SCALE_CLASS}>Create / Send Assessment</span>
         </DropdownMenuItem>
         <DropdownMenuItem
@@ -52,7 +52,7 @@ export default function RowInviteSubmenu({ onInvite }: { onInvite: (kind: Invite
           title={!mayInviteAIInterview ? aiInterviewDeniedReason : undefined}
           onSelect={() => onInvite('interview')}
         >
-          <Video className="w-4 h-4 text-menu-icon-share" />
+          <Video className="w-4 h-4 text-menu-icon-ai" />
           <span className={MENU_ITEM_SCALE_CLASS}>Create / Send AI Interview</span>
         </DropdownMenuItem>
       </DropdownMenuSubContent>

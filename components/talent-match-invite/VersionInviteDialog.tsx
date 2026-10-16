@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useEffectEvent, useRef, useState, type ComponentProps } from 'react';
-import { ArrowLeft, ArrowRight, Brain, CheckCircle, ClipboardCheck, Link2, Loader2, Mail } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle, ClipboardList, Link2, Loader2, Mail, Video } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
@@ -58,7 +58,7 @@ interface PendingConfirm {
  * Job Details → AI Talent Match: "Create / Send Assessment" and "Create / Send
  * AI Interview" — two SEPARATE popups, this one component per `kind`. Built
  * on the Invite to Assessment / AI Interview popups' shell (InviteToAssessmentFlow,
- * class for class): the type's version cards (up to MAX_VERSIONS_PER_TYPE per
+ * class for class): the type's version cards (up to MAX_VERSIONS[kind] per
  * JD row, every status counted, the Latest Active one pre-ticked, one version
  * per send, New version = a Draft copy of the latest), the candidates and the
  * invitation, and one Send; the send's per-candidate results then replace
@@ -517,7 +517,7 @@ export default function VersionInviteDialog({
           ? (handsOff ? 'No candidates ticked · add them in the next step' : '')
           : null;
 
-  const Icon = kind === 'assessment' ? ClipboardCheck : Brain;
+  const Icon = kind === 'assessment' ? ClipboardList : Video;
 
   return (
     <>
