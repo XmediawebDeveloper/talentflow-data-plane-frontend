@@ -543,8 +543,8 @@ export const AIInviteStatusBadge = ({ inv }: { inv: any }) => {
  *  FileText is the resume document. Both share one tone so neither source
  *  reads as more important than the other. */
 const INVITE_SOURCES: Record<string, { label: string; Icon: LucideIcon }> = {
-  resume: { label: 'From Resume', Icon: FileText },
-  email: { label: 'From Email', Icon: Mail },
+  resume: { label: 'Via Resume', Icon: FileText },
+  email: { label: 'Via Email', Icon: Mail },
 };
 export const inviteSourceLabel = (inv: any): string | null => INVITE_SOURCES[inv.invite_source]?.label ?? null;
 

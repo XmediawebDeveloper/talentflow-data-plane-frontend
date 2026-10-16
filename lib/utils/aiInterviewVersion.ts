@@ -65,7 +65,9 @@ export function interviewEditBlockedReason(config: VersionLike): string | null {
  * earlier ones stay blocked whether or not they were sent. "Latest" counts
  * archived versions too: if V3 is archived, V2 still may not be duplicated;
  * V3 must be unarchived first.
- * Order: archived; a draft already open in the lineage; not the latest; not
+ * Order: draft; a draft already open in the lineage; not the latest; archived
+ * (only the latest can be unarchived into a duplicable one, so an archived
+ * earlier version reports "not the latest" rather than "unarchive"); not
  * invited → still editable, so a new version is pointless; cap reached.
  * `lineage` is every config you know of, any status — pass the archived ones
  * too: they decide "latest" and count to the cap.
@@ -76,7 +78,6 @@ export function interviewDuplicateBlockedReason(
   canCreate = true,
 ): string | null {
   if (!canCreate) return 'You do not have permission to create AI interviews';
-  if (norm(config.status) === 'archived') return 'Unarchive this version to duplicate it.';
   if (norm(config.status) === 'draft') return 'Publish this version before duplicating it.';
   const siblings = lineage.filter((c) => c.jd_id === config.jd_id);
   // An open draft is the next version already being written — point there
@@ -95,6 +96,7 @@ export function interviewDuplicateBlockedReason(
       ? `Only the latest version (V${latest}) can be duplicated. It is archived — unarchive it to duplicate.`
       : `Only the latest version (V${latest}) can be duplicated.`;
   }
+  if (norm(config.status) === 'archived') return 'Unarchive this version to duplicate it.';
   if ((config.invitations_count ?? 0) === 0) return 'No candidates invited yet — edit this version instead.';
   // The cap counts every version, archived included: archiving does not free
   // a slot (the Job Details Create Assessment cap, JobDetailView.tsx).

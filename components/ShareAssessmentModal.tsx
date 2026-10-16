@@ -68,6 +68,10 @@ interface ShareAssessmentModalProps {
   prefilledCandidates?: CandidateEmail[]; // Optional pre-filled candidates from resume selection
   inviteSource?: string; // Source context: "Resume Scoring", "JD", "Assessment", "Internal DB", "Manual"
   onInviteSent?: (count: number) => void;
+  /** Fired the moment an invitation exists server-side (Send or Copy Link),
+   *  without waiting for the success popup — so a tracker behind the modal can
+   *  refresh at once. Distinct from onInviteSent, which is held back 2s. */
+  onInvitesChanged?: () => void;
   additionalAssessments?: Array<{
     id: string;
     title: string;
@@ -158,7 +162,7 @@ type SidebarFolder = { id: string; name: string; parentId?: string | null; count
 const withEntryRow = (list: CandidateEmail[]): CandidateEmail[] =>
   list.some((c) => c.source !== 'database') ? list : [...list, { id: 'manual-entry', name: '', email: '', source: 'manual' }];
 
-export default function ShareAssessmentModal({ isOpen, onClose, assessment, prefilledCandidates, inviteSource, onInviteSent, additionalAssessments, onBack, embedded = false, footerTarget = null }: ShareAssessmentModalProps) {
+export default function ShareAssessmentModal({ isOpen, onClose, assessment, prefilledCandidates, inviteSource, onInviteSent, onInvitesChanged, additionalAssessments, onBack, embedded = false, footerTarget = null }: ShareAssessmentModalProps) {
   const router = useRouter();
   const { user } = useAuth();
   const { quotaData } = useQuota();
@@ -873,6 +877,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
           : c
       ));
 
+      onInvitesChanged?.();
       await navigator.clipboard.writeText(result.link);
       toast.success(`Link copied for ${candidate.name}! Expires in ${expiryDays} day${expiryDays !== 1 ? 's' : ''}. Share via WhatsApp, SMS, or send via email.`);
     } catch (err: any) {
@@ -1042,6 +1047,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
 
         setSentCount(sentSoFar);
         setShowSuccess(true);
+        onInvitesChanged?.();
         // As in the AI Interview modal: the host is told AFTER the success popup
         // has had its moment, so a refresh it kicks off cannot disturb the popup.
         setTimeout(() => {
@@ -1125,6 +1131,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
 
       setSentCount(successCount);
       setShowSuccess(true);
+      onInvitesChanged?.();
       setTimeout(() => {
         setShowSuccess(false);
         onInviteSent?.(successCount);

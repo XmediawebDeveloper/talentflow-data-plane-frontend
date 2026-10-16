@@ -802,10 +802,12 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
     if (failed > 0) {
       toast.error(`${failed} invitation${failed === 1 ? '' : 's'} could not be ${action === 'revoke' ? 'revoked' : 'resent'}.`);
     }
+    // Reload first, so the table is already current when the dialog closes
+    // and the selection clears (rows no longer flash their old status).
+    await loadSessions();
     setSelected(new Map());
     setIsBulkWorking(false);
     setBulkAction(null);
-    await loadSessions();
   };
 
   /* Bulk PDF download — moved inline (rather than the shared

@@ -67,7 +67,7 @@ import AssessmentVersionHistoryPanel, {
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import AllInterviewsTable, { VersionPill } from '@/components/ai-interview/AllInterviewsTable';
-import { resolveAIInterviewDraftResumeHref } from '@/lib/utils/aiInterviewDraftResume';
+import { resolveAIInterviewDraftResumeHref, aiInterviewConfigureHref } from '@/lib/utils/aiInterviewDraftResume';
 
 /* The version panel's 3-dot menu trigger — the 28px bordered square matched to
    the Assessment page's `QUICK_ACTION_BASE` in Assessments.tsx. */
@@ -963,7 +963,10 @@ export default function AIInterview() {
   const refreshAfterInviteAction = useCallback(async (configId?: string) => {
     if (viewInvitationsConfig && configId) await refreshInvitationsView(configId);
     if (activeTab === 'invitation-status') await loadAllInviteStatuses();
-  }, [viewInvitationsConfig, refreshInvitationsView, activeTab, loadAllInviteStatuses]);
+    // The interview cards/tables carry invite counts too — refresh them with it.
+    await loadData();
+    setRefreshSignal((n) => n + 1);
+  }, [viewInvitationsConfig, refreshInvitationsView, activeTab, loadAllInviteStatuses, loadData]);
 
   /* Manual Refresh in the tracking popup — same refetch the row actions use,
      in place with no page reload. Guarded so rapid clicks (or a click while
@@ -1124,7 +1127,9 @@ export default function AIInterview() {
     // 'all' now includes archived configs too, so load them for that tab as well.
     // Invitation Status spans every config too — an invite sent before its
     // interview was archived must not silently drop out of the aggregate.
-    if (activeTab === 'archived' || activeTab === 'all' || activeTab === 'invitation-status') loadArchivedConfigs();
+    // Every tab: Duplicate's latest-version and cap rules count archived versions,
+    // so the row menu on Active/Draft/All Interviews needs them too.
+    loadArchivedConfigs();
     if (activeTab === 'audit') loadAuditTrail();
     if (activeTab === 'processing') loadProcessingSessions();
   }, [activeTab, loadSettings, loadArchivedConfigs, loadAuditTrail, loadProcessingSessions, settingsSubTab, loadProctoringSettings, auditCategory, auditPage]);
@@ -1217,9 +1222,10 @@ export default function AIInterview() {
     setDeleteLoading(true);
     try {
       await aiInterviewService.delete(deleteTarget.id);
-      toast.success('Configuration deleted');
-      loadData();
+      // Reload BEFORE announcing, so the deleted row is gone when the dialog closes.
+      await Promise.all([loadData(), loadArchivedConfigs()]);
       setRefreshSignal((n) => n + 1);
+      toast.success('Configuration deleted');
       setDeleteTarget(null);
     } catch (error) {
       console.error('Failed to delete:', error);
@@ -1232,8 +1238,10 @@ export default function AIInterview() {
   const handlePublishConfig = async (config: AIInterviewResponse) => {
     try {
       await aiInterviewService.publishConfig(config.id);
+      await loadData();
+      // The All/Active/Draft tables fetch their own rows - nudge them too.
+      setRefreshSignal((n) => n + 1);
       toast.success('Configuration published!');
-      loadData();
     } catch (error) {
       console.error('Failed to publish:', error);
       toast.error('Failed to publish configuration');
@@ -1346,14 +1354,13 @@ export default function AIInterview() {
   const handleUnarchiveConfig = async (config: AIInterviewResponse) => {
     try {
       const restored = await aiInterviewService.unarchive(config.id);
+      await Promise.all([loadData(), loadArchivedConfigs()]);
+      setRefreshSignal((n) => n + 1);
       toast.success(
         restored.status === 'draft'
           ? 'Configuration restored to Draft'
           : 'Configuration restored to Active'
       );
-      loadData();
-      loadArchivedConfigs();
-      setRefreshSignal((n) => n + 1);
     } catch (error: any) {
       toast.error(error.message || 'Failed to unarchive');
     }
@@ -1376,10 +1383,13 @@ export default function AIInterview() {
     }
     try {
       const result = await aiInterviewService.clone(config.id);
-      toast.success(`New version created as a draft: ${result.cloned_title}`);
-      loadData();
-      loadArchivedConfigs();
+      // The version counts the duplicate gate reads must be fresh before the
+      // recruiter can click again, so reload first.
+      await Promise.all([loadData(), loadArchivedConfigs()]);
       setRefreshSignal((n) => n + 1);
+      toast.success(`New version created as a draft: ${result.cloned_title}`);
+      // Open the new version straight in Configure so it can be edited at once.
+      router.push(aiInterviewConfigureHref(result.cloned_id, config.jd_id || ''));
     } catch (error: any) {
       toast.error(error.message || 'Failed to duplicate');
     }
@@ -2058,6 +2068,7 @@ export default function AIInterview() {
           {openMenuId === menuKey && menuAnchor && typeof document !== 'undefined' && createPortal(
             <div
               ref={versionMenuRef}
+              data-tf-popover
               className="fixed w-52 bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-gray-200 dark:border-slate-700/60 py-1 z-[9999] max-h-[70dvh] overflow-y-auto"
               style={{
                 top: menuDropUp ? undefined : menuAnchor.bottom + 4,
@@ -2169,7 +2180,7 @@ export default function AIInterview() {
                   tooltip) for a draft, for a version nobody was invited to
                   (edit it instead), while another draft is open in the lineage,
                   and at the version cap: the Assessments Duplicate gate. */}
-              {normalizedStatus !== 'archived' && (() => {
+              {(() => {
                 const dupBlocked = interviewDuplicateBlockedReason(
                   config,
                   [...configs, ...archivedConfigs],
@@ -2692,7 +2703,7 @@ export default function AIInterview() {
             Candidate Results / Invitation Status / Activity Logs portal theirs
             in (see their `toolbarSlot` prop), so the search box sits in the
             same spot whichever tab is active. */}
-        <div ref={setToolbarSlotEl} className="empty:hidden mb-3 border-b border-gray-200 dark:border-slate-700/60 [&>*:last-child:not(:first-child)]:mb-3" />
+        <div ref={setToolbarSlotEl} className="empty:hidden mb-3 [&>*:last-child:not(:first-child)]:mb-3" />
 
         {isConfigListTab && !showUngroupedList && toolbarSlotEl && createPortal(
           <>
@@ -3831,6 +3842,7 @@ export default function AIInterview() {
                           if (failed > 0) toast.error(`Failed to revoke ${failed} invitation${failed === 1 ? '' : 's'}.`);
                           setSelectedStatusInviteIds(new Set());
                           await loadAllInviteStatuses();
+                          setRefreshSignal((n) => n + 1);
                         } finally {
                           setIsBulkRevoking(false);
                           setStatusBulkRevokeOpen(false);
@@ -4263,6 +4275,16 @@ export default function AIInterview() {
             }
           }}
           config={shareConfig}
+          onInvitesChanged={() => {
+            // Immediate, silent refresh the moment an invite / copied link
+            // exists — the 2s success popup no longer delays the trackers.
+            loadData();
+            if (viewInvitationsConfig) {
+              loadInvitations(viewInvitationsConfig.id, invitationPage, inviteFilters, trackerSourceFilter, trackerResultFilter, true);
+              loadInvitationOverview(viewInvitationsConfig.id);
+            }
+            if (activeTab === 'invitation-status') loadAllInviteStatuses(true);
+          }}
           onInviteSent={() => {
             loadData();
             // loadData() only refreshes the config list's own counters — the
