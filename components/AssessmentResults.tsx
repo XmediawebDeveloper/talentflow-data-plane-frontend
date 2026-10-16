@@ -975,6 +975,27 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
      are answered by the backend exactly as before. What moved to the client is
      PAGING: a page of a merged set cannot be asked for per assessment, so each
      request asks for the whole (filtered) set and the table pages over it. */
+  /* Bumped by the poll / tab-focus effect below so newly sent invitations show
+     without a manual page refresh. `silentRefreshRef` keeps those background
+     refetches from flashing the fetching state. */
+  const [refreshTick, setRefreshTick] = useState(0);
+  const silentRefreshRef = useRef(false);
+  useEffect(() => {
+    const bump = () => {
+      if (document.visibilityState !== 'visible') return;
+      silentRefreshRef.current = true;
+      setRefreshTick((t) => t + 1);
+    };
+    const timer = window.setInterval(bump, 10000);
+    document.addEventListener('visibilitychange', bump);
+    window.addEventListener('focus', bump);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', bump);
+      window.removeEventListener('focus', bump);
+    };
+  }, []);
+
   useEffect(() => {
     /* Wait for the scope. Fetching this assessment first and the job's other
        versions a moment later is precisely the flicker the selector must not
@@ -984,9 +1005,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     const fetchResults = async () => {
       if (!initialLoadDone.current) {
         setIsLoading(true);
-      } else {
+      } else if (!silentRefreshRef.current) {
         setIsFetching(true);
       }
+      silentRefreshRef.current = false;
       try {
         // Build server-side filter parameters
         const params: any = {
@@ -1160,7 +1182,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                  assessment revision its own candidate sat. */
               assessmentVersion: assessmentVersionByAssessmentId.get(sourceAssessmentId),
             };
-          }));
+            /* Results only: invited / in-progress candidates have no result to
+               show — they live on the Invitation Status tab (the AI Interview
+               Results tab lists Completed and Terminated only, too). */
+          })).filter((c: CandidateResult) => c.status === 'Completed' || c.status === 'Terminated');
 
           /* Newest first, across the merged set — on the Candidate Results
              tab's own key (`resultOrderTime`: completed_at, else created_at),
@@ -1203,7 +1228,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     /* `statusFilter` is deliberately absent: it no longer goes to the server, so
        a status card click must not refetch — refetching is what replaced the
        full set the cards are counted from. */
-  }, [jobVersionsLoaded, scopeKey, jobVersionByAssessmentId, assessmentVersionByAssessmentId, searchQuery, passFailFilter, appliedDateFrom, appliedDateTo]);
+  }, [jobVersionsLoaded, scopeKey, jobVersionByAssessmentId, assessmentVersionByAssessmentId, searchQuery, passFailFilter, appliedDateFrom, appliedDateTo, refreshTick]);
 
   // Canonical status → Badge variant (shared mapping so statuses don't drift).
   const getStatusVariant = (status: string): 'success' | 'info' | 'warning' | 'muted' | 'destructive' => {
@@ -2508,8 +2533,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     <button
                       type="button"
                       onClick={() => handleDownloadPDF(candidate.id, candidate.candidateDisplayId)}
-                      disabled={downloadingPDF === candidate.id}
-                      className={CANDIDATE_RESULT_CARD_ICON_ACTION_CLASS}
+                      disabled={downloadingPDF === candidate.id || !canDownloadResultPdf(candidate)}
+                      className={`${CANDIDATE_RESULT_CARD_ICON_ACTION_CLASS} disabled:opacity-40 disabled:cursor-not-allowed`}
                       title="Download PDF Report"
                       aria-label={`Download PDF report for ${candidate.name || 'candidate'}`}
                     >
@@ -2938,13 +2963,13 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                                 <DropdownMenuSeparator className="my-1 bg-gray-100" />
                               </>
                             )}
-                            <DropdownMenuItem className={portaled ? ROW_MENU_ITEM_CLASS : 'gap-2'} onClick={() => viewCandidateDetails(candidate)}>
+                            <DropdownMenuItem className={portaled ? ROW_MENU_ITEM_CLASS : 'gap-2'} disabled={candidate.status === 'Pending'} onClick={() => viewCandidateDetails(candidate)}>
                               <Eye className="w-4 h-4 text-menu-icon-view" />
                               <span className={MENU_ITEM_SCALE_CLASS}>View Details</span>
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               className={portaled ? ROW_MENU_ITEM_CLASS : 'gap-2'}
-                              disabled={downloadingPDF === candidate.id}
+                              disabled={downloadingPDF === candidate.id || !canDownloadResultPdf(candidate)}
                               onClick={() => handleDownloadPDF(candidate.id, candidate.candidateDisplayId)}
                             >
                               {downloadingPDF === candidate.id ? (

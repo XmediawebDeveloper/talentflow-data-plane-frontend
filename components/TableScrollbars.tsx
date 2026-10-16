@@ -30,6 +30,9 @@ import { useEffect } from 'react';
    ones mounted later by a route change or a dialog. */
 
 const SHELL_SELECTOR = '.tf-table-shell';
+/** Open dropdown menus / popovers, which are portalled over the table. */
+const OPEN_POPOVER_SELECTOR =
+  '[role="menu"][data-state="open"], [data-radix-popper-content-wrapper], [data-tf-popover]';
 /**
  * Marks a shell whose native bars are suppressed (see globals.css).
  *
@@ -471,6 +474,14 @@ export default function TableScrollbars() {
           x.track.style.display = 'none';
           if (x.gutter) x.gutter.style.display = 'none';
         };
+
+        /* A row-actions menu (or any popper) open over the table: stand down.
+           The occlusion probe below samples the shell's right edge, which an
+           end-aligned menu covers, so it would read the menu's top as the end of
+           the visible table and drag the horizontal bar up onto the first rows.
+           The menu is modal and blocks scrolling, so hiding until it closes
+           loses nothing. Same for every tab - they share one table. */
+        if (document.querySelector(OPEN_POPOVER_SELECTOR)) return hideBoth();
 
         const rect = shell.getBoundingClientRect();
         if (rect.width === 0 || rect.height === 0) return hideBoth();

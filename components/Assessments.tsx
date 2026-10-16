@@ -112,7 +112,7 @@ import QuotaBadge from '@/components/ui/quota-badge';
 import AllAssessmentsTable, { VersionPill, type AssessmentRowAction } from '@/components/assessments/AllAssessmentsTable';
 import type { AssessmentResponse } from '@/lib/services/assessmentService';
 import DraftAssessmentExistsModal from '@/components/assessments/DraftAssessmentExistsModal';
-import AssessmentVersionHistoryPanel, { type AssessmentVersionRow, VersionChip, jobVersionDisplayStatus } from '@/components/assessments/AssessmentVersionHistoryPanel';
+import AssessmentVersionHistoryPanel, { type AssessmentVersionRow, VersionChip, jobVersionDisplayStatus, assessmentStatusLabel } from '@/components/assessments/AssessmentVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import { latestVersionNumber } from '@/lib/utils/jobOpeningDisplay';
 /* The Job Opening → Job Version → Assessment retrieval, as one implementation
@@ -1098,12 +1098,32 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   ) => {
     if (!assessment.jd_id) return 0;
     const fetched = lineage ?? assessmentLineages[assessment.jd_id];
-    if (fetched?.length) {
-      return fetched.filter(v => String(v.status || '').toLowerCase() !== 'archived').length;
+    // Archived versions count toward the cap (same as Create on the job page).
+    if (fetched?.length) return fetched.length;
+    return apiAssessments.filter((x: any) => x.jd_id === assessment.jd_id).length;
+  };
+
+  /** Why this version is not the one to duplicate, or null when it is. Only the
+   *  LATEST version (highest number, archived included) can be duplicated, and
+   *  an archived one must be unarchived first. */
+  const latestVersionBlockedReason = (
+    assessment: { id?: string; jd_id?: string; version?: number; status?: string },
+    lineage?: AssessmentVersionRow[],
+  ): string | null => {
+    if (!assessment.jd_id) return null;
+    const fetched = lineage ?? assessmentLineages[assessment.jd_id];
+    const rows: any[] = fetched?.length
+      ? fetched
+      : apiAssessments.filter((x: any) => x.jd_id === assessment.jd_id);
+    const mine = assessment.version || 1;
+    const latest = rows.reduce((best: any, v: any) => ((v.version || 1) > (best?.version || 0) ? v : best), null);
+    const latestVersion = latest?.version || 1;
+    const archivedSelf = String(assessment.status || '').toLowerCase() === 'archived';
+    if (mine >= latestVersion) {
+      return archivedSelf ? 'Unarchive this version to duplicate it.' : null;
     }
-    return apiAssessments.filter(
-      (x: any) => x.jd_id === assessment.jd_id && x.status !== 'Archived',
-    ).length;
+    const latestArchived = String(latest?.status || '').toLowerCase() === 'archived';
+    return `Only the latest version (V${latestVersion}) can be duplicated.${latestArchived ? ' It is archived — unarchive it to duplicate.' : ''}`;
   };
 
   /** At the cap — Duplicate must not mint another version. */
@@ -3724,9 +3744,20 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     if (isVersionCapReached(assessment, lineage)) {
       await dialog.alert({
         title: 'Maximum versions reached',
-        message: `This assessment already has ${MAX_ASSESSMENT_VERSIONS} versions (the maximum allowed). Archive or delete a version before duplicating again.`,
+        message: `All ${MAX_ASSESSMENT_VERSIONS} versions are used (the maximum allowed): ${
+          (lineage?.length ? lineage : apiAssessments.filter((x: any) => x.jd_id === assessment.jd_id))
+            .slice()
+            .sort((a: any, b: any) => (Number(a.version) || 1) - (Number(b.version) || 1))
+            .map((v: any) => `V${Number(v.version) || 1} (${assessmentStatusLabel(v.status)})`)
+            .join(', ')
+        }. Archived versions count too — delete a version before duplicating again.`,
         variant: 'warning',
       });
+      return;
+    }
+    const versionBlocked = latestVersionBlockedReason(assessment, lineage);
+    if (versionBlocked) {
+      await dialog.alert({ title: 'Cannot duplicate this version', message: versionBlocked, variant: 'warning' });
       return;
     }
     // Only one draft may exist per lineage at a time — offer to open the
@@ -3827,7 +3858,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           ? { ...a, has_revoked_invites: true }
           : a
       ));
-      await reloadAssessments();
+      await Promise.all([reloadAssessments(), refreshInviteSurfaces(true)]);
       toast.success(
         result.revoked_count > 0
           ? `Revoked ${result.revoked_count} pending invite link(s).`
@@ -4207,17 +4238,21 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
    *  hidden tab and left the popup's own rows (and stat cards) frozen on the
    *  pre-action data until a full page reload. The tab needs no refetch while
    *  hidden: it reloads on activation. */
-  const refreshInviteSurfaces = async () => {
+  const refreshInviteSurfaces = async (silent = false) => {
     const pending: Promise<unknown>[] = [];
     if (showTrackInvitesModal && selectedAssessmentForTracking) {
       pending.push(
-        loadTrackingInvitations(selectedAssessmentForTracking, trackingCurrentPage, trackingFilters),
+        loadTrackingInvitations(selectedAssessmentForTracking, trackingCurrentPage, trackingFilters, silent),
         loadTrackingInvitationSummary(selectedAssessmentForTracking),
       );
     }
     if (activeTab === 'invitation-status') {
-      pending.push(loadAllInviteStatuses());
+      pending.push(loadAllInviteStatuses(silent));
     }
+    // Cards and list rows carry per-assessment invitation counts. The silent
+    // path (fired the instant an invite is minted) leaves this to the modal's
+    // onClose reload so the page behind the popup does not flash.
+    if (!silent) pending.push(reloadAssessments());
     await Promise.all(pending);
   };
 
@@ -4412,7 +4447,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             // until some OTHER action (Resend/Revoke/Edit) happened to
             // trigger refreshInviteSurfaces. Fire it as soon as the send
             // actually completes, not just on modal close.
-            onInviteSent={refreshInviteSurfaces}
+            onInviteSent={() => { void refreshInviteSurfaces(); }}
+            onInvitesChanged={() => { void refreshInviteSurfaces(true); }}
             assessment={selectedAssessmentForShare}
             inviteSource="Assessment"
           />
@@ -5654,7 +5690,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 <div className="border-t border-gray-100 dark:border-slate-700/60 my-1"></div>
               </>
             )}
-            {assessment.status !== 'Archived' && (() => {
+            {(() => {
               // Gating computed FRONT-END, on the lineage this page has
               // actually loaded, so it does not depend on which of the
               // backend's clone_* flags a deployment happens to return.
@@ -5682,15 +5718,18 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               // a published version nobody was invited to is still editable,
               // so it is edited, not duplicated.
               const notInvited = (assessment.invitations_count || 0) === 0;
-              const buttonDisabled = !canCreateAssessment || isDraft || notInvited || capReached;
+              const versionBlocked = latestVersionBlockedReason(assessment);
+              const buttonDisabled = !canCreateAssessment || isDraft || notInvited || capReached || !!versionBlocked;
               const disabledReason = !canCreateAssessment
                 ? 'You do not have permission to create assessments'
                 : isDraft
                 ? 'Publish the assessment before duplicating.'
                 : notInvited
                 ? 'No candidates invited yet — edit this version instead.'
+                : versionBlocked
+                ? versionBlocked
                 : capReached
-                ? `Maximum ${MAX_ASSESSMENT_VERSIONS} versions reached. Archive a version to duplicate again.`
+                ? `Maximum ${MAX_ASSESSMENT_VERSIONS} versions reached — archived versions count too.`
                 : '';
               return (
                 <button
@@ -5897,10 +5936,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         : '';
     // Duplicate — blocked at the version cap.
     const capReached = isVersionCapReached(assessment);
+    const versionBlockedReason = latestVersionBlockedReason(assessment);
     const duplicateReason = !canCreateAssessment
       ? 'You do not have permission to create assessments'
+      : versionBlockedReason
+        ? versionBlockedReason
       : capReached
-        ? `Maximum ${MAX_ASSESSMENT_VERSIONS} versions reached. Archive a version to duplicate again.`
+        ? `Maximum ${MAX_ASSESSMENT_VERSIONS} versions reached — archived versions count too.`
         : '';
     // Revoke — once there are invites, and only once.
     const revokeReason = !canUpdateAssessment
@@ -6452,7 +6494,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             placeholder and its own filter fields — what is shared is the row,
             its position and its order: search, More Filters, Reset, count
             badge. */}
-        <ListToolbarSlot ref={toolbarSlot.ref} className="mb-3 border-b border-gray-200 dark:border-slate-700/60 [&>*:last-child:not(:first-child)]:mb-3" />
+        <ListToolbarSlot ref={toolbarSlot.ref} className="mb-3 [&>*:last-child:not(:first-child)]:mb-3" />
 
         {/* Total Jobs and Archived — the two tabs the page lists itself. Same
             ListToolbar, same panel, same handlers as before; the only change is
@@ -9551,7 +9593,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           // reloadAssessments() doesn't touch the Track Invites /
           // Invitation Status row data, so fire the dedicated refetch as
           // soon as the send itself completes.
-          onInviteSent={refreshInviteSurfaces}
+          onInviteSent={() => { void refreshInviteSurfaces(); }}
+            onInvitesChanged={() => { void refreshInviteSurfaces(true); }}
           assessment={selectedAssessmentForShare}
           inviteSource="Assessment"
         />

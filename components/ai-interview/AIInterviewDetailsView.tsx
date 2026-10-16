@@ -155,7 +155,7 @@ function getTimedModeAllocation(nthEnabled: boolean, hrEnabled: boolean) {
 interface AIInterviewDetailsViewProps {
   config: AIInterviewResponse;
   onBack: () => void;
-  onRefresh?: () => void;
+  onRefresh?: () => void | Promise<void>;
   currentIndex?: number;
   totalCount?: number;
   onPrev?: () => void;
@@ -553,8 +553,8 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
     setActionLoading(true);
     try {
       const result = await aiInterviewService.clone(config.id);
+      await onRefresh?.();
       toast.success(`New version created as a draft: ${result.cloned_title}`);
-      onRefresh?.();
       // Land on the new draft, where Continue Editing resumes it.
       router.push(`/recruitment/ai-interviews/${result.cloned_id}`);
     } catch (error: any) {
@@ -568,8 +568,8 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
     setActionLoading(true);
     try {
       await aiInterviewService.archive(config.id);
+      await onRefresh?.();
       toast.success('Config archived');
-      onRefresh?.();
     } catch (error: any) {
       toast.error(error.message || 'Failed to archive');
     } finally {
@@ -588,12 +588,12 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
     setActionLoading(true);
     try {
       const restored = await aiInterviewService.unarchive(config.id);
+      await onRefresh?.();
       toast.success(
         restored.status === 'draft'
           ? 'Configuration restored to Draft'
           : 'Configuration restored to Active'
       );
-      onRefresh?.();
     } catch (error: any) {
       toast.error(error.message || 'Failed to unarchive');
     } finally {
@@ -2282,6 +2282,9 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
               jdTitle={config.jd_title || config.position || 'Untitled'}
               jdShortId={config.jd_short_id}
               hideVersionDetails
+              // Resend / revoke / edit here also change the activity list and
+              // the header's invite counts — refresh both at once.
+              onChanged={async () => { await Promise.all([loadActivity(), onRefresh?.()]); }}
               // Completed rows offer View Result — swap the popup for the
               // same inline candidate result view the Results tab opens.
               onViewResult={(inv) => handleCandidateClick(inv.id)}
@@ -2300,6 +2303,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
           config={config}
           interviewVersion={interviewVersionOrdinal}
           onClose={() => setShowShareModal(false)}
+          onInvitesChanged={() => { loadActivity(); }}
           onInviteSent={() => { loadActivity(); }}
         />
       )}
