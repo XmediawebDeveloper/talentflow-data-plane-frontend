@@ -1,6 +1,6 @@
 'use client';
 
-import { FileText, Video } from 'lucide-react';
+import { ClipboardList, Video } from 'lucide-react';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { useScoringActionPermissions } from '@/components/ScoredResumesTable';
@@ -28,7 +28,7 @@ export default function RowInviteItems({ onInvite }: { onInvite: (kind: InviteKi
         title={!canCreateAssessments ? assessmentDeniedReason : undefined}
         onSelect={() => onInvite('assessment')}
       >
-        <FileText className="w-4 h-4 text-menu-icon-view" />
+        <ClipboardList className="w-4 h-4 text-menu-icon-view" />
         <span className={MENU_ITEM_SCALE_CLASS}>Create / Send Assessment</span>
       </DropdownMenuItem>
       <DropdownMenuItem
@@ -37,7 +37,7 @@ export default function RowInviteItems({ onInvite }: { onInvite: (kind: InviteKi
         title={!mayInviteAIInterview ? aiInterviewDeniedReason : undefined}
         onSelect={() => onInvite('interview')}
       >
-        <Video className="w-4 h-4 text-menu-icon-share" />
+        <Video className="w-4 h-4 text-menu-icon-ai" />
         <span className={MENU_ITEM_SCALE_CLASS}>Create / Send AI Interview</span>
       </DropdownMenuItem>
     </>
