@@ -37,7 +37,7 @@ import { INVALID_CAMERA_SELECTION_MESSAGE } from "@/lib/proctoring/virtualCamera
 // TF.js backend crashes AND benign browser-extension "message channel closed"
 // noise. Idempotent — safe even though face-verification also imports it.
 import "@/lib/tfjs-rejection-guard";
-import { loadVerifiedAudioInputs } from '@/lib/utils/mediaDeviceProbe';
+import { keepAudioContextRunning, loadVerifiedAudioInputs } from '@/lib/utils/mediaDeviceProbe';
 
 interface FaceVerificationHandle {
   startVerification: (videoElement: HTMLVideoElement, intervalMs?: number) => void;
@@ -306,6 +306,11 @@ function nowIST(): string {
 // S3 multipart-upload requires every part except the last to be >= 5 MiB; we add
 // a small margin so a slightly-undersized flush can't fail CompleteMultipartUpload.
 const RECORDING_MIN_SEGMENT_BYTES = 5 * 1024 * 1024 + 256 * 1024; // ~5.25 MiB
+// A recorder that has produced no data this long after start is stalled (its
+// audio mix isn't running) — see the watchdog in startRecorder. Two 5 s
+// timeslices plus slack.
+const RECORDING_STALL_CHECK_MS = 12_000;
+const RECORDING_STALL_RECHECK_MS = 6_000;
 const REVEAL_DEBUG = true;
 // The text reveal is anchored to audio playback so caption ≈ voice. But tracking
 // the audio position EXACTLY makes the text always trail the word you already
@@ -1583,8 +1588,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // Keeps the recording-audio boost graph alive (a GC'd AudioContext would stop
   // the boost). Used to make quiet headset mics clearly audible in the saved video.
   const recordingAudioCtxRef = useRef<AudioContext | null>(null);
+  // Removes keepAudioContextRunning's listeners for the mix context.
+  const recordingAudioKeepAliveRef = useRef<(() => void) | null>(null);
   // Close the boost AudioContext on unmount so it doesn't leak across sessions.
   useEffect(() => () => {
+    recordingAudioKeepAliveRef.current?.();
+    recordingAudioKeepAliveRef.current = null;
     try { recordingAudioCtxRef.current?.close(); } catch { /* already closed */ }
     recordingAudioCtxRef.current = null;
   }, []);
@@ -2878,7 +2887,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
           const actx = new Ctx();
           recordingAudioCtxRef.current = actx;
-          if (actx.state === 'suspended') actx.resume().catch(() => {});
+          // A mix context that isn't running makes the recorder save NOTHING
+          // (a 0-byte recording) — keep it running for the whole interview.
+          recordingAudioKeepAliveRef.current?.();
+          recordingAudioKeepAliveRef.current = keepAudioContextRunning(actx, 'Webcam');
           const dest = actx.createMediaStreamDestination();
 
           const srcNode = actx.createMediaStreamSource(new MediaStream(aTracks));
@@ -2963,9 +2975,48 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         }
         const recorder = new MediaRecorder(recordStream, opts);
         recordedChunksRef.current = [];
+        let gotData = false;
         recorder.ondataavailable = (e) => {
-          if (e.data.size > 0) recordedChunksRef.current.push(e.data);
+          if (e.data.size > 0) { gotData = true; recordedChunksRef.current.push(e.data); }
         };
+        // Stall watchdog. If the audio mix's AudioContext isn't running, Chrome's
+        // MediaRecorder emits nothing for the WHOLE interview and a 0-byte
+        // recording is saved (staging ai-d7eff074). keepAudioContextRunning
+        // usually prevents that. If the recorder is still empty after two
+        // timeslices AND the mix is not running, stop depending on Web Audio and
+        // record the raw mic track (Bina's voice tap is lost from this view, the
+        // candidate is not). "Empty" alone is not enough: under start-up load
+        // (face/object models loading) the first chunk can land after 12 s with a
+        // healthy mix — swapping then would throw that footage away. So with a
+        // running mix it just keeps checking until data arrives.
+        const checkStall = () => {
+          if (gotData || isUnmountedRef.current || isFinalizingUploadRef.current) return;
+          if (mediaRecorderRef.current !== recorder || recorder.state !== 'recording') return;
+          const mixState = recordingAudioCtxRef.current?.state ?? 'none';
+          const micTracks = stream.getAudioTracks();
+          // Already on the raw mic (the mix was never built) → nothing to fall back to.
+          const alreadyRaw = recordStream.getAudioTracks().some((t) => micTracks.includes(t));
+          if (mixState === 'running' || alreadyRaw || micTracks.length === 0) {
+            window.setTimeout(checkStall, RECORDING_STALL_RECHECK_MS);
+            return;
+          }
+          console.error(
+            `[Recording] No data ${Math.round((performance.now() - startedAt) / 1000)}s after start and the audio mix is '${mixState}' — restarting on the raw mic track`,
+          );
+          candidateAIInterviewService.reportProctorEvent(token, {
+            event_type: 'recording_stalled',
+            severity: 'medium',
+            details: { audio_mix_state: mixState, fell_back_to_raw_audio: true },
+          }).catch(() => { /* best-effort */ });
+          recorder.ondataavailable = null;
+          recorder.onerror = null;
+          try { recorder.stop(); } catch { /* already stopped */ }
+          recordStream = rawAudioFallbackStream();
+          recordStreamRef.current = recordStream;
+          startRecorder(opts);
+        };
+        const startedAt = performance.now();
+        window.setTimeout(checkStall, RECORDING_STALL_CHECK_MS);
         // The recorder dying used to be completely silent: the 30 s checkpoint
         // no-ops on a non-'recording' state and the final upload ships an empty
         // part, so a lost recording only surfaced when a recruiter opened it.
@@ -7316,6 +7367,18 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       const blob = new Blob(chunks, { type: mimeType });
       const sizeMb = (blob.size / 1024 / 1024).toFixed(1);
       console.log(`[Recording] Final segment ${segmentIndex}: ${chunks.length} chunks, ${sizeMb} MB, recorder=${recorder?.state ?? 'null'}`);
+      // Nothing was ever recorded: no earlier segment and an empty buffer. The
+      // final marker still goes out (it closes the server's multipart upload),
+      // but this is a LOST recording, not a success — say so, loudly.
+      const recordingEmpty = segmentIndex === 0 && blob.size === 0;
+      if (recordingEmpty) {
+        console.error(`[Recording] EMPTY — the webcam recording captured no data (audio mix '${recordingAudioCtxRef.current?.state ?? 'none'}')`);
+        candidateAIInterviewService.reportProctorEvent(token, {
+          event_type: 'recording_failed',
+          severity: 'high',
+          details: { error: 'empty_recording', audio_mix_state: recordingAudioCtxRef.current?.state ?? 'none' },
+        }).catch(() => { /* best-effort */ });
+      }
 
       // RETRY the final upload. This request is what turns the already-uploaded
       // parts into a playable object — if it is the only attempt and it 502s,
@@ -7331,7 +7394,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           // Recording finalized — clear the persisted index so a fresh interview
           // in the same tab starts at segment 0 again.
           try { if (typeof window !== 'undefined') window.sessionStorage.removeItem(_recSegKey); } catch { /* ignore */ }
-          console.log(`[Recording] Final upload + multipart completion succeeded${attempt > 1 ? ` (attempt ${attempt})` : ''}`);
+          if (!recordingEmpty) console.log(`[Recording] Final upload + multipart completion succeeded${attempt > 1 ? ` (attempt ${attempt})` : ''}`);
           return;
         } catch (err: unknown) {
           const msg = getErrorMessage(err);

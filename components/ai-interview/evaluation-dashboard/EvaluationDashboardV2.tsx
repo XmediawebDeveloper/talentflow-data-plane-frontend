@@ -1044,7 +1044,12 @@ export function QuestionsView({ data, renderAnswerAction }: {
           This interview was terminated before completion. The scores below are for attended questions only; no overall pass/fail or final match score is generated.
         </div>
       )}
-      <div className="flex items-center gap-2 pt-1 pb-1">
+      {/* Sticky so the All / Sections toggle stays reachable while scrolling a
+          long question list. --crumb-h is the measured height of the page's
+          sticky breadcrumb (set by CandidateResultsView); 3rem matches the left
+          tab rail's offset where it isn't set. -mx-6 px-6 stretches the white
+          backdrop to the card's padding so cards scroll cleanly beneath it. */}
+      <div className="sticky top-[var(--crumb-h,3rem)] z-20 -mx-6 px-6 py-2 bg-white flex items-center gap-2">
         {viewMode === 'all' ? (
           <>
             <div className="text-base font-bold text-gray-900">All Questions</div>
