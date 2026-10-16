@@ -75,6 +75,7 @@ export interface AIMatchSessionResponse {
   status: string;
   created_at: string;
   completed_at?: string;
+  created_by_name?: string | null;
   results: AIMatchResultItem[];
   // Fresh runs only: how many candidates passed the similarity threshold.
   // AI Talent Match is free (no Resume Scoring units), so all are returned.

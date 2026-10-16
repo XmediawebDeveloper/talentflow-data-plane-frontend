@@ -839,7 +839,7 @@ export default function VersionInviteDialog({
         />
       )}
       {viewingInterviewId && (
-        <ConfigurePreviewDialog configId={viewingInterviewId} onClose={() => setViewingInterviewId(null)} />
+        <ConfigurePreviewDialog configId={viewingInterviewId} onClose={() => setViewingInterviewId(null)} cancelInFooter />
       )}
       {editing && (
         <AssessmentConfigureModal

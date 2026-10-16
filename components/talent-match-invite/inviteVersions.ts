@@ -316,7 +316,10 @@ const archiveItem = (v: InviteVersion, perms: VersionPermissions): VersionAction
   disabledReason: perms.canArchive ? undefined : 'You do not have permission to archive',
   confirm: {
     title: `Archive v${v.version}?`,
-    message: `It is hidden from invite lists. It still counts toward the ${MAX_VERSIONS_PER_TYPE}-version limit.`,
+    /* AI interviews have one version per job for now, so no version limit to name. */
+    message: v.kind === 'interview'
+      ? 'It can no longer be sent to candidates. You can unarchive it later.'
+      : `It is hidden from invite lists. It still counts toward the ${MAX_VERSIONS_PER_TYPE}-version limit.`,
     confirmText: 'Archive',
     destructive: true,
   },
@@ -427,6 +430,20 @@ export function versionActions(v: InviteVersion, versions: InviteVersion[], perm
     },
   });
   if (v.status !== 'archived') items.push(archiveItem(v, perms));
+  else {
+    /* The AI Interviews page's Unarchive: the server restores it to Draft
+       or Active, whichever it was. */
+    items.push({
+      action: 'unarchive',
+      label: 'Unarchive',
+      disabledReason: perms.canArchive ? undefined : 'You do not have permission to unarchive',
+      confirm: {
+        title: `Unarchive v${v.version}?`,
+        message: 'It leaves the archive and is restored to Draft or Active, as it was before.',
+        confirmText: 'Unarchive',
+      },
+    });
+  }
   return items;
 }
 
@@ -447,6 +464,8 @@ export async function runVersionAction(v: InviteVersion, action: 'publish' | 'pa
   }
   if (action === 'publish') await aiInterviewService.publishConfig(v.id);
   else if (action === 'archive') await aiInterviewService.archive(v.id);
+  // The AI Interviews page's Unarchive.
+  else if (action === 'unarchive') await aiInterviewService.unarchive(v.id);
 }
 
 /** The assessment as it stands now, for the Invite to Assessment popup's

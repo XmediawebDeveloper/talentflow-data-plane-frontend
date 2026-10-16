@@ -10,9 +10,10 @@ import {
   Trash2, Settings2,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import UnsavedChangesModal from '@/components/UnsavedChangesModal';
-import { useEmbeddedWizard, useWizardRouter, useWizardSearchParams } from './embeddedWizardNav';
+import { useEmbeddedWizard, useWizardRouter, useWizardSearchParams, WizardLayer } from './embeddedWizardNav';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import { Button } from '@/components/ui/button';
 import type {
@@ -1007,7 +1008,9 @@ function HRSection({
   };
 
   return (
-    <div className={`rounded-xl transition-all ${enabled ? 'bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5' : 'border border-gray-100 bg-slate-50 opacity-60'}`}>
+    /* The same card on or off, as the Nice-To-Have Skills section — off is
+       told by the switch and the hidden body, not by greying the card. */
+    <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
       <div className="flex flex-wrap items-start justify-between gap-3 px-4 py-3 border-b border-gray-100">
         <SectionHeader
           icon={Users}
@@ -1347,7 +1350,8 @@ export default function AIInterviewConfig() {
   const router = useWizardRouter();
   const searchParams = useWizardSearchParams();
   /* Run inside the Create / Send AI Interview popup (AIInterviewWizardDialog). */
-  const embedded = !!useEmbeddedWizard();
+  const wizardNav = useEmbeddedWizard();
+  const embedded = !!wizardNav;
   const jdId = searchParams.get('jd_id');
   const configId = searchParams.get('config_id'); // set when editing an existing config (any status)
   // Set when the flow was entered from a JD's Job Details page. Keeps the
@@ -2980,6 +2984,55 @@ export default function AIInterviewConfig() {
     setPendingNavigation(null);
   };
 
+  /* ── Inside the wizard popup: the footer's Cancel ──
+     Asks to save or discard only when the form has changed. The baseline is
+     the form as it stands when the recruiter first touches it, so the values
+     the step settles into while it loads never count as a change. */
+  const editSnapshot = useMemo(
+    () => JSON.stringify([mth, nth, hrPct, hrEnabled, hrSelectedIds, hrQuestionStages, hrQuestionTypeOverrides, mode, sttModel, recordingEnabled, environmentVerificationEnabled, availableLanguages, introVideoUrl]),
+    [mth, nth, hrPct, hrEnabled, hrSelectedIds, hrQuestionStages, hrQuestionTypeOverrides, mode, sttModel, recordingEnabled, environmentVerificationEnabled, availableLanguages, introVideoUrl],
+  );
+  const editSnapshotRef = useRef(editSnapshot);
+  const editBaselineRef = useRef<string | null>(null);
+  useEffect(() => {
+    editSnapshotRef.current = editSnapshot;
+  }, [editSnapshot]);
+  const markEditStart = () => {
+    if (editBaselineRef.current === null) editBaselineRef.current = editSnapshotRef.current;
+  };
+  const requestCancel = async () => {
+    const changed = editBaselineRef.current !== null && editBaselineRef.current !== editSnapshotRef.current;
+    if (changed) {
+      // Any address outside the wizard ends the popup once saved / discarded.
+      setPendingNavigation(jdId ? `/recruitment/job-details?id=${encodeURIComponent(jdId)}` : '/recruitment/ai-interviews');
+      setShowUnsavedDialog(true);
+      return;
+    }
+    // Nothing changed: leave without asking, as Discard would — a draft this
+    // visit only auto-created goes; one that existed before stays.
+    isNavigatingRef.current = true;
+    if (existingDraftIdRef.current && !draftExistedOnLoadRef.current) {
+      try {
+        await aiInterviewService.delete(existingDraftIdRef.current);
+        existingDraftIdRef.current = null;
+      } catch {
+        // Silent — leaving is what was asked for.
+      }
+    } else {
+      await checkpointExit();
+    }
+    wizardNav?.exit();
+  };
+  const requestCancelRef = useRef(requestCancel);
+  useEffect(() => {
+    requestCancelRef.current = requestCancel;
+  });
+  useEffect(() => {
+    if (!wizardNav) return;
+    wizardNav.setCancelHandler(() => void requestCancelRef.current());
+    return () => wizardNav.setCancelHandler(null);
+  }, [wizardNav]);
+
   /* ── Loading / null guards ── */
   // `redirecting` keeps the loader up while the router navigates away (JD not
   // found, or the JD already has a live interview). Without it `finally` clears
@@ -2998,7 +3051,7 @@ export default function AIInterviewConfig() {
   /* ─────────────────────────────────────────────────────────────────── */
 
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
+    <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950" onPointerDownCapture={markEditStart} onKeyDownCapture={markEditStart}>
       <div className="mx-auto w-full max-w-[1400px]">
         <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
           <PageBreadcrumb
@@ -3066,6 +3119,8 @@ export default function AIInterviewConfig() {
                   View JD
                 </button>
               )}
+              {/* The wizard popup is opened for one job, so it has no Change JD. */}
+              {!embedded && (
               <button
                 type="button"
                 onClick={() => {
@@ -3076,6 +3131,7 @@ export default function AIInterviewConfig() {
               >
                 Change JD
               </button>
+              )}
             </div>
           </div>
         </div>
@@ -3954,66 +4010,92 @@ export default function AIInterviewConfig() {
             outcomes, and they now sit where the form ends rather than beside
             the summary the recruiter is still reading. Not sticky: it sits
             in normal flow at the end of the page, below the last section. */}
-        <div className="mt-6 pt-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3">
-          {/* On phones the bar is two rows (leave / advance) rather than four
-              stacked buttons. */}
-          <div className="flex items-center justify-between sm:justify-start gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setPendingNavigation('/recruitment/ai-interviews/jd-selection');
-                setShowUnsavedDialog(true);
-              }}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Back to JD
-            </button>
-            <WizardDiscardButton onClick={handleDiscardDraft} disabled={savingDraft} />
-          </div>
-
-          <div className="flex flex-row items-stretch sm:items-center gap-2">
-            <button
-              onClick={handleSaveAsDraft}
-              disabled={savingDraft}
-              className="flex-1 sm:flex-none whitespace-nowrap inline-flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 text-sm border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {savingDraft ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              {savingDraft ? 'Saving…' : 'Save as Draft'}
-            </button>
-
-            {/* No native `title` on the button — the styled bubble below
-                already shows `continueDisabledReason`, and setting both made
-                the browser draw a second plain tooltip over it. */}
-            <div className="relative group flex-1 sm:flex-none">
-              <button
-                onClick={handleContinueToClusters}
-                disabled={!canContinueToClusters}
-                aria-disabled={!canContinueToClusters}
-                className={`w-full whitespace-nowrap inline-flex items-center justify-center gap-2 px-3 sm:px-5 py-2.5 text-sm rounded-lg transition-colors ${
-                  canContinueToClusters
-                    ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
-                    : 'bg-slate-200 text-gray-400 cursor-not-allowed'
-                }`}
-              >
-                {savingDraft ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                {savingDraft ? 'Saving…' : (
-                  <>
-                    <span className="sm:hidden">Continue</span>
-                    <span className="hidden sm:inline">Continue to Clusters</span>
-                  </>
-                )}
-                {!savingDraft && <ChevronRight className="w-4 h-4" />}
-              </button>
-              {!canContinueToClusters && continueDisabledReason && (
-                <div className="pointer-events-none absolute bottom-full right-0 mb-2 px-3 py-2 text-xs text-white bg-gray-900 rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-normal w-max max-w-[calc(100vw-2rem)] sm:max-w-xs z-10">
-                  {continueDisabledReason}
-                  <div className="absolute top-full right-6 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900" />
-                </div>
+        {(() => {
+          /* Leaving (start) and advancing (end). In the wizard popup they sit in
+             its sticky footer, around its Cancel, and Back to JD is not offered:
+             the popup is opened for one job. */
+          const leaveActions = (
+            <>
+              {!embedded && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPendingNavigation('/recruitment/ai-interviews/jd-selection');
+                    setShowUnsavedDialog(true);
+                  }}
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Back to JD
+                </button>
               )}
+              <WizardDiscardButton onClick={handleDiscardDraft} disabled={savingDraft} />
+            </>
+          );
+          const advanceActions = (
+            <>
+              <button
+                onClick={handleSaveAsDraft}
+                disabled={savingDraft}
+                className="flex-1 sm:flex-none whitespace-nowrap inline-flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 text-sm border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {savingDraft ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                {savingDraft ? 'Saving…' : 'Save as Draft'}
+              </button>
+
+              {/* No native `title` on the button — the styled bubble below
+                  already shows `continueDisabledReason`, and setting both made
+                  the browser draw a second plain tooltip over it. */}
+              <div className="relative group flex-1 sm:flex-none">
+                <button
+                  onClick={handleContinueToClusters}
+                  disabled={!canContinueToClusters}
+                  aria-disabled={!canContinueToClusters}
+                  className={`w-full whitespace-nowrap inline-flex items-center justify-center gap-2 px-3 sm:px-5 py-2.5 text-sm rounded-lg transition-colors ${
+                    canContinueToClusters
+                      ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
+                      : 'bg-slate-200 text-gray-400 cursor-not-allowed'
+                  }`}
+                >
+                  {savingDraft ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  {savingDraft ? 'Saving…' : (
+                    <>
+                      <span className="sm:hidden">Continue</span>
+                      <span className="hidden sm:inline">Continue to Clusters</span>
+                    </>
+                  )}
+                  {!savingDraft && <ChevronRight className="w-4 h-4" />}
+                </button>
+                {!canContinueToClusters && continueDisabledReason && (
+                  <div className="pointer-events-none absolute bottom-full right-0 mb-2 px-3 py-2 text-xs text-white bg-gray-900 rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-normal w-max max-w-[calc(100vw-2rem)] sm:max-w-xs z-10">
+                    {continueDisabledReason}
+                    <div className="absolute top-full right-6 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900" />
+                  </div>
+                )}
+              </div>
+            </>
+          );
+          if (embedded) {
+            return (
+              <>
+                {wizardNav?.footerStartEl && createPortal(leaveActions, wizardNav.footerStartEl)}
+                {wizardNav?.footerEndEl && createPortal(advanceActions, wizardNav.footerEndEl)}
+              </>
+            );
+          }
+          return (
+            <div className="mt-6 pt-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3">
+              {/* On phones the bar is two rows (leave / advance) rather than four
+                  stacked buttons. */}
+              <div className="flex items-center justify-between sm:justify-start gap-2">
+                {leaveActions}
+              </div>
+              <div className="flex flex-row items-stretch sm:items-center gap-2">
+                {advanceActions}
+              </div>
             </div>
-          </div>
-        </div>
+          );
+        })()}
       </div>
 
       {/* Video Preview Dialog */}
@@ -4048,11 +4130,16 @@ export default function AIInterviewConfig() {
 
       {/* ── Job description, in place ── */}
       {jdViewOpen && jdId && (
-        <JDFullViewModal
-          jdId={jdId}
-          jdTitle={selectedJd?.title}
-          onClose={() => setJdViewOpen(false)}
-        />
+        <WizardLayer>
+          <JDFullViewModal
+            jdId={jdId}
+            jdTitle={selectedJd?.title}
+            onClose={() => setJdViewOpen(false)}
+            /* In the popup, the job's card opens the JD, as on Job Details. */
+            showJobCard={embedded}
+            cancelInFooter={embedded}
+          />
+        </WizardLayer>
       )}
 
       {/* Unsaved Changes — the shared prompt. Its own wording, because what

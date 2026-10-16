@@ -1,6 +1,7 @@
 'use client';
 
-import { createContext, useContext, useMemo } from 'react';
+import { createContext, useContext, useMemo, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 /**
@@ -19,6 +20,13 @@ export interface EmbeddedWizardNav {
   back: () => void;
   /** Leave the wizard — the popup closes and the host re-reads its list. */
   exit: () => void;
+  /** The popup's sticky footer: a step portals its actions here — leaving
+   *  actions to the start (left), advancing ones to the end, after Cancel. */
+  footerStartEl: HTMLElement | null;
+  footerEndEl: HTMLElement | null;
+  /** A step's own answer to the footer's Cancel (e.g. ask to save its
+   *  changes first); null restores the default, which just closes. */
+  setCancelHandler: (handler: (() => void) | null) => void;
 }
 
 const EmbeddedWizardContext = createContext<EmbeddedWizardNav | null>(null);
@@ -26,6 +34,17 @@ export const EmbeddedWizardProvider = EmbeddedWizardContext.Provider;
 
 /** The popup's navigator, or null on the wizard's own pages. */
 export const useEmbeddedWizard = () => useContext(EmbeddedWizardContext);
+
+/**
+ * A step's own popup (e.g. View JD's job description) — over the wizard popup
+ * while embedded: lifted to <body> on a layer above it, so it is never drawn
+ * inside, or under, the popups it was opened from. On the pages, in place.
+ */
+export function WizardLayer({ children }: { children: ReactNode }) {
+  const nav = useContext(EmbeddedWizardContext);
+  if (!nav || typeof document === 'undefined') return <>{children}</>;
+  return createPortal(<div className="relative z-[70]">{children}</div>, document.body);
+}
 
 /** `useRouter`, routed to the popup's address while the wizard is embedded. */
 export function useWizardRouter(): ReturnType<typeof useRouter> {
