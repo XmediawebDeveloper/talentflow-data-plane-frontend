@@ -22,7 +22,7 @@ import {
   interviewDuplicateBlockedReason,
   interviewEditBlockedReason,
 } from '@/lib/utils/aiInterviewVersion';
-import { aiInterviewDraftResumeHref } from '@/lib/utils/aiInterviewDraftResume';
+import { aiInterviewDraftResumeHref, aiInterviewConfigureHref } from '@/lib/utils/aiInterviewDraftResume';
 import { jdService, type JDLineageVersion, type JDResponse } from '@/lib/services/jdService';
 import JDIdentityHeader from '@/components/jobs/JDIdentityHeader';
 import JDOverviewSections from '@/components/jobs/JDOverviewSections';
@@ -555,8 +555,8 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
       const result = await aiInterviewService.clone(config.id);
       await onRefresh?.();
       toast.success(`New version created as a draft: ${result.cloned_title}`);
-      // Land on the new draft, where Continue Editing resumes it.
-      router.push(`/recruitment/ai-interviews/${result.cloned_id}`);
+      // Open the new draft straight in Configure so it can be edited at once.
+      router.push(aiInterviewConfigureHref(result.cloned_id, config.jd_id || ''));
     } catch (error: any) {
       toast.error(error.message || 'Failed to duplicate config');
     } finally {
