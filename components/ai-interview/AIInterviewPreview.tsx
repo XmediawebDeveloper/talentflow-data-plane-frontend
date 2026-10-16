@@ -2,7 +2,7 @@
 
 import { handoffContinueLabel, resolveInviteHandoffOrigin, useHandoffCandidateCrumb } from '@/lib/utils/resumeScoringInviteHandoff';
 import React, { useState, useEffect, useCallback } from 'react';
-import { useEmbeddedWizard, useWizardRouter, useWizardSearchParams } from './embeddedWizardNav';
+import { useEmbeddedWizard, useWizardRouter, useWizardSearchParams, WizardLayer } from './embeddedWizardNav';
 import {
   ArrowLeft, CheckCircle2, Loader2, Clock, Shield, Users,
   Brain, Video, Globe, Timer, Layers, Settings,
@@ -467,6 +467,16 @@ export default function AIInterviewPreview() {
   }, [published, listHref, router, embedded]);
 
   const handleSaveAsDraft = async () => {
+    // Preview saves nothing of its own — except when this is a published
+    // version being edited, which Save as Draft must take off "published".
+    if (id && interview?.status === 'published') {
+      try {
+        await aiInterviewService.update(id, { status: 'draft', save_and_exit: true });
+      } catch {
+        toast.error('Failed to save draft');
+        return;
+      }
+    }
     toast.success('Draft saved!');
     router.push(exitHref ?? '/recruitment/ai-interviews');
   };
@@ -1235,11 +1245,16 @@ export default function AIInterviewPreview() {
 
       {/* ── Job description, in place ── */}
       {jdViewOpen && interview.jd_id && (
-        <JDFullViewModal
-          jdId={interview.jd_id}
-          jdTitle={interview.jd_title ?? position}
-          onClose={() => setJdViewOpen(false)}
-        />
+        <WizardLayer>
+          <JDFullViewModal
+            jdId={interview.jd_id}
+            jdTitle={interview.jd_title ?? position}
+            onClose={() => setJdViewOpen(false)}
+            /* In the popup, the job's card opens the JD, as on Job Details. */
+            showJobCard={embedded}
+            cancelInFooter={embedded}
+          />
+        </WizardLayer>
       )}
 
       {/* ── Introduction video ── */}

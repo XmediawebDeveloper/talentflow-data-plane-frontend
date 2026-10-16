@@ -213,13 +213,13 @@ export async function loadInterviewVersions(jdId: string): Promise<InviteVersion
     .sort(byVersionDesc);
 }
 
-/** What Select AI Interview Version lists: only the job version's mapped
- *  interview (or, with no live one, its newest Draft) — never several
- *  versions for one job version. Assessments list every version. */
-export function listedVersions(kind: InviteKind, versions: InviteVersion[]): InviteVersion[] {
-  if (kind === 'assessment') return versions;
-  const mapped = versions.find((v) => v.mapped) ?? versions.find((v) => v.status === 'draft');
-  return mapped ? [mapped] : [];
+/** What the Select Version step lists. Every version of either type, as
+ *  assessments always have: several AI interview versions can be Active at once
+ *  (each has its own invitations and lock), so the step no longer narrows an
+ *  interview to the one the job version is mapped to. Only Active versions are
+ *  `sendable`; the mapped one stays marked and is still the first pick. */
+export function listedVersions(_kind: InviteKind, versions: InviteVersion[]): InviteVersion[] {
+  return versions;
 }
 
 export const loadVersions = (kind: InviteKind, jdId: string) =>
@@ -238,7 +238,13 @@ export interface VersionPermissions {
 }
 
 /** Why a new version cannot be made right now, or null when it can. */
-export function createBlockedReason(versions: InviteVersion[], perms: VersionPermissions, kind: InviteKind): string | null {
+export function createBlockedReason(
+  versions: InviteVersion[],
+  perms: VersionPermissions,
+  kind: InviteKind,
+  /** The version being copied. New version copies the latest, so it defaults to that. */
+  source?: InviteVersion,
+): string | null {
   if (!perms.canCreate) return `You do not have permission to create ${KIND_LABEL[kind].plural.toLowerCase()}`;
   if (versions.length >= MAX_VERSIONS_PER_TYPE) {
     return `Maximum ${MAX_VERSIONS_PER_TYPE} versions reached. Manage existing versions to continue.`;
@@ -248,6 +254,13 @@ export function createBlockedReason(versions: InviteVersion[], perms: VersionPer
      types so a sixth draft cannot be stacked behind five. */
   const draft = versions.find((v) => v.status === 'draft');
   if (draft) return `Publish or finish Draft v${draft.version} before creating another version.`;
+  /* An AI interview version is only duplicated once it has been sent - until
+     then it is still editable (the backend's clone rule). New version copies the
+     latest, so that is the one that must have been sent. */
+  const copied = source ?? versions[0];
+  if (kind === 'interview' && copied && !hasBeenSent(copied)) {
+    return `No candidates invited to v${copied.version} yet — edit it instead.`;
+  }
   return null;
 }
 
@@ -266,32 +279,18 @@ export function createPageHref(kind: InviteKind, jdId: string, jdTitle: string, 
 }
 
 /**
- * Duplicate `source` as a new Draft — the next version. Assessments use the
- * clone endpoint (Job Details' Create, the Assessments page's Duplicate); AI
- * interviews have no clone endpoint, so the source's full config is read and
- * created again on the same job, as the AI interview wizard creates one.
+ * Duplicate `source` as a new Draft - the next version. Both types use their
+ * clone endpoint (Job Details' Create, the Assessments / AI Interviews pages'
+ * Duplicate), so the same rules apply wherever it is triggered: the source must
+ * have been invited, one draft per lineage, the version cap. For an interview the
+ * clone keeps the AI-xxx ID and takes the next V-number.
  * Resolves to the new draft's id.
  */
 export async function duplicateVersion(source: InviteVersion): Promise<string> {
   if (source.kind === 'assessment') {
     return (await assessmentService.clone(source.id)).cloned_id;
   }
-  const full = await aiInterviewService.get(source.id);
-  const created = await aiInterviewService.create({
-    position: full.position,
-    jd_id: full.jd_id,
-    duration_minutes: full.duration_minutes,
-    rounds_config: full.rounds_config,
-    recording_enabled: full.recording_enabled,
-    environment_verification_enabled: full.environment_verification_enabled,
-    send_email_reminder: full.send_email_reminder,
-    enable_ai_analysis: full.enable_ai_analysis,
-    ai_voice_language: full.ai_voice_language,
-    special_instructions: full.special_instructions,
-    title: (full as { title?: string }).title || `${full.position || full.jd_title || 'AI Interview'} - AI Interview`,
-    introduction_video_url: (full as { introduction_video_url?: string }).introduction_video_url,
-  });
-  return created.id;
+  return (await aiInterviewService.clone(source.id)).cloned_id;
 }
 
 /* ── Version actions (the ⋯ menu) ───────────────────────────────────── */
@@ -317,7 +316,10 @@ const archiveItem = (v: InviteVersion, perms: VersionPermissions): VersionAction
   disabledReason: perms.canArchive ? undefined : 'You do not have permission to archive',
   confirm: {
     title: `Archive v${v.version}?`,
-    message: `It is hidden from invite lists. It still counts toward the ${MAX_VERSIONS_PER_TYPE}-version limit.`,
+    /* AI interviews have one version per job for now, so no version limit to name. */
+    message: v.kind === 'interview'
+      ? 'It can no longer be sent to candidates. You can unarchive it later.'
+      : `It is hidden from invite lists. It still counts toward the ${MAX_VERSIONS_PER_TYPE}-version limit.`,
     confirmText: 'Archive',
     destructive: true,
   },
@@ -353,7 +355,8 @@ export function publishAction(v: InviteVersion, perms: VersionPermissions): Vers
  *
  * AI interviews: a Draft offers the AI Interviews page's draft actions —
  * Continue Editing (the wizard popup, where it publishes), View Details,
- * Delete; any other status View, Duplicate, Archive.
+ * Delete. An Active version: View, Edit (only while never sent), Duplicate
+ * (only once sent), Archive. Any other status: View, Duplicate, Archive.
  */
 export function versionActions(v: InviteVersion, versions: InviteVersion[], perms: VersionPermissions): VersionActionItem[] {
   const noUpdate = 'You do not have permission to edit';
@@ -398,7 +401,24 @@ export function versionActions(v: InviteVersion, versions: InviteVersion[], perm
   }
 
   const items: VersionActionItem[] = [{ action: 'view', label: 'View' }];
-  const blocked = createBlockedReason(versions, perms, v.kind);
+  /* Edit: only while nobody has been invited to THIS version - the Assessment
+     rule. A sent version is locked; Duplicate makes the next one. */
+  if (v.status === 'active') {
+    items.push({
+      action: 'edit',
+      label: 'Edit',
+      disabledReason: !perms.canUpdate
+        ? noUpdate
+        : hasBeenSent(v)
+          ? 'Cannot edit — this version has already been sent to candidates. Duplicate it to create a new version.'
+          : undefined,
+    });
+  }
+  /* Duplicate: only a sent version (an unsent one is edited), judged on this
+     version's own invitations, then the shared draft / cap gate. */
+  const blocked = !hasBeenSent(v) && v.status !== 'archived'
+    ? 'No candidates invited yet — edit this version instead.'
+    : createBlockedReason(versions, perms, v.kind, v);
   items.push({
     action: 'duplicate',
     label: 'Duplicate',
@@ -410,6 +430,20 @@ export function versionActions(v: InviteVersion, versions: InviteVersion[], perm
     },
   });
   if (v.status !== 'archived') items.push(archiveItem(v, perms));
+  else {
+    /* The AI Interviews page's Unarchive: the server restores it to Draft
+       or Active, whichever it was. */
+    items.push({
+      action: 'unarchive',
+      label: 'Unarchive',
+      disabledReason: perms.canArchive ? undefined : 'You do not have permission to unarchive',
+      confirm: {
+        title: `Unarchive v${v.version}?`,
+        message: 'It leaves the archive and is restored to Draft or Active, as it was before.',
+        confirmText: 'Unarchive',
+      },
+    });
+  }
   return items;
 }
 
@@ -430,6 +464,8 @@ export async function runVersionAction(v: InviteVersion, action: 'publish' | 'pa
   }
   if (action === 'publish') await aiInterviewService.publishConfig(v.id);
   else if (action === 'archive') await aiInterviewService.archive(v.id);
+  // The AI Interviews page's Unarchive.
+  else if (action === 'unarchive') await aiInterviewService.unarchive(v.id);
 }
 
 /** The assessment as it stands now, for the Invite to Assessment popup's

@@ -80,6 +80,9 @@ const UI_COOLDOWN_PER_TYPE: Record<ProctoringEventType, number> = {
   gaze_away: 8000,
   face_mismatch: 10000,
   face_identity_changed: 15000,
+  // Fires at most once per session anyway.
+  face_verification_unavailable: 600000,
+  face_unverifiable: 15000,
   voice_mismatch: 10000,
   voice_identity_changed: 15000,
   screen_share_stopped: 10000,
@@ -120,7 +123,7 @@ const UI_ONLY_EVENT_TYPES: ReadonlySet<ProctoringEventType> = new Set<Proctoring
 // ("the phone detector couldn't start") — the candidate can do nothing about it
 // and telling them a proctoring check is DOWN actively invites cheating.
 const BACKEND_ONLY_EVENT_TYPES: ReadonlySet<ProctoringEventType> =
-  new Set<ProctoringEventType>(['object_detection_unavailable']);
+  new Set<ProctoringEventType>(['object_detection_unavailable', 'face_verification_unavailable']);
 // Window during which a fresh speaker-identity event suppresses the
 // voice_detected hint — the identity layer already covered it.
 const IDENTITY_SUPPRESSION_MS = 5000;
@@ -1245,7 +1248,7 @@ export function useInterviewProctoringMonitor({
     // These bypass emitEvent (go directly to the bus), so we listen here and
     // queue them for backend logging without re-emitting to the bus.
     const IDENTITY_EVENTS: ProctoringEventType[] = [
-      'face_mismatch', 'face_identity_changed',
+      'face_mismatch', 'face_identity_changed', 'face_unverifiable',
       'voice_mismatch', 'voice_identity_changed',
     ];
     const unsubIdentity = InterviewEventBus.subscribe((event) => {
@@ -1352,13 +1355,17 @@ function getSeverity(type: ProctoringEventType): 'minor' | 'moderate' | 'severe'
     // Moderate (2 pts) — suspicious but not conclusive
     camera_obstructed:        'moderate',
     voice_detected:           'minor',
-    multiple_voices:          'moderate',
     screenshot_attempt:       'moderate',
     screen_recording_attempt: 'moderate',
     face_missing:             'moderate',
-    face_mismatch:            'moderate',
-    voice_mismatch:           'moderate',
     // Severe (3 pts) — strong integrity signals
+    // Every person-change signal (face + voice) is severe (2026-10-16),
+    // "possible" tier included.
+    multiple_voices:          'severe',
+    voice_mismatch:           'severe',
+    face_mismatch:            'severe',
+    face_verification_unavailable: 'severe',
+    face_unverifiable:        'severe',
     camera_disabled:          'severe',
     microphone_disabled:      'severe',
     // Allowed fallback to a system-check-verified mic — recorded, not halting.

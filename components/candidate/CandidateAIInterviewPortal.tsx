@@ -425,6 +425,9 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     onFaceIdentityChanged: (distance) => {
       InterviewEventBus.emit('face_identity_changed', { distance: distance.toFixed(3) });
     },
+    onFaceUnverifiable: (reason, checks) => {
+      InterviewEventBus.emit('face_unverifiable', { reason, checks });
+    },
   });
   const voiceVerification = useInterviewVoiceVerification({
     onVoiceMismatch: (similarity) => {
@@ -441,12 +444,18 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       const ok = await faceRegistrationPromiseRef.current;
       return ok || faceVerification.hasBaseline();
     }
-    if (!identityPhotoRef.current) return false;
-
-    faceRegistrationPromiseRef.current = withTimeout(
-      faceVerification.registerFaceFromBlob(identityPhotoRef.current),
-      8000,
-    )
+    faceRegistrationPromiseRef.current = (async () => {
+      // The Identity-step photo is the ONLY face reference. It lives in memory,
+      // so after a page reload re-fetch the stored copy from the backend rather
+      // than registering whoever happens to be in front of the camera now.
+      if (!identityPhotoRef.current) {
+        const stored = await candidateAIInterviewService.getIdentityPhoto(token);
+        if (!stored) return false;
+        identityPhotoRef.current = stored;
+        setCandidatePhotoUrl((prev) => prev ?? URL.createObjectURL(stored));
+      }
+      return withTimeout(faceVerification.registerFaceFromBlob(identityPhotoRef.current), 8000);
+    })()
       .then((ok) => Boolean(ok))
       .catch(() => false)
       .finally(() => {
@@ -455,7 +464,23 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
 
     const ok = await faceRegistrationPromiseRef.current;
     return ok || faceVerification.hasBaseline();
-  }, [faceVerification]);
+  }, [faceVerification, token]);
+
+  // A reload that resumes PAST the system check (intro video … interview)
+  // skips onRegisterFace, which used to leave no face reference at all for the
+  // whole interview. Re-register from the stored Identity photo on those steps.
+  // Not during system_check itself: its face-api polling must stop first
+  // (concurrent TF.js calls corrupt the backend) — onRegisterFace covers it.
+  // One attempt per page load — faceVerification is a fresh object each render,
+  // and a 404 (no stored photo) must not turn into a request per render.
+  const photoBaselineReloadTriedRef = useRef(false);
+  useEffect(() => {
+    if (step === 'loading' || step === 'consent' || step === 'identity' || step === 'reauth'
+      || step === 'system_check' || step === 'completed' || step === 'terminated' || step === 'error') return;
+    if (photoBaselineReloadTriedRef.current || faceVerification.hasBaseline()) return;
+    photoBaselineReloadTriedRef.current = true;
+    void ensureFaceBaselineFromIdentityPhoto();
+  }, [step, faceVerification, ensureFaceBaselineFromIdentityPhoto]);
 
   // Post-check step persistence goes through aiInterviewSessionStore, which
   // mirrors to localStorage with a TTL so an accidental tab close within the
@@ -3988,13 +4013,14 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
           token={token}
           position={interview.position}
           onAllPassed={handleSystemCheckPassed}
-          onRegisterFace={async (video) => {
-            // Prefer the identity photo blob (better quality than live video).
+          onRegisterFace={async () => {
+            // The Identity-step photo is the ONLY reference — never fall back to
+            // live frames, which would enrol whoever is on camera right now.
+            // No baseline → face_verification_unavailable (severe) in the interview.
             // Called here — after StepSystemCheck stops all face polling — so there
             // is no concurrent TF.js/WebGL call that could corrupt the backend.
             if (await ensureFaceBaselineFromIdentityPhoto()) return true;
-            if (faceVerification.hasBaseline()) return true;
-            return faceVerification.registerFace(video);
+            return faceVerification.hasBaseline();
           }}
           onVerifyFace={faceVerification.baselineReady ? faceVerification.verifyCurrentFace : undefined}
           onEnrollVoice={async (stream, onPhase) => {

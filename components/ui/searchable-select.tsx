@@ -64,6 +64,9 @@ export interface SearchableSelectProps {
    * trigger's chrome changes — the search box and option list are unaffected.
    */
   variant?: 'bordered' | 'pill';
+  /** Extra trigger classes, merged last (tailwind-merge), for a caller that
+   *  must match a neighbouring native `<select>`'s text exactly. */
+  triggerClassName?: string;
 }
 
 export default function SearchableSelect({
@@ -79,6 +82,7 @@ export default function SearchableSelect({
   className,
   ariaLabel,
   variant = 'bordered',
+  triggerClassName,
 }: SearchableSelectProps) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState('');
@@ -227,6 +231,7 @@ export default function SearchableSelect({
                     ? 'text-gray-900 dark:text-slate-100 bg-brand-blue/5 border-brand-blue/30'
                     : 'text-gray-500 dark:text-slate-400',
                 ),
+            triggerClassName,
           )}
         >
           <span className="truncate" title={selected?.label}>

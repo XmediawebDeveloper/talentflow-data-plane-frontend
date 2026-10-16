@@ -35,7 +35,11 @@ import InviteFilterBar, { EMPTY_INVITE_FILTERS, AI_INTERVIEW_INVITE_STATUS_OPTIO
 import InviteStatCards, { INVITE_CARD_TONES } from '@/components/InviteStatCards';
 import AIInterviewInviteTable, { isRevocableInvite, isExpiredForActions, resolveInviteStatus, displayInviteScore, matchesInviteResultFilter } from '@/components/AIInterviewInviteTable';
 import SearchableSelect from '@/components/ui/searchable-select';
-import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
+import {
+  interviewVersionOrdinal,
+  interviewDuplicateBlockedReason,
+  interviewEditBlockedReason,
+} from '@/lib/utils/aiInterviewVersion';
 import {
   FilterSelect,
   jobFilterOptions,
@@ -63,7 +67,7 @@ import AssessmentVersionHistoryPanel, {
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import AllInterviewsTable, { VersionPill } from '@/components/ai-interview/AllInterviewsTable';
-import { resolveAIInterviewDraftResumeHref } from '@/lib/utils/aiInterviewDraftResume';
+import { resolveAIInterviewDraftResumeHref, aiInterviewConfigureHref } from '@/lib/utils/aiInterviewDraftResume';
 
 /* The version panel's 3-dot menu trigger — the 28px bordered square matched to
    the Assessment page's `QUICK_ACTION_BASE` in Assessments.tsx. */
@@ -730,8 +734,8 @@ export default function AIInterview() {
     }
   }, []);
 
-  const loadInvitations = useCallback(async (configId: string, page: number, filters: InviteFilterState, source = '', resultFilter = '') => {
-    setLoadingInvitations(true);
+  const loadInvitations = useCallback(async (configId: string, page: number, filters: InviteFilterState, source = '', resultFilter = '', silent = false) => {
+    if (!silent) setLoadingInvitations(true);
     try {
       /* Source (email / resume) and Result (the Score column's Pass / Fail)
          have no server-side filter, so with either set the whole matching
@@ -816,9 +820,9 @@ export default function AIInterview() {
       }
     } catch (error) {
       console.error('Failed to load invitations:', error);
-      toast.error('Failed to load invitations');
+      if (!silent) toast.error('Failed to load invitations');
     } finally {
-      setLoadingInvitations(false);
+      if (!silent) setLoadingInvitations(false);
     }
   }, []);
 
@@ -838,9 +842,9 @@ export default function AIInterview() {
      request: the stat cards must keep counting the whole set while the
      table is narrowed, so narrowing happens client-side over these rows —
      same rule the Assessments page's own cross-assessment tab follows. */
-  const loadAllInviteStatuses = useCallback(async () => {
-    setIsLoadingInviteStatus(true);
-    setInviteStatusError(null);
+  const loadAllInviteStatuses = useCallback(async (silent = false) => {
+    if (!silent) setIsLoadingInviteStatus(true);
+    if (!silent) setInviteStatusError(null);
     try {
       const allConfigs = [...configs, ...archivedConfigs];
       if (allConfigs.length === 0) {
@@ -867,10 +871,34 @@ export default function AIInterview() {
           .forEach((config, index) => interviewVersionById.set(config.id, index + 1));
       });
 
+      /* Each config's invitation total in ONE request (batches of 200), so a
+         config with none is skipped outright and one with some is fetched in a
+         single call at its exact size — instead of a page_size=1 probe per
+         config followed by a second, sized request. A batch that fails leaves
+         its configs out of the map and they take the probe path below, as
+         before. */
+      const knownTotals = new Map<string, number>();
+      for (let start = 0; start < allConfigs.length; start += 200) {
+        const batch = allConfigs.slice(start, start + 200);
+        try {
+          const counts = await aiInterviewService.getInvitationCounts(batch.map((c) => c.id));
+          for (const c of batch) {
+            const entry = counts[c.id];
+            if (entry) knownTotals.set(c.id, entry.total || 0);
+          }
+        } catch {
+          /* fall back per config */
+        }
+      }
+
       const perConfig = await Promise.all(
         allConfigs.map(async (config) => {
           try {
-            const probe = await aiInterviewService.getConfigInvitations(config.id, { page: 1, page_size: 1 });
+            const known = knownTotals.get(config.id);
+            if (known === 0) return [];
+            const probe = known !== undefined
+              ? await aiInterviewService.getConfigInvitations(config.id, { page: 1, page_size: known })
+              : await aiInterviewService.getConfigInvitations(config.id, { page: 1, page_size: 1 });
             if (!probe.total) return [];
             const full = probe.total > probe.items.length
               ? await aiInterviewService.getConfigInvitations(config.id, { page: 1, page_size: probe.total })
@@ -902,13 +930,24 @@ export default function AIInterview() {
       // coming back from a candidate / job page, and the render clamps it
       // (safePage) if the reload left fewer pages.
     } catch (err: any) {
+      if (silent) return;
       console.error('Failed to load invitation statuses:', err);
       setInviteStatusError(err?.message || 'Failed to load invitation statuses');
       setInviteStatusRows([]);
     } finally {
-      setIsLoadingInviteStatus(false);
+      if (!silent) setIsLoadingInviteStatus(false);
     }
   }, [configs, archivedConfigs]);
+
+  /* Candidates open, start and finish on their own — poll quietly so the tab
+     doesn't need a page refresh. Paused while the browser tab is hidden. */
+  useEffect(() => {
+    if (activeTab !== 'invitation-status') return;
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') loadAllInviteStatuses(true);
+    }, 15000);
+    return () => clearInterval(timer);
+  }, [activeTab, loadAllInviteStatuses]);
 
   useEffect(() => {
     // Also re-fires as `configs`/`archivedConfigs` finish loading (both
@@ -924,7 +963,10 @@ export default function AIInterview() {
   const refreshAfterInviteAction = useCallback(async (configId?: string) => {
     if (viewInvitationsConfig && configId) await refreshInvitationsView(configId);
     if (activeTab === 'invitation-status') await loadAllInviteStatuses();
-  }, [viewInvitationsConfig, refreshInvitationsView, activeTab, loadAllInviteStatuses]);
+    // The interview cards/tables carry invite counts too — refresh them with it.
+    await loadData();
+    setRefreshSignal((n) => n + 1);
+  }, [viewInvitationsConfig, refreshInvitationsView, activeTab, loadAllInviteStatuses, loadData]);
 
   /* Manual Refresh in the tracking popup — same refetch the row actions use,
      in place with no page reload. Guarded so rapid clicks (or a click while
@@ -1085,7 +1127,9 @@ export default function AIInterview() {
     // 'all' now includes archived configs too, so load them for that tab as well.
     // Invitation Status spans every config too — an invite sent before its
     // interview was archived must not silently drop out of the aggregate.
-    if (activeTab === 'archived' || activeTab === 'all' || activeTab === 'invitation-status') loadArchivedConfigs();
+    // Every tab: Duplicate's latest-version and cap rules count archived versions,
+    // so the row menu on Active/Draft/All Interviews needs them too.
+    loadArchivedConfigs();
     if (activeTab === 'audit') loadAuditTrail();
     if (activeTab === 'processing') loadProcessingSessions();
   }, [activeTab, loadSettings, loadArchivedConfigs, loadAuditTrail, loadProcessingSessions, settingsSubTab, loadProctoringSettings, auditCategory, auditPage]);
@@ -1093,7 +1137,13 @@ export default function AIInterview() {
   useEffect(() => {
     if (!viewInvitationsConfig) return;
     loadInvitations(viewInvitationsConfig.id, invitationPage, inviteFilters, trackerSourceFilter, trackerResultFilter);
-  }, [viewInvitationsConfig, trackerJobScope, trackerJobVersionFilter, trackerVersionFilter, invitationPage, inviteFilters, trackerSourceFilter, trackerResultFilter, loadInvitations]);
+    const timer = setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      loadInvitations(viewInvitationsConfig.id, invitationPage, inviteFilters, trackerSourceFilter, trackerResultFilter, true);
+      loadInvitationOverview(viewInvitationsConfig.id);
+    }, 15000);
+    return () => clearInterval(timer);
+  }, [viewInvitationsConfig, trackerJobScope, trackerJobVersionFilter, trackerVersionFilter, invitationPage, inviteFilters, trackerSourceFilter, trackerResultFilter, loadInvitations, loadInvitationOverview]);
 
   // Bulk-revoke selection is scoped to the current invitations page — clear it
   // whenever the page, filters, or the open config changes so a stale selection
@@ -1106,7 +1156,18 @@ export default function AIInterview() {
   // list, so a selection made on the old one is dropped.
   useEffect(() => {
     setSelectedStatusInviteIds(new Set());
-  }, [inviteStatusFilters, inviteStatusColumnFilters, inviteStatusRows]);
+  }, [inviteStatusFilters, inviteStatusColumnFilters]);
+
+  // A background refresh swaps the rows but must not drop the recruiter's
+  // selection — only forget ids that no longer exist.
+  useEffect(() => {
+    setSelectedStatusInviteIds((prev) => {
+      if (prev.size === 0) return prev;
+      const live = new Set(inviteStatusRows.map((r: any) => r.id));
+      const next = new Set([...prev].filter((id) => live.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [inviteStatusRows]);
 
   useEffect(() => {
     if (!viewInvitationsConfig) return;
@@ -1161,9 +1222,10 @@ export default function AIInterview() {
     setDeleteLoading(true);
     try {
       await aiInterviewService.delete(deleteTarget.id);
-      toast.success('Configuration deleted');
-      loadData();
+      // Reload BEFORE announcing, so the deleted row is gone when the dialog closes.
+      await Promise.all([loadData(), loadArchivedConfigs()]);
       setRefreshSignal((n) => n + 1);
+      toast.success('Configuration deleted');
       setDeleteTarget(null);
     } catch (error) {
       console.error('Failed to delete:', error);
@@ -1176,8 +1238,10 @@ export default function AIInterview() {
   const handlePublishConfig = async (config: AIInterviewResponse) => {
     try {
       await aiInterviewService.publishConfig(config.id);
+      await loadData();
+      // The All/Active/Draft tables fetch their own rows - nudge them too.
+      setRefreshSignal((n) => n + 1);
       toast.success('Configuration published!');
-      loadData();
     } catch (error) {
       console.error('Failed to publish:', error);
       toast.error('Failed to publish configuration');
@@ -1290,29 +1354,45 @@ export default function AIInterview() {
   const handleUnarchiveConfig = async (config: AIInterviewResponse) => {
     try {
       const restored = await aiInterviewService.unarchive(config.id);
+      await Promise.all([loadData(), loadArchivedConfigs()]);
+      setRefreshSignal((n) => n + 1);
       toast.success(
         restored.status === 'draft'
           ? 'Configuration restored to Draft'
           : 'Configuration restored to Active'
       );
-      loadData();
-      loadArchivedConfigs();
-      setRefreshSignal((n) => n + 1);
     } catch (error: any) {
       toast.error(error.message || 'Failed to unarchive');
     }
     setOpenMenuId(null);
   };
 
+  /* Duplicate = mint the next VERSION of this interview (same AI-xxx ID, next V),
+     as Duplicate does on an assessment. The gate is the shared one the menu
+     item shows; the backend enforces the same three rules. */
   const handleCloneConfig = async (config: AIInterviewResponse) => {
+    setOpenMenuId(null);
+    const blocked = interviewDuplicateBlockedReason(
+      config,
+      [...configs, ...archivedConfigs],
+      canCreateAIInterviews,
+    );
+    if (blocked) {
+      toast.error(blocked);
+      return;
+    }
     try {
       const result = await aiInterviewService.clone(config.id);
-      toast.success(`Configuration duplicated: ${result.cloned_title}`);
-      loadData();
+      // The version counts the duplicate gate reads must be fresh before the
+      // recruiter can click again, so reload first.
+      await Promise.all([loadData(), loadArchivedConfigs()]);
+      setRefreshSignal((n) => n + 1);
+      toast.success(`New version created as a draft: ${result.cloned_title}`);
+      // Open the new version straight in Configure so it can be edited at once.
+      router.push(aiInterviewConfigureHref(result.cloned_id, config.jd_id || ''));
     } catch (error: any) {
       toast.error(error.message || 'Failed to duplicate');
     }
-    setOpenMenuId(null);
   };
 
   const handleCopyLink = async (config: AIInterviewResponse) => {
@@ -1988,6 +2068,7 @@ export default function AIInterview() {
           {openMenuId === menuKey && menuAnchor && typeof document !== 'undefined' && createPortal(
             <div
               ref={versionMenuRef}
+              data-tf-popover
               className="fixed w-52 bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-gray-200 dark:border-slate-700/60 py-1 z-[9999] max-h-[70dvh] overflow-y-auto"
               style={{
                 top: menuDropUp ? undefined : menuAnchor.bottom + 4,
@@ -2023,6 +2104,34 @@ export default function AIInterview() {
                   <span className={MENU_ITEM_SCALE_CLASS}>Continue Editing</span>
                 </button>
               )}
+              {/* Edit — a published version nobody has been invited to can still
+                  be edited. Once any invite exists the version is locked (every
+                  candidate sits the same interview) and the tooltip says to
+                  duplicate it instead — the Assessments Edit rule. */}
+              {isPublished && config.jd_id && (() => {
+                const editBlocked = !canUpdateAIInterviews
+                  ? 'You do not have permission to edit AI interviews'
+                  : interviewEditBlockedReason(config);
+                return (
+                  <button
+                    onClick={() => {
+                      if (editBlocked) {
+                        if (!canUpdateAIInterviews) toast.error(editBlocked);
+                        return;
+                      }
+                      setOpenMenuId(null);
+                      void resolveAIInterviewDraftResumeHref(config.id, config.jd_id!).then((href) => router.push(href));
+                    }}
+                    disabled={!!editBlocked}
+                    aria-disabled={!!editBlocked}
+                    title={editBlocked || 'Edit this version'}
+                    className={editBlocked ? VERSION_MENU_ITEM_DISABLED_CLASS : VERSION_MENU_ITEM_CLASS}
+                  >
+                    <Pencil className={`w-4 h-4 flex-shrink-0 ${editBlocked ? '' : 'text-menu-icon-edit'}`} />
+                    <span className={MENU_ITEM_SCALE_CLASS}>Edit</span>
+                  </button>
+                );
+              })()}
               {isPublished && (
                 <button
                   onClick={() => {
@@ -2067,6 +2176,35 @@ export default function AIInterview() {
                 <BarChart2 className={`w-4 h-4 flex-shrink-0 ${hasBeenShared ? 'text-menu-icon-view' : ''}`} />
                 <span className={MENU_ITEM_SCALE_CLASS}>View Results</span>
               </button>
+              {/* Duplicate — creates the next version. Disabled (reason in the
+                  tooltip) for a draft, for a version nobody was invited to
+                  (edit it instead), while another draft is open in the lineage,
+                  and at the version cap: the Assessments Duplicate gate. */}
+              {(() => {
+                const dupBlocked = interviewDuplicateBlockedReason(
+                  config,
+                  [...configs, ...archivedConfigs],
+                  canCreateAIInterviews,
+                );
+                return (
+                  <button
+                    onClick={() => {
+                      if (dupBlocked) {
+                        if (!canCreateAIInterviews) toast.error(dupBlocked);
+                        return;
+                      }
+                      void handleCloneConfig(config);
+                    }}
+                    disabled={!!dupBlocked}
+                    aria-disabled={!!dupBlocked}
+                    title={dupBlocked || 'Duplicate as a new version'}
+                    className={dupBlocked ? VERSION_MENU_ITEM_DISABLED_CLASS : VERSION_MENU_ITEM_CLASS}
+                  >
+                    <Copy className={`w-4 h-4 flex-shrink-0 ${dupBlocked ? '' : 'text-menu-icon-download'}`} />
+                    <span className={MENU_ITEM_SCALE_CLASS}>Duplicate</span>
+                  </button>
+                );
+              })()}
               <div className="my-1 h-px bg-gray-100 dark:bg-slate-800" />
               {normalizedStatus !== 'archived' && (
                 <button
@@ -2565,7 +2703,7 @@ export default function AIInterview() {
             Candidate Results / Invitation Status / Activity Logs portal theirs
             in (see their `toolbarSlot` prop), so the search box sits in the
             same spot whichever tab is active. */}
-        <div ref={setToolbarSlotEl} className="empty:hidden mb-3 border-b border-gray-200 dark:border-slate-700/60 [&>*:last-child:not(:first-child)]:mb-3" />
+        <div ref={setToolbarSlotEl} className="empty:hidden mb-3 [&>*:last-child:not(:first-child)]:mb-3" />
 
         {isConfigListTab && !showUngroupedList && toolbarSlotEl && createPortal(
           <>
@@ -3359,7 +3497,7 @@ export default function AIInterview() {
               ) : inviteStatusError ? (
                 <div className="text-center py-12">
                   <p className="text-sm text-destructive mb-3">{inviteStatusError}</p>
-                  <Button variant="primary" size="sm" onClick={loadAllInviteStatuses}>
+                  <Button variant="primary" size="sm" onClick={() => loadAllInviteStatuses()}>
                     Retry
                   </Button>
                 </div>
@@ -3704,6 +3842,7 @@ export default function AIInterview() {
                           if (failed > 0) toast.error(`Failed to revoke ${failed} invitation${failed === 1 ? '' : 's'}.`);
                           setSelectedStatusInviteIds(new Set());
                           await loadAllInviteStatuses();
+                          setRefreshSignal((n) => n + 1);
                         } finally {
                           setIsBulkRevoking(false);
                           setStatusBulkRevokeOpen(false);
@@ -4136,6 +4275,16 @@ export default function AIInterview() {
             }
           }}
           config={shareConfig}
+          onInvitesChanged={() => {
+            // Immediate, silent refresh the moment an invite / copied link
+            // exists — the 2s success popup no longer delays the trackers.
+            loadData();
+            if (viewInvitationsConfig) {
+              loadInvitations(viewInvitationsConfig.id, invitationPage, inviteFilters, trackerSourceFilter, trackerResultFilter, true);
+              loadInvitationOverview(viewInvitationsConfig.id);
+            }
+            if (activeTab === 'invitation-status') loadAllInviteStatuses(true);
+          }}
           onInviteSent={() => {
             loadData();
             // loadData() only refreshes the config list's own counters — the

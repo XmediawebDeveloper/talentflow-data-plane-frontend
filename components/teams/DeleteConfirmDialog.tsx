@@ -28,7 +28,7 @@ export default function DeleteConfirmDialog({
 }: DeleteConfirmDialogProps) {
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="max-w-md max-h-[90dvh] rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-2xl flex flex-col">
+      <AlertDialogContent className="flex max-h-[calc(100dvh-2rem)] w-full max-w-[95vw] flex-col rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:max-w-md">
         <AlertDialogHeader className="shrink-0">
           <div className="flex items-center gap-3 mb-2">
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-destructive-subtle ring-1 ring-destructive-line">

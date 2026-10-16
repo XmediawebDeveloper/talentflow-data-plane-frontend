@@ -73,6 +73,15 @@ interface AIInterviewTrackInvitesModalProps {
   /** Footer "Invite More" — the host closes this tracker and opens its own
    *  invite flow. Left out, the button is not shown. */
   onInviteMore?: () => void;
+  /** Called after a resend / revoke / edit changed invitations, once this
+   *  tracker's own rows are reloaded — so the host's counts and lists (the
+   *  Invitation Status tab, interview cards, activity) refresh at once rather
+   *  than on their next poll. */
+  onChanged?: () => void | Promise<void>;
+  /** Bump to make the tracker reload its list at once — for a host whose own
+   *  dialog (e.g. Share) adds invitations while this tracker stays mounted
+   *  underneath, so they appear without waiting for the 15s poll. */
+  refreshSignal?: number;
 }
 
 const PAGE_SIZE = 10;
@@ -99,6 +108,8 @@ export default function AIInterviewTrackInvitesModal({
   onViewResult,
   embedded = false,
   onInviteMore,
+  onChanged,
+  refreshSignal,
 }: AIInterviewTrackInvitesModalProps) {
   const [isLoading, setIsLoading] = useState(true);
 
@@ -261,6 +272,7 @@ export default function AIInterviewTrackInvitesModal({
     setShowBulkResendConfirm(false);
     setIsBulkResending(false);
     await loadInvitations(true);
+    await onChanged?.();
   };
 
   const loadInvitations = useCallback(async (silent = false) => {
@@ -352,6 +364,7 @@ export default function AIInterviewTrackInvitesModal({
       if (failed > 0) toast.error(`Failed to revoke ${failed} invitation${failed === 1 ? '' : 's'}.`);
       setSelectedIds(new Set());
       await loadInvitations(true);
+      await onChanged?.();
     } finally {
       setIsBulkRevoking(false);
       setShowBulkRevokeConfirm(false);
@@ -368,6 +381,12 @@ export default function AIInterviewTrackInvitesModal({
       if (refreshRef.current) clearInterval(refreshRef.current);
     };
   }, [isOpen, configId, loadInvitations]);
+
+  useEffect(() => {
+    if (!isOpen || !configId || !refreshSignal) return;
+    loadInvitations(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshSignal]);
 
   if (!isOpen) return null;
 
@@ -664,6 +683,7 @@ export default function AIInterviewTrackInvitesModal({
               await aiInterviewService.sendSessionEmail(inv.id, { base_url: window.location.origin });
               toast.success(`New invitation link sent to ${inv.candidate_email}`);
               await loadInvitations(true);
+              await onChanged?.();
             } catch (err: any) {
               const detail = err?.response?.data?.detail;
               const msg =
@@ -702,6 +722,7 @@ export default function AIInterviewTrackInvitesModal({
               await aiInterviewService.revokeInvitation(inv.id);
               toast.success(`Invitation for ${inv.candidate_email} has been revoked`);
               await loadInvitations(true);
+              await onChanged?.();
             } catch (err: any) {
               toast.error(err?.message || 'Failed to revoke invitation');
             } finally {
@@ -827,6 +848,7 @@ export default function AIInterviewTrackInvitesModal({
         );
       }
       await loadInvitations(true);
+      await onChanged?.();
       setEditTarget(null);
     } catch (err: any) {
       toast.error(err?.message || 'Failed to update invitation');

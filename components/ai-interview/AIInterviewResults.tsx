@@ -1,7 +1,7 @@
 'use client';
 
 import { SCORE_CELL_TEXT } from '@/lib/utils/score';
-import { Fragment, useState, useEffect, useCallback, useMemo } from 'react';
+import { Fragment, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListEmptyState from '@/components/ui/list-empty-state';
@@ -38,7 +38,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import RowInviteSubmenu from '@/components/talent-match-invite/RowInviteSubmenu';
+import RowInviteItems from '@/components/talent-match-invite/RowInviteItems';
 import { ROW_ACTION_BUTTON_CLASS, ROW_MENU_CONTENT_CLASS, ROW_MENU_ITEM_CLASS, RowDetailsPanel, RowDetailsToggle } from '@/components/ResultRowDetails';
 import { toast } from 'sonner';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
@@ -129,6 +129,9 @@ interface AIInterviewResultsProps {
    *  the ticked candidates to the host's version popup of that type
    *  (VersionInviteDialog). Other hosts leave it unset. */
   onOpenInviteDialog?: (kind: 'assessment' | 'interview', candidates: InviteCandidate[]) => void;
+  /** Job Details: told the table's record count (every page, current filters)
+   *  whenever a load lands, so the tab badge shows the number the table lists. */
+  onTotalItemsChange?: (total: number) => void;
 }
 
 /* Toggleable table columns (Actions always shows). Same Customize Columns
@@ -172,6 +175,7 @@ export function getStatusBadge(status: string) {
     case 'expired': return 'bg-gray-100 text-gray-600 ring-1 ring-gray-200';
     case 'terminated': return 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line';
     case 'cancelled': return 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line';
+    case 'revoked': return 'bg-slate-200 text-gray-700 ring-1 ring-gray-300';
     default: return 'bg-gray-100 text-gray-600 ring-1 ring-gray-200';
   }
 }
@@ -198,6 +202,7 @@ export function getStatusLabel(status: string) {
     case 'expired': return 'Expired';
     case 'terminated': return 'Terminated';
     case 'cancelled': return 'Cancelled';
+    case 'revoked': return 'Revoked';
     default: return status;
   }
 }
@@ -274,7 +279,7 @@ const SCORE_INPUT_CLASS = 'w-full min-w-0 h-9 px-3 text-sm text-black dark:text-
 const RESULT_STATUSES = new Set(['in_progress', 'completed', 'terminated']);
 const isResultStatus = (v: unknown) => RESULT_STATUS_OPTIONS.some((o) => o.value === v);
 
-export default function AIInterviewResults({ configId, configTitle, jdTitle, jdShortId, embedded = false, showStats, hideVersionDetails = false, hideJobVersion = false, onViewCandidate, breadcrumbItems, toolbarActions, emptyStateAction, jobVersion: jobVersionProp, interviewVersion: interviewVersionProp, toolbarPortal, formatCandidateName, onOpenInviteDialog }: AIInterviewResultsProps) {
+export default function AIInterviewResults({ configId, configTitle, jdTitle, jdShortId, embedded = false, showStats, hideVersionDetails = false, hideJobVersion = false, onViewCandidate, breadcrumbItems, toolbarActions, emptyStateAction, jobVersion: jobVersionProp, interviewVersion: interviewVersionProp, toolbarPortal, formatCandidateName, onOpenInviteDialog, onTotalItemsChange }: AIInterviewResultsProps) {
   /* Create / Send Assessment | AI Interview's gates — the AI Talent Match tab's own. */
   const { canCreateAssessments, assessmentDeniedReason, mayInviteAIInterview, aiInterviewDeniedReason } = useScoringActionPermissions(true);
   const showName = (name?: string | null) => (formatCandidateName && name ? formatCandidateName(name) : name);
@@ -282,6 +287,10 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
   const [sessions, setSessions] = useState<AIInterviewResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [totalSessions, setTotalSessions] = useState(0);
+  /* The host's record-count listener, in a ref so an inline callback does not
+     change loadSessions' identity (and re-fetch) on every host render. */
+  const onTotalItemsChangeRef = useRef(onTotalItemsChange);
+  onTotalItemsChangeRef.current = onTotalItemsChange;
   const [totalPages, setTotalPages] = useState(1);
   const [summary, setSummary] = useState({
     /* The server's count, before the Source / Result / Score Range filters
@@ -396,8 +405,10 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
     initialFilters: { status: DEFAULT_RESULT_STATUS, scoreMin: '', scoreMax: '', dateFrom: '', dateTo: '', jobVersion: '', interviewVersion: '', inviteSource: '', result: '' },
     onChange: () => setCurrentPage(1),
     // Score min/max is one logical range filter, and so is the date range.
+    // Job Version has no control in Job Details (toolbarPortal), so a
+    // restored value is neither counted nor applied there.
     countFilters: (f) =>
-      [f.scoreMin || f.scoreMax, f.dateFrom || f.dateTo, f.jobVersion, f.interviewVersion, f.inviteSource].filter(Boolean).length,
+      [f.scoreMin || f.scoreMax, f.dateFrom || f.dateTo, !toolbarPortal && f.jobVersion, f.interviewVersion, f.inviteSource].filter(Boolean).length,
   });
 
   /* Opening a candidate and coming back (breadcrumb or browser Back) remounts
@@ -534,6 +545,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
       }
       setSessions(shown.items);
       setTotalSessions(shown.total);
+      onTotalItemsChangeRef.current?.(shown.total);
       setTotalPages(shown.pages);
       setSummary({
         total: result.total || 0,
@@ -573,6 +585,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
           const shown = pageBySource(r);
           setSessions(shown.items);
           setTotalSessions(shown.total);
+          onTotalItemsChangeRef.current?.(shown.total);
           setTotalPages(shown.pages);
           setSummary({
             total: r.total || 0,
@@ -594,7 +607,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
   // Job/interview version are properties of this config, not of each row, so
   // the version filters narrow client-side against the resolved versions.
   const versionMatches =
-    (!jobVersionFilter || String(jobVersion) === jobVersionFilter) &&
+    (!jobVersionFilter || !!toolbarPortal || String(jobVersion) === jobVersionFilter) &&
     (!interviewVersionFilter || String(interviewVersion) === interviewVersionFilter);
   const paginatedSessions = versionMatches ? sessions : [];
 
@@ -789,10 +802,12 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
     if (failed > 0) {
       toast.error(`${failed} invitation${failed === 1 ? '' : 's'} could not be ${action === 'revoke' ? 'revoked' : 'resent'}.`);
     }
+    // Reload first, so the table is already current when the dialog closes
+    // and the selection clears (rows no longer flash their old status).
+    await loadSessions();
     setSelected(new Map());
     setIsBulkWorking(false);
     setBulkAction(null);
-    await loadSessions();
   };
 
   /* Bulk PDF download — moved inline (rather than the shared
@@ -1086,9 +1101,12 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
           // Six controls beside the search — lay out by the toolbar's own
           // width, since beside the details page's nav it's far narrower
           // than the screen. In Job Details it takes the AI Talent Match
-          // row's own layout instead (List / Grid pinned right).
-          fitToContainer={!portaled}
-          containerBreakpoint="4xl"
+          // row's layout (List / Grid pinned right), which also carries
+          // Select All and Actions, so it goes single-line only once the tab
+          // card is 64rem wide — below that the search takes its own row
+          // instead of shrinking to an icon.
+          fitToContainer
+          containerBreakpoint={portaled ? '5xl' : '4xl'}
           trailing={portaled ? <ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-9" /> : undefined}
           onToggleFilters={() => setShowFilters((v) => !v)}
           filtersOpen={showFilters}
@@ -1255,7 +1273,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             )}
             {!hideVersionDetails && (
             <>
-            {!hideJobVersion && (
+            {!hideJobVersion && !portaled && (
             <div className={portaled ? JOB_TAB_FILTER_FIELD_CLASS : 'flex-1 min-w-0 basis-[180px]'}>
               <label className={filterLabelClass}>Job Version</label>
               <select
@@ -1352,7 +1370,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                   onChange={(v) => search.setFilter('dateTo', v)}
                 />
               </div>
-              {!hideVersionDetails && !hideJobVersion && (
+              {!hideVersionDetails && !hideJobVersion && !portaled && (
                 <div>
                   <label className={filterLabelClass}>Job Version</label>
                   <SearchableSelect
@@ -1879,8 +1897,9 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                         )}
                         <td className="px-4 py-3 text-right whitespace-nowrap tf-sticky-col" onClick={portaled ? (e) => e.stopPropagation() : undefined}>
                           {portaled ? (
-                            /* The AI Talent Match table's ⋮ + ▾: Invite, View
-                               Details and Download Report in ⋮. */
+                            /* The AI Talent Match table's ⋮ + ▾: Create / Send
+                               Assessment | AI Interview, View Details and
+                               Download Report in ⋮. */
                             <div className="inline-flex items-center gap-1.5">
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
@@ -1889,9 +1908,16 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                                   </button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className={ROW_MENU_CONTENT_CLASS}>
+                                  <DropdownMenuItem className={ROW_MENU_ITEM_CLASS} onSelect={() => handleViewDetails(session)}>
+                                    <Eye className="w-4 h-4 text-menu-icon-view" />
+                                    <span>View Details</span>
+                                  </DropdownMenuItem>
+                                  {/* Create / Send — between View Details and
+                                      Download Report, the Scored Resumes row's order. */}
                                   {onOpenInviteDialog && (
                                     <>
-                                      <RowInviteSubmenu
+                                      <DropdownMenuSeparator className="my-1 bg-gray-100" />
+                                      <RowInviteItems
                                         onInvite={(kind) => onOpenInviteDialog(kind, [{
                                           id: session.resume_id || session.id,
                                           name: session.candidate_name || '',
@@ -1902,10 +1928,6 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                                       <DropdownMenuSeparator className="my-1 bg-gray-100" />
                                     </>
                                   )}
-                                  <DropdownMenuItem className={ROW_MENU_ITEM_CLASS} onSelect={() => handleViewDetails(session)}>
-                                    <Eye className="w-4 h-4 text-menu-icon-view" />
-                                    <span>View Details</span>
-                                  </DropdownMenuItem>
                                   <DropdownMenuItem
                                     className={ROW_MENU_ITEM_CLASS}
                                     disabled={!canTryReport(session) || downloadingReportId === session.id}
@@ -1926,9 +1948,9 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                           ) : (
                           <>
                           <ResultRowActions session={session} onView={() => handleViewDetails(session)} />
-                          {/* ⋮ beside View / Download: Invite ▸ Create / Send —
-                              the Scored Resumes row's Invite, for this row's
-                              candidate. */}
+                          {/* ⋮ beside View / Download: Create / Send Assessment |
+                              AI Interview — the Scored Resumes row's invite
+                              entries, for this row's candidate. */}
                           {onOpenInviteDialog && (
                             <span className="inline-flex ml-1.5 align-middle" onClick={(e) => e.stopPropagation()}>
                               <DropdownMenu>
@@ -1943,8 +1965,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                                     <MoreVertical className="w-4 h-4" />
                                   </Button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-52 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
-                                  <RowInviteSubmenu
+                                <DropdownMenuContent align="end" className="w-56 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
+                                  <RowInviteItems
                                     onInvite={(kind) => onOpenInviteDialog(kind, [{
                                       id: session.resume_id || session.id,
                                       name: session.candidate_name || '',

@@ -215,6 +215,9 @@ export interface AIInterviewResponse {
   resume_id?: string;
   config_id?: string;
   display_id?: string;
+  /** Position in the interview's lineage (V1, V2..), stored by the backend. Null on
+   *  candidate sessions and on rows that predate it. */
+  interview_version?: number | null;
   candidate_name?: string;
   candidate_email?: string;
   position?: string;

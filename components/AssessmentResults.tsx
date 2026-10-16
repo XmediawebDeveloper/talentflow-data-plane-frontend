@@ -1,4 +1,4 @@
-import { User, Clock, Timer, Award, XCircle, ChevronUp, ChevronDown, FileText, FileSpreadsheet, TrendingUp, AlertCircle, Filter, ArrowUpDown, Loader2, BarChart3, SlidersHorizontal, Columns3, Trash2, Users, Download, Play, Eye, ArrowUp, ArrowDown, MoreVertical, Video } from 'lucide-react';
+import { User, Clock, Timer, Award, XCircle, ChevronUp, ChevronDown, FileText, FileDown, FileSpreadsheet, TrendingUp, AlertCircle, Filter, ArrowUpDown, Loader2, BarChart3, SlidersHorizontal, Columns3, Trash2, Users, Download, Play, Eye, ArrowUp, ArrowDown, MoreVertical, Video } from 'lucide-react';
 import { Fragment, useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
@@ -15,7 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import RowInviteSubmenu from '@/components/talent-match-invite/RowInviteSubmenu';
+import RowInviteItems from '@/components/talent-match-invite/RowInviteItems';
 import { ROW_ACTION_BUTTON_CLASS, ROW_MENU_CONTENT_CLASS, ROW_MENU_ITEM_CLASS, RowDetailsPanel, RowDetailsToggle } from '@/components/ResultRowDetails';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import CandidateResultCard, { CANDIDATE_RESULT_CARD_ICON_ACTION_CLASS } from '@/components/assessments/CandidateResultCard';
@@ -151,6 +151,9 @@ interface AssessmentResultsProps {
    *  the ticked candidates to the host's version popup of that type
    *  (VersionInviteDialog). Other hosts leave it unset. */
   onOpenInviteDialog?: (kind: 'assessment' | 'interview', candidates: InviteCandidate[]) => void;
+  /** Job Details: told the table's record count (every page, current filters)
+   *  whenever it changes, so the tab badge shows the number the table lists. */
+  onTotalItemsChange?: (total: number) => void;
 }
 
 interface CandidateResult {
@@ -250,7 +253,7 @@ interface QuestionResult {
 const resultOrderTime = (c: { completed_at?: string; created_at?: string }) =>
   new Date(c.completed_at || c.created_at || 0).getTime();
 
-export default function AssessmentResults({ onBack, assessmentId, assessmentTitle, assessmentVersion, jdTitle, jdId, jdShortId, jdVersion, jobVersionScope = null, assessmentVersionScope = null, embedded = false, openOnTotalCandidates = false, canDownloadPDF = false, canBatchDownload = false, prevId, nextId, currentIndex, totalCount, toolbarPortal, formatCandidateName, onOpenInviteDialog }: AssessmentResultsProps) {
+export default function AssessmentResults({ onBack, assessmentId, assessmentTitle, assessmentVersion, jdTitle, jdId, jdShortId, jdVersion, jobVersionScope = null, assessmentVersionScope = null, embedded = false, openOnTotalCandidates = false, canDownloadPDF = false, canBatchDownload = false, prevId, nextId, currentIndex, totalCount, toolbarPortal, formatCandidateName, onOpenInviteDialog, onTotalItemsChange }: AssessmentResultsProps) {
   /* Create / Send Assessment | AI Interview's gates — the AI Talent Match tab's own. */
   const { canCreateAssessments, assessmentDeniedReason, mayInviteAIInterview, aiInterviewDeniedReason } = useScoringActionPermissions(true);
   const showName = (name: string) => (formatCandidateName && name ? formatCandidateName(name) : name);
@@ -564,6 +567,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const namesJobVersionScope = !!jobVersionScope;
   const namesAssessmentVersionScope = !!assessmentVersionScope;
   const jobVersionScopeApplied = useRef(false);
+  /* The job version the scope resolved to. Job Details has no Job Version
+     selector (see `showsJobVersionSelect`), so its Reset returns here rather
+     than widening the page to every job version unseen. */
+  const scopedJobVersion = useRef<'all' | number>('all');
 
   useEffect(() => {
     let cancelled = false;
@@ -589,7 +596,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
         ?? (jobVersionScope === jdId ? jdVersion ?? undefined : undefined);
       /* A version the job does not have stays on All Versions rather than
          rendering an empty table for something that isn't there. */
-      if (named !== undefined) setSelectedJobVersion(named);
+      if (named !== undefined) {
+        scopedJobVersion.current = named;
+        setSelectedJobVersion(named);
+      }
     };
 
     /* The page's own assessment, on the version it was authored against.
@@ -775,7 +785,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
    * scope, not from the narrowed set), so a dropdown cannot vanish under the
    * recruiter the moment they use it.
    */
-  const showsJobVersionSelect = jobVersionScopes.length > 1;
+  const showsJobVersionSelect = !portaled && jobVersionScopes.length > 1;
 
   /** The assessments the JOB VERSION selection covers, before the assessment
    *  version narrows it. */
@@ -807,21 +817,28 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
   /* Same rule as `effectiveJobVersion`: an assessment the job-version scope
      does not hold — left from before the job version changed, or restored from
-     a previous visit — reads as All Assessments rather than an empty table. */
+     a previous visit — reads as All Assessments rather than an empty table.
+     Embedded in Job Details (`portaled`) there is no Assessment selector (see
+     `showsAssessmentSelect`), so a restored pick must not narrow it unseen. */
   const effectiveAssessmentId: 'all' | string =
-    selectedAssessmentId !== 'all'
-    && jobVersionsLoaded
-    && !jobScopedAssessmentIds.includes(selectedAssessmentId)
+    portaled
       ? 'all'
-      : selectedAssessmentId;
+      : selectedAssessmentId !== 'all'
+        && jobVersionsLoaded
+        && !jobScopedAssessmentIds.includes(selectedAssessmentId)
+        ? 'all'
+        : selectedAssessmentId;
   const selectedAssessmentOption =
     effectiveAssessmentId === 'all' ? null : assessmentOptions.find(option => option.id === effectiveAssessmentId) ?? null;
 
   /** Offered wherever the job holds more than one assessment across all its
    *  versions — read from the whole job, not the job-version selection, so the
-   *  control does not vanish when a version with one assessment is picked. */
+   *  control does not vanish when a version with one assessment is picked.
+   *  Not in Job Details (`portaled`): there each job version holds one
+   *  assessment lineage, whose revisions are the assessments this lists, so it
+   *  repeats Assessment Version (with Job Version) and only that one is kept. */
   const showsAssessmentSelect =
-    new Set(jobVersionScopes.flatMap(scope => scope.assessmentIds)).size > 1;
+    !portaled && new Set(jobVersionScopes.flatMap(scope => scope.assessmentIds)).size > 1;
 
   /** The assessments the job version AND assessment selections cover, before
    *  the assessment version narrows them. */
@@ -886,7 +903,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   /* What the toolbar's Reset clears: search, Status and every panel filter,
      with the three scopes back to All Versions / All Assessments. */
   const clearAllFilters = () => {
-    setSelectedJobVersion('all');
+    setSelectedJobVersion(portaled ? scopedJobVersion.current : 'all');
     setSelectedAssessmentId('all');
     setSelectedAssessmentVersion('all');
     setSelectedRows([]);
@@ -975,6 +992,27 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
      are answered by the backend exactly as before. What moved to the client is
      PAGING: a page of a merged set cannot be asked for per assessment, so each
      request asks for the whole (filtered) set and the table pages over it. */
+  /* Bumped by the poll / tab-focus effect below so newly sent invitations show
+     without a manual page refresh. `silentRefreshRef` keeps those background
+     refetches from flashing the fetching state. */
+  const [refreshTick, setRefreshTick] = useState(0);
+  const silentRefreshRef = useRef(false);
+  useEffect(() => {
+    const bump = () => {
+      if (document.visibilityState !== 'visible') return;
+      silentRefreshRef.current = true;
+      setRefreshTick((t) => t + 1);
+    };
+    const timer = window.setInterval(bump, 10000);
+    document.addEventListener('visibilitychange', bump);
+    window.addEventListener('focus', bump);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', bump);
+      window.removeEventListener('focus', bump);
+    };
+  }, []);
+
   useEffect(() => {
     /* Wait for the scope. Fetching this assessment first and the job's other
        versions a moment later is precisely the flicker the selector must not
@@ -984,9 +1022,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     const fetchResults = async () => {
       if (!initialLoadDone.current) {
         setIsLoading(true);
-      } else {
+      } else if (!silentRefreshRef.current) {
         setIsFetching(true);
       }
+      silentRefreshRef.current = false;
       try {
         // Build server-side filter parameters
         const params: any = {
@@ -1160,7 +1199,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                  assessment revision its own candidate sat. */
               assessmentVersion: assessmentVersionByAssessmentId.get(sourceAssessmentId),
             };
-          }));
+            /* Results only: invited / in-progress candidates have no result to
+               show — they live on the Invitation Status tab (the AI Interview
+               Results tab lists Completed and Terminated only, too). */
+          })).filter((c: CandidateResult) => c.status === 'Completed' || c.status === 'Terminated');
 
           /* Newest first, across the merged set — on the Candidate Results
              tab's own key (`resultOrderTime`: completed_at, else created_at),
@@ -1203,7 +1245,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     /* `statusFilter` is deliberately absent: it no longer goes to the server, so
        a status card click must not refetch — refetching is what replaced the
        full set the cards are counted from. */
-  }, [jobVersionsLoaded, scopeKey, jobVersionByAssessmentId, assessmentVersionByAssessmentId, searchQuery, passFailFilter, appliedDateFrom, appliedDateTo]);
+  }, [jobVersionsLoaded, scopeKey, jobVersionByAssessmentId, assessmentVersionByAssessmentId, searchQuery, passFailFilter, appliedDateFrom, appliedDateTo, refreshTick]);
 
   // Canonical status → Badge variant (shared mapping so statuses don't drift).
   const getStatusVariant = (status: string): 'success' | 'info' | 'warning' | 'muted' | 'destructive' => {
@@ -1225,9 +1267,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
    *  row from opening a result it has no attempt for, and what the API takes as
    *  `status_filter=pending`. Renaming the value would have had to be matched in
    *  every one of those places and in the backend. What changes is the reading —
-   *  "Not Started", which is what the state means: invited, never begun. One
-   *  constant, so the card, the badge and the filter option cannot drift apart. */
-  const PENDING_STATUS_LABEL = 'Not Started';
+   *  "Invited", the word Invite Status Tracking uses for the same state
+   *  (invited, never begun). One constant, so the card, the badge and the
+   *  filter option cannot drift apart. */
+  const PENDING_STATUS_LABEL = 'Invited';
   const statusLabel = (status: CandidateResult['status']) =>
     status === 'Pending' ? PENDING_STATUS_LABEL : status;
 
@@ -1507,6 +1550,20 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   // Use API results only (no mock data)
   const displayResults = candidateResults;
 
+  /* Report the table's record count (`totalItems`, set below) to the host.
+     Runs after every render but only calls out when the number changes; the
+     callback sits in a ref so an inline host function re-triggers nothing. */
+  const totalItemsRef = useRef<number | null>(null);
+  const reportedTotalRef = useRef<number | null>(null);
+  const onTotalItemsChangeRef = useRef(onTotalItemsChange);
+  onTotalItemsChangeRef.current = onTotalItemsChange;
+  useEffect(() => {
+    const total = isLoading ? null : totalItemsRef.current;
+    if (total === null || total === reportedTotalRef.current) return;
+    reportedTotalRef.current = total;
+    onTotalItemsChangeRef.current?.(total);
+  });
+
   // Loading state
   if (isLoading) {
     return <AssessmentResultsSkeleton />;
@@ -1616,6 +1673,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   /* Paged on the client: the rows are the merged, filtered results of every
      assessment in scope, which no single server page can express. */
   const totalItems = filteredCandidates.length;
+  totalItemsRef.current = totalItems;
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
   /* A page number the current set can honour. A restored page, or one the user
      was on when a narrower Job Version was picked, can sit past the end — the
@@ -2140,14 +2198,14 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer"
                           onSelect={() => setShowColumnSelector(true)}
                         >
-                          <Columns3 className="w-4 h-4 text-menu-icon-view" />
+                          <SlidersHorizontal className="w-4 h-4 text-menu-icon-view" />
                           <span className={MENU_ITEM_SCALE_CLASS}>Customize Columns</span>
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer"
                           onSelect={() => setShowExportModal(true)}
                         >
-                          <FileText className="w-4 h-4 text-menu-icon-download" />
+                          <FileDown className="w-4 h-4 text-menu-icon-download" />
                           <span className={MENU_ITEM_SCALE_CLASS}>Export</span>
                         </DropdownMenuItem>
                         {canBatchDownload && (
@@ -2214,8 +2272,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                Columns → Export, laid out by the toolbar's own width (it sits
                beside the tab menu). Row 2 (below): Select All → status pills →
                Sort by → List / Grid. */
-            fitToContainer={!portaled}
-            containerBreakpoint="4xl"
+            fitToContainer
+            /* Embedded, the row also carries Select All and Actions, so it goes
+               single-line only once the tab card is 64rem wide — below that the
+               search takes its own row instead of shrinking to an icon. */
+            containerBreakpoint={portaled ? '5xl' : '4xl'}
             compactButtons={portaled}
             /* Embedded in Job Details: Select All → Actions → Search → All
                Candidates → Sort by → More Filters → List / Grid, as on AI
@@ -2507,8 +2568,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     <button
                       type="button"
                       onClick={() => handleDownloadPDF(candidate.id, candidate.candidateDisplayId)}
-                      disabled={downloadingPDF === candidate.id}
-                      className={CANDIDATE_RESULT_CARD_ICON_ACTION_CLASS}
+                      disabled={downloadingPDF === candidate.id || !canDownloadResultPdf(candidate)}
+                      className={`${CANDIDATE_RESULT_CARD_ICON_ACTION_CLASS} disabled:opacity-40 disabled:cursor-not-allowed`}
                       title="Download PDF Report"
                       aria-label={`Download PDF report for ${candidate.name || 'candidate'}`}
                     >
@@ -2920,12 +2981,19 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                               <MoreVertical className="w-4 h-4" />
                             </button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className={portaled ? ROW_MENU_CONTENT_CLASS : 'w-48'}>
-                            {/* Invite ▸ Create / Send — the Scored Resumes row's
-                                Invite, first, for this row's candidate. */}
+                          <DropdownMenuContent align="end" className={portaled ? ROW_MENU_CONTENT_CLASS : onOpenInviteDialog ? 'w-56' : 'w-48'}>
+                            <DropdownMenuItem className={portaled ? ROW_MENU_ITEM_CLASS : 'gap-2'} onClick={() => viewCandidateDetails(candidate)}>
+                              <Eye className="w-4 h-4 text-menu-icon-view" />
+                              <span className={MENU_ITEM_SCALE_CLASS}>View Details</span>
+                            </DropdownMenuItem>
+                            {/* Create / Send Assessment | AI Interview — the Scored
+                                Resumes row's invite entries, between View Details
+                                and Download (that row's order), for this row's
+                                candidate. */}
                             {onOpenInviteDialog && (
                               <>
-                                <RowInviteSubmenu
+                                <DropdownMenuSeparator className="my-1 bg-gray-100" />
+                                <RowInviteItems
                                   onInvite={(kind) => onOpenInviteDialog(kind, [{
                                     id: candidate.resumeId || candidate.id,
                                     name: candidate.name,
@@ -2937,13 +3005,13 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                                 <DropdownMenuSeparator className="my-1 bg-gray-100" />
                               </>
                             )}
-                            <DropdownMenuItem className={portaled ? ROW_MENU_ITEM_CLASS : 'gap-2'} onClick={() => viewCandidateDetails(candidate)}>
+                            <DropdownMenuItem className={portaled ? ROW_MENU_ITEM_CLASS : 'gap-2'} disabled={candidate.status === 'Pending'} onClick={() => viewCandidateDetails(candidate)}>
                               <Eye className="w-4 h-4 text-menu-icon-view" />
                               <span className={MENU_ITEM_SCALE_CLASS}>View Details</span>
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               className={portaled ? ROW_MENU_ITEM_CLASS : 'gap-2'}
-                              disabled={downloadingPDF === candidate.id}
+                              disabled={downloadingPDF === candidate.id || !canDownloadResultPdf(candidate)}
                               onClick={() => handleDownloadPDF(candidate.id, candidate.candidateDisplayId)}
                             >
                               {downloadingPDF === candidate.id ? (

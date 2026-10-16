@@ -152,6 +152,9 @@ export const EVENT_META: Record<string, EventMeta> = {
   voice_mismatch:         { category: 'someone_else', label: 'A different voice than the candidate', confidence: 'possible' },
   face_identity_changed:  { category: 'someone_else', label: 'A different face than the candidate', confidence: 'high' },
   face_mismatch:          { category: 'someone_else', label: 'A different face than the candidate', confidence: 'possible' },
+  // Not proof of a second person — but serious: nobody was identity-checked.
+  face_verification_unavailable: { category: 'someone_else', label: 'Face identity check did not run' },
+  face_unverifiable:      { category: 'someone_else', label: 'Face could not be verified', confidence: 'possible' },
   multiple_faces:         { category: 'someone_else', label: 'Another person on camera' },
 
   // Prohibited items seen on camera. The LABEL stays generic here because the
@@ -350,7 +353,7 @@ export const REPEAT_DISCONNECT_THRESHOLD = 3;
 const DEVICE_DISCONNECT_TYPES = new Set<string>(['camera_disabled', 'microphone_disabled']);
 
 const SOMEONE_ELSE_SERIOUS = new Set<string>([
-  'multiple_voices', 'voice_identity_changed', 'face_identity_changed', 'multiple_faces',
+  'multiple_voices', 'voice_identity_changed', 'voice_mismatch', 'face_identity_changed', 'face_mismatch', 'multiple_faces',
 ]);
 
 export function summarizeViolations(violations: ViolationRecord[]): ViolationSummary {
@@ -459,6 +462,22 @@ export function describeViolation(v: ViolationRecord): string {
         ? 'The face on camera did not match the enrolled candidate.'
         : 'The face on camera partly stopped matching the enrolled candidate.';
     }
+    case 'face_unverifiable': {
+      const why: Record<string, string> = {
+        no_face: 'no face could be found in the camera image',
+        low_confidence: 'the face was not clear enough (covered, turned away or poorly lit)',
+        cut_off: 'the face was partly outside the camera frame',
+        too_close: 'the face was too close to the camera',
+        too_small: 'the face was too far from the camera',
+      };
+      const reason = typeof d.reason === 'string' ? why[d.reason] : undefined;
+      return `For about a minute the face on camera could not be compared with the candidate's photo` +
+        `${reason ? ` — ${reason}` : ''}. Someone else may have been on camera; review the recording.`;
+    }
+    case 'face_verification_unavailable':
+      return 'The face identity check could not start (no reference face was registered — the face models ' +
+        'failed to load or no face was found in the identity photo). A change of person on camera could not ' +
+        'be detected in this interview — review the recording.';
     case 'multiple_faces': {
       const n = num(d.face_count);
       return n != null ? `${n} faces were visible in the camera.` : 'More than one face was visible in the camera.';

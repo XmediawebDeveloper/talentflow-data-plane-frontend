@@ -427,6 +427,23 @@ export const candidateAIInterviewService = {
     return response.data;
   },
 
+  /**
+   * The candidate's own identity photo (captured at the Identity step), served
+   * back so the face-identity reference survives a page reload. null when there
+   * is none / the interview is over.
+   */
+  async getIdentityPhoto(token: string): Promise<Blob | null> {
+    try {
+      const response = await candidateApi.get<Blob>(
+        `/candidate/ai-interview/${token}/identity-photo`,
+        { responseType: 'blob' },
+      );
+      return response.data && response.data.size > 0 ? response.data : null;
+    } catch {
+      return null;
+    }
+  },
+
   // Both OTP calls carry this browser's client id, so the server binds the code
   // to the browser that asked for it: Chrome and Edge each get their own code,
   // and one browser's code never opens the interview in another.
