@@ -67,7 +67,7 @@ import AssessmentVersionHistoryPanel, {
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import AllInterviewsTable, { VersionPill } from '@/components/ai-interview/AllInterviewsTable';
-import { resolveAIInterviewDraftResumeHref } from '@/lib/utils/aiInterviewDraftResume';
+import { resolveAIInterviewDraftResumeHref, aiInterviewConfigureHref } from '@/lib/utils/aiInterviewDraftResume';
 
 /* The version panel's 3-dot menu trigger — the 28px bordered square matched to
    the Assessment page's `QUICK_ACTION_BASE` in Assessments.tsx. */
@@ -1388,6 +1388,8 @@ export default function AIInterview() {
       await Promise.all([loadData(), loadArchivedConfigs()]);
       setRefreshSignal((n) => n + 1);
       toast.success(`New version created as a draft: ${result.cloned_title}`);
+      // Open the new version straight in Configure so it can be edited at once.
+      router.push(aiInterviewConfigureHref(result.cloned_id, config.jd_id || ''));
     } catch (error: any) {
       toast.error(error.message || 'Failed to duplicate');
     }

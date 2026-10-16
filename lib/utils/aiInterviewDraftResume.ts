@@ -27,6 +27,9 @@ export function aiInterviewDraftHasClusters(config: Pick<AIInterviewResponse, 'r
 
 const configureHref = (id: string, jdId: string) => `${CONFIG_BASE}?jd_id=${jdId}&config_id=${id}`;
 
+/** The Configure step of a version, for a freshly duplicated draft (V2…) that should open straight in edit. */
+export const aiInterviewConfigureHref = (id: string, jdId: string) => configureHref(id, jdId);
+
 export function aiInterviewDraftResumeHref(config: ResumeSource): string {
   return aiInterviewDraftHasClusters(config)
     ? `${CONFIG_BASE}/clusters?id=${encodeURIComponent(config.id)}`
