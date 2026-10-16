@@ -1614,7 +1614,11 @@ Best regards`);
                 {showInviteMenu && canInvite && (
                   <div
                     role="menu"
-                    className="absolute right-0 top-full mt-2 w-64 max-w-[calc(100vw-1.5rem)] bg-white rounded-xl border border-gray-200 shadow-lg shadow-gray-900/10 py-1.5 z-30"
+                    // Anchor left on mobile (the action row wraps and the button
+                    // sits near the left edge, so right-0 pushed a 256px menu off
+                    // the left of the viewport); keep the original right-0 from sm
+                    // up, where the actions are right-aligned on one line.
+                    className="absolute left-0 right-auto sm:left-auto sm:right-0 top-full mt-2 w-64 max-w-[calc(100vw-1.5rem)] bg-white rounded-xl border border-gray-200 shadow-lg shadow-gray-900/10 py-1.5 z-30"
                   >
                     {/* Each entry stays visible for anyone permitted to use
                         it and goes disabled when this JD has nothing to
@@ -1709,7 +1713,11 @@ Best regards`);
               <span className="hidden sm:inline text-gray-400">|</span>
               {/* The title is the shortcut into the View JD tab — recruiters
                   reading a score reach for the JD from here constantly. */}
-              <span className="text-xs sm:text-sm font-normal text-gray-700 truncate">
+              {/* min-w-0 + wrapping (not truncate): the inline JD-code / title /
+                  version badges are whitespace-nowrap and can't shrink, so a
+                  nowrap+truncate parent overflowed the card on mobile instead of
+                  clipping — let the group wrap to a second line below sm. */}
+              <span className="text-xs sm:text-sm font-normal text-gray-700 min-w-0 break-words">
                 <span className="font-bold text-gray-800">Job Title :</span>{' '}
                 {/* Read as one: "EDG 267 High Court Judge v3.0" - the job's
                     ID, its title, its version, the ID and version in the JD
