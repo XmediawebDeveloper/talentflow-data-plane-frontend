@@ -2577,7 +2577,20 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   const versionInviteDialogEl = inviteDialog ? (
         <VersionInviteDialog
           kind={inviteDialog.kind}
-          onClose={() => setInviteDialog(null)}
+          onClose={() => {
+            const closedKind = inviteDialog.kind;
+            setInviteDialog(null);
+            /* The popup creates, edits, publishes, archives and duplicates
+               versions in place, so this page's own reads of them (Create's
+               cap and gate, Send Invite, the results tabs and their badges)
+               are re-read once it closes — the AI one past its fetched-once
+               guard, as Publish on this page does. */
+            if (closedKind === 'assessment') void fetchAssessmentResults();
+            else {
+              aiInterviewConfigFetchedRef.current = false;
+              void loadAIInterviewConfig();
+            }
+          }}
           jdId={job.id}
           jdCode={job.job_id}
           jdTitle={job.title}

@@ -172,7 +172,11 @@ export default function VersionList({
         <div className="space-y-2.5" role="radiogroup" aria-label={`${label.singular} versions`}>
           {shown.map((v) => {
             const selected = selectedId === v.id;
-            const why = v.sendable ? undefined : v.status === 'draft' ? 'Publish this version to send it' : `${v.statusLabel} versions cannot be sent`;
+            const why = v.sendable
+              ? undefined
+              : v.revoked
+                ? 'Invites for this version have been revoked. Create a new version to start fresh.'
+                : v.status === 'draft' ? 'Publish this version to send it' : `${v.statusLabel} versions cannot be sent`;
             const pick = () => { if (v.sendable) onSelect(selected ? null : v.id); };
             const actions = versionActions(v, every, perms).filter((a) => !(hideDuplicate && a.action === 'duplicate'));
             return (

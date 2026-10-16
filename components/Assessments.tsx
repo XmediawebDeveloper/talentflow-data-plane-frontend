@@ -1088,19 +1088,29 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
    *      This one is tab-filtered — the Active tab never loaded the drafts —
    *      so it can only undercount, never over-, which is why it is second.
    *
-   * Archived versions are excluded from both: archiving is what the cap
-   * message tells a recruiter to do to make room, so counting archived rows
-   * would make that advice do nothing.
+   * Archived versions count too (same as Create on the job page and the
+   * Create / Send Assessment popup).
    */
   const countAssessmentVersions = (
     assessment: { jd_id?: string },
     lineage?: AssessmentVersionRow[],
-  ) => {
-    if (!assessment.jd_id) return 0;
-    const fetched = lineage ?? assessmentLineages[assessment.jd_id];
-    // Archived versions count toward the cap (same as Create on the job page).
-    if (fetched?.length) return fetched.length;
-    return apiAssessments.filter((x: any) => x.jd_id === assessment.jd_id).length;
+  ) => jobVersionRows(assessment, lineage).length;
+
+  /** The versions of THIS assessment's job version (its JD row) — what the
+   *  cap, the latest-version rule and the one-draft rule are judged on, as on
+   *  Job Details and its Create / Send Assessment popup. The fetched lineage
+   *  holds every job version of the job, and assessment version numbers
+   *  restart per job version, so it is narrowed to the row first. */
+  const jobVersionRows = (
+    assessment: { jd_id?: string },
+    lineage?: AssessmentVersionRow[],
+  ): AssessmentVersionRow[] => {
+    if (!assessment.jd_id) return [];
+    const fetched = (lineage ?? assessmentLineages[assessment.jd_id])
+      ?.filter((x) => x.jd_id === assessment.jd_id);
+    return fetched?.length
+      ? fetched
+      : (apiAssessments.filter((x: any) => x.jd_id === assessment.jd_id) as AssessmentVersionRow[]);
   };
 
   /** Why this version is not the one to duplicate, or null when it is. Only the
@@ -1111,10 +1121,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     lineage?: AssessmentVersionRow[],
   ): string | null => {
     if (!assessment.jd_id) return null;
-    const fetched = lineage ?? assessmentLineages[assessment.jd_id];
-    const rows: any[] = fetched?.length
-      ? fetched
-      : apiAssessments.filter((x: any) => x.jd_id === assessment.jd_id);
+    const rows: any[] = jobVersionRows(assessment, lineage);
     const mine = assessment.version || 1;
     const latest = rows.reduce((best: any, v: any) => ((v.version || 1) > (best?.version || 0) ? v : best), null);
     const latestVersion = latest?.version || 1;
@@ -1146,11 +1153,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     lineage?: AssessmentVersionRow[],
   ): AssessmentVersionRow | undefined => {
     if (!assessment.jd_id) return undefined;
-    const fetched = lineage ?? assessmentLineages[assessment.jd_id];
-    const rows: AssessmentVersionRow[] = fetched?.length
-      ? fetched
-      : (apiAssessments.filter((x: any) => x.jd_id === assessment.jd_id) as AssessmentVersionRow[]);
-    return rows.find(
+    return jobVersionRows(assessment, lineage).find(
       v => String(v.status || '').toLowerCase() === 'draft' && v.id !== assessment.id,
     );
   };
@@ -3745,7 +3748,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       await dialog.alert({
         title: 'Maximum versions reached',
         message: `All ${MAX_ASSESSMENT_VERSIONS} versions are used (the maximum allowed): ${
-          (lineage?.length ? lineage : apiAssessments.filter((x: any) => x.jd_id === assessment.jd_id))
+          jobVersionRows(assessment, lineage)
             .slice()
             .sort((a: any, b: any) => (Number(a.version) || 1) - (Number(b.version) || 1))
             .map((v: any) => `V${Number(v.version) || 1} (${assessmentStatusLabel(v.status)})`)
