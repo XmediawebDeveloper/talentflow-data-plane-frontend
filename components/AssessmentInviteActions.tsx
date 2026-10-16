@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   Mail, Play, CheckCircle, Clock, Ban, Copy, Loader2, Eye, Pencil, Send,
-  MoreVertical, Monitor, RefreshCw, X, History,
+  MoreVertical, Monitor, RefreshCw, X, History, Link2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatIST, parseIST } from '@/lib/utils/dateUtils';
@@ -154,6 +154,8 @@ const describeTimelineAction = (action: string): { label: string; Icon: LucideIc
     case 'assessment_invite':
     case 'assessment_invite_resend':
       return { label: 'Invited', Icon: Mail, tone: 'text-brand-blue' };
+    case 'assessment_link_shared':
+      return { label: 'Link Shared', Icon: Link2, tone: 'text-brand-blue' };
     case 'assessment_invitation_revoke':
       return { label: 'Revoked', Icon: Ban, tone: 'text-destructive' };
     case 'assessment_invitation_edit':
@@ -384,7 +386,12 @@ const buildFullTimeline = (
  *  every one of them. */
 const COMPACT_TIMELINE_LIMIT = 4;
 export const timelineEvents = (inv: any, limit: number = COMPACT_TIMELINE_LIMIT): TimelineEntry[] =>
-  buildFullTimeline(inv, inv.timeline || []).slice(0, limit).reverse();
+  buildFullTimeline(inv, inv.timeline || []).slice(0, limit).reverse().map(
+    // An "Invited" entry is the invitation EMAIL going out (a shared link has
+    // its own "Link Shared" entry), so the cell says how it was shared. Display
+    // only: the status logic above still keys on the "Invited" label.
+    (entry) => (entry.label === 'Invited' ? { ...entry, label: 'Email Shared' } : entry)
+  );
 
 /** Timeline entry label -> the status key it puts an invitation in (the keys
  *  the status badge and the Invitation Status tabs use). Only entries that ARE
@@ -420,6 +427,7 @@ const isStatusEntry = (entry: TimelineEntry): boolean => !!TIMELINE_LABEL_TO_STA
 /** One line under each event in View History, saying what it means. */
 const TIMELINE_EVENT_DESCRIPTION: Record<string, string> = {
   'Invited': 'Invitation sent to candidate',
+  'Link Shared': 'Assessment link copied and shared with candidate',
   'Revoked': 'Invitation revoked',
   'Edited': 'Invitation details edited',
   'Email Changed': 'Candidate email changed',

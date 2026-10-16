@@ -29,6 +29,7 @@ import InviteFilterBar, {
   ASSESSMENT_INVITE_STATUS_OPTIONS,
   type InviteFilterState,
 } from '@/components/InviteFilterBar';
+import { RevokeInvitationDialog, EditInvitationModal } from '@/components/AssessmentInviteActions';
 import AssessmentInviteTable, {
   isBulkResendable,
   isTrackedInviteCompleted,
@@ -923,6 +924,8 @@ export default function AssessmentDetailsView({
   const [newEmailValue, setNewEmailValue] = useState('');
   const [isSendingChangeEmail, setIsSendingChangeEmail] = useState(false);
   const [resendTarget, setResendTarget] = useState<any | null>(null);
+  const [revokeInviteTarget, setRevokeInviteTarget] = useState<any | null>(null);
+  const [editInviteTarget, setEditInviteTarget] = useState<any | null>(null);
   const [isResending, setIsResending] = useState(false);
 
   const inviteHasActiveFilters =
@@ -1050,6 +1053,9 @@ export default function AssessmentDetailsView({
     await Promise.all([
       loadInviteRows(assessment.id, invitePage, inviteFilters),
       loadInviteSummary(assessment.id),
+      // The header counts and Overview/Analytics read the `assessment` prop,
+      // so the parent must refetch it too or they stay on pre-action numbers.
+      onRefresh?.(),
     ]);
   };
 
@@ -2972,6 +2978,9 @@ export default function AssessmentDetailsView({
                 canOpenResult={opensTrackedInviteDetails}
                 onOpenResult={openInviteResult}
                 onResend={setResendTarget}
+                onRevoke={setRevokeInviteTarget}
+                onEdit={setEditInviteTarget}
+                revokingId={revokeInviteTarget?.id}
                 editingEmailId={editingEmailId}
                 newEmailValue={newEmailValue}
                 onNewEmailChange={setNewEmailValue}
@@ -3651,6 +3660,19 @@ export default function AssessmentDetailsView({
       </div>
 
       {archiveConfirmModal}
+
+      <RevokeInvitationDialog
+        target={revokeInviteTarget}
+        onClose={() => setRevokeInviteTarget(null)}
+        getAssessmentId={() => assessment.id}
+        onRevoked={reloadInvites}
+      />
+      <EditInvitationModal
+        target={editInviteTarget}
+        onClose={() => setEditInviteTarget(null)}
+        getAssessmentId={() => assessment.id}
+        onSaved={reloadInvites}
+      />
 
       {/* Resend confirmation — regenerates the token and invalidates the old
           link. Same wording, tone and variant as the Track Invites popup's. */}

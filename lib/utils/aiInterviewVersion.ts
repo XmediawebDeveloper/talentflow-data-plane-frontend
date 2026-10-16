@@ -36,6 +36,7 @@ type VersionLike = {
   jd_id?: string | null;
   status?: string | null;
   invitations_count?: number | null;
+  interview_version?: number | null;
 };
 
 const norm = (s?: string | null) => String(s ?? '').toLowerCase();
@@ -57,10 +58,9 @@ export function interviewEditBlockedReason(config: VersionLike): string | null {
 
 /**
  * Why Duplicate is unavailable for this version, or null when it can be
- * duplicated. Same three rules as AssessmentService.clone_assessment (and the
- * backend's clone_config), in the order the Assessments menu reports them:
- * not invited → still editable; a draft already open in the lineage; cap reached.
- * `lineage` is every config you know of, any status — archived ones are ignored.
+ * duplicated. Only the LATEST version (highest V, archived ones included) can
+ * be duplicated, and an archived one must be unarchived first. Archived
+ * versions count toward the cap. `lineage` is every config you know of.
  */
 export function interviewDuplicateBlockedReason(
   config: VersionLike,
@@ -69,15 +69,25 @@ export function interviewDuplicateBlockedReason(
 ): string | null {
   if (!canCreate) return 'You do not have permission to create AI interviews';
   if (norm(config.status) === 'draft') return 'Publish this version before duplicating it.';
-  if ((config.invitations_count ?? 0) === 0) return 'No candidates invited yet — edit this version instead.';
-  const live = lineage.filter(
-    (c) => c.jd_id === config.jd_id && norm(c.status) !== 'archived',
+  const sib = lineage.filter((c) => c.jd_id === config.jd_id);
+  const mine = config.interview_version ?? 1;
+  const latest = sib.reduce<VersionLike | null>(
+    (best, c) => ((c.interview_version ?? 1) > (best?.interview_version ?? 0) ? c : best),
+    null,
   );
-  if (live.some((c) => norm(c.status) === 'draft')) {
+  const latestVersion = latest?.interview_version ?? 1;
+  if (mine < latestVersion) {
+    return `Only the latest version (V${latestVersion}) can be duplicated.${
+      norm(latest?.status) === 'archived' ? ' It is archived — unarchive it to duplicate.' : ''
+    }`;
+  }
+  if (norm(config.status) === 'archived') return 'Unarchive this version to duplicate it.';
+  if ((config.invitations_count ?? 0) === 0) return 'No candidates invited yet — edit this version instead.';
+  if (sib.some((c) => norm(c.status) === 'draft')) {
     return 'An interview version is already in draft. Publish (or discard) it before duplicating again.';
   }
-  if (live.length >= MAX_INTERVIEW_VERSIONS) {
-    return `Maximum ${MAX_INTERVIEW_VERSIONS} versions reached. Archive a version to duplicate again.`;
+  if (sib.length >= MAX_INTERVIEW_VERSIONS) {
+    return `Maximum ${MAX_INTERVIEW_VERSIONS} versions reached — archived versions count too.`;
   }
   return null;
 }

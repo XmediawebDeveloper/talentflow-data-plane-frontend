@@ -70,6 +70,10 @@ interface ShareAIInterviewModalProps {
   config: AIInterviewResponse;
   /** Called with the number of invitations that went out (at least 1). */
   onInviteSent: (sentCount: number) => void;
+  /** Fired the moment an invitation exists server-side (Send or Copy Link),
+   *  without waiting for the 2s success popup — so a tracker behind the modal
+   *  can refresh at once. */
+  onInvitesChanged?: () => void;
   /** When true, render the share form inline (no backdrop / fixed overlay /
    *  close button) so it can live inside a tab on the interview details page. */
   embedded?: boolean;
@@ -108,7 +112,7 @@ const ROUND_LABELS: Record<string, string> = {
   nice_to_have_skills: 'Nice-to-Have Skills',
 };
 
-export default function ShareAIInterviewModal({ isOpen, onClose, config, onInviteSent, embedded = false, initialCandidates, interviewVersion: interviewVersionProp, onBack, inPopupStep = false, footerTarget = null, jobVersion }: ShareAIInterviewModalProps) {
+export default function ShareAIInterviewModal({ isOpen, onClose, config, onInviteSent, onInvitesChanged, embedded = false, initialCandidates, interviewVersion: interviewVersionProp, onBack, inPopupStep = false, footerTarget = null, jobVersion }: ShareAIInterviewModalProps) {
   const { user } = useAuth();
   const { quotaData } = useQuota();
 
@@ -790,6 +794,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
           : c
       ));
 
+      onInvitesChanged?.();
       await navigator.clipboard.writeText(result.link);
       toast.success(`Link copied for ${candidate.name}! Expires in ${expiryDays} day${expiryDays !== 1 ? 's' : ''}. Share via WhatsApp, SMS, or send via email.`);
     } catch (err: any) {
@@ -963,6 +968,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
           toast.error(`${failed.length} failed: ${emails} — ${uniqueReasons.join('; ')}`);
         }
         setShowSuccess(true);
+        onInvitesChanged?.();
         setTimeout(() => {
           setShowSuccess(false);
           onInviteSent(successCount);
