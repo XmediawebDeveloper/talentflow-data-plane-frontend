@@ -187,6 +187,12 @@ interface CandidateScoringDetailPageProps {
    * dropdown only previews versions.
    */
   onSelectScore?: (scoreId: string, resumeVersion: number) => void;
+  /**
+   * Job Details → Scored Resumes → View Result: this page shows the score of
+   * the one resume version that was scored, so its version is a plain badge
+   * for reference — no dropdown to switch versions.
+   */
+  versionReadOnly?: boolean;
 }
 
 /**
@@ -207,7 +213,7 @@ function byNewestVersion(a: any, b: any): number {
   return bTime - aTime;
 }
 
-export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, onMinimize, currentIndex, totalCount, onPrev, onNext, jobPager, breadcrumbItems, assessmentConfigured, aiInterviewConfigured, allowCreateInviteTarget, onOpenInviteDialog, onSelectScore }: CandidateScoringDetailPageProps) {
+export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, onMinimize, currentIndex, totalCount, onPrev, onNext, jobPager, breadcrumbItems, assessmentConfigured, aiInterviewConfigured, allowCreateInviteTarget, onOpenInviteDialog, onSelectScore, versionReadOnly = false }: CandidateScoringDetailPageProps) {
   const { isTenantAdmin, user, hasPermissionCode } = useAuth();
   const { hasPlanFeature, isPlanLocked } = usePlanLock();
   const canExport = isTenantAdmin || (user?.permissions?.canExport ?? false);
@@ -1460,7 +1466,7 @@ Best regards`);
               <h1 className="text-lg sm:text-xl text-gray-900 font-semibold mb-2 truncate">{resume.candidateName}</h1>
               <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <p className="text-base sm:text-lg text-gray-700 font-medium">{resume.title || resume.experience || 'Candidate'}</p>
-                {resume.resumeVersion && (resumeVersions.length === 0 ? (
+                {resume.resumeVersion && (versionReadOnly || resumeVersions.length === 0 ? (
                   <span className="inline-flex items-center px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md text-xs sm:text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200">
                     Version {resume.resumeVersion}
                   </span>

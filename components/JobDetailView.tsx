@@ -915,6 +915,12 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   // finished — Completed or Terminated (the API's 'abandoned'). Invited or
   // in-progress candidates have no result yet.
   const [assessmentFinishedCount, setAssessmentFinishedCount] = useState(0);
+  /* The Assessments Results tab's BADGE: the table's own record count while
+     the tab is open (reported by AssessmentResults — every status, every
+     page, its current filters), else every result row of this job's
+     assessments, any status — what the table lists with no filter. */
+  const [assessmentResultTotal, setAssessmentResultTotal] = useState(0);
+  const [assessmentTableTotal, setAssessmentTableTotal] = useState<number | null>(null);
   const [loadingAssessmentResults, setLoadingAssessmentResults] = useState(false);
   const [viewingAssessmentResult, setViewingAssessmentResult] = useState<any | null>(null);
   /* The Assessment objects themselves (not the per-candidate results above) —
@@ -1017,6 +1023,10 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   // (it gates Track and the quick actions); an invited or still-in-progress
   // candidate has no result yet.
   const [aiInterviewResultCount, setAiInterviewResultCount] = useState(0);
+  /* The AI Interview Result tab's BADGE, the assessment rule: the table's
+     record count while the tab is open, else every invitation of the live
+     interview (`aiInterviewCount`) — what the table lists with no filter. */
+  const [aiInterviewTableTotal, setAiInterviewTableTotal] = useState<number | null>(null);
   const [loadingAIInterviewConfig, setLoadingAIInterviewConfig] = useState(false);
   const [aiInterviewConfigError, setAiInterviewConfigError] = useState<string | null>(null);
   const aiInterviewConfigFetchedRef = useRef(false);
@@ -1873,6 +1883,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       }
 
       setAssessmentInviteCount(Math.max(listedInviteCount, resultInviteCount));
+      setAssessmentResultTotal(resultInviteCount);
       setAssessmentFinishedCount(allResults.filter((r: any) => {
         const st = String(r.status || '').toLowerCase();
         return !!r.completed_at || st === 'completed' || st === 'terminated' || st === 'abandoned';
@@ -1881,6 +1892,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     } catch (error) {
       console.error('Failed to fetch assessment results:', error);
       setAssessmentInviteCount(0);
+      setAssessmentResultTotal(0);
       setAssessmentFinishedCount(0);
       setAssessmentResults([]);
       setJdAssessments([]);
@@ -1938,6 +1950,12 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   };
 
   const [activeTab, setActiveTab] = useState<'overview' | 'scored-resumes' | 'assessment-results' | 'ai-talent-match' | 'ai-interview-results'>(initialTab || 'overview');
+  /* A results table's reported count holds only while its tab is open; off
+     the tab the badge goes back to the unfiltered total. */
+  useEffect(() => {
+    if (activeTab !== 'assessment-results') setAssessmentTableTotal(null);
+    if (activeTab !== 'ai-interview-results') setAiInterviewTableTotal(null);
+  }, [activeTab]);
   /* The DOM node of the toolbar slot that sits INSIDE the sticky tab-navigation
      card, directly under the tab row. Each result tab's search/filter toolbar
      portals its markup here (keeping all of its own state local), so the
@@ -2609,11 +2627,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         resume={viewingScoredResume}
         jobTitle={job.title}
         jobId={job.id}
-        // Version dropdown: that version's score for this job, in place.
-        onSelectScore={(scoreId) => {
-          const r = scoredResumes.find((row: any) => row.id === scoreId);
-          if (r) setViewingScoredResume(toCandidateDetail(r));
-        }}
+        /* The scored resume's version as a plain badge — this view is that
+           one version's score, so there is no version switcher here. */
+        versionReadOnly
         onBack={() => setViewingScoredResume(null)}
         breadcrumbItems={[
           { label: 'Dashboard', href: '/dashboard' },
@@ -3291,7 +3307,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               <BarChart3 className="w-4 h-4" />
               Assessments Results
               <span className={detailTabBadge(activeTab === 'assessment-results')}>
-                {assessmentPlanLocked ? <Lock className="inline-block w-3 h-3 align-middle" aria-label="Not in plan" /> : assessmentFinishedCount}
+                {assessmentPlanLocked ? <Lock className="inline-block w-3 h-3 align-middle" aria-label="Not in plan" /> : (assessmentTableTotal ?? assessmentResultTotal)}
               </span>
             </button>
           )}
@@ -3318,7 +3334,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               <MessageSquare className="w-4 h-4" />
               AI Interview Result
               <span className={detailTabBadge(activeTab === 'ai-interview-results')}>
-                {aiInterviewPlanLocked ? <Lock className="inline-block w-3 h-3 align-middle" aria-label="Not in plan" /> : aiInterviewResultCount}
+                {aiInterviewPlanLocked ? <Lock className="inline-block w-3 h-3 align-middle" aria-label="Not in plan" /> : (aiInterviewTableTotal ?? aiInterviewCount)}
               </span>
             </button>
           )}
@@ -4257,6 +4273,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               /* Actions ▸ AI Assessment / AI Interview Invite: the AI Talent
                  Match tab's version popups, with the ticked candidates. */
               onOpenInviteDialog={(kind, invitees) => openInviteDialog(kind, invitees, 'score-resume')}
+              /* Row ⋮: Create / Send Assessment | AI Interview directly, no Invite ▸. */
+              inlineRowInviteItems
               initialMatchStatus={scoredResumesMatchFilter}
               // Same gate and target as the Score Resumes quick action — opens
               // "Select Applicants to Score" in place on this page.
@@ -4326,6 +4344,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                 /* Actions ▸ Create / Send Assessment | AI Interview: the AI
                    Talent Match tab's version popups, with the ticked candidates. */
                 onOpenInviteDialog={(kind, invitees) => openInviteDialog(kind, invitees, 'assessment-result')}
+                onTotalItemsChange={setAssessmentTableTotal}
               />
             );
           })()}
@@ -4414,6 +4433,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               /* Actions ▸ Create / Send Assessment | AI Interview: the AI
                  Talent Match tab's version popups, with the ticked candidates. */
               onOpenInviteDialog={(kind, invitees) => openInviteDialog(kind, invitees, 'interview-result')}
+              onTotalItemsChange={setAiInterviewTableTotal}
             />
           ) : (
             /* No interview exists for this JD yet. Create has to stay reachable
@@ -5610,6 +5630,10 @@ function AIMatchTabContent({
           onSearchChange={setSearchQuery}
           searchDebounceMs={0}
           searchPlaceholder="Search candidates..."
+          /* Lay out by the tab card's width: search takes its own row until
+             the card is wide enough, instead of shrinking to an icon beside
+             Select All and the controls (tablet widths). */
+          fitToContainer
           /* The built-in More Filters (and Reset) at the 36px band via
              `compactButtons` — the same buttons the sibling result tabs use. */
           onToggleFilters={() => setShowMoreFilters((open) => !open)}
@@ -5713,22 +5737,6 @@ function AIMatchTabContent({
                         </DropdownMenuItem>
                       );
                     })()}
-                    {/* Export — the ticked candidates, through the AI Talent
-                        Match page's CSV / Excel picker. */}
-                    <DropdownMenuItem
-                      className={`flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer ${canExport ? '' : 'text-gray-400 opacity-60'}`}
-                      onSelect={(e) => {
-                        if (!canExport) {
-                          e.preventDefault();
-                          toast.error('You do not have permission to export');
-                          return;
-                        }
-                        setShowExportModal(true);
-                      }}
-                    >
-                      <FileDown className="w-4 h-4 text-menu-icon-download" />
-                      <span>Export</span>
-                    </DropdownMenuItem>
                     {/* Create / Send — the version drawer, on that type. The
                         same icons and permission reads the invite items used. */}
                     <DropdownMenuItem
@@ -5758,6 +5766,22 @@ function AIMatchTabContent({
                     >
                       <Video className="w-4 h-4 text-menu-icon-share" />
                       <span>Create / Send AI Interview</span>
+                    </DropdownMenuItem>
+                    {/* Export, last — the ticked candidates, through the AI
+                        Talent Match page's CSV / Excel picker. */}
+                    <DropdownMenuItem
+                      className={`flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer ${canExport ? '' : 'text-gray-400 opacity-60'}`}
+                      onSelect={(e) => {
+                        if (!canExport) {
+                          e.preventDefault();
+                          toast.error('You do not have permission to export');
+                          return;
+                        }
+                        setShowExportModal(true);
+                      }}
+                    >
+                      <FileDown className="w-4 h-4 text-menu-icon-download" />
+                      <span>Export</span>
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
