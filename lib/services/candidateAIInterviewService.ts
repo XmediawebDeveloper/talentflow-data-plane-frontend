@@ -421,6 +421,23 @@ export const candidateAIInterviewService = {
     return response.data;
   },
 
+  /**
+   * The candidate's own identity photo (captured at the Identity step), served
+   * back so the face-identity reference survives a page reload. null when there
+   * is none / the interview is over.
+   */
+  async getIdentityPhoto(token: string): Promise<Blob | null> {
+    try {
+      const response = await candidateApi.get<Blob>(
+        `/candidate/ai-interview/${token}/identity-photo`,
+        { responseType: 'blob' },
+      );
+      return response.data && response.data.size > 0 ? response.data : null;
+    } catch {
+      return null;
+    }
+  },
+
   async sendOtp(token: string, email: string): Promise<{ message: string }> {
     const response = await candidateApi.post<{ message: string }>(
       `/candidate/ai-interview/${token}/send-otp`,

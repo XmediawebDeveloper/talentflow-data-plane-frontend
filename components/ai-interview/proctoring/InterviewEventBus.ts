@@ -28,6 +28,10 @@ export type ProctoringEventType =
   | 'gaze_away'
   | 'face_mismatch'
   | 'face_identity_changed'
+  // The continuous face-identity check never started (no baseline). Severe by
+  // product decision: a session nobody identity-checked is treated as seriously
+  // as a detected change. Backend-only — never toasted to the candidate.
+  | 'face_verification_unavailable'
   | 'voice_mismatch'
   | 'voice_identity_changed'
   | 'screen_share_stopped'
@@ -84,6 +88,8 @@ const WARNING_MESSAGES: Record<ProctoringEventType, string> = {
   gaze_away: 'Looking away detected. Please keep your attention on the screen.',
   face_mismatch: 'Face verification warning. Please ensure you are the registered candidate.',
   face_identity_changed: 'A different person has been detected. Identity verification failed.',
+  // Never shown to the candidate — see BACKEND_ONLY_EVENT_TYPES in the monitor.
+  face_verification_unavailable: '',
   voice_mismatch: 'Voice verification warning. Voice pattern does not match the registered speaker.',
   voice_identity_changed: 'A different speaker has been detected. Voice verification failed.',
   screen_share_stopped: 'Screen sharing was stopped. Screen sharing is mandatory throughout this session.',
@@ -107,13 +113,17 @@ const EVENT_SEVERITY: Record<ProctoringEventType, 'minor' | 'moderate' | 'severe
   // Moderate (2 pts) — suspicious but not conclusive
   camera_obstructed:        'moderate',
   voice_detected:           'moderate',
-  multiple_voices:          'moderate',
   screenshot_attempt:       'moderate',
   screen_recording_attempt: 'moderate',
   face_missing:             'moderate',
-  face_mismatch:            'moderate',
-  voice_mismatch:           'moderate',
   // Severe (3 pts) — strong integrity signals
+  // Every person-change signal (face AND voice) is severe (product decision
+  // 2026-10-16), the "possible" tier included; the recruiter still sees its
+  // lower confidence.
+  multiple_voices:          'severe',
+  voice_mismatch:           'severe',
+  face_mismatch:            'severe',
+  face_verification_unavailable: 'severe',
   camera_disabled:          'severe',
   microphone_disabled:      'severe',
   microphone_switched:      'moderate',

@@ -423,7 +423,7 @@ export async function exportEvalReportPDF(
   // Each flag the result page raises as a banner: long form for the
   // appendix callouts, short form for the page-1 status line.
   const integrityFlags: { long: string; short: string }[] = [];
-  const voiceHits = violations.filter((v) => v.event_type === 'multiple_voices' || v.event_type === 'voice_identity_changed');
+  const voiceHits = violations.filter((v) => ['multiple_voices', 'voice_identity_changed', 'voice_mismatch'].includes(v.event_type));
   if (voiceHits.length > 0) {
     const at = timeOf(voiceHits[0].timestamp);
     integrityFlags.push({
@@ -431,11 +431,17 @@ export async function exportEvalReportPDF(
       short: `Multiple speakers (${voiceHits.length}x${at ? `, first at ${at}` : ''})`,
     });
   }
-  const faceHits = violations.filter((v) => ['multiple_faces', 'face_identity_changed'].includes(v.event_type));
+  const faceHits = violations.filter((v) => ['multiple_faces', 'face_identity_changed', 'face_mismatch'].includes(v.event_type));
   if (faceHits.length > 0) {
     integrityFlags.push({
       long: `Another person or a different face was seen on camera (${times(faceHits.length)}).`,
       short: `Another person on camera (${faceHits.length}x)`,
+    });
+  }
+  if (violations.some((v) => v.event_type === 'face_verification_unavailable')) {
+    integrityFlags.push({
+      long: 'Face identity verification did not run in this interview, so a change of person on camera could not be detected. Review the recording.',
+      short: 'Face identity check not run',
     });
   }
   if (vs.phoneSeen) integrityFlags.push({ long: 'A mobile phone was detected on camera.', short: 'Phone on camera' });
