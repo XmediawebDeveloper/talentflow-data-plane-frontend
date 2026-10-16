@@ -37,6 +37,7 @@ type VersionLike = {
   status?: string | null;
   invitations_count?: number | null;
   interview_version?: number | null;
+  created_at?: string | null;
 };
 
 const norm = (s?: string | null) => String(s ?? '').toLowerCase();
@@ -58,9 +59,18 @@ export function interviewEditBlockedReason(config: VersionLike): string | null {
 
 /**
  * Why Duplicate is unavailable for this version, or null when it can be
- * duplicated. Only the LATEST version (highest V, archived ones included) can
- * be duplicated, and an archived one must be unarchived first. Archived
- * versions count toward the cap. `lineage` is every config you know of.
+ * duplicated. The Assessments rules (and the backend's clone_config) plus one
+ * of the interview's own: versions are minted in sequence (V2 from V1, V3 from
+ * V2..), so only the latest version of the job version may be duplicated —
+ * earlier ones stay blocked whether or not they were sent. "Latest" counts
+ * archived versions too: if V3 is archived, V2 still may not be duplicated;
+ * V3 must be unarchived first.
+ * Order: draft; a draft already open in the lineage; not the latest; archived
+ * (only the latest can be unarchived into a duplicable one, so an archived
+ * earlier version reports "not the latest" rather than "unarchive"); not
+ * invited → still editable, so a new version is pointless; cap reached.
+ * `lineage` is every config you know of, any status — pass the archived ones
+ * too: they decide "latest" and count to the cap.
  */
 export function interviewDuplicateBlockedReason(
   config: VersionLike,
@@ -69,25 +79,29 @@ export function interviewDuplicateBlockedReason(
 ): string | null {
   if (!canCreate) return 'You do not have permission to create AI interviews';
   if (norm(config.status) === 'draft') return 'Publish this version before duplicating it.';
-  const sib = lineage.filter((c) => c.jd_id === config.jd_id);
-  const mine = config.interview_version ?? 1;
-  const latest = sib.reduce<VersionLike | null>(
-    (best, c) => ((c.interview_version ?? 1) > (best?.interview_version ?? 0) ? c : best),
-    null,
+  const siblings = lineage.filter((c) => c.jd_id === config.jd_id);
+  // An open draft is the next version already being written — point there
+  // first, rather than at a "latest" the recruiter cannot duplicate either.
+  if (siblings.some((c) => norm(c.status) === 'draft')) {
+    return 'An interview version is already in draft. Publish (or discard) it before duplicating again.';
+  }
+  const ownVersion = interviewVersionOrdinal(config, lineage);
+  const latestConfig = siblings.reduce<VersionLike>(
+    (best, c) => (interviewVersionOrdinal(c, lineage) > interviewVersionOrdinal(best, lineage) ? c : best),
+    config,
   );
-  const latestVersion = latest?.interview_version ?? 1;
-  if (mine < latestVersion) {
-    return `Only the latest version (V${latestVersion}) can be duplicated.${
-      norm(latest?.status) === 'archived' ? ' It is archived — unarchive it to duplicate.' : ''
-    }`;
+  const latest = interviewVersionOrdinal(latestConfig, lineage);
+  if (ownVersion < latest) {
+    return norm(latestConfig.status) === 'archived'
+      ? `Only the latest version (V${latest}) can be duplicated. It is archived — unarchive it to duplicate.`
+      : `Only the latest version (V${latest}) can be duplicated.`;
   }
   if (norm(config.status) === 'archived') return 'Unarchive this version to duplicate it.';
   if ((config.invitations_count ?? 0) === 0) return 'No candidates invited yet — edit this version instead.';
-  if (sib.some((c) => norm(c.status) === 'draft')) {
-    return 'An interview version is already in draft. Publish (or discard) it before duplicating again.';
-  }
-  if (sib.length >= MAX_INTERVIEW_VERSIONS) {
-    return `Maximum ${MAX_INTERVIEW_VERSIONS} versions reached — archived versions count too.`;
+  // The cap counts every version, archived included: archiving does not free
+  // a slot (the Job Details Create Assessment cap, JobDetailView.tsx).
+  if (siblings.length >= MAX_INTERVIEW_VERSIONS) {
+    return `Maximum ${MAX_INTERVIEW_VERSIONS} versions reached for this job version — archived versions count too.`;
   }
   return null;
 }

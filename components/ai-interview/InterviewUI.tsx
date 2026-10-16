@@ -5459,6 +5459,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           serverVadActiveRef.current = true;
           console.log('[INTERVIEW-DEBUG] AII14-server: pause detection active for this answer', {
             turn: data.turn, doneAfterMs: data.done_after_ms, resumeSpeechMs: data.resume_speech_ms,
+            voiceVeto: data.voice_veto,
           });
         } else if (ev === 'unavailable') {
           serverVadActiveRef.current = false;
@@ -5491,6 +5492,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             turn: data.turn,
             serverSilenceMs: data.silence_ms,
             ignoredSoundsInPause: data.ignored_sounds_in_pause,
+            vetoedOtherVoiceSegments: data.vetoed_other_voice_segments,
             // Comparison with the browser clock (diagnostics only).
             clientClockSilenceMs: Date.now() - sc.voiceAt,
           });
