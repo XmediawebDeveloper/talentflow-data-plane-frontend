@@ -418,6 +418,9 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     onFaceIdentityChanged: (distance) => {
       InterviewEventBus.emit('face_identity_changed', { distance: distance.toFixed(3) });
     },
+    onFaceUnverifiable: (reason, checks) => {
+      InterviewEventBus.emit('face_unverifiable', { reason, checks });
+    },
   });
   const voiceVerification = useInterviewVoiceVerification({
     onVoiceMismatch: (similarity) => {

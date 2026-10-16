@@ -154,6 +154,7 @@ export const EVENT_META: Record<string, EventMeta> = {
   face_mismatch:          { category: 'someone_else', label: 'A different face than the candidate', confidence: 'possible' },
   // Not proof of a second person — but serious: nobody was identity-checked.
   face_verification_unavailable: { category: 'someone_else', label: 'Face identity check did not run' },
+  face_unverifiable:      { category: 'someone_else', label: 'Face could not be verified', confidence: 'possible' },
   multiple_faces:         { category: 'someone_else', label: 'Another person on camera' },
 
   // Prohibited items seen on camera. The LABEL stays generic here because the
@@ -460,6 +461,18 @@ export function describeViolation(v: ViolationRecord): string {
       return v.event_type === 'face_identity_changed'
         ? 'The face on camera did not match the enrolled candidate.'
         : 'The face on camera partly stopped matching the enrolled candidate.';
+    }
+    case 'face_unverifiable': {
+      const why: Record<string, string> = {
+        no_face: 'no face could be found in the camera image',
+        low_confidence: 'the face was not clear enough (covered, turned away or poorly lit)',
+        cut_off: 'the face was partly outside the camera frame',
+        too_close: 'the face was too close to the camera',
+        too_small: 'the face was too far from the camera',
+      };
+      const reason = typeof d.reason === 'string' ? why[d.reason] : undefined;
+      return `For about a minute the face on camera could not be compared with the candidate's photo` +
+        `${reason ? ` — ${reason}` : ''}. Someone else may have been on camera; review the recording.`;
     }
     case 'face_verification_unavailable':
       return 'The face identity check could not start (no reference face was registered — the face models ' +

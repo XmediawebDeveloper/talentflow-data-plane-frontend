@@ -158,6 +158,7 @@ const EVENT_CONFIG: Record<string, { label: string; icon: React.ReactNode; color
   face_mismatch:            { label: 'Face Mismatch',        icon: <User className="w-4 h-4" />,          color: 'text-destructive',    bg: 'bg-destructive-subtle',    border: 'border-destructive-line'    },
   face_identity_changed:    { label: 'Identity Changed',     icon: <UserX className="w-4 h-4" />,         color: 'text-destructive',    bg: 'bg-destructive-subtle',    border: 'border-destructive-line'    },
   face_verification_unavailable: { label: 'Face ID Check Not Run', icon: <UserX className="w-4 h-4" />,    color: 'text-destructive',    bg: 'bg-destructive-subtle',    border: 'border-destructive-line'    },
+  face_unverifiable:        { label: 'Face Not Verifiable',  icon: <UserX className="w-4 h-4" />,         color: 'text-destructive',    bg: 'bg-destructive-subtle',    border: 'border-destructive-line'    },
   voice_mismatch:           { label: 'Voice Mismatch',       icon: <Mic className="w-4 h-4" />,           color: 'text-destructive',    bg: 'bg-destructive-subtle',    border: 'border-destructive-line'    },
   voice_identity_changed:   { label: 'Voice ID Changed',     icon: <Mic className="w-4 h-4" />,           color: 'text-destructive',    bg: 'bg-destructive-subtle',    border: 'border-destructive-line'    },
   screen_share_stopped:     { label: 'Screen Share Stopped', icon: <Monitor className="w-4 h-4" />,       color: 'text-destructive',    bg: 'bg-destructive-subtle',    border: 'border-destructive-line'    },
@@ -5143,7 +5144,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                     'camera_disabled', 'camera_obstructed', 'microphone_disabled',
                     'copy_attempt', 'paste_attempt',
                     'voice_detected', 'multiple_voices',
-                    'face_mismatch', 'face_identity_changed', 'face_verification_unavailable',
+                    'face_mismatch', 'face_identity_changed', 'face_unverifiable', 'face_verification_unavailable',
                     'voice_mismatch', 'voice_identity_changed',
                     'screenshot_attempt', 'screen_recording_attempt', 'screen_share_stopped',
                   ];

@@ -27,9 +27,14 @@ import { useRef, useCallback, useState, useMemo } from 'react';
 import '@/lib/tfjs-rejection-guard';
 import { ensureFaceApiCpuBackend, loadFaceApiWithCpuBackend, type FaceApiModule } from '@/lib/face-api-loader';
 
+/** Why a live frame could not be compared against the reference face. */
+export type FaceUnverifiableReason = 'no_face' | 'low_confidence' | 'cut_off' | 'too_close' | 'too_small';
+
 interface FaceVerificationCallbacks {
   onFaceMismatch?: (distance: number) => void;
   onFaceIdentityChanged?: (distance: number) => void;
+  /** Several checks in a row produced no usable face (once per episode). */
+  onFaceUnverifiable?: (reason: FaceUnverifiableReason, checks: number) => void;
 }
 
 // Models are self-hosted under /public/models/ (tiny_face_detector,
@@ -48,6 +53,23 @@ const FACE_CONSECUTIVE_TO_FLAG = 2;
 // After one suspicious reading, confirm this soon rather than a full interval
 // later — a 30s cadence x2 used to let a ~60s substitution slip through.
 const CONFIRM_DELAY_MS = 3000;
+// Frame-quality gate for the live comparison (staging 2026-10-16):
+//  - the registered candidate leaned in until the face filled the frame with
+//    the forehead cut off → distance 0.6-0.8 → FALSE face_mismatch;
+//  - a stranger sat half out of frame with a hand over the face → no usable
+//    detection → every check silently skipped → never flagged.
+// A face that is cut off / too close / too small / low-confidence is NOT
+// compared (it would distort the fingerprint) — it counts as unverifiable
+// instead, and that streak is reported.
+const LIVE_DETECT_SCORE = 0.3;      // find partial faces too…
+const USABLE_FACE_SCORE = 0.5;      // …but only compare confident ones
+const EDGE_MARGIN = 0.01;           // box within 1% of a frame edge = cut off
+const MAX_FACE_HEIGHT = 0.7;        // face taller than 70% of the frame = too close
+const MIN_FACE_WIDTH = 0.06;        // narrower than 6% of the frame = too far / background
+// Unverifiable checks in a row before reporting (~1 min at the 30s cadence,
+// with the 3s confirm in between) — long enough that leaning in briefly or
+// adjusting the chair never triggers it.
+const UNVERIFIABLE_CONSECUTIVE_TO_FLAG = 3;
 const REGISTRATION_CAPTURES = 3;
 const CAPTURE_DELAY_MS = 1500; // delay between registration captures
 
@@ -210,6 +232,50 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
     } catch (err) {
       if (!isTfjsBackendError(err)) {
         console.warn('[FaceVerification] extractDescriptor outer error:', err);
+      }
+      return null;
+    } finally {
+      isDetectingRef.current = false;
+    }
+  }, [detectFaceWithDescriptor, isTfjsBackendError]);
+
+  /**
+   * One live frame for continuous verification: either a usable descriptor or
+   * the reason the frame cannot be compared. null = check skipped (busy, tab
+   * hidden, video not playing) — that must count neither way.
+   */
+  const extractLiveReading = useCallback(async (): Promise<
+    { descriptor: Float32Array } | { unusable: FaceUnverifiableReason } | null
+  > => {
+    if (isDetectingRef.current) return null;
+    const video = videoElementRef.current;
+    if (!faceApiRef.current || !video || !verificationActiveRef.current || video.paused || video.videoWidth === 0) return null;
+    if (typeof document !== 'undefined' && document.hidden) return null;
+
+    isDetectingRef.current = true;
+    try {
+      const detection = await detectFaceWithDescriptor(video, LIVE_DETECT_SCORE) as
+        | { descriptor?: Float32Array; detection?: { score: number; box: { x: number; y: number; width: number; height: number } } }
+        | null
+        | undefined;
+      // null = backend not ready / TF error / stopped → skip this check.
+      // undefined = face-api ran and found no face → counts as unverifiable.
+      if (detection === null) return null;
+      if (!detection?.descriptor || !detection.detection) return { unusable: 'no_face' };
+      const W = video.videoWidth;
+      const H = video.videoHeight || 1;
+      const { score, box } = detection.detection;
+      if (score < USABLE_FACE_SCORE) return { unusable: 'low_confidence' };
+      if (box.height > MAX_FACE_HEIGHT * H) return { unusable: 'too_close' };
+      if (box.width < MIN_FACE_WIDTH * W) return { unusable: 'too_small' };
+      if (
+        box.x < EDGE_MARGIN * W || box.y < EDGE_MARGIN * H
+        || box.x + box.width > (1 - EDGE_MARGIN) * W || box.y + box.height > (1 - EDGE_MARGIN) * H
+      ) return { unusable: 'cut_off' };
+      return { descriptor: detection.descriptor };
+    } catch (err) {
+      if (!isTfjsBackendError(err)) {
+        console.warn('[FaceVerification] extractLiveReading error:', err);
       }
       return null;
     } finally {
@@ -392,6 +458,8 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
     // Consecutive-agreement debounce (local to this run; reset on stop/restart).
     let mismatchStreak = 0;
     let changedStreak = 0;
+    let unverifiableStreak = 0;
+    let unverifiableReported = false;   // once per episode; a usable reading re-arms
 
     const scheduleConfirm = () => {
       if (confirmTimerRef.current) return;
@@ -404,13 +472,32 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
     const runCheck = async () => {
       try {
         if (!verificationActiveRef.current) return;
-        const descriptor = await extractDescriptor();
-        if (!descriptor || !baselineDescriptorRef.current) return;
+        const reading = await extractLiveReading();
+        if (!reading || !baselineDescriptorRef.current) return;
+        if ('unusable' in reading) {
+          // Not compared — and not silently dropped either.
+          // No quick confirm here: the streak must span regular checks
+          // (~1 min), so briefly leaning in or adjusting never flags.
+          unverifiableStreak += 1;
+          console.log(`[FaceVerification] check unusable=${reading.unusable} streak=${unverifiableStreak}`);
+          if (unverifiableStreak >= UNVERIFIABLE_CONSECUTIVE_TO_FLAG && !unverifiableReported) {
+            unverifiableReported = true;
+            console.warn(`[FaceVerification] UNVERIFIABLE — ${reading.unusable} (x${unverifiableStreak})`);
+            callbacksRef.current?.onFaceUnverifiable?.(reading.unusable, unverifiableStreak);
+          }
+          return;
+        }
+        unverifiableStreak = 0;
+        unverifiableReported = false;
+        const descriptor = reading.descriptor;
 
         const distance = faceapi.euclideanDistance(
           Array.from(baselineDescriptorRef.current),
           Array.from(descriptor),
         );
+        // One line per check — the server log is the only place to tune the
+        // thresholds from (glasses, lighting) after a real interview.
+        console.log(`[FaceVerification] check distance=${distance.toFixed(3)}`);
 
         if (distance > IDENTITY_CHANGED_THRESHOLD) {
           changedStreak += 1;
@@ -456,7 +543,7 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
     document.addEventListener('visibilitychange', visibilityHandlerRef.current);
 
     console.log(`[FaceVerification] Continuous verification started (every ${Math.round(intervalMs / 1000)}s)`);
-  }, [extractDescriptor]);
+  }, [extractLiveReading]);
 
   /**
    * Stop verification and clean up.
