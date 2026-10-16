@@ -9758,7 +9758,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                  it already had, so which card filters to what, and the counts
                  behind them, are untouched. */
               cards={[
-                { key: 'all', label: 'Total Invited', Icon: Users, value: invitationStats.total, ...INVITE_CARD_TONES.blue },
+                { key: 'all', label: 'Total', Icon: Users, value: invitationStats.total, ...INVITE_CARD_TONES.blue },
                 { key: 'sent', label: 'Invited', Icon: Mail, value: invitationStats.invited, ...INVITE_CARD_TONES.slate },
                 { key: 'started', label: 'In Progress', Icon: Play, value: invitationStats.started, ...INVITE_CARD_TONES.cyan },
                 { key: 'completed', label: 'Completed', Icon: CheckCircle, value: invitationStats.completed, ...INVITE_CARD_TONES.green },
