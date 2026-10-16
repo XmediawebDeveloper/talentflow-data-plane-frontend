@@ -158,17 +158,6 @@ type SidebarFolder = { id: string; name: string; parentId?: string | null; count
 const withEntryRow = (list: CandidateEmail[]): CandidateEmail[] =>
   list.some((c) => c.source !== 'database') ? list : [...list, { id: 'manual-entry', name: '', email: '', source: 'manual' }];
 
-/** A 409 Conflict (or its message) means the candidate was already invited to
- *  this assessment — surfaced to the user as a duplicate notice, not a failure. */
-const isDuplicateInviteError = (error: unknown): boolean => {
-  const e = error as { response?: { status?: number }; message?: string } | null;
-  const message = e?.message || '';
-  return e?.response?.status === 409 ||
-    message.includes('status code 409') ||
-    message.includes('already been invited') ||
-    message.includes('DUPLICATE_INVITATION');
-};
-
 export default function ShareAssessmentModal({ isOpen, onClose, assessment, prefilledCandidates, inviteSource, onInviteSent, additionalAssessments, onBack, embedded = false, footerTarget = null }: ShareAssessmentModalProps) {
   const router = useRouter();
   const { user } = useAuth();
@@ -931,44 +920,6 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
     setPicks((prev) => Object.fromEntries(Object.entries(prev).filter(([, p]) => !isBlocked(p.email))));
   };
 
-  /** Invite a whole list to one assessment, returning per-outcome counts.
-   *  Tries the bulk endpoint first; on a duplicate (409) it falls back to
-   *  one-by-one so already-invited rows are skipped (not failed) and named. */
-  const inviteMany = async (assessmentId: string, list: CandidateEmail[]) => {
-    const rows = list.map((c) => ({
-      candidate_name: c.name,
-      candidate_email: c.email,
-      candidate_phone: c.phone,
-      invite_source: inviteSource || (c.source === 'database' ? 'Internal DB' : 'Manual'),
-      resume_id: c.resumeId,
-    }));
-    try {
-      const results = await assessmentService.bulkInvite(assessmentId, {
-        candidates: rows,
-        custom_message: customMessage,
-        expiry_days: expiryDays,
-      });
-      const failed = results.filter((r) => r.status === 'failed').length;
-      return { sent: list.length - failed, failed, already: [] as string[] };
-    } catch (error) {
-      if (!isDuplicateInviteError(error)) throw error;
-      let sent = 0;
-      let failed = 0;
-      const already: string[] = [];
-      for (const row of rows) {
-        try {
-          const r = await assessmentService.invite(assessmentId, { ...row, custom_message: customMessage, expiry_days: expiryDays });
-          if (r.status === 'failed') failed++;
-          else sent++;
-        } catch (err) {
-          if (isDuplicateInviteError(err)) already.push(row.candidate_email);
-          else failed++;
-        }
-      }
-      return { sent, failed, already };
-    }
-  };
-
   const handleSend = async () => {
     setIsSubmitting(true);
     try {
@@ -1105,7 +1056,6 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
       // did not throw can still carry a candidate whose send failed.
       let failedHere = 0;
       let alreadyHere: string[] = [];
-      const alreadyHere: string[] = [];
 
       // Rows already carrying a Copy-Link invitation must be EMAILED, not
       // re-invited — invite()/bulkInvite() would 409 as a duplicate against
