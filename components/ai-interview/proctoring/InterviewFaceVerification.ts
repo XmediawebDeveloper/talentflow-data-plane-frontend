@@ -9,7 +9,11 @@
  * - face_recognition_model (needs to be present in /public/models/)
  *
  * During system check: captures 3 face descriptors and averages them into a baseline.
- * During interview: every 10s, extracts a descriptor and compares with baseline.
+ * During interview: on a fixed cadence, extracts a descriptor and compares with baseline.
+ * A suspicious reading is confirmed by a quick re-check (CONFIRM_DELAY_MS) instead
+ * of waiting a whole interval, and verifyNow() runs an out-of-band check when the
+ * face comes back after being missing / a second face leaves / the tab is visible
+ * again — the moments a substitute candidate would sit down.
  *
  * Thresholds (euclidean distance):
  *   < 0.6 = same person
@@ -17,7 +21,7 @@
  *   > 0.8 = different person (face_identity_changed)
  */
 
-import { useRef, useCallback, useState } from 'react';
+import { useRef, useCallback, useState, useMemo } from 'react';
 // Side-effect import: installs the global unhandledrejection guard for
 // face-api.js / TF.js WebGL backend crashes. Safe to import anywhere.
 import '@/lib/tfjs-rejection-guard';
@@ -41,6 +45,9 @@ const IDENTITY_CHANGED_THRESHOLD = 0.8;
 // Require this many CONSECUTIVE readings in the same band before emitting — a
 // single bad frame (blur, head-turn, lighting) must not accuse the candidate.
 const FACE_CONSECUTIVE_TO_FLAG = 2;
+// After one suspicious reading, confirm this soon rather than a full interval
+// later — a 30s cadence x2 used to let a ~60s substitution slip through.
+const CONFIRM_DELAY_MS = 3000;
 const REGISTRATION_CAPTURES = 3;
 const CAPTURE_DELAY_MS = 1500; // delay between registration captures
 
@@ -49,6 +56,11 @@ const CAPTURE_DELAY_MS = 1500; // delay between registration captures
 // to import from every face-api caller.
 
 export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbacks) {
+  // Callers pass an inline callbacks object (new every render). Read it via a
+  // ref so startVerification — and the returned handle — stay referentially
+  // stable; see the useMemo at the bottom.
+  const callbacksRef = useRef(callbacks);
+  callbacksRef.current = callbacks;
   const faceApiRef = useRef<FaceApiModule | null>(null);
   const baselineDescriptorRef = useRef<Float32Array | null>(null);
   const verificationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -57,6 +69,9 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
   const videoElementRef = useRef<HTMLVideoElement | null>(null);
   const isDetectingRef = useRef(false); // guard against concurrent TF.js calls
   const verificationActiveRef = useRef(false);
+  const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const runCheckRef = useRef<(() => Promise<void>) | null>(null);
+  const visibilityHandlerRef = useRef<(() => void) | null>(null);
   const [baselineReady, setBaselineReady] = useState(false);
 
   const isTfjsBackendError = useCallback((err: unknown): boolean => {
@@ -378,8 +393,17 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
     let mismatchStreak = 0;
     let changedStreak = 0;
 
-    verificationIntervalRef.current = setInterval(async () => {
+    const scheduleConfirm = () => {
+      if (confirmTimerRef.current) return;
+      confirmTimerRef.current = setTimeout(() => {
+        confirmTimerRef.current = null;
+        void runCheckRef.current?.();
+      }, CONFIRM_DELAY_MS);
+    };
+
+    const runCheck = async () => {
       try {
+        if (!verificationActiveRef.current) return;
         const descriptor = await extractDescriptor();
         if (!descriptor || !baselineDescriptorRef.current) return;
 
@@ -393,14 +417,18 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
           mismatchStreak = 0;
           if (changedStreak >= FACE_CONSECUTIVE_TO_FLAG) {
             console.warn(`[FaceVerification] IDENTITY CHANGED — distance: ${distance.toFixed(3)} (x${changedStreak})`);
-            callbacks?.onFaceIdentityChanged?.(distance);
+            callbacksRef.current?.onFaceIdentityChanged?.(distance);
+          } else {
+            scheduleConfirm();
           }
         } else if (distance > MISMATCH_THRESHOLD) {
           mismatchStreak += 1;
           changedStreak = 0;
           if (mismatchStreak >= FACE_CONSECUTIVE_TO_FLAG) {
             console.warn(`[FaceVerification] MISMATCH — distance: ${distance.toFixed(3)} (x${mismatchStreak})`);
-            callbacks?.onFaceMismatch?.(distance);
+            callbacksRef.current?.onFaceMismatch?.(distance);
+          } else {
+            scheduleConfirm();
           }
         } else {
           // Clearly the same person — reset streaks.
@@ -412,10 +440,23 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
         // a single bad frame does not halt continuous verification.
         console.warn('[FaceVerification] Verification frame skipped:', err);
       }
-    }, intervalMs);
+    };
+    runCheckRef.current = runCheck;
+
+    verificationIntervalRef.current = setInterval(() => { void runCheck(); }, intervalMs);
+
+    // Checks are skipped while the tab is hidden — re-check the moment it is
+    // visible again (shortly after, so the camera frame is fresh).
+    if (visibilityHandlerRef.current) {
+      document.removeEventListener('visibilitychange', visibilityHandlerRef.current);
+    }
+    visibilityHandlerRef.current = () => {
+      if (!document.hidden) scheduleConfirm();
+    };
+    document.addEventListener('visibilitychange', visibilityHandlerRef.current);
 
     console.log(`[FaceVerification] Continuous verification started (every ${Math.round(intervalMs / 1000)}s)`);
-  }, [extractDescriptor, callbacks]);
+  }, [extractDescriptor]);
 
   /**
    * Stop verification and clean up.
@@ -426,6 +467,28 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
       clearInterval(verificationIntervalRef.current);
       verificationIntervalRef.current = null;
     }
+    if (confirmTimerRef.current) {
+      clearTimeout(confirmTimerRef.current);
+      confirmTimerRef.current = null;
+    }
+    if (visibilityHandlerRef.current) {
+      document.removeEventListener('visibilitychange', visibilityHandlerRef.current);
+      visibilityHandlerRef.current = null;
+    }
+    runCheckRef.current = null;
+  }, []);
+
+  /**
+   * Run an identity check now (out of the regular cadence) — e.g. when the face
+   * comes back after being missing. No-op unless continuous verification is
+   * running. Delayed by CONFIRM_DELAY_MS so the returning face has settled.
+   */
+  const verifyNow = useCallback(() => {
+    if (!verificationActiveRef.current || !runCheckRef.current || confirmTimerRef.current) return;
+    confirmTimerRef.current = setTimeout(() => {
+      confirmTimerRef.current = null;
+      void runCheckRef.current?.();
+    }, CONFIRM_DELAY_MS);
   }, []);
 
   /**
@@ -435,14 +498,19 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
     return baselineDescriptorRef.current !== null;
   }, []);
 
-  return {
+  // MUST be stable. The portal re-renders every second (interview timer) and
+  // passes this handle to InterviewUI, whose effect cleanup calls
+  // stopVerification() whenever the handle's identity changes — a fresh object
+  // per render silently stopped continuous verification ~1s after connect.
+  return useMemo(() => ({
     registerFace,
     registerFaceFromBlob,
     verifyCurrentFace,
     startVerification,
     stopVerification,
+    verifyNow,
     hasBaseline,
     baselineReady,
     baselineDescriptorRef,
-  };
+  }), [registerFace, registerFaceFromBlob, verifyCurrentFace, startVerification, stopVerification, verifyNow, hasBaseline, baselineReady]);
 }

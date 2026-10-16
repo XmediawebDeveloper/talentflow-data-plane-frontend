@@ -42,6 +42,8 @@ import { loadVerifiedAudioInputs } from '@/lib/utils/mediaDeviceProbe';
 interface FaceVerificationHandle {
   startVerification: (videoElement: HTMLVideoElement, intervalMs?: number) => void;
   stopVerification: () => void;
+  /** Out-of-cadence identity check (face back after missing, 2nd face gone). */
+  verifyNow?: () => void;
   hasBaseline: () => boolean;
 }
 
@@ -270,6 +272,9 @@ const REPEAT_WINDOW_MS = 30000;
 // Live-interview face identity check cadence, same for every device tier
 // (CPU cost — see the startVerification call). Revisit after R&D.
 const FACE_VERIFY_INTERVAL_MS = 30000;
+// How long after connect a missing face baseline may still arrive (stored
+// Identity photo re-fetched after a reload) before it is logged as unavailable.
+const FACE_BASELINE_GRACE_MS = 15000;
 // Longest the "Preparing your interview…" warm-up may hold back the start.
 const PREPARE_MAX_WAIT_MS = 20000;
 
@@ -2576,7 +2581,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     // We never blocked the interview — just take the held warning down and
     // log how long the face was gone.
     endAttentionEpisode('face_missing', 'restored');
-  }, [endAttentionEpisode]);
+    // A substitute sits down exactly here — check identity now, not up to
+    // FACE_VERIFY_INTERVAL_MS later.
+    faceVerification?.verifyNow?.();
+  }, [endAttentionEpisode, faceVerification]);
 
   const handleMultipleFaces = useCallback((count: number) => {
     startAttentionEpisode('multiple_faces', { face_count: count });
@@ -2584,7 +2592,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
   const handleMultipleFacesCleared = useCallback(() => {
     endAttentionEpisode('multiple_faces', 'restored');
-  }, [endAttentionEpisode]);
+    // Back to one face — make sure it is still the registered candidate.
+    faceVerification?.verifyNow?.();
+  }, [endAttentionEpisode, faceVerification]);
 
   const handleGazeAway = useCallback((direction: string, metrics?: Record<string, any>) => {
     startAttentionEpisode('gaze_away', { direction, ...(metrics ?? {}) });
@@ -2689,17 +2699,46 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   });
 
   // Face verification event handlers (identity check, not just presence)
+  // Webcam element continuous face verification runs against (set in handleVideoReady).
+  const faceVerifyVideoRef = useRef<HTMLVideoElement | null>(null);
   useEffect(() => {
     if (!faceVerification || !isConnected) return;
     // The faceVerification hook calls callbacks internally, but we need to wire
     // them to emitEvent. Since the callbacks are set at hook creation time in the
     // portal, we handle this via a subscription-like pattern in InterviewUI.
     // The callbacks are already set up in CandidateAIInterviewPortal if needed.
-    // Here we just ensure cleanup on unmount.
+    // The baseline can land AFTER the camera was ready (reload straight into the
+    // interview → the stored Identity photo is re-fetched), in which case
+    // handleVideoReady skipped starting — start it here. startVerification is
+    // idempotent (it replaces any running interval).
+    const video = faceVerifyVideoRef.current;
+    if (video && faceVerification.hasBaseline()) {
+      faceVerification.startVerification(video, FACE_VERIFY_INTERVAL_MS);
+    }
     return () => {
       faceVerification.stopVerification();
     };
   }, [faceVerification, isConnected]);
+
+  // No face baseline (face models failed to load, or no face found in the
+  // identity photo / system-check frames) → no identity check runs at all this
+  // session. Record it once the proctor pipeline is live (emitEvent drops
+  // events before connect) so "no identity flags" is never misread as
+  // "checked and clean".
+  // Grace period: after a reload the portal is still re-fetching the stored
+  // Identity photo (fetch + 8s registration cap) when the socket connects.
+  const faceVerifyUnavailableSentRef = useRef(false);
+  useEffect(() => {
+    if (!isConnected || faceVerifyUnavailableSentRef.current) return;
+    if (faceVerification?.hasBaseline()) return;
+    const t = setTimeout(() => {
+      if (faceVerifyUnavailableSentRef.current) return;
+      faceVerifyUnavailableSentRef.current = true;
+      console.warn('[INTERVIEW-DEBUG] Face verification unavailable — no baseline registered');
+      emitEvent('face_verification_unavailable', { reason: 'no_face_baseline' });
+    }, FACE_BASELINE_GRACE_MS);
+    return () => clearTimeout(t);
+  }, [isConnected, faceVerification, emitEvent]);
 
   const faceDetection = useInterviewFaceDetection({
     enabled: isConnected && webcamReady,
@@ -3021,6 +3060,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     // the old 10s cadence for non-low tiers tripled that load — noticeable
     // once 4-core machines started classifying as 'mid'. 30s still catches a
     // substituted candidate within ~30s.
+    faceVerifyVideoRef.current = video;
     if (faceVerification?.hasBaseline()) {
       faceVerification.startVerification(video, FACE_VERIFY_INTERVAL_MS);
       console.log(`[INTERVIEW-DEBUG] Continuous face verification started (${FACE_VERIFY_INTERVAL_MS / 1000}s cadence)`);
