@@ -467,6 +467,16 @@ export default function AIInterviewPreview() {
   }, [published, listHref, router, embedded]);
 
   const handleSaveAsDraft = async () => {
+    // Preview saves nothing of its own — except when this is a published
+    // version being edited, which Save as Draft must take off "published".
+    if (id && interview?.status === 'published') {
+      try {
+        await aiInterviewService.update(id, { status: 'draft', save_and_exit: true });
+      } catch {
+        toast.error('Failed to save draft');
+        return;
+      }
+    }
     toast.success('Draft saved!');
     router.push(exitHref ?? '/recruitment/ai-interviews');
   };
