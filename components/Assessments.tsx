@@ -5918,15 +5918,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     const hasBeenShared = invitationsSent > 0;
     const version = assessment.version ?? 1;
 
-    // Edit — open until an invitation has gone out; the version cap explains itself.
-    const atVersionCap = version >= MAX_ASSESSMENT_VERSIONS;
+    // Edit — open until an invitation has gone out. The version cap does not
+    // apply: republishing a never-invited version keeps its number (the
+    // backend only mints a new one once candidates were invited).
     const editReason = !canUpdateAssessment
       ? 'You do not have permission to edit assessments'
       : hasBeenShared
         ? 'Cannot edit — this assessment has already been sent to candidates'
-        : atVersionCap
-          ? `This assessment already has ${MAX_ASSESSMENT_VERSIONS} versions, the maximum allowed — it can’t be edited further.`
-          : '';
+        : '';
     // Share/Invite — blocked once invites were revoked (duplicate to start fresh).
     const canShare = isTenantAdmin || hasPermissionCode('assessments:share');
     const shareReason = !canShare
@@ -6055,18 +6054,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           // of hovering for the title tooltip. Same fix as the JD edit icon
           // (job-details/page.tsx) — the click is how a recruiter learns the
           // reason and stays clickable for it.
-          const atVersionCap = (assessment.version ?? 1) >= MAX_ASSESSMENT_VERSIONS;
+          // The cap no longer blocks Edit: a never-invited version keeps its
+          // number when republished, so editing it never mints a version 6.
           const editReason = !canUpdateAssessment
             ? 'You do not have permission to edit assessments'
             : hasBeenShared
             ? 'Cannot edit — this assessment has already been sent to candidates'
             : assessment.status === 'Archived'
             ? 'Archived assessments cannot be edited'
-            : atVersionCap
-            ? `This assessment already has ${MAX_ASSESSMENT_VERSIONS} versions, the maximum allowed — it can’t be edited further.`
             : '';
           const editDisabled = !canUpdateAssessment || hasBeenShared || assessment.status === 'Archived';
-          const editGreyed = editDisabled || atVersionCap;
+          const editGreyed = editDisabled;
           /* A draft isn't finished yet, so its Edit reads "Continue Editing" -
              same action, same Configure page. Status is checked loosely: the
              job row passes the list's 'Draft', a version row the API's 'draft'. */
@@ -6077,10 +6075,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               onClick={() => {
                 if (editDisabled) return;
                 setOpenMenuId(null);
-                if (atVersionCap) {
-                  toast.error('Maximum versions reached', { description: editReason });
-                  return;
-                }
                 handleEditAssessment(assessment);
               }}
               disabled={editDisabled}
