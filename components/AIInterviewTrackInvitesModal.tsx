@@ -78,6 +78,10 @@ interface AIInterviewTrackInvitesModalProps {
    *  Invitation Status tab, interview cards, activity) refresh at once rather
    *  than on their next poll. */
   onChanged?: () => void | Promise<void>;
+  /** Bump to make the tracker reload its list at once — for a host whose own
+   *  dialog (e.g. Share) adds invitations while this tracker stays mounted
+   *  underneath, so they appear without waiting for the 15s poll. */
+  refreshSignal?: number;
 }
 
 const PAGE_SIZE = 10;
@@ -105,6 +109,7 @@ export default function AIInterviewTrackInvitesModal({
   embedded = false,
   onInviteMore,
   onChanged,
+  refreshSignal,
 }: AIInterviewTrackInvitesModalProps) {
   const [isLoading, setIsLoading] = useState(true);
 
@@ -376,6 +381,12 @@ export default function AIInterviewTrackInvitesModal({
       if (refreshRef.current) clearInterval(refreshRef.current);
     };
   }, [isOpen, configId, loadInvitations]);
+
+  useEffect(() => {
+    if (!isOpen || !configId || !refreshSignal) return;
+    loadInvitations(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshSignal]);
 
   if (!isOpen) return null;
 

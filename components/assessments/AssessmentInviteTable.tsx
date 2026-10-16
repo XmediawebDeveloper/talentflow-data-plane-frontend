@@ -70,7 +70,9 @@ export const isInviteExpired = (inv: any): boolean => {
  *  (used by the Invite Tracking popup / Invitation Status tab), not a copy of
  *  it. */
 export const isBulkResendable = (inv: any): boolean =>
-  ['sent', 'expired'].includes(inv.status)
+  // 'pending' = a Copy Link invite (link minted, no email yet). It shows as
+  // Invited, so it gets a checkbox like any other invite that went out.
+  ['sent', 'pending', 'expired'].includes(inv.status)
   && !inv.started_at
   && !inv.completed_at;
 
