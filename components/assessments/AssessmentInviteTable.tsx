@@ -15,6 +15,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { InviteSourceValue, assessmentInviteSource } from '@/components/AIInterviewInviteTable';
 import { formatScore, SCORE_CELL_TEXT } from '@/lib/utils/score';
+import { timelineEvents } from '@/components/AssessmentInviteActions';
 
 /**
  * The candidate list for an ASSESSMENT invite tracker.
@@ -160,7 +161,7 @@ export const InviteStatusBadge = ({ inv }: { inv: any }) => {
   if (s === 'sent' || inv.sent_at) {
     return <span className={`${base} bg-status-invited/10 text-status-invited ring-status-invited/20`}><Mail className="w-3 h-3" /> Invited</span>;
   }
-  return <span className={`${base} bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-gray-200 dark:ring-slate-700`}><Clock className="w-3 h-3" /> Pending</span>;
+  return <span className={`${base} bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-gray-200 dark:ring-slate-700`} title="Link created — no email sent yet"><Mail className="w-3 h-3" /> Invited</span>;
 };
 
 /* The popup's own value for this class, kept beside the markup that uses it. */
@@ -373,72 +374,23 @@ export default function AssessmentInviteTable({
                       </div>
                     </td>
                         <td className="py-3 px-4 align-top text-xs text-gray-500 dark:text-slate-500 hidden md:table-cell">
+                          {/* Same trail the Track Invites popup prints (timelineEvents). */}
                           <div className="space-y-1">
-                            {invitation.sent_at && (
-                              <div className="flex items-center gap-2">
-                                <Mail className="w-3 h-3 text-status-invited flex-shrink-0" />
-                                <span className="text-status-invited">Invited: {formatIST(invitation.sent_at)}</span>
+                            {timelineEvents(invitation).length === 0 ? (
+                              <div className="flex items-center gap-2 whitespace-nowrap">
+                                <Clock className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                                <span>Created: {formatIST(invitation.created_at)}</span>
+                              </div>
+                            ) : (
+                              timelineEvents(invitation).map(({ label, at, Icon, tone }, i) => (
+                                <div key={`${label}-${i}`} className="flex items-center gap-2 whitespace-nowrap">
+                                  <Icon className={`w-3 h-3 flex-shrink-0 ${tone}`} />
+                                  <span className={tone}>{label}: {formatIST(at)}</span>
+                                </div>
+                              ))
+                            )}
                           </div>
-                        )}
-                        {invitation.bounced_at && (
-                          <div className="flex items-center gap-2">
-                            <RefreshCw className="w-3 h-3 text-destructive flex-shrink-0" />
-                            <span className="text-destructive">Bounced: {formatIST(invitation.bounced_at)}</span>
-                          </div>
-                        )}
-                        {invitation.opened_at && (
-                          <div className="flex items-center gap-2">
-                            <Monitor className="w-3 h-3 text-status-progress flex-shrink-0" />
-                            <span className="text-status-progress">System Check: {formatIST(invitation.opened_at)}</span>
-                          </div>
-                        )}
-                        {invitation.started_at && (
-                          <div className="flex items-center gap-2">
-                            <Play className="w-3 h-3 text-status-progress flex-shrink-0" />
-                            <span className="text-status-progress">Started: {formatIST(invitation.started_at)}</span>
-                          </div>
-                        )}
-                        {invitation.completed_at && (
-                          <div className="flex items-center gap-2">
-                            <CheckCircle className="w-3 h-3 text-status-completed flex-shrink-0" />
-                            <span className="text-status-completed">Completed: {formatIST(invitation.completed_at)}</span>
-                          </div>
-                        )}
-                        {invitation.terminated_at && !invitation.completed_at && (
-                          <div className="flex items-center gap-2">
-                            <Ban className="w-3 h-3 text-destructive flex-shrink-0" />
-                            <span className="text-destructive">Terminated: {formatIST(invitation.terminated_at)}</span>
-                          </div>
-                        )}
-                        {/* Expired-at timestamp — shown when the link
-                            has expired (status='expired' or clock-based
-                            expiry on a never-started invite). The
-                            expires_at column holds the deadline; we
-                            surface it as the moment of expiry. */}
-                        {(() => {
-                          const s = (invitation.status || '').toLowerCase();
-                          const clockExpired = !invitation.started_at
-                            && !invitation.unit_consumed
-                            && invitation.expires_at
-                            && new Date(invitation.expires_at) < new Date();
-                          const isExpired = !invitation.completed_at
-                            && (s === 'expired' || clockExpired);
-                          if (!isExpired || !invitation.expires_at) return null;
-                          return (
-                            <div className="flex items-center gap-2">
-                              <Clock className="w-3 h-3 text-status-expired flex-shrink-0" />
-                              <span className="text-status-expired">Expired at: {formatIST(invitation.expires_at)}</span>
-                            </div>
-                          );
-                        })()}
-                        {!invitation.sent_at && !invitation.started_at && (
-                          <div className="flex items-center gap-2">
-                            <Clock className="w-3 h-3 text-gray-400 flex-shrink-0" />
-                            <span>Created: {formatIST(invitation.created_at)}</span>
-                          </div>
-                        )}
-                      </div>
-                    </td>
+                        </td>
                     <td className="py-3 px-4 align-top">
                       {/* Status is the badge alone. Expiry is resolved inside
                           renderInviteStatusBadge, so a lapsed invite renders one Expired

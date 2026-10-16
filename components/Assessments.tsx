@@ -2006,7 +2006,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       case 'sent':
         return <span className={`${base} bg-status-invited/10 text-status-invited ring-status-invited/20`}><Mail className="w-3 h-3" /> Invited</span>;
       default:
-        return <span className={`${base} bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-gray-200 dark:ring-slate-700`}><Clock className="w-3 h-3" /> Pending</span>;
+        return <span className={`${base} bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-gray-200 dark:ring-slate-700`} title="Link created — no email sent yet"><Mail className="w-3 h-3" /> Invited</span>;
     }
   };
 
@@ -2226,9 +2226,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       opened: 'System Check',
       sent: 'Invited',
       revoked: 'Revoked',
-      pending: 'Pending',
+      pending: 'Invited',
     };
-    return labels[currentInviteStatus(inv)] || 'Pending';
+    return labels[currentInviteStatus(inv)] || 'Invited';
   };
 
   /* The exported sheet's columns, in table order: what is on screen, with the
@@ -2574,8 +2574,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     }
   };
 
-  const loadTrackingInvitations = async (assessment: any, page: number, filters: InviteFilterState) => {
-    setIsLoadingInvitations(true);
+  const loadTrackingInvitations = async (assessment: any, page: number, filters: InviteFilterState, silent = false) => {
+    if (!silent) setIsLoadingInvitations(true);
     try {
       const query = {
         status: filters.status !== 'all' ? filters.status : undefined,
@@ -2649,7 +2649,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         revoked: 0,
       });
     } finally {
-      setIsLoadingInvitations(false);
+      if (!silent) setIsLoadingInvitations(false);
     }
   };
 
@@ -2887,9 +2887,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      the assessment it belongs to so the table can name it. Unfiltered on the
      request: the tab's stat cards must keep counting the whole set while the
      table is narrowed, so narrowing happens client-side over these rows. */
-  const loadAllInviteStatuses = async () => {
-    setIsLoadingInviteStatus(true);
-    setInviteStatusError(null);
+  const loadAllInviteStatuses = async (silent = false) => {
+    if (!silent) setIsLoadingInviteStatus(true);
+    if (!silent) setInviteStatusError(null);
     try {
       /* Every assessment of every job version, paged to the end — see the same
          call in `loadAllCompletedCandidates`. */
@@ -2966,23 +2966,34 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         return ty - tx;
       });
       setInviteStatusRows(merged);
-      setInviteStatusPage(1);
-      // The ids just went stale; a selection pointing at them would export rows
-      // the recruiter can no longer see.
-      setSelectedInviteIds(new Set());
+      /* A background poll must not yank the recruiter back to page 1 or drop
+         their selection — only an explicit load does. */
+      if (!silent) {
+        setInviteStatusPage(1);
+        // The ids just went stale; a selection pointing at them would export rows
+        // the recruiter can no longer see.
+        setSelectedInviteIds(new Set());
+      }
     } catch (err: any) {
+      if (silent) return;
       console.error('Failed to load invitation statuses:', err);
       setInviteStatusError(err?.message || 'Failed to load invitation statuses');
       setInviteStatusRows([]);
     } finally {
-      setIsLoadingInviteStatus(false);
+      if (!silent) setIsLoadingInviteStatus(false);
     }
   };
 
   useEffect(() => {
-    if (activeTab === 'invitation-status') {
-      loadAllInviteStatuses();
-    }
+    if (activeTab !== 'invitation-status') return;
+    loadAllInviteStatuses();
+    /* Candidates open, start and finish on their own, so the tab polls quietly
+       instead of waiting for a page refresh. Skipped while the browser tab is
+       hidden. */
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') loadAllInviteStatuses(true);
+    }, 15000);
+    return () => clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
@@ -3171,6 +3182,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   useEffect(() => {
     if (!showTrackInvitesModal || !selectedAssessmentForTracking) return;
     loadTrackingInvitations(selectedAssessmentForTracking, trackingCurrentPage, trackingFilters);
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        loadTrackingInvitations(selectedAssessmentForTracking, trackingCurrentPage, trackingFilters, true);
+        loadTrackingInvitationSummary(selectedAssessmentForTracking);
+      }
+    }, 15000);
+    return () => clearInterval(timer);
   }, [showTrackInvitesModal, selectedAssessmentForTracking, trackingJob, trackingCurrentPage, trackingFilters]);
 
   useEffect(() => {
@@ -6704,7 +6722,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   <Button
                     variant="secondary"
                     size="sm"
-                    onClick={loadAllInviteStatuses}
+                    onClick={() => loadAllInviteStatuses()}
                     disabled={isLoadingInviteStatus}
                     title="Fetch the latest invite statuses"
                     aria-label="Refresh"
@@ -7632,7 +7650,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   ) : inviteStatusError ? (
                     <div className="p-6 text-center">
                       <p className="text-sm text-destructive mb-3">{inviteStatusError}</p>
-                      <Button variant="primary" size="md" onClick={loadAllInviteStatuses}>
+                      <Button variant="primary" size="md" onClick={() => loadAllInviteStatuses()}>
                         Retry
                       </Button>
                     </div>

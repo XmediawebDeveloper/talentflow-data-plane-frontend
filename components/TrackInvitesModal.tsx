@@ -335,7 +335,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
     if (effective === 'opened') return <Badge variant="info" title="Consent accepted — the candidate is on the system check step"><Monitor /> System Check</Badge>;
     if (inv.email_read_at) return <Badge variant="info"><Eye /> Read</Badge>;
     if (effective === 'sent') return <Badge variant="info"><Mail /> Invited</Badge>;
-    return <Badge variant="warning"><Clock /> Pending</Badge>;
+    return <Badge variant="info" title="Link created — no email sent yet"><Mail /> Invited</Badge>;
   };
 
   // timelineEvents / isInviteExpired now come from AssessmentInviteActions.
