@@ -20,6 +20,7 @@ import { ArrowLeft,
   Ban,
   Mail,
   Calendar,
+  Clock,
   Loader2,
   UserCog,
   Check,
@@ -58,7 +59,7 @@ import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { formatISTDate, formatIST } from '@/lib/utils/dateUtils';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { Skeleton } from '@/components/ui/skeleton';
-import { planTurnOn, planTurnOff, withoutOrphanEntryPoints, isEntryPointLocked, labelOf } from '@/lib/permissions/permissionRules';
+import { planTurnOn, planTurnOff, withoutOrphanEntryPoints, isEntryPointLocked, isGroupFullyOn, labelOf } from '@/lib/permissions/permissionRules';
 import { usePermissionChangeDialog } from '@/components/roles/PermissionChangeDialog';
 import AppModal from '@/components/ui/app-modal';
 import PermissionSectionsView, {
@@ -439,15 +440,15 @@ const hashString = (str: string): number => {
 
 // Get role label - use RBAC name or fallback to defaults
 const getRoleLabel = (role: string, availableRoles: RoleListItem[]): string => {
-  const rbacRole = availableRoles.find(r => r.code.toLowerCase() === role.toLowerCase());
+  const rbacRole = availableRoles.find(r => (r.code || '').toLowerCase() === (role || '').toLowerCase());
   // Role names are always shown in CAPITALS (see formatRoleName in rbacService).
   if (rbacRole) return formatRoleName(rbacRole.name);
-  return formatRoleName(defaultRoleLabels[role.toLowerCase()] || role);
+  return formatRoleName(defaultRoleLabels[(role || '').toLowerCase()] || role || '');
 };
 
 // Get role badge color - system roles use default colors, custom roles get distinct colors from palette
 const getRoleBadgeColor = (role: string, availableRoles: RoleListItem[]): string => {
-  const roleCode = role.toLowerCase();
+  const roleCode = (role || '').toLowerCase();
 
   // Check if it's a known system role with predefined color
   if (defaultRoleBadgeColors[roleCode]) {
@@ -476,6 +477,39 @@ const permissionLabels: Record<keyof UserPermissions, string> = {
   can_view_analytics: 'View Analytics',
   can_manage_settings: 'Manage Settings',
   can_manage_users: 'Manage Users',
+};
+
+// The users list sends ~85 legacy `can_*` flags, not just the 9 above. Any flag
+// without a label rendered as an EMPTY pill, and alias flags (`*_granular`, and
+// the combined "manage/access/upload" ones that repeat their parts) inflated
+// "+N more". Every flag now gets a readable label; aliases are dropped.
+const PERMISSION_FLAG_WORDS: Record<string, string> = {
+  jd: 'JD', hr: 'HR', ai: 'AI', api: 'API', pdf: 'PDF', db: 'Database',
+};
+const humanizePermissionFlag = (key: string): string =>
+  key
+    .replace(/^can_/, '')
+    .split('_')
+    .filter(Boolean)
+    .map((w) => PERMISSION_FLAG_WORDS[w] ?? w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+
+const getUserPermissionPills = (permissions: object | null | undefined): string[] => {
+  const seen = new Set<string>();
+  const labels: string[] = [];
+  const add = (label: string) => {
+    if (label && !seen.has(label)) { seen.add(label); labels.push(label); }
+  };
+  const granted = Object.entries(permissions || {}).filter(([key, value]) => value && !key.endsWith('_granular'));
+  // Labelled flags first (the familiar Create JD / Manage JD / ...), then the rest.
+  granted.forEach(([key]) => {
+    const label = permissionLabels[key as keyof UserPermissions];
+    if (label) add(label);
+  });
+  granted.forEach(([key]) => {
+    if (!(key in permissionLabels)) add(humanizePermissionFlag(key));
+  });
+  return labels;
 };
 
 const defaultPermissions: UserPermissions = {
@@ -613,8 +647,8 @@ export default function UserManagement() {
       tone: 'off',
       summary: <>This will also turn off {parts.join(' and ')}.</>,
       details: [
-        { heading: 'Entry points in other sections', items: plan.entryPointsOff.map(labelOf) },
-        { heading: 'Also turned off (they need it)', items: plan.dependentsOff.map(labelOf) },
+        { heading: 'Entry points in other sections', codes: plan.entryPointsOff },
+        { heading: 'Also turned off (they need it)', codes: plan.dependentsOff },
       ],
       actions: [{ id: 'off', label: 'Turn off', variant: 'destructive' }],
     });
@@ -645,9 +679,9 @@ export default function UserManagement() {
         tone: 'on',
         summary,
         details: [
-          { heading: 'Can also be started from', items: offered.map(labelOf) },
-          { heading: 'Also turned on (needed)', items: plan.autoRequired.filter(c => !MANDATORY_PERMISSION_CODES.has(c)).map(labelOf) },
-          { heading: 'Not turned on (their main permission is off)', items: plan.skippedLocked.map(labelOf) },
+          { heading: 'Can also be started from', codes: offered },
+          { heading: 'Also turned on (needed)', codes: plan.autoRequired.filter(c => !MANDATORY_PERMISSION_CODES.has(c)) },
+          { heading: 'Not turned on (their main permission is off)', codes: plan.skippedLocked },
         ],
         actions: offered.length > 0
           ? [{ id: 'only', label: 'Only this', variant: 'secondary' }, { id: 'all', label: 'Turn on all' }]
@@ -1103,7 +1137,7 @@ export default function UserManagement() {
           : user.permission_ids ?? [];
       let granted = perms.filter((p) => ids.includes(p.id));
       if (granted.length === 0) {
-        const role = availableRoles.find((r) => r.code.toLowerCase() === user.role.toLowerCase());
+        const role = availableRoles.find((r) => r.code.toLowerCase() === (user.role || '').toLowerCase());
         if (role) {
           const rolePerms = await userService.getRolePermissions(role.id);
           granted = perms.filter((p) => rolePerms.permission_codes.includes(p.code));
@@ -1545,8 +1579,8 @@ export default function UserManagement() {
 
   const filteredUsers = users.filter(user => {
     const matchesSearch =
-      user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchQuery.toLowerCase());
+      (user.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (user.email || '').toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus =
       statusFilter === 'all' ||
       (statusFilter === 'active' && user.is_active) ||
@@ -1557,6 +1591,131 @@ export default function UserManagement() {
   const paginatedUsers = filteredUsers.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
+  );
+
+  // Active/Inactive toggle (or badge when the viewer can't change it). `compact`
+  // hides the word next to the switch on tablet widths so the table fits.
+  const renderUserStatus = (user: (typeof users)[number], compact = false) => (
+    <>
+    {/* Toggle Switch for Active/Inactive — requires users:disable */}
+    {(user.role || '').toLowerCase() !== 'tenant_admin' && user.id !== currentUserId && canDisableUser ? (
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => handleToggleActive(user)}
+          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:ring-offset-2 ring-1 ring-inset ${
+            user.is_active
+              ? 'bg-success ring-success-line shadow-sm'
+              : 'bg-gray-300 ring-black/5'
+          }`}
+          title={user.is_active ? 'Active - Click to deactivate' : 'Inactive - Click to activate'}
+        >
+          <span
+            className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+              user.is_active ? 'translate-x-6' : 'translate-x-1'
+            }`}
+          />
+        </button>
+        <span className={`${compact ? 'hidden lg:inline' : ''} text-xs font-semibold ${user.is_active ? 'text-success' : 'text-gray-500 dark:text-slate-500'}`}>
+          {user.is_active ? 'Active' : 'Inactive'}
+        </span>
+      </div>
+    ) : (
+      <Badge variant={user.is_active ? 'success' : 'destructive'}>
+        {user.is_active ? 'Active' : 'Inactive'}
+      </Badge>
+    )}
+    </>
+  );
+
+  // Row actions — shared by the table (md+) and the phone card list.
+  const renderUserActions = (user: (typeof users)[number]) => (
+    <div className="flex items-center justify-center gap-1 sm:gap-2">
+      {/* Feature Permissions button - HIDDEN for now as requested */}
+      {/* {(user.role || '').toLowerCase() !== 'tenant_admin' && (
+        <button
+          onClick={() => setFeaturePermissionUser(user)}
+          className="p-2 text-gray-500 dark:text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+          aria-label="Feature Permissions" title="Feature Permissions"
+        >
+          <Settings2 className="w-4 h-4" />
+        </button>
+      )} */}
+  
+      {/* Edit button - requires users:update, disabled when user is inactive.
+          Icon stays visible (never removed from the DOM) when the permission
+          is off, matching the is_active disabled treatment right below it —
+          and reacts live to a permission change because canUpdateUser is
+          derived from currentUser?.permissions on every render. */}
+      {(user.role || '').toLowerCase() !== 'tenant_admin' && user.id !== currentUserId && (
+        <Tooltip content={!canUpdateUser ? 'You do not have permission to edit users' : user.is_active ? 'Edit User' : 'Cannot edit inactive user'}>
+          <button
+            onClick={() => canUpdateUser && user.is_active && openEditModal(user)}
+            disabled={!canUpdateUser || !user.is_active}
+            aria-label="Edit user"
+            className={`p-2 rounded-lg transition-all ${
+              canUpdateUser && user.is_active
+                ? 'text-gray-500 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/10 cursor-pointer'
+                : 'text-gray-300 dark:text-slate-500 cursor-not-allowed'
+            }`}
+          >
+            <Pencil className="w-4 h-4" />
+          </button>
+        </Tooltip>
+      )}
+
+      {/* Reset Password — requires users:reset_password. Icon stays visible; see Edit button above. */}
+      {(user.role || '').toLowerCase() !== 'tenant_admin' && user.id !== currentUserId && (
+        <Tooltip content={!canResetPassword ? 'You do not have permission to reset passwords' : user.is_active ? 'Reset Password' : 'Cannot reset password for inactive user'}>
+          <button
+            onClick={() => { if (canResetPassword && user.is_active) { setResetPwMode('choose'); setResetPwUser(user); } }}
+            disabled={!canResetPassword || !user.is_active}
+            aria-label="Reset password"
+            className={`p-2 rounded-lg transition-all ${
+              canResetPassword && user.is_active
+                ? 'text-gray-500 dark:text-slate-500 hover:text-warning hover:bg-warning-subtle cursor-pointer'
+                : 'text-gray-300 dark:text-slate-500 cursor-not-allowed'
+            }`}
+          >
+            <KeyRound className="w-4 h-4" />
+          </button>
+        </Tooltip>
+      )}
+
+      {/* Force Password Change — requires users:force_password_change. Icon stays visible; see Edit button above. */}
+      {(user.role || '').toLowerCase() !== 'tenant_admin' && user.id !== currentUserId && (
+        <Tooltip content={!canForcePwChange ? 'You do not have permission to force a password change' : user.is_active ? 'Force password change on next login' : 'Cannot update inactive user'}>
+          <button
+            onClick={() => canForcePwChange && user.is_active && handleForcePasswordChange(user)}
+            disabled={!canForcePwChange || !user.is_active}
+            aria-label="Force password change"
+            className={`p-2 rounded-lg transition-all ${
+              canForcePwChange && user.is_active
+                ? 'text-gray-500 dark:text-slate-500 hover:text-brand-orange hover:bg-brand-orange/10 cursor-pointer'
+                : 'text-gray-300 dark:text-slate-500 cursor-not-allowed'
+            }`}
+          >
+            <Lock className="w-4 h-4" />
+          </button>
+        </Tooltip>
+      )}
+    </div>
+  );
+
+  // Created + Last Login as two lines — icon-only in the xl+ table column
+  // (the header names them), labelled under the email / on the phone cards.
+  const renderUserDates = (user: (typeof users)[number], labels = true) => (
+    <div className="space-y-0.5 text-2xs sm:text-xs text-gray-500 dark:text-slate-400">
+      <div className="flex items-center gap-1.5" title="Created">
+        <Calendar className="w-3.5 h-3.5 shrink-0 text-brand-cyan" />
+        {labels && <span className="w-14 shrink-0 text-gray-400 dark:text-slate-500">Created</span>}
+        <span className="text-gray-700 dark:text-slate-300">{formatIST(user.created_at)}</span>
+      </div>
+      <div className="flex items-center gap-1.5" title="Last login">
+        <Clock className="w-3.5 h-3.5 shrink-0 text-brand-cyan" />
+        {labels && <span className="w-14 shrink-0 text-gray-400 dark:text-slate-500">Last login</span>}
+        <span className="text-gray-700 dark:text-slate-300">{user.last_login ? formatIST(user.last_login) : 'Never'}</span>
+      </div>
+    </div>
   );
 
   // Reset to first page when search changes
@@ -1738,7 +1897,7 @@ export default function UserManagement() {
     setEditingUser(user);
 
     // Find the role ID based on user's current role
-    const matchingRole = availableRoles.find(r => r.code.toLowerCase() === user.role.toLowerCase());
+    const matchingRole = availableRoles.find(r => r.code.toLowerCase() === (user.role || '').toLowerCase());
     setEditSelectedRoleId(matchingRole?.id || null);
 
     // Guard the permissions panel with a loading state so it doesn't render
@@ -2209,7 +2368,73 @@ export default function UserManagement() {
     setSeatQuotaRefreshTrigger(prev => prev + 1);
   };
 
-  const handleUpdateUser = async () => {
+  // Name / email / phone edits are confirmed with a code mailed to the user's
+  // CURRENT email (backend: app/services/identity_change.py). The first Save
+  // returns 202 + requires_otp and applies NOTHING (not even permissions) —
+  // this popup collects the code and re-submits the same save with it.
+  const [identityOtp, setIdentityOtp] = useState<{ requestId: string; sentTo: string; alreadySent: boolean } | null>(null);
+  const [identityOtpCode, setIdentityOtpCode] = useState('');
+  const [identityOtpError, setIdentityOtpError] = useState('');
+  const [identityOtpBusy, setIdentityOtpBusy] = useState(false);
+
+  // Name / email edits vs the saved user — drives the in-form notice, the
+  // Save button label and the "what will change" list in the code popup.
+  const editingSavedUser = editingUser ? users.find(u => u.id.toString() === editingUser.id.toString()) : undefined;
+  const identityChanges: { field: string; from: string; to: string }[] = [];
+  if (editingUser && editingSavedUser) {
+    if ((editingUser.name || '').trim() !== (editingSavedUser.name || '').trim()) {
+      identityChanges.push({ field: 'Name', from: editingSavedUser.name || '—', to: editingUser.name || '—' });
+    }
+    if ((editingUser.email || '').trim().toLowerCase() !== (editingSavedUser.email || '').trim().toLowerCase()) {
+      identityChanges.push({ field: 'Email', from: editingSavedUser.email || '—', to: editingUser.email || '—' });
+    }
+  }
+
+  const closeIdentityOtp = () => {
+    setIdentityOtp(null);
+    setIdentityOtpCode('');
+    setIdentityOtpError('');
+  };
+
+  // Cancel = abandon the change; drop the pending request so it can't block a later save.
+  const cancelIdentityOtp = async () => {
+    const userId = editingUser?.id;
+    closeIdentityOtp();
+    if (!userId) return;
+    try {
+      await fetch(`${API_URL}/users/${userId}/identity-change`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` },
+      });
+    } catch { /* best effort — a stale request is replaced on the next save anyway */ }
+  };
+
+  const resendIdentityOtp = async () => {
+    if (!editingUser || !identityOtp) return;
+    setIdentityOtpBusy(true);
+    setIdentityOtpError('');
+    try {
+      const res = await fetch(`${API_URL}/users/${editingUser.id}/identity-change/resend`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setIdentityOtp({ requestId: data.request_id, sentTo: data.sent_to || identityOtp.sentTo, alreadySent: false });
+        setIdentityOtpCode('');
+        toast.success(`New code sent to ${data.sent_to || identityOtp.sentTo}`);
+      } else if (data.detail?.error === 'NO_PENDING') {
+        // Expired / used up — start a fresh verification with the same changes.
+        await handleUpdateUser();
+      } else {
+        setIdentityOtpError(data.detail?.message || 'Could not resend the code');
+      }
+    } finally {
+      setIdentityOtpBusy(false);
+    }
+  };
+
+  const handleUpdateUser = async (otp?: { code: string; requestId: string }, staleRetried = false): Promise<void> => {
     console.log('[UPDATE USER] Function called');
     console.log('[UPDATE USER] allPermissions state at function start:', {
       count: allPermissions.length,
@@ -2302,6 +2527,10 @@ export default function UserManagement() {
     // This prevents the backend from applying role defaults when role changes
     requestBody.permission_ids = derivedPermissionIds;
     requestBody.permission_codes = Array.from(editSelectedPermissionCodes);
+    if (otp) {
+      requestBody.otp = otp.code;
+      requestBody.request_id = otp.requestId;
+    }
 
     if (permissionsChanged) {
       console.log('[EDIT USER] Permissions changed, sending updated permission_ids:', derivedPermissionIds);
@@ -2338,8 +2567,45 @@ export default function UserManagement() {
         return;
       }
 
+      // Name/email changed: a code was mailed and NOTHING was saved yet.
+      if (response.status === 202) {
+        const pending = await response.json().catch(() => ({}));
+        if (pending.requires_otp) {
+          setIdentityOtp({
+            requestId: pending.request_id,
+            sentTo: pending.sent_to || editingUser.email,
+            alreadySent: !!pending.already_sent,
+          });
+          setIdentityOtpCode('');
+          setIdentityOtpError('');
+          return;
+        }
+      }
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+
+        // A leftover unfinished verification (older backends never cleared
+        // one, so it blocked every later save): drop it and retry once.
+        if (errorData.detail?.error === 'VERIFICATION_PENDING' && !otp && !staleRetried) {
+          await fetch(`${API_URL}/users/${editingUser.id}/identity-change`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` },
+          }).catch(() => undefined);
+          setIsSaving(false);
+          return await handleUpdateUser(undefined, true);
+        }
+
+        // Wrong / expired code: keep the code popup open and say why.
+        const otpErr = errorData.detail?.error;
+        if (otp && (otpErr === 'OTP_INVALID' || otpErr === 'OTP_EXPIRED' || otpErr === 'NO_PENDING' || otpErr === 'REQUEST_MISMATCH')) {
+          setIdentityOtpError(
+            otpErr === 'OTP_INVALID' && errorData.detail?.attempts_left > 0
+              ? errorData.detail.message
+              : 'This code can no longer be used. Click "Send new code".'
+          );
+          return;
+        }
 
         // DEBUG: Log error details
         console.error('='.repeat(80));
@@ -2372,11 +2638,13 @@ export default function UserManagement() {
                 ...user,
                 ...updatedUserData,
                 id: user.id, // ⚠️ PRESERVE string id — API returns numeric id which would cause type mismatch in userStillExists check
-                role: updatedUserData.role, // Explicitly update role
-                name: updatedUserData.name,
-                email: updatedUserData.email,
-                permissions: updatedUserData.permissions,
-                permission_ids: updatedUserData.permission_ids,
+                // Keep the old value when the response lacks a field — an
+                // undefined role/name/email crashed the list (.toLowerCase()).
+                role: updatedUserData.role ?? user.role,
+                name: updatedUserData.name ?? user.name,
+                email: updatedUserData.email ?? user.email,
+                permissions: updatedUserData.permissions ?? user.permissions,
+                permission_ids: updatedUserData.permission_ids ?? user.permission_ids,
               }
             : user
         );
@@ -2384,6 +2652,7 @@ export default function UserManagement() {
         return updated;
       });
 
+      closeIdentityOtp();
       toast.success('User updated successfully');
 
       // RBAC02 AC3: the backend force-keeps a dependency enabled (e.g. Resume
@@ -2636,26 +2905,24 @@ export default function UserManagement() {
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 tf-round-edges">
         {isLoading ? (
           /* Neutral skeleton matching the users table columns: User ID, User,
-             Role, Permissions, Status, Created At, Last Login, Actions.
+             Role, Permissions, Status, Created / Last Login, Actions.
              Column count per breakpoint mirrors the real <thead> below: User ID
-             hides below sm, Permissions below md, Created At/Last Login below lg —
-             otherwise the skeleton shows 8 cramped columns on a phone while the
-             real table only ever shows 4. */
+             hides below 2xl, Permissions below lg, Created / Last Login below xl
+             (both shown under the user's name instead); phones get cards. */
           <div className="tf-table-shell">
-            <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-4 border-b border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-6 py-4">
-              <div className="hidden sm:block"><Skeleton className="h-3 w-16" /></div>
+            <div className="grid grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-4 border-b border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-6 py-4">
+              <div className="hidden 2xl:block"><Skeleton className="h-3 w-16" /></div>
               <Skeleton className="h-3 w-24" />
               <Skeleton className="h-3 w-12" />
-              <div className="hidden md:block"><Skeleton className="h-3 w-24" /></div>
+              <div className="hidden xl:block"><Skeleton className="h-3 w-24" /></div>
               <Skeleton className="h-3 w-14" />
-              <div className="hidden lg:block"><Skeleton className="h-3 w-20" /></div>
-              <div className="hidden lg:block"><Skeleton className="h-3 w-20" /></div>
+              <div className="hidden xl:block"><Skeleton className="h-3 w-24" /></div>
               <Skeleton className="h-3 w-16" />
             </div>
             <div className="divide-y divide-gray-100 dark:divide-slate-700/60">
               {Array.from({ length: 8 }).map((_, r) => (
-                <div key={r} className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 items-center gap-4 px-6 py-4">
-                  <div className="hidden sm:block"><Skeleton className="h-5 w-16 rounded" /></div>
+                <div key={r} className="grid grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 items-center gap-4 px-6 py-4">
+                  <div className="hidden 2xl:block"><Skeleton className="h-5 w-16 rounded" /></div>
                   <div className="flex items-center gap-2">
                     <Skeleton className="h-8 w-8 rounded-full shrink-0" />
                     <div className="space-y-1.5">
@@ -2664,15 +2931,14 @@ export default function UserManagement() {
                     </div>
                   </div>
                   <Skeleton className="h-5 w-16 rounded-full" />
-                  <div className="hidden md:block">
+                  <div className="hidden lg:block">
                     <div className="flex flex-wrap gap-1">
                       <Skeleton className="h-5 w-14 rounded" />
                       <Skeleton className="h-5 w-10 rounded" />
                     </div>
                   </div>
                   <Skeleton className="h-5 w-14 rounded-full" />
-                  <div className="hidden lg:block"><Skeleton className="h-4 w-20" /></div>
-                  <div className="hidden lg:block"><Skeleton className="h-4 w-20" /></div>
+                  <div className="hidden xl:block space-y-1.5"><Skeleton className="h-3 w-28" /><Skeleton className="h-3 w-28" /></div>
                   <div className="flex items-center justify-center gap-1">
                     <Skeleton className="h-8 w-8 rounded-lg" />
                     <Skeleton className="h-8 w-8 rounded-lg" />
@@ -2682,32 +2948,30 @@ export default function UserManagement() {
             </div>
           </div>
         ) : (
-          <div className="tf-table-shell">
+          <>
+          <div className="hidden md:block tf-table-shell">
             <table className="w-full">
               <thead className="bg-gray-50 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
                 <tr>
-                  <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider hidden sm:table-cell whitespace-nowrap">
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider hidden 2xl:table-cell whitespace-nowrap">
                     User ID
                   </th>
-                  <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">
                     User
                   </th>
-                  <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">
                     Role
                   </th>
-                  <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider hidden md:table-cell">
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider hidden lg:table-cell">
                     Permissions
                   </th>
-                  <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">
                     Status
                   </th>
-                  <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider hidden lg:table-cell">
-                    Created At
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider hidden xl:table-cell">
+                    Created / Last Login
                   </th>
-                  <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider hidden lg:table-cell">
-                    Last Login
-                  </th>
-                  <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider tf-sticky-col">
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-center text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider tf-sticky-col">
                     Actions
                   </th>
                 </tr>
@@ -2715,7 +2979,7 @@ export default function UserManagement() {
               <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                 {paginatedUsers.map((user) => (
                   <tr key={user.id} className="hover:bg-brand-blue/5 transition-colors">
-                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 hidden sm:table-cell">
+                    <td className="px-3 xl:px-4 2xl:px-5 py-2.5 lg:py-3 hidden 2xl:table-cell">
                       {user.user_display_id ? (
                         <span className="px-2 py-0.5 text-2xs sm:text-xs font-mono font-semibold bg-brand-blue/5 text-brand-blue rounded ring-1 ring-brand-blue/15">
                           {user.user_display_id}
@@ -2724,12 +2988,12 @@ export default function UserManagement() {
                         <span className="text-2xs sm:text-xs text-gray-400 dark:text-slate-500">—</span>
                       )}
                     </td>
-                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
+                    <td className="px-3 xl:px-4 2xl:px-5 py-2.5 lg:py-3">
                       <div className="flex items-center gap-2 sm:gap-3">
                         <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 ring-1 ring-white/10 shadow-sm ${
-                          user.role.toLowerCase() === 'tenant_admin' || user.role.toLowerCase() === 'admin'
+                          (user.role || '').toLowerCase() === 'tenant_admin' || (user.role || '').toLowerCase() === 'admin'
                             ? 'bg-brand-blue shadow-brand-blue/25'
-                            : user.role.toLowerCase() === 'recruiter'
+                            : (user.role || '').toLowerCase() === 'recruiter'
                             ? 'bg-gradient-to-br from-brand-cyan to-brand-blue shadow-brand-cyan/20'
                             : 'bg-gradient-to-br from-slate-500 to-slate-600'
                         }`}>
@@ -2737,163 +3001,115 @@ export default function UserManagement() {
                             {(user.name || 'U').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
                           </span>
                         </div>
-                        <div className="min-w-0">
-                          <div className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-slate-50 truncate">{user.name || user.email || 'Unknown'}</div>
-                          <div className="text-2xs sm:text-xs text-gray-500 dark:text-slate-500 flex items-center gap-1 truncate">
+                        <div className="min-w-0 max-w-[180px] lg:max-w-[220px] 2xl:max-w-[260px]">
+                          <div className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-slate-50 truncate" title={user.name || user.email || undefined}>{user.name || user.email || 'Unknown'}</div>
+                          <div className="text-2xs sm:text-xs text-gray-500 dark:text-slate-500 flex items-center gap-1 truncate" title={user.email}>
                             <Mail className="w-3 h-3 flex-shrink-0" />
                             <span className="truncate">{user.email}</span>
                           </div>
+                          {/* User ID / dates columns are hidden on narrower screens — show them here. */}
+                          {user.user_display_id && (
+                            <span className="2xl:hidden mt-1 inline-block px-1.5 py-0.5 text-2xs font-mono font-semibold bg-brand-blue/5 text-brand-blue rounded ring-1 ring-brand-blue/15">
+                              {user.user_display_id}
+                            </span>
+                          )}
+                          <div className="mt-1 xl:hidden">{renderUserDates(user)}</div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
-                      <span className={`px-2 sm:px-2.5 py-0.5 sm:py-1 text-2xs sm:text-xs font-semibold rounded-full ring-1 ring-inset ring-black/5 ${getRoleBadgeColor(user.role, availableRoles)}`}>
+                    <td className="px-3 xl:px-4 2xl:px-5 py-2.5 lg:py-3">
+                      <span title={getRoleLabel(user.role, availableRoles)} className={`inline-block max-w-[120px] lg:max-w-[160px] truncate align-middle px-2 sm:px-2.5 py-0.5 sm:py-1 text-2xs sm:text-xs font-semibold rounded-full ring-1 ring-inset ring-black/5 ${getRoleBadgeColor(user.role, availableRoles)}`}>
                         {getRoleLabel(user.role, availableRoles)}
                       </span>
                     </td>
-                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 hidden md:table-cell">
-                      <div className="flex flex-wrap gap-1 max-w-xs">
-                        {Object.entries(user.permissions)
-                          .filter(([, value]) => value)
-                          .slice(0, 3)
-                          .map(([key]) => (
-                            <span
-                              key={key}
-                              className="px-2 py-0.5 text-xs font-medium bg-brand-blue/5 text-brand-blue rounded ring-1 ring-brand-blue/15"
-                            >
-                              {permissionLabels[key as keyof UserPermissions]}
-                            </span>
-                          ))}
-                        {Object.values(user.permissions).filter(v => v).length > 3 && (
-                          <button
-                            type="button"
-                            onClick={() => handleViewUserPermissions(user)}
-                            title="View all permissions"
-                            className="px-2 py-0.5 text-xs font-medium bg-brand-cyan/5 text-brand-cyan rounded ring-1 ring-brand-cyan/15 hover:bg-brand-cyan/10 hover:ring-brand-cyan/30 transition-colors cursor-pointer"
-                          >
-                            +{Object.values(user.permissions).filter(v => v).length - 3} more
-                          </button>
-                        )}
+                    <td className="tf-wrap px-3 xl:px-4 2xl:px-5 py-2.5 lg:py-3 hidden lg:table-cell">
+                      <div className="flex flex-wrap gap-1 max-w-[170px] 2xl:max-w-xs">
+                        {(() => {
+                          const pills = getUserPermissionPills(user.permissions);
+                          return (
+                            <>
+                              {pills.slice(0, 3).map((label) => (
+                                <span
+                                  key={label}
+                                  className="px-2 py-0.5 text-xs font-medium bg-brand-blue/5 text-brand-blue rounded ring-1 ring-brand-blue/15"
+                                >
+                                  {label}
+                                </span>
+                              ))}
+                              {pills.length > 3 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleViewUserPermissions(user)}
+                                  title="View all permissions"
+                                  className="px-2 py-0.5 text-xs font-medium bg-brand-cyan/5 text-brand-cyan rounded ring-1 ring-brand-cyan/15 hover:bg-brand-cyan/10 hover:ring-brand-cyan/30 transition-colors cursor-pointer"
+                                >
+                                  +{pills.length - 3} more
+                                </button>
+                              )}
+                            </>
+                          );
+                        })()}
                       </div>
                     </td>
-                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
-                      {/* Toggle Switch for Active/Inactive — requires users:disable */}
-                      {user.role.toLowerCase() !== 'tenant_admin' && user.id !== currentUserId && canDisableUser ? (
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => handleToggleActive(user)}
-                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:ring-offset-2 ring-1 ring-inset ${
-                              user.is_active
-                                ? 'bg-success ring-success-line shadow-sm'
-                                : 'bg-gray-300 ring-black/5'
-                            }`}
-                            title={user.is_active ? 'Active - Click to deactivate' : 'Inactive - Click to activate'}
-                          >
-                            <span
-                              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                                user.is_active ? 'translate-x-6' : 'translate-x-1'
-                              }`}
-                            />
-                          </button>
-                          <span className={`text-xs font-semibold ${user.is_active ? 'text-success' : 'text-gray-500 dark:text-slate-500'}`}>
-                            {user.is_active ? 'Active' : 'Inactive'}
-                          </span>
-                        </div>
-                      ) : (
-                        <Badge variant={user.is_active ? 'success' : 'destructive'}>
-                          {user.is_active ? 'Active' : 'Inactive'}
-                        </Badge>
-                      )}
+                    <td className="px-3 xl:px-4 2xl:px-5 py-2.5 lg:py-3">
+                      {renderUserStatus(user, true)}
                     </td>
-                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 hidden lg:table-cell">
-                      <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-500">
-                        <Calendar className="w-4 h-4 text-brand-cyan" />
-                        {formatIST(user.created_at)}
-                      </div>
+                    <td className="px-3 xl:px-4 2xl:px-5 py-2.5 lg:py-3 hidden xl:table-cell">
+                      {renderUserDates(user, false)}
                     </td>
-                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 hidden lg:table-cell">
-                      <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-500">
-                        <Calendar className="w-4 h-4 text-brand-cyan" />
-                        {formatIST(user.last_login)}
-                      </div>
-                    </td>
-                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 tf-sticky-col">
-                      <div className="flex items-center justify-center gap-1 sm:gap-2">
-                        {/* Feature Permissions button - HIDDEN for now as requested */}
-                        {/* {user.role.toLowerCase() !== 'tenant_admin' && (
-                          <button
-                            onClick={() => setFeaturePermissionUser(user)}
-                            className="p-2 text-gray-500 dark:text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            aria-label="Feature Permissions" title="Feature Permissions"
-                          >
-                            <Settings2 className="w-4 h-4" />
-                          </button>
-                        )} */}
-  
-                        {/* Edit button - requires users:update, disabled when user is inactive.
-                            Icon stays visible (never removed from the DOM) when the permission
-                            is off, matching the is_active disabled treatment right below it —
-                            and reacts live to a permission change because canUpdateUser is
-                            derived from currentUser?.permissions on every render. */}
-                        {user.role.toLowerCase() !== 'tenant_admin' && user.id !== currentUserId && (
-                          <Tooltip content={!canUpdateUser ? 'You do not have permission to edit users' : user.is_active ? 'Edit User' : 'Cannot edit inactive user'}>
-                            <button
-                              onClick={() => canUpdateUser && user.is_active && openEditModal(user)}
-                              disabled={!canUpdateUser || !user.is_active}
-                              aria-label="Edit user"
-                              className={`p-2 rounded-lg transition-all ${
-                                canUpdateUser && user.is_active
-                                  ? 'text-gray-500 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/10 cursor-pointer'
-                                  : 'text-gray-300 dark:text-slate-500 cursor-not-allowed'
-                              }`}
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </button>
-                          </Tooltip>
-                        )}
-
-                        {/* Reset Password — requires users:reset_password. Icon stays visible; see Edit button above. */}
-                        {user.role.toLowerCase() !== 'tenant_admin' && user.id !== currentUserId && (
-                          <Tooltip content={!canResetPassword ? 'You do not have permission to reset passwords' : user.is_active ? 'Reset Password' : 'Cannot reset password for inactive user'}>
-                            <button
-                              onClick={() => { if (canResetPassword && user.is_active) { setResetPwMode('choose'); setResetPwUser(user); } }}
-                              disabled={!canResetPassword || !user.is_active}
-                              aria-label="Reset password"
-                              className={`p-2 rounded-lg transition-all ${
-                                canResetPassword && user.is_active
-                                  ? 'text-gray-500 dark:text-slate-500 hover:text-warning hover:bg-warning-subtle cursor-pointer'
-                                  : 'text-gray-300 dark:text-slate-500 cursor-not-allowed'
-                              }`}
-                            >
-                              <KeyRound className="w-4 h-4" />
-                            </button>
-                          </Tooltip>
-                        )}
-
-                        {/* Force Password Change — requires users:force_password_change. Icon stays visible; see Edit button above. */}
-                        {user.role.toLowerCase() !== 'tenant_admin' && user.id !== currentUserId && (
-                          <Tooltip content={!canForcePwChange ? 'You do not have permission to force a password change' : user.is_active ? 'Force password change on next login' : 'Cannot update inactive user'}>
-                            <button
-                              onClick={() => canForcePwChange && user.is_active && handleForcePasswordChange(user)}
-                              disabled={!canForcePwChange || !user.is_active}
-                              aria-label="Force password change"
-                              className={`p-2 rounded-lg transition-all ${
-                                canForcePwChange && user.is_active
-                                  ? 'text-gray-500 dark:text-slate-500 hover:text-brand-orange hover:bg-brand-orange/10 cursor-pointer'
-                                  : 'text-gray-300 dark:text-slate-500 cursor-not-allowed'
-                              }`}
-                            >
-                              <Lock className="w-4 h-4" />
-                            </button>
-                          </Tooltip>
-                        )}
-                      </div>
+                    <td className="px-3 xl:px-4 2xl:px-5 py-2.5 lg:py-3 tf-sticky-col">
+                      {renderUserActions(user)}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          {/* Phone: one card per user — no sideways scrolling. */}
+          <div className="md:hidden divide-y divide-gray-100 dark:divide-slate-700/60">
+            {paginatedUsers.map((user) => (
+              <div key={user.id} className="space-y-3 p-4">
+                <div className="flex items-start gap-3">
+                  <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ring-1 ring-white/10 shadow-sm ${
+                    (user.role || '').toLowerCase() === 'tenant_admin' || (user.role || '').toLowerCase() === 'admin'
+                      ? 'bg-brand-blue shadow-brand-blue/25'
+                      : (user.role || '').toLowerCase() === 'recruiter'
+                      ? 'bg-gradient-to-br from-brand-cyan to-brand-blue shadow-brand-cyan/20'
+                      : 'bg-gradient-to-br from-slate-500 to-slate-600'
+                  }`}>
+                    <span className="text-white text-xs font-semibold">
+                      {(user.name || 'U').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate text-sm font-semibold text-gray-900 dark:text-slate-50">{user.name || user.email || 'Unknown'}</span>
+                      {user.user_display_id && (
+                        <span className="shrink-0 px-1.5 py-0.5 text-2xs font-mono font-semibold bg-brand-blue/5 text-brand-blue rounded ring-1 ring-brand-blue/15">
+                          {user.user_display_id}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-slate-500">
+                      <Mail className="w-3 h-3 flex-shrink-0" />
+                      <span className="truncate">{user.email}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span title={getRoleLabel(user.role, availableRoles)} className={`max-w-[60%] truncate px-2.5 py-1 text-xs font-semibold rounded-full ring-1 ring-inset ring-black/5 ${getRoleBadgeColor(user.role, availableRoles)}`}>
+                    {getRoleLabel(user.role, availableRoles)}
+                  </span>
+                  {renderUserStatus(user)}
+                </div>
+                {renderUserDates(user)}
+                <div className="flex items-center justify-end border-t border-gray-100 dark:border-slate-700/60 pt-2">
+                  {renderUserActions(user)}
+                </div>
+              </div>
+            ))}
+          </div>
+          </>
         )}
 
         {!isLoading && filteredUsers.length === 0 && (
@@ -3132,8 +3348,8 @@ export default function UserManagement() {
           }
           actions={[
             {
-              label: 'Save Changes',
-              onClick: handleUpdateUser,
+              label: identityChanges.length > 0 ? 'Send code & Save' : 'Save Changes',
+              onClick: () => handleUpdateUser(),
               disabled: isSaving,
               icon: isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : undefined,
             },
@@ -3161,6 +3377,26 @@ export default function UserManagement() {
                   />
                 </div>
               </div>
+              {identityChanges.length > 0 ? (
+                <div className="flex gap-3 rounded-xl border border-brand-orange/30 bg-brand-orange/[0.06] p-3 sm:p-4">
+                  <Info className="mt-0.5 h-4 w-4 shrink-0 text-brand-orange" />
+                  <div className="space-y-1 text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+                    <p className="font-semibold text-gray-900 dark:text-slate-50">
+                      Changing the {identityChanges.map(c => c.field.toLowerCase()).join(' and ')}{' '}needs the user&apos;s confirmation
+                    </p>
+                    <p>
+                      When you click <span className="font-semibold">Send code &amp; Save</span>, a 6-digit code is emailed to{' '}
+                      <span className="font-semibold">{editingSavedUser?.email}</span>. Ask the user for that code and enter it
+                      in the next step. Nothing is saved until the code is verified.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <p className="-mt-2 flex items-center gap-1.5 text-2xs sm:text-xs text-gray-500 dark:text-slate-400">
+                  <Info className="h-3.5 w-3.5 shrink-0" />
+                  Changing the name or email needs a verification code sent to the user&apos;s current email.
+                </p>
+              )}
 
               {/* Role Selection - Compact Pills */}
               <div>
@@ -3287,21 +3523,22 @@ export default function UserManagement() {
                           }
                         };
 
+                        // Every code the section toggle controls (plan-locked sub-sections excluded).
+                        const allCategoryCodes = [
+                          ...(category.viewCode ? [category.viewCode] : []),
+                          ...(category.actions?.map(a => a.code) || []),
+                          ...(category.subCategories?.filter(s => isCategoryVisible(category.id, s.name)).flatMap(s => [
+                            ...(s.viewCode ? [s.viewCode] : []),
+                            ...s.actions.map(a => a.code),
+                          ]) || []),
+                        ];
+                        // Toggle is ON only when everything in the section is selected;
+                        // a partly selected section reads OFF and a click selects all.
                         const isCategoryActive = category.viewCode
-                          ? editSelectedPermissionCodes.has(category.viewCode) ||
-                            (category.actions?.some(a => editSelectedPermissionCodes.has(a.code)) ?? false) ||
-                            (category.subCategories?.some(s => s.actions.some(a => editSelectedPermissionCodes.has(a.code))) ?? false)
+                          ? isGroupFullyOn(allCategoryCodes, editSelectedPermissionCodes)
                           : true;
 
                         const toggleCategory = async (e?: React.MouseEvent) => {
-                          const allCategoryCodes = [
-                            ...(category.viewCode ? [category.viewCode] : []),
-                            ...(category.actions?.map(a => a.code) || []),
-                            ...(category.subCategories?.flatMap(s => [
-                              ...(s.viewCode ? [s.viewCode] : []),
-                              ...s.actions.map(a => a.code),
-                            ]) || []),
-                          ];
                           if (!isCategoryActive) {
                             const next = await turnOnWithPrompt(allCategoryCodes, category.name);
                             if (next) setEditSelectedPermissionCodes(next);
@@ -3372,7 +3609,7 @@ export default function UserManagement() {
                         const selectedCount = allCodes.filter(c => editSelectedPermissionCodes.has(c)).length;
 
                         return (
-                          <div key={category.id} className="overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+                          <div key={category.id} className="overflow-hidden rounded-2xl border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 shadow-sm">
                             {/* Module Header */}
                             <div
                               className="flex items-center justify-between gap-3 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-3 sm:px-5 select-none"
@@ -3463,9 +3700,11 @@ export default function UserManagement() {
                             {category.subCategories?.map(sub => {
                               if (!isCategoryVisible(category.id, sub.name)) return renderPlanLockedCategory(`${category.id}:${sub.name}`, sub.name);
 
-                              const isSubActive = sub.viewCode
-                                ? editSelectedPermissionCodes.has(sub.viewCode) || sub.actions.some(a => editSelectedPermissionCodes.has(a.code))
-                                : sub.actions.some(a => editSelectedPermissionCodes.has(a.code));
+                              // ON only when the View and every action are selected.
+                              const isSubActive = isGroupFullyOn(
+                                [...(sub.viewCode ? [sub.viewCode] : []), ...sub.actions.map(a => a.code)],
+                                editSelectedPermissionCodes
+                              );
 
                               const toggleSub = async () => {
                                 const subAllCodesForToggle = [
@@ -3473,10 +3712,7 @@ export default function UserManagement() {
                                   ...sub.actions.map(a => a.code),
                                 ];
                                 if (!isSubActive) {
-                                  const next = await turnOnWithPrompt(
-                                    sub.viewCode ? [sub.viewCode] : sub.actions.map(a => a.code),
-                                    sub.name
-                                  );
+                                  const next = await turnOnWithPrompt(subAllCodesForToggle, sub.name);
                                   if (next) setEditSelectedPermissionCodes(next);
                                   return;
                                 }
@@ -3535,7 +3771,7 @@ export default function UserManagement() {
                               const subSelectedCount = subAllCodes.filter(c => editSelectedPermissionCodes.has(c)).length;
 
                               return (
-                                <div key={sub.name} className="border-t border-gray-100 dark:border-slate-700/60">
+                                <div key={sub.name} className="ml-4 mr-3 mb-3 sm:ml-8 sm:mr-4 overflow-hidden rounded-xl border border-gray-200 dark:border-slate-700 border-l-4 border-l-brand-blue/30">
                                   {/* Sub-category header */}
                                   <div
                                     className={`px-3 sm:px-4 py-2 flex items-center justify-between cursor-pointer select-none transition-colors ${isSubActive ? 'bg-brand-cyan/5' : 'bg-slate-50 dark:bg-slate-800/50'}`}
@@ -3852,6 +4088,89 @@ export default function UserManagement() {
       </div>
       </div>
       {permissionChangeDialog}
+      <AppModal
+        open={!!identityOtp}
+        onCancel={cancelIdentityOtp}
+        size="sm"
+        zIndexClass="z-[70]"
+        icon={<Mail />}
+        title="Enter verification code"
+        subtitle="Step 2 of 2 — confirm the change"
+        cancelLabel="Cancel change"
+        cancelDisabled={isSaving || identityOtpBusy}
+        actions={[
+          { label: 'Send new code', variant: 'secondary', onClick: resendIdentityOtp, disabled: isSaving || identityOtpBusy },
+          {
+            label: 'Verify & Save',
+            onClick: () => identityOtp && handleUpdateUser({ code: identityOtpCode.trim(), requestId: identityOtp.requestId }),
+            disabled: isSaving || identityOtpBusy || identityOtpCode.trim().length < 6,
+            icon: isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : undefined,
+          },
+        ]}
+      >
+        <div className="space-y-4 text-sm text-gray-700 dark:text-slate-300">
+          {identityChanges.length > 0 && (
+            <div className="rounded-xl border border-gray-200 dark:border-slate-700 p-3">
+              <p className="mb-2 text-2xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-500">What will change</p>
+              <div className="space-y-1.5">
+                {identityChanges.map(c => (
+                  <div key={c.field} className="grid grid-cols-[3.5rem_1fr] gap-2 text-xs sm:text-sm">
+                    <span className="font-medium text-gray-500 dark:text-slate-400">{c.field}</span>
+                    <span className="min-w-0 break-words">
+                      <span className="text-gray-400 line-through dark:text-slate-500">{c.from}</span>
+                      <span className="mx-1.5 text-gray-400">→</span>
+                      <span className="font-semibold text-gray-900 dark:text-slate-50">{c.to}</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <ol className="space-y-2">
+            <li className="flex gap-2.5">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-success text-white"><Check className="h-3 w-3" /></span>
+              <span>
+                {identityOtp?.alreadySent ? 'A code was already sent' : 'A 6-digit code was emailed'} to{' '}
+                <span className="font-semibold text-gray-900 dark:text-slate-50 break-all">{identityOtp?.sentTo}</span>
+              </span>
+            </li>
+            <li className="flex gap-2.5">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-blue text-2xs font-semibold text-white">2</span>
+              <span>Ask the user to check that inbox and share the code with you</span>
+            </li>
+            <li className="flex gap-2.5">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-blue text-2xs font-semibold text-white">3</span>
+              <span>Type it below and click <span className="font-semibold">Verify &amp; Save</span></span>
+            </li>
+          </ol>
+
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-slate-400">6-digit code</label>
+            <Input
+              autoFocus
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              placeholder="000000"
+              value={identityOtpCode}
+              maxLength={6}
+              onChange={(e) => { setIdentityOtpCode(e.target.value.replace(/\D/g, '')); setIdentityOtpError(''); }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && identityOtp && identityOtpCode.trim().length === 6 && !isSaving) {
+                  handleUpdateUser({ code: identityOtpCode.trim(), requestId: identityOtp.requestId });
+                }
+              }}
+              className="text-center tracking-[0.5em] font-mono text-lg"
+            />
+            {identityOtpError && <p className="mt-1.5 text-xs font-medium text-red-600 dark:text-red-400">{identityOtpError}</p>}
+          </div>
+
+          <p className="text-xs text-gray-500 dark:text-slate-400">
+            Nothing is saved until the code is verified. The code works for 10 minutes — if it didn&apos;t arrive, ask the
+            user to check spam, or click <span className="font-semibold">Send new code</span>. <span className="font-semibold">Cancel change</span> keeps the old {identityChanges.length === 1 ? identityChanges[0].field.toLowerCase() : 'name and email'}.
+          </p>
+        </div>
+      </AppModal>
     </main>
   );
 }

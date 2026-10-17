@@ -21,6 +21,7 @@ import {
   labelOf,
   planTurnOff,
   planTurnOn,
+  isGroupFullyOn,
   withRequired,
   withoutOrphanEntryPoints,
 } from '@/lib/permissions/permissionRules';
@@ -262,9 +263,9 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
       tone: 'on',
       summary,
       details: [
-        { heading: 'Can also be started from', items: plan.offeredEntryPoints.flatMap((g) => g.entries.map(labelOf)) },
-        { heading: 'Also turned on (needed)', items: plan.autoRequired.map(labelOf) },
-        { heading: 'Not turned on (their main permission is off)', items: plan.skippedLocked.map(labelOf) },
+        { heading: 'Can also be started from', codes: plan.offeredEntryPoints.flatMap((g) => g.entries) },
+        { heading: 'Also turned on (needed)', codes: plan.autoRequired },
+        { heading: 'Not turned on (their main permission is off)', codes: plan.skippedLocked },
       ],
       actions:
         entryCount === 0
@@ -308,8 +309,8 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
       tone: 'off',
       summary: `This will also turn off ${parts.join(' and ')}.`,
       details: [
-        { heading: 'Entry points in other sections', items: plan.entryPointsOff.map(labelOf) },
-        { heading: 'Also turned off (they need it)', items: plan.dependentsOff.map(labelOf) },
+        { heading: 'Entry points in other sections', codes: plan.entryPointsOff },
+        { heading: 'Also turned off (they need it)', codes: plan.dependentsOff },
       ],
       actions: [{ id: 'off', label: 'Turn off', variant: 'destructive' }],
     });
@@ -323,6 +324,52 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
     } else {
       void applyTurnOn([code], labelOf(code));
     }
+  };
+
+  // Section / sub-section checkbox: everything selected -> turn ALL off;
+  // anything less (none or some) -> turn ALL on. Entry points whose main is
+  // off can't be selected, so they don't block "everything selected".
+  const handleSelectAllGroup = (codes: string[], label: string) => {
+    if (isGroupFullyOn(codes, selectedPermissionCodes)) {
+      void applyTurnOff(codes, label);
+    } else {
+      void applyTurnOn(codes.filter((code) => !selectedPermissionCodes.has(code)), label);
+    }
+  };
+
+  const getAllCodesForCategory = (category: CustomPermissionCategory): string[] => [
+    ...(category.viewCode ? [category.viewCode] : []),
+    ...(category.actions?.map((action) => action.code) || []),
+    ...(category.subCategories?.flatMap((sub) => [
+      ...(sub.viewCode ? [sub.viewCode] : []),
+      ...sub.actions.map((action) => action.code),
+    ]) || []),
+  ];
+
+  const getAllCodesForSubCategory = (subCategory: CustomPermissionSubCategory): string[] => [
+    ...(subCategory.viewCode ? [subCategory.viewCode] : []),
+    ...subCategory.actions.map((action) => action.code),
+  ];
+
+  const renderGroupCheckbox = (codes: string[], label: string, size: 'md' | 'sm') => {
+    const all = isGroupFullyOn(codes, selectedPermissionCodes);
+    const some = !all && codes.some((code) => selectedPermissionCodes.has(code));
+    return (
+      <button
+        type="button"
+        onClick={() => handleSelectAllGroup(codes, label)}
+        className={`inline-flex ${size === 'md' ? 'mt-0.5 h-5 w-5' : 'h-4 w-4'} shrink-0 items-center justify-center rounded border transition-colors ${
+          all
+            ? 'border-brand-blue bg-brand-blue text-white'
+            : some
+            ? 'border-brand-cyan bg-brand-cyan text-white'
+            : 'border-gray-300 bg-white hover:border-brand-blue/40'
+        }`}
+        aria-label={`Select all permissions for ${label}`}
+      >
+        {(all || some) && <Check className="h-3 w-3" />}
+      </button>
+    );
   };
 
   const handleSelectAll = () => {
@@ -466,9 +513,11 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
         {CUSTOM_PERMISSION_CATEGORIES.map((category) => (
           <section
             key={category.id}
-            className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm ring-1 ring-black/[0.02]"
+            className="overflow-hidden rounded-2xl border border-gray-300 dark:border-slate-600 bg-white shadow-sm"
           >
             <div className="flex flex-col gap-3 border-b border-gray-100 bg-gray-50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+              <div className="flex items-start gap-3">
+              {renderGroupCheckbox(getAllCodesForCategory(category), category.name, 'md')}
               <div>
                 <div className="flex flex-wrap items-center gap-2">
                   <h3 className="text-sm font-semibold text-gray-900">{category.name}</h3>
@@ -482,6 +531,10 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
                   <p className="mt-1 text-xs text-gray-500">{category.description}</p>
                 )}
               </div>
+              </div>
+              <span className="inline-flex items-center rounded-full bg-gray-50 px-3 py-1.5 text-xs text-gray-500 ring-1 ring-gray-200">
+                {getAllCodesForCategory(category).filter((code) => selectedPermissionCodes.has(code)).length}/{getAllCodesForCategory(category).length} selected
+              </span>
             </div>
 
             <div className="space-y-5 p-4 sm:p-5">
@@ -508,8 +561,9 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
               {category.subCategories && (
                 <div className="space-y-4">
                   {category.subCategories.map((subCategory) => (
-                    <div key={subCategory.name} className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4">
+                    <div key={subCategory.name} className="ml-4 sm:ml-8 rounded-2xl border border-gray-200 border-l-4 border-l-brand-blue/30 bg-gray-50/70 p-4">
                       <div className="mb-3 flex flex-wrap items-center gap-2">
+                        {renderGroupCheckbox(getAllCodesForSubCategory(subCategory), subCategory.name, 'sm')}
                         <span className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
                           {subCategory.name}
                         </span>
