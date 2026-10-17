@@ -1,7 +1,11 @@
 'use client';
 
 import React from 'react';
-import { getPermissionDisplaySections, PermissionDisplaySection } from '@/lib/constants/permissionCategories';
+import {
+  ALWAYS_ON_PERMISSION_CODES,
+  getPermissionDisplaySections,
+  PermissionDisplaySection,
+} from '@/lib/constants/permissionCategories';
 
 /**
  * Read-only "which permissions does this have" view, shared by every screen that
@@ -37,6 +41,21 @@ export const getGrantedPermissionSections = (codes: Iterable<string>): Permissio
     .filter((section) => section.items.length > 0);
 };
 
+/** A role's codes plus the always-on baseline every user gets. */
+export const withAlwaysOnPermissions = (codes: Iterable<string>): string[] =>
+  Array.from(new Set([...codes, ...ALWAYS_ON_PERMISSION_CODES]));
+
+/** One-line explanation shown above a role's permission list. */
+export function AlwaysOnPermissionsNote() {
+  return (
+    <p className="mb-4 rounded-xl border border-brand-blue/15 bg-brand-blue/5 px-3 py-2 text-xs text-gray-600 dark:text-slate-400">
+      <span className="font-semibold text-brand-blue">View Analytics</span> and{' '}
+      <span className="font-semibold text-brand-blue">View Support</span>
+      {' '}are always included for every user, whatever their role — they are counted here and can&apos;t be switched off.
+    </p>
+  );
+}
+
 export const countGrantedPermissions = (codes: Iterable<string>): number =>
   getGrantedPermissionSections(codes).reduce((sum, section) => sum + section.items.length, 0);
 
@@ -44,15 +63,24 @@ interface PermissionSectionsViewProps {
   codes: Iterable<string>;
   /** Return a replacement node for a section the plan doesn't include, or null to render it normally. */
   renderLockedSection?: (sectionId: string, sectionName: string) => React.ReactNode | null;
+  /**
+   * List EVERY permission in the catalogue: granted ones look normal, the rest
+   * are greyed out — so a role's popup always shows the full picture of what it
+   * can and can't do. Default false = only the granted ones.
+   */
+  showAll?: boolean;
 }
 
-export default function PermissionSectionsView({ codes, renderLockedSection }: PermissionSectionsViewProps) {
-  const sections = getGrantedPermissionSections(codes);
+export default function PermissionSectionsView({ codes, renderLockedSection, showAll = false }: PermissionSectionsViewProps) {
+  const granted = new Set(codes);
+  const sections = showAll ? getPermissionDisplaySections() : getGrantedPermissionSections(granted);
   return (
     <div className="space-y-4">
       {sections.map((section) => {
         const locked = renderLockedSection?.(section.id, section.name);
         if (locked) return <React.Fragment key={section.id}>{locked}</React.Fragment>;
+        const grantedCount = section.items.filter((item) => granted.has(item.code)).length;
+        const noneGranted = showAll && grantedCount === 0;
         return (
           <section
             key={section.id}
@@ -60,28 +88,45 @@ export default function PermissionSectionsView({ codes, renderLockedSection }: P
           >
             <div className="flex items-center justify-between gap-3 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-3 sm:px-5">
               <div>
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">{section.name}</h3>
+                <h3 className={`text-sm font-semibold ${noneGranted ? 'text-gray-400 dark:text-slate-500' : 'text-gray-900 dark:text-slate-50'}`}>{section.name}</h3>
                 <p className="text-xs text-gray-500 dark:text-slate-500">
-                  {section.items.length} permission{section.items.length !== 1 ? 's' : ''}
+                  {showAll
+                    ? `${grantedCount} of ${section.items.length} permission${section.items.length !== 1 ? 's' : ''}`
+                    : `${section.items.length} permission${section.items.length !== 1 ? 's' : ''}`}
                 </p>
               </div>
             </div>
             <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
-              {section.items.map((item) => (
-                <div
-                  key={item.code}
-                  className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-gradient-to-br from-white to-gray-50 dark:from-slate-900 dark:to-slate-800/50 p-4 transition-colors hover:border-brand-blue/15"
-                >
-                  <div className="flex items-center gap-3">
-                    <span
-                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ring-1 ${permissionBadgeClass(permissionActionOf(item.code))}`}
-                    >
-                      <span className="text-xs font-semibold uppercase">{item.label[0] || 'P'}</span>
-                    </span>
-                    <p className="min-w-0 text-sm font-semibold text-gray-900 dark:text-slate-50">{item.label}</p>
+              {section.items.map((item) => {
+                const isGranted = granted.has(item.code);
+                return (
+                  <div
+                    key={item.code}
+                    aria-disabled={!isGranted || undefined}
+                    title={isGranted ? undefined : 'Not granted'}
+                    className={
+                      isGranted
+                        ? 'rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-gradient-to-br from-white to-gray-50 dark:from-slate-900 dark:to-slate-800/50 p-4 transition-colors hover:border-brand-blue/15'
+                        : 'rounded-2xl border border-dashed border-gray-200 dark:border-slate-700/60 bg-gray-50/60 dark:bg-slate-800/30 p-4 opacity-50'
+                    }
+                  >
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ring-1 ${
+                          isGranted
+                            ? permissionBadgeClass(permissionActionOf(item.code))
+                            : 'bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-slate-500 ring-gray-200 dark:ring-slate-700'
+                        }`}
+                      >
+                        <span className="text-xs font-semibold uppercase">{item.label[0] || 'P'}</span>
+                      </span>
+                      <p className={`min-w-0 text-sm font-semibold ${isGranted ? 'text-gray-900 dark:text-slate-50' : 'text-gray-400 dark:text-slate-500'}`}>
+                        {item.label}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </section>
         );

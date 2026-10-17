@@ -41,6 +41,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { useBreadcrumbOffset } from '@/components/ai-interview/AIInterviewStepIndicator';
 
 const ITEMS_PER_PAGE = 6;
 
@@ -59,6 +60,8 @@ const getErrorDetail = (error: unknown): string | undefined => {
 };
 
 export default function TeamManagementPage() {
+  // Org tab bar pins just below the sticky breadcrumb (measured height).
+  const [orgCrumbRef, orgCrumbHeight] = useBreadcrumbOffset();
   const router = useRouter();
   const { hasPermissionCode } = useAuth();
   const [teams, setTeams] = useState<Team[]>([]);
@@ -450,8 +453,8 @@ export default function TeamManagementPage() {
       <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
         <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
-          <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Teams' }]} />
-          <OrganizationTabs />
+          <PageBreadcrumb barRef={orgCrumbRef} className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Teams' }]} />
+          <OrganizationTabs stickyTop={orgCrumbHeight} />
           <div className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 p-4 sm:p-5 lg:-mt-5 lg:rounded-t-none lg:border-t-0">
             <PageHeader
               icon={<Users className="h-5 w-5" />}

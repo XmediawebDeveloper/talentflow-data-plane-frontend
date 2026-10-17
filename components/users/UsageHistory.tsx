@@ -64,6 +64,7 @@ import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Tooltip } from '@/components/ui/tooltip';
 import { PageHeader } from '@/components/ui/page-header';
+import { useBreadcrumbOffset } from '@/components/ai-interview/AIInterviewStepIndicator';
 
 type BadgeVariant = React.ComponentProps<typeof Badge>['variant'];
 
@@ -1170,6 +1171,8 @@ function RefundsTab({
 // ─── Main Component ─────────────────────────────────────────────────────────
 
 export default function UsageHistory() {
+  // Org tab bar pins just below the sticky breadcrumb (measured height).
+  const [orgCrumbRef, orgCrumbHeight] = useBreadcrumbOffset();
   const { user, isTenantAdmin, hasPermission } = useAuth();
   const today = useMemo(() => new Date(), []);
   const defaultStartDate = useMemo(
@@ -1447,9 +1450,9 @@ export default function UsageHistory() {
     <div ref={rootRef} className="flex-1 bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl space-y-6">
-        <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Usage History' }]} />
+        <PageBreadcrumb barRef={orgCrumbRef} className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Usage History' }]} />
         <div>
-        <OrganizationTabs />
+        <OrganizationTabs stickyTop={orgCrumbHeight} />
         <div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 p-4 sm:p-5 lg:-mt-5 lg:rounded-t-none lg:border-t-0 space-y-6">
       {/* ── Page Header ── */}
       <PageHeader

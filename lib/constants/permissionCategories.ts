@@ -472,6 +472,14 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
   },
 ];
 
+/**
+ * Granted to EVERY user regardless of role — the backend re-adds them on every
+ * save (app/config/mandatory_permissions.py BASELINE_PERMISSIONS) and the Edit
+ * User popup shows them as "(always on)". Role popups include them so a role's
+ * count matches what its users actually get (Standard User = 2, not 0).
+ */
+export const ALWAYS_ON_PERMISSION_CODES = ['analytics:read', 'support:read'] as const;
+
 export interface PermissionDisplayItem {
   code: string;
   label: string;

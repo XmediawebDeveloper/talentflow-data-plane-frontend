@@ -6,6 +6,7 @@ import CreateRoleForm from './CreateRoleForm';
 import EditRoleForm from './EditRoleForm';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
+import { Tooltip } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
 import { PageHeader } from '@/components/ui/page-header';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
@@ -30,7 +31,11 @@ import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { formatIST } from '@/lib/utils/dateUtils';
 import authService from '@/lib/services/authService';
 import { getPermissionDisplaySections } from '@/lib/constants/permissionCategories';
-import PermissionSectionsView, { countGrantedPermissions } from './PermissionSectionsView';
+import PermissionSectionsView, {
+  AlwaysOnPermissionsNote,
+  countGrantedPermissions,
+  withAlwaysOnPermissions,
+} from './PermissionSectionsView';
 import AppModal from '@/components/ui/app-modal';
 import rbacService from '@/lib/services/rbacService';
 import {
@@ -40,10 +45,16 @@ import {
 } from '@/lib/types/rbac';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { useBreadcrumbOffset } from '@/components/ai-interview/AIInterviewStepIndicator';
 
 type TabType = 'roles' | 'audit';
 
 const protectedRoleCodes = ['admin', 'recruiter', 'billing_manager', 'viewer'];
+
+// Shown on the locked Edit / Delete controls of default roles.
+const DEFAULT_ROLE_EDIT_LOCKED_MESSAGE =
+  "Default roles can't be edited. Assign this role to a user, then change that user's permissions in Users → Edit User.";
+const DEFAULT_ROLE_DELETE_LOCKED_MESSAGE = "Default roles can't be deleted.";
 
 const getActionBadgeClass = (action: string) => {
   if (action.includes('create')) {
@@ -61,6 +72,8 @@ const getRoleBadgeClass = (isSystem: boolean) =>
     : 'bg-brand-cyan/15 text-brand-blue ring-1 ring-brand-cyan/20';
 
 export default function RoleManagement() {
+  // Org tab bar pins just below the sticky breadcrumb (measured height).
+  const [orgCrumbRef, orgCrumbHeight] = useBreadcrumbOffset();
   const router = useRouter();
   const dialog = useGlobalDialog();
   const { hasPermission } = useAuth();
@@ -70,6 +83,11 @@ export default function RoleManagement() {
   const canManageRoles = hasPermission('canManagePermissionsRoles');
   const [activeTab, setActiveTab] = useState<TabType>('roles');
   const [roles, setRoles] = useState<RoleListItem[]>([]);
+  // Per-role count shown in the lists — the SAME number the role popup and Edit
+  // User show: tickable permissions + the 2 always-on ones (Standard User = 2).
+  // The list API only returns a raw DB total, so each role's codes are fetched.
+  const [roleShownCounts, setRoleShownCounts] = useState<Record<number, number>>({});
+  const shownCountFor = (role: RoleListItem) => roleShownCounts[role.id] ?? role.permission_count;
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -139,6 +157,18 @@ export default function RoleManagement() {
       ]);
       setRoles(rolesData.roles);
       setPermissions(permissionsData.permissions);
+      // Fill in the popup-matching counts (a handful of roles; failures fall
+      // back to the raw total for that role).
+      const details = await Promise.allSettled(rolesData.roles.map((r) => rbacService.getRoleById(r.id)));
+      const counts: Record<number, number> = {};
+      details.forEach((d, i) => {
+        if (d.status === 'fulfilled') {
+          counts[rolesData.roles[i].id] = countGrantedPermissions(
+            withAlwaysOnPermissions((d.value.permissions || []).map((p) => p.code)),
+          );
+        }
+      });
+      setRoleShownCounts(counts);
     } catch (error) {
       console.error('Failed to load roles and permissions:', error);
       toast.error('Failed to load roles and permissions');
@@ -215,7 +245,7 @@ export default function RoleManagement() {
   const handleDeleteRole = async (roleId: number) => {
     const role = roles.find((item) => item.id === roleId);
     if (role?.is_system) {
-      toast.error('System roles cannot be deleted');
+      toast.error(DEFAULT_ROLE_DELETE_LOCKED_MESSAGE);
       return;
     }
 
@@ -372,14 +402,17 @@ export default function RoleManagement() {
   };
 
   // Role details popup: shared read-only view (same sections/labels as Edit User).
-  const viewingRoleShownCount = countGrantedPermissions(viewingRolePermissions.map((p) => p.code));
+  // Includes the always-on pair every user gets, so this matches Edit User
+  // (Standard User = 2, not 0).
+  const viewingRoleCodes = withAlwaysOnPermissions(viewingRolePermissions.map((p) => p.code));
+  const viewingRoleShownCount = countGrantedPermissions(viewingRoleCodes);
 
   return (
     <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
-        <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Roles & Permissions' }]} />
-        <OrganizationTabs />
+        <PageBreadcrumb barRef={orgCrumbRef} className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Roles & Permissions' }]} />
+        <OrganizationTabs stickyTop={orgCrumbHeight} />
         <div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 p-4 sm:p-5 lg:-mt-5 lg:rounded-t-none lg:border-t-0">
         <PageHeader
           icon={<Shield className="h-5 w-5" />}
@@ -447,7 +480,7 @@ export default function RoleManagement() {
                 showClickArrow
               />
               <StatsCard
-                label="System Roles"
+                label="Default Roles"
                 value={systemRolesCount}
                 icon={Lock}
                 tone="neutral"
@@ -524,7 +557,7 @@ export default function RoleManagement() {
                         {customRolesCount} custom
                       </span>
                       <span className="inline-flex items-center rounded-full bg-brand-teal/10 px-3 py-1.5 text-brand-teal ring-1 ring-brand-teal/20">
-                        {systemRolesCount} system
+                        {systemRolesCount} default
                       </span>
                     </>
                   )}
@@ -537,7 +570,7 @@ export default function RoleManagement() {
               <div className="flex items-center justify-between gap-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-4 sm:px-6">
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50">Roles Directory</h2>
-                  <p className="text-sm text-gray-500 dark:text-slate-500">Review access levels, inheritance, and role usage across the organization.</p>
+                  <p className="text-sm text-gray-500 dark:text-slate-500">Review access levels and role usage across the organization.</p>
                 </div>
               </div>
 
@@ -561,10 +594,8 @@ export default function RoleManagement() {
                         <tr className="text-left">
                           <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Role</th>
                           <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Type</th>
-                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Inheritance</th>
-                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Permissions</th>
+                          <th className="px-6 py-4 text-center text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Permissions</th>
                           <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Users</th>
-                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Priority</th>
                           <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500 text-right tf-sticky-col">Actions</th>
                         </tr>
                       </thead>
@@ -585,32 +616,23 @@ export default function RoleManagement() {
                                       </span>
                                     )}
                                   </div>
-                                  <p className="mt-1 truncate text-xs font-medium uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">{role.code}</p>
                                   <p className="mt-2 line-clamp-2 break-words text-sm text-gray-500 dark:text-slate-500">{role.description || 'No description provided.'}</p>
                                 </div>
                               </div>
                             </td>
                             <td className="px-6 py-5">
                               <Badge variant={role.is_system ? 'muted' : 'secondary'}>
-                                {role.is_system ? 'System role' : 'Custom role'}
+                                {role.is_system ? 'Default role' : 'Custom role'}
                               </Badge>
                             </td>
-                            <td className="px-6 py-5 text-sm text-gray-600 dark:text-slate-400">
-                              {role.parent_role_name ? role.parent_role_name : <span className="text-gray-400 dark:text-slate-500">Independent</span>}
-                            </td>
-                            <td className="px-6 py-5">
-                              <Badge variant="info">
-                                {role.permission_count} permissions
-                              </Badge>
+                            <td className="px-6 py-5 text-center">
+                              <Badge variant="info">{shownCountFor(role)}</Badge>
                             </td>
                             <td className="px-6 py-5">
                               <div className="inline-flex items-center gap-2 rounded-full bg-gray-50 dark:bg-slate-800/50 px-3 py-1.5 ring-1 ring-gray-200 dark:ring-slate-700">
                                 <Users className="h-4 w-4 text-gray-400 dark:text-slate-500" />
                                 <span className="text-sm font-medium text-gray-700 dark:text-slate-300">{role.user_count}</span>
                               </div>
-                            </td>
-                            <td className="px-6 py-5">
-                              <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">{role.priority}</span>
                             </td>
                             <td className="px-6 py-5 tf-sticky-col">
                               <div className="flex items-center justify-end gap-2">
@@ -643,9 +665,15 @@ export default function RoleManagement() {
                                     <Pencil className="h-4 w-4" />
                                   </button>
                                 ) : (
-                                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-300" title="Protected role">
-                                    <Lock className="h-4 w-4" />
-                                  </span>
+                                  <Tooltip content={DEFAULT_ROLE_EDIT_LOCKED_MESSAGE}>
+                                    <span
+                                      tabIndex={0}
+                                      aria-label={DEFAULT_ROLE_EDIT_LOCKED_MESSAGE}
+                                      className="inline-flex h-10 w-10 cursor-not-allowed items-center justify-center rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-300"
+                                    >
+                                      <Lock className="h-4 w-4" />
+                                    </span>
+                                  </Tooltip>
                                 )}
                                 {!role.is_system ? (
                                   <button
@@ -668,9 +696,15 @@ export default function RoleManagement() {
                                     <Ban className="h-4 w-4" />
                                   </button>
                                 ) : (
-                                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-300" title="System roles cannot be deleted">
-                                    <Lock className="h-4 w-4" />
-                                  </span>
+                                  <Tooltip content={DEFAULT_ROLE_DELETE_LOCKED_MESSAGE}>
+                                    <span
+                                      tabIndex={0}
+                                      aria-label={DEFAULT_ROLE_DELETE_LOCKED_MESSAGE}
+                                      className="inline-flex h-10 w-10 cursor-not-allowed items-center justify-center rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-300"
+                                    >
+                                      <Lock className="h-4 w-4" />
+                                    </span>
+                                  </Tooltip>
                                 )}
                               </div>
                             </td>
@@ -695,10 +729,9 @@ export default function RoleManagement() {
                               <div className="flex flex-wrap items-center gap-2">
                                 <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">{role.name}</h3>
                                 <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-2xs font-medium ${role.is_system ? 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-1 ring-gray-200 dark:ring-slate-700' : 'bg-brand-cyan/10 text-brand-blue ring-1 ring-brand-cyan/20'}`}>
-                                  {role.is_system ? 'System' : 'Custom'}
+                                  {role.is_system ? 'Default role' : 'Custom role'}
                                 </span>
                               </div>
-                              <p className="mt-1 text-xs font-medium uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">{role.code}</p>
                               <p className="mt-2 text-sm text-gray-500 dark:text-slate-500">{role.description || 'No description provided.'}</p>
                             </div>
                           </div>
@@ -712,19 +745,11 @@ export default function RoleManagement() {
                         <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
                           <div className="rounded-xl bg-gray-50 dark:bg-slate-800/50 px-3 py-2 ring-1 ring-gray-100 dark:ring-slate-700/60">
                             <div className="text-xs text-gray-500 dark:text-slate-500">Permissions</div>
-                            <div className="mt-1 font-semibold text-gray-900 dark:text-slate-50">{role.permission_count}</div>
+                            <div className="mt-1 font-semibold text-gray-900 dark:text-slate-50">{shownCountFor(role)}</div>
                           </div>
                           <div className="rounded-xl bg-gray-50 dark:bg-slate-800/50 px-3 py-2 ring-1 ring-gray-100 dark:ring-slate-700/60">
                             <div className="text-xs text-gray-500 dark:text-slate-500">Users</div>
                             <div className="mt-1 font-semibold text-gray-900 dark:text-slate-50">{role.user_count}</div>
-                          </div>
-                          <div className="rounded-xl bg-gray-50 dark:bg-slate-800/50 px-3 py-2 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                            <div className="text-xs text-gray-500 dark:text-slate-500">Priority</div>
-                            <div className="mt-1 font-semibold text-gray-900 dark:text-slate-50">{role.priority}</div>
-                          </div>
-                          <div className="rounded-xl bg-gray-50 dark:bg-slate-800/50 px-3 py-2 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                            <div className="text-xs text-gray-500 dark:text-slate-500">Inherits</div>
-                            <div className="mt-1 font-semibold text-gray-900 dark:text-slate-50">{role.parent_role_name || 'Independent'}</div>
                           </div>
                         </div>
 
@@ -736,6 +761,18 @@ export default function RoleManagement() {
                             <Eye className="h-4 w-4" />
                             View permissions
                           </button>
+                          {protectedRoleCodes.includes(role.code) && (
+                            <button
+                              type="button"
+                              onClick={() => toast.info(DEFAULT_ROLE_EDIT_LOCKED_MESSAGE)}
+                              aria-disabled
+                              title={DEFAULT_ROLE_EDIT_LOCKED_MESSAGE}
+                              className="inline-flex cursor-not-allowed items-center gap-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 px-3 py-2 text-sm font-medium text-gray-300"
+                            >
+                              <Lock className="h-4 w-4" />
+                              Edit
+                            </button>
+                          )}
                           {!protectedRoleCodes.includes(role.code) && (
                             <button
                               onClick={() => {
@@ -816,7 +853,7 @@ export default function RoleManagement() {
                         <tr className="text-left">
                           <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Role</th>
                           <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Type</th>
-                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Permissions</th>
+                          <th className="px-6 py-4 text-center text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Permissions</th>
                           <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500 text-right">Users</th>
                         </tr>
                       </thead>
@@ -830,16 +867,15 @@ export default function RoleManagement() {
                                 </span>
                                 <div className="min-w-0">
                                   <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">{role.name}</p>
-                                  <p className="mt-0.5 text-xs font-medium uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">{role.code}</p>
                                 </div>
                               </div>
                             </td>
                             <td className="px-6 py-4">
                               <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${role.is_system ? 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-1 ring-gray-200 dark:ring-slate-700' : 'bg-brand-cyan/10 text-brand-blue ring-1 ring-brand-cyan/20'}`}>
-                                {role.is_system ? 'System' : 'Custom'}
+                                {role.is_system ? 'Default role' : 'Custom role'}
                               </span>
                             </td>
-                            <td className="px-6 py-4 text-sm text-gray-700 dark:text-slate-300">{role.permission_count}</td>
+                            <td className="px-6 py-4 text-center text-sm text-gray-700 dark:text-slate-300">{shownCountFor(role)}</td>
                             <td className="px-6 py-4 text-right">
                               <span className="inline-flex items-center rounded-full bg-brand-teal/10 px-3 py-1 text-sm font-semibold text-brand-teal ring-1 ring-brand-teal/20">
                                 {role.user_count}
@@ -1001,14 +1037,14 @@ export default function RoleManagement() {
         headerExtra={
           viewingRole && (
             <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-2xs font-medium ${getRoleBadgeClass(viewingRole.is_system)}`}>
-              {viewingRole.is_system ? 'System role' : 'Custom role'}
+              {viewingRole.is_system ? 'Default role' : 'Custom role'}
             </span>
           )
         }
       >
         {viewingRole && (
           <>
-              <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="mb-6 grid gap-4 sm:grid-cols-3">
                 <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 shadow-sm ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
                   <div className="text-xs uppercase tracking-[0.18em] text-gray-400 dark:text-slate-500">Role Code</div>
                   <div className="mt-2 text-sm font-semibold text-gray-900 dark:text-slate-50">{viewingRole.code}</div>
@@ -1021,23 +1057,10 @@ export default function RoleManagement() {
                   <div className="text-xs uppercase tracking-[0.18em] text-gray-400 dark:text-slate-500">Permissions</div>
                   <div className="mt-2 text-sm font-semibold text-gray-900 dark:text-slate-50">{viewingRoleShownCount}</div>
                 </div>
-                <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 shadow-sm ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-                  <div className="text-xs uppercase tracking-[0.18em] text-gray-400 dark:text-slate-500">Inheritance</div>
-                  <div className="mt-2 text-sm font-semibold text-gray-900 dark:text-slate-50">{viewingRole.parent_role_name || 'Independent'}</div>
-                </div>
               </div>
 
-              {viewingRoleShownCount === 0 ? (
-                <div className="rounded-2xl border border-dashed border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 px-6 py-16 text-center">
-                  <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
-                    <Shield className="h-6 w-6 text-brand-blue" />
-                  </div>
-                  <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">No permissions allocated</h3>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-slate-500">This role does not currently expose any explicit permissions.</p>
-                </div>
-              ) : (
-                <PermissionSectionsView codes={viewingRolePermissions.map((p) => p.code)} />
-              )}
+              <AlwaysOnPermissionsNote />
+              <PermissionSectionsView codes={viewingRoleCodes} showAll />
           </>
         )}
       </AppModal>

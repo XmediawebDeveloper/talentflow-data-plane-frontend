@@ -38,7 +38,7 @@ import { ArrowLeft,
 import { toast } from 'sonner';
 import { handleUnauthorized } from '@/lib/services/api';
 import authService from '@/lib/services/authService';
-import rbacService from '@/lib/services/rbacService';
+import rbacService, { formatRoleName } from '@/lib/services/rbacService';
 import userService from '@/lib/services/userService';
 import { RoleListItem, Permission } from '@/lib/types/rbac';
 import { UserRole } from '@/lib/types/tenant';
@@ -60,6 +60,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import AppModal from '@/components/ui/app-modal';
 import PermissionSectionsView, {
   PermissionSectionsSkeleton,
+  AlwaysOnPermissionsNote,
+  withAlwaysOnPermissions,
   countGrantedPermissions,
   permissionBadgeClass,
 } from '@/components/roles/PermissionSectionsView';
@@ -70,6 +72,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Tooltip } from '@/components/ui/tooltip';
+import { useBreadcrumbOffset } from '@/components/ai-interview/AIInterviewStepIndicator';
 
 // Types
 interface UserPermissions {
@@ -389,8 +392,9 @@ const hashString = (str: string): number => {
 // Get role label - use RBAC name or fallback to defaults
 const getRoleLabel = (role: string, availableRoles: RoleListItem[]): string => {
   const rbacRole = availableRoles.find(r => r.code.toLowerCase() === role.toLowerCase());
-  if (rbacRole) return rbacRole.name;
-  return defaultRoleLabels[role.toLowerCase()] || role.charAt(0).toUpperCase() + role.slice(1);
+  // Role names are always shown in CAPITALS (see formatRoleName in rbacService).
+  if (rbacRole) return formatRoleName(rbacRole.name);
+  return formatRoleName(defaultRoleLabels[role.toLowerCase()] || role);
 };
 
 // Get role badge color - system roles use default colors, custom roles get distinct colors from palette
@@ -521,6 +525,8 @@ const mockUsers: ApiUser[] = [
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
 export default function UserManagement() {
+  // Org tab bar pins just below the sticky breadcrumb (measured height).
+  const [orgCrumbRef, orgCrumbHeight] = useBreadcrumbOffset();
   const router = useRouter();
   const { user: currentUser, refreshUser } = useAuth();
   const dialog = useGlobalDialog();
@@ -579,10 +585,10 @@ export default function UserManagement() {
   const totalUsersCount = activeUsersCount + inactiveUsersCount;
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  // Drill-in pattern: cards-first overview, switch to list+search when a stat
-  // card is clicked. `statusFilter` carries the card that was clicked so the
-  // list is pre-filtered.
-  const [pageView, setPageView] = useState<'cards' | 'list'>('cards');
+  // The page always opens on the Total Users list (client request 2026-10-17);
+  // clicking a stat card re-filters it. `statusFilter` carries the card that was
+  // clicked so the list is pre-filtered.
+  const [pageView, setPageView] = useState<'cards' | 'list'>('list');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const listSectionRef = useRef<HTMLDivElement | null>(null);
   const [listScrollRequest, setListScrollRequest] = useState(0);
@@ -656,7 +662,10 @@ export default function UserManagement() {
   // Same popup, opened from a user row's "+N more" permissions chip.
   const [viewingUserPermissions, setViewingUserPermissions] = useState<ApiUser | null>(null);
   const [viewingRolePopupPermissions, setViewingRolePopupPermissions] = useState<Permission[]>([]);
-  const viewingRolePopupShownCount = countGrantedPermissions(viewingRolePopupPermissions.map((p) => p.code));
+  // Role / user permission popups include the always-on pair every user gets,
+  // so the count matches Edit User (Standard User = 2, not 0).
+  const viewingRolePopupCodes = withAlwaysOnPermissions(viewingRolePopupPermissions.map((p) => p.code));
+  const viewingRolePopupShownCount = countGrantedPermissions(viewingRolePopupCodes);
   const [isViewingRolePopupLoading, setIsViewingRolePopupLoading] = useState(false);
 
   // Reset Password modal — offers BOTH "email a temp password" and "set directly".
@@ -711,11 +720,10 @@ export default function UserManagement() {
   const rootRef = useScrollRestoration<HTMLElement>('org-user-management', !isLoading, [pageView]);
   useListStatePersistence(
     'org-user-management',
-    { statusFilter, searchQuery, itemsPerPage },
+    { searchQuery, itemsPerPage },
     (s) => {
-      if (s.statusFilter === 'all' || s.statusFilter === 'active' || s.statusFilter === 'inactive') {
-        setStatusFilter(s.statusFilter as typeof statusFilter);
-      }
+      // statusFilter is deliberately NOT restored — the page always opens on
+      // Total Users.
       if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
       if (typeof s.itemsPerPage === 'number') setItemsPerPage(s.itemsPerPage);
     },
@@ -997,15 +1005,11 @@ export default function UserManagement() {
 
       {isViewingRolePopupLoading ? (
         <PermissionSectionsSkeleton sections={2} Skeleton={Skeleton} />
-      ) : viewingRolePopupShownCount === 0 ? (
-        <div className="text-center py-10 sm:py-12">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/20 mb-3">
-            <Shield className="w-7 h-7 text-brand-blue" />
-          </div>
-          <p className="text-gray-700 dark:text-slate-300 font-semibold text-sm">No permissions allocated</p>
-        </div>
       ) : (
-        <PermissionSectionsView codes={viewingRolePopupPermissions.map((p) => p.code)} />
+        <>
+          <AlwaysOnPermissionsNote />
+          <PermissionSectionsView codes={viewingRolePopupCodes} showAll />
+        </>
       )}
     </>
   );
@@ -2326,10 +2330,10 @@ export default function UserManagement() {
     <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
-      <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users' }]} />
+      <PageBreadcrumb barRef={orgCrumbRef} className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users' }]} />
 
       {/* Shared organization tab bar — Users is the first tab */}
-      <OrganizationTabs />
+      <OrganizationTabs stickyTop={orgCrumbHeight} />
 
       {/* Active tab + its data enclosed together in one bordered panel that
           connects to the tab bar's baseline (-mt-5 cancels the tab bar's mb-5). */}
@@ -2885,7 +2889,7 @@ export default function UserManagement() {
                             </span>
                             {isSystemRole && (
                               <span className="text-2xs font-medium text-brand-cyan bg-brand-cyan/10 ring-1 ring-brand-cyan/20 px-1.5 py-0.5 rounded flex-shrink-0">
-                                System
+                                Default role
                               </span>
                             )}
                           </div>
@@ -3079,6 +3083,12 @@ export default function UserManagement() {
                         {/* Count only permissions shown as tiles below — a role's defaults can
                             include legacy codes that have no checkbox. */}
                         {getAllCustomPermissionCodes().filter(code => editSelectedPermissionCodes.has(code)).length} active
+                      </span>
+                      <span
+                        className="text-2xs font-medium text-gray-500 dark:text-slate-500 whitespace-nowrap"
+                        title="View Analytics and View Support are included for every user and can't be switched off"
+                      >
+                        incl. {MANDATORY_PERMISSION_CODES.size} always on
                       </span>
                     </div>
                   </div>
@@ -3674,7 +3684,7 @@ export default function UserManagement() {
             viewingRolePopup.is_system ? (
               <span className="inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-1 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded-full text-2xs sm:text-xs font-semibold">
                 <Lock className="w-3 h-3" />
-                System Role (Read-Only)
+                Default Role (Read-Only)
               </span>
             ) : null
           }
