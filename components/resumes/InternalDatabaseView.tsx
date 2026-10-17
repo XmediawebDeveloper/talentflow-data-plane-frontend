@@ -1058,8 +1058,8 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
             onAssessmentDisabled={isPlanLocked('assessment') || !(isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('internal_db:assessment')))}
             onAssessmentDisabledReason={!(isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('internal_db:assessment'))) ? "You do not have permission to invite candidates to an assessment" : PLAN_LOCKED_MESSAGE}
             onAIInterview={handleBulkAIInterview}
-            onAIInterviewDisabled={isPlanLocked('ai_interview') || !(isTenantAdmin || hasPermission('canInviteAIInterviews'))}
-            onAIInterviewDisabledReason={!(isTenantAdmin || hasPermission('canInviteAIInterviews')) ? "You do not have permission to invite candidates to an AI interview" : PLAN_LOCKED_MESSAGE}
+            onAIInterviewDisabled={isPlanLocked('ai_interview') || !(isTenantAdmin || (hasPermission('canInviteAIInterviews') && hasPermissionCode('internal_db:invite_ai_interview')))}
+            onAIInterviewDisabledReason={!(isTenantAdmin || (hasPermission('canInviteAIInterviews') && hasPermissionCode('internal_db:invite_ai_interview'))) ? "You do not have permission to invite candidates to an AI interview" : PLAN_LOCKED_MESSAGE}
             onAITalentMatch={handleBulkAITalentMatch}
             onAITalentMatchDisabled={isPlanLocked('ai_talent_match') || !(isTenantAdmin || (hasPermission('canRunAiMatch') && hasPermissionCode('internal_db:ai_match')))}
             onAITalentMatchDisabledReason={!(isTenantAdmin || (hasPermission('canRunAiMatch') && hasPermissionCode('internal_db:ai_match'))) ? "You do not have permission to run AI talent match" : PLAN_LOCKED_MESSAGE}

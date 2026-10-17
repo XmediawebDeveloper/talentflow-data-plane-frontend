@@ -984,7 +984,13 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     canViewAIInterviews: hasPermission('canViewAIInterviews') || hasPermission('canRunAiInterviews') || hasPermission('canInviteAIInterviews'),
   };
 
-  const canInviteJd = isTenantAdmin || hasPermissionCode('jd:invite');
+  // Job Description → "Invite to Assessment" / "Invite to AI Interview" are
+  // separate permissions; each target also needs its module's own Invite
+  // (the server checks assessments:invite / ai_interview:invite on send).
+  const canInviteJdAssessment =
+    isTenantAdmin || (hasPermissionCode('jd:invite_assessment') && hasPermissionCode('assessments:invite'));
+  const canInviteJdAIInterview =
+    isTenantAdmin || (hasPermissionCode('jd:invite_ai_interview') && hasPermissionCode('ai_interview:invite'));
 
   // ✅ PERMISSIONS: Get feature flags for Quick Actions
   const features = {
@@ -3674,10 +3680,10 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                         planLocked={assessmentPlanLocked}
                         onClick={openCreateSendAssessment}
                         loading={isLoadingShareAssessments}
-                        disabled={!canInviteJd || !canInviteToAssessment}
+                        disabled={!canInviteJdAssessment || !canInviteToAssessment}
                         disabledTooltip={
-                          !canInviteJd
-                            ? 'You do not have permission to invite candidates from a job description'
+                          !canInviteJdAssessment
+                            ? 'You do not have permission to invite candidates to an assessment from a job description'
                             : !features.assessment
                               ? 'Assessments not enabled'
                               : job.status === 'Disabled'
@@ -3792,10 +3798,10 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                       accent="orange"
                       planLocked={aiInterviewPlanLocked}
                       onClick={() => handleInviteAIInterview()}
-                      disabled={!canInviteJd || !canInviteToAIInterview}
+                      disabled={!canInviteJdAIInterview || !canInviteToAIInterview}
                       disabledTooltip={
-                        !canInviteJd
-                          ? 'You do not have permission to invite candidates from a job description'
+                        !canInviteJdAIInterview
+                          ? 'You do not have permission to invite candidates to an AI interview from a job description'
                           : !features.ai_interview
                             ? 'AI Interviews not enabled'
                             : job.status === 'Disabled'

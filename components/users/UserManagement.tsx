@@ -176,7 +176,7 @@ const getPermissionDependencies = (code: string): string[] => {
 // Helper to get a human-readable display name for a permission code
 const getPermissionDisplayName = (code: string): string => {
   for (const cat of CUSTOM_PERMISSION_CATEGORIES) {
-    if (cat.viewCode === code) return cat.name;
+    if (cat.viewCode === code) return `View ${cat.name}`;
     const action = cat.actions?.find(a => a.code === code);
     if (action) return `${action.label} (${cat.name})`;
     for (const sub of cat.subCategories || []) {
@@ -200,6 +200,35 @@ const getCategoryViewCodeFor = (code: string): string | null => {
   return null;
 };
 
+// Complete a permission set with everything it needs — the same rules applied
+// when ticking by hand (category dependencies + each code's section View),
+// repeated until nothing new is added. Used when loading a role's defaults
+// (Reset / role chip) so the popup shows exactly what Save will store: the
+// server completes missing dependencies on save, so a role with gaps used to
+// show e.g. 93 before Save and 95 after reopening.
+const withRequiredPermissions = (codes: Iterable<string>): Set<string> => {
+  const result = new Set(codes);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const code of Array.from(result)) {
+      const needed = [getCategoryViewCodeFor(code), ...getPermissionDependencies(code)];
+      for (const dep of needed) {
+        if (dep && !result.has(dep)) {
+          result.add(dep);
+          changed = true;
+        }
+        const depView = dep ? getCategoryViewCodeFor(dep) : null;
+        if (depView && !result.has(depView)) {
+          result.add(depView);
+          changed = true;
+        }
+      }
+    }
+  }
+  return result;
+};
+
 // Helper to get which currently-enabled permission CODES block disabling the
 // given code (same traversal as getBlockingPermissions below, but returns the
 // raw codes so a cascade-disable can actually remove them from the set).
@@ -211,6 +240,21 @@ const getBlockingPermissionCodes = (code: string, currentCodes: Set<string>): st
         if (deps.includes(code) && currentCodes.has(depender)) {
           blockers.push(depender);
         }
+      }
+    }
+    // A section's View is needed by every action in that section: turning the
+    // View off (directly or as a cascade) must turn its actions off too, or the
+    // section is left with actions on but no way to open it.
+    if (cat.viewCode === code) {
+      cat.actions?.forEach(a => { if (currentCodes.has(a.code)) blockers.push(a.code); });
+      cat.subCategories?.forEach(sub => {
+        if (sub.viewCode && currentCodes.has(sub.viewCode)) blockers.push(sub.viewCode);
+        sub.actions.forEach(a => { if (currentCodes.has(a.code)) blockers.push(a.code); });
+      });
+    }
+    for (const sub of cat.subCategories || []) {
+      if (sub.viewCode === code) {
+        sub.actions.forEach(a => { if (currentCodes.has(a.code)) blockers.push(a.code); });
       }
     }
   }
@@ -542,21 +586,27 @@ export default function UserManagement() {
     codesBeingDisabled: string[],
     currentCodes: Set<string>
   ): Promise<Set<string> | null> => {
-    const blockerCodes = [
-      ...new Set(codesBeingDisabled.flatMap(c => getBlockingPermissionCodes(c, currentCodes))),
-    ];
-    if (blockerCodes.length === 0) return new Set(codesBeingDisabled);
+    // Full cascade up front, so the box lists EVERYTHING that will go — not just
+    // the first level of dependents.
+    const removal = computeCascadeRemovals(codesBeingDisabled, currentCodes);
+    const alsoOff = Array.from(removal).filter(
+      c => !codesBeingDisabled.includes(c) && currentCodes.has(c) && !MANDATORY_PERMISSION_CODES.has(c)
+    );
+    if (alsoOff.length === 0) return new Set(codesBeingDisabled);
 
-    const blockerNames = [...new Set(blockerCodes.map(getPermissionDisplayName))];
+    const names = [...new Set(alsoOff.map(getPermissionDisplayName))];
     const confirmed = await dialog.confirm({
-      title: `Disable "${label}"?`,
-      message: `"${label}" is required by ${blockerNames.join(', ')}. Disabling it will also turn off: ${blockerNames.join(', ')}.`,
+      title: `Turn off "${label}"?`,
+      message:
+        `${names.length === 1 ? 'This permission needs' : `These ${names.length} permissions need`} "${label}", ` +
+        `so ${names.length === 1 ? 'it' : 'they'} will be turned off too:\n\n` +
+        names.join('\n'),
       variant: 'warning',
-      confirmText: 'Yes, Disable All',
-      cancelText: 'No',
+      confirmText: 'Turn off all',
+      cancelText: 'Keep it on',
     });
     if (!confirmed) return null;
-    return computeCascadeRemovals(codesBeingDisabled, currentCodes);
+    return removal;
   };
 
   // Granular action gates. Tenant admins always pass; delegated admins pass when
@@ -899,9 +949,20 @@ export default function UserManagement() {
       const role = await rbacService.getRoleById(roleId);
       if (requestId !== selectRoleRequestIdRef.current) return; // a newer click won
       const shown = new Set(getAllCustomPermissionCodes());
-      const codes = new Set<string>((role.permissions || []).map(p => p.code).filter(c => shown.has(c)));
+      const roleCodes = new Set<string>((role.permissions || []).map(p => p.code).filter(c => shown.has(c)));
+      // Also switch on whatever the role's permissions need (a role can have
+      // gaps), so this is exactly what Save will store.
+      const codes = withRequiredPermissions(roleCodes);
       setEditSelectedPermissionCodes(codes);
-      toast.success(`Permissions set to ${role.name} defaults`);
+      const added = Array.from(codes).filter(c => !roleCodes.has(c) && !MANDATORY_PERMISSION_CODES.has(c));
+      if (added.length > 0) {
+        toast.success(
+          `Permissions set to ${role.name} defaults. Also switched on ${added.map(getPermissionDisplayName).join(', ')} — required by permissions in this role.`,
+          { duration: 8000 },
+        );
+      } else {
+        toast.success(`Permissions set to ${role.name} defaults`);
+      }
     } catch (error) {
       if (requestId !== selectRoleRequestIdRef.current) return;
       console.error('Failed to load role default permissions:', error);
