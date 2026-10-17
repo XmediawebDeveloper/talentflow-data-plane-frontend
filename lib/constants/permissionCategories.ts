@@ -70,6 +70,7 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       { code: 'jd:invite_assessment', label: 'Invite to Assessment' },
       { code: 'jd:invite_ai_interview', label: 'Invite to AI Interview' },
       { code: 'jd:add_applicants', label: 'Score Resume' },
+      { code: 'jd:ai_match', label: 'Run AI Talent Match' },
     ],
     // Rule: JD Invite requires Assessment Invite (this is what actually sends
     // the invitation server-side — see app/routers/assessments.py's
@@ -86,10 +87,6 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     // or Delete stayed checked, leaving a combination the backend would
     // reject the next time either ran.
     dependencies: {
-      // Each invite target needs that module's own Invite — the server checks
-      // assessments:invite / ai_interview:invite when the invite is sent.
-      'jd:invite_assessment': ['assessments:invite'],
-      'jd:invite_ai_interview': ['ai_interview:invite'],
       'jd:update': ['jd:read'],
       'jd:delete': ['jd:read'],
     },
@@ -127,15 +124,11 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     // for why this points at 'assessments:invite' rather than 'assessments:share')
     // NOTE: Export, Invite, Download Scorecard do NOT block disabling Score Resumes
     dependencies: {
-      // 'my_resumes:score' added so enabling Score Resumes always leaves the
-      // user with at least one usable scoring SOURCE — SelectSourceModal.tsx
-      // gates the "My Resumes" source tab on this exact code independently of
-      // my_resumes:read/upload (see its own comment: "now gated by its own
-      // Score Resume sub-action"). Without it, a user could have Score
-      // Resumes enabled with no tab available to actually pick a resume from.
-      'scoring:score': ['jd:read', 'my_resumes:read', 'my_resumes:upload', 'my_resumes:score', 'jd:add_applicants'],
-      'scoring:invite_assessment': ['assessments:invite'],
-      'scoring:invite_ai_interview': ['ai_interview:invite'],
+      // Score Resume needs a job to score against and resumes to read (the
+      // server checks jd:read + resumes:read). Where else scoring can be started
+      // from (JD, My Resumes, Shared Database, AI Talent Match) is an ENTRY POINT
+      // of this permission — see ENTRY_POINT_GROUPS, not a dependency.
+      'scoring:score': ['jd:read', 'my_resumes:read'],
     },
   },
   {
@@ -147,6 +140,8 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       { code: 'ai_match:run', label: 'Run AI Talent Match' },
       { code: 'ai_match:score', label: 'Score Resume' },
       { code: 'ai_match:export', label: 'Export' },
+      { code: 'ai_match:invite_assessment', label: 'Invite to Assessment' },
+      { code: 'ai_match:invite_ai_interview', label: 'Invite to AI Interview' },
     ],
     // Rule: Run AI Match requires both Job Description and Shared Database
     // access (app/services/permission_dependencies.py: ai_match:run ->
@@ -176,8 +171,6 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     // Rule: Assessment invite from My Resumes requires Assessment Invite
     // (see jd:invite above for why this points at 'assessments:invite')
     dependencies: {
-      'my_resumes:assessment': ['assessments:invite'],
-      'my_resumes:invite_ai_interview': ['ai_interview:invite'],
     },
   },
   {
@@ -207,10 +200,7 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     // internal_db:ai_match -> ai_match:run) — otherwise the button here could
     // be enabled while every click 403s server-side.
     dependencies: {
-      'internal_db:assessment': ['assessments:invite'],
-      'internal_db:invite_ai_interview': ['ai_interview:invite'],
       'internal_db:delete': ['internal_db:read'],
-      'internal_db:ai_match': ['ai_match:run'],
     },
   },
   {
@@ -566,3 +556,37 @@ export const getCatalogDependencyMatrix = () => {
   const feature_names = Object.fromEntries(features.map((c) => [c, getPermissionLabel(c)]));
   return { features, dependencies, reverse_dependencies, feature_names };
 };
+
+
+/**
+ * MAIN permission → its ENTRY POINTS in other sections (client rule 2026-10-17).
+ * An entry point lets someone start the main action from another section (e.g.
+ * Score Resume from the Job Description page). Rules everywhere permissions are
+ * edited:
+ *   - an entry point can only be on while its main is on (greyed out otherwise);
+ *     turning an entry point off never touches the main;
+ *   - turning the main ON offers to turn its entry points on too;
+ *   - turning the main OFF turns its entry points off.
+ * These are NOT "needs" dependencies, so they are not in `dependencies` above and
+ * never grant the main permission to anyone.
+ */
+export const ENTRY_POINT_GROUPS: { main: string; entries: string[] }[] = [
+  { main: 'scoring:score', entries: ['jd:add_applicants', 'my_resumes:score', 'internal_db:score', 'ai_match:score'] },
+  { main: 'ai_match:run', entries: ['jd:ai_match', 'my_resumes:ai_match', 'internal_db:ai_match'] },
+  {
+    main: 'assessments:invite',
+    entries: ['jd:invite_assessment', 'scoring:invite_assessment', 'my_resumes:assessment', 'internal_db:assessment', 'ai_match:invite_assessment'],
+  },
+  {
+    main: 'ai_interview:invite',
+    entries: ['jd:invite_ai_interview', 'scoring:invite_ai_interview', 'my_resumes:invite_ai_interview', 'internal_db:invite_ai_interview', 'ai_match:invite_ai_interview'],
+  },
+];
+
+/** Entry points of a main permission ([] if it has none). */
+export const getEntryPoints = (main: string): string[] =>
+  ENTRY_POINT_GROUPS.find((g) => g.main === main)?.entries ?? [];
+
+/** The main permission an entry point belongs to, or null. */
+export const getMainPermission = (entry: string): string | null =>
+  ENTRY_POINT_GROUPS.find((g) => g.entries.includes(entry))?.main ?? null;

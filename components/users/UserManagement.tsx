@@ -7,6 +7,7 @@ import { SurfaceCard, SectionHeading } from '@/components/ui/section-container';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   CUSTOM_PERMISSION_CATEGORIES,
+  getMainPermission,
   type CustomPermissionAction,
   type CustomPermissionCategory,
   type CustomPermissionSubCategory,
@@ -57,6 +58,8 @@ import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { formatISTDate, formatIST } from '@/lib/utils/dateUtils';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { Skeleton } from '@/components/ui/skeleton';
+import { planTurnOn, planTurnOff, withoutOrphanEntryPoints, isEntryPointLocked, labelOf } from '@/lib/permissions/permissionRules';
+import { usePermissionChangeDialog } from '@/components/roles/PermissionChangeDialog';
 import AppModal from '@/components/ui/app-modal';
 import PermissionSectionsView, {
   PermissionSectionsSkeleton,
@@ -581,32 +584,83 @@ export default function UserManagement() {
   // confirm cascading the disable to those dependents too. Returns the full
   // set of codes to remove (the requested ones plus every dependent pulled
   // in transitively) on "Yes", or null if the admin chose "No" (no changes).
+  const { ask: askPermissionChange, dialog: permissionChangeDialog } = usePermissionChangeDialog();
+
+  // Turning permissions OFF (tile, View, section): shared rules decide what else
+  // must go — permissions that need them, the section's actions (for a View) and
+  // a main permission's entry points in other sections. Compact popup, full list
+  // behind "Show details". Returns the codes to remove, or null if cancelled.
   const confirmCascadeDisable = async (
     label: string,
     codesBeingDisabled: string[],
     currentCodes: Set<string>
   ): Promise<Set<string> | null> => {
-    // Full cascade up front, so the box lists EVERYTHING that will go — not just
-    // the first level of dependents.
-    const removal = computeCascadeRemovals(codesBeingDisabled, currentCodes);
-    const alsoOff = Array.from(removal).filter(
-      c => !codesBeingDisabled.includes(c) && currentCodes.has(c) && !MANDATORY_PERMISSION_CODES.has(c)
-    );
-    if (alsoOff.length === 0) return new Set(codesBeingDisabled);
+    const plan = planTurnOff(codesBeingDisabled, currentCodes, MANDATORY_PERMISSION_CODES);
+    const removal = new Set(Array.from(currentCodes).filter(c => !plan.next.has(c)));
+    codesBeingDisabled.forEach(c => { if (!MANDATORY_PERMISSION_CODES.has(c)) removal.add(c); });
+    const extra = plan.entryPointsOff.length + plan.dependentsOff.length;
+    if (extra === 0) return removal;
 
-    const names = [...new Set(alsoOff.map(getPermissionDisplayName))];
-    const confirmed = await dialog.confirm({
+    const parts: string[] = [];
+    if (plan.entryPointsOff.length) {
+      parts.push(`its ${plan.entryPointsOff.length} entry point${plan.entryPointsOff.length === 1 ? '' : 's'} in other sections`);
+    }
+    if (plan.dependentsOff.length) {
+      parts.push(`${plan.dependentsOff.length} permission${plan.dependentsOff.length === 1 ? '' : 's'} that need${plan.dependentsOff.length === 1 ? 's' : ''} it`);
+    }
+    const choice = await askPermissionChange({
       title: `Turn off "${label}"?`,
-      message:
-        `${names.length === 1 ? 'This permission needs' : `These ${names.length} permissions need`} "${label}", ` +
-        `so ${names.length === 1 ? 'it' : 'they'} will be turned off too:\n\n` +
-        names.join('\n'),
-      variant: 'warning',
-      confirmText: 'Turn off all',
-      cancelText: 'Keep it on',
+      tone: 'off',
+      summary: <>This will also turn off {parts.join(' and ')}.</>,
+      details: [
+        { heading: 'Entry points in other sections', items: plan.entryPointsOff.map(labelOf) },
+        { heading: 'Also turned off (they need it)', items: plan.dependentsOff.map(labelOf) },
+      ],
+      actions: [{ id: 'off', label: 'Turn off', variant: 'destructive' }],
     });
-    if (!confirmed) return null;
-    return removal;
+    return choice === 'off' ? removal : null;
+  };
+
+  // Turning permissions ON (tile, View, section). Locked entry points (main off)
+  // are refused/skipped; turning a MAIN on offers to turn its entry points in
+  // other sections on too ([Cancel] [Only this] [Turn on all]). Returns the new
+  // full set, or null if nothing should change.
+  const turnOnWithPrompt = async (codes: string[], label: string): Promise<Set<string> | null> => {
+    const current = editSelectedPermissionCodes;
+    const plan = planTurnOn(codes, current);
+    if (codes.length === 1 && plan.skippedLocked.includes(codes[0])) {
+      const main = getMainPermission(codes[0]);
+      toast.info(`Turn on "${main ? labelOf(main) : 'its main permission'}" first — "${labelOf(codes[0])}" can only be used while it is on.`);
+      return null;
+    }
+    const offered = plan.offeredEntryPoints.flatMap(g => g.entries);
+    if (offered.length > 0 || plan.skippedLocked.length > 0) {
+      const summary = offered.length > 0
+        ? (plan.offeredEntryPoints.length === 1
+            ? <>&quot;{labelOf(plan.offeredEntryPoints[0].main)}&quot; can also be started from {offered.length} other section{offered.length === 1 ? '' : 's'}. Turn {offered.length === 1 ? 'it' : 'those'} on too?</>
+            : <>{offered.length} entry points in other sections can be turned on too. Turn them on?</>)
+        : <>Some permissions in this section were not turned on because their main permission is off.</>;
+      const choice = await askPermissionChange({
+        title: `Turn on "${label}"?`,
+        tone: 'on',
+        summary,
+        details: [
+          { heading: 'Can also be started from', items: offered.map(labelOf) },
+          { heading: 'Also turned on (needed)', items: plan.autoRequired.filter(c => !MANDATORY_PERMISSION_CODES.has(c)).map(labelOf) },
+          { heading: 'Not turned on (their main permission is off)', items: plan.skippedLocked.map(labelOf) },
+        ],
+        actions: offered.length > 0
+          ? [{ id: 'only', label: 'Only this', variant: 'secondary' }, { id: 'all', label: 'Turn on all' }]
+          : [{ id: 'only', label: 'Turn on' }],
+      });
+      if (!choice) return null;
+      return choice === 'all' ? plan.all : plan.only;
+    }
+    const auto = plan.autoRequired.filter(c => !MANDATORY_PERMISSION_CODES.has(c));
+    if (auto.length > 0) {
+      toast.info(`Also turned on: ${auto.map(labelOf).join(', ')} — needed by "${label}"`);
+    }
+    return plan.only;
   };
 
   // Granular action gates. Tenant admins always pass; delegated admins pass when
@@ -952,7 +1006,7 @@ export default function UserManagement() {
       const roleCodes = new Set<string>((role.permissions || []).map(p => p.code).filter(c => shown.has(c)));
       // Also switch on whatever the role's permissions need (a role can have
       // gaps), so this is exactly what Save will store.
-      const codes = withRequiredPermissions(roleCodes);
+      const codes = withoutOrphanEntryPoints(withRequiredPermissions(roleCodes));
       setEditSelectedPermissionCodes(codes);
       const added = Array.from(codes).filter(c => !roleCodes.has(c) && !MANDATORY_PERMISSION_CODES.has(c));
       if (added.length > 0) {
@@ -1877,8 +1931,10 @@ export default function UserManagement() {
           currentPermissionCodes.add(perm.code);
         }
       });
-      setEditSelectedPermissionCodes(currentPermissionCodes);
-      setEditOriginalPermissionCodes(new Set(currentPermissionCodes));
+      // An entry point can't work without its main — never show one alone.
+      const loadedCodes = withoutOrphanEntryPoints(currentPermissionCodes);
+      setEditSelectedPermissionCodes(loadedCodes);
+      setEditOriginalPermissionCodes(new Set(loadedCodes));
 
       console.log(`[EDIT USER] Pre-selected ${currentPermissionIds.size} permissions for user ${user.email}`);
       console.log(`[EDIT USER] Permission codes:`, Array.from(currentPermissionCodes));
@@ -3226,27 +3282,8 @@ export default function UserManagement() {
                               return next;
                             });
                           } else {
-                            // Enabling — collect deps not yet enabled so we can notify
-                            const deps = getPermissionDependencies(code);
-                            const newlyEnabled = deps.filter(dep => !editSelectedPermissionCodes.has(dep));
-                            setEditSelectedPermissionCodes(prev => {
-                              const next = new Set(prev);
-                              next.add(code);
-                              // Auto-enable viewCode
-                              if (category.viewCode) next.add(category.viewCode);
-                              // Handle dependencies — also enable each dep's category viewCode
-                              deps.forEach(dep => {
-                                next.add(dep);
-                                const depViewCode = getCategoryViewCodeFor(dep);
-                                if (depViewCode) next.add(depViewCode);
-                              });
-                              return next;
-                            });
-                            // Notify admin which dependencies were auto-enabled
-                            if (newlyEnabled.length > 0) {
-                              const depLabels = newlyEnabled.map(d => getPermissionDisplayName(d)).join(' and ');
-                              toast.info(`"${depLabels}" auto-enabled — required for "${getPermissionDisplayName(code)}"`);
-                            }
+                            const next = await turnOnWithPrompt([code], getPermissionDisplayName(code));
+                            if (next) setEditSelectedPermissionCodes(next);
                           }
                         };
 
@@ -3265,6 +3302,11 @@ export default function UserManagement() {
                               ...s.actions.map(a => a.code),
                             ]) || []),
                           ];
+                          if (!isCategoryActive) {
+                            const next = await turnOnWithPrompt(allCategoryCodes, category.name);
+                            if (next) setEditSelectedPermissionCodes(next);
+                            return;
+                          }
                           let cascadeRemoval: Set<string> | null = null;
                           if (isCategoryActive) {
                             // Confirm cascading to any dependents instead of blocking
@@ -3392,17 +3434,25 @@ export default function UserManagement() {
                               {category.actions?.map(action => {
                                 const badge = getActionBadge(action.code);
                                 const isOn = editSelectedPermissionCodes.has(action.code);
+                                const lockedMain = !isOn && isEntryPointLocked(action.code, editSelectedPermissionCodes)
+                                  ? getMainPermission(action.code)
+                                  : null;
                                 return (
                                   <div
                                     key={action.code}
                                     onClick={() => toggleCode(action.code)}
-                                    className={`rounded-2xl border p-4 transition-all select-none flex items-center gap-3 cursor-pointer ${isOn ? 'border-brand-blue/30 bg-gradient-to-br from-white to-brand-blue/5 dark:from-slate-900 dark:to-brand-blue/10 ring-1 ring-brand-blue/20 shadow-sm' : 'border-gray-100 dark:border-slate-700/60 bg-gradient-to-br from-white to-gray-50 dark:from-slate-900 dark:to-slate-800/50 opacity-50 hover:opacity-90 hover:border-brand-blue/30'}`}
+                                    title={lockedMain ? `Turn on "${labelOf(lockedMain)}" first` : undefined}
+                                    aria-disabled={lockedMain ? true : undefined}
+                                    className={`rounded-2xl border p-4 transition-all select-none flex items-center gap-3 ${lockedMain ? 'cursor-not-allowed border-dashed border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/40 opacity-40' : `cursor-pointer ${isOn ? 'border-brand-blue/30 bg-gradient-to-br from-white to-brand-blue/5 dark:from-slate-900 dark:to-brand-blue/10 ring-1 ring-brand-blue/20 shadow-sm' : 'border-gray-100 dark:border-slate-700/60 bg-gradient-to-br from-white to-gray-50 dark:from-slate-900 dark:to-slate-800/50 opacity-50 hover:opacity-90 hover:border-brand-blue/30'}`}`}
                                   >
                                     <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ring-1 ${badge.cls}`}>
                                       <span className="text-xs font-semibold uppercase">{badge.letter}</span>
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                      <div className="text-sm font-semibold text-gray-900 dark:text-slate-50">{action.label}</div>
+                                      <div className="text-sm font-semibold text-gray-900 dark:text-slate-50 flex items-center gap-1.5">
+                                        {action.label}
+                                        {lockedMain && <Lock className="w-3.5 h-3.5 text-gray-400" />}
+                                      </div>
                                     </div>
                                   </div>
                                 );
@@ -3422,6 +3472,14 @@ export default function UserManagement() {
                                   ...(sub.viewCode ? [sub.viewCode] : []),
                                   ...sub.actions.map(a => a.code),
                                 ];
+                                if (!isSubActive) {
+                                  const next = await turnOnWithPrompt(
+                                    sub.viewCode ? [sub.viewCode] : sub.actions.map(a => a.code),
+                                    sub.name
+                                  );
+                                  if (next) setEditSelectedPermissionCodes(next);
+                                  return;
+                                }
                                 let cascadeRemoval: Set<string> | null = null;
                                 if (isSubActive) {
                                   // Confirm cascading to any dependents instead of blocking
@@ -3511,7 +3569,8 @@ export default function UserManagement() {
                                               if (!removal) return;
                                               setEditSelectedPermissionCodes(prev => { const next = new Set(prev); removal.forEach(c => next.delete(c)); return next; });
                                             } else {
-                                              setEditSelectedPermissionCodes(prev => { const next = new Set(prev); next.add(sub.viewCode!); if (category.viewCode) next.add(category.viewCode); return next; });
+                                              const next = await turnOnWithPrompt([sub.viewCode!], `View ${sub.name}`);
+                                              if (next) setEditSelectedPermissionCodes(next);
                                             }
                                           }}
                                           className={`rounded-2xl border p-4 transition-all select-none flex items-center gap-3 cursor-pointer ${isOn ? 'border-brand-blue/30 bg-gradient-to-br from-white to-brand-blue/5 dark:from-slate-900 dark:to-brand-blue/10 ring-1 ring-brand-blue/20 shadow-sm' : 'border-gray-100 dark:border-slate-700/60 bg-gradient-to-br from-white to-gray-50 dark:from-slate-900 dark:to-slate-800/50 opacity-50 hover:opacity-90 hover:border-brand-blue/30'}`}
@@ -3528,6 +3587,9 @@ export default function UserManagement() {
                                     {sub.actions.map(action => {
                                       const badge = getActionBadge(action.code);
                                       const isOn = editSelectedPermissionCodes.has(action.code);
+                                const lockedMain = !isOn && isEntryPointLocked(action.code, editSelectedPermissionCodes)
+                                  ? getMainPermission(action.code)
+                                  : null;
                                       return (
                                         <div
                                           key={action.code}
@@ -3555,25 +3617,8 @@ export default function UserManagement() {
                                                 return next;
                                               });
                                             } else {
-                                              const deps = getPermissionDependencies(action.code);
-                                              const newlyEnabled = deps.filter(dep => !editSelectedPermissionCodes.has(dep));
-                                              setEditSelectedPermissionCodes(prev => {
-                                                const next = new Set(prev);
-                                                next.add(action.code);
-                                                if (sub.viewCode) next.add(sub.viewCode);
-                                                if (category.viewCode) next.add(category.viewCode);
-                                                // Also enable each dep's category viewCode
-                                                deps.forEach(dep => {
-                                                  next.add(dep);
-                                                  const depViewCode = getCategoryViewCodeFor(dep);
-                                                  if (depViewCode) next.add(depViewCode);
-                                                });
-                                                return next;
-                                              });
-                                              if (newlyEnabled.length > 0) {
-                                                const depLabels = newlyEnabled.map(d => getPermissionDisplayName(d)).join(' and ');
-                                                toast.info(`"${depLabels}" auto-enabled — required for "${getPermissionDisplayName(action.code)}"`);
-                                              }
+                                              const next = await turnOnWithPrompt([action.code], getPermissionDisplayName(action.code));
+                                              if (next) setEditSelectedPermissionCodes(next);
                                             }
                                           }}
                                           className={`rounded-2xl border p-4 transition-all select-none flex items-center gap-3 cursor-pointer ${isOn ? 'border-brand-blue/30 bg-gradient-to-br from-white to-brand-blue/5 dark:from-slate-900 dark:to-brand-blue/10 ring-1 ring-brand-blue/20 shadow-sm' : 'border-gray-100 dark:border-slate-700/60 bg-gradient-to-br from-white to-gray-50 dark:from-slate-900 dark:to-slate-800/50 opacity-50 hover:opacity-90 hover:border-brand-blue/30'}`}
@@ -3806,6 +3851,7 @@ export default function UserManagement() {
       )}
       </div>
       </div>
+      {permissionChangeDialog}
     </main>
   );
 }

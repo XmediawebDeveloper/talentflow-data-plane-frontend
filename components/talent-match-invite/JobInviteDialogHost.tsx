@@ -40,11 +40,15 @@ export default function JobInviteDialogHost({
   request,
   onClose,
   onSent,
+  inviteGate,
 }: {
   request: InviteDialogRequest | null;
   onClose: () => void;
   /** Invitations went out — the host refreshes whatever it shows. */
   onSent?: (kind: InviteKind) => void;
+  /** Host-specific invite permission per kind (AI Talent Match's entry points).
+   *  Omitted = no extra gate. */
+  inviteGate?: (kind: InviteKind) => { allowed: boolean; reason?: string };
 }) {
   const { tenant } = useAuth();
   if (!request) return null;
@@ -75,6 +79,8 @@ export default function JobInviteDialogHost({
         onSent?.('interview');
       }}
       onSent={(sentKind) => onSent?.(sentKind)}
+      inviteAllowed={inviteGate ? inviteGate(kind).allowed : true}
+      inviteDeniedReason={inviteGate ? inviteGate(kind).reason : undefined}
     />
   );
 }

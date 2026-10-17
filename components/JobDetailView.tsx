@@ -971,7 +971,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   const permissions = {
     canCreateAssessments: hasPermission('canCreateAssessments'),
     canUpdateAssessments: hasPermission('canUpdateAssessments'),
-    canRunAiMatch: hasPermission('canRunAiMatch'),
+    // Run AI Talent Match from a JD needs the main (AI Talent Match → Run) AND
+    // this JD entry point (jd:ai_match). Gates every AI-match trigger on this page.
+    canRunAiMatch: hasPermission('canRunAiMatch') && (isAdminUser || hasPermissionCode('jd:ai_match')),
     canReadJD: hasPermission('canReadJD'),
     canViewAssessments: hasPermission('canViewAssessments'),
     canUploadResumes: hasPermission('canUploadResumes'),
