@@ -2120,7 +2120,8 @@ export default function AIInterview() {
                         return;
                       }
                       setOpenMenuId(null);
-                      void resolveAIInterviewDraftResumeHref(config.id, config.jd_id!).then((href) => router.push(href));
+                      // A published version always edits from Configure, not Clusters.
+                      router.push(aiInterviewConfigureHref(config.id, config.jd_id!));
                     }}
                     disabled={!!editBlocked}
                     aria-disabled={!!editBlocked}
