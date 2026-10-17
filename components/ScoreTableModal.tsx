@@ -18,6 +18,9 @@ interface ScoreTableModalProps {
   /** Fallback readable JD code (e.g. "JD-105") for a single-job host, whose
    *  rows don't carry their own `jobCode` — same pattern as `jobId` above. */
   jobCode?: string;
+  /** Fallback JD version for a single-job host, whose rows don't carry their
+   *  own `jobVersion` — same pattern as `jobCode` above. */
+  jobVersion?: number | null;
   jobTitle: string;
   onClose: () => void;
   /** View by Candidates: steps through this candidate's other scored jobs,
@@ -35,7 +38,7 @@ interface ScoreTableModalProps {
  * CandidateScoringDetailPage's Score Table tab renders, opened in place as a
  * popup instead of navigating away to that page.
  */
-export default function ScoreTableModal({ resume, jobId, jobCode, jobTitle, onClose, jobPager, header }: ScoreTableModalProps) {
+export default function ScoreTableModal({ resume, jobId, jobCode, jobVersion, jobTitle, onClose, jobPager, header }: ScoreTableModalProps) {
   const [detail, setDetail] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -121,6 +124,12 @@ export default function ScoreTableModal({ resume, jobId, jobCode, jobTitle, onCl
     return 'bg-destructive';
   };
 
+  /* The JD version this score was made against: the row's own (cross-job
+     hosts), then the scoring record fetched above (`jd_version_number`, the
+     field Resume Scoring reads), then the single-job host's version — the one
+     these scores were fetched for. */
+  const scoredJobVersion = resume.jobVersion || detail?.jd_version_number || jobVersion || null;
+
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-6xl h-[90dvh] flex flex-col overflow-hidden">
@@ -174,9 +183,9 @@ export default function ScoreTableModal({ resume, jobId, jobCode, jobTitle, onCl
                   </span>
                 )}
                 {jobTitle && <span className="truncate">{jobTitle}</span>}
-                {resume.jobVersion && (
+                {scoredJobVersion != null && (
                   <span className="px-2 py-0.5 rounded-md text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 flex-shrink-0">
-                    V{resume.jobVersion}
+                    V{scoredJobVersion}
                   </span>
                 )}
               </div>

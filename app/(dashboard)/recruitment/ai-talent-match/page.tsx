@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { toast } from 'sonner';
 import AITalentMatchPage from '@/components/AITalentMatchPage';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { aiMatchService, AIMatchSessionResponse, AIMatchSessionListResponse } from '@/lib/services/aiMatchService';
@@ -221,18 +222,35 @@ function transformJDToJob(jd: JDResponse): Job {
   };
 }
 
+/** How long a just-run match keeps being merged into refetched history while
+ *  the sessions list doesn't carry it yet — see pendingMatchesRef. */
+const PENDING_MATCH_TTL_MS = 2 * 60 * 1000;
+
+
 /** Every match session, not just the first 100 — the endpoint caps page_size
  *  at 100, and history past that silently vanished. Page 1 carries the totals
- *  (and the tenant-wide rating-band counts), the rest are fetched in parallel. */
-async function listAllSessions(): Promise<AIMatchSessionListResponse> {
+ *  (and the tenant-wide rating-band counts), the rest are fetched in parallel.
+ *  A later page failing keeps page 1 and every page that did load (flagged
+ *  via `partial`) rather than discarding the whole history; a session that
+ *  shifts across a page boundary between requests is kept once. */
+async function listAllSessions(): Promise<AIMatchSessionListResponse & { partial?: boolean }> {
   const PAGE_SIZE = 100;
   const first = await aiMatchService.listSessions({ page: 1, page_size: PAGE_SIZE });
   const pages = Math.ceil((first.total || 0) / PAGE_SIZE);
   if (pages <= 1) return first;
-  const rest = await Promise.all(
+  const rest = await Promise.allSettled(
     Array.from({ length: pages - 1 }, (_, i) => aiMatchService.listSessions({ page: i + 2, page_size: PAGE_SIZE }))
   );
-  return { ...first, items: [...first.items, ...rest.flatMap(r => r.items || [])] };
+  const seen = new Set<string>();
+  const items = [
+    ...(first.items || []),
+    ...rest.flatMap(r => (r.status === 'fulfilled' ? r.value.items || [] : [])),
+  ].filter(s => {
+    if (seen.has(s.id)) return false;
+    seen.add(s.id);
+    return true;
+  });
+  return { ...first, items, partial: rest.some(r => r.status === 'rejected') };
 }
 
 export default function AITalentMatchRoute() {
@@ -258,6 +276,15 @@ export default function AITalentMatchRoute() {
   const [allMatchSessions, setAllMatchSessions] = useState<AIMatchSessionResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /* Bumped by every fetchData run and on unmount, so a response belonging to
+     an older run is dropped instead of overwriting newer data. */
+  const fetchSeqRef = useRef(0);
+  /* Match runs this mount just made (handleSaveMatch), by job, until a
+     refetch returns their session. `baselineId` is the job's session id
+     before the run: the response is only "caught up" once the job's latest
+     session is a different one. Until then the optimistic entry is merged
+     back in, so a refetch that races the backend's write can't wipe it. */
+  const pendingMatchesRef = useRef(new Map<string, { entry: MatchHistory; baselineId: string | null; savedAt: number }>());
 
   /* Extracted so a completed match can trigger the same fetch again instead of
      only ever running once per mount. `matchHistory`/`jobs`/`matchSessionCounts`
@@ -267,6 +294,8 @@ export default function AITalentMatchRoute() {
      happened to remount this route the first time; a second round trip hit
      Next's client-side route cache and reused the same (still stale) instance. */
   const fetchData = useCallback(async (opts?: { silent?: boolean }) => {
+      const seq = ++fetchSeqRef.current;
+      const isStale = () => seq !== fetchSeqRef.current;
       try {
         if (!opts?.silent) setIsLoading(true);
 
@@ -275,9 +304,13 @@ export default function AITalentMatchRoute() {
         const [jobsResponse, historyResponse] = await Promise.all([
           jdService.list({ page_size: 100, source: 'my-jds' }), // Fetch user's jobs to show disabled jobs in history
           listAllSessions().catch(
-            (): AIMatchSessionListResponse => ({ items: [], total: 0, page: 1, page_size: 100 })
+            (): AIMatchSessionListResponse & { partial?: boolean } => ({ items: [], total: 0, page: 1, page_size: 100 })
           ),
         ]);
+        if (isStale()) return;
+        if (historyResponse.partial) {
+          toast.error('Some match history could not be loaded — counts may be incomplete. Refresh to try again.');
+        }
 
         // The page of 100 above is the most recently updated JDs, and a tenant
         // can have hundreds — a job matched weeks ago falls off it. Every lookup
@@ -300,6 +333,7 @@ export default function AITalentMatchRoute() {
             // Titles still come from the session's own jd_title below.
             console.warn('[AITalentMatch] Failed to load JDs referenced by match sessions:', err);
           }
+          if (isStale()) return;
         }
 
         const transformedJobs = [...jobsResponse.items, ...referencedJDs].map(transformJDToJob);
@@ -350,12 +384,28 @@ export default function AITalentMatchRoute() {
           };
         });
 
+        // Runs made on this mount that the response doesn't carry yet keep
+        // their optimistic entry (see pendingMatchesRef). One that never shows
+        // up stops being merged after PENDING_MATCH_TTL_MS, so a run the
+        // backend didn't record can't linger for the rest of the visit.
+        pendingMatchesRef.current.forEach((pending, jobId) => {
+          const index = history.findIndex(h => h.jobId === jobId);
+          const caughtUp = index >= 0 && history[index].id !== pending.baselineId;
+          if (caughtUp || Date.now() - pending.savedAt > PENDING_MATCH_TTL_MS) {
+            pendingMatchesRef.current.delete(jobId);
+            return;
+          }
+          if (index >= 0) history[index] = pending.entry;
+          else history.push(pending.entry);
+        });
+
         // Sort by most recent first
         history.sort((a, b) => b.matchedAt.getTime() - a.matchedAt.getTime());
 
         setMatchHistory(history);
         setError(null);
       } catch (err) {
+        if (isStale()) return;
         console.error('Failed to fetch data:', err);
         // A silent background refresh (after a match completes) failing
         // shouldn't wipe out the good data already on screen — only the
@@ -370,12 +420,15 @@ export default function AITalentMatchRoute() {
           setAllMatchSessions([]);
         }
       } finally {
-        setIsLoading(false);
+        // A stale run leaves the loading state to the run that replaced it.
+        if (!isStale()) setIsLoading(false);
       }
   }, []);
 
   useEffect(() => {
     fetchData();
+    // Invalidate the in-flight run on unmount.
+    return () => { fetchSeqRef.current += 1; };
   }, [fetchData]);
 
   /* Update matchHistory the INSTANT a match finishes, rather than waiting on
@@ -393,6 +446,15 @@ export default function AITalentMatchRoute() {
   const handleSaveMatch = useCallback((newMatch: MatchHistory) => {
     setMatchHistory(prev => {
       const existingIndex = prev.findIndex(h => h.jobId === newMatch.jobId);
+      // Remember the run until a refetch returns it. A second run before then
+      // keeps the first run's baseline — the session the server last had.
+      // (Idempotent, so a double-invoked updater records the same thing.)
+      const earlier = pendingMatchesRef.current.get(newMatch.jobId);
+      pendingMatchesRef.current.set(newMatch.jobId, {
+        entry: newMatch,
+        baselineId: earlier ? earlier.baselineId : existingIndex >= 0 ? prev[existingIndex].id : null,
+        savedAt: Date.now(),
+      });
       if (existingIndex >= 0) {
         const updated = [...prev];
         updated[existingIndex] = newMatch;

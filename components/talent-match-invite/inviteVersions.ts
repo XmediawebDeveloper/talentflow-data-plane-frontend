@@ -97,6 +97,9 @@ export interface InviteVersion {
   jdId: string;
   /** Only Active versions can take an invite. */
   sendable: boolean;
+  /** Assessments: its invites were revoked — sealed against new ones, as the
+   *  Assessments page's Share is (a duplicate starts a fresh round). */
+  revoked?: boolean;
 }
 
 /* ── Loading ─────────────────────────────────────────────────────────── */
@@ -145,10 +148,12 @@ export async function loadAssessmentVersions(jdId: string): Promise<InviteVersio
     if (items.length < 100 || rows.length >= (response.total ?? rows.length)) break;
   }
   const seen = new Set<string>();
+  const revokedIds = getLocallyRevokedAssessmentIds();
   return rows
     .filter((a) => a.jd_id === jdId && (seen.has(a.id) ? false : (seen.add(a.id), true)))
     .map((a): InviteVersion => {
       const status = assessmentStatus(a);
+      const revoked = isAssessmentRevoked(a, revokedIds);
       return {
         id: a.id,
         kind: 'assessment',
@@ -169,7 +174,8 @@ export async function loadAssessmentVersions(jdId: string): Promise<InviteVersio
         createdBy: a.created_by_name,
         raw: a,
         jdId: a.jd_id,
-        sendable: status === 'active',
+        sendable: status === 'active' && !revoked,
+        revoked,
       };
     })
     .sort(byVersionDesc);
@@ -271,13 +277,16 @@ export function createBlockedReason(
      types so a sixth draft cannot be stacked behind five. */
   const draft = versions.find((v) => v.status === 'draft');
   if (draft) return `Publish or finish Draft v${draft.version} before creating another version.`;
-  /* An AI interview follows the backend's clone rules (the AI Interviews
-     page's Duplicate): only the latest version, not archived, and only once
+  /* The source follows the module's Duplicate rules (the Assessments and AI
+     Interviews pages, and the backend's clone): not archived, and only once
      sent — until then it is still edited. New version copies the latest. */
   const copied = source ?? versions[0];
-  if (kind === 'interview' && copied) {
+  if (copied) {
     if (copied.status === 'archived') return `Unarchive v${copied.version} to create a new version from it.`;
     if (!hasBeenSent(copied)) return `No candidates invited to v${copied.version} yet — edit it instead.`;
+  }
+  /* An AI interview's own clone rules on top (latest only, ...). */
+  if (kind === 'interview' && copied) {
     if (copied.config) {
       const lineage = versions.flatMap((v) => (v.config ? [v.config] : []));
       const why = interviewDuplicateBlockedReason(copied.config, lineage, perms.canCreate);

@@ -27,32 +27,23 @@ import MyResumesView from '@/components/resumes/MyResumesView';
 import InternalDatabaseView from '@/components/resumes/InternalDatabaseView';
 import { resumeService, RESUMES_CHANGED_EVENT } from '@/lib/services/resumeService';
 import type { Permission } from '@/lib/types/tenant';
+import {
+  INTERNAL_DB_PERMISSIONS,
+  MY_RESUMES_PERMISSIONS,
+  RESUME_TAB_LABEL as TAB_LABEL,
+  type ResumeTab,
+} from '@/lib/constants/resumePools';
 
-export type ResumeTab = 'my-resumes' | 'internal-db';
+export type { ResumeTab };
 
-/** Tab labels for the tab strip. */
-const TAB_LABEL: Record<ResumeTab, string> = {
-  'my-resumes': 'My Resumes',
-  'internal-db': 'Shared Database',
-};
-
-/* The same permission lists the nav entry is gated on (see
-   lib/navigation/menuSections.ts) — holding ANY one of a tab's permissions is
-   enough to see that tab, so the two stay in step: if the menu item shows, at
-   least one tab behind it is reachable. */
-const MY_RESUMES_PERMISSIONS = [
-  'canViewResumes',
-  'canUploadResumes',
-  'canUpdateResumes',
-  'canDeleteResumes',
-] as const;
-
-const INTERNAL_DB_PERMISSIONS = [
-  'canAccessInternalDB',
-  'canViewInternalDB',
-  'canUpdateInternalDB',
-  'canDeleteInternalDB',
-] as const;
+/** The page's breadcrumb, shared by the page and its no-access state.
+ *  The tab strip already shows which pool is open, so the trail stops at the
+ *  page itself rather than repeating the tab name — and stays the same when
+ *  the tab changes. */
+const CRUMBS = [
+  { label: 'Dashboard', href: '/dashboard' },
+  { label: 'Resume Database' },
+];
 
 export default function ResumeDatabasePage() {
   const searchParams = useSearchParams();
@@ -135,16 +126,9 @@ export default function ResumeDatabasePage() {
     };
   }, [showTabs, activeTab]);
 
-  // The tab strip already shows which pool is open, so the breadcrumb stops at
-  // the page itself rather than repeating the tab name.
-  const crumbs = [
-    { label: 'Dashboard', href: '/dashboard' },
-    { label: 'Resume Database' },
-  ];
-
   const header = (
     <>
-      <PageBreadcrumb className={showTabs ? 'mb-3' : 'mb-4 md:mb-6'} items={crumbs} />
+      <PageBreadcrumb className={showTabs ? 'mb-3' : 'mb-4 md:mb-6'} items={CRUMBS} />
       {showTabs && (
         <Tabs value={activeTab ?? undefined} onValueChange={handleTabChange} className="mb-5 md:mb-6">
           {/* Sized to its labels and visibly grooved, so the selected pool reads
@@ -195,10 +179,7 @@ export default function ResumeDatabasePage() {
       <main className="flex-1 overflow-x-clip bg-slate-50">
         <div className="mx-auto w-full max-w-[1400px]">
           <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
-            <PageBreadcrumb
-              className="mb-4 md:mb-6"
-              items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Resume Database' }]}
-            />
+            <PageBreadcrumb className="mb-4 md:mb-6" items={CRUMBS} />
             <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
               <span className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 text-gray-500">
                 <Lock className="h-5 w-5" />

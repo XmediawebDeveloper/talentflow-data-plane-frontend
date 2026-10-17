@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { internalTicketService, InternalTicket, InternalTicketStats, InternalTicketCategory, InternalTicketPriority } from '@/lib/services';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import { StatValuePlaceholder } from '@/components/ui/stats-card';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 type ViewType = 'overview' | 'submit' | 'tickets' | 'detail';
@@ -55,7 +56,13 @@ export default function InternalHelpDesk() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
+  // The stats call failed — the cards show '—' instead of a number.
+  const [statsFailed, setStatsFailed] = useState(false);
   const hasFetched = useRef(false);
+  /* Bumped by every fetchTickets run, so only the latest request's rows apply.
+     The mount fetch runs with default filters before the saved ones are
+     restored, then again with them; whichever landed last used to win. */
+  const fetchSeqRef = useRef(0);
   const hasHandledUrlTicket = useRef(false);
 
   // Persist scroll + list view state so returning to the Help Desk restores it.
@@ -102,6 +109,8 @@ export default function InternalHelpDesk() {
   }, [ticketIdFromUrl, router]);
 
   const fetchTickets = async () => {
+    const seq = ++fetchSeqRef.current;
+    const isStale = () => seq !== fetchSeqRef.current;
     try {
       setLoading(true);
       const response = await internalTicketService.listTickets({
@@ -109,12 +118,14 @@ export default function InternalHelpDesk() {
         priority: filterPriority !== 'all' ? filterPriority as any : undefined,
         search: searchQuery || undefined,
       });
+      if (isStale()) return;
       setTickets(response.items);
     } catch (error) {
+      if (isStale()) return;
       console.error('Error fetching tickets:', error);
       setTickets([]);
     } finally {
-      setLoading(false);
+      if (!isStale()) setLoading(false);
     }
   };
 
@@ -122,8 +133,10 @@ export default function InternalHelpDesk() {
     try {
       const data = await internalTicketService.getStats();
       setStats(data);
+      setStatsFailed(false);
     } catch (error) {
       console.error('Error fetching stats:', error);
+      setStatsFailed(true);
     }
   };
 
@@ -234,10 +247,14 @@ export default function InternalHelpDesk() {
     return matchesSearch;
   });
 
-  const openTickets = stats?.open_tickets ?? 0;
-  const inProgressTickets = stats?.in_progress_tickets ?? 0;
-  const resolvedTickets = stats?.resolved_tickets ?? 0;
-  const totalTickets = stats?.total_tickets ?? 0;
+  /* Placeholder until stats arrive ('—' if they failed) rather than a
+     provisional 0 that then jumps. */
+  const statCount = (value: number | undefined) =>
+    value !== undefined ? value : statsFailed ? '—' : <StatValuePlaceholder />;
+  const openTickets = statCount(stats?.open_tickets);
+  const inProgressTickets = statCount(stats?.in_progress_tickets);
+  const resolvedTickets = statCount(stats?.resolved_tickets);
+  const totalTickets = statCount(stats?.total_tickets);
 
   return (
     <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
