@@ -608,7 +608,7 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
 
   if (isLoading) {
     // Skeleton mirroring the role builder: gradient hero, the Role Details form
-    // card (Name/Code, Description, Priority/Inherits, Permissions) and the
+    // card (Name/Code, Description, Copy permissions from, Permissions) and the
     // right-hand summary sidebar.
     return (
       <main className={embedded ? '' : 'flex-1 overflow-x-clip bg-slate-50'}>
@@ -676,7 +676,7 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
         <PageHeader
           icon={<Shield className="h-5 w-5" />}
           title="Create New Role"
-          description="Define a role that fits your dashboard's access model, including inheritance, operational priority, and detailed feature permissions."
+          description="Define a role that fits your dashboard's access model, including inheritance and detailed feature permissions."
           actions={
             <div className="grid grid-cols-2 gap-2 sm:min-w-[260px]">
               <div className="rounded-xl border border-gray-100 bg-white px-3 py-2">
@@ -707,9 +707,9 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
                   <input
                     type="text"
                     value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value.toUpperCase() })}
                     onBlur={() => setTouched((prev) => ({ ...prev, name: true }))}
-                    placeholder="e.g. Senior Recruiter"
+                    placeholder="e.g. SENIOR RECRUITER"
                     aria-invalid={!!showError('name')}
                     className={showError('name') ? fieldErrorClassName : fieldClassName}
                   />
@@ -749,21 +749,9 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
               </label>
 
               <div className="grid gap-5 md:grid-cols-2">
-                <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-gray-700">Priority</span>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={formData.priority}
-                    onChange={(e) => setFormData({ ...formData, priority: parseInt(e.target.value, 10) || 0 })}
-                    className={fieldClassName}
-                  />
-                  <span className="mt-2 block text-xs text-gray-500">Higher priority roles take precedence in overlap scenarios.</span>
-                </label>
 
                 <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-gray-700">Inherits From</span>
+                  <span className="mb-2 block text-sm font-medium text-gray-700">Copy permissions from</span>
                   <select
                     value={formData.parent_role_id || ''}
                     onChange={(e) => handleParentRoleChange(e.target.value)}
@@ -776,7 +764,7 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
                       </option>
                     ))}
                   </select>
-                  <span className="mt-2 block text-xs text-gray-500">Selecting a parent role preloads its permissions into this role.</span>
+                  <span className="mt-2 block text-xs text-gray-500">Copies that role&apos;s permissions into this role as a starting point. Later changes to that role won&apos;t affect this one.</span>
                 </label>
               </div>
 
@@ -830,9 +818,9 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
                   <div className="mt-1 text-sm font-semibold text-gray-900">{formData.code || 'not-set'}</div>
                 </div>
                 <div className="rounded-xl bg-gray-50 px-4 py-3 ring-1 ring-gray-100">
-                  <div className="text-xs uppercase tracking-[0.16em] text-gray-400">Inheritance</div>
+                  <div className="text-xs uppercase tracking-[0.16em] text-gray-400">Copied from</div>
                   <div className="mt-1 text-sm font-semibold text-gray-900">
-                    {roles.find((role) => role.id === formData.parent_role_id)?.name || 'Independent'}
+                    {roles.find((role) => role.id === formData.parent_role_id)?.name || 'None'}
                   </div>
                 </div>
                 <div className="rounded-xl bg-gray-50 px-4 py-3 ring-1 ring-gray-100">
