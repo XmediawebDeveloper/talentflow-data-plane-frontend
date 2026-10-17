@@ -8,7 +8,7 @@ import JDEditBlockedModal, { type JobDetailsTab } from '@/components/JDEditBlock
 import ArchiveJobModal from '@/components/ArchiveJobModal';
 import DisableJobModal from '@/components/DisableJobModal';
 import { Job } from '@/lib/types/types';
-import { jdService, JDResponse, JDUsageStatus } from '@/lib/services/jdService';
+import { jdService, JDResponse, JDUsageStatus, JDLocation } from '@/lib/services/jdService';
 import { formatJobExperienceText } from '@/lib/utils/jobExperience';
 import { getJDUsageModules, type JDUsageModule } from '@/lib/utils/jdUsageModules';
 import { formatJobVersionLabel } from '@/lib/utils/jobOpeningDisplay';
@@ -61,6 +61,10 @@ interface ExtendedJob extends Job {
   jobHoppingEnabled?: boolean | null;
   // JD13: Usage status for edit/republish logic
   usageStatus?: JDUsageStatus;
+  // Full per-location detail (city/state/country/radius_km), for views that need
+  // to show every location rather than the single joined `location` string - see
+  // ExtractedDataSummary's `locations` prop.
+  locations?: JDLocation[];
 }
 
 // Loading skeleton for Job Details — mirrors JobDetailView's real layout: white
@@ -324,7 +328,14 @@ function JobDetailsContent() {
         job_id: data.job_id,  // Human-readable ID like JD-076
         title: data.title || 'Untitled',
         status: mapStatus(data.status),
-        location: data.location || (data.locations && data.locations.length > 0 ? data.locations.map(l => l.city).join(', ') : ''),
+        // Prefer the full locations array (ALL saved cities) over the legacy
+        // `location` column, which is only ever the FIRST city - see JDCreation.tsx's
+        // save payload. Falling back to `data.location` only when there is no
+        // locations array at all keeps old/legacy JDs working.
+        location: (data.locations && data.locations.length > 0)
+          ? data.locations.map(l => l.city).filter(Boolean).join(', ')
+          : (data.location || ''),
+        locations: data.locations || [],
         daysActive: calculateDaysActive(data.created_at),
         requiredMatch: 70,
         department: data.department,

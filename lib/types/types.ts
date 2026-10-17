@@ -67,7 +67,12 @@ export interface Job {
   job_id?: string;  // Human-readable ID like JD-001
   title: string;
   status: 'Published' | 'Draft' | 'Closed' | 'Archived' | 'Disabled';
+  /** Joined display string ("Chennai, Mumbai") - kept for hosts that only show
+   *  text. `locations` below is the per-city detail; prefer it when present so
+   *  a surface can tell "one city" from "first of several" (see
+   *  JobOpeningPrimaryItems). */
   location: string;
+  locations?: Array<{ city?: string | null; state?: string | null; country?: string | null; radius_km?: number | null }>;
   daysActive: number;
   requiredMatch: number;
   department?: string;

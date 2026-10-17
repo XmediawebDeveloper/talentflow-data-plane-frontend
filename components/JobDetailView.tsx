@@ -9,7 +9,7 @@ import type { User, Tenant } from '@/lib/types/tenant';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
-import { jdService, JDLineageVersion, JDStatusEvent, JDUsageStatus, JDVersion } from '@/lib/services/jdService';
+import { jdService, JDLineageVersion, JDLocation, JDStatusEvent, JDUsageStatus, JDVersion } from '@/lib/services/jdService';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import { formatJobVersionLabel, formatLastUpdated } from '@/lib/utils/jobOpeningDisplay';
 import SkillsList from '@/components/ui/SkillsList';
@@ -487,6 +487,10 @@ interface ExtendedJob extends Job {
   jobHoppingEnabled?: boolean | null;
   // JD13: Usage status for edit/republish logic
   usageStatus?: JDUsageStatus;
+  // Full per-location detail (city/state/country/radius_km) - see
+  // ExtractedDataSummary's `locations` prop, which renders every saved location
+  // instead of the single joined `location` string.
+  locations?: JDLocation[];
 }
 
 /**
@@ -3533,6 +3537,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               industry={job.industry_type ? prettifyCode(job.industry_type) : null}
               industryNote={job.industry_type ? criterionScoringLabel(job.industry_type, job.industryMandatory, { isIndustry: true }) : undefined}
               location={job.location}
+              locations={job.locations}
               locationNote={job.location ? criterionScoringLabel(job.location, job.locationMandatory) : undefined}
               employmentType={employmentTypeLabel(job.employmentType)}
               workMode={workModeLabel(job.workMode)}
