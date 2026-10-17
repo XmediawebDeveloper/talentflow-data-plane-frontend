@@ -16,6 +16,7 @@ import {
   Video,
 } from 'lucide-react';
 import type { Job } from '@/lib/types/types';
+import { Tooltip } from '@/components/ui/tooltip';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { formatSalaryRange, formatCompensationPeriod } from '@/lib/utils/salary';
 import {
@@ -135,7 +136,13 @@ function JobOpeningMetaItems({ job, showIcons = true, showCounts = true }: { job
  *  Exported so a list that is not a Job Openings row (AI Talent Match's
  *  Matched Jobs) can print the same JD details line. */
 export function JobOpeningPrimaryItems({ job, hideEmpty = false }: { job: Job; hideEmpty?: boolean }) {
-  const hasLocation = !!(job.location && job.location.trim());
+  // Per-city names when the full array is available (every current JD); hosts
+  // that only ever set the legacy joined `location` string (older cached data)
+  // fall back to showing that string as-is, same as before this array existed.
+  const locationNames = (job.locations || [])
+    .map((loc) => loc?.city?.trim())
+    .filter((city): city is string => !!city);
+  const hasLocation = locationNames.length > 0 || !!(job.location && job.location.trim());
   const salaryText = formatSalaryRange({ min: job.salary_min, max: job.salary_max, currency: job.salary_currency });
   const hasSalary = !!salaryText;
   return (
@@ -151,11 +158,29 @@ export function JobOpeningPrimaryItems({ job, hideEmpty = false }: { job: Job; h
         {formatIndustryType(job.industry_type)}
       </span>
       {/* Location — under `hideEmpty` (Job Openings cards) it is omitted entirely
-          when absent, rather than rendering a '-' placeholder. */}
+          when absent, rather than rendering a '-' placeholder. A single location
+          shows its name directly; more than one collapses to a count, with every
+          name available in a hover tooltip rather than overflowing the row. */}
       {(!hideEmpty || hasLocation) && (
         <span className="flex items-center gap-1.5">
           <MapPin className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-          {hasLocation ? job.location : '-'}
+          {locationNames.length > 1 ? (
+            <Tooltip
+              content={
+                <div className="flex flex-col gap-0.5">
+                  {locationNames.map((name, index) => (
+                    <span key={index}>{name}</span>
+                  ))}
+                </div>
+              }
+            >
+              <span className="underline decoration-dotted decoration-gray-400 dark:decoration-slate-500 underline-offset-2">
+                {locationNames.length} Locations
+              </span>
+            </Tooltip>
+          ) : (
+            hasLocation ? (locationNames[0] || job.location) : '-'
+          )}
         </span>
       )}
       {/* Salary — same conditional treatment: shown only when there is a value. */}
