@@ -164,3 +164,42 @@ export async function currentAudioInputId(): Promise<string | null> {
     stream?.getTracks().forEach(t => t.stop());
   }
 }
+
+/**
+ * Keep a recording mix's AudioContext running for as long as it lives.
+ *
+ * Both interview recordings (webcam view in InterviewUI, screen view in the
+ * portal) route their audio through a Web Audio mix. A MediaRecorder whose
+ * audio track comes from a context that is NOT running emits nothing at all —
+ * a single 0-byte chunk for the whole interview (verified in Chrome; staging
+ * session ai-d7eff074 saved a 0-byte webcam recording and no screen recording
+ * at all). Chrome may create the context 'suspended' (autoplay policy: these
+ * mixes are built outside a click), or suspend/interrupt it later when the
+ * audio device switches (Bluetooth headset profile change).
+ *
+ * So: resume now, resume whenever it leaves 'running', and resume on the
+ * candidate's next click / key press (a gesture always unlocks it). Returns a
+ * cleanup that removes the listeners.
+ */
+export function keepAudioContextRunning(ctx: AudioContext, label: string): () => void {
+  const resume = () => {
+    if (ctx.state === 'running' || ctx.state === 'closed') return;
+    ctx.resume().catch(() => { /* retried on the next state change / gesture */ });
+  };
+  const onState = () => {
+    if (ctx.state !== 'running' && ctx.state !== 'closed') {
+      console.warn(`[Recording] ${label} audio mix is '${ctx.state}' — resuming`);
+      resume();
+    }
+  };
+  ctx.addEventListener('statechange', onState);
+  const opts = { capture: true, passive: true } as const;
+  window.addEventListener('pointerdown', resume, opts);
+  window.addEventListener('keydown', resume, opts);
+  resume();
+  return () => {
+    ctx.removeEventListener('statechange', onState);
+    window.removeEventListener('pointerdown', resume, opts);
+    window.removeEventListener('keydown', resume, opts);
+  };
+}

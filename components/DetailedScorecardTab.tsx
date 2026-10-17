@@ -741,7 +741,72 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
               complete. It grows to its content instead: the page is the only
               vertical scroller and every criterion is visible at once.
               globals.css calls the shell opt-in for exactly this reason. */}
-          <div className="overflow-x-auto">
+          {/* Mobile (below md): the 6-column table collapses to one letter per
+              line at phone widths, so render a stacked card per criterion
+              instead — every field label:value, reasoning in full. The table
+              below is shown from md up, where the columns have room. */}
+          <div className="md:hidden divide-y divide-gray-200">
+            {criteriaScores.map((criteria, index) => {
+              const Icon = criteria.icon;
+              const eligibility = getEligibleStatus(criteria.rating);
+              return (
+                <div key={index} className="p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Icon className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                      <span className="text-sm font-semibold text-gray-900 break-words">{criteria.name}</span>
+                    </div>
+                    <span className={`inline-flex items-center justify-center w-10 h-10 rounded-lg font-bold border flex-shrink-0 ${getRatingBgColor(criteria.rating)}`}>
+                      {criteria.rating}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                    <div>
+                      <div className="text-2xs font-semibold uppercase tracking-wider text-gray-500 mb-0.5">Range</div>
+                      <span className={`text-sm ${getRatingRangeColor(criteria.rating)}`}>{getRatingRange(criteria.rating)}</span>
+                    </div>
+                    <div>
+                      <div className="text-2xs font-semibold uppercase tracking-wider text-gray-500 mb-0.5">Eligible Status</div>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        {eligibility.icon}
+                        <span className={`text-sm font-medium ${eligibility.color}`}>{eligibility.status}</span>
+                      </div>
+                    </div>
+                    <div className="col-span-2">
+                      <div className="text-2xs font-semibold uppercase tracking-wider text-gray-500 mb-0.5">Criteria</div>
+                      <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
+                        criteria.criteriaType === 'Required'
+                          ? 'bg-destructive-subtle text-destructive border border-destructive-line'
+                          : 'bg-gray-100 text-gray-900 border border-gray-300'
+                      }`}>
+                        {criteria.criteriaType}
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <div className="text-2xs font-semibold uppercase tracking-wider text-gray-500">AI Reasoning</div>
+                      <button
+                        type="button"
+                        onClick={() => copyReasoning(index, criteria.aiReasoning)}
+                        className="p-1 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors flex-shrink-0"
+                        aria-label="Copy AI reasoning"
+                        title="Copy full text"
+                      >
+                        {copiedReasoningIndex === index
+                          ? <Check className="w-3.5 h-3.5 text-success" />
+                          : <Copy className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                    <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line break-words">
+                      {criteria.aiReasoning}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="overflow-x-auto hidden md:block">
             <table className="w-full table-fixed">
               <thead className="bg-brand-sky dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
                 <tr>

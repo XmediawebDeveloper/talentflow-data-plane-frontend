@@ -29,7 +29,7 @@ import {
   ChevronLeft, ChevronRight, ChevronDown, Eye, Loader2,
   Users, CheckCircle, Clock, Mail, XCircle, AlertTriangle, CalendarDays,
   Ban, SlidersHorizontal, FileDown, FileText, FileSpreadsheet, Download,
-  Play, Video, MoreVertical,
+  Play, Video, MoreVertical, ClipboardList,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -1080,14 +1080,14 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                             className={`flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer ${canCreateAssessments ? '' : 'text-gray-400 opacity-60'}`}
                             onSelect={openInvite('assessment', canCreateAssessments, assessmentDeniedReason)}
                           >
-                            <FileText className="w-4 h-4 text-menu-icon-view" />
+                            <ClipboardList className="w-4 h-4 text-menu-icon-view" />
                             <span>Create / Send Assessment</span>
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             className={`flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer ${mayInviteAIInterview ? '' : 'text-gray-400 opacity-60'}`}
                             onSelect={openInvite('interview', mayInviteAIInterview, aiInterviewDeniedReason)}
                           >
-                            <Video className="w-4 h-4 text-menu-icon-share" />
+                            <Video className="w-4 h-4 text-menu-icon-ai" />
                             <span>Create / Send AI Interview</span>
                           </DropdownMenuItem>
                         </>

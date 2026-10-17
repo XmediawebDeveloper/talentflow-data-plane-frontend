@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowRight, CheckCircle2, FileText, Info, Send, Undo2, Video, X } from 'lucide-react';
+import { ArrowRight, CheckCircle2, ClipboardList, Info, Send, Undo2, Video, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { InviteHandoffKind } from '@/lib/utils/resumeScoringInviteHandoff';
 
@@ -30,7 +30,7 @@ export default function CreateInviteTargetModal({
   onStart: () => void;
 }) {
   const what = kind === 'assessment' ? 'AI Assessment' : 'AI Interview';
-  const Icon = kind === 'assessment' ? FileText : Video;
+  const Icon = kind === 'assessment' ? ClipboardList : Video;
   const people = `${candidateCount} candidate${candidateCount === 1 ? '' : 's'}`;
   const steps = [
     {

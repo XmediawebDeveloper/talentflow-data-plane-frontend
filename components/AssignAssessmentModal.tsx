@@ -1,4 +1,4 @@
-import { X, ClipboardCheck, CheckCircle, AlertCircle, FileText, Calendar, Clock, Target, Loader2 } from 'lucide-react';
+import { X, ClipboardCheck, ClipboardList, CheckCircle, AlertCircle, FileText, Calendar, Clock, Target, Loader2 } from 'lucide-react';
 import { Resume } from '@/lib/types/types';
 import { useState } from 'react';
 import { toast } from '@/components/ui/enhanced-toast';
@@ -62,7 +62,7 @@ export default function AssignAssessmentModal({
         <div className="flex-shrink-0 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between gap-2">
           <div className="flex items-center gap-3 min-w-0 flex-1">
             <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
-              <ClipboardCheck className="w-4 h-4 text-brand-blue" />
+              <ClipboardList className="w-4 h-4 text-brand-blue" />
             </div>
             <div className="min-w-0">
               <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight truncate">Assign Assessment</h2>

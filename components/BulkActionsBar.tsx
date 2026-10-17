@@ -1,6 +1,6 @@
 'use client'
 
-import { FolderInput, FolderRoot, ChevronRight, Download, Trash2, ClipboardList, ClipboardCheck, Archive, ArchiveRestore, Sparkles, Brain } from 'lucide-react';
+import { FolderInput, FolderRoot, ChevronRight, Download, Trash2, ClipboardList, Archive, ArchiveRestore, Sparkles, Video } from 'lucide-react';
 import { Folder } from '@/lib/types/types';
 import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
@@ -474,7 +474,7 @@ export default function BulkActionsBar({
               className={`${actionBtn} ${onAssessmentDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
               aria-label="Invite Assessment" title={onAssessmentDisabled ? (onAssessmentDisabledReason || 'You do not have permission to invite candidates to an assessment') : 'Invite Assessment'}
             >
-              <ClipboardCheck className="w-3.5 h-3.5" />
+              <ClipboardList className="w-3.5 h-3.5" />
               <span className="hidden xl:inline">Invite Assessment</span>
               <span className="xl:hidden">Invite</span>
             </button>
@@ -493,7 +493,7 @@ export default function BulkActionsBar({
               className={`${actionBtn} ${onAIInterviewDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
               aria-label="Invite AI Interview" title={onAIInterviewDisabled ? (onAIInterviewDisabledReason || 'You do not have permission to invite candidates to an AI interview') : 'Invite AI Interview'}
             >
-              <Brain className="w-3.5 h-3.5" />
+              <Video className="w-3.5 h-3.5" />
               <span className="hidden xl:inline">Invite AI Interview</span>
               {/* Short form for narrow widths, same shape as Invite Assessment's. */}
               <span className="xl:hidden">Invite AI</span>
