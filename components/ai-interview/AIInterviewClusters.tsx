@@ -2803,6 +2803,7 @@ export default function AIInterviewClusters() {
           console.warn('[Clusters] AI skill distribution failed; falling back to local preview', distErr);
         }
       }
+      si.wizard_step = CURRENT_STEP;
       await aiInterviewService.update(id, {
         special_instructions: JSON.stringify(si),
         rounds_config: buildUpdatedRoundsConfig(),
@@ -2925,6 +2926,8 @@ export default function AIInterviewClusters() {
       if (isFlexible) {
         si.flexible_finalized = isFinalized;
       }
+      // A draft saved here reopens here, not on Configure.
+      si.wizard_step = CURRENT_STEP;
       await aiInterviewService.update(id, {
         special_instructions: JSON.stringify(si),
         rounds_config: buildUpdatedRoundsConfig(),
