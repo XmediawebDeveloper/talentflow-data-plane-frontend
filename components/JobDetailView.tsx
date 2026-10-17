@@ -962,6 +962,11 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     return tenant.features[feature as keyof typeof tenant.features] === true;
   };
 
+  // jd:invite / jd:add_applicants have no typed field on the Permission interface,
+  // so they're read via the raw permission code instead of hasPermission() above.
+  const { hasPermissionCode } = useAuth();
+  const isAdminUser = isTenantAdmin || user?.role === 'tenant_admin';
+
   // ✅ PERMISSIONS: Get permissions for Quick Actions (using camelCase)
   const permissions = {
     canCreateAssessments: hasPermission('canCreateAssessments'),
@@ -970,15 +975,15 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     canReadJD: hasPermission('canReadJD'),
     canViewAssessments: hasPermission('canViewAssessments'),
     canUploadResumes: hasPermission('canUploadResumes'),
-    canRunScoring: hasPermission('canRunScoring'),
+    // Scoring from a JD needs Resume Scoring → Score Resume AND the JD's own
+    // "Score Resume" (jd:add_applicants). Gates every scoring entry point on this
+    // page: quick action, ?action=score-resumes deep link, Scored Resumes toolbar.
+    canRunScoring: hasPermission('canRunScoring') && (isAdminUser || hasPermissionCode('jd:add_applicants')),
     canCreateAIInterviews: hasPermission('canCreateAIInterviews'),
     canShareAIInterviews: hasPermission('canInviteAIInterviews'),
     canViewAIInterviews: hasPermission('canViewAIInterviews') || hasPermission('canRunAiInterviews') || hasPermission('canInviteAIInterviews'),
   };
 
-  // jd:invite has no typed field on the Permission interface, so it's read via
-  // the raw permission code instead of the local hasPermission() helper above.
-  const { hasPermissionCode } = useAuth();
   const canInviteJd = isTenantAdmin || hasPermissionCode('jd:invite');
 
   // ✅ PERMISSIONS: Get feature flags for Quick Actions

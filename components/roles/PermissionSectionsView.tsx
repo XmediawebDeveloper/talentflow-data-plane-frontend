@@ -1,0 +1,115 @@
+'use client';
+
+import React from 'react';
+import { getPermissionDisplaySections, PermissionDisplaySection } from '@/lib/constants/permissionCategories';
+
+/**
+ * Read-only "which permissions does this have" view, shared by every screen that
+ * shows a role's / user's permissions without editing them:
+ *   - Role details popup        (components/roles/RoleManagement.tsx)
+ *   - View Role Permissions     (components/users/UserManagement.tsx)
+ *   - Invite New User summary   (components/users/UserManagement.tsx)
+ * Sections, labels, badge letters and colours match the Edit User popup, which
+ * renders the same catalogue (lib/constants/permissionCategories.ts) as toggles.
+ */
+
+/** 'jd:create' -> 'create'. View codes are 'read' / 'view'. */
+export const permissionActionOf = (code: string): string => code.split(':')[1] || '';
+
+/** Badge colour by action type — also used by the Edit User popup's tiles. */
+export const permissionBadgeClass = (action: string): string =>
+  action === 'read' || action === 'view'
+    ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/15'
+    : action === 'create'
+    ? 'bg-brand-teal/10 text-brand-teal ring-brand-teal/15'
+    : action === 'update'
+    ? 'bg-brand-cyan/10 text-brand-cyan ring-brand-cyan/15'
+    : action === 'delete'
+    ? 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/15'
+    : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-gray-200 dark:ring-slate-700';
+
+/** Catalogue sections narrowed to the given codes; empty sections dropped. Codes
+ *  with no catalogue entry are not configurable from any screen, so not listed. */
+export const getGrantedPermissionSections = (codes: Iterable<string>): PermissionDisplaySection[] => {
+  const granted = new Set(codes);
+  return getPermissionDisplaySections()
+    .map((section) => ({ ...section, items: section.items.filter((item) => granted.has(item.code)) }))
+    .filter((section) => section.items.length > 0);
+};
+
+export const countGrantedPermissions = (codes: Iterable<string>): number =>
+  getGrantedPermissionSections(codes).reduce((sum, section) => sum + section.items.length, 0);
+
+interface PermissionSectionsViewProps {
+  codes: Iterable<string>;
+  /** Return a replacement node for a section the plan doesn't include, or null to render it normally. */
+  renderLockedSection?: (sectionId: string, sectionName: string) => React.ReactNode | null;
+}
+
+export default function PermissionSectionsView({ codes, renderLockedSection }: PermissionSectionsViewProps) {
+  const sections = getGrantedPermissionSections(codes);
+  return (
+    <div className="space-y-4">
+      {sections.map((section) => {
+        const locked = renderLockedSection?.(section.id, section.name);
+        if (locked) return <React.Fragment key={section.id}>{locked}</React.Fragment>;
+        return (
+          <section
+            key={section.id}
+            className="overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm ring-1 ring-black/[0.02] dark:ring-white/[0.02]"
+          >
+            <div className="flex items-center justify-between gap-3 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-3 sm:px-5">
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">{section.name}</h3>
+                <p className="text-xs text-gray-500 dark:text-slate-500">
+                  {section.items.length} permission{section.items.length !== 1 ? 's' : ''}
+                </p>
+              </div>
+            </div>
+            <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
+              {section.items.map((item) => (
+                <div
+                  key={item.code}
+                  className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-gradient-to-br from-white to-gray-50 dark:from-slate-900 dark:to-slate-800/50 p-4 transition-colors hover:border-brand-blue/15"
+                >
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ring-1 ${permissionBadgeClass(permissionActionOf(item.code))}`}
+                    >
+                      <span className="text-xs font-semibold uppercase">{item.label[0] || 'P'}</span>
+                    </span>
+                    <p className="min-w-0 text-sm font-semibold text-gray-900 dark:text-slate-50">{item.label}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Loading placeholder in the same shape. */
+export function PermissionSectionsSkeleton({ sections = 2, Skeleton }: { sections?: number; Skeleton: React.ComponentType<{ className?: string }> }) {
+  return (
+    <div className="space-y-4">
+      {Array.from({ length: sections }).map((_, si) => (
+        <div key={si} className="overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm">
+          <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-3 sm:px-5">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="mt-1.5 h-3 w-20" />
+          </div>
+          <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, pi) => (
+              <div key={pi} className="flex items-center gap-3 rounded-2xl border border-gray-100 dark:border-slate-700/60 p-4">
+                <Skeleton className="h-9 w-9 shrink-0 rounded-xl" />
+                <Skeleton className="h-4 flex-1" />
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}

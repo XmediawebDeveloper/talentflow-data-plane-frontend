@@ -462,7 +462,10 @@ export default function AITalentMatchPage({
   // category's own Export checkbox is turned off (same bug shape fixed for
   // can_view_ai_match elsewhere in this app).
   const canExport = isTenantAdmin || hasPermissionCode('ai_match:export');
-  const canRunScoring = isTenantAdmin || (user?.permissions?.canRunScoring ?? false);
+  // Scoring from AI Talent Match needs Resume Scoring → Score Resume AND this
+  // module's own "Score Resume" checkbox (ai_match:score).
+  const canRunScoring =
+    isTenantAdmin || ((user?.permissions?.canRunScoring ?? false) && hasPermissionCode('ai_match:score'));
   const canCreateAssessments = isTenantAdmin || hasPermission('canCreateAssessments');
   const canCreateAIInterviews = isTenantAdmin || hasPermission('canCreateAIInterviews');
 

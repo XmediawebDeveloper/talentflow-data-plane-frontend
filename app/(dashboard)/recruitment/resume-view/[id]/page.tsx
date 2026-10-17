@@ -381,7 +381,9 @@ export default function ResumeViewPage() {
   // Plan gates DISABLE (hover explains), they never hide: permission decides
   // whether a control is shown, the plan only whether it is clickable.
   const canApplyResumeToJob =
-    isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job'));
+    isTenantAdmin ||
+    (hasPermission('canRunScoring') &&
+      hasPermissionCode(viewSource === 'resume-database' ? 'internal_db:score' : 'my_resumes:score'));
   const applyPlanLocked = isPlanLocked('resume_scoring');
   const hasAITalentMatchSourcePermission =
     viewSource === 'resume-database'

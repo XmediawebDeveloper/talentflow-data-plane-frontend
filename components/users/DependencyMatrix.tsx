@@ -7,7 +7,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  X,
   Loader2,
   ArrowRight,
   Link2,
@@ -23,7 +22,7 @@ import {
 import { toast } from 'sonner';
 import { featurePermissionService, DependencyMatrixResponse } from '@/lib/services/featurePermissionService';
 import { FEATURE_METADATA, PERMISSION_DEPENDENCIES } from '@/lib/types/tenant';
-import { Button } from '@/components/ui/button';
+import AppModal from '@/components/ui/app-modal';
 import { Badge } from '@/components/ui/badge';
 
 interface DependencyMatrixProps {
@@ -118,31 +117,22 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-4xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col tf-round-edges">
-        {/* Header */}
-        <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-gray-200 bg-gradient-to-r from-brand-cyan/[0.05] via-white to-brand-blue/[0.04] flex items-start sm:items-center justify-between gap-3 shrink-0">
-          <div className="flex items-center gap-3 min-w-0 flex-1">
-            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-brand-cyan to-brand-blue flex items-center justify-center shadow-md shadow-brand-cyan/25 ring-1 ring-white/20 flex-shrink-0">
-              <Network className="w-5 h-5 text-white" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <h2 className="text-base sm:text-lg font-semibold text-gray-900">
-                Feature Dependency Matrix
-              </h2>
-              <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
-                Visualize how features depend on each other
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-            <div className="flex items-center bg-gray-100 rounded-lg p-0.5 sm:p-1 ring-1 ring-gray-200">
+    <AppModal
+      open
+      size="lg"
+      zIndexClass="z-50"
+      onCancel={onClose}
+      icon={<Network />}
+      title="Feature Dependency Matrix"
+      subtitle="Visualize how features depend on each other"
+      headerExtra={
+            <div className="flex items-center bg-white/10 rounded-lg p-0.5 sm:p-1 ring-1 ring-white/25">
               <button
                 onClick={() => setViewMode('tree')}
                 className={`px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all ${
                   viewMode === 'tree'
-                    ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
-                    : 'text-gray-600 hover:text-brand-blue'
+                    ? 'bg-white text-brand-blue shadow-sm'
+                    : 'text-white/80 hover:text-white'
                 }`}
               >
                 Tree
@@ -151,25 +141,28 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
                 onClick={() => setViewMode('matrix')}
                 className={`px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all ${
                   viewMode === 'matrix'
-                    ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
-                    : 'text-gray-600 hover:text-brand-blue'
+                    ? 'bg-white text-brand-blue shadow-sm'
+                    : 'text-white/80 hover:text-white'
                 }`}
               >
                 Matrix
               </button>
             </div>
-            <Button
-              variant="secondary"
-              onClick={onClose}
-              className="px-2"
-             aria-label="Close">
-              <X className="w-4 h-4 sm:w-5 sm:h-5" />
-            </Button>
+      }
+      bodyClassName="!p-0 sm:!p-0 flex flex-col"
+      footerStart={
+          <div className="text-xs sm:text-sm text-gray-600 flex items-center gap-2 flex-wrap">
+            <Badge variant="info">
+              {(matrix?.features || Object.keys(matrix?.feature_names || {})).length || 0} features
+            </Badge>
+            <Badge variant="secondary">
+              {Object.keys(matrix?.dependencies || {}).length} with dependencies
+            </Badge>
           </div>
-        </div>
-
+      }
+    >
         {/* Content */}
-        <div className="flex-1 overflow-hidden flex flex-col lg:flex-row bg-gray-50/40">
+        <div className="flex-1 min-h-[50dvh] overflow-hidden flex flex-col lg:flex-row bg-gray-50/40">
           {isLoading ? (
             <div className="flex-1 flex items-center justify-center">
               <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
@@ -456,18 +449,6 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
           )}
         </div>
 
-        {/* Footer */}
-        <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 bg-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 shrink-0">
-          <div className="text-xs sm:text-sm text-gray-600 flex items-center gap-2 flex-wrap">
-            <Badge variant="info">
-              {(matrix?.features || Object.keys(matrix?.feature_names || {})).length || 0} features
-            </Badge>
-            <Badge variant="secondary">
-              {Object.keys(matrix?.dependencies || {}).length} with dependencies
-            </Badge>
-          </div>
-        </div>
-      </div>
-    </div>
+    </AppModal>
   );
 }

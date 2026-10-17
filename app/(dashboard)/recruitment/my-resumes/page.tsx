@@ -3987,7 +3987,7 @@ export default function MyResumesPage() {
             selectedCount={selectedResumes.length}
             onCancel={() => setSelectedResumes([])}
             onMoveToFolder={canMoveMyResumes ? (folderId) => handleMoveToFolder(selectedResumes, folderId) : undefined}
-            onApplyToJob={!isArchivedContext && (isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job'))) ? handleApplyToJob : undefined}
+            onApplyToJob={!isArchivedContext && (isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:score'))) ? handleApplyToJob : undefined}
             onApplyToJobDisabled={isPlanLocked('resume_scoring')}
             onApplyToJobDisabledReason={PLAN_LOCKED_MESSAGE}
             onDownload={handleBulkDownload}
@@ -4207,7 +4207,7 @@ export default function MyResumesPage() {
                   onSelectResume={handleSelectResume}
                   onSelectAll={handleSelectAll}
                   onQuickView={(resume) => setQuickViewResume(resume)}
-                  onApplyToJob={(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job'))) ? handleSingleResumeApplyToJob : undefined}
+                  onApplyToJob={(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:score'))) ? handleSingleResumeApplyToJob : undefined}
                   onApplyToJobDisabled={isPlanLocked('resume_scoring')}
                   onApplyToJobDisabledReason={PLAN_LOCKED_MESSAGE}
                   onDelete={canDeleteMyResumes ? (id) => handleDelete(id) : undefined}
@@ -4737,7 +4737,7 @@ export default function MyResumesPage() {
                               }
                             }}
                             onQuickView={(resume) => setQuickViewResume(resume)}
-                            onApplyToJob={(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job'))) ? handleSingleResumeApplyToJob : undefined}
+                            onApplyToJob={(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:score'))) ? handleSingleResumeApplyToJob : undefined}
                             onApplyToJobDisabled={isPlanLocked('resume_scoring')}
                             onApplyToJobDisabledReason={PLAN_LOCKED_MESSAGE}
                             onDelete={canDeleteMyResumes ? (id) => handleDelete(id) : undefined}

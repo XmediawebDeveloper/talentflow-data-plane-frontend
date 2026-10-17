@@ -14,7 +14,7 @@ import { QuotaProvider, useQuota } from '@/contexts/QuotaContext';
 import { PlanFeaturesProvider } from '@/components/providers/PlanFeaturesProvider';
 import { TermsProvider } from '@/components/providers/TermsProvider';
 import { PlanChangeProvider, usePlanChange } from '@/components/providers/PlanChangeProvider';
-import { SUBSCRIPTION_INACTIVE_EVENT, SubscriptionInactiveDetail, PAYMENT_PENDING_EVENT, PaymentPendingDetail, redirectToPaymentPage, SESSION_EXPIRED_EVENT } from '@/lib/services/api';
+import { SUBSCRIPTION_INACTIVE_EVENT, SubscriptionInactiveDetail, PAYMENT_PENDING_EVENT, PaymentPendingDetail, redirectToPaymentPage, SESSION_EXPIRED_EVENT, clearTokens } from '@/lib/services/api';
 import SuspendedAccountBlock from '@/components/subscription/SuspendedAccountBlock';
 import ExpiredAccountBlock from '@/components/subscription/ExpiredAccountBlock';
 import TermsReminderBanner from '@/components/terms/TermsReminderBanner';
@@ -268,6 +268,11 @@ export default function DashboardLayout({
     if (sessionExpiredVisible) return;
     if (!isLoading && !isAuthenticated) {
       console.log('[DASHBOARD] Not authenticated, redirecting to login');
+      // Drop any leftover accessToken cookie first. The middleware treats a bare
+      // cookie as "logged in" and bounces /login straight back to /dashboard, while
+      // this layout renders null — an endless redirect that shows a blank white page
+      // (e.g. localStorage cleared but the cookie survived).
+      clearTokens();
       const loginUrl = getLoginUrl();
       if (loginUrl.startsWith('http')) {
         window.location.href = loginUrl;

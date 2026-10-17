@@ -1,5 +1,6 @@
 'use client';
 
+import { MODAL_FOOTER_BUTTON_CLASS, MODAL_FOOTER_ROW_CLASS } from '@/components/ui/app-modal';
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
@@ -58,7 +59,7 @@ const getPermissionDisplayName = (code: string): string => {
   for (const category of CUSTOM_PERMISSION_CATEGORIES) {
     if (category.viewCode === code) return category.name;
     const action = category.actions?.find((a) => a.code === code);
-    if (action) return action.label;
+    if (action) return `${action.label} (${category.name})`;
     for (const sub of category.subCategories || []) {
       if (sub.viewCode === code) return `View ${sub.name}`;
       const subAction = sub.actions.find((a) => a.code === code);
@@ -696,18 +697,22 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
               </div>
             </div>
 
-            <div className="flex flex-col gap-3 border-t border-gray-100 px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
-              <Button variant="secondary" onClick={handleClose} disabled={isSaving}>
+            <div className="border-t border-gray-100 px-5 py-4 sm:px-6">
+              <div className={MODAL_FOOTER_ROW_CLASS}>
+              <Button variant="secondary" size="md" onClick={handleClose} disabled={isSaving} className={MODAL_FOOTER_BUTTON_CLASS}>
                 Cancel
               </Button>
               <Button
                 variant="primary"
+                size="md"
+                className={MODAL_FOOTER_BUTTON_CLASS}
                 onClick={handleSubmit}
                 disabled={isSaving}
                 icon={isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUpRight className="h-4 w-4" />}
               >
                 Save Changes
               </Button>
+              </div>
             </div>
           </section>
 
