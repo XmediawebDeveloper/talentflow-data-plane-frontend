@@ -1480,7 +1480,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     type="button"
                     variant="secondary"
                     size="sm"
-                    onClick={editBlockedReason ? undefined : () => router.push(aiInterviewDraftResumeHref(config))}
+                    onClick={editBlockedReason ? undefined : () => router.push(aiInterviewConfigureHref(config.id, config.jd_id || ''))}
                     disabled={!!editBlockedReason}
                     aria-label="Edit AI interview"
                     title={editBlockedReason || 'Edit this version'}

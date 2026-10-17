@@ -6,6 +6,26 @@
  *
  * ⚠️  Edit THIS file only. All three UIs will automatically reflect your changes.
  *     Do NOT duplicate this list in any of the three files above.
+ *
+ * The read-only views (Role details popup, Permissions Catalog in
+ * components/roles/RoleManagement.tsx) render through getPermissionDisplaySections()
+ * below, so they show these same section names and labels — never raw DB
+ * names or codes like "JD:CREATE".
+ *
+ * NAMING RULE — one capability, one label, in every section:
+ *   Score Resume          scoring a resume against a JD, whatever the entry point
+ *                         (JD page, Resume Scoring, AI Talent Match, My Resumes,
+ *                         Shared Database). 'my_resumes:apply_job' /
+ *                         'internal_db:apply_job' were a second checkbox for the
+ *                         same thing and are no longer listed — the resume-list
+ *                         "Score Resume" button checks '<source>:score'.
+ *   Invite Candidates     a module's own invite (Assessment, AI Interview)
+ *   Invite to Assessment / Invite to AI Interview
+ *                         inviting from another module (Job Description, Resume
+ *                         Scoring, My Resumes, Shared Database) — one per target
+ *   Invite to Assessment  sending a resume to an assessment from a resume list
+ *   Run AI Talent Match   running AI Talent Match
+ *   Upgrade Plan          plan upgrade from Current Plan / Usage
  */
 
 export interface CustomPermissionAction {
@@ -47,8 +67,10 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       { code: 'jd:archive', label: 'Archive' },
       { code: 'jd:disable', label: 'Disable' },
       { code: 'jd:export', label: 'Export' },
-      { code: 'jd:invite', label: 'Invite' },
-      { code: 'jd:add_applicants', label: 'Add Applicants' },
+      { code: 'jd:invite_assessment', label: 'Invite to Assessment' },
+      { code: 'jd:invite_ai_interview', label: 'Invite to AI Interview' },
+      { code: 'jd:add_applicants', label: 'Score Resume' },
+      { code: 'jd:ai_match', label: 'Run AI Talent Match' },
     ],
     // Rule: JD Invite requires Assessment Invite (this is what actually sends
     // the invitation server-side — see app/routers/assessments.py's
@@ -65,7 +87,6 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     // or Delete stayed checked, leaving a combination the backend would
     // reject the next time either ran.
     dependencies: {
-      'jd:invite': ['assessments:invite'],
       'jd:update': ['jd:read'],
       'jd:delete': ['jd:read'],
     },
@@ -76,9 +97,10 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     description: 'Resume scoring permissions (auto-enables Resume Upload)',
     viewCode: 'scoring:read',
     actions: [
-      { code: 'scoring:score', label: 'Score Resumes' },
+      { code: 'scoring:score', label: 'Score Resume' },
       { code: 'scoring:export', label: 'Export' },
-      { code: 'scoring:invite', label: 'Invite' },
+      { code: 'scoring:invite_assessment', label: 'Invite to Assessment' },
+      { code: 'scoring:invite_ai_interview', label: 'Invite to AI Interview' },
       { code: 'scoring:download', label: 'Download Scorecard' },
     ],
     // Rule: Enable Score Resumes → auto-enable Job Description view + My
@@ -102,14 +124,11 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     // for why this points at 'assessments:invite' rather than 'assessments:share')
     // NOTE: Export, Invite, Download Scorecard do NOT block disabling Score Resumes
     dependencies: {
-      // 'my_resumes:score' added so enabling Score Resumes always leaves the
-      // user with at least one usable scoring SOURCE — SelectSourceModal.tsx
-      // gates the "My Resumes" source tab on this exact code independently of
-      // my_resumes:read/upload (see its own comment: "now gated by its own
-      // Score Resume sub-action"). Without it, a user could have Score
-      // Resumes enabled with no tab available to actually pick a resume from.
-      'scoring:score': ['jd:read', 'my_resumes:read', 'my_resumes:upload', 'my_resumes:score', 'jd:add_applicants'],
-      'scoring:invite': ['assessments:invite'],
+      // Score Resume needs a job to score against and resumes to read (the
+      // server checks jd:read + resumes:read). Where else scoring can be started
+      // from (JD, My Resumes, Shared Database, AI Talent Match) is an ENTRY POINT
+      // of this permission — see ENTRY_POINT_GROUPS, not a dependency.
+      'scoring:score': ['jd:read', 'my_resumes:read'],
     },
   },
   {
@@ -118,9 +137,11 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     description: 'AI-powered talent matching permissions',
     viewCode: 'ai_match:read',
     actions: [
-      { code: 'ai_match:run', label: 'Run AI Match' },
-      { code: 'ai_match:score', label: 'Score Resumes' },
+      { code: 'ai_match:run', label: 'Run AI Talent Match' },
+      { code: 'ai_match:score', label: 'Score Resume' },
       { code: 'ai_match:export', label: 'Export' },
+      { code: 'ai_match:invite_assessment', label: 'Invite to Assessment' },
+      { code: 'ai_match:invite_ai_interview', label: 'Invite to AI Interview' },
     ],
     // Rule: Run AI Match requires both Job Description and Shared Database
     // access (app/services/permission_dependencies.py: ai_match:run ->
@@ -141,16 +162,15 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       { code: 'my_resumes:upload', label: 'Upload' },
       { code: 'my_resumes:delete', label: 'Delete' },
       { code: 'my_resumes:archive', label: 'Archive' },
-      { code: 'my_resumes:apply_job', label: 'Apply to Job' },
-      { code: 'my_resumes:assessment', label: 'Assessment' },
-      { code: 'my_resumes:ai_match', label: 'AI Talent Match' },
+      { code: 'my_resumes:assessment', label: 'Invite to Assessment' },
+      { code: 'my_resumes:invite_ai_interview', label: 'Invite to AI Interview' },
+      { code: 'my_resumes:ai_match', label: 'Run AI Talent Match' },
       { code: 'my_resumes:score', label: 'Score Resume' },
       { code: 'my_resumes:share', label: 'Share Resume' },
     ],
     // Rule: Assessment invite from My Resumes requires Assessment Invite
     // (see jd:invite above for why this points at 'assessments:invite')
     dependencies: {
-      'my_resumes:assessment': ['assessments:invite'],
     },
   },
   {
@@ -161,9 +181,9 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     actions: [
       { code: 'internal_db:archive', label: 'Archive' },
       { code: 'internal_db:delete', label: 'Delete' },
-      { code: 'internal_db:apply_job', label: 'Apply to Job' },
-      { code: 'internal_db:assessment', label: 'Assessment' },
-      { code: 'internal_db:ai_match', label: 'AI Talent Match' },
+      { code: 'internal_db:assessment', label: 'Invite to Assessment' },
+      { code: 'internal_db:invite_ai_interview', label: 'Invite to AI Interview' },
+      { code: 'internal_db:ai_match', label: 'Run AI Talent Match' },
       { code: 'internal_db:score', label: 'Score Resume' },
       { code: 'internal_db:share', label: 'Share Resume' },
     ],
@@ -180,9 +200,7 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     // internal_db:ai_match -> ai_match:run) — otherwise the button here could
     // be enabled while every click 403s server-side.
     dependencies: {
-      'internal_db:assessment': ['assessments:invite'],
       'internal_db:delete': ['internal_db:read'],
-      'internal_db:ai_match': ['ai_match:run'],
     },
   },
   {
@@ -200,7 +218,7 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       // 'scoring:invite' etc. above were pointed at 'assessments:share' (a
       // different, real permission that only gates the "Share" link action)
       // instead.
-      { code: 'assessments:invite', label: 'Invite' },
+      { code: 'assessments:invite', label: 'Invite Candidates' },
       { code: 'assessments:share', label: 'Share' },
       { code: 'assessments:download_report', label: 'Download Report' },
       { code: 'assessments:batch_download', label: 'Batch Download' },
@@ -216,9 +234,14 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     // actions are). Declared here so disabling a role's Job Description
     // access warns about breaking Assessment creation and editing, not just
     // Resume Scoring.
+    // Add Question requires Edit (app/services/permission_dependencies.py:
+    // assessments:add_question -> assessments:update) — adding a question edits
+    // the assessment, so ticking it without Edit left a combination the
+    // server rejects.
     dependencies: {
       'assessments:create': ['jd:read'],
       'assessments:update': ['jd:read'],
+      'assessments:add_question': ['assessments:update'],
     },
   },
   {
@@ -229,7 +252,7 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     actions: [
       { code: 'ai_interview:create', label: 'Create' },
       { code: 'ai_interview:update', label: 'Edit' },
-      { code: 'ai_interview:invite', label: 'Invite' },
+      { code: 'ai_interview:invite', label: 'Invite Candidates' },
       { code: 'ai_interview:publish', label: 'Publish' },
       { code: 'ai_interview:archive', label: 'Archive' },
       { code: 'ai_interview:delete', label: 'Delete' },
@@ -318,14 +341,14 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
         name: 'Current Plan',
         viewCode: 'current_plan:read',
         actions: [
-          { code: 'billing:upgrade', label: 'Upgrade' },
+          { code: 'billing:upgrade', label: 'Upgrade Plan' },
         ],
       },
       {
         name: 'Usage & Quotas',
         viewCode: 'usage:read',
         actions: [
-          { code: 'usage:upgrade', label: 'Upgrade' },
+          { code: 'usage:upgrade', label: 'Upgrade Plan' },
           { code: 'usage:export', label: 'Export' },
         ],
       },
@@ -456,3 +479,130 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     ],
   },
 ];
+
+/**
+ * Granted to EVERY user regardless of role — the backend re-adds them on every
+ * save (app/config/mandatory_permissions.py BASELINE_PERMISSIONS) and the Edit
+ * User popup shows them as "(always on)". Role popups include them so a role's
+ * count matches what its users actually get (Standard User = 2, not 0).
+ */
+export const ALWAYS_ON_PERMISSION_CODES = ['analytics:read', 'support:read'] as const;
+
+export interface PermissionDisplayItem {
+  code: string;
+  label: string;
+}
+
+export interface PermissionDisplaySection {
+  id: string;
+  name: string;
+  items: PermissionDisplayItem[];
+}
+
+const subActionLabel = (label: string, subName: string): string =>
+  label === 'View' ? `View ${subName}` : `${label} (${subName})`;
+
+/**
+ * Every permission the UI exposes, grouped and labelled exactly as the Edit User
+ * popup shows them (section name, "View <section>" for the view code, action labels).
+ */
+export const getPermissionDisplaySections = (): PermissionDisplaySection[] =>
+  CUSTOM_PERMISSION_CATEGORIES.map((category) => {
+    const items: PermissionDisplayItem[] = [];
+    if (category.viewCode) items.push({ code: category.viewCode, label: `View ${category.name}` });
+    category.actions?.forEach((action) => items.push({ code: action.code, label: action.label }));
+    category.subCategories?.forEach((sub) => {
+      if (sub.viewCode) items.push({ code: sub.viewCode, label: `View ${sub.name}` });
+      sub.actions.forEach((action) => items.push({ code: action.code, label: subActionLabel(action.label, sub.name) }));
+    });
+    return { id: category.id, name: category.name, items };
+  });
+
+/** Screen label for any catalogue code, with its section for actions:
+ *  "View Job Description", "Score Resume (Resume Scoring)", "Manage (General Settings)". */
+export const getPermissionLabel = (code: string): string => {
+  for (const cat of CUSTOM_PERMISSION_CATEGORIES) {
+    if (cat.viewCode === code) return `View ${cat.name}`;
+    const action = cat.actions?.find((a) => a.code === code);
+    if (action) return `${action.label} (${cat.name})`;
+    for (const sub of cat.subCategories || []) {
+      if (sub.viewCode === code) return `View ${sub.name}`;
+      const subAction = sub.actions.find((a) => a.code === code);
+      if (subAction) return subAction.label === 'View' ? `View ${sub.name}` : `${subAction.label} (${sub.name})`;
+    }
+  }
+  return code;
+};
+
+/**
+ * The permission dependency rules exactly as the Edit User / Edit Role screens
+ * apply them (each category's `dependencies` above, which mirror the server's
+ * app/services/permission_dependencies.py). The Feature Dependency Matrix popup
+ * renders THIS, so it always shows the rules that are really enforced. Implicit
+ * "every action needs its section's View" rules are not listed.
+ */
+export const getCatalogDependencyMatrix = () => {
+  const dependencies: Record<string, string[]> = {};
+  CUSTOM_PERMISSION_CATEGORIES.forEach((cat) => {
+    Object.entries(cat.dependencies || {}).forEach(([code, deps]) => {
+      dependencies[code] = Array.from(new Set([...(dependencies[code] || []), ...deps]));
+    });
+  });
+  const reverse_dependencies: Record<string, string[]> = {};
+  Object.entries(dependencies).forEach(([code, deps]) =>
+    deps.forEach((d) => (reverse_dependencies[d] ||= []).push(code)),
+  );
+  const features = Array.from(new Set([...Object.keys(dependencies), ...Object.keys(reverse_dependencies)]));
+  const feature_names = Object.fromEntries(features.map((c) => [c, getPermissionLabel(c)]));
+  return { features, dependencies, reverse_dependencies, feature_names };
+};
+
+
+/**
+ * MAIN permission → its ENTRY POINTS in other sections (client rule 2026-10-17).
+ * An entry point lets someone start the main action from another section (e.g.
+ * Score Resume from the Job Description page). Rules everywhere permissions are
+ * edited:
+ *   - an entry point can only be on while its main is on (greyed out otherwise);
+ *     turning an entry point off never touches the main;
+ *   - turning the main ON offers to turn its entry points on too;
+ *   - turning the main OFF turns its entry points off.
+ * These are NOT "needs" dependencies, so they are not in `dependencies` above and
+ * never grant the main permission to anyone.
+ */
+export const ENTRY_POINT_GROUPS: { main: string; entries: string[] }[] = [
+  { main: 'scoring:score', entries: ['jd:add_applicants', 'my_resumes:score', 'internal_db:score', 'ai_match:score'] },
+  { main: 'ai_match:run', entries: ['jd:ai_match', 'my_resumes:ai_match', 'internal_db:ai_match'] },
+  {
+    main: 'assessments:invite',
+    entries: ['jd:invite_assessment', 'scoring:invite_assessment', 'my_resumes:assessment', 'internal_db:assessment', 'ai_match:invite_assessment'],
+  },
+  {
+    main: 'ai_interview:invite',
+    entries: ['jd:invite_ai_interview', 'scoring:invite_ai_interview', 'my_resumes:invite_ai_interview', 'internal_db:invite_ai_interview', 'ai_match:invite_ai_interview'],
+  },
+];
+
+/** Entry points of a main permission ([] if it has none). */
+export const getEntryPoints = (main: string): string[] =>
+  ENTRY_POINT_GROUPS.find((g) => g.main === main)?.entries ?? [];
+
+/** The main permission an entry point belongs to, or null. */
+export const getMainPermission = (entry: string): string | null =>
+  ENTRY_POINT_GROUPS.find((g) => g.entries.includes(entry))?.main ?? null;
+
+/** A code's tile label and the section it lives in — e.g. { label: 'Score Resume',
+ *  section: 'Job Description' }, { label: 'View My Resumes', section: 'My Resumes' }. */
+export const getPermissionParts = (code: string): { label: string; section: string } => {
+  for (const cat of CUSTOM_PERMISSION_CATEGORIES) {
+    if (cat.viewCode === code) return { label: `View ${cat.name}`, section: cat.name };
+    const action = cat.actions?.find((a) => a.code === code);
+    if (action) return { label: action.label, section: cat.name };
+    for (const sub of cat.subCategories || []) {
+      if (sub.viewCode === code) return { label: `View ${sub.name}`, section: cat.name };
+      const subAction = sub.actions.find((a) => a.code === code);
+      if (subAction) return { label: subAction.label === 'View' ? `View ${sub.name}` : subAction.label, section: sub.name };
+    }
+  }
+  return { label: code, section: '' };
+};

@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { X, AlertTriangle, Lock, Trash2, FileText, Users } from 'lucide-react';
+import { AlertTriangle, Lock, Trash2, FileText, Users, Info, ArrowRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 interface QuotaOverage {
@@ -55,11 +55,11 @@ export default function DowngradeWarningModal({
   const getQuotaIcon = (quotaType: string) => {
     switch (quotaType) {
       case 'resume_storage':
-        return <FileText className="w-5 h-5 text-red-600 flex-shrink-0" />;
+        return <FileText className="h-4 w-4" />;
       case 'max_seats':
-        return <Users className="w-5 h-5 text-red-600 flex-shrink-0" />;
+        return <Users className="h-4 w-4" />;
       default:
-        return <Trash2 className="w-5 h-5 text-red-600 flex-shrink-0" />;
+        return <Trash2 className="h-4 w-4" />;
     }
   };
 
@@ -83,116 +83,98 @@ export default function DowngradeWarningModal({
     }
   };
 
+  // One neutral stat cell: label above, value + unit below.
+  const Stat = ({ label, value, unit, tone = 'default' }: { label: string; value: number; unit?: string; tone?: 'default' | 'danger' }) => (
+    <div className="min-w-0">
+      <p className="truncate text-[11px] font-medium text-gray-500 dark:text-slate-400 sm:text-xs">{label}</p>
+      <p className={`mt-0.5 truncate text-base font-semibold tabular-nums sm:text-lg ${tone === 'danger' ? 'text-destructive' : 'text-gray-900 dark:text-slate-50'}`}>
+        {value.toLocaleString()}
+        {unit && <span className="ml-1 text-xs font-normal text-gray-500 dark:text-slate-400">{unit}</span>}
+      </p>
+    </div>
+  );
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-sm">
-      <div className="relative w-full max-w-[95vw] sm:max-w-2xl mx-4 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-h-[90dvh] flex flex-col tf-round-edges">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm dark:bg-black/70 sm:items-center sm:p-4">
+      <div className="relative flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl dark:bg-slate-900 sm:max-h-[90dvh] sm:max-w-2xl sm:rounded-2xl tf-round-edges">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-slate-700 bg-gradient-to-r from-orange-50 to-red-50 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-orange-100 rounded-lg">
-              <AlertTriangle className="w-6 h-6 text-orange-600" />
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 dark:border-slate-700/60 sm:px-6 sm:py-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-warning-subtle text-warning sm:h-10 sm:w-10">
+              <AlertTriangle className="h-5 w-5" />
             </div>
-            <div>
-              <h2 className="text-xl font-bold text-gray-900 dark:text-slate-50">
+            <div className="min-w-0">
+              <h2 className="truncate text-base font-semibold text-gray-900 dark:text-slate-50 sm:text-lg">
                 {hasOverages ? 'Downgrade with Read-Only Mode' : 'Confirm Downgrade'}
               </h2>
-              <p className="text-sm text-gray-600 dark:text-slate-400">
+              <p className="truncate text-xs text-gray-500 dark:text-slate-400 sm:text-sm">
                 {currentPlanName} → {targetPlanName}
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            disabled={isDowngrading}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50"
-           aria-label="Close">
-            <X className="w-5 h-5 text-gray-500 dark:text-slate-500" />
-          </button>
         </div>
 
         {/* Content */}
-        <div className="px-6 py-6 overflow-y-auto flex-1">
+        <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:space-y-5 sm:px-6 sm:py-5">
           {hasOverages ? (
             <>
               {/* Warning Message */}
-              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl">
-                <div className="flex items-start gap-3">
-                  <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <h3 className="font-semibold text-red-900 mb-1">
-                      Current Usage Exceeds Target Plan Limits
-                    </h3>
-                    <p className="text-sm text-red-800">
-                      Your current usage exceeds the limits of the <strong>{targetPlanName}</strong> plan.
-                      You can still downgrade — your account will enter <strong>read-only mode</strong> until you reduce usage to fit within the new limits.
-                    </p>
-                  </div>
+              <div className="flex items-start gap-3 rounded-xl bg-warning-subtle/60 p-3 sm:p-4">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+                <div className="min-w-0">
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">
+                    Current Usage Exceeds Target Plan Limits
+                  </h3>
+                  <p className="mt-0.5 text-xs text-gray-600 dark:text-slate-400 sm:text-sm">
+                    Your current usage exceeds the limits of the <strong className="font-semibold text-gray-900 dark:text-slate-100">{targetPlanName}</strong> plan.
+                    You can still downgrade — your account will enter <strong className="font-semibold text-gray-900 dark:text-slate-100">read-only mode</strong> until you reduce usage to fit within the new limits.
+                  </p>
                 </div>
               </div>
 
               {/* Quota Overages */}
-              <div className="space-y-4 mb-6">
-                <h4 className="font-semibold text-gray-900 dark:text-slate-50 flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-gray-600 dark:text-slate-400" />
+              <div className="space-y-3">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400">
                   Usage Overages
                 </h4>
 
                 {overages.map((overage, index) => (
-                  <div key={index} className="p-4 bg-red-50 border border-red-200 rounded-xl">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-start gap-3">
-                        {getQuotaIcon(overage.quotaType)}
-                        <div>
-                          <h5 className="font-semibold text-gray-900 dark:text-slate-50">{overage.quotaLabel}</h5>
-                          <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">
-                            You need to reduce your usage to fit within the new plan limit
-                          </p>
-                        </div>
+                  <div key={index} className="rounded-xl border border-gray-200 p-3 dark:border-slate-700 sm:p-4">
+                    <div className="mb-3 flex items-start gap-2.5">
+                      <span className="mt-0.5 text-gray-500 dark:text-slate-400">{getQuotaIcon(overage.quotaType)}</span>
+                      <div className="min-w-0">
+                        <h5 className="text-sm font-semibold text-gray-900 dark:text-slate-50">{overage.quotaLabel}</h5>
+                        <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">
+                          You need to reduce your usage to fit within the new plan limit
+                        </p>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-4 text-sm mb-4">
-                      <div>
-                        <p className="text-gray-600 dark:text-slate-400">Current Usage</p>
-                        <p className="font-bold text-gray-900 dark:text-slate-50 text-lg">
-                          {overage.currentUsage.toLocaleString()}
-                          {overage.unit && <span className="text-sm text-gray-600 dark:text-slate-400 ml-1">{overage.unit}</span>}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-gray-600 dark:text-slate-400">New Plan Limit</p>
-                        <p className="font-bold text-blue-600 text-lg">
-                          {overage.newPlanLimit.toLocaleString()}
-                          {overage.unit && <span className="text-sm text-gray-600 dark:text-slate-400 ml-1">{overage.unit}</span>}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-gray-600 dark:text-slate-400">Must Remove</p>
-                        <p className="font-bold text-red-600 text-lg">
-                          {overage.overage.toLocaleString()}
-                          {overage.unit && <span className="text-sm text-gray-600 dark:text-slate-400 ml-1">{overage.unit}</span>}
-                        </p>
-                      </div>
+                    <div className="grid grid-cols-3 gap-2 rounded-lg bg-gray-50 p-2.5 dark:bg-slate-800/50 sm:gap-4 sm:p-3">
+                      <Stat label="Current Usage" value={overage.currentUsage} unit={overage.unit} />
+                      <Stat label="New Plan Limit" value={overage.newPlanLimit} unit={overage.unit} />
+                      <Stat label="Must Remove" value={overage.overage} unit={overage.unit} tone="danger" />
                     </div>
 
                     {getActionLink(overage.quotaType) && (
                       <button
                         onClick={() => handleGoToAction(overage.quotaType)}
-                        className="w-full px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                        className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-800 transition-colors hover:border-brand-blue/30 hover:bg-brand-blue/[0.04] hover:text-brand-blue dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
                       >
                         {overage.quotaType === 'resume_storage' ? (
                           <>
-                            <FileText className="w-4 h-4" />
+                            <FileText className="h-4 w-4" />
                             Go to My Resumes
                           </>
                         ) : overage.quotaType === 'max_seats' ? (
                           <>
-                            <Users className="w-4 h-4" />
+                            <Users className="h-4 w-4" />
                             Go to User Management
                           </>
                         ) : (
                           <>Manage {overage.quotaLabel}</>
                         )}
+                        <ArrowRight className="h-3.5 w-3.5" />
                       </button>
                     )}
                   </div>
@@ -200,22 +182,22 @@ export default function DowngradeWarningModal({
               </div>
 
               {/* Read-Only Mode Warning */}
-              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-xl mb-6">
+              <div className="rounded-xl bg-gray-50 p-3 dark:bg-slate-800/50 sm:p-4">
                 <div className="flex items-start gap-3">
-                  <Lock className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <h4 className="font-semibold text-yellow-900 mb-1">
-                      ⚠️ Read-Only Mode Will Be Activated
+                  <Lock className="mt-0.5 h-4 w-4 shrink-0 text-gray-500 dark:text-slate-400" />
+                  <div className="min-w-0">
+                    <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-50">
+                      Read-Only Mode Will Be Activated
                     </h4>
-                    <p className="text-sm text-yellow-800 mb-2">
+                    <p className="mt-0.5 text-xs text-gray-600 dark:text-slate-400 sm:text-sm">
                       If you downgrade while exceeding quota limits, your account will be placed in{' '}
-                      <strong>read-only mode</strong> until you reduce your usage.
+                      <strong className="font-semibold text-gray-900 dark:text-slate-100">read-only mode</strong> until you reduce your usage.
                     </p>
-                    <ul className="text-sm text-yellow-800 space-y-1 ml-4 list-disc">
-                      <li>You will <strong>NOT be able to upload new resumes</strong></li>
-                      <li>You will <strong>NOT be able to run new resume scores</strong></li>
-                      <li>You will <strong>NOT be able to create new assessments</strong></li>
-                      <li>You <strong>CAN</strong> view existing data and delete items to reduce usage</li>
+                    <ul className="ml-4 mt-2 list-disc space-y-1 text-xs text-gray-600 marker:text-gray-400 dark:text-slate-400 sm:text-sm">
+                      <li>You will <strong className="font-semibold text-gray-900 dark:text-slate-100">NOT be able to upload new resumes</strong></li>
+                      <li>You will <strong className="font-semibold text-gray-900 dark:text-slate-100">NOT be able to run new resume scores</strong></li>
+                      <li>You will <strong className="font-semibold text-gray-900 dark:text-slate-100">NOT be able to create new assessments</strong></li>
+                      <li>You <strong className="font-semibold text-gray-900 dark:text-slate-100">CAN</strong> view existing data and delete items to reduce usage</li>
                       <li>Once usage is within limits, full access will be automatically restored</li>
                     </ul>
                   </div>
@@ -223,125 +205,108 @@ export default function DowngradeWarningModal({
               </div>
 
               {/* Action Steps */}
-              <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
-                <h4 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
-                  <span className="text-lg">ℹ️</span>
+              <div className="rounded-xl border border-gray-200 p-3 dark:border-slate-700 sm:p-4">
+                <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-slate-50">
+                  <Info className="h-4 w-4 text-brand-blue" />
                   Steps to Restore Full Access After Downgrading
                 </h4>
-                <ol className="text-sm text-blue-800 space-y-2 ml-4 list-decimal">
-                  {overages.map((overage, index) => (
-                    <li key={index}>
-                      <strong>Reduce {overage.quotaLabel}:</strong> Remove{' '}
-                      {overage.overage.toLocaleString()} {overage.unit || 'items'} to fit within the{' '}
-                      {overage.newPlanLimit.toLocaleString()} limit
+                <ol className="space-y-2 text-xs text-gray-600 dark:text-slate-400 sm:text-sm">
+                  {[
+                    ...overages.map((overage, index) => (
+                      <React.Fragment key={index}>
+                        <strong className="font-semibold text-gray-900 dark:text-slate-100">Reduce {overage.quotaLabel}:</strong> Remove{' '}
+                        {overage.overage.toLocaleString()} {overage.unit || 'items'} to fit within the{' '}
+                        {overage.newPlanLimit.toLocaleString()} limit
+                      </React.Fragment>
+                    )),
+                    <React.Fragment key="restore">
+                      <strong className="font-semibold text-gray-900 dark:text-slate-100">Full access restored automatically</strong> once your usage is within all new plan limits
+                    </React.Fragment>,
+                  ].map((content, idx) => (
+                    <li key={idx} className="flex items-start gap-2.5">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gray-100 text-[11px] font-semibold text-gray-600 dark:bg-slate-800 dark:text-slate-300">
+                        {idx + 1}
+                      </span>
+                      <span className="min-w-0 pt-0.5">{content}</span>
                     </li>
                   ))}
-                  <li>
-                    <strong>Full access restored automatically</strong> once your usage is within all new plan limits
-                  </li>
                 </ol>
               </div>
             </>
           ) : (
             <>
               {/* No Overages - Standard Downgrade Confirmation */}
-              <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
-                <div className="flex items-start gap-3">
-                  <AlertTriangle className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <h3 className="font-semibold text-blue-900 mb-1">
-                      Confirm Plan Downgrade
-                    </h3>
-                    <p className="text-sm text-blue-800">
-                      You are about to downgrade from <strong>{currentPlanName}</strong> to{' '}
-                      <strong>{targetPlanName}</strong>. Please review the changes below.
-                    </p>
-                  </div>
+              <div className="flex items-start gap-3 rounded-xl bg-gray-50 p-3 dark:bg-slate-800/50 sm:p-4">
+                <Info className="mt-0.5 h-4 w-4 shrink-0 text-brand-blue" />
+                <div className="min-w-0">
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">
+                    Confirm Plan Downgrade
+                  </h3>
+                  <p className="mt-0.5 text-xs text-gray-600 dark:text-slate-400 sm:text-sm">
+                    You are about to downgrade from <strong className="font-semibold text-gray-900 dark:text-slate-100">{currentPlanName}</strong> to{' '}
+                    <strong className="font-semibold text-gray-900 dark:text-slate-100">{targetPlanName}</strong>. Please review the changes below.
+                  </p>
                 </div>
               </div>
 
-              <div className="space-y-3 text-sm text-gray-700 dark:text-slate-300 mb-6">
-                <p className="flex items-start gap-2">
-                  <span className="text-blue-500 font-bold">•</span>
-                  <span>Your billing will be adjusted to the lower plan rate</span>
-                </p>
-                <p className="flex items-start gap-2">
-                  <span className="text-blue-500 font-bold">•</span>
-                  <span>Your quota limits will be reduced to match the new plan</span>
-                </p>
-                <p className="flex items-start gap-2">
-                  <span className="text-blue-500 font-bold">•</span>
-                  <span>Changes will take effect at the end of your current billing period</span>
-                </p>
-                <p className="flex items-start gap-2">
-                  <span className="text-blue-500 font-bold">•</span>
-                  <span>You can upgrade again at any time if needed</span>
-                </p>
-              </div>
+              <ul className="space-y-2 text-xs text-gray-700 dark:text-slate-300 sm:text-sm">
+                {[
+                  'Your billing will be adjusted to the lower plan rate',
+                  'Your quota limits will be reduced to match the new plan',
+                  'Changes will take effect at the end of your current billing period',
+                  'You can upgrade again at any time if needed',
+                ].map(item => (
+                  <li key={item} className="flex items-start gap-2">
+                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-gray-400 dark:bg-slate-500" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
 
               {/* Near Limit Warnings - Show when approaching quota limits */}
               {hasNearLimitWarnings && (
-                <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl">
-                  <div className="flex items-start gap-3 mb-3">
-                    <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <h4 className="font-semibold text-amber-900 mb-1">
-                        ⚠️ Limited Storage Remaining
+                <div className="rounded-xl border border-gray-200 p-3 dark:border-slate-700 sm:p-4">
+                  <div className="mb-3 flex items-start gap-3">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+                    <div className="min-w-0">
+                      <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-50">
+                        Limited Storage Remaining
                       </h4>
-                      <p className="text-sm text-amber-800">
-                        After downgrading, you'll be close to your quota limits. Be careful with new uploads.
+                      <p className="mt-0.5 text-xs text-gray-600 dark:text-slate-400 sm:text-sm">
+                        After downgrading, you&apos;ll be close to your quota limits. Be careful with new uploads.
                       </p>
                     </div>
                   </div>
 
-                  <div className="space-y-3">
+                  <div className="space-y-2.5">
                     {nearLimitQuotas.map((quota, index) => (
-                      <div key={index} className="p-3 bg-white dark:bg-slate-900 rounded-lg border border-amber-200">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="font-semibold text-gray-900 dark:text-slate-50">{quota.quotaLabel}</span>
-                          <span className="text-xs font-medium text-amber-700 bg-amber-100 px-2 py-1 rounded">
+                      <div key={index} className="rounded-lg bg-gray-50 p-3 dark:bg-slate-800/50">
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <span className="truncate text-sm font-semibold text-gray-900 dark:text-slate-50">{quota.quotaLabel}</span>
+                          <span className="shrink-0 rounded bg-white px-2 py-0.5 text-[11px] font-semibold text-gray-600 ring-1 ring-gray-200 dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700">
                             {quota.percentageUsed.toFixed(0)}% Used
                           </span>
                         </div>
 
-                        <div className="grid grid-cols-3 gap-3 text-sm mb-2">
-                          <div>
-                            <p className="text-gray-600 dark:text-slate-400 text-xs">Used</p>
-                            <p className="font-bold text-gray-900 dark:text-slate-50">
-                              {quota.currentUsage.toLocaleString()}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-gray-600 dark:text-slate-400 text-xs">Limit</p>
-                            <p className="font-bold text-blue-600">
-                              {quota.newPlanLimit.toLocaleString()}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-amber-700 text-xs font-semibold">Remaining</p>
-                            <p className="font-bold text-amber-700">
-                              {quota.remaining.toLocaleString()}
-                            </p>
-                          </div>
+                        <div className="mb-2 grid grid-cols-3 gap-2">
+                          <Stat label="Used" value={quota.currentUsage} />
+                          <Stat label="Limit" value={quota.newPlanLimit} />
+                          <Stat label="Remaining" value={quota.remaining} />
                         </div>
 
                         {/* Progress bar */}
-                        <div className="w-full h-2 bg-gray-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-slate-700">
                           <div
-                            className={`h-full transition-all ${
-                              quota.percentageUsed >= 90
-                                ? 'bg-red-500'
-                                : quota.percentageUsed >= 75
-                                ? 'bg-amber-500'
-                                : 'bg-blue-500'
+                            className={`h-full rounded-full transition-all ${
+                              quota.percentageUsed >= 90 ? 'bg-destructive' : quota.percentageUsed >= 75 ? 'bg-warning' : 'bg-brand-blue'
                             }`}
                             style={{ width: `${Math.min(quota.percentageUsed, 100)}%` }}
                           />
                         </div>
 
-                        <p className="text-xs text-amber-800 mt-2">
-                          <strong>Warning:</strong> You have only{' '}
-                          <strong>{quota.remaining.toLocaleString()} {quota.unit}</strong> left to upload.
+                        <p className="mt-2 text-xs text-gray-600 dark:text-slate-400">
+                          <strong className="font-semibold text-gray-900 dark:text-slate-100">Warning:</strong> You have only{' '}
+                          <strong className="font-semibold text-gray-900 dark:text-slate-100">{quota.remaining.toLocaleString()} {quota.unit}</strong> left to upload.
                           Consider deleting old data before adding new items.
                         </p>
                       </div>
@@ -350,25 +315,31 @@ export default function DowngradeWarningModal({
                 </div>
               )}
 
-              <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                <p className="text-sm text-amber-800">
-                  <strong>Note:</strong> Make sure your current usage is within the new plan's limits
-                  to avoid any service interruptions.
-                </p>
-              </div>
+              <p className="rounded-lg bg-gray-50 p-3 text-xs text-gray-600 dark:bg-slate-800/50 dark:text-slate-400 sm:text-sm">
+                <strong className="font-semibold text-gray-900 dark:text-slate-100">Note:</strong> Make sure your current usage is within the new plan&apos;s limits
+                to avoid any service interruptions.
+              </p>
             </>
           )}
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 shrink-0">
+        <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-gray-100 px-4 py-3 dark:border-slate-700/60 sm:flex-row sm:items-center sm:justify-end sm:gap-3 sm:px-6">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isDowngrading}
+            className="flex w-full items-center justify-center rounded-lg border border-gray-200 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 sm:w-auto"
+          >
+            Cancel
+          </button>
           <button
             onClick={onConfirm}
             disabled={isDowngrading}
-            className={`px-6 py-2.5 text-sm font-medium text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2 ${
+            className={`flex w-full items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white transition-colors disabled:opacity-50 sm:w-auto ${
               hasOverages
-                ? 'bg-red-600 hover:bg-red-700'
-                : 'bg-orange-600 hover:bg-orange-700'
+                ? 'bg-destructive hover:opacity-90'
+                : 'bg-brand-blue hover:bg-brand-blue-2'
             }`}
           >
             {isDowngrading ? (
@@ -381,12 +352,12 @@ export default function DowngradeWarningModal({
               </>
             ) : hasOverages ? (
               <>
-                <Lock className="w-4 h-4" />
+                <Lock className="h-4 w-4" />
                 Downgrade (Read-Only Mode)
               </>
             ) : (
               <>
-                <AlertTriangle className="w-4 h-4" />
+                <AlertTriangle className="h-4 w-4" />
                 Confirm Downgrade
               </>
             )}

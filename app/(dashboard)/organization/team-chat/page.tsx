@@ -17,7 +17,6 @@ import {
   BellOff,
   Pin,
   Loader2,
-  X,
   Lock,
   Globe,
   ArrowUpRight,
@@ -37,6 +36,7 @@ import { useSearchParams } from 'next/navigation';
 import { formatISTTime, formatISTDate } from '@/lib/utils/dateUtils';
 import { PageSkeleton, Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import AppModal from '@/components/ui/app-modal';
 
 const quickEmojis = ['👍', '❤️', '😄', '🎉', '👀', '✅'];
 
@@ -1195,32 +1195,25 @@ export default function TeamChatPage() {
         )}
 
         {/* Create Channel Modal */}
-        {showCreateModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
-            <div className="max-h-[90dvh] flex flex-col w-full max-w-[95vw] sm:max-w-2xl overflow-hidden rounded-3xl border border-white/40 bg-white shadow-2xl ring-1 ring-black/5">
-              <div className="flex-shrink-0 relative overflow-hidden bg-brand-blue px-5 py-4 text-white">
-                <div className="pointer-events-none absolute -top-10 right-0 h-32 w-32 rounded-full bg-white/10 blur-3xl" />
-                <div className="relative flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15">
-                      <Hash className="h-5 w-5" />
-                    </span>
-                    <div>
-                      <h2 className="text-lg font-semibold">Create channel</h2>
-                      <p className="mt-0.5 text-sm text-white/75">Bring teammates together around a topic.</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setShowCreateModal(false)}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-white transition-colors hover:bg-white/15"
-                    aria-label="Close"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-5">
+        <AppModal
+          open={showCreateModal}
+          onCancel={() => setShowCreateModal(false)}
+          size="md"
+          icon={<Hash />}
+          title="Create channel"
+          subtitle="Bring teammates together around a topic."
+          cancelDisabled={isCreating}
+          bodyClassName="space-y-5"
+          actions={[
+            {
+              label: isCreating ? 'Creating...' : 'Create channel',
+              onClick: handleCreateChannel,
+              disabled: isCreating || !newChannelName.trim(),
+              loading: isCreating,
+              icon: <ArrowUpRight className="h-4 w-4" />,
+            },
+          ]}
+        >
                 <label className="block">
                   <span className="mb-2 block text-sm font-medium text-gray-700">
                     Channel name <span className="text-brand-orange">*</span>
@@ -1328,61 +1321,28 @@ export default function TeamChatPage() {
                     </div>
                   )}
                 </div>
-              </div>
-
-              <div className="flex flex-col gap-2 border-t border-gray-100 px-5 py-4 sm:flex-row sm:justify-end">
-                <button
-                  onClick={handleCreateChannel}
-                  disabled={isCreating || !newChannelName.trim()}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:opacity-70"
-                >
-                  {isCreating ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Creating...
-                    </>
-                  ) : (
-                    <>
-                      <ArrowUpRight className="h-4 w-4" />
-                      Create channel
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        </AppModal>
 
         {/* Add Members Modal */}
-        {showAddMembersModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
-            <div className="max-h-[90dvh] flex flex-col w-full max-w-[95vw] sm:max-w-2xl overflow-hidden rounded-3xl border border-white/40 bg-white shadow-2xl ring-1 ring-black/5">
-              <div className="flex-shrink-0 relative overflow-hidden bg-brand-blue px-5 py-4 text-white">
-                <div className="pointer-events-none absolute -top-10 right-0 h-32 w-32 rounded-full bg-white/10 blur-3xl" />
-                <div className="relative flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15">
-                      <Users className="h-5 w-5" />
-                    </span>
-                    <div>
-                      <h2 className="text-lg font-semibold">Add members</h2>
-                      <p className="mt-0.5 text-sm text-white/75">Invite teammates to this channel.</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setShowAddMembersModal(false);
-                      setSelectedMemberIds([]);
-                    }}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-white transition-colors hover:bg-white/15"
-                    aria-label="Close"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex-1 min-h-0 overflow-y-auto p-5">
+        <AppModal
+          open={showAddMembersModal}
+          onCancel={() => {
+            setShowAddMembersModal(false);
+            setSelectedMemberIds([]);
+          }}
+          size="md"
+          icon={<Users />}
+          title="Add members"
+          subtitle="Invite teammates to this channel."
+          actions={[
+            {
+              label: `Add${selectedMemberIds.length > 0 ? ` (${selectedMemberIds.length})` : ''}`,
+              onClick: handleAddMembers,
+              disabled: selectedMemberIds.length === 0,
+              icon: <Plus className="h-4 w-4" />,
+            },
+          ]}
+        >
                 {availableUsers.filter((user) => !selectedChannel?.members.some((m) => m.user_id === user.id))
                   .length === 0 ? (
                   <div className="rounded-xl border border-dashed border-gray-200 bg-slate-50 px-4 py-10 text-center">
@@ -1425,49 +1385,18 @@ export default function TeamChatPage() {
                       })}
                   </div>
                 )}
-              </div>
-
-              <div className="flex flex-col gap-2 border-t border-gray-100 px-5 py-4 sm:flex-row sm:justify-end">
-                <button
-                  onClick={handleAddMembers}
-                  disabled={selectedMemberIds.length === 0}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:opacity-70"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add {selectedMemberIds.length > 0 ? `(${selectedMemberIds.length})` : ''}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        </AppModal>
 
         {/* New Direct Message Modal */}
-        {showNewDMModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
-            <div className="max-h-[90dvh] flex flex-col w-full max-w-[95vw] sm:max-w-2xl overflow-hidden rounded-3xl border border-white/40 bg-white shadow-2xl ring-1 ring-black/5">
-              <div className="flex-shrink-0 relative overflow-hidden bg-brand-blue px-5 py-4 text-white">
-                <div className="pointer-events-none absolute -top-10 right-0 h-32 w-32 rounded-full bg-white/10 blur-3xl" />
-                <div className="relative flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15">
-                      <MessageCircle className="h-5 w-5" />
-                    </span>
-                    <div>
-                      <h2 className="text-lg font-semibold">New direct message</h2>
-                      <p className="mt-0.5 text-sm text-white/75">Pick a teammate to start a private chat.</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setShowNewDMModal(false)}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-white transition-colors hover:bg-white/15"
-                    aria-label="Close"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex-1 min-h-0 overflow-y-auto p-5">
+        <AppModal
+          open={showNewDMModal}
+          onCancel={() => setShowNewDMModal(false)}
+          size="md"
+          icon={<MessageCircle />}
+          title="New direct message"
+          subtitle="Pick a teammate to start a private chat."
+          cancelDisabled={isCreatingDM}
+        >
                 <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
                   {isLoadingUsers ? (
                     <div className="max-h-80 overflow-y-auto">
@@ -1513,11 +1442,7 @@ export default function TeamChatPage() {
                     </div>
                   )}
                 </div>
-              </div>
-
-            </div>
-          </div>
-        )}
+        </AppModal>
       </div>
       </div>
       </div>

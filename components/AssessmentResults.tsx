@@ -2297,7 +2297,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   <option value="In Progress">In Progress</option>
                   <option value="Completed">Completed</option>
                   <option value="Terminated">Terminated</option>
-                  <option value="Pending">{PENDING_STATUS_LABEL}</option>
                 </ToolbarFilterSelect>
                 {resultsSortControl}
               </>
@@ -2434,7 +2433,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 ['In Progress', 'In Progress'],
                 ['Completed', 'Completed'],
                 ['Terminated', 'Terminated'],
-                ['Pending', PENDING_STATUS_LABEL],
               ] as const).map(([value, label]) => (
                 <button
                   key={value}

@@ -312,7 +312,12 @@ function isUndeliveredHistoryRow(q: any): boolean {
   return rt === 'not_asked'
     || rt === 'not_delivered'
     || rt === 'unasked'
-    || rt === 'auto_skipped_by_coverage';
+    || rt === 'auto_skipped_by_coverage'
+    || !!q?.not_delivered
+    // The backend's un-reached padding row. Older evaluations could carry a
+    // runtime skip label on it (mis-bound to a silence-skipped question), which
+    // rendered it as asked + "auto-skipped" with a 0.0 score.
+    || /^\(not asked\b.*planned question\b/i.test(String(q?.question || '').trim());
 }
 
 /** The row's response type, except a skip label is overridden when the row
@@ -328,6 +333,18 @@ function effectiveResponseType(responseType: unknown, answer: unknown): string {
   if (!ans || ans.startsWith('[')) return rt;
   if (/wrap up the interview|end (the )?interview/i.test(ans)) return rt;
   return 'answered';
+}
+
+/** True when the candidate actually answered this question_history row.
+ *  Skipped / silence / timeout / "I don't know" rows and placeholder answers
+ *  ("[SKIPPED]") do not count: Cluster Coverage credits a skill only from an
+ *  answered question (product rule 2026-10-17). Mirrors the backend's
+ *  _has_real_answer. */
+function hasRealAnswer(q: any): boolean {
+  const ans = String(q?.answer ?? q?.response ?? '').trim();
+  if (ans.startsWith('[')) return false;
+  const rt = effectiveResponseType(q?.response_type, ans);
+  return rt !== 'skipped' && rt !== 'not_answered' && rt !== 'timeout' && rt !== 'idk';
 }
 
 /** Build cluster data from config (authoritative) + scores from ai_evaluation. */
@@ -382,6 +399,7 @@ function buildClustersFromConfig(
     // HR questions never probe technical skills — an HR row can carry the next
     // Must-Have slot's skills when the HR round closes on its last question.
     if (String(q?.round_type || '').toLowerCase() === 'hr' || q?.hr_question_id) continue;
+    if (!hasRealAnswer(q)) continue;
     const a = q?.assigned_skills;
     if (Array.isArray(a)) {
       for (const s of a) {
@@ -417,16 +435,34 @@ function buildClustersFromConfig(
   //  A skill counts as delivered if ANY entry for it was delivered: Sanity
   //  Testing is asked on delivered Q5 AND recovered onto un-reached Q9, and the
   //  delivered occurrence is what matters.
+  //  Entries on HR questions are ignored: HR never probes a skill, but older
+  //  evaluations tagged HR turns with skills from their wording (an unanswered
+  //  "Are you willing to work night shift" → FRMS) and showed them Covered.
+  //  Entries on questions the candidate never answered (silence-skip, timeout,
+  //  "I don't know") are ignored too — a skill counts as Covered only from an
+  //  answered question, so such a skill reads Not Covered.
+  const hrQuestionNumbers = new Set<string>();
+  const unansweredQuestionNumbers = new Set<string>();
+  for (const q of questionHistory) {
+    if (String(q?.round_type || '').toLowerCase() === 'hr' || q?.hr_question_id) {
+      hrQuestionNumbers.add(String(q?.question_number ?? ''));
+    } else if (!isUndeliveredHistoryRow(q) && !hasRealAnswer(q)) {
+      unansweredQuestionNumbers.add(String(q?.question_number ?? ''));
+    }
+  }
   const qsmDelivered = new Set<string>();
   const qsmSeen = new Set<string>();
-  for (const entries of Object.values((eval_?.question_skill_map || {}) as Record<string, any>)) {
+  for (const [qnum, entries] of Object.entries((eval_?.question_skill_map || {}) as Record<string, any>)) {
     if (!Array.isArray(entries)) continue;
+    if (hrQuestionNumbers.has(String(qnum))) continue;
+    // Seen (so it is decided here, as Not Covered) but never delivered-credit.
+    const unanswered = unansweredQuestionNumbers.has(String(qnum));
     for (const e of entries) {
       const k = String(e?.skill || '').toLowerCase().trim();
       if (!k) continue;
       const c = compactSkillKey(e?.skill);
       qsmSeen.add(k); if (c) qsmSeen.add(c);
-      if (!e?.not_delivered) { qsmDelivered.add(k); if (c) qsmDelivered.add(c); }
+      if (!e?.not_delivered && !unanswered) { qsmDelivered.add(k); if (c) qsmDelivered.add(c); }
     }
   }
 
@@ -2189,12 +2225,16 @@ export function buildDashboardData(params: {
   const deliveredMainCountBySection = (() => {
     const out: Record<'mth' | 'nth', number> = { mth: 0, nth: 0 };
     const seen = new Set<string>();
+    let historyUsable = false;
     for (const h of ((eval_?.question_history || []) as any[])) {
       // NOT a bare `is_follow_up` check — see isExplicitFollowUpRow. A resume /
       // skip-recovery turn is mis-tagged as a follow-up while being a real
       // delivered question, and dropping it under-counts the reached slots.
       if (!h || isExplicitFollowUpRow(h)) continue;
       if (isUndeliveredHistoryRow(h)) continue;
+      // Only an ANSWERED question covers its plan slot's skills.
+      historyUsable = true;
+      if (!hasRealAnswer(h)) continue;
       const qText = String(h?.question || '').trim();
       if (!qText) continue;
       if (isMetaAssistantTurn(qText)) continue;
@@ -2207,8 +2247,9 @@ export function buildDashboardData(params: {
       out[sec] += 1;
     }
     // Fallback when question_history is absent/unusable: the runtime's own
-    // per-round counter.
-    for (const rt of ((eval_?.round_tracking || []) as any[])) {
+    // per-round counter. Not when the history exists but nothing was answered
+    // — the counter includes silence-skipped questions.
+    for (const rt of (historyUsable ? [] : (eval_?.round_tracking || []) as any[])) {
       const t = String(rt?.type || '').toLowerCase();
       const sec: 'mth' | 'nth' | null =
         t === 'must_have_skills' ? 'mth' : t === 'nice_to_have_skills' ? 'nth' : null;
@@ -2225,6 +2266,7 @@ export function buildDashboardData(params: {
     const out: Record<'mth' | 'nth', Set<string>> = { mth: new Set(), nth: new Set() };
     for (const h of ((eval_?.question_history || []) as any[])) {
       if (!h || isExplicitFollowUpRow(h) || isUndeliveredHistoryRow(h)) continue;
+      if (!hasRealAnswer(h)) continue;
       const rt = String(h?.round_type || '').toLowerCase();
       if (rt === 'hr') continue;
       const sec: 'mth' | 'nth' = rt === 'nice_to_have_skills' ? 'nth' : 'mth';
@@ -2958,7 +3000,14 @@ export function buildDashboardData(params: {
     const askedNumOf = new Map<PerQuestionDetail, number>();
     ranked.forEach(({ row }, rank) => askedNumOf.set(row, rank + 1));
     for (const key of ['mth', 'nth', 'hr'] as const) {
-      buckets[key] = buckets[key].map((row, idx) => ({ ...row, qNum: idx + 1, askedNum: askedNumOf.get(row) }));
+      buckets[key] = buckets[key].map((row, idx) => ({
+        ...row,
+        qNum: idx + 1,
+        askedNum: askedNumOf.get(row),
+        // Never asked → never scored (older evaluations stored a recovered
+        // score on these slots). Adds 0 to its section's planned-count average.
+        ...(row.notDelivered ? { questionScore: 0 } : {}),
+      }));
     }
 
     return [...buckets.mth, ...buckets.nth, ...buckets.hr];

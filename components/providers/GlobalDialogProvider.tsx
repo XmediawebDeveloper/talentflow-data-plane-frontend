@@ -10,6 +10,8 @@ import {
   ReactNode,
 } from 'react';
 import { AlertTriangle, CheckCircle, Info, XCircle, HelpCircle, Trash2, AlertCircle, FileText, LucideIcon } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { APP_MODAL_WIDTH, MODAL_FOOTER_BUTTON_CLASS, MODAL_FOOTER_ROW_CLASS } from '@/components/ui/app-modal';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -284,15 +286,15 @@ export function GlobalDialogProvider({ children }: { children: ReactNode }) {
             aria-modal="true"
             aria-labelledby="global-dialog-title"
             aria-describedby="global-dialog-desc"
-            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 pointer-events-none"
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-6 pointer-events-none"
           >
             <div
-              className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full pointer-events-auto animate-in zoom-in-95 fade-in duration-200"
+              className={`relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-full w-full max-h-[calc(100dvh-1rem)] overflow-y-auto pointer-events-auto animate-in zoom-in-95 fade-in duration-200 ${APP_MODAL_WIDTH.sm}`}
               onClick={(e) => e.stopPropagation()}
             >
               {/* No top-right X — the dialog is dismissed via the Cancel button
                   (confirm-style), the OK button (alerts), the backdrop, or Esc. */}
-              <div className="p-6 pt-8">
+              <div className="p-4 pt-6 sm:p-6 sm:pt-8">
                 {/* Icon */}
                 <div
                   className={`w-16 h-16 ${config.iconBg} rounded-full flex items-center justify-center mx-auto mb-4`}
@@ -352,23 +354,26 @@ export function GlobalDialogProvider({ children }: { children: ReactNode }) {
                   </div>
                 )}
 
-                {/* Buttons — right-aligned, sized like ArchiveJobModal /
-                    DisableJobModal's footer rather than stretched flex-1s. */}
-                <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
+                {/* Buttons — the standard popup footer (components/ui/app-modal.tsx):
+                    Cancel and the action share one size/width/text style; they
+                    stack full-width on phones. The action keeps its variant colour. */}
+                <div className={MODAL_FOOTER_ROW_CLASS}>
                   {!dialog.hideCancelButton && (
-                    <button
+                    <Button
                       type="button"
+                      variant="secondary"
+                      size="md"
                       onClick={() => handleClose(false)}
-                      className="px-6 py-2.5 rounded-lg transition-colors text-sm font-semibold border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-400"
+                      className={MODAL_FOOTER_BUTTON_CLASS}
                     >
                       {dialog.cancelText}
-                    </button>
+                    </Button>
                   )}
                   <button
                     ref={confirmBtnRef}
                     type="button"
                     onClick={() => handleClose(true)}
-                    className={`px-6 py-2.5 text-white rounded-lg transition-colors text-sm font-semibold shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 flex items-center justify-center gap-2 ${config.confirmBtn}`}
+                    className={`h-10 px-4 text-sm font-medium text-white rounded-lg transition-colors shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 inline-flex items-center justify-center gap-2 whitespace-nowrap ${MODAL_FOOTER_BUTTON_CLASS} ${config.confirmBtn}`}
                   >
                     {dialog.variant === 'delete' && <Trash2 className="w-4 h-4" />}
                     {dialog.confirmText}

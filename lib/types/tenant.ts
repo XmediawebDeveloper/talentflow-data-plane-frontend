@@ -535,18 +535,18 @@ export const ROLE_METADATA: Record<UserRole, { name: string; description: string
 
 // RBAC06: Feature flag metadata
 export const FEATURE_METADATA: Record<string, { name: string; description: string; category: string }> = {
-  resume_upload: { name: 'Resume Upload', description: 'Upload and parse resumes', category: 'Resume Management' },
-  resume_database_access: { name: 'Resume Database Access', description: 'Access internal resume database', category: 'Resume Management' },
-  resume_scoring: { name: 'Resume Scoring', description: 'AI-powered resume scoring against job descriptions', category: 'AI Features' },
-  assessment: { name: 'Assessment', description: 'Create and manage candidate assessments', category: 'Assessment' },
+  resume_upload: { name: 'My Resumes → Upload', description: 'Upload and parse resumes', category: 'Resume Management' },
+  resume_database_access: { name: 'View Shared Database', description: 'Access internal resume database', category: 'Resume Management' },
+  resume_scoring: { name: 'Resume Scoring → Score Resume', description: 'AI-powered resume scoring against job descriptions', category: 'AI Features' },
+  assessment: { name: 'Assessment → Create', description: 'Create and manage candidate assessments', category: 'Assessment' },
   ai_interview: { name: 'AI Interview', description: 'Conduct AI-powered interviews', category: 'AI Features' },
   api_access: { name: 'API Access', description: 'Access platform via API', category: 'Integration' },
-  reporting: { name: 'Reporting', description: 'View reports and analytics', category: 'Analytics' },
-  jd_create: { name: 'Create Job Descriptions', description: 'Create new job descriptions', category: 'Job Descriptions' },
-  jd_manage: { name: 'Manage Job Descriptions', description: 'Edit and manage job descriptions', category: 'Job Descriptions' },
-  ai_talent_match: { name: 'AI Talent Match', description: 'AI-powered candidate matching', category: 'AI Features' },
-  bulk_operations: { name: 'Bulk Operations', description: 'Perform bulk actions on resumes and candidates', category: 'Operations' },
-  export_data: { name: 'Export Data', description: 'Export data to Excel, CSV, PDF', category: 'Operations' },
+  reporting: { name: 'View Analytics', description: 'View reports and analytics', category: 'Analytics' },
+  jd_create: { name: 'Job Description → Create', description: 'Create new job descriptions', category: 'Job Descriptions' },
+  jd_manage: { name: 'Job Description → Manage', description: 'Edit and manage job descriptions', category: 'Job Descriptions' },
+  ai_talent_match: { name: 'AI Talent Match → Run AI Talent Match', description: 'AI-powered candidate matching', category: 'AI Features' },
+  bulk_operations: { name: 'Bulk Actions', description: 'Perform bulk actions on resumes and candidates', category: 'Operations' },
+  export_data: { name: 'Export', description: 'Export data to Excel, CSV, PDF', category: 'Operations' },
 };
 
 // RBAC07: Permission dependency matrix

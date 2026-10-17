@@ -9,7 +9,7 @@ import type { User, Tenant } from '@/lib/types/tenant';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
-import { jdService, JDLineageVersion, JDStatusEvent, JDUsageStatus, JDVersion } from '@/lib/services/jdService';
+import { jdService, JDLineageVersion, JDLocation, JDStatusEvent, JDUsageStatus, JDVersion } from '@/lib/services/jdService';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import { formatJobVersionLabel, formatLastUpdated } from '@/lib/utils/jobOpeningDisplay';
 import SkillsList from '@/components/ui/SkillsList';
@@ -487,6 +487,10 @@ interface ExtendedJob extends Job {
   jobHoppingEnabled?: boolean | null;
   // JD13: Usage status for edit/republish logic
   usageStatus?: JDUsageStatus;
+  // Full per-location detail (city/state/country/radius_km) - see
+  // ExtractedDataSummary's `locations` prop, which renders every saved location
+  // instead of the single joined `location` string.
+  locations?: JDLocation[];
 }
 
 /**
@@ -967,24 +971,37 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     return tenant.features[feature as keyof typeof tenant.features] === true;
   };
 
+  // jd:invite / jd:add_applicants have no typed field on the Permission interface,
+  // so they're read via the raw permission code instead of hasPermission() above.
+  const { hasPermissionCode } = useAuth();
+  const isAdminUser = isTenantAdmin || user?.role === 'tenant_admin';
+
   // ✅ PERMISSIONS: Get permissions for Quick Actions (using camelCase)
   const permissions = {
     canCreateAssessments: hasPermission('canCreateAssessments'),
     canUpdateAssessments: hasPermission('canUpdateAssessments'),
-    canRunAiMatch: hasPermission('canRunAiMatch'),
+    // Run AI Talent Match from a JD needs the main (AI Talent Match → Run) AND
+    // this JD entry point (jd:ai_match). Gates every AI-match trigger on this page.
+    canRunAiMatch: hasPermission('canRunAiMatch') && (isAdminUser || hasPermissionCode('jd:ai_match')),
     canReadJD: hasPermission('canReadJD'),
     canViewAssessments: hasPermission('canViewAssessments'),
     canUploadResumes: hasPermission('canUploadResumes'),
-    canRunScoring: hasPermission('canRunScoring'),
+    // Scoring from a JD needs Resume Scoring → Score Resume AND the JD's own
+    // "Score Resume" (jd:add_applicants). Gates every scoring entry point on this
+    // page: quick action, ?action=score-resumes deep link, Scored Resumes toolbar.
+    canRunScoring: hasPermission('canRunScoring') && (isAdminUser || hasPermissionCode('jd:add_applicants')),
     canCreateAIInterviews: hasPermission('canCreateAIInterviews'),
     canShareAIInterviews: hasPermission('canInviteAIInterviews'),
     canViewAIInterviews: hasPermission('canViewAIInterviews') || hasPermission('canRunAiInterviews') || hasPermission('canInviteAIInterviews'),
   };
 
-  // jd:invite has no typed field on the Permission interface, so it's read via
-  // the raw permission code instead of the local hasPermission() helper above.
-  const { hasPermissionCode } = useAuth();
-  const canInviteJd = isTenantAdmin || hasPermissionCode('jd:invite');
+  // Job Description → "Invite to Assessment" / "Invite to AI Interview" are
+  // separate permissions; each target also needs its module's own Invite
+  // (the server checks assessments:invite / ai_interview:invite on send).
+  const canInviteJdAssessment =
+    isTenantAdmin || (hasPermissionCode('jd:invite_assessment') && hasPermissionCode('assessments:invite'));
+  const canInviteJdAIInterview =
+    isTenantAdmin || (hasPermissionCode('jd:invite_ai_interview') && hasPermissionCode('ai_interview:invite'));
 
   // ✅ PERMISSIONS: Get feature flags for Quick Actions
   const features = {
@@ -3635,6 +3652,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               industry={job.industry_type ? prettifyCode(job.industry_type) : null}
               industryNote={job.industry_type ? criterionScoringLabel(job.industry_type, job.industryMandatory, { isIndustry: true }) : undefined}
               location={job.location}
+              locations={job.locations}
               locationNote={job.location ? criterionScoringLabel(job.location, job.locationMandatory) : undefined}
               employmentType={employmentTypeLabel(job.employmentType)}
               workMode={workModeLabel(job.workMode)}
@@ -3768,10 +3786,10 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                         planLocked={assessmentPlanLocked}
                         onClick={openCreateSendAssessment}
                         loading={isLoadingShareAssessments}
-                        disabled={!canInviteJd || !canInviteToAssessment}
+                        disabled={!canInviteJdAssessment || !canInviteToAssessment}
                         disabledTooltip={
-                          !canInviteJd
-                            ? 'You do not have permission to invite candidates from a job description'
+                          !canInviteJdAssessment
+                            ? 'You do not have permission to invite candidates to an assessment from a job description'
                             : !features.assessment
                               ? 'Assessments not enabled'
                               : job.status === 'Disabled'
@@ -3886,10 +3904,10 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                       accent="orange"
                       planLocked={aiInterviewPlanLocked}
                       onClick={() => handleInviteAIInterview()}
-                      disabled={!canInviteJd || !canInviteToAIInterview}
+                      disabled={!canInviteJdAIInterview || !canInviteToAIInterview}
                       disabledTooltip={
-                        !canInviteJd
-                          ? 'You do not have permission to invite candidates from a job description'
+                        !canInviteJdAIInterview
+                          ? 'You do not have permission to invite candidates to an AI interview from a job description'
                           : !features.ai_interview
                             ? 'AI Interviews not enabled'
                             : job.status === 'Disabled'

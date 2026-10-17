@@ -1,12 +1,11 @@
 'use client';
 
-import { CreditCard, Check, Loader2, Users, Building2, Zap, AlertCircle, Lock, Clock, CheckCircle, XCircle, X, Database, Layers, Package, Sparkles, ArrowRight, ArrowLeft, ArrowUpRight, Crown, FileText, Mail, ChevronDown, ChevronUp, Shield, BarChart3, Wallet, Receipt, RefreshCw, AlertTriangle } from 'lucide-react';
+import { CreditCard, Check, Loader2, Users, Building2, Zap, AlertCircle, Lock, Clock, CheckCircle, XCircle, X, Database, Layers, Package, Sparkles, ArrowRight, ArrowLeft, ArrowUpRight, Crown, FileText, Mail, ChevronDown, ChevronUp, Shield, BarChart3, Wallet, Receipt, RefreshCw, AlertTriangle, Briefcase, Gauge, ClipboardCheck, Video } from 'lucide-react';
 import { useState, useEffect, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import api, { handleUnauthorized } from '@/lib/services/api';
 import { ScrollableTabs } from '@/components/subscription/ScrollableTabs';
-import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,7 +25,7 @@ import { useRazorpay } from '@/lib/hooks/useRazorpay';
 import { usePlanChange } from '@/components/providers/PlanChangeProvider';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 // Sub-section pages — rendered inline below the tabs as additional sections.
-import UsageQuotasPage from '@/app/(dashboard)/subscription/usage-quotas/page';
+import UsageDashboard from '@/components/UsageDashboard';
 import PaymentMethodsPage from '@/app/(dashboard)/subscription/payment-methods/page';
 import BillingHistoryPage from '@/app/(dashboard)/subscription/billing-history/page';
 import RefundHistoryPage from '@/app/(dashboard)/subscription/refund-history/page';
@@ -563,81 +562,86 @@ const formatQuotaValue = (value: number | string | undefined | null | Record<str
   return String(value);
 };
 
-// Neutral-gray skeleton mirroring the Current Plan layout: hero header,
-// subscription nav tabs, the "Your Current Plan" card (title + status badge +
-// 4-stat grid), and a 3-card plans grid. Shared with loading.tsx.
+// Neutral-gray skeleton mirroring the Current Plan layout: one shared card
+// (summary strip + cycle bar + 6 limit tiles), subscription
+// pill tabs, and a plans grid. Shared with loading.tsx.
 export function CurrentPlanLoadingSkeleton() {
   return (
     <main className="flex-1 overflow-x-clip bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
         <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
-          {/* Hero header */}
-          <section className="mb-5 rounded-xl border border-gray-100 bg-gray-50 p-4 sm:p-5 lg:p-6">
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          {/* Shared current-plan card: plan summary, cycle bar and limits */}
+          <section className="mb-4 flex flex-col gap-4 rounded-xl border border-gray-100 bg-white p-4 shadow-sm sm:p-5">
+            <div className="flex flex-col gap-4 rounded-lg bg-gray-50 p-3 sm:p-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex items-start gap-3">
-                <Skeleton className="h-9 w-9 shrink-0 rounded-lg" />
+                <Skeleton className="h-10 w-10 shrink-0 rounded-lg" />
                 <div className="space-y-2">
-                  <Skeleton className="h-6 w-40" />
-                  <Skeleton className="h-4 w-96 max-w-full" />
+                  <Skeleton className="h-3 w-28" />
+                  <Skeleton className="h-6 w-56" />
+                  <Skeleton className="h-3.5 w-72 max-w-full" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-2 sm:min-w-[260px]">
-                <Skeleton className="h-14 rounded-xl" />
-                <Skeleton className="h-14 rounded-xl" />
-              </div>
-            </div>
-          </section>
-
-          {/* Subscription nav tabs */}
-          <section className="mb-5">
-            <div className="border-b border-gray-200">
-              <div className="flex gap-4 pb-2.5">
-                {Array.from({ length: 7 }).map((_, i) => (
-                  <Skeleton key={i} className="h-4 w-24" />
-                ))}
-              </div>
-            </div>
-          </section>
-
-          {/* Your Current Plan card */}
-          <div className="mb-5 rounded-xl border border-gray-200 bg-white p-3 sm:p-4 lg:p-6">
-            <div className="mb-4 flex flex-col gap-2 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
               <div className="space-y-2">
-                <Skeleton className="h-5 w-40" />
-                <Skeleton className="h-3.5 w-64" />
+                <Skeleton className="h-3 w-16" />
+                <Skeleton className="h-8 w-32" />
               </div>
-              <Skeleton className="h-7 w-24 rounded-full" />
             </div>
-            <div className="grid grid-cols-2 gap-2 sm:gap-4 md:grid-cols-4 lg:gap-6">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="rounded-lg border border-gray-200 bg-gray-50 p-2.5 sm:p-3 lg:p-4">
-                  <Skeleton className="mb-2 h-3.5 w-16" />
-                  <Skeleton className="h-6 w-24" />
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-80 max-w-full" />
+              <Skeleton className="h-1.5 w-full rounded-full" />
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 xl:grid-cols-6">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="rounded-lg bg-gray-50 p-3">
+                  <Skeleton className="mb-2 h-3 w-20" />
+                  <Skeleton className="h-6 w-14" />
                 </div>
               ))}
             </div>
-          </div>
+          </section>
 
-          {/* Plans grid */}
-          <div className="grid grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-3">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="rounded-xl border border-gray-100 bg-white p-5 sm:p-6">
-                <div className="mb-4 flex items-center gap-3">
-                  <Skeleton className="h-10 w-10 rounded-xl" />
-                  <div className="flex-1 space-y-2">
-                    <Skeleton className="h-4 w-32" />
-                    <Skeleton className="h-3 w-20" />
-                  </div>
-                </div>
-                <Skeleton className="mb-4 h-8 w-28" />
-                <div className="space-y-2">
-                  <Skeleton className="h-3 w-full" />
-                  <Skeleton className="h-3 w-5/6" />
-                  <Skeleton className="h-3 w-2/3" />
-                </div>
-                <Skeleton className="mt-5 h-10 w-full rounded-xl" />
-              </div>
+          {/* Subscription pill tabs */}
+          <section className="mb-4 flex gap-1.5 overflow-hidden">
+            {Array.from({ length: 7 }).map((_, i) => (
+              <Skeleton key={i} className="h-9 w-28 shrink-0 rounded-lg" />
             ))}
+          </section>
+
+          <div className="rounded-xl bg-slate-50 p-3 ring-1 ring-gray-100 sm:p-5">
+            {/* Plans heading + toggle */}
+            <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+              <div className="space-y-2">
+                <Skeleton className="h-5 w-36" />
+                <Skeleton className="h-4 w-72 max-w-full" />
+              </div>
+              <Skeleton className="h-9 w-44 rounded-xl" />
+            </div>
+
+            {/* Plans — one boxed tier section */}
+            <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
+            <div className="mb-4 flex items-center gap-3 border-b border-gray-100 pb-3">
+              <Skeleton className="h-9 w-9 shrink-0 rounded-lg" />
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-3 w-56 max-w-full" />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-4 pt-3 md:grid-cols-2 xl:grid-cols-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm sm:p-5">
+                  <Skeleton className="mb-2 h-5 w-32" />
+                  <Skeleton className="mb-4 h-3.5 w-full" />
+                  <Skeleton className="mb-4 h-8 w-28" />
+                  <div className="mb-4 space-y-2 rounded-lg bg-gray-50 p-3">
+                    <Skeleton className="h-3 w-full" />
+                    <Skeleton className="h-3 w-5/6" />
+                    <Skeleton className="h-3 w-2/3" />
+                  </div>
+                  <Skeleton className="h-11 w-full rounded-lg" />
+                </div>
+              ))}
+            </div>
+            </div>
           </div>
         </div>
       </div>
@@ -653,13 +657,13 @@ function CurrentPlanContent() {
 
   // Subscription navigation tabs — surfaced on this page instead of the sidebar
   const billingLinks = [
-    { id: 'current-plan', label: 'Current Plan', icon: BarChart3, href: '/subscription/current-plan', visible: true },
+    { id: 'current-plan', label: 'Upgrade Plans', icon: BarChart3, href: '/subscription/current-plan', visible: true },
     { id: 'usage-quotas', label: 'Usage & Quotas', icon: BarChart3, href: '/subscription/usage-quotas', visible: isTenantAdmin || hasPermission('canViewUsage') },
-    { id: 'payment-methods', label: 'Payment Methods', icon: Wallet, href: '/subscription/payment-methods', visible: isTenantAdmin || hasPermission('canViewPaymentMethods') },
     { id: 'billing-history', label: 'Billing History', icon: Receipt, href: '/subscription/billing-history', visible: isTenantAdmin || hasPermission('canViewBillingHistory') },
     { id: 'refund-history', label: 'Refund History', icon: RefreshCw, href: '/subscription/refund-history', visible: isTenantAdmin || hasPermission('canViewRefundHistory') },
     { id: 'dispute-history', label: 'Dispute History', icon: AlertTriangle, href: '/subscription/dispute-history', visible: isTenantAdmin || hasPermission('canViewDisputeHistory') },
     { id: 'unit-disputes', label: 'Unit Disputes', icon: Shield, href: '/subscription/unit-disputes', visible: isTenantAdmin || hasPermission('canViewUsage') },
+    { id: 'payment-methods', label: 'Payment Methods', icon: Wallet, href: '/subscription/payment-methods', visible: isTenantAdmin || hasPermission('canViewPaymentMethods') },
   ].filter(link => link.visible);
 
   // Use shared quota context - prevents duplicate API calls
@@ -791,8 +795,26 @@ function CurrentPlanContent() {
   const [isCancellingUpgrade, setIsCancellingUpgrade] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
-  const [hoveredPlan, setHoveredPlan] = useState<string | null>(null);
   const [expandedFeaturesPlan, setExpandedFeaturesPlan] = useState<string | null>(null);
+  const [showAllModalFeatures, setShowAllModalFeatures] = useState(false);
+  const paymentModalRef = useRef<HTMLDivElement>(null);
+
+  // While the payment modal is open, lock the dashboard's scroll container
+  // behind it so no background scrollbar shows next to the dialog.
+  useEffect(() => {
+    if (!showPaymentModal) return;
+    const locked: { el: HTMLElement; overflow: string }[] = [];
+    let el = paymentModalRef.current?.parentElement || null;
+    while (el) {
+      const oy = getComputedStyle(el).overflowY;
+      if (oy === 'auto' || oy === 'scroll') {
+        locked.push({ el, overflow: el.style.overflowY });
+        el.style.overflowY = 'hidden';
+      }
+      el = el.parentElement;
+    }
+    return () => locked.forEach(({ el, overflow }) => { el.style.overflowY = overflow; });
+  }, [showPaymentModal]);
   const [showAdminMeta, setShowAdminMeta] = useState(false);
 
   // Use ref to track if data has been fetched to prevent duplicate calls
@@ -2100,7 +2122,7 @@ function CurrentPlanContent() {
         <div className="mx-auto w-full max-w-[1400px] bg-white dark:bg-slate-900 rounded-2xl p-4 md:p-8 my-4 md:my-5 shadow-2xl">
           <PageHeader
             icon={<CreditCard className="h-5 w-5" />}
-            title="Current Plan"
+            title="Upgrade Plans"
             description="Manage your subscription and billing"
           />
 
@@ -2161,40 +2183,335 @@ function CurrentPlanContent() {
     );
   }
 
+  // Display-only values for the redesigned current-plan summary.
+  const planDisplayName = isOnTrial
+    ? 'Free Trial'
+    : (companySettings?.current_plan_name?.replace(/\s*\([^)]*\)\s*$/, '') || '-');
+  const cycleStartDate = isOnTrial ? companySettings?.trial_start_date : companySettings?.plan_start_date;
+  const cycleEndDate = isOnTrial ? companySettings?.trial_end_date : companySettings?.plan_expiry_date;
+  const cycleProgressPct = (() => {
+    if (!cycleStartDate || !cycleEndDate) return null;
+    const start = new Date(cycleStartDate).getTime();
+    const end = new Date(cycleEndDate).getTime();
+    if (isNaN(start) || isNaN(end) || end <= start) return null;
+    return Math.min(100, Math.max(0, ((new Date().getTime() - start) / (end - start)) * 100));
+  })();
+
   return (
     <main className="flex-1 overflow-x-clip bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
-        <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Current Plan' }]} />
+        <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Upgrade Plans' }]} />
 
-        {/* Header panel — design-flow gray header (icon tile + title + subtitle) */}
-        <div className="mb-5 flex flex-col gap-4 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
-              <CreditCard className="h-5 w-5 text-brand-blue" />
+        {/* Shared Current Plan Card (shown on every tab) — mild brand-palette gradient border (1px gradient frame around the white card) */}
+        <div className="mb-4 rounded-xl bg-gradient-to-r from-brand-blue/35 via-brand-teal/35 to-brand-cyan/35 p-px shadow-md shadow-brand-blue/10 dark:from-brand-blue/50 dark:via-brand-teal/40 dark:to-brand-cyan/40 dark:shadow-black/30">
+        <div className="flex flex-col gap-4 rounded-[11px] bg-white dark:bg-slate-900 p-4 sm:p-5">
+          {/* Page title kept for screen readers; the visible header was folded into this card */}
+          <h1 className="sr-only">Upgrade Plans</h1>
+          {/* Plan summary strip — name, status, tier, cycle and price */}
+          <div className="flex flex-col gap-4 rounded-lg bg-brand-blue/[0.04] p-3 ring-1 ring-brand-blue/10 dark:bg-slate-800/50 dark:ring-slate-700 sm:p-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex min-w-0 items-start gap-3">
+              <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-blue text-white shadow-sm shadow-brand-blue/25">
+                <Crown className="h-5 w-5" />
+              </span>
+              <div className="min-w-0">
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">Your Current Plan</h2>
+                <div className="mt-0.5 flex flex-wrap items-center gap-2">
+                  <span className="truncate text-lg font-semibold text-gray-900 dark:text-slate-50">{planDisplayName}</span>
+                  <Badge variant={statusBadge.variant} className="shrink-0">
+                    <StatusIcon />
+                    {statusBadge.label}
+                  </Badge>
+                  {sharedQuotaData?.plan_info?.plan_tier && (
+                    <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-gray-600 dark:bg-slate-800 dark:text-slate-400">
+                      Tier: {sharedQuotaData.plan_info.plan_tier}
+                    </span>
+                  )}
+                  {(() => {
+                    const isolation = sharedQuotaData?.plan_info?.isolation_type || sharedQuotaData?.isolation_type;
+                    if (!isolation) return null;
+                    return (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-0.5 text-[11px] font-semibold text-gray-600 dark:bg-slate-800 dark:text-slate-400">
+                        <Database className="h-3 w-3" />
+                        {isolation === 'DEDICATED' ? 'Dedicated Server' :
+                         isolation === 'DATABASE' ? 'Dedicated Database' :
+                         isolation === 'SCHEMA' ? 'Schema Isolation' :
+                         isolation}
+                      </span>
+                    );
+                  })()}
+                  {cycleEndDate && !isExpiredSubscription && !isLocked && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-teal/10 px-2.5 py-0.5 text-[11px] font-semibold text-brand-teal">
+                      <span className="h-1.5 w-1.5 rounded-full bg-brand-teal" />
+                      {isOnTrial ? 'Trial ends' : 'Valid till'}: {formatISTDate(cycleEndDate)}
+                    </span>
+                  )}
+                  {selectedPlan && (
+                    <span className="inline-flex items-center rounded-full bg-warning-subtle px-2.5 py-0.5 text-[11px] font-semibold text-warning-strong">
+                      Selected plan: {selectedPlan.name}
+                    </span>
+                  )}
+                </div>
+                <p className="mt-1 text-xs sm:text-sm text-gray-600 dark:text-slate-400">
+                {isLocked
+                  ? 'Your account is locked. Please select a plan and complete payment.'
+                  : isOnTrial
+                    ? `You are on a Free Trial${!remainingTime.isExpired ? ` - ${remainingTime.displayText}` : ' - Expired'}`
+                    : isActive
+                      ? `You are on the ${(companySettings?.current_plan_name || currentPlan?.name || '').replace(/\s*\([^)]*\)\s*$/, '')} plan${!remainingTime.isExpired ? ` - ${remainingTime.displayText}` : ''}`
+                      : isPendingPayment
+                        ? 'Complete payment to activate your selected plan'
+                        : isExpiredSubscription
+                          ? `Your ${(companySettings?.current_plan_name || currentPlan?.name || 'subscription').replace(/\s*\([^)]*\)\s*$/, '')} plan has expired. Please renew to continue using all features.`
+                          : companySettings?.current_plan_name ? `You are on the ${companySettings.current_plan_name.replace(/\s*\([^)]*\)\s*$/, '')} plan` : ''
+                }
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">Current Plan</h1>
-              <p className="mt-0.5 text-sm text-gray-600 dark:text-slate-400">Review your active subscription, manage billing, and explore plan upgrades from one place.</p>
+            <div className="flex shrink-0 flex-col lg:text-right">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">Price</span>
+              <div className="flex items-baseline gap-1 lg:justify-end">
+                {isOnTrial ? (
+                  <span className="text-2xl font-bold tracking-tight text-gray-900 dark:text-slate-50 sm:text-3xl">Free</span>
+                ) : currentPlanPrice !== null && currentPlanPrice > 0 ? (
+                  <>
+                    <span className="text-2xl font-bold tracking-tight text-gray-900 dark:text-slate-50 sm:text-3xl">{formatCurrency(currentPlanPrice, currentPlanCurrency)}</span>
+                    <span className="text-sm text-gray-500 dark:text-slate-500">{getBillingPeriodLabel(currentPlanBillingPeriod)}</span>
+                  </>
+                ) : currentPlan?.price ? (
+                  <span className="text-2xl font-bold tracking-tight text-gray-900 dark:text-slate-50 sm:text-3xl">{formatCurrency(currentPlan.price, currentPlan.currency)}</span>
+                ) : (
+                  <span className="text-2xl font-bold tracking-tight text-gray-900 dark:text-slate-50 sm:text-3xl">-</span>
+                )}
+              </div>
+              {cycleEndDate && !remainingTime.isExpired && (
+                <p className="mt-1.5 flex items-center gap-1 text-xs font-semibold text-brand-blue lg:justify-end">
+                  <Clock className="h-3.5 w-3.5" />
+                  {isOnTrial ? 'Trial ends in' : 'Renews in'} {remainingTime.displayText.replace(/\s*remaining$/, '')}
+                </p>
+              )}
             </div>
           </div>
-          {selectedPlan && (
-            <div className="grid grid-cols-2 gap-2 text-sm sm:min-w-[260px]">
-              <div className="rounded-xl border border-gray-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900">
-                <div className="text-xs text-gray-500 dark:text-slate-400">Active plan</div>
-                <div className="mt-1 truncate font-semibold text-gray-900 dark:text-slate-50">{selectedPlan.name}</div>
+
+          {/* Billing cycle — start / end dates with elapsed-cycle progress */}
+          <div>
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs sm:text-sm">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-gray-600 dark:text-slate-400">
+                <span>
+                  {isOnTrial ? 'Trial Started' : 'Plan Start'}:{' '}
+                  <strong className="font-semibold text-gray-900 dark:text-slate-50">{cycleStartDate ? formatISTDate(cycleStartDate) : '-'}</strong>
+                </span>
+                <span>
+                  {isOnTrial ? 'Trial Ends' : 'Plan Expires'}:{' '}
+                  <strong className="font-semibold text-gray-900 dark:text-slate-50">{cycleEndDate ? formatISTDate(cycleEndDate) : '-'}</strong>
+                </span>
               </div>
-              <div className="rounded-xl border border-gray-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900">
-                <div className="text-xs text-gray-500 dark:text-slate-400">Status</div>
-                <div className="mt-1 truncate font-semibold text-gray-900 dark:text-slate-50">{statusBadge.label}</div>
+            </div>
+            {cycleProgressPct !== null && (
+              <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-slate-800">
+                <div
+                  className={`h-full rounded-full ${isExpiredSubscription || cycleProgressPct >= 100 ? 'bg-destructive' : 'bg-brand-blue'}`}
+                  style={{ width: `${cycleProgressPct}%` }}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* PS03 Fix: Renew Plan Button for Expired/Expiring Subscriptions */}
+          {!isOnTrial && !isPendingPayment && !isLocked && (companySettings?.plan_expiry_date || isExpiredSubscription) && (
+            (() => {
+              const planName = currentPlan?.name || companySettings?.current_plan_name?.replace(/\s*\([^)]*\)\s*$/, '') || 'Your';
+
+              // If no expiry date but status is expired, show expired banner directly
+              if (!companySettings?.plan_expiry_date && isExpiredSubscription) {
+                return (
+                  <div className="p-3 sm:p-4 rounded-lg border bg-destructive-subtle border-destructive-line">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <div className="flex items-start sm:items-center gap-2 sm:gap-3">
+                        <AlertCircle className="w-5 h-5 sm:w-6 sm:h-6 text-destructive flex-shrink-0" />
+                        <div>
+                          <h4 className="font-medium text-destructive-strong text-sm sm:text-base">Plan Expired</h4>
+                          <p className="text-xs sm:text-sm text-destructive">
+                            Your {planName} plan has expired. Please renew to continue using all features.
+                          </p>
+                        </div>
+                      </div>
+                      {currentPlan && (
+                        <Button
+                          variant="destructive"
+                          className="w-full sm:w-auto flex-shrink-0"
+                          onClick={() => {
+                            setSelectedPlanForPayment(currentPlan);
+                            setModalStep('isolation');
+                            setIsolationType(hasDedicatedDatabase ? 'database' : 'schema');
+                            setIsNewTenant(false);
+                            setIsYearly(currentPlanBillingPeriod?.toUpperCase() === 'ANNUAL');
+                            setTransactionResult(null);
+                            setError(null);
+                            setShowPaymentModal(true);
+                          }}
+                          icon={<ArrowRight className="w-4 h-4" />}
+                        >
+                          Renew Current Plan
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              }
+
+              const expiryDate = new Date(companySettings!.plan_expiry_date!);
+              const now = new Date();
+              const daysUntilExpiry = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+              const daysSinceExpiry = Math.floor((now.getTime() - expiryDate.getTime()) / (1000 * 60 * 60 * 24));
+              const isExpired = daysUntilExpiry <= 0 || isExpiredSubscription;
+              const isExpiringSoon = !isExpired && daysUntilExpiry >= 0 && daysUntilExpiry <= 7;
+
+              if (isExpired || isExpiringSoon) {
+                return (
+                  <div className={`p-3 sm:p-4 rounded-lg border ${
+                    isExpired
+                      ? 'bg-destructive-subtle border-destructive-line'
+                      : 'bg-warning-subtle border-warning-line'
+                  }`}>
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <div className="flex items-start sm:items-center gap-2 sm:gap-3">
+                        <AlertCircle className={`w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0 ${
+                          isExpired ? 'text-destructive' : 'text-warning'
+                        }`} />
+                        <div>
+                          <h4 className={`font-medium text-sm sm:text-base ${
+                            isExpired ? 'text-destructive-strong' : 'text-warning-strong'
+                          }`}>
+                            {isExpired ? 'Plan Expired' : 'Plan Expiring Soon'}
+                          </h4>
+                          <p className={`text-xs sm:text-sm ${
+                            isExpired ? 'text-destructive' : 'text-warning'
+                          }`}>
+                            {isExpired
+                              ? daysSinceExpiry === 0
+                                ? `Your ${planName} plan expired today. Please renew to continue using all features.`
+                                : `Your ${planName} plan expired ${daysSinceExpiry} day${daysSinceExpiry !== 1 ? 's' : ''} ago. Please renew to continue using all features.`
+                              : `Your ${planName} plan expires in ${daysUntilExpiry} day${daysUntilExpiry !== 1 ? 's' : ''}`
+                            }
+                          </p>
+                        </div>
+                      </div>
+                      {currentPlan && (
+                        <button
+                          onClick={() => {
+                            setSelectedPlanForPayment(currentPlan);
+                            setModalStep('isolation');
+                            setIsolationType(hasDedicatedDatabase ? 'database' : 'schema');
+                            setIsNewTenant(false);
+                            setIsYearly(currentPlanBillingPeriod?.toUpperCase() === 'ANNUAL');
+                            setTransactionResult(null);
+                            setError(null);
+                            setShowPaymentModal(true);
+                          }}
+                          className={`px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg font-medium transition-colors flex items-center gap-2 text-xs sm:text-sm w-full sm:w-auto justify-center flex-shrink-0 ${
+                            isExpired
+                              ? 'bg-destructive hover:bg-destructive text-white'
+                              : 'bg-warning hover:opacity-90 text-white'
+                          }`}
+                        >
+                          <ArrowRight className="w-4 h-4" />
+                          Renew Current Plan
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })()
+          )}
+
+          {/* Quotas - Using data from quota-status API via companySettings */}
+          {companySettings && (
+            <div>
+              <h3 className="mb-2.5 text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400">Your Plan Limits</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2 sm:gap-3">
+                {[
+                  { label: 'Team Seats', icon: Users, value: companySettings.max_seats },
+                  { label: 'Job Postings', icon: Briefcase, value: companySettings.max_jobs },
+                  { label: 'Resume Storage', icon: FileText, value: companySettings.max_resume_uploads },
+                  { label: 'Resume Scores', icon: Gauge, value: companySettings.max_resume_searches },
+                  { label: 'Assessments', icon: ClipboardCheck, value: companySettings.max_assessments },
+                  { label: 'AI Interviews', icon: Video, value: companySettings.max_ai_interviews },
+                ].map(({ label, icon: LimitIcon, value }) => {
+                  const formatted = formatQuotaValue(value);
+                  return (
+                    <div key={label} className="flex min-w-0 flex-col justify-between rounded-lg bg-gray-50 p-3 dark:bg-slate-800/50">
+                      <div className="flex items-center justify-between gap-2 text-gray-500 dark:text-slate-400">
+                        <span className="truncate text-xs font-medium">{label}</span>
+                        <LimitIcon className="h-4 w-4 shrink-0" />
+                      </div>
+                      <p className={`mt-1.5 truncate font-bold tabular-nums tracking-tight ${
+                        formatted === 'Unlimited'
+                          ? 'text-lg sm:text-xl text-brand-teal'
+                          : 'text-xl sm:text-2xl text-gray-900 dark:text-slate-50'
+                      }`}>
+                        {formatted}
+                      </p>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
+
+          {/* Plan Features - non-quota features only (Teams, API Access, SSO, etc.) */}
+          {(() => {
+            const QUOTA_FEATURE_KEYS = new Set([
+              'resume_upload', 'resume_storage', 'resume_scoring',
+              'assessment', 'assessments', 'ai_interview', 'ai_interviews',
+              'seats', 'storage', 'jobs',
+            ]);
+            // Also filter by feature_category if available (category 'quota' or 'metered')
+            const QUOTA_CATEGORIES = new Set(['quota', 'metered', 'usage']);
+            const seen = new Set<string>();
+            const nonQuotaFeatures = (sharedQuotaData?.features ?? []).filter(f => {
+              if (QUOTA_FEATURE_KEYS.has(f.feature_key)) return false;
+              if (f.feature_category && QUOTA_CATEGORIES.has(f.feature_category.toLowerCase())) return false;
+              // deduplicate by feature_key
+              if (seen.has(f.feature_key)) return false;
+              seen.add(f.feature_key);
+              return true;
+            });
+            if (nonQuotaFeatures.length === 0) return null;
+            return (
+              <div className="border-t border-gray-100 pt-4 dark:border-slate-700/60">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <h3 className="mr-1 text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400">Plan Features:</h3>
+                  {nonQuotaFeatures.map(f => (
+                    <span
+                      key={f.feature_key}
+                      className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium ${
+                        f.is_enabled
+                          ? 'bg-gray-100 text-gray-800 dark:bg-slate-800 dark:text-slate-100'
+                          : 'bg-gray-50 text-gray-400 dark:bg-slate-800/50 dark:text-slate-500'
+                      }`}
+                    >
+                      {f.is_enabled ? (
+                        <Check className="h-3.5 w-3.5 shrink-0 text-brand-teal" strokeWidth={3} />
+                      ) : (
+                        <X className="h-3.5 w-3.5 shrink-0 text-gray-300 dark:text-slate-600" />
+                      )}
+                      {f.feature_name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
+        </div>
         </div>
 
-        {/* Subscription navigation — scrollable pills on mobile/tablet, folder tabs on desktop */}
+        {/* Subscription navigation — pill tabs (scrollable on mobile/tablet, wrapping on desktop) */}
         {billingLinks.length > 0 && (
-          <section className="mb-3 lg:mb-5">
+          <section className="mb-4">
             {/* Mobile + tablet (< lg): single swipeable row of pills with an
                 always-visible custom scrollbar (native bars auto-hide on touch). */}
             <ScrollableTabs className="lg:hidden" ariaLabel="Subscription sections">
@@ -2206,10 +2523,10 @@ function CurrentPlanContent() {
                     type="button"
                     onClick={() => setActiveSection(link.id as typeof activeSection)}
                     aria-current={isActive ? 'page' : undefined}
-                    className={`shrink-0 whitespace-nowrap rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
+                    className={`shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
                       isActive
-                        ? 'border-brand-blue bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
-                        : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-400 hover:border-brand-blue/30 hover:text-brand-blue'
+                        ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
+                        : 'bg-gray-50 dark:bg-slate-800/60 text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-gray-900 dark:hover:text-slate-100'
                     }`}
                   >
                     {link.label}
@@ -2218,10 +2535,9 @@ function CurrentPlanContent() {
               })}
             </ScrollableTabs>
 
-            {/* Desktop (lg+): folder tabs that merge into the panel below.
-                flex-wrap (not overflow scroll) so wide-but-tight laptop widths
-                wrap to a second row instead of scrolling horizontally. */}
-            <nav className="hidden max-w-full flex-wrap gap-1 border-b border-gray-200 dark:border-slate-700 lg:flex" aria-label="Subscription tabs">
+            {/* Desktop (lg+): flex-wrap (not overflow scroll) so tight laptop
+                widths wrap to a second row instead of scrolling horizontally. */}
+            <nav className="hidden max-w-full flex-wrap gap-1.5 lg:flex" aria-label="Subscription tabs">
               {billingLinks.map((link) => {
                 const isActive = link.id === activeSection;
                 return (
@@ -2230,10 +2546,10 @@ function CurrentPlanContent() {
                     type="button"
                     onClick={() => setActiveSection(link.id as typeof activeSection)}
                     aria-current={isActive ? 'page' : undefined}
-                    className={`-mb-px whitespace-nowrap rounded-t-lg border px-4 py-2.5 text-sm font-medium transition-colors ${
+                    className={`whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
                       isActive
-                        ? 'border-gray-200 dark:border-slate-700 border-b-slate-100 dark:border-b-slate-800 bg-slate-100 dark:bg-slate-800/50 text-brand-blue'
-                        : 'border-transparent text-gray-600 dark:text-slate-400 hover:text-brand-blue hover:bg-gray-50 dark:hover:bg-slate-800/40'
+                        ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
+                        : 'text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-gray-900 dark:hover:text-slate-100'
                     }`}
                   >
                     {link.label}
@@ -2244,8 +2560,8 @@ function CurrentPlanContent() {
           </section>
         )}
 
-        {/* Active sub-section + its content enclosed with the tabs in one bordered gray panel */}
-        <div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 p-4 sm:p-5 lg:-mt-5 lg:rounded-t-none lg:border-t-0">
+        {/* Active sub-section + its content on a soft surface panel */}
+        <div className="rounded-xl bg-slate-50 dark:bg-slate-800/40 p-3 ring-1 ring-gray-100 dark:ring-slate-700/60 sm:p-5">
         {/* Inline sub-section — strips the embedded page's own breadcrumb,
             outer left/right padding, and card wrapper so the content lines up
             seamlessly with the current-plan body. Selectors target the
@@ -2269,7 +2585,7 @@ function CurrentPlanContent() {
               [&>main>div:not(.fixed)>div]:!p-0
               [&>main>div:not(.fixed)>div]:!my-0"
           >
-            {activeSection === 'usage-quotas' && <UsageQuotasPage />}
+            {activeSection === 'usage-quotas' && <UsageDashboard hideSubscriptionSummary />}
             {activeSection === 'payment-methods' && <PaymentMethodsPage />}
             {activeSection === 'billing-history' && <BillingHistoryPage />}
             {activeSection === 'refund-history' && <RefundHistoryPage />}
@@ -2377,300 +2693,6 @@ function CurrentPlanContent() {
             </div>
           </div>
         )}
-
-        {/* Current Plan Card */}
-        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-4 sm:p-5 lg:p-6 mb-5">
-          <div className="flex flex-col gap-3 mb-5 sm:mb-6 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-            <div className="flex items-start gap-3 min-w-0">
-              <span className="hidden sm:flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 text-brand-blue">
-                <CreditCard className="h-5 w-5" />
-              </span>
-              <div className="min-w-0">
-                <h2 className="text-base lg:text-lg font-semibold text-gray-900 dark:text-slate-50">Your Current Plan</h2>
-                <p className="mt-0.5 text-xs sm:text-sm text-gray-600 dark:text-slate-400">
-                {isLocked
-                  ? 'Your account is locked. Please select a plan and complete payment.'
-                  : isOnTrial
-                    ? `You are on a Free Trial${!remainingTime.isExpired ? ` - ${remainingTime.displayText}` : ' - Expired'}`
-                    : isActive
-                      ? `You are on the ${(companySettings?.current_plan_name || currentPlan?.name || '').replace(/\s*\([^)]*\)\s*$/, '')} plan${!remainingTime.isExpired ? ` - ${remainingTime.displayText}` : ''}`
-                      : isPendingPayment
-                        ? 'Complete payment to activate your selected plan'
-                        : isExpiredSubscription
-                          ? `Your ${(companySettings?.current_plan_name || currentPlan?.name || 'subscription').replace(/\s*\([^)]*\)\s*$/, '')} plan has expired. Please renew to continue using all features.`
-                          : companySettings?.current_plan_name ? `You are on the ${companySettings.current_plan_name.replace(/\s*\([^)]*\)\s*$/, '')} plan` : ''
-                }
-                </p>
-              </div>
-            </div>
-            <Badge variant={statusBadge.variant} className="shrink-0 self-start">
-              <StatusIcon />
-              {statusBadge.label}
-            </Badge>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 lg:gap-4">
-            <div className="min-w-0 rounded-lg border border-gray-200 bg-gray-50 p-3 sm:p-4 dark:border-slate-700 dark:bg-slate-800/50">
-              <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-slate-400">Plan</p>
-              <p className="mt-1 truncate text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50">
-                {isOnTrial ? 'Free Trial' : (companySettings?.current_plan_name?.replace(/\s*\([^)]*\)\s*$/, '') || '-')}
-              </p>
-            </div>
-            <div className="min-w-0 rounded-lg border border-gray-200 bg-gray-50 p-3 sm:p-4 dark:border-slate-700 dark:bg-slate-800/50">
-              <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-slate-400">Price</p>
-              <p className="mt-1 truncate text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50">
-                {isOnTrial ? (
-                  'Free'
-                ) : currentPlanPrice !== null && currentPlanPrice > 0 ? (
-                  <>{formatCurrency(currentPlanPrice, currentPlanCurrency)}<span className="text-sm font-normal text-gray-500 dark:text-slate-500">{getBillingPeriodLabel(currentPlanBillingPeriod)}</span></>
-                ) : currentPlan?.price ? (
-                  <>{formatCurrency(currentPlan.price, currentPlan.currency)}</>
-                ) : (
-                  '-'
-                )}
-              </p>
-            </div>
-            <div className="min-w-0 rounded-lg border border-gray-200 bg-gray-50 p-3 sm:p-4 dark:border-slate-700 dark:bg-slate-800/50">
-              <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-slate-400">
-                {isOnTrial ? 'Trial Started' : 'Plan Start'}
-              </p>
-              <p className="mt-1 truncate text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50">
-                {isOnTrial
-                  ? (companySettings?.trial_start_date
-                      ? formatISTDate(companySettings.trial_start_date)
-                      : '-')
-                  : (companySettings?.plan_start_date
-                      ? formatISTDate(companySettings.plan_start_date)
-                      : '-')
-                }
-              </p>
-            </div>
-            <div className="min-w-0 rounded-lg border border-gray-200 bg-gray-50 p-3 sm:p-4 dark:border-slate-700 dark:bg-slate-800/50">
-              <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-slate-400">
-                {isOnTrial ? 'Trial Ends' : 'Plan Expires'}
-              </p>
-              <p className="mt-1 truncate text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50">
-                {isOnTrial
-                  ? (companySettings?.trial_end_date
-                      ? formatISTDate(companySettings.trial_end_date)
-                      : '-')
-                  : (companySettings?.plan_expiry_date
-                      ? formatISTDate(companySettings.plan_expiry_date)
-                      : '-')
-                }
-              </p>
-            </div>
-          </div>
-
-          {/* PS03 Fix: Renew Plan Button for Expired/Expiring Subscriptions */}
-          {!isOnTrial && !isPendingPayment && !isLocked && (companySettings?.plan_expiry_date || isExpiredSubscription) && (
-            (() => {
-              const planName = currentPlan?.name || companySettings?.current_plan_name?.replace(/\s*\([^)]*\)\s*$/, '') || 'Your';
-
-              // If no expiry date but status is expired, show expired banner directly
-              if (!companySettings?.plan_expiry_date && isExpiredSubscription) {
-                return (
-                  <div className="mt-4 sm:mt-6 p-3 sm:p-4 rounded-lg border-2 bg-destructive-subtle border-destructive-line">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                      <div className="flex items-start sm:items-center gap-2 sm:gap-3">
-                        <AlertCircle className="w-5 h-5 sm:w-6 sm:h-6 text-destructive flex-shrink-0" />
-                        <div>
-                          <h4 className="font-medium text-destructive-strong text-sm sm:text-base">Plan Expired</h4>
-                          <p className="text-xs sm:text-sm text-destructive">
-                            Your {planName} plan has expired. Please renew to continue using all features.
-                          </p>
-                        </div>
-                      </div>
-                      {currentPlan && (
-                        <Button
-                          variant="destructive"
-                          className="w-full sm:w-auto flex-shrink-0"
-                          onClick={() => {
-                            setSelectedPlanForPayment(currentPlan);
-                            setModalStep('isolation');
-                            setIsolationType(hasDedicatedDatabase ? 'database' : 'schema');
-                            setIsNewTenant(false);
-                            setIsYearly(currentPlanBillingPeriod?.toUpperCase() === 'ANNUAL');
-                            setTransactionResult(null);
-                            setError(null);
-                            setShowPaymentModal(true);
-                          }}
-                          icon={<ArrowRight className="w-4 h-4" />}
-                        >
-                          Renew Current Plan
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                );
-              }
-
-              const expiryDate = new Date(companySettings!.plan_expiry_date!);
-              const now = new Date();
-              const daysUntilExpiry = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-              const daysSinceExpiry = Math.floor((now.getTime() - expiryDate.getTime()) / (1000 * 60 * 60 * 24));
-              const isExpired = daysUntilExpiry <= 0 || isExpiredSubscription;
-              const isExpiringSoon = !isExpired && daysUntilExpiry >= 0 && daysUntilExpiry <= 7;
-
-              if (isExpired || isExpiringSoon) {
-                return (
-                  <div className={`mt-4 sm:mt-6 p-3 sm:p-4 rounded-lg border-2 ${
-                    isExpired
-                      ? 'bg-destructive-subtle border-destructive-line'
-                      : 'bg-warning-subtle border-warning-line'
-                  }`}>
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                      <div className="flex items-start sm:items-center gap-2 sm:gap-3">
-                        <AlertCircle className={`w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0 ${
-                          isExpired ? 'text-destructive' : 'text-warning'
-                        }`} />
-                        <div>
-                          <h4 className={`font-medium text-sm sm:text-base ${
-                            isExpired ? 'text-destructive-strong' : 'text-warning-strong'
-                          }`}>
-                            {isExpired ? 'Plan Expired' : 'Plan Expiring Soon'}
-                          </h4>
-                          <p className={`text-xs sm:text-sm ${
-                            isExpired ? 'text-destructive' : 'text-warning'
-                          }`}>
-                            {isExpired
-                              ? daysSinceExpiry === 0
-                                ? `Your ${planName} plan expired today. Please renew to continue using all features.`
-                                : `Your ${planName} plan expired ${daysSinceExpiry} day${daysSinceExpiry !== 1 ? 's' : ''} ago. Please renew to continue using all features.`
-                              : `Your ${planName} plan expires in ${daysUntilExpiry} day${daysUntilExpiry !== 1 ? 's' : ''}`
-                            }
-                          </p>
-                        </div>
-                      </div>
-                      {currentPlan && (
-                        <button
-                          onClick={() => {
-                            setSelectedPlanForPayment(currentPlan);
-                            setModalStep('isolation');
-                            setIsolationType(hasDedicatedDatabase ? 'database' : 'schema');
-                            setIsNewTenant(false);
-                            setIsYearly(currentPlanBillingPeriod?.toUpperCase() === 'ANNUAL');
-                            setTransactionResult(null);
-                            setError(null);
-                            setShowPaymentModal(true);
-                          }}
-                          className={`px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg font-medium transition-colors flex items-center gap-2 text-xs sm:text-sm w-full sm:w-auto justify-center flex-shrink-0 ${
-                            isExpired
-                              ? 'bg-destructive hover:bg-destructive text-white'
-                              : 'bg-warning hover:opacity-90 text-white'
-                          }`}
-                        >
-                          <ArrowRight className="w-4 h-4" />
-                          Renew Current Plan
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              }
-              return null;
-            })()
-          )}
-
-          {/* Quotas - Using data from quota-status API via companySettings */}
-          {companySettings && (
-            <div className="mt-6 pt-6 border-t border-gray-200 dark:border-slate-700">
-              <h3 className="mb-3 sm:mb-4 text-sm font-semibold text-gray-900 dark:text-slate-50">Your Plan Limits</h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2 sm:gap-3">
-                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-center dark:border-slate-700 dark:bg-slate-800/50">
-                  <p className="text-xl sm:text-2xl font-semibold tabular-nums text-gray-900 dark:text-slate-50">
-                    {formatQuotaValue(companySettings.max_seats)}
-                  </p>
-                  <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">Team Seats</p>
-                </div>
-                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-center dark:border-slate-700 dark:bg-slate-800/50">
-                  <p className="text-xl sm:text-2xl font-semibold tabular-nums text-gray-900 dark:text-slate-50">
-                    {formatQuotaValue(companySettings.max_jobs)}
-                  </p>
-                  <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">Job Postings</p>
-                </div>
-                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-center dark:border-slate-700 dark:bg-slate-800/50">
-                  <p className="text-xl sm:text-2xl font-semibold tabular-nums text-gray-900 dark:text-slate-50">
-                    {formatQuotaValue(companySettings.max_resume_uploads)}
-                  </p>
-                  <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">Resume Storage</p>
-                </div>
-                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-center dark:border-slate-700 dark:bg-slate-800/50">
-                  <p className="text-xl sm:text-2xl font-semibold tabular-nums text-gray-900 dark:text-slate-50">
-                    {formatQuotaValue(companySettings.max_resume_searches)}
-                  </p>
-                  <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">Resume Scores</p>
-                </div>
-                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-center dark:border-slate-700 dark:bg-slate-800/50">
-                  <p className="text-xl sm:text-2xl font-semibold tabular-nums text-gray-900 dark:text-slate-50">
-                    {formatQuotaValue(companySettings.max_assessments)}
-                  </p>
-                  <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">Assessments</p>
-                </div>
-                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-center dark:border-slate-700 dark:bg-slate-800/50">
-                  <p className="text-xl sm:text-2xl font-semibold tabular-nums text-gray-900 dark:text-slate-50">
-                    {formatQuotaValue(companySettings.max_ai_interviews)}
-                  </p>
-                  <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">AI Interviews</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Plan Features - non-quota features only (Teams, API Access, SSO, etc.) */}
-          {(() => {
-            const QUOTA_FEATURE_KEYS = new Set([
-              'resume_upload', 'resume_storage', 'resume_scoring',
-              'assessment', 'assessments', 'ai_interview', 'ai_interviews',
-              'seats', 'storage', 'jobs',
-            ]);
-            // Also filter by feature_category if available (category 'quota' or 'metered')
-            const QUOTA_CATEGORIES = new Set(['quota', 'metered', 'usage']);
-            const seen = new Set<string>();
-            const nonQuotaFeatures = (sharedQuotaData?.features ?? []).filter(f => {
-              if (QUOTA_FEATURE_KEYS.has(f.feature_key)) return false;
-              if (f.feature_category && QUOTA_CATEGORIES.has(f.feature_category.toLowerCase())) return false;
-              // deduplicate by feature_key
-              if (seen.has(f.feature_key)) return false;
-              seen.add(f.feature_key);
-              return true;
-            });
-            if (nonQuotaFeatures.length === 0) return null;
-            return (
-              <div className="mt-6 pt-6 border-t border-gray-200 dark:border-slate-700">
-                <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Plan Features</h3>
-                  <div className="flex items-center gap-3">
-                    {sharedQuotaData?.plan_info?.plan_tier && (
-                      <span className="text-xs text-gray-500 dark:text-slate-500">
-                        Tier: <span className="font-medium text-gray-800 dark:text-slate-100 capitalize">{sharedQuotaData.plan_info.plan_tier}</span>
-                      </span>
-                    )}
-                    {sharedQuotaData?.plan_info?.isolation_type && (
-                      <span className="text-xs text-gray-500 dark:text-slate-500">
-                        Isolation: <span className="font-medium text-gray-800 dark:text-slate-100 capitalize">{sharedQuotaData.plan_info.isolation_type.toLowerCase()}</span>
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-                  {nonQuotaFeatures.map(f => (
-                    <div key={f.feature_key} className="flex items-center gap-2 p-2 rounded-lg bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700">
-                      {f.is_enabled ? (
-                        <CheckCircle className="w-4 h-4 text-success flex-shrink-0" />
-                      ) : (
-                        <XCircle className="w-4 h-4 text-gray-300 flex-shrink-0" />
-                      )}
-                      <span className={`text-xs font-medium ${f.is_enabled ? 'text-gray-800 dark:text-slate-100' : 'text-gray-400 dark:text-slate-500'}`}>
-                        {f.feature_name}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })()}
-
-        </div>
 
         {/* Earlier payment not applied yet — why Choose Plan is disabled. */}
         {purchaseHold && (
@@ -2832,141 +2854,124 @@ function CurrentPlanContent() {
         {/* Available Plans - Hidden for Billing Manager (RBAC03) */}
         {!isBillingManager && plans.length > 0 && (
           <>
-            <div className="mb-5 text-center">
-              <h2 className="text-base lg:text-lg font-semibold text-gray-900 dark:text-slate-50">
-                {isOnTrial || isLocked ? 'Choose a Plan' : 'Available Plans'}
-              </h2>
-              <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
-                Pick the plan that fits your team. Switch between monthly and yearly billing below.
-              </p>
-              {queuedUpgrades.length > 0 && !isOnTrial && !isLocked && (
-                <p className="mt-2 text-xs sm:text-sm text-warning">
-                  You have a pending plan change queued. {queuedUpgrades.some(u => u.can_cancel !== false)
-                    ? 'Cancel it above or apply it now to select a different plan.'
-                    : 'Apply it now to select a different plan.'}
+            <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+              <div className="min-w-0">
+                <h2 className="text-base lg:text-lg font-semibold text-gray-900 dark:text-slate-50">
+                  {isOnTrial || isLocked ? 'Choose a Plan' : 'Upgrade Plans'}
+                </h2>
+                <p className="mt-0.5 text-sm text-gray-500 dark:text-slate-400">
+                  Pick the plan that fits your team. Switch between monthly and yearly billing.
                 </p>
-              )}
+                {queuedUpgrades.length > 0 && !isOnTrial && !isLocked && (
+                  <p className="mt-1.5 text-xs sm:text-sm text-warning">
+                    You have a pending plan change queued. {queuedUpgrades.some(u => u.can_cancel !== false)
+                      ? 'Cancel it above or apply it now to select a different plan.'
+                      : 'Apply it now to select a different plan.'}
+                  </p>
+                )}
+              </div>
 
               {/* Billing Period Toggle - No common discount, each plan shows its own */}
-              <div className="mt-4 inline-flex items-center gap-3 rounded-full border border-gray-200 bg-white px-4 py-2 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:gap-4">
-                <span className={`text-sm ${!isYearly ? "text-gray-900 dark:text-slate-50 font-semibold" : "text-gray-500 dark:text-slate-500"}`}>
-                  Monthly
-                </span>
-                <button
-                  onClick={() => setIsYearly(!isYearly)}
-                  className={`relative h-7 w-12 rounded-full transition-colors duration-200 focus:outline-none focus:ring-4 focus:ring-brand-blue/15 ${
-                    isYearly
-                      ? "bg-brand-blue shadow-sm shadow-brand-blue/25"
-                      : "bg-gray-300"
+              <div role="group" aria-label="Toggle billing period" className="relative inline-flex shrink-0 items-center self-start rounded-xl bg-gray-100 p-1 dark:bg-slate-800 md:self-auto">
+                {/* Sliding pill — moves under the selected option */}
+                <span
+                  aria-hidden="true"
+                  className={`pointer-events-none absolute left-1 top-1 bottom-1 w-[calc(50%-4px)] rounded-lg bg-white shadow-sm ring-1 ring-black/[0.04] transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none dark:bg-slate-900 dark:ring-white/[0.06] ${
+                    isYearly ? 'translate-x-full' : 'translate-x-0'
                   }`}
-                  aria-label="Toggle billing period"
-                >
-                  <span
-                    className={`absolute top-1 left-1 h-5 w-5 transform rounded-full bg-white shadow-md transition-transform duration-200 ${
-                      isYearly ? "translate-x-5" : "translate-x-0"
-                    }`}
-                  />
-                </button>
-                <span className={`text-sm ${isYearly ? "text-gray-900 dark:text-slate-50 font-semibold" : "text-gray-500 dark:text-slate-500"}`}>
-                  Yearly
-                </span>
+                />
+                {[
+                  { label: 'Monthly', yearly: false },
+                  { label: 'Yearly', yearly: true },
+                ].map(({ label, yearly }) => {
+                  const selected = isYearly === yearly;
+                  return (
+                    <button
+                      key={label}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => setIsYearly(yearly)}
+                      className={`relative z-10 w-24 rounded-lg py-1.5 text-center text-sm font-semibold transition-colors duration-300 ${
+                        selected
+                          ? 'text-gray-900 dark:text-slate-50'
+                          : 'text-gray-500 hover:text-gray-900 dark:text-slate-400 dark:hover:text-slate-100'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
-            <div
-              className={`grid gap-4 sm:gap-6 lg:gap-8 pt-4 sm:pt-6 lg:pt-8 max-w-6xl mx-auto ${
-                plans.length === 1 ? 'grid-cols-1 max-w-md' :
-                plans.length === 2 ? 'grid-cols-1 sm:grid-cols-2 max-w-3xl' :
-                'grid-cols-1 sm:grid-cols-2 xl:grid-cols-3'
-              }`}
-              style={{ gridAutoRows: '1fr' }}
-              onMouseLeave={() => setHoveredPlan(null)}
-            >
-              {[...plans].sort((a, b) => {
+            {/* Plans grouped into one boxed section per tier */}
+            <div className="space-y-4">
+              {(() => {
                 const tierOrder: Record<string, number> = { STARTER: 0, PROFESSIONAL: 1, ENTERPRISE: 2 };
-                const priceA = tierOrder[a.tier?.toUpperCase()] ?? 99;
-                const priceB = tierOrder[b.tier?.toUpperCase()] ?? 99;
-                return priceA - priceB;
-              }).map((plan) => {
-                const Icon = plan.icon;
+                const TIER_SECTIONS: Record<string, { label: string; description: string; icon: typeof Users }> = {
+                  STARTER: { label: 'Starter Plans', description: 'For individuals and small teams getting started.', icon: Users },
+                  PROFESSIONAL: { label: 'Professional Plans', description: 'For growing teams that need more capacity.', icon: Building2 },
+                  ENTERPRISE: { label: 'Enterprise Plans', description: 'For large organisations with advanced hiring needs.', icon: Zap },
+                };
+                const groups: { tier: string; plans: DisplayPlan[] }[] = [];
+                [...plans].sort((a, b) => {
+                  const priceA = tierOrder[a.tier?.toUpperCase()] ?? 99;
+                  const priceB = tierOrder[b.tier?.toUpperCase()] ?? 99;
+                  return priceA - priceB;
+                }).forEach((plan) => {
+                  const tierKey = plan.tier?.toUpperCase() || 'OTHER';
+                  const group = groups.find(g => g.tier === tierKey);
+                  if (group) group.plans.push(plan);
+                  else groups.push({ tier: tierKey, plans: [plan] });
+                });
+
+                const maxPlansPerTier = Math.max(...groups.map(g => g.plans.length));
+
+                const renderPlanCard = (plan: DisplayPlan) => {
                 const isSelectedPending = isPendingPayment && companySettings?.selected_plan_id === plan.numericId;
                 // Show "Current Plan" only when viewing the matching billing period
                 // e.g., if user has Annual plan, show "Current Plan" only when toggle is on Annual
                 const isCurrentForToggle = (plan.isCurrentMonthly && !isYearly) || (plan.isCurrentAnnual && isYearly);
-                const isHovered = hoveredPlan === plan.id;
-                const hasHoveredPlan = hoveredPlan !== null;
 
                 return (
                   <div
                     key={plan.id}
-                    className="flex"
-                    onMouseEnter={() => setHoveredPlan(plan.id)}
-                    style={{
-                      transition: 'opacity 0.3s ease-out',
-                      opacity: hasHoveredPlan && !isHovered ? 0.5 : 1,
-                    }}
-                  >
-                  <div
-                    style={{
-                      width: '100%',
-                      display: 'flex',
-                      transform: isHovered ? 'translateY(-8px)' : 'translateY(0)',
-                      transition: 'transform 0.3s ease-out',
-                    }}
-                  >
-                  <Card
-                    className={`relative p-4 sm:p-6 lg:p-8 flex flex-col w-full transition-all duration-300 ease-out ${
+                    className={`relative flex flex-col rounded-xl p-4 sm:p-5 transition-all duration-300 ease-out ${
                       isSelectedPending
-                        ? "border-2 border-warning-line shadow-xl"
+                        ? 'border-2 border-warning-line bg-white shadow-lg shadow-warning/20 hover:shadow-xl hover:shadow-warning/30 dark:bg-slate-900'
                         : isCurrentForToggle
-                          ? "border-2 border-gray-600 shadow-xl"
-                          : isHovered
-                            ? "border-2 border-gray-400 shadow-xl"
-                            : plan.popular
-                              ? "border-2 border-gray-800 shadow-xl"
-                              : "border border-gray-200 dark:border-slate-700 shadow-sm"
+                          ? 'border-2 border-success bg-gradient-to-b from-success/[0.06] to-white shadow-lg shadow-success/20 hover:shadow-xl hover:shadow-success/30 dark:from-success/15 dark:to-slate-900 dark:shadow-success/10'
+                          : plan.popular
+                            ? 'border-2 border-brand-blue bg-white shadow-lg shadow-brand-blue/20 hover:-translate-y-1 hover:shadow-2xl hover:shadow-brand-blue/30 dark:bg-slate-900 dark:shadow-brand-blue/20'
+                            : 'border border-gray-200 bg-white shadow-md shadow-slate-200/70 hover:-translate-y-1 hover:shadow-xl hover:shadow-slate-300/60 dark:border-slate-700 dark:bg-slate-900 dark:shadow-black/30 dark:hover:shadow-black/50'
                     }`}
                   >
                     {isSelectedPending && (
-                      <div className="absolute -top-4 left-1/2 -translate-x-1/2">
-                        <Badge className="bg-warning text-white px-4 py-1">
-                          Selected - Pending Payment
-                        </Badge>
-                      </div>
+                      <span className="absolute -top-3 right-4 inline-flex items-center gap-1 rounded-full bg-warning px-2.5 py-0.5 text-[11px] font-semibold text-white shadow-sm">
+                        <Clock className="h-3.5 w-3.5" />
+                        Selected - Pending Payment
+                      </span>
                     )}
                     {isCurrentForToggle && !isSelectedPending && (
-                      <div className="absolute -top-4 left-1/2 -translate-x-1/2">
-                        <Badge className="bg-gray-700 text-white px-4 py-1">
-                          Current Plan
-                        </Badge>
-                      </div>
+                      <span className="absolute -top-3 right-4 inline-flex items-center gap-1 rounded-full bg-success px-2.5 py-0.5 text-[11px] font-semibold text-white shadow-sm shadow-success/25">
+                        <CheckCircle className="h-3.5 w-3.5" />
+                        Current Plan
+                      </span>
                     )}
                     {plan.popular && !isCurrentForToggle && !isSelectedPending && (
-                      <div className="absolute -top-4 left-1/2 -translate-x-1/2">
-                        <Badge className="bg-brand-orange text-white px-4 py-1 shadow-md shadow-brand-orange/25">
-                          Most Popular
-                        </Badge>
-                      </div>
+                      <span className="absolute -top-3 right-4 inline-flex items-center gap-1 rounded-full bg-brand-blue px-2.5 py-0.5 text-[11px] font-semibold text-white shadow-sm shadow-brand-blue/25">
+                        <Sparkles className="h-3.5 w-3.5" />
+                        Most Popular
+                      </span>
                     )}
 
-                    <div className="mb-4 flex items-center gap-3">
-                      <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${plan.gradient} shadow-sm`}>
-                        <Icon className="h-6 w-6 text-white" />
-                      </div>
-                      {plan.tier && (
-                        <Badge className="text-[10px] uppercase tracking-widest bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 border border-gray-200 dark:border-slate-700">
-                          {plan.tier}
-                        </Badge>
-                      )}
-                    </div>
+                    <h3 className="pt-1 text-base font-bold text-gray-900 dark:text-slate-50">{plan.name}</h3>
+                    <p className="mt-0.5 min-h-[36px] text-xs sm:text-sm text-gray-600 dark:text-slate-400">{plan.description}</p>
 
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-slate-50 mb-1">{plan.name}</h3>
-                    <p className="text-gray-600 dark:text-slate-400 mb-4 sm:mb-6 min-h-[36px] sm:min-h-[40px] text-xs sm:text-sm">{plan.description}</p>
-
-                    <div className="mb-4 sm:mb-6">
+                    <div className="my-4">
                       {(plan.monthlyPrice || plan.annualPrice) ? (
                         <div>
                           <div className="flex items-baseline gap-1">
-                            <span className="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900 dark:text-slate-50">
+                            <span className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 dark:text-slate-50">
                               {formatCurrency(
                                 isYearly
                                   ? (plan.annualPrice ?? plan.monthlyPrice ?? 0)
@@ -2980,16 +2985,15 @@ function CurrentPlanContent() {
                                 ? (plan.annualPrice ? '/year' : '/month')
                                 : (plan.monthlyPrice ? '/month' : '/year')}
                             </span>
-
                           </div>
                           {/* Show strikethrough price and discount badge when viewing yearly and both prices exist */}
                           {isYearly && plan.monthlyPrice && plan.annualPrice && (plan.monthlyPrice * 12) > plan.annualPrice && (
                             <div className="flex items-center gap-2 mt-1">
-                              <span className="text-sm text-gray-400 dark:text-slate-500 line-through">
+                              <span className="text-xs text-gray-400 dark:text-slate-500 line-through">
                                 {formatCurrency(plan.monthlyPrice * 12, plan.currency)}
                               </span>
                               {plan.discountPercentage && plan.discountPercentage > 0 && (
-                                <span className="inline-block px-2 py-0.5 text-xs font-medium bg-success-subtle text-success rounded-full">
+                                <span className="text-xs font-bold text-brand-teal">
                                   Save {Math.round(plan.discountPercentage)}%
                                 </span>
                               )}
@@ -3018,17 +3022,17 @@ function CurrentPlanContent() {
                             <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">
                               or {formatCurrency(plan.annualPrice, plan.currency)}/year
                               {plan.discountPercentage && plan.discountPercentage > 0 && (
-                                <span className="text-success"> (Save {Math.round(plan.discountPercentage)}%)</span>
+                                <span className="text-brand-teal font-semibold"> (Save {Math.round(plan.discountPercentage)}%)</span>
                               )}
                             </p>
                           )}
                         </div>
                       ) : (
-                        <div className="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900 dark:text-slate-50">Custom</div>
+                        <div className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 dark:text-slate-50">Custom</div>
                       )}
                     </div>
 
-                    {/* Quotas Section - Single column layout */}
+                    {/* Quotas Section - tinted single-column box */}
                     {(() => {
                       // Use correct quotas based on billing toggle - all values from API directly
                       const rawQuotas = isYearly
@@ -3047,64 +3051,46 @@ function CurrentPlanContent() {
                         AIU: rawQuotas.AIU ?? rawQuotas.ai_interviews ?? rawQuotas.ai_interview,
                       };
 
+                      const quotaRows = [
+                        { label: 'Max Users', value: displayQuotas.max_seats },
+                        { label: 'Max Jobs', value: displayQuotas.max_jobs },
+                        { label: 'Resume Storage', value: displayQuotas.RU },
+                        { label: 'Resume Scores', value: displayQuotas.RS },
+                        { label: 'Assessments', value: displayQuotas.AS },
+                        { label: 'AI Interviews', value: displayQuotas.AIU },
+                      ].filter(row => row.value != null && formatQuotaValue(row.value) !== '-');
+
+                      if (quotaRows.length === 0) return null;
+
                       return (
-                        <div className="mb-6 py-4 border-t border-b border-gray-100 dark:border-slate-700/60">
-                          <div className="space-y-2 text-sm">
-                            {displayQuotas.max_seats != null && formatQuotaValue(displayQuotas.max_seats) !== '-' && (
-                              <div className="flex justify-between items-center">
-                                <span className="text-gray-500 dark:text-slate-500">Max Users</span>
-                                <span className="font-semibold text-gray-900 dark:text-slate-50">{formatQuotaValue(displayQuotas.max_seats)}</span>
+                        <div className={`mb-4 space-y-2 rounded-lg px-3 py-2.5 text-sm ${
+                          isCurrentForToggle ? 'bg-brand-blue/[0.06] dark:bg-slate-800/70' : 'bg-gray-50 dark:bg-slate-800/50'
+                        }`}>
+                          {quotaRows.map(row => {
+                            const formatted = formatQuotaValue(row.value);
+                            return (
+                              <div key={row.label} className="flex items-center justify-between gap-2">
+                                <span className="text-gray-500 dark:text-slate-400">{row.label}</span>
+                                <span className={`font-semibold ${formatted === 'Unlimited' ? 'text-brand-teal' : 'text-gray-900 dark:text-slate-50'}`}>{formatted}</span>
                               </div>
-                            )}
-                            {displayQuotas.max_jobs != null && formatQuotaValue(displayQuotas.max_jobs) !== '-' && (
-                              <div className="flex justify-between items-center">
-                                <span className="text-gray-500 dark:text-slate-500">Max Jobs</span>
-                                <span className="font-semibold text-gray-900 dark:text-slate-50">{formatQuotaValue(displayQuotas.max_jobs)}</span>
-                              </div>
-                            )}
-                            {displayQuotas.RU != null && formatQuotaValue(displayQuotas.RU) !== '-' && (
-                              <div className="flex justify-between items-center">
-                                <span className="text-gray-500 dark:text-slate-500">Resume Storage</span>
-                                <span className="font-semibold text-gray-900 dark:text-slate-50">{formatQuotaValue(displayQuotas.RU)}</span>
-                              </div>
-                            )}
-                            {displayQuotas.RS != null && formatQuotaValue(displayQuotas.RS) !== '-' && (
-                              <div className="flex justify-between items-center">
-                                <span className="text-gray-500 dark:text-slate-500">Resume Scores</span>
-                                <span className="font-semibold text-gray-900 dark:text-slate-50">{formatQuotaValue(displayQuotas.RS)}</span>
-                              </div>
-                            )}
-                            {displayQuotas.AS != null && formatQuotaValue(displayQuotas.AS) !== '-' && (
-                              <div className="flex justify-between items-center">
-                                <span className="text-gray-500 dark:text-slate-500">Assessments</span>
-                                <span className="font-semibold text-gray-900 dark:text-slate-50">{formatQuotaValue(displayQuotas.AS)}</span>
-                              </div>
-                            )}
-                            {displayQuotas.AIU != null && formatQuotaValue(displayQuotas.AIU) !== '-' && (
-                              <div className="flex justify-between items-center">
-                                <span className="text-gray-500 dark:text-slate-500">AI Interviews</span>
-                                <span className="font-semibold text-gray-900 dark:text-slate-50">{formatQuotaValue(displayQuotas.AIU)}</span>
-                              </div>
-                            )}
-                          </div>
+                            );
+                          })}
                         </div>
                       );
                     })()}
 
-                    {/* Features Section - Expand on hover */}
+                    {/* Features Section - first 4, expandable */}
                     {(() => {
                       const displayFeatures = isYearly
                         ? (plan.annualFeatures?.length ? plan.annualFeatures : plan.features)
                         : (plan.monthlyFeatures?.length ? plan.monthlyFeatures : plan.features);
                       return displayFeatures.length > 0 && (
-                        <div className="mb-6">
-                          <ul className="space-y-2.5">
+                        <div className="mb-5">
+                          <ul className="space-y-1.5">
                             {displayFeatures.slice(0, expandedFeaturesPlan === plan.id ? undefined : 4).map((feature, idx) => (
-                              <li key={idx} className="flex items-start gap-2.5">
-                                <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-brand-teal/15 text-brand-teal">
-                                  <Check className="h-3 w-3" strokeWidth={3} />
-                                </span>
-                                <span className="text-gray-700 dark:text-slate-300 text-sm">{feature}</span>
+                              <li key={idx} className="flex items-start gap-2">
+                                <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-brand-teal" />
+                                <span className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300">{feature}</span>
                               </li>
                             ))}
                           </ul>
@@ -3114,7 +3100,7 @@ function CurrentPlanContent() {
                                 e.stopPropagation();
                                 setExpandedFeaturesPlan(expandedFeaturesPlan === plan.id ? null : plan.id);
                               }}
-                              className="text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 text-sm mt-2 pl-6 text-left"
+                              className="mt-2 pl-6 text-left text-xs sm:text-sm font-medium text-brand-blue hover:underline"
                             >
                               {expandedFeaturesPlan === plan.id
                                 ? 'Show less'
@@ -3143,11 +3129,11 @@ function CurrentPlanContent() {
                         // Disable if viewing monthly but only yearly available
                         (!isYearly && !plan.monthlyPrice && !!plan.annualPrice)
                       }
-                      className={`block w-full h-12 rounded-lg font-medium text-center transition-all flex items-center justify-center gap-2 mt-auto ${
+                      className={`mt-auto flex h-11 w-full items-center justify-center gap-2 rounded-lg text-sm font-semibold transition-colors ${
                         !canUpgradePlan && !isCurrentForToggle
                           ? "bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-slate-500 cursor-not-allowed"
                           : isCurrentForToggle || isSelectedPending
-                          ? "bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-slate-500 cursor-not-allowed"
+                          ? "bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-400 cursor-not-allowed"
                           : purchaseHold || queuedUpgrades.length > 0
                             ? "bg-warning-subtle text-warning cursor-not-allowed"
                             : (!plan.monthlyPrice && !plan.annualPrice)
@@ -3156,8 +3142,8 @@ function CurrentPlanContent() {
                                 (isYearly && !plan.annualPrice && plan.monthlyPrice) || (!isYearly && !plan.monthlyPrice && plan.annualPrice)
                                 ? "bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-slate-500 cursor-not-allowed"
                               : plan.popular
-                                ? "bg-brand-blue text-white shadow-md shadow-brand-blue/25 hover:-translate-y-0.5 hover:shadow-lg"
-                                : "border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue"
+                                ? "bg-brand-blue text-white shadow-sm shadow-brand-blue/25 hover:bg-brand-blue-2"
+                                : "bg-gray-100 dark:bg-slate-800 text-gray-800 dark:text-slate-200 hover:bg-brand-blue hover:text-white"
                       }`}
                     >
                       {isCurrentForToggle ? (
@@ -3197,11 +3183,60 @@ function CurrentPlanContent() {
                         return tierComparison === -1 ? 'Downgrade' : 'Upgrade';
                       })()}
                     </button>
-                  </Card>
-                  </div>
                   </div>
                 );
-              })}
+                };
+
+                return groups.map((group) => {
+                  const section = TIER_SECTIONS[group.tier] || { label: `${group.tier.charAt(0)}${group.tier.slice(1).toLowerCase()} Plans`, description: 'Additional plans available for your workspace.', icon: Layers };
+                  const SectionIcon = section.icon;
+                  const hasCurrentPlan = group.plans.some(p => (p.isCurrentMonthly && !isYearly) || (p.isCurrentAnnual && isYearly));
+                  const count = group.plans.length;
+                  return (
+                    <section
+                      key={group.tier}
+                      aria-label={section.label}
+                      className={`rounded-xl border bg-white p-4 shadow-sm dark:bg-slate-900 sm:p-5 ${
+                        hasCurrentPlan ? 'border-brand-blue/25 dark:border-brand-blue/40' : 'border-gray-200 dark:border-slate-700'
+                      }`}
+                    >
+                      <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 pb-3 dark:border-slate-700/60">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 text-brand-blue">
+                            <SectionIcon className="h-[18px] w-[18px]" />
+                          </span>
+                          <div className="min-w-0">
+                            <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50 sm:text-base">{section.label}</h3>
+                            <p className="text-xs text-gray-500 dark:text-slate-400">{section.description}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {hasCurrentPlan && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-brand-blue/10 px-2.5 py-0.5 text-[11px] font-semibold text-brand-blue">
+                              <CheckCircle className="h-3.5 w-3.5" />
+                              Your tier
+                            </span>
+                          )}
+                          <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-[11px] font-semibold text-gray-600 dark:bg-slate-800 dark:text-slate-400">
+                            {count} plan{count !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                      </div>
+                      {/* Same column count in every tier box so cards share one width */}
+                      <div
+                        className={`grid gap-4 pt-3 ${
+                          maxPlansPerTier === 1 ? 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3' :
+                          maxPlansPerTier === 2 ? 'grid-cols-1 md:grid-cols-2' :
+                          maxPlansPerTier === 3 ? 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3' :
+                          'grid-cols-1 md:grid-cols-2 xl:grid-cols-4'
+                        }`}
+                      >
+                        {group.plans.map(renderPlanCard)}
+                      </div>
+                    </section>
+                  );
+                });
+              })()}
             </div>
           </>
         )}
@@ -3217,291 +3252,316 @@ function CurrentPlanContent() {
       </div>
       </div>
 
-      {/* Plan Selection Modal */}
+      {/* Plan Selection Modal — bottom sheet on mobile, centred two-column dialog on desktop.
+          Body scrolls only when the viewport is too short, with the scrollbar hidden. */}
       {showPaymentModal && selectedPlanForPayment && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-4xl w-full max-h-[90dvh] overflow-y-auto">
+        <div ref={paymentModalRef} className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center sm:p-4">
+          <div className={`flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl dark:bg-slate-900 sm:max-h-[calc(100dvh-2rem)] sm:rounded-2xl ${
+            modalStep === 'result' ? 'sm:max-w-4xl' : 'sm:max-w-5xl'
+          }`}>
             {/* Modal Header */}
-            <div className="flex items-center justify-between gap-3 border-b border-gray-200 p-6 dark:border-slate-700">
-              <div className="flex items-center gap-3">
-                <span className="hidden sm:flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 text-brand-blue">
-                  <CreditCard className="h-5 w-5" />
-                </span>
-                <div>
-                  <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50">
-                    {modalStep === 'result'
-                      ? (isDowngradePayment ? 'Downgrade Confirmed!' : 'Upgrade Complete!')
-                      : (isDowngradePayment ? 'Downgrade Plan' : 'Upgrade Plan')}
-                  </h2>
-                  <p className="text-sm text-gray-600 dark:text-slate-400 mt-0.5">
-                    {selectedPlanForPayment.name} - {formatCurrency(
-                      isYearly && selectedPlanForPayment.annualPrice != null
-                        ? selectedPlanForPayment.annualPrice
-                        : (selectedPlanForPayment.monthlyPrice ?? selectedPlanForPayment.price ?? 0),
-                      selectedPlanForPayment.currency
-                    )}{isYearly && selectedPlanForPayment.annualPrice != null ? '/year' : '/month'}
-                  </p>
+            {(() => {
+              const PlanIcon = selectedPlanForPayment.icon;
+              const billedYearly = (isYearly && !!selectedPlanForPayment.annualPrice) || (!selectedPlanForPayment.monthlyPrice && !!selectedPlanForPayment.annualPrice);
+              return (
+                <div className="flex shrink-0 items-start justify-between gap-3 border-b border-gray-100 px-4 py-3 dark:border-slate-700/60 sm:px-5">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 text-brand-blue sm:flex">
+                      <PlanIcon className="h-5 w-5" />
+                    </span>
+                    <div className="min-w-0">
+                      <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-slate-50">
+                        {modalStep === 'result'
+                          ? (isDowngradePayment ? 'Downgrade Confirmed!' : 'Upgrade Complete!')
+                          : (isDowngradePayment ? 'Downgrade Plan' : 'Upgrade Plan')}
+                      </h2>
+                      <div className="mt-0.5 flex flex-wrap items-center gap-2">
+                        <span className="text-[13px] text-gray-600 dark:text-slate-400">{selectedPlanForPayment.name}</span>
+                        {modalStep !== 'result' && (
+                          <span className="rounded-full bg-brand-blue/10 px-2 py-0.5 text-[11px] font-semibold text-brand-blue">
+                            {billedYearly ? 'Yearly Plan' : 'Monthly Plan'}
+                          </span>
+                        )}
+                      </div>
+                      {modalStep !== 'result' && selectedPlanForPayment.description && (
+                        <p className="mt-0.5 line-clamp-1 text-xs text-gray-500 dark:text-slate-500">{selectedPlanForPayment.description}</p>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => { setShowPaymentModal(false); setModalStep('isolation'); setIsDowngradePayment(false); setShowAllModalFeatures(false); }}
+                    className="shrink-0 rounded-lg p-2 transition-colors hover:bg-gray-100 dark:hover:bg-slate-700"
+                    aria-label="Close"
+                  >
+                    <X className="h-5 w-5 text-gray-500 dark:text-slate-500" />
+                  </button>
                 </div>
-              </div>
-              <button
-                onClick={() => { setShowPaymentModal(false); setModalStep('isolation'); setIsDowngradePayment(false); }}
-                className="shrink-0 rounded-lg p-2 transition-colors hover:bg-gray-100 dark:hover:bg-slate-700"
-               aria-label="Close">
-                <X className="w-5 h-5 text-gray-500 dark:text-slate-500" />
-              </button>
-            </div>
+              );
+            })()}
 
             {/* Single Page Payment Summary */}
-            {modalStep !== 'result' && (
-              <div className="p-6 space-y-5">
-                {/* Payment Details */}
-                <div className="bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded-xl p-5">
-                  <h4 className="font-semibold text-gray-900 dark:text-slate-50 mb-4">Payment Details</h4>
-                  <div className="space-y-3 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600 dark:text-slate-400">Plan:</span>
-                      <span className="font-medium text-gray-900 dark:text-slate-50">{selectedPlanForPayment?.name}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600 dark:text-slate-400">
-                        {isYearly
-                          ? (selectedPlanForPayment?.annualPrice ? 'Annual Price:' : 'Monthly Price:')
-                          : (selectedPlanForPayment?.monthlyPrice ? 'Monthly Price:' : 'Annual Price:')}
-                      </span>
-                      <span className="font-medium text-gray-900 dark:text-slate-50">
-                        {formatCurrency(
-                          isYearly && selectedPlanForPayment?.monthlyPrice && selectedPlanForPayment?.annualPrice
-                            // Show full undiscounted price (monthly × 12) so savings row is meaningful
-                            ? selectedPlanForPayment.monthlyPrice * 12
-                            : isYearly
-                              ? (selectedPlanForPayment?.annualPrice ?? selectedPlanForPayment?.monthlyPrice ?? 0)
-                              : (selectedPlanForPayment?.monthlyPrice ?? selectedPlanForPayment?.annualPrice ?? 0),
-                          selectedPlanForPayment?.currency || 'INR'
+            {modalStep !== 'result' && (() => {
+              const plan = selectedPlanForPayment;
+              const cur = plan.currency || 'INR';
+              const dbMonthly = planSettings?.databasePerTenantMonthlyPrice ?? 0;
+              const showsAnnualLabel = isYearly ? !!plan.annualPrice : !plan.monthlyPrice;
+              const listPrice = isYearly && plan.monthlyPrice && plan.annualPrice
+                // Show full undiscounted price (monthly × 12) so savings row is meaningful
+                ? plan.monthlyPrice * 12
+                : isYearly
+                  ? (plan.annualPrice ?? plan.monthlyPrice ?? 0)
+                  : (plan.monthlyPrice ?? plan.annualPrice ?? 0);
+              const savings = isYearly && plan.monthlyPrice && plan.annualPrice && (plan.monthlyPrice * 12) > plan.annualPrice
+                ? (plan.monthlyPrice * 12) - plan.annualPrice
+                : null;
+              const savingsPct = savings && plan.monthlyPrice ? Math.round((savings / (plan.monthlyPrice * 12)) * 100) : null;
+              const basePrice = isYearly
+                ? (plan.annualPrice ?? plan.monthlyPrice ?? 0)
+                : (plan.monthlyPrice ?? plan.annualPrice ?? 0);
+              const subtotal = basePrice + (isolationType === 'database' ? dbMonthly * (isYearly && plan.annualPrice ? 12 : 1) : 0);
+              const gst = subtotal * 0.18;
+              // Determine actual billing period based on availability
+              const actuallyYearly = isYearly && plan.annualPrice;
+              const actuallyMonthly = !isYearly && plan.monthlyPrice;
+              const useYearlyPrice = actuallyYearly || (!actuallyMonthly && plan.annualPrice);
+              const totalSubtotal = (useYearlyPrice ? (plan.annualPrice ?? 0) : (plan.monthlyPrice ?? 0))
+                + (isolationType === 'database' ? dbMonthly * (useYearlyPrice ? 12 : 1) : 0);
+              const total = totalSubtotal + totalSubtotal * 0.18;
+              const paySubtotal = isYearly
+                ? (plan.annualPrice || 0) + (isolationType === 'database' ? dbMonthly * 12 : 0)
+                : (plan.monthlyPrice || 0) + (isolationType === 'database' ? dbMonthly : 0);
+              const payAmount = paySubtotal + paySubtotal * 0.18;
+
+              const rawQuotas = isYearly ? (plan.annualQuotas || plan.quotas) : (plan.monthlyQuotas || plan.quotas);
+              const includedRows = rawQuotas ? [
+                { label: 'Max Users', icon: Users, value: rawQuotas.max_seats },
+                { label: 'Max Jobs', icon: Briefcase, value: rawQuotas.max_jobs },
+                { label: 'Resume Storage', icon: FileText, value: rawQuotas.RU ?? rawQuotas.resume_uploads ?? rawQuotas.resume_storage },
+                { label: 'Resume Scores', icon: BarChart3, value: rawQuotas.RS ?? rawQuotas.resume_scoring },
+                { label: 'Assessments', icon: ClipboardCheck, value: rawQuotas.AS ?? rawQuotas.assessments },
+                { label: 'AI Interviews', icon: Video, value: rawQuotas.AIU ?? rawQuotas.ai_interviews ?? rawQuotas.ai_interview },
+              ].filter(row => row.value != null && formatQuotaValue(row.value) !== '-') : [];
+              const features = isYearly
+                ? (plan.annualFeatures?.length ? plan.annualFeatures : plan.features)
+                : (plan.monthlyFeatures?.length ? plan.monthlyFeatures : plan.features);
+              const visibleFeatures = showAllModalFeatures ? features : features.slice(0, 6);
+
+              return (
+                <>
+                  <div className="flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    <div className="grid gap-3 p-3 sm:p-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] lg:gap-4">
+                      {/* Left: billing summary + add-on */}
+                      <div className="flex min-w-0 flex-col gap-3">
+                        <div className="rounded-xl border border-gray-200 p-3 dark:border-slate-700 sm:p-4">
+                          <h3 className="mb-1 text-sm font-semibold text-gray-900 dark:text-slate-50">Billing Summary</h3>
+                          <div className="divide-y divide-gray-100 text-[13px] dark:divide-slate-700/60">
+                            <div className="flex items-center justify-between gap-3 py-1.5">
+                              <span className="text-gray-600 dark:text-slate-400">Plan</span>
+                              <span className="truncate text-right font-medium text-gray-900 dark:text-slate-50">{plan.name}</span>
+                            </div>
+                            <div className="flex items-center justify-between gap-3 py-1.5">
+                              <span className="text-gray-600 dark:text-slate-400">{showsAnnualLabel ? 'Annual Price' : 'Monthly Price'}</span>
+                              <span className="font-medium tabular-nums text-gray-900 dark:text-slate-50">{formatCurrency(listPrice, cur)}</span>
+                            </div>
+                            {/* Show note when billing period doesn't match available pricing */}
+                            {isYearly && !plan.annualPrice && plan.monthlyPrice && (
+                              <div className="py-1.5 text-[11px] text-warning">Yearly billing not available for this plan. Will be billed monthly.</div>
+                            )}
+                            {!isYearly && !plan.monthlyPrice && plan.annualPrice && (
+                              <div className="py-1.5 text-[11px] text-warning">Monthly billing not available for this plan. Will be billed annually.</div>
+                            )}
+                            {isolationType === 'database' && (
+                              <div className="flex items-center justify-between gap-3 py-1.5 text-warning">
+                                <span>Database Isolation Fee{isYearly ? ' (12 months)' : ''}</span>
+                                <span className="font-medium tabular-nums">+{formatCurrency(isYearly ? dbMonthly * 12 : dbMonthly, cur)}</span>
+                              </div>
+                            )}
+                            {savings !== null && (
+                              <div className="py-1">
+                                <div className="flex items-center justify-between gap-3 rounded-lg bg-success-subtle px-2.5 py-1.5 text-success">
+                                  <span className="flex items-center gap-1.5 font-medium">
+                                    <Crown className="h-4 w-4" />
+                                    Annual Savings{savingsPct ? ` (${savingsPct}%)` : ''}
+                                  </span>
+                                  <span className="font-semibold tabular-nums">-{formatCurrency(savings, cur)}</span>
+                                </div>
+                              </div>
+                            )}
+                            <div className="flex items-center justify-between gap-3 py-1.5">
+                              <span className="text-gray-600 dark:text-slate-400">Subtotal</span>
+                              <span className="font-medium tabular-nums text-gray-900 dark:text-slate-50">{formatCurrency(subtotal, cur)}</span>
+                            </div>
+                            <div className="flex items-center justify-between gap-3 py-1.5">
+                              <span className="text-gray-600 dark:text-slate-400">GST (18%)</span>
+                              <span className="font-medium tabular-nums text-gray-900 dark:text-slate-50">{formatCurrency(gst, cur)}</span>
+                            </div>
+                          </div>
+
+                          {/* Total */}
+                          <div className="mt-2 flex flex-col gap-1.5 rounded-xl bg-brand-blue/[0.05] px-3 py-2.5 ring-1 ring-brand-blue/10 dark:bg-slate-800/60 dark:ring-slate-700 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                              <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">Total (incl. GST)</p>
+                              <p className="text-[11px] text-gray-500 dark:text-slate-400">
+                                {(isYearly && plan.annualPrice) || (!plan.monthlyPrice && plan.annualPrice)
+                                  ? 'Billed annually (12× quotas)'
+                                  : 'Billed monthly'}
+                              </p>
+                            </div>
+                            <div className="flex flex-col sm:items-end">
+                              <span className="text-xl font-bold tracking-tight tabular-nums text-gray-900 dark:text-slate-50 sm:text-2xl">{formatCurrency(total, cur)}</span>
+                              {savings !== null && (
+                                <span className="mt-0.5 inline-flex items-center gap-1 self-start rounded-md bg-success-subtle px-1.5 py-0.5 text-[11px] font-semibold text-success sm:self-auto">
+                                  <CheckCircle className="h-3.5 w-3.5" />
+                                  You save {formatCurrency(savings, cur)}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Dedicated Database add-on - Available for both Monthly and Annual */}
+                        <label className={`flex items-start gap-3 rounded-xl border p-3 transition-colors ${
+                          hasDedicatedDatabase || planSettingsError
+                            ? 'cursor-not-allowed border-gray-200 bg-gray-50 opacity-60 dark:border-slate-700 dark:bg-slate-800/50'
+                            : isolationType === 'database'
+                              ? 'cursor-pointer border-brand-blue/40 bg-brand-blue/[0.04] ring-1 ring-brand-blue/20'
+                              : 'cursor-pointer border-gray-200 hover:bg-gray-50 dark:border-slate-700 dark:hover:bg-slate-800'
+                        }`}>
+                          <input
+                            type="checkbox"
+                            checked={isolationType === 'database'}
+                            onChange={(e) => {
+                              if (!hasDedicatedDatabase && !planSettingsError) {
+                                setIsolationType(e.target.checked ? 'database' : 'schema');
+                              }
+                            }}
+                            disabled={hasDedicatedDatabase || planSettingsError}
+                            className="mt-1.5 h-4 w-4 shrink-0 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/30 disabled:cursor-not-allowed"
+                          />
+                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 text-brand-blue">
+                            <Database className="h-4 w-4" />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">Dedicated Database</span>
+                                <span className="rounded-full bg-brand-blue/10 px-2 py-0.5 text-[11px] font-semibold text-brand-blue">Add-on</span>
+                                {hasDedicatedDatabase && (
+                                  <span className="rounded-full bg-warning-subtle px-2 py-0.5 text-[11px] font-semibold text-warning">Active</span>
+                                )}
+                              </div>
+                              {!planSettingsError && (
+                                <span className="text-[13px] font-semibold tabular-nums text-gray-900 dark:text-slate-50">
+                                  +{formatCurrency(isYearly ? dbMonthly * 12 : dbMonthly, cur)}{isYearly ? '/year' : '/month'}
+                                </span>
+                              )}
+                            </div>
+                            <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">
+                              {hasDedicatedDatabase
+                                ? 'Your organization already uses a dedicated database. This cannot be changed.'
+                                : 'Get your own dedicated database for enhanced isolation and performance'}
+                            </p>
+                            {planSettingsError && (
+                              <p className="mt-0.5 flex items-center gap-1 text-xs font-medium text-destructive">
+                                <AlertCircle className="h-4 w-4" />
+                                Pricing unavailable — unable to load from server
+                              </p>
+                            )}
+                          </div>
+                        </label>
+
+                        {/* Error Display in Modal */}
+                        {error && (
+                          <div className="flex items-start gap-2.5 rounded-xl border border-destructive-line bg-destructive-subtle p-3">
+                            <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-destructive" />
+                            <div>
+                              <p className="text-sm font-medium text-destructive">Plan Selection Failed</p>
+                              <p className="mt-1 text-sm text-destructive">{error}</p>
+                            </div>
+                          </div>
                         )}
-                      </span>
-                    </div>
-                    {/* Show note when billing period doesn't match available pricing */}
-                    {isYearly && !selectedPlanForPayment?.annualPrice && selectedPlanForPayment?.monthlyPrice && (
-                      <div className="text-xs text-warning">
-                        Yearly billing not available for this plan. Will be billed monthly.
                       </div>
-                    )}
-                    {!isYearly && !selectedPlanForPayment?.monthlyPrice && selectedPlanForPayment?.annualPrice && (
-                      <div className="text-xs text-warning">
-                        Monthly billing not available for this plan. Will be billed annually.
-                      </div>
-                    )}
-                    {isolationType === 'database' && (
-                      <div className="flex justify-between text-warning">
-                        <span>Database Isolation Fee{isYearly ? ' (12 months)' : ''}:</span>
-                        <span className="font-medium">
-                          +{formatCurrency(
-                            isYearly
-                              ? (planSettings?.databasePerTenantMonthlyPrice ?? 0) * 12
-                              : (planSettings?.databasePerTenantMonthlyPrice ?? 0),
-                            selectedPlanForPayment?.currency || 'INR'
-                          )}
-                        </span>
-                      </div>
-                    )}
-                    {isYearly && selectedPlanForPayment?.monthlyPrice && selectedPlanForPayment?.annualPrice &&
-                     (selectedPlanForPayment.monthlyPrice * 12) > selectedPlanForPayment.annualPrice && (
-                      <div className="flex justify-between pt-2 border-t border-gray-200 dark:border-slate-700 text-success">
-                        <span className="flex items-center gap-1">
-                          <Crown className="w-4 h-4" />
-                          Annual Savings:
-                        </span>
-                        <span className="font-medium">
-                          -{formatCurrency(
-                            (selectedPlanForPayment.monthlyPrice * 12) - selectedPlanForPayment.annualPrice,
-                            selectedPlanForPayment?.currency || 'INR'
-                          )}
-                        </span>
-                      </div>
-                    )}
-                    {/* Subtotal */}
-                    <div className="flex justify-between pt-2 border-t border-gray-200 dark:border-slate-700">
-                      <span className="text-gray-600 dark:text-slate-400">Subtotal:</span>
-                      <span className="font-medium text-gray-900 dark:text-slate-50">
-                        {formatCurrency(
-                          (() => {
-                            const basePrice = isYearly
-                              ? (selectedPlanForPayment?.annualPrice ?? selectedPlanForPayment?.monthlyPrice ?? 0)
-                              : (selectedPlanForPayment?.monthlyPrice ?? selectedPlanForPayment?.annualPrice ?? 0);
-                            const dbFee = isolationType === 'database'
-                              ? (planSettings?.databasePerTenantMonthlyPrice ?? 0) * (isYearly && selectedPlanForPayment?.annualPrice ? 12 : 1)
-                              : 0;
-                            return basePrice + dbFee;
-                          })(),
-                          selectedPlanForPayment?.currency || 'INR'
+
+                      {/* Right: what's included */}
+                      <div className="flex min-w-0 flex-col rounded-xl bg-gray-50 p-3 dark:bg-slate-800/50 sm:p-4">
+                        <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">What&apos;s included</h3>
+                        <p className="text-[11px] text-gray-500 dark:text-slate-400">Everything you need to scale your hiring.</p>
+
+                        {includedRows.length > 0 && (
+                          <ul className="mt-2.5 space-y-1.5 text-[13px]">
+                            {includedRows.map(({ label, icon: RowIcon, value }) => {
+                              const formatted = formatQuotaValue(value);
+                              return (
+                                <li key={label} className="flex items-center gap-3">
+                                  <RowIcon className="h-4 w-4 shrink-0 text-brand-blue" />
+                                  <span className="flex-1 text-gray-700 dark:text-slate-300">{label}</span>
+                                  <span className={`font-semibold tabular-nums ${formatted === 'Unlimited' ? 'text-brand-teal' : 'text-gray-900 dark:text-slate-50'}`}>{formatted}</span>
+                                </li>
+                              );
+                            })}
+                          </ul>
                         )}
-                      </span>
-                    </div>
-                    {/* GST Row */}
-                    <div className="flex justify-between">
-                      <span className="text-gray-600 dark:text-slate-400">GST (18%):</span>
-                      <span className="font-medium text-gray-900 dark:text-slate-50">
-                        {formatCurrency(
-                          (() => {
-                            const basePrice = isYearly
-                              ? (selectedPlanForPayment?.annualPrice ?? selectedPlanForPayment?.monthlyPrice ?? 0)
-                              : (selectedPlanForPayment?.monthlyPrice ?? selectedPlanForPayment?.annualPrice ?? 0);
-                            const dbFee = isolationType === 'database'
-                              ? (planSettings?.databasePerTenantMonthlyPrice ?? 0) * (isYearly && selectedPlanForPayment?.annualPrice ? 12 : 1)
-                              : 0;
-                            return (basePrice + dbFee) * 0.18;
-                          })(),
-                          selectedPlanForPayment?.currency || 'INR'
+
+                        {features.length > 0 && (
+                          <div className={includedRows.length > 0 ? 'mt-3 border-t border-gray-200 pt-3 dark:border-slate-700' : 'mt-3'}>
+                            <h4 className="mb-1.5 text-[13px] font-semibold text-gray-900 dark:text-slate-50">Key Features</h4>
+                            <ul className="grid grid-cols-1 gap-x-3 gap-y-1.5 min-[400px]:grid-cols-2">
+                              {visibleFeatures.map((feature, idx) => (
+                                <li key={idx} className="flex min-w-0 items-start gap-2 text-[13px] text-gray-700 dark:text-slate-300">
+                                  <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-brand-blue text-white">
+                                    <Check className="h-3 w-3" strokeWidth={3} />
+                                  </span>
+                                  {feature}
+                                </li>
+                              ))}
+                            </ul>
+                            {features.length > 6 && (
+                              <button
+                                type="button"
+                                onClick={() => setShowAllModalFeatures(v => !v)}
+                                className="mt-1.5 text-xs font-medium text-brand-blue hover:underline"
+                              >
+                                {showAllModalFeatures ? 'Show less' : `+ ${features.length - 6} more features`}
+                              </button>
+                            )}
+                          </div>
                         )}
-                      </span>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Total Summary - Above checkboxes */}
-                <div className="relative overflow-hidden rounded-xl bg-brand-blue p-4 text-white shadow-md shadow-brand-blue/20 ring-1 ring-white/10">
-                  <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-brand-cyan/25 blur-3xl" />
-                  <div className="relative flex items-center justify-between">
-                    <div>
-                      <span className="font-semibold">Total (incl. GST)</span>
-                      <p className="text-xs text-white/75">
-                        {(isYearly && selectedPlanForPayment?.annualPrice) || (!selectedPlanForPayment?.monthlyPrice && selectedPlanForPayment?.annualPrice)
-                          ? 'Billed annually (12× quotas)'
-                          : 'Billed monthly'}
-                      </p>
+                  {/* Footer — security note + pay button */}
+                  <div className="flex shrink-0 flex-col-reverse gap-3 border-t border-gray-100 px-4 py-2.5 dark:border-slate-700/60 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                    <div className="flex items-center justify-center gap-2 text-[11px] text-gray-500 dark:text-slate-500 sm:justify-start sm:text-xs">
+                      <Lock className="h-3.5 w-3.5 shrink-0" />
+                      <span>Secure payment powered by Razorpay · 256-bit SSL encryption. Your payment details are protected.</span>
                     </div>
-                    <div className="text-right">
-                      <span className="font-bold text-2xl">
-                        {formatCurrency(
-                          (() => {
-                            // Determine actual billing period based on availability
-                            const actuallyYearly = isYearly && selectedPlanForPayment?.annualPrice;
-                            const actuallyMonthly = !isYearly && selectedPlanForPayment?.monthlyPrice;
-                            const useYearlyPrice = actuallyYearly || (!actuallyMonthly && selectedPlanForPayment?.annualPrice);
-                            const basePrice = useYearlyPrice
-                              ? (selectedPlanForPayment?.annualPrice ?? 0)
-                              : (selectedPlanForPayment?.monthlyPrice ?? 0);
-                            const dbFee = isolationType === 'database'
-                              ? (planSettings?.databasePerTenantMonthlyPrice ?? 0) * (useYearlyPrice ? 12 : 1)
-                              : 0;
-                            const subtotal = basePrice + dbFee;
-                            return subtotal + subtotal * 0.18;
-                          })(),
-                          selectedPlanForPayment?.currency || 'INR'
-                        )}
-                      </span>
-                      {isYearly && selectedPlanForPayment?.monthlyPrice && selectedPlanForPayment?.annualPrice &&
-                       (selectedPlanForPayment.monthlyPrice * 12) > selectedPlanForPayment.annualPrice && (
-                        <p className="text-xs text-success">
-                          You save {formatCurrency(
-                            (selectedPlanForPayment.monthlyPrice * 12) - selectedPlanForPayment.annualPrice,
-                            selectedPlanForPayment?.currency || 'INR'
-                          )}
-                        </p>
+                    <button
+                      onClick={handlePaymentSubmit}
+                      disabled={isSelectingPlan}
+                      className="flex w-full shrink-0 items-center justify-center gap-2 rounded-lg bg-brand-blue px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:opacity-60 sm:w-auto sm:min-w-[220px]"
+                    >
+                      {isSelectingPlan ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Processing...
+                        </>
+                      ) : (
+                        <>
+                          <CreditCard className="h-4 w-4" />
+                          Pay {formatCurrency(payAmount, cur)}
+                          <ArrowRight className="h-4 w-4" />
+                        </>
                       )}
-                    </div>
+                    </button>
                   </div>
-                </div>
-
-                {/* Dedicated Database Checkbox - Available for both Monthly and Annual */}
-                <label className={`flex items-start gap-3 p-4 border-2 rounded-xl transition-colors ${
-                  hasDedicatedDatabase || planSettingsError
-                    ? 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 cursor-not-allowed opacity-60'
-                    : isolationType === 'database'
-                      ? 'border-warning-line bg-warning-subtle cursor-pointer'
-                      : 'border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800 cursor-pointer'
-                }`}>
-                  <input
-                    type="checkbox"
-                    checked={isolationType === 'database'}
-                    onChange={(e) => {
-                      if (!hasDedicatedDatabase && !planSettingsError) {
-                        setIsolationType(e.target.checked ? 'database' : 'schema');
-                      }
-                    }}
-                    disabled={hasDedicatedDatabase || planSettingsError}
-                    className="mt-1 w-5 h-5 text-warning border-gray-300 rounded focus:ring-warning-line disabled:cursor-not-allowed"
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <Database className="w-5 h-5 text-warning" />
-                      <span className="font-medium text-gray-900 dark:text-slate-50">Dedicated Database</span>
-                      {hasDedicatedDatabase && (
-                        <span className="text-xs bg-warning-subtle text-warning px-2 py-0.5 rounded-full font-medium">
-                          Active
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm text-gray-500 dark:text-slate-500 mt-1">
-                      {hasDedicatedDatabase
-                        ? 'Your organization already uses a dedicated database. This cannot be changed.'
-                        : 'Get your own dedicated database for enhanced isolation and performance'}
-                    </p>
-                    {planSettingsError ? (
-                      <p className="text-sm text-destructive font-medium mt-1 flex items-center gap-1">
-                        <AlertCircle className="w-4 h-4" />
-                        Pricing unavailable — unable to load from server
-                      </p>
-                    ) : (
-                      <p className="text-sm text-warning font-medium mt-1">
-                        +{formatCurrency(
-                          isYearly
-                            ? (planSettings!.databasePerTenantMonthlyPrice) * 12
-                            : (planSettings!.databasePerTenantMonthlyPrice),
-                          selectedPlanForPayment?.currency || 'INR'
-                        )}{isYearly ? '/year' : '/month'}
-                      </p>
-                    )}
-                  </div>
-                </label>
-
-                {/* Error Display in Modal */}
-                {error && (
-                  <div className="bg-destructive-subtle border border-destructive-line rounded-xl p-4 flex items-start gap-3">
-                    <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-destructive text-sm font-medium">Plan Selection Failed</p>
-                      <p className="text-destructive text-sm mt-1">{error}</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Pay Button */}
-                <button
-                  onClick={handlePaymentSubmit}
-                  disabled={isSelectingPlan}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand-blue py-3 font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:opacity-60"
-                >
-                  {isSelectingPlan ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      Processing...
-                    </>
-                  ) : (
-                    <>
-                      <CreditCard className="w-5 h-5" />
-                      Pay {formatCurrency(
-                        (() => {
-                          const subtotal = isYearly
-                            ? (selectedPlanForPayment?.annualPrice || 0) +
-                              (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice ?? 0) * 12 : 0)
-                            : (selectedPlanForPayment?.monthlyPrice || 0) +
-                              (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice ?? 0) : 0);
-                          return subtotal + subtotal * 0.18;
-                        })(),
-                        selectedPlanForPayment?.currency || 'INR'
-                      )}
-                    </>
-                  )}
-                </button>
-                <p className="text-xs text-gray-500 dark:text-slate-500 text-center">
-                  Secure payment processing. Your data is protected.
-                </p>
-              </div>
-            )}
+                </>
+              );
+            })()}
 
             {/* Result */}
             {modalStep === 'result' && transactionResult && (
+              <div className="flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <div className="p-6 space-y-4">
                 {transactionResult.queued ? (
                   /* Queued Upgrade Result */
@@ -3710,6 +3770,7 @@ function CurrentPlanContent() {
                     </Button>
                   </>
                 )}
+              </div>
               </div>
             )}
           </div>

@@ -76,6 +76,54 @@ export interface DependencyMatrixResponse {
   feature_names: Record<string, string>;
 }
 
+/**
+ * GET /tenant-admin/dependencies/matrix (app/routers/tenant_admin.py) returns
+ *   dependencies:          [{ parent: {code, name}, requires: [{code, name}] }]
+ *   reverse_dependencies:  [{ feature: {code, name}, required_by: [{code, name}] }]
+ * with no `features` / `feature_names`, while the Dependency Matrix popup reads
+ * the map shape in DependencyMatrixResponse — so the popup always rendered
+ * "0 features" and an empty tree. Convert here; an already-map-shaped payload
+ * passes through untouched.
+ */
+type CodeName = { code: string; name?: string };
+export function normalizeDependencyMatrix(raw: unknown): DependencyMatrixResponse {
+  const data = (raw ?? {}) as Record<string, unknown>;
+  if (!Array.isArray(data.dependencies)) {
+    return {
+      features: (data.features as string[]) ?? [],
+      dependencies: (data.dependencies as Record<string, string[]>) ?? {},
+      reverse_dependencies: (data.reverse_dependencies as Record<string, string[]>) ?? {},
+      feature_names: (data.feature_names as Record<string, string>) ?? {},
+    };
+  }
+  const names: Record<string, string> = {};
+  const remember = (f?: CodeName) => {
+    if (f?.code) names[f.code] = f.name || names[f.code] || f.code;
+  };
+  const dependencies: Record<string, string[]> = {};
+  for (const row of data.dependencies as { parent?: CodeName; requires?: CodeName[] }[]) {
+    if (!row?.parent?.code) continue;
+    remember(row.parent);
+    (row.requires ?? []).forEach(remember);
+    dependencies[row.parent.code] = (row.requires ?? []).map((d) => d.code).filter(Boolean);
+  }
+  const reverse_dependencies: Record<string, string[]> = {};
+  if (Array.isArray(data.reverse_dependencies)) {
+    for (const row of data.reverse_dependencies as { feature?: CodeName; required_by?: CodeName[] }[]) {
+      if (!row?.feature?.code) continue;
+      remember(row.feature);
+      (row.required_by ?? []).forEach(remember);
+      reverse_dependencies[row.feature.code] = (row.required_by ?? []).map((d) => d.code).filter(Boolean);
+    }
+  } else {
+    // Derive it if the server ever stops sending it.
+    for (const [parent, deps] of Object.entries(dependencies)) {
+      deps.forEach((d) => (reverse_dependencies[d] ||= []).push(parent));
+    }
+  }
+  return { features: Object.keys(names), dependencies, reverse_dependencies, feature_names: names };
+}
+
 export interface UserDependencyStatusResponse {
   user_id: string;
   user_name: string;
@@ -316,10 +364,8 @@ export const featurePermissionService = {
    */
   async getDependencyMatrix(): Promise<DependencyMatrixResponse> {
     try {
-      const response = await api.get<DependencyMatrixResponse>(
-        `${TENANT_ADMIN_BASE_URL}/dependencies/matrix`
-      );
-      return response.data;
+      const response = await api.get(`${TENANT_ADMIN_BASE_URL}/dependencies/matrix`);
+      return normalizeDependencyMatrix(response.data);
     } catch (error) {
       throw new Error(handleApiError(error));
     }

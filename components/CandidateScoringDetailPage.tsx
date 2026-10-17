@@ -283,7 +283,10 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   // (see ScoredResumesTable.tsx's canCreateAssessments), which this page had
   // missed: previously, disabling Resume Scoring's "Invite" permission had
   // no effect on this button.
-  const mayInviteAssessment = isTenantAdmin || hasPermissionCode('scoring:invite');
+  // Resume Scoring → "Invite to Assessment" (separate from "Invite to AI
+  // Interview"); the Assessment module's own Invite is what the server checks.
+  const mayInviteAssessment =
+    isTenantAdmin || (hasPermissionCode('scoring:invite_assessment') && hasPermissionCode('assessments:invite'));
   // Same scoring:invite gate as Assessment above — this page lives on the
   // Resume Scoring surface, so disabling that module's "Invite" permission
   // should turn off BOTH invite targets reachable from it, not just
@@ -292,8 +295,8 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   // required alongside it, since that is what the AI Interview invite
   // endpoints actually enforce server-side.
   const mayInviteAIInterview =
-    (isTenantAdmin || hasPermissionCode('scoring:invite')) &&
-    hasPermission('canInviteAIInterviews');
+    isTenantAdmin ||
+    (hasPermissionCode('scoring:invite_ai_interview') && hasPermission('canInviteAIInterviews'));
   const canInvite = mayInviteAssessment || mayInviteAIInterview;
   // Plan gates DISABLE the entry (hover explains), they never hide it:
   // permission decides what is shown, the plan only whether it is clickable.

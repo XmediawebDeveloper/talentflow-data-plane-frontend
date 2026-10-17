@@ -169,7 +169,13 @@ export default function JobOpeningsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const dialog = useGlobalDialog();
-  const { user, isTenantAdmin, hasPermission } = useAuth();
+  const { user, isTenantAdmin, hasPermission, hasPermissionCode } = useAuth();
+  // Score Resumes from the JD list needs Resume Scoring → Score Resume and the
+  // JD's own "Score Resume" permission (jd:add_applicants).
+  // Run AI Talent Match from the JD list needs AI Talent Match → Run and the
+  // JD entry point "Run AI Talent Match" (jd:ai_match).
+  const canAIMatchFromJd = isTenantAdmin || (hasPermission('canRunAiMatch') && hasPermissionCode('jd:ai_match'));
+  const canScoreFromJd = isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('jd:add_applicants'));
   const canManageMasters = hasPermission('canManageSettings');
 
   // "?view=list" is a one-shot instruction from the JD flow's "Go to All Jobs":
@@ -817,11 +823,11 @@ export default function JobOpeningsPage() {
         onViewJob={handleViewJob}
         onViewApplicants={handleViewApplicants}
         onAIMatch={handleAIMatch}
-        onAIMatchDisabled={isPlanLocked('ai_talent_match') || !(hasPermission('canRunAiMatch') || isTenantAdmin)}
-        onAIMatchDisabledReason={isPlanLocked('ai_talent_match') ? PLAN_LOCKED_MESSAGE : undefined}
+        onAIMatchDisabled={isPlanLocked('ai_talent_match') || !canAIMatchFromJd}
+        onAIMatchDisabledReason={isPlanLocked('ai_talent_match') ? PLAN_LOCKED_MESSAGE : 'You do not have permission to run AI Talent Match from a job description'}
         onScoreResumes={handleScoreResumes}
-        onScoreResumesDisabled={isPlanLocked('resume_scoring') || !(hasPermission('canRunScoring') || isTenantAdmin)}
-        onScoreResumesDisabledReason={isPlanLocked('resume_scoring') ? PLAN_LOCKED_MESSAGE : undefined}
+        onScoreResumesDisabled={isPlanLocked('resume_scoring') || !canScoreFromJd}
+        onScoreResumesDisabledReason={isPlanLocked('resume_scoring') ? PLAN_LOCKED_MESSAGE : 'You do not have permission to score resumes'}
         onUpdateJobStatus={handleUpdateJobStatus}
         onEditJob={handleEditJob}
         onPublishJob={handlePublishJob}

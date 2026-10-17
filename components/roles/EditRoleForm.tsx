@@ -1,5 +1,6 @@
 'use client';
 
+import { MODAL_FOOTER_BUTTON_CLASS, MODAL_FOOTER_ROW_CLASS } from '@/components/ui/app-modal';
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
@@ -12,6 +13,18 @@ import {
   ArrowUpRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { usePermissionChangeDialog } from '@/components/roles/PermissionChangeDialog';
+import {
+  getAllCatalogCodes,
+  getNeeds,
+  isEntryPointLocked,
+  labelOf,
+  planTurnOff,
+  planTurnOn,
+  isGroupFullyOn,
+  withRequired,
+  withoutOrphanEntryPoints,
+} from '@/lib/permissions/permissionRules';
 import rbacService from '@/lib/services/rbacService';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { PageHeader } from '@/components/ui/page-header';
@@ -24,48 +37,20 @@ import {
 } from '@/lib/types/rbac';
 import {
   CUSTOM_PERMISSION_CATEGORIES,
+  getMainPermission,
   type CustomPermissionCategory,
   type CustomPermissionSubCategory,
 } from '@/lib/constants/permissionCategories';
 
-const getPermissionDependencies = (code: string): string[] => {
-  for (const category of CUSTOM_PERMISSION_CATEGORIES) {
-    if (category.dependencies && category.dependencies[code]) {
-      return category.dependencies[code];
-    }
-  }
-  return [];
-};
-
-/** The reverse of getPermissionDependencies: every action code that declares
- *  `code` as one of ITS dependencies. Used to block unchecking a permission
- *  that something else currently selected still relies on — mirrors
- *  getBlockingPermissions in components/users/UserManagement.tsx, so the
- *  per-role and per-user permission editors enforce the same rule the same
- *  way instead of one silently allowing an inconsistent combination. */
-const getPermissionsDependingOn = (code: string): string[] => {
-  const dependents: string[] = [];
-  CUSTOM_PERMISSION_CATEGORIES.forEach((category) => {
-    if (!category.dependencies) return;
-    Object.entries(category.dependencies).forEach(([action, deps]) => {
-      if (deps.includes(code)) dependents.push(action);
-    });
-  });
-  return dependents;
-};
-
-const getPermissionDisplayName = (code: string): string => {
-  for (const category of CUSTOM_PERMISSION_CATEGORIES) {
-    if (category.viewCode === code) return category.name;
-    const action = category.actions?.find((a) => a.code === code);
-    if (action) return action.label;
-    for (const sub of category.subCategories || []) {
-      if (sub.viewCode === code) return `View ${sub.name}`;
-      const subAction = sub.actions.find((a) => a.code === code);
-      if (subAction) return `${subAction.label} (${sub.name})`;
-    }
-  }
-  return code;
+/** Codes loaded into the editor (existing role / "Copy permissions from"): the
+ *  catalogue part is completed with what it needs and stripped of entry points
+ *  whose main is off, so the form never shows an entry point it can't use.
+ *  Codes with no tile (legacy) are kept untouched so a save doesn't drop them. */
+const normalizeRoleCodes = (codes: Iterable<string>): Set<string> => {
+  const catalog = new Set(getAllCatalogCodes());
+  const all = Array.from(codes);
+  const fromCatalog = withoutOrphanEntryPoints(withRequired(all.filter((c) => catalog.has(c))));
+  return new Set([...fromCatalog, ...all.filter((c) => !catalog.has(c))]);
 };
 
 const getAllCustomPermissionCodes = (): string[] => {
@@ -167,6 +152,8 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [selectedPermissionCodes, setSelectedPermissionCodes] = useState<Set<string>>(new Set());
+  // Compact confirm popup for cascading permission changes (shared with Edit User).
+  const { ask, dialog } = usePermissionChangeDialog();
   // Set once the editable Role Name field is left, so its error shows the
   // moment it's touched (and updates live as they type) rather than only after
   // Save. Role Code is immutable here, so only the name needs validating.
@@ -197,7 +184,7 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
         setPermissions(permissionsData.permissions);
 
         if (roleData.permissions) {
-          setSelectedPermissionCodes(new Set(roleData.permissions.map((permission) => permission.code)));
+          setSelectedPermissionCodes(normalizeRoleCodes(roleData.permissions.map((permission) => permission.code)));
         }
       } catch (error: unknown) {
         console.error('Failed to load role data:', error);
@@ -246,62 +233,149 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
     return ids;
   };
 
-  const handlePermissionToggle = (code: string) => {
-    const dependencies = getPermissionDependencies(code);
-    const found = findCategoryForAction(code);
-    const isSelected = selectedPermissionCodes.has(code);
-
-    if (isSelected) {
-      // Disabling — block if another still-enabled permission requires this
-      // one, the same guard components/users/UserManagement.tsx already
-      // applies to per-user overrides, so both editors refuse the same
-      // inconsistent combination instead of only one of them catching it.
-      const blockers = getPermissionsDependingOn(code).filter((dependent) => selectedPermissionCodes.has(dependent));
-      if (blockers.length > 0) {
-        toast.warning(
-          `Cannot disable "${getPermissionDisplayName(code)}" — it's required by ${blockers.map(getPermissionDisplayName).join(', ')}. Disable that permission first.`,
-        );
-        return;
-      }
+  // Same rules as Edit User (lib/permissions/permissionRules.ts): needs are
+  // turned on with a permission, a main offers its entry points, turning off
+  // cascades with a confirm, and entry points are locked while their main is off.
+  const applyTurnOn = async (codes: string[], label: string) => {
+    const plan = planTurnOn(codes, selectedPermissionCodes);
+    if (codes.length === 1 && plan.skippedLocked.includes(codes[0])) {
+      const main = getMainPermission(codes[0]);
+      toast.info(`Turn on "${labelOf(main ?? '')}" first — "${labelOf(codes[0])}" can only be used while it is on.`);
+      return;
     }
-
-    setSelectedPermissionCodes((prev) => {
-      const next = new Set(prev);
-
-      if (!isSelected) {
-        next.add(code);
-        dependencies.forEach((dependencyCode) => {
-          next.add(dependencyCode);
-          const dependencyCategory = findCategoryForAction(dependencyCode);
-          if (dependencyCategory) {
-            const dependencyViewCode = dependencyCategory.subCategory?.viewCode || dependencyCategory.category.viewCode;
-            if (dependencyViewCode) next.add(dependencyViewCode);
-          }
-        });
-
-        if (found) {
-          const viewCode = found.subCategory?.viewCode || found.category.viewCode;
-          if (viewCode) next.add(viewCode);
-        }
-      } else {
-        next.delete(code);
-        if (found) {
-          const viewCode = found.subCategory?.viewCode || found.category.viewCode;
-          if (viewCode) {
-            const stillHasActions = hasAnyActionSelected(next, found.category, found.subCategory);
-            if (!stillHasActions) next.delete(viewCode);
-          }
-        }
+    const entryCount = plan.offeredEntryPoints.reduce((n, g) => n + g.entries.length, 0);
+    const needAsk = entryCount > 0 || (codes.length > 1 && plan.skippedLocked.length > 0);
+    if (!needAsk) {
+      setSelectedPermissionCodes(plan.only);
+      if (plan.autoRequired.length > 0) {
+        toast.info(`Also turned on: ${plan.autoRequired.map(labelOf).join(', ')} — needed by "${label}"`);
       }
-
-      return next;
+      return;
+    }
+    const summary =
+      entryCount === 0
+        ? 'Some permissions here can only be turned on after their main permission in another section.'
+        : plan.offeredEntryPoints.length === 1
+          ? `"${labelOf(plan.offeredEntryPoints[0].main)}" can also be started from ${entryCount} other section${entryCount === 1 ? '' : 's'}. Turn those on too?`
+          : `${plan.offeredEntryPoints.length} of these permissions can also be started from other sections (${entryCount} places). Turn those on too?`;
+    const choice = await ask({
+      title: `Turn on "${label}"?`,
+      tone: 'on',
+      summary,
+      details: [
+        { heading: 'Can also be started from', codes: plan.offeredEntryPoints.flatMap((g) => g.entries) },
+        { heading: 'Also turned on (needed)', codes: plan.autoRequired },
+        { heading: 'Not turned on (their main permission is off)', codes: plan.skippedLocked },
+      ],
+      actions:
+        entryCount === 0
+          ? [{ id: 'only', label: 'Turn on' }]
+          : [
+              { id: 'only', label: 'Only this', variant: 'secondary' },
+              { id: 'all', label: 'Turn on all' },
+            ],
     });
+    if (!choice) return;
+    setSelectedPermissionCodes(choice === 'all' ? plan.all : plan.only);
+  };
+
+  const applyTurnOff = async (codes: string[], label: string) => {
+    const plan = planTurnOff(codes, selectedPermissionCodes);
+    let next = plan.next;
+    // A section's View goes with its last action (as before) — but only when
+    // nothing else still needs that View.
+    codes.forEach((code) => {
+      const found = findCategoryForAction(code);
+      if (!found) return;
+      const viewCode = found.subCategory?.viewCode || found.category.viewCode;
+      if (!viewCode || !next.has(viewCode) || hasAnyActionSelected(next, found.category, found.subCategory)) return;
+      const trial = planTurnOff([viewCode], next);
+      if (trial.entryPointsOff.length === 0 && trial.dependentsOff.length === 0) next = trial.next;
+    });
+    const extra = plan.entryPointsOff.length + plan.dependentsOff.length;
+    if (extra === 0) {
+      setSelectedPermissionCodes(next);
+      return;
+    }
+    const parts: string[] = [];
+    if (plan.entryPointsOff.length) {
+      parts.push(`${plan.entryPointsOff.length} entry point${plan.entryPointsOff.length === 1 ? '' : 's'} in other sections`);
+    }
+    if (plan.dependentsOff.length) {
+      parts.push(`${plan.dependentsOff.length} other permission${plan.dependentsOff.length === 1 ? '' : 's'} that need${plan.dependentsOff.length === 1 ? 's' : ''} it`);
+    }
+    const choice = await ask({
+      title: `Turn off "${label}"?`,
+      tone: 'off',
+      summary: `This will also turn off ${parts.join(' and ')}.`,
+      details: [
+        { heading: 'Entry points in other sections', codes: plan.entryPointsOff },
+        { heading: 'Also turned off (they need it)', codes: plan.dependentsOff },
+      ],
+      actions: [{ id: 'off', label: 'Turn off', variant: 'destructive' }],
+    });
+    if (choice !== 'off') return;
+    setSelectedPermissionCodes(next);
+  };
+
+  const handlePermissionToggle = (code: string) => {
+    if (selectedPermissionCodes.has(code)) {
+      void applyTurnOff([code], labelOf(code));
+    } else {
+      void applyTurnOn([code], labelOf(code));
+    }
+  };
+
+  // Section / sub-section checkbox: everything selected -> turn ALL off;
+  // anything less (none or some) -> turn ALL on. Entry points whose main is
+  // off can't be selected, so they don't block "everything selected".
+  const handleSelectAllGroup = (codes: string[], label: string) => {
+    if (isGroupFullyOn(codes, selectedPermissionCodes)) {
+      void applyTurnOff(codes, label);
+    } else {
+      void applyTurnOn(codes.filter((code) => !selectedPermissionCodes.has(code)), label);
+    }
+  };
+
+  const getAllCodesForCategory = (category: CustomPermissionCategory): string[] => [
+    ...(category.viewCode ? [category.viewCode] : []),
+    ...(category.actions?.map((action) => action.code) || []),
+    ...(category.subCategories?.flatMap((sub) => [
+      ...(sub.viewCode ? [sub.viewCode] : []),
+      ...sub.actions.map((action) => action.code),
+    ]) || []),
+  ];
+
+  const getAllCodesForSubCategory = (subCategory: CustomPermissionSubCategory): string[] => [
+    ...(subCategory.viewCode ? [subCategory.viewCode] : []),
+    ...subCategory.actions.map((action) => action.code),
+  ];
+
+  const renderGroupCheckbox = (codes: string[], label: string, size: 'md' | 'sm') => {
+    const all = isGroupFullyOn(codes, selectedPermissionCodes);
+    const some = !all && codes.some((code) => selectedPermissionCodes.has(code));
+    return (
+      <button
+        type="button"
+        onClick={() => handleSelectAllGroup(codes, label)}
+        className={`inline-flex ${size === 'md' ? 'mt-0.5 h-5 w-5' : 'h-4 w-4'} shrink-0 items-center justify-center rounded border transition-colors ${
+          all
+            ? 'border-brand-blue bg-brand-blue text-white'
+            : some
+            ? 'border-brand-cyan bg-brand-cyan text-white'
+            : 'border-gray-300 bg-white hover:border-brand-blue/40'
+        }`}
+        aria-label={`Select all permissions for ${label}`}
+      >
+        {(all || some) && <Check className="h-3 w-3" />}
+      </button>
+    );
   };
 
   const handleSelectAll = () => {
     const allCodes = getAllCustomPermissionCodes();
     const allSelected = allCodes.every((code) => selectedPermissionCodes.has(code));
-    setSelectedPermissionCodes(allSelected ? new Set() : new Set(allCodes));
+    setSelectedPermissionCodes(allSelected ? new Set() : withRequired(allCodes));
   };
 
   const handleParentRoleChange = async (parentRoleId: string) => {
@@ -314,7 +388,7 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
       try {
         const parentRole = await rbacService.getRoleById(nextParentRoleId);
         if (parentRole.permissions) {
-          const codes = new Set(parentRole.permissions.map((permission) => permission.code));
+          const codes = normalizeRoleCodes(parentRole.permissions.map((permission) => permission.code));
           setSelectedPermissionCodes(codes);
           toast.success(`Loaded ${codes.size} permissions from ${parentRole.name}`);
         }
@@ -361,7 +435,27 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
     isSelected: boolean,
     hasDependencies: boolean,
     onClick: () => void
-  ) => (
+  ) => {
+    // Entry point whose main permission is off: greyed out with a lock; clicking
+    // explains which main to turn on first (handled by applyTurnOn).
+    const mainCode = getMainPermission(code);
+    const locked = !isSelected && isEntryPointLocked(code, selectedPermissionCodes);
+    if (locked) {
+      return (
+        <button
+          key={code}
+          type="button"
+          onClick={onClick}
+          aria-disabled
+          title={`Turn on "${labelOf(mainCode ?? '')}" first`}
+          className="inline-flex cursor-not-allowed items-center gap-2 rounded-xl border border-dashed border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-400"
+        >
+          <Lock className="h-3.5 w-3.5" />
+          <span>{label}</span>
+        </button>
+      );
+    }
+    return (
     <button
       key={code}
       type="button"
@@ -379,7 +473,8 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
         </span>
       )}
     </button>
-  );
+    );
+  };
 
   const renderPermissionCategories = () => {
     const allCodes = getAllCustomPermissionCodes();
@@ -418,9 +513,11 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
         {CUSTOM_PERMISSION_CATEGORIES.map((category) => (
           <section
             key={category.id}
-            className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm ring-1 ring-black/[0.02]"
+            className="overflow-hidden rounded-2xl border border-gray-300 dark:border-slate-600 bg-white shadow-sm"
           >
             <div className="flex flex-col gap-3 border-b border-gray-100 bg-gray-50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+              <div className="flex items-start gap-3">
+              {renderGroupCheckbox(getAllCodesForCategory(category), category.name, 'md')}
               <div>
                 <div className="flex flex-wrap items-center gap-2">
                   <h3 className="text-sm font-semibold text-gray-900">{category.name}</h3>
@@ -434,6 +531,10 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
                   <p className="mt-1 text-xs text-gray-500">{category.description}</p>
                 )}
               </div>
+              </div>
+              <span className="inline-flex items-center rounded-full bg-gray-50 px-3 py-1.5 text-xs text-gray-500 ring-1 ring-gray-200">
+                {getAllCodesForCategory(category).filter((code) => selectedPermissionCodes.has(code)).length}/{getAllCodesForCategory(category).length} selected
+              </span>
             </div>
 
             <div className="space-y-5 p-4 sm:p-5">
@@ -450,7 +551,7 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
                       action.code,
                       action.label,
                       selectedPermissionCodes.has(action.code),
-                      getPermissionDependencies(action.code).length > 0,
+                      getNeeds(action.code).length > 0,
                       () => handlePermissionToggle(action.code)
                     )
                   )}
@@ -460,8 +561,9 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
               {category.subCategories && (
                 <div className="space-y-4">
                   {category.subCategories.map((subCategory) => (
-                    <div key={subCategory.name} className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4">
+                    <div key={subCategory.name} className="ml-4 sm:ml-8 rounded-2xl border border-gray-200 border-l-4 border-l-brand-blue/30 bg-gray-50/70 p-4">
                       <div className="mb-3 flex flex-wrap items-center gap-2">
+                        {renderGroupCheckbox(getAllCodesForSubCategory(subCategory), subCategory.name, 'sm')}
                         <span className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
                           {subCategory.name}
                         </span>
@@ -478,7 +580,7 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
                             action.code,
                             action.label,
                             selectedPermissionCodes.has(action.code),
-                            getPermissionDependencies(action.code).length > 0,
+                            getNeeds(action.code).length > 0,
                             () => handlePermissionToggle(action.code)
                           )
                         )}
@@ -520,7 +622,7 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
 
   if (isLoading || !role) {
     // Skeleton mirroring the role editor: gradient hero, the Role Details form
-    // card (Name/Code, Description, Priority/Inherits, Permissions) and the
+    // card (Name/Code, Description, Copy permissions from, Permissions) and the
     // right-hand summary sidebar.
     return (
       <main className={embedded ? '' : 'flex-1 overflow-x-clip bg-slate-50'}>
@@ -570,6 +672,7 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
 
   return (
     <main className={embedded ? '' : 'flex-1 overflow-x-clip bg-slate-50'}>
+      {dialog}
       <div className={embedded ? 'w-full' : 'mx-auto w-full max-w-[1400px]'}>
       <div className={embedded ? 'w-full' : 'p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl'}>
         {!embedded && (
@@ -625,7 +728,7 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
                   <input
                     type="text"
                     value={role.name}
-                    onChange={(e) => setRole({ ...role, name: e.target.value })}
+                    onChange={(e) => setRole({ ...role, name: e.target.value.toUpperCase() })}
                     onBlur={() => setNameTouched(true)}
                     aria-invalid={!!showNameError}
                     className={showNameError ? fieldErrorClassName : fieldClassName}
@@ -654,21 +757,9 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
               </label>
 
               <div className="grid gap-5 md:grid-cols-2">
-                <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-gray-700">Priority</span>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={role.priority}
-                    onChange={(e) => setRole({ ...role, priority: parseInt(e.target.value, 10) || 0 })}
-                    className={fieldClassName}
-                  />
-                  <span className="mt-2 block text-xs text-gray-500">Higher priority roles take precedence in overlap scenarios.</span>
-                </label>
 
                 <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-gray-700">Inherits From</span>
+                  <span className="mb-2 block text-sm font-medium text-gray-700">Copy permissions from</span>
                   <select
                     value={role.parent_role_id || ''}
                     onChange={(e) => handleParentRoleChange(e.target.value)}
@@ -683,7 +774,7 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
                         </option>
                       ))}
                   </select>
-                  <span className="mt-2 block text-xs text-gray-500">Selecting a parent role replaces the current permission set with inherited permissions.</span>
+                  <span className="mt-2 block text-xs text-gray-500">Replaces this role&apos;s current permissions with a copy of that role&apos;s. Later changes to that role won&apos;t affect this one.</span>
                 </label>
               </div>
 
@@ -696,18 +787,22 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
               </div>
             </div>
 
-            <div className="flex flex-col gap-3 border-t border-gray-100 px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
-              <Button variant="secondary" onClick={handleClose} disabled={isSaving}>
+            <div className="border-t border-gray-100 px-5 py-4 sm:px-6">
+              <div className={MODAL_FOOTER_ROW_CLASS}>
+              <Button variant="secondary" size="md" onClick={handleClose} disabled={isSaving} className={MODAL_FOOTER_BUTTON_CLASS}>
                 Cancel
               </Button>
               <Button
                 variant="primary"
+                size="md"
+                className={MODAL_FOOTER_BUTTON_CLASS}
                 onClick={handleSubmit}
                 disabled={isSaving}
                 icon={isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUpRight className="h-4 w-4" />}
               >
                 Save Changes
               </Button>
+              </div>
             </div>
           </section>
 
@@ -733,9 +828,9 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
                   <div className="mt-1 text-sm font-semibold text-gray-900">{role.code}</div>
                 </div>
                 <div className="rounded-xl bg-gray-50 px-4 py-3 ring-1 ring-gray-100">
-                  <div className="text-xs uppercase tracking-[0.16em] text-gray-400">Inheritance</div>
+                  <div className="text-xs uppercase tracking-[0.16em] text-gray-400">Copied from</div>
                   <div className="mt-1 text-sm font-semibold text-gray-900">
-                    {roles.find((roleOption) => roleOption.id === role.parent_role_id)?.name || 'Independent'}
+                    {roles.find((roleOption) => roleOption.id === role.parent_role_id)?.name || 'None'}
                   </div>
                 </div>
                 <div className="rounded-xl bg-gray-50 px-4 py-3 ring-1 ring-gray-100">

@@ -31,7 +31,8 @@ import type { JDMergeTrailEntry } from '@/lib/services/jdService';
 import { useQuotaCheck } from '@/lib/hooks/useQuotaCheck';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
 import { normalizeManualJDToMarkdown, stripEmptyCertificationSections } from '@/lib/utils/jdMarkdown';
-import { formatSalaryRange, getSalaryCurrencySymbol, normalizeSalaryCurrency, parseSalaryInput } from '@/lib/utils/salary';
+import { convertSalaryAmount, formatSalaryRange, getSalaryCurrencySymbol, normalizeSalaryCurrency, parseSalaryInput } from '@/lib/utils/salary';
+import { getExchangeRate } from '@/lib/services/exchangeRateService';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
@@ -735,6 +736,17 @@ interface ExtractedData {
   salaryTo: string;
   compensationType: 'hourly' | 'daily' | 'monthly' | 'yearly';
   salaryCurrency: 'INR' | 'USD';
+  /** The salary figure/currency as last established by extraction, a loaded draft,
+   *  or the recruiter's own typed input - NOT necessarily what salaryFrom/salaryTo/
+   *  salaryCurrency currently show, which may be a currency-toggle-derived conversion.
+   *  The toggle always converts FROM here, never from whatever is on screen, so an
+   *  INR -> USD -> INR round trip restores the exact original figure instead of
+   *  compounding FX rounding error on every switch. Typing in either salary box
+   *  re-pins this to the currently displayed pair, in the currently displayed
+   *  currency - the edited figure becomes the new ground truth. */
+  salaryOriginalFrom: string;
+  salaryOriginalTo: string;
+  salaryOriginalCurrency: 'INR' | 'USD';
   locations: Array<{ city: string; radius: string; radiusKm?: number; isRequired?: boolean; country?: 'IN' | 'US' }>;
   locationsRequired: boolean;
   assessmentGuidance: string;
@@ -2089,6 +2101,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     salaryTo: '',
     compensationType: 'yearly',
     salaryCurrency: 'INR',
+    salaryOriginalFrom: '',
+    salaryOriginalTo: '',
+    salaryOriginalCurrency: 'INR',
     locations: [],
     locationsRequired: false,
     assessmentGuidance: '',
@@ -2319,6 +2334,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     allowOverqualified?: string;
     locations?: string;
   }>({});
+  // Loading/error state for the salary currency toggle's exchange-rate fetch
+  // (GET /jd/exchange-rate). Kept separate from validationErrors since this is
+  // an infrastructure failure, not a bad input - see handleSalaryCurrencyChange.
+  const [isFetchingExchangeRate, setIsFetchingExchangeRate] = useState(false);
+  const [exchangeRateError, setExchangeRateError] = useState<string | null>(null);
   const [jobTitleServerValidationError, setJobTitleServerValidationError] = useState('');
   const [jobTitleServerValidatedValue, setJobTitleServerValidatedValue] = useState('');
   const [isJobTitleValidating, setIsJobTitleValidating] = useState(false);
@@ -2550,6 +2570,56 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     return undefined;
   };
 
+  /**
+   * Switches the displayed salary currency on the extraction page. Always converts
+   * FROM extractedData.salaryOriginal{From,To,Currency} - never from whatever is
+   * currently displayed - so an INR -> USD -> INR round trip restores the exact
+   * original figures instead of compounding FX rounding error on every toggle.
+   *
+   * Switching back to the original currency is instant and needs no network call:
+   * there is nothing to convert, the original figures are just restored verbatim.
+   * Switching away from it fetches a live rate (lib/services/exchangeRateService,
+   * itself cached) and converts from the original amount. On failure, the currency
+   * selection is left unchanged and an inline error is shown - never a silently
+   * unconverted amount.
+   */
+  const handleSalaryCurrencyChange = async (targetCurrency: 'INR' | 'USD') => {
+    if (extractedData.salaryCurrency === targetCurrency) return;
+    setExchangeRateError(null);
+
+    const { salaryOriginalFrom, salaryOriginalTo, salaryOriginalCurrency } = extractedData;
+
+    if (targetCurrency === salaryOriginalCurrency) {
+      setExtractedData(prev => ({
+        ...prev,
+        salaryCurrency: targetCurrency,
+        salaryFrom: prev.salaryOriginalFrom,
+        salaryTo: prev.salaryOriginalTo,
+      }));
+      setValidationErrors(prev => ({
+        ...prev,
+        salaryRange: validateSalaryRange(salaryOriginalFrom || '', salaryOriginalTo || ''),
+      }));
+      markExtractedDataModified();
+      return;
+    }
+
+    setIsFetchingExchangeRate(true);
+    try {
+      const { rate } = await getExchangeRate(salaryOriginalCurrency, targetCurrency);
+      const salaryFrom = convertSalaryAmount(salaryOriginalFrom, rate);
+      const salaryTo = convertSalaryAmount(salaryOriginalTo, rate);
+      setExtractedData(prev => ({ ...prev, salaryCurrency: targetCurrency, salaryFrom, salaryTo }));
+      setValidationErrors(prev => ({ ...prev, salaryRange: validateSalaryRange(salaryFrom, salaryTo) }));
+      markExtractedDataModified();
+    } catch (err) {
+      setExchangeRateError(
+        err instanceof Error ? err.message : 'Could not fetch the exchange rate. Please try again.'
+      );
+    } finally {
+      setIsFetchingExchangeRate(false);
+    }
+  };
 
   /**
    * Promote a grouped wording to a skill of its own ("Add" on a tree child).
@@ -4050,6 +4120,16 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           ? (sanitizeExtractedSalary(params.salary_max) || '')
           : (isEditMode && !params.salary_mixed_period ? (prev.salaryTo || '') : ''),
         salaryCurrency: normalizeSalaryCurrency(params.salary_currency || prev.salaryCurrency),
+        // Mirrors salaryFrom/salaryTo/salaryCurrency above exactly - this IS a fresh
+        // ground-truth extraction, so the "original" pair starts out identical to what
+        // is displayed (no currency toggle has been applied yet).
+        salaryOriginalFrom: params.salary_min != null
+          ? (sanitizeExtractedSalary(params.salary_min) || '')
+          : (isEditMode && !params.salary_mixed_period ? (prev.salaryOriginalFrom || '') : ''),
+        salaryOriginalTo: params.salary_max != null
+          ? (sanitizeExtractedSalary(params.salary_max) || '')
+          : (isEditMode && !params.salary_mixed_period ? (prev.salaryOriginalTo || '') : ''),
+        salaryOriginalCurrency: normalizeSalaryCurrency(params.salary_currency || prev.salaryOriginalCurrency),
         compensationType: (params.compensation_type as 'yearly' | 'monthly' | 'hourly' | 'daily') || prev.compensationType || 'yearly',
         // "City, State" when the JD qualified the city, matching how a SAVED JD is loaded
         // (see the load effect) and how the save path re-splits it. Dropping `state` here
@@ -4058,7 +4138,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         // would pick by hand.
         locations: (params.locations || []).length > 0 ? params.locations.map((loc: any) => ({
           city: loc.state ? `${loc.city}, ${loc.state}` : (loc.city || ''),
-          radius: '50'
+          radius: loc.radius_km != null ? String(loc.radius_km) : '50'
         })) : (isEditMode ? prev.locations : []),
         allowOverqualified: isEditMode ? prev.allowOverqualified : null,
         // Forced OFF: the 'Requires a hands-on coding assessment' control was removed
@@ -4895,6 +4975,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           : (isEditMode && !params.salary_mixed_period ? (extractedData.salaryTo || '') : ''),
         compensationType: (params.compensation_type as 'yearly' | 'monthly' | 'hourly' | 'daily') || extractedData.compensationType || 'yearly',
         salaryCurrency: normalizeSalaryCurrency(params.salary_currency || extractedData.salaryCurrency),
+        // Mirrors salaryFrom/salaryTo/salaryCurrency above - a fresh ground-truth
+        // extraction, so "original" starts out identical to what is displayed.
+        salaryOriginalFrom: params.salary_min != null
+          ? (sanitizeExtractedSalary(params.salary_min) || '')
+          : (isEditMode && !params.salary_mixed_period ? (extractedData.salaryOriginalFrom || '') : ''),
+        salaryOriginalTo: params.salary_max != null
+          ? (sanitizeExtractedSalary(params.salary_max) || '')
+          : (isEditMode && !params.salary_mixed_period ? (extractedData.salaryOriginalTo || '') : ''),
+        salaryOriginalCurrency: normalizeSalaryCurrency(params.salary_currency || extractedData.salaryOriginalCurrency),
         // "City, State" when the JD qualified the city, matching how a SAVED JD is loaded
         // (see the load effect) and how the save path re-splits it. Dropping `state` here
         // meant an extracted "Chennai, Tamil Nadu" reached Step 2 as a bare "Chennai" and
@@ -4902,7 +4991,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         // would pick by hand.
         locations: (params.locations || []).length > 0 ? params.locations.map((loc: any) => ({
           city: loc.state ? `${loc.city}, ${loc.state}` : (loc.city || ''),
-          radius: '50'  // Default radius
+          radius: loc.radius_km != null ? String(loc.radius_km) : '50'  // Use JD-stated radius when extracted, else default
         })) : (isEditMode ? extractedData.locations : []),
         locationsRequired: params.location_mandatory || (isEditMode ? extractedData.locationsRequired : false),
         assessmentGuidance: isEditMode ? extractedData.assessmentGuidance : '',
@@ -7705,6 +7794,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           salaryTo: sanitizeExtractedSalary(effectiveEditingJD.salary_max),
           compensationType: (effectiveEditingJD.compensation_type as 'hourly' | 'daily' | 'monthly' | 'yearly') || 'yearly',
           salaryCurrency: normalizeSalaryCurrency(effectiveEditingJD.salary_currency),
+          // A loaded draft/saved JD is ground truth - "original" starts out identical
+          // to what is displayed, same as a fresh extraction.
+          salaryOriginalFrom: sanitizeExtractedSalary(effectiveEditingJD.salary_min),
+          salaryOriginalTo: sanitizeExtractedSalary(effectiveEditingJD.salary_max),
+          salaryOriginalCurrency: normalizeSalaryCurrency(effectiveEditingJD.salary_currency),
           assessmentGuidance: effectiveEditingJD.assessment_guidance || '',
           additionalDetails: effectiveEditingJD.additional_details || '',
           internalRecruiterComments: effectiveEditingJD.internal_comments ? effectiveEditingJD.internal_comments.split('\n').filter(c => c.trim()) : [],
@@ -9383,30 +9477,33 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mb-3">
                   <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">Salary Range</h3>
                   <div className="flex items-center gap-4">
-                    <label className={`flex items-center gap-1.5 ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+                    <label className={`flex items-center gap-1.5 ${isRegenerating || isFetchingExchangeRate ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                       <input
                         type="radio"
                         name="salaryCurrency"
                         value="INR"
                         checked={extractedData.salaryCurrency === 'INR'}
-                        onChange={() => { setExtractedData(prev => ({ ...prev, salaryCurrency: 'INR' })); markExtractedDataModified(); }}
+                        onChange={() => handleSalaryCurrencyChange('INR')}
                         className="w-4 h-4 text-brand-blue border-gray-300 focus:ring-brand-blue/40"
-                        disabled={isRegenerating}
+                        disabled={isRegenerating || isFetchingExchangeRate}
                       />
                       <span className="text-sm text-gray-700 dark:text-slate-300">INR (₹)</span>
                     </label>
-                    <label className={`flex items-center gap-1.5 ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+                    <label className={`flex items-center gap-1.5 ${isRegenerating || isFetchingExchangeRate ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                       <input
                         type="radio"
                         name="salaryCurrency"
                         value="USD"
                         checked={extractedData.salaryCurrency === 'USD'}
-                        onChange={() => { setExtractedData(prev => ({ ...prev, salaryCurrency: 'USD' })); markExtractedDataModified(); }}
+                        onChange={() => handleSalaryCurrencyChange('USD')}
                         className="w-4 h-4 text-brand-blue border-gray-300 focus:ring-brand-blue/40"
-                        disabled={isRegenerating}
+                        disabled={isRegenerating || isFetchingExchangeRate}
                       />
                       <span className="text-sm text-gray-700 dark:text-slate-300">USD ($)</span>
                     </label>
+                    {isFetchingExchangeRate && (
+                      <span className="text-xs text-gray-500 dark:text-slate-400">Converting…</span>
+                    )}
                   </div>
                 </div>
                 {/* Wraps instead of squeezing: in a half-width column the period
@@ -9424,7 +9521,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           // permitted a large rate with cents ("12345678.90" - 10 digits)
                           // was blocked mid-typing by a rule that is about magnitude.
                           if (newValue.split('.')[0].replace(/\D/g, '').length > 8) return;
-                          setExtractedData(prev => ({ ...prev, salaryFrom: newValue }));
+                          setExtractedData(prev => ({
+                            ...prev,
+                            salaryFrom: newValue,
+                            // Typing directly re-pins "original" to what's now on screen, in
+                            // the currently displayed currency - see handleSalaryCurrencyChange.
+                            salaryOriginalFrom: newValue,
+                            salaryOriginalTo: prev.salaryTo,
+                            salaryOriginalCurrency: prev.salaryCurrency,
+                          }));
                           markExtractedDataModified();
                           const error = validateSalaryRange(newValue, extractedData.salaryTo || '');
                           setValidationErrors(prev => ({ ...prev, salaryRange: error }));
@@ -9454,7 +9559,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           // permitted a large rate with cents ("12345678.90" - 10 digits)
                           // was blocked mid-typing by a rule that is about magnitude.
                           if (newValue.split('.')[0].replace(/\D/g, '').length > 8) return;
-                          setExtractedData(prev => ({ ...prev, salaryTo: newValue }));
+                          setExtractedData(prev => ({
+                            ...prev,
+                            salaryTo: newValue,
+                            // Typing directly re-pins "original" to what's now on screen, in
+                            // the currently displayed currency - see handleSalaryCurrencyChange.
+                            salaryOriginalFrom: prev.salaryFrom,
+                            salaryOriginalTo: newValue,
+                            salaryOriginalCurrency: prev.salaryCurrency,
+                          }));
                           markExtractedDataModified();
                           const error = validateSalaryRange(extractedData.salaryFrom || '', newValue);
                           setValidationErrors(prev => ({ ...prev, salaryRange: error }));
@@ -9483,6 +9596,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     <p className="text-destructive text-sm mt-2 flex items-center gap-1">
                       <AlertCircle className="w-4 h-4 shrink-0" />
                       {validationErrors.salaryRange}
+                    </p>
+                  )}
+                  {exchangeRateError && (
+                    <p className="text-destructive text-sm mt-2 flex items-center gap-1">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                      {exchangeRateError}
                     </p>
                   )}
                 </div>
@@ -11091,8 +11210,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       )}
                     </div>
                     <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600 dark:text-slate-400">
-                      {extractedData.locations.length > 0 && extractedData.locations[0].city && (
-                        <span className="flex items-center gap-1.5"><MapPin className="w-4 h-4 text-gray-500 dark:text-slate-400 flex-shrink-0" />{extractedData.locations[0].city}</span>
+                      {extractedData.locations.filter(loc => loc.city).length > 0 && (
+                        <span className="flex items-center gap-1.5"><MapPin className="w-4 h-4 text-gray-500 dark:text-slate-400 flex-shrink-0" />{extractedData.locations.filter(loc => loc.city).map(loc => loc.city).join(', ')}</span>
                       )}
                       {extractedData.experience && (
                         <span className="flex items-center gap-1.5"><Clock className="w-4 h-4 text-gray-500 dark:text-slate-400 flex-shrink-0" />{getExperienceLabel(extractedData.experience)}</span>

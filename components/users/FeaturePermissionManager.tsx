@@ -8,7 +8,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import type { IconComponent } from '@/lib/types/icon';
 import {
-  X,
   Loader2,
   Check,
   AlertTriangle,
@@ -29,8 +28,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import AppModal from '@/components/ui/app-modal';
 import { Badge } from '@/components/ui/badge';
-import { Tooltip } from '@/components/ui/tooltip';
 import { featurePermissionService } from '@/lib/services/featurePermissionService';
 import {
   FeatureFlags,
@@ -303,40 +302,34 @@ export default function FeaturePermissionManager({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-[95vw] sm:max-w-2xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="px-6 py-5 border-b border-gray-200 bg-gradient-to-r from-brand-blue/[0.04] via-white to-brand-cyan/[0.04] flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-11 h-11 rounded-xl bg-brand-blue flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/20 flex-shrink-0">
-              <Shield className="w-5 h-5 text-white" />
-            </div>
-            <div className="min-w-0">
-              <h2 className="text-lg font-semibold text-gray-900 truncate">
-                Feature Permissions
-              </h2>
-              <p className="text-sm text-gray-500 mt-0.5 flex items-center gap-2 flex-wrap">
-                <span className="truncate">{userName}</span>
-                <Badge variant="info" className="text-2xs uppercase tracking-wider">
-                  {userRole}
-                </Badge>
-              </p>
-            </div>
-          </div>
-          <Tooltip content="Close">
-            <Button
-              variant="secondary"
-              onClick={onClose}
-              aria-label="Close"
-              className="px-2 flex-shrink-0"
-            >
-              <X className="w-5 h-5" />
-            </Button>
-          </Tooltip>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 bg-gray-50/40">
+    <AppModal
+      open
+      size="md"
+      zIndexClass="z-50"
+      onCancel={onClose}
+      cancelDisabled={isSaving}
+      icon={<Shield />}
+      title="Feature Permissions"
+      subtitle={
+        <span className="inline-flex items-center gap-2">
+          <span className="truncate">{userName}</span>
+          <span className="text-2xs uppercase tracking-wider font-semibold bg-white/20 text-white px-2 py-0.5 rounded-full ring-1 ring-white/30">
+            {userRole}
+          </span>
+        </span>
+      }
+      bodyClassName="bg-gray-50/40"
+      actions={[
+        {
+          label: isSaving ? 'Saving...' : 'Save Changes',
+          onClick: handleSave,
+          disabled: isSaving || isExpansionBlocked,
+          icon: isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />,
+        },
+      ]}
+    >
+        {/* Content (AppModal scrolls it) */}
+        <div>
           {isLoading ? (
             <div className="flex items-center justify-center py-12 tf-loader-center tf-loader-center--compact">
               <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
@@ -515,18 +508,6 @@ export default function FeaturePermissionManager({
           )}
         </div>
 
-        {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200 bg-white flex items-center justify-end gap-3">
-          <Button
-            variant="primary"
-            onClick={handleSave}
-            disabled={isSaving || isExpansionBlocked}
-            icon={isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-          >
-            {isSaving ? 'Saving...' : 'Save Changes'}
-          </Button>
-        </div>
-      </div>
-    </div>
+    </AppModal>
   );
 }

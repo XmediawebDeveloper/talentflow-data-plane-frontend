@@ -47,6 +47,7 @@ export function aiInterviewDraftResumeHref(config: ResumeSource): string {
   // The recorded step wins: clusters generated on an earlier visit leave
   // topics behind, which must not drag a draft last saved on Configure forward.
   const step = savedWizardStep(config);
+  if (step !== undefined && step >= 4) return `${CONFIG_BASE}/preview?id=${encodeURIComponent(config.id)}`;
   const hasClusters = step === undefined ? aiInterviewDraftHasClusters(config) : step >= 3;
   return hasClusters
     ? `${CONFIG_BASE}/clusters?id=${encodeURIComponent(config.id)}`

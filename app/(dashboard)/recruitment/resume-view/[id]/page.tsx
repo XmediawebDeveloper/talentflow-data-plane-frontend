@@ -435,7 +435,9 @@ export default function ResumeViewPage() {
   // Plan gates DISABLE (hover explains), they never hide: permission decides
   // whether a control is shown, the plan only whether it is clickable.
   const canApplyResumeToJob =
-    isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job'));
+    isTenantAdmin ||
+    (hasPermission('canRunScoring') &&
+      hasPermissionCode(viewSource === 'resume-database' ? 'internal_db:score' : 'my_resumes:score'));
   const applyPlanLocked = isPlanLocked('resume_scoring');
   const hasAITalentMatchSourcePermission =
     viewSource === 'resume-database'
@@ -456,7 +458,16 @@ export default function ResumeViewPage() {
         viewSource === 'resume-database' ? 'internal_db:assessment' : 'my_resumes:assessment'
       )
     );
-  const canInviteAIInterview = isTenantAdmin || hasPermission('canInviteAIInterviews');
+  // "Invite to AI Interview" is its own permission per resume source (My
+  // Resumes / Shared Database), plus AI Interview's own Invite.
+  const canInviteAIInterview =
+    isTenantAdmin ||
+    (hasPermission('canInviteAIInterviews') &&
+      (viewSource === 'resume-database'
+        ? hasPermissionCode('internal_db:invite_ai_interview')
+        : viewSource === 'my-resumes'
+          ? hasPermissionCode('my_resumes:invite_ai_interview')
+          : true));
   const assessmentPlanLocked = isPlanLocked('assessment');
   const aiInterviewPlanLocked = isPlanLocked('ai_interview');
   const canInvite = canInviteAssessment || canInviteAIInterview;

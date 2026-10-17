@@ -25,7 +25,7 @@ import {
   interviewVersionOrdinal,
   MAX_INTERVIEW_VERSIONS,
 } from '@/lib/utils/aiInterviewVersion';
-import { resolveAIInterviewDraftResumeHref } from '@/lib/utils/aiInterviewDraftResume';
+import { resolveAIInterviewDraftResumeHref, aiInterviewConfigureHref } from '@/lib/utils/aiInterviewDraftResume';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { modeFromConfig } from '@/lib/constants/aiInterviewMode';
 import { ROUND_LABELS, ROUND_SHORT_LABELS } from '@/components/ai-interview/AIInterviewPicker';
@@ -523,7 +523,9 @@ export async function versionHref(v: InviteVersion, action: 'view' | 'edit', jdT
       : `/recruitment/assessments/create?step=configure&jd_id=${encodeURIComponent(v.jdId)}&edit=${encodeURIComponent(v.id)}` +
         `&from=job-details&jd_title=${encodeURIComponent(jdTitle)}&returnUrl=${encodeURIComponent(returnUrl)}`;
   }
-  return action === 'view' ? `/recruitment/ai-interviews/${v.id}` : resolveAIInterviewDraftResumeHref(v.id, v.jdId);
+  if (action === 'view') return `/recruitment/ai-interviews/${v.id}`;
+  // Only a draft resumes at its last step; a published version edits from Configure.
+  return v.status === 'draft' ? resolveAIInterviewDraftResumeHref(v.id, v.jdId) : aiInterviewConfigureHref(v.id, v.jdId);
 }
 
 /* ── Sending ─────────────────────────────────────────────────────────── */

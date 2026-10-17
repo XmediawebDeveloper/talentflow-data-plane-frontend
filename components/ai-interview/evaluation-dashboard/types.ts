@@ -328,7 +328,10 @@ export interface DashboardData {
  * in the same order with the same 1..N numbers:
  *   Opening HR (asked before the first skill question) → Must-Have →
  *   Nice-to-Have → Closing HR (and any HR never reached).
- * The HR stage isn't carried on the rows, so it is read from the ask order.
+ * An HR row matched to a selected HR question uses its configured stage and
+ * list position, asked or not — a Not Asked opening question stays in the
+ * Opening block instead of dropping to the end. Other HR rows fall back to
+ * the ask order.
  */
 export function orderQuestionsAsAsked(questions: PerQuestionDetail[]): PerQuestionDetail[] {
   const mh = questions.filter(q => q.section === 'mth');
@@ -339,6 +342,18 @@ export function orderQuestionsAsAsked(questions: PerQuestionDetail[]): PerQuesti
     .map(q => q.askedNum as number);
   const firstSkillAsked = skillAsked.length > 0 ? Math.min(...skillAsked) : Infinity;
   const isOpeningHr = (q: PerQuestionDetail) =>
-    !q.notDelivered && typeof q.askedNum === 'number' && q.askedNum < firstSkillAsked;
-  return [...hr.filter(isOpeningHr), ...mh, ...nh, ...hr.filter(q => !isOpeningHr(q))];
+    q.hrStage
+      ? q.hrStage === 'opening'
+      : !q.notDelivered && typeof q.askedNum === 'number' && q.askedNum < firstSkillAsked;
+  // Configured order within each HR block; rows without a bank position keep
+  // their relative order after the configured ones.
+  const byBank = (rows: PerQuestionDetail[]) =>
+    rows
+      .map((q, i) => ({ q, i }))
+      .sort((a, b) =>
+        (a.q.hrBankIndex ?? Infinity) - (b.q.hrBankIndex ?? Infinity) || a.i - b.i)
+      .map(x => x.q);
+  return [
+    ...byBank(hr.filter(isOpeningHr)), ...mh, ...nh, ...byBank(hr.filter(q => !isOpeningHr(q))),
+  ];
 }

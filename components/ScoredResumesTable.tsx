@@ -609,7 +609,7 @@ export function useScoringActionPermissions(canCarryAIInterview: boolean) {
   // canCreateAssessments (creating a brand-new assessment is a different
   // action).
   const assessmentInvitePermitted =
-    (isTenantAdmin || hasPermissionCode('scoring:invite')) &&
+    (isTenantAdmin || (hasPermissionCode('scoring:invite_assessment') && hasPermissionCode('assessments:invite'))) &&
     isFeatureEnabled('assessment');
   const canCreateAssessments = assessmentInvitePermitted && hasPlanFeature('assessment');
   // A permitted user whose plan lacks Assessments is told so, not that they
@@ -622,8 +622,7 @@ export function useScoringActionPermissions(canCarryAIInterview: boolean) {
   // Scoring surface); canInviteAIInterviews is what the endpoints enforce.
   const aiInterviewInvitePermitted =
     canCarryAIInterview &&
-    (isTenantAdmin || hasPermissionCode('scoring:invite')) &&
-    hasPermission('canInviteAIInterviews') &&
+    (isTenantAdmin || (hasPermissionCode('scoring:invite_ai_interview') && hasPermission('canInviteAIInterviews'))) &&
     isFeatureEnabled('ai_interview');
   const mayInviteAIInterview = aiInterviewInvitePermitted && hasPlanFeature('ai_interview');
   const aiInterviewDeniedReason = aiInterviewInvitePermitted
