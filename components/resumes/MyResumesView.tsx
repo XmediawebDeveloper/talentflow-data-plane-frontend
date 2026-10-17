@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ChevronDown, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, FileArchive, Users, Info, ClipboardCheck, UserPlus, Sparkles, RefreshCw, Ban, Brain, Edit2, Lightbulb, HelpCircle } from 'lucide-react';
+import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ChevronDown, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, FileArchive, Users, Info, ClipboardList, UserPlus, Sparkles, RefreshCw, Ban, Brain, Edit2, Lightbulb, HelpCircle } from 'lucide-react';
 import { DndProvider, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import dynamic from 'next/dynamic';
@@ -4026,8 +4026,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
             onMoveToFolderDisabled={!canMoveMyResumes}
             onMoveToFolderDisabledReason="You do not have permission to move resumes to a folder"
             onApplyToJob={!isArchivedContext ? handleApplyToJob : undefined}
-            onApplyToJobDisabled={isPlanLocked('resume_scoring') || !(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job')))}
-            onApplyToJobDisabledReason={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job'))) ? "You do not have permission to score resumes" : PLAN_LOCKED_MESSAGE}
+            onApplyToJobDisabled={isPlanLocked('resume_scoring') || !(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:score')))}
+            onApplyToJobDisabledReason={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:score'))) ? "You do not have permission to score resumes" : PLAN_LOCKED_MESSAGE}
             onDownload={handleBulkDownload}
             onDelete={() => handleDeleteResumes(selectedResumes)}
             onDeleteDisabled={!canDeleteMyResumes}
@@ -4258,8 +4258,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   onSelectAll={handleSelectAll}
                   onQuickView={(resume) => setQuickViewResume(resume)}
                   onApplyToJob={handleSingleResumeApplyToJob}
-                  onApplyToJobDisabled={isPlanLocked('resume_scoring') || !(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job')))}
-                  onApplyToJobDisabledReason={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job'))) ? "You do not have permission to score resumes" : PLAN_LOCKED_MESSAGE}
+                  onApplyToJobDisabled={isPlanLocked('resume_scoring') || !(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:score')))}
+                  onApplyToJobDisabledReason={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:score'))) ? "You do not have permission to score resumes" : PLAN_LOCKED_MESSAGE}
                   onDelete={(id) => handleDelete(id)}
                   onDeleteDisabled={!canDeleteMyResumes}
                   onDeleteDisabledReason="You do not have permission to delete resumes"
@@ -4794,8 +4794,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                             }}
                             onQuickView={(resume) => setQuickViewResume(resume)}
                             onApplyToJob={handleSingleResumeApplyToJob}
-                            onApplyToJobDisabled={isPlanLocked('resume_scoring') || !(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job')))}
-                            onApplyToJobDisabledReason={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job'))) ? "You do not have permission to score resumes" : PLAN_LOCKED_MESSAGE}
+                            onApplyToJobDisabled={isPlanLocked('resume_scoring') || !(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:score')))}
+                            onApplyToJobDisabledReason={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:score'))) ? "You do not have permission to score resumes" : PLAN_LOCKED_MESSAGE}
                             onDelete={(id) => handleDelete(id)}
                             onDeleteDisabled={!canDeleteMyResumes}
                             onDeleteDisabledReason="You do not have permission to delete resumes"
@@ -6226,7 +6226,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
               <div className="flex-shrink-0 flex items-center justify-between gap-2 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60">
                 <div className="flex items-center gap-3 min-w-0 flex-1">
                   <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
-                    <ClipboardCheck className="w-4 h-4 text-brand-blue" />
+                    <ClipboardList className="w-4 h-4 text-brand-blue" />
                   </div>
                   <div className="min-w-0">
                     <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Invite to Assessment</h2>

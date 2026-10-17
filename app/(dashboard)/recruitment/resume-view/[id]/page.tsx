@@ -1,6 +1,7 @@
 'use client'
 
 import { RESUME_EMAIL_SHARE_ENABLED } from '@/lib/constants/featureFlags';
+import { CREATE_SEND_BUTTON_CLASS } from '@/lib/constants/createSendActions';
 import { useState, useEffect, useMemo, useRef, useId } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import CreateInviteTargetModal from '@/components/resume-scoring/CreateInviteTargetModal';
@@ -17,7 +18,7 @@ import {
   Languages, Star, Edit2, Trash2, Send, Building2, GraduationCap, Code,
   ChevronRight, ExternalLink, Globe, FileText, Clock, History,
   User, File, HardDrive, Loader2, Share2, Copy, Check, ChevronDown, ChevronUp,
-  AlignLeft, Hash, X, Eye, UserPlus, Sparkles, Search, Database, Paperclip, Plus
+  AlignLeft, Hash, X, Eye, UserPlus, Sparkles, Search, Database, Paperclip, Plus, ClipboardList, Video
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -381,7 +382,9 @@ export default function ResumeViewPage() {
   // Plan gates DISABLE (hover explains), they never hide: permission decides
   // whether a control is shown, the plan only whether it is clickable.
   const canApplyResumeToJob =
-    isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job'));
+    isTenantAdmin ||
+    (hasPermission('canRunScoring') &&
+      hasPermissionCode(viewSource === 'resume-database' ? 'internal_db:score' : 'my_resumes:score'));
   const applyPlanLocked = isPlanLocked('resume_scoring');
   const hasAITalentMatchSourcePermission =
     viewSource === 'resume-database'
@@ -600,7 +603,7 @@ export default function ResumeViewPage() {
      pair as AI Talent Match's / Resume Scoring's Actions menu. */
   const renderCreateInviteItems = (kind: InviteHandoffKind) => {
     const what = kind === 'assessment' ? 'AI Assessment' : 'AI Interview';
-    const Icon = kind === 'assessment' ? Mail : Sparkles;
+    const Icon = kind === 'assessment' ? ClipboardList : Video;
     return (
       <>
         <div role="menuitem" aria-disabled="true" className="w-full flex items-start gap-3 px-3 py-2 text-left text-gray-400 cursor-not-allowed">
@@ -1510,13 +1513,9 @@ Best regards`);
                         onClick={() => openCreateSend('assessment')}
                         disabled={!jobForInvite || assessmentPlanLocked}
                         title={assessmentPlanLocked ? PLAN_LOCKED_MESSAGE : undefined}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${
-                          !jobForInvite || assessmentPlanLocked
-                            ? 'bg-gray-50 border border-gray-200 text-gray-400 cursor-not-allowed'
-                            : 'bg-white border border-brand-blue/40 text-brand-blue hover:bg-brand-blue/5'
-                        }`}
+                        className={CREATE_SEND_BUTTON_CLASS.assessment}
                       >
-                        <Mail className="w-4 h-4" />
+                        <ClipboardList className="w-4 h-4" />
                         Create / Send Assessment
                       </button>
                     )}
@@ -1525,13 +1524,9 @@ Best regards`);
                         onClick={() => openCreateSend('interview')}
                         disabled={!jobForInvite || aiInterviewPlanLocked}
                         title={aiInterviewPlanLocked ? PLAN_LOCKED_MESSAGE : undefined}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${
-                          !jobForInvite || aiInterviewPlanLocked
-                            ? 'bg-gray-50 border border-gray-200 text-gray-400 cursor-not-allowed'
-                            : 'bg-white border border-brand-cyan/40 text-brand-cyan hover:bg-brand-cyan/5'
-                        }`}
+                        className={CREATE_SEND_BUTTON_CLASS.interview}
                       >
-                        <Sparkles className="w-4 h-4" />
+                        <Video className="w-4 h-4" />
                         Create / Send AI Interview
                       </button>
                     )}
@@ -1567,7 +1562,7 @@ Best regards`);
                                 }`}
                               >
                                 <span className="w-8 h-8 rounded-lg bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
-                                  <Mail className="w-4 h-4 text-brand-blue" />
+                                  <ClipboardList className="w-4 h-4 text-brand-blue" />
                                 </span>
                                 <span className="min-w-0 text-sm font-medium text-gray-900">Assessment</span>
                               </button>
@@ -1583,7 +1578,7 @@ Best regards`);
                                 }`}
                               >
                                 <span className="w-8 h-8 rounded-lg bg-brand-cyan/10 flex items-center justify-center flex-shrink-0">
-                                  <Sparkles className="w-4 h-4 text-brand-cyan" />
+                                  <Video className="w-4 h-4 text-brand-cyan" />
                                 </span>
                                 <span className="min-w-0 text-sm font-medium text-gray-900">AI Interview</span>
                               </button>

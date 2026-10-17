@@ -462,7 +462,10 @@ export default function AITalentMatchPage({
   // category's own Export checkbox is turned off (same bug shape fixed for
   // can_view_ai_match elsewhere in this app).
   const canExport = isTenantAdmin || hasPermissionCode('ai_match:export');
-  const canRunScoring = isTenantAdmin || (user?.permissions?.canRunScoring ?? false);
+  // Scoring from AI Talent Match needs Resume Scoring → Score Resume AND this
+  // module's own "Score Resume" checkbox (ai_match:score).
+  const canRunScoring =
+    isTenantAdmin || ((user?.permissions?.canRunScoring ?? false) && hasPermissionCode('ai_match:score'));
   const canCreateAssessments = isTenantAdmin || hasPermission('canCreateAssessments');
   const canCreateAIInterviews = isTenantAdmin || hasPermission('canCreateAIInterviews');
 
@@ -5228,7 +5231,7 @@ export default function AITalentMatchPage({
                             handleInviteAssessmentSelectedAllResumes();
                           }}
                         >
-                          <BarChart3 className="w-4 h-4 text-menu-icon-score" />
+                          <ClipboardList className="w-4 h-4 text-menu-icon-view" />
                           <span className={MENU_ITEM_SCALE_CLASS}>Invite Assessment</span>
                         </DropdownMenuItem>
                         <DropdownMenuItem
@@ -5243,7 +5246,7 @@ export default function AITalentMatchPage({
                             handleInviteAIInterviewSelectedAllResumes();
                           }}
                         >
-                          <Video className="w-4 h-4 text-menu-icon-view" />
+                          <Video className="w-4 h-4 text-menu-icon-ai" />
                           <span className={MENU_ITEM_SCALE_CLASS}>Invite AI Interview</span>
                         </DropdownMenuItem>
                       </DropdownMenuContent>
@@ -5738,7 +5741,7 @@ export default function AITalentMatchPage({
                                   title={!canCreateAssessments ? 'You do not have permission to invite to an assessment' : !row.email ? 'Candidate has no email on file' : undefined}
                                   onSelect={() => inviteAssessmentForJobMatch(row, job)}
                                 >
-                                  <FileText className="w-4 h-4 text-menu-icon-view" />
+                                  <ClipboardList className="w-4 h-4 text-menu-icon-view" />
                                   <span className={MENU_ITEM_SCALE_CLASS}>Create / Send Assessment</span>
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
@@ -5747,7 +5750,7 @@ export default function AITalentMatchPage({
                                   title={!canCreateAIInterviews ? 'You do not have permission to invite to an AI interview' : !row.email ? 'Candidate has no email on file' : undefined}
                                   onSelect={() => inviteAIInterviewForJobMatch(row, job)}
                                 >
-                                  <Video className="w-4 h-4 text-menu-icon-share" />
+                                  <Video className="w-4 h-4 text-menu-icon-ai" />
                                   <span className={MENU_ITEM_SCALE_CLASS}>Create / Send AI Interview</span>
                                 </DropdownMenuItem>
                               </DropdownMenuContent>

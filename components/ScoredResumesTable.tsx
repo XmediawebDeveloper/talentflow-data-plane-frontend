@@ -19,6 +19,7 @@ import InviteToAIInterviewFlow from './InviteToAIInterviewFlow';
 import type { Resume } from '@/lib/types/types';
 import { isAssessmentRevoked, getLocallyRevokedAssessmentIds, parseAssessmentTitle } from '@/lib/utils/assessmentUtils';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
+import { CREATE_SEND_BUTTON_CLASS } from '@/lib/constants/createSendActions';
 import { scoringService } from '@/lib/services/scoringService';
 import { assessmentService } from '@/lib/services/assessmentService';
 import { resumeService } from '@/lib/services/resumeService';
@@ -545,8 +546,8 @@ export function renderInviteTargetItems({
   label?: string;
 }) {
   const what = kind === 'assessment' ? 'AI Assessment' : 'AI Interview';
-  const Icon = kind === 'assessment' ? FileText : Video;
-  const iconClass = kind === 'assessment' ? 'text-menu-icon-view' : 'text-menu-icon-share';
+  const Icon = kind === 'assessment' ? ClipboardList : Video;
+  const iconClass = kind === 'assessment' ? 'text-menu-icon-view' : 'text-menu-icon-ai';
   if (!allowed || target.state === 'ready') {
     return (
       <DropdownMenuItem
@@ -1828,7 +1829,7 @@ Best regards`);
             title={!rowCanInviteAssessment ? assessmentDeniedReason : undefined}
             onSelect={() => onOpenInviteDialog('assessment', [invitee])}
           >
-            <FileText className="w-4 h-4 text-menu-icon-view" />
+            <ClipboardList className="w-4 h-4 text-menu-icon-view" />
             <span className={MENU_ITEM_SCALE_CLASS}>Create / Send Assessment</span>
           </DropdownMenuItem>
           <DropdownMenuItem
@@ -1837,7 +1838,7 @@ Best regards`);
             title={!rowCanInviteAIInterview ? aiInterviewDeniedReason : undefined}
             onSelect={() => onOpenInviteDialog('interview', [invitee])}
           >
-            <Video className="w-4 h-4 text-menu-icon-share" />
+            <Video className="w-4 h-4 text-menu-icon-ai" />
             <span className={MENU_ITEM_SCALE_CLASS}>Create / Send AI Interview</span>
           </DropdownMenuItem>
         </>
@@ -1870,7 +1871,7 @@ Best regards`);
               setShowInviteModal(true);
             }}
           >
-            <FileText className="w-4 h-4 text-menu-icon-view" />
+            <ClipboardList className="w-4 h-4 text-menu-icon-view" />
             <span className={MENU_ITEM_SCALE_CLASS}>Assessment</span>
           </DropdownMenuItem>
           <DropdownMenuItem
@@ -1903,7 +1904,7 @@ Best regards`);
                 }
               }}
             >
-              <Video className="w-4 h-4 text-menu-icon-share" />
+              <Video className="w-4 h-4 text-menu-icon-ai" />
               <span className={MENU_ITEM_SCALE_CLASS}>AI Interview</span>
             </DropdownMenuItem>
       </>
@@ -3522,9 +3523,9 @@ Best regards`);
                   published assessment on this JD, or no units left. */}
               {(resume.matchStatus === 'Exact Match' || resume.matchStatus === 'Partial Match') && (
                 <div className="relative group">
-                  <Button
-                    variant="primary"
-                    size="md"
+                  {/* Create / Send Assessment's shared look (createSendActions). */}
+                  <button
+                    type="button"
                     disabled={!canCreateAssessments || !canInviteAssessment || availableUnits === 0}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -3535,11 +3536,11 @@ Best regards`);
                       setInviteCandidate(resume);
                       setShowInviteModal(true);
                     }}
-                    icon={<UserPlus className="w-4 h-4" />}
-                    className="w-full"
+                    className={`${CREATE_SEND_BUTTON_CLASS.assessment} w-full justify-center`}
                   >
+                    <ClipboardList className="w-4 h-4 flex-shrink-0" />
                     Invite for Assessment
-                  </Button>
+                  </button>
                   {(!canCreateAssessments || !canInviteAssessment || availableUnits === 0) && (
                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-30">
                       <div className="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 whitespace-nowrap shadow-lg">
@@ -4082,7 +4083,7 @@ const BULK_ACTION_INFO: Record<BulkActionKind, {
   },
   assessment: {
     title: 'AI Assessment Invite',
-    icon: FileText,
+    icon: ClipboardList,
     what: "Invites the included candidates to this job's published assessment. You pick the assessment and the link expiry next. Each invitation uses one assessment unit.",
     continueLabel: 'Continue',
   },

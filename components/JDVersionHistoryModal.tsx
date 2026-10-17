@@ -493,7 +493,7 @@ export default function JDVersionHistoryModal({
         className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-4xl w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex-shrink-0 flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60">
+        <div className="flex-shrink-0 flex items-center justify-between gap-2 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60">
           <div className="flex items-center gap-3 min-w-0">
             {selectedVersion ? (
               <Button
@@ -512,12 +512,12 @@ export default function JDVersionHistoryModal({
               </div>
             )}
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">
+              <div className="flex items-center gap-2 min-w-0">
+                <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight truncate min-w-0">
                   {selectedVersion ? `Version ${selectedVersion.version_number}.0` : 'Version History'}
                 </h2>
                 {!selectedVersion && versions.length > 0 && (
-                  <span className="inline-flex items-center rounded-full bg-brand-blue/10 px-2 py-0.5 text-xs font-medium text-brand-blue ring-1 ring-brand-blue/15">
+                  <span className="inline-flex flex-shrink-0 items-center rounded-full bg-brand-blue/10 px-2 py-0.5 text-xs font-medium text-brand-blue ring-1 ring-brand-blue/15">
                     {versions.length} version{versions.length !== 1 ? 's' : ''}
                   </span>
                 )}
@@ -555,7 +555,7 @@ export default function JDVersionHistoryModal({
                 size="sm"
                 onClick={compareSelected}
                 disabled={compareChecked.length !== 2}
-                className="hidden sm:inline-flex"
+                className="hidden lg:inline-flex"
               >
                 {compareChecked.length === 2 ? 'Compare selected' : 'Select 2 versions to compare'}
               </Button>
@@ -773,7 +773,7 @@ export default function JDVersionHistoryModal({
                   variant="primary"
                   onClick={compareSelected}
                   disabled={compareChecked.length !== 2}
-                  className="sm:hidden"
+                  className="lg:hidden"
                 >
                   Compare
                 </Button>

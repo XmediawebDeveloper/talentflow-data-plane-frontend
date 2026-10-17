@@ -32,6 +32,11 @@ export type ProctoringEventType =
   // product decision: a session nobody identity-checked is treated as seriously
   // as a detected change. Backend-only — never toasted to the candidate.
   | 'face_verification_unavailable'
+  // ~1 min of identity checks found no usable face (cut off by the frame
+  // edge, too close, covered, turned away) — the person on camera could not
+  // be compared with the reference. Severe; toasted so a genuine candidate
+  // can sit back and face the camera.
+  | 'face_unverifiable'
   | 'voice_mismatch'
   | 'voice_identity_changed'
   | 'screen_share_stopped'
@@ -90,6 +95,7 @@ const WARNING_MESSAGES: Record<ProctoringEventType, string> = {
   face_identity_changed: 'A different person has been detected. Identity verification failed.',
   // Never shown to the candidate — see BACKEND_ONLY_EVENT_TYPES in the monitor.
   face_verification_unavailable: '',
+  face_unverifiable: 'We cannot verify your face. Sit centred, facing the camera, not too close, and keep your face uncovered.',
   voice_mismatch: 'Voice verification warning. Voice pattern does not match the registered speaker.',
   voice_identity_changed: 'A different speaker has been detected. Voice verification failed.',
   screen_share_stopped: 'Screen sharing was stopped. Screen sharing is mandatory throughout this session.',
@@ -124,6 +130,7 @@ const EVENT_SEVERITY: Record<ProctoringEventType, 'minor' | 'moderate' | 'severe
   voice_mismatch:           'severe',
   face_mismatch:            'severe',
   face_verification_unavailable: 'severe',
+  face_unverifiable:        'severe',
   camera_disabled:          'severe',
   microphone_disabled:      'severe',
   microphone_switched:      'moderate',

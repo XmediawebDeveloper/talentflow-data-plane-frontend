@@ -163,7 +163,10 @@ export default function JobOpeningsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const dialog = useGlobalDialog();
-  const { user, isTenantAdmin, hasPermission } = useAuth();
+  const { user, isTenantAdmin, hasPermission, hasPermissionCode } = useAuth();
+  // Score Resumes from the JD list needs Resume Scoring → Score Resume and the
+  // JD's own "Score Resume" permission (jd:add_applicants).
+  const canScoreFromJd = isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('jd:add_applicants'));
   const canManageMasters = hasPermission('canManageSettings');
 
   // "?view=list" is a one-shot instruction from the JD flow's "View All Jobs":
@@ -794,8 +797,8 @@ export default function JobOpeningsPage() {
         onAIMatchDisabled={isPlanLocked('ai_talent_match') || !(hasPermission('canRunAiMatch') || isTenantAdmin)}
         onAIMatchDisabledReason={isPlanLocked('ai_talent_match') ? PLAN_LOCKED_MESSAGE : undefined}
         onScoreResumes={handleScoreResumes}
-        onScoreResumesDisabled={isPlanLocked('resume_scoring') || !(hasPermission('canRunScoring') || isTenantAdmin)}
-        onScoreResumesDisabledReason={isPlanLocked('resume_scoring') ? PLAN_LOCKED_MESSAGE : undefined}
+        onScoreResumesDisabled={isPlanLocked('resume_scoring') || !canScoreFromJd}
+        onScoreResumesDisabledReason={isPlanLocked('resume_scoring') ? PLAN_LOCKED_MESSAGE : 'You do not have permission to score resumes'}
         onUpdateJobStatus={handleUpdateJobStatus}
         onEditJob={handleEditJob}
         onPublishJob={handlePublishJob}

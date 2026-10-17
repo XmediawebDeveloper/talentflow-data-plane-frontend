@@ -32,12 +32,13 @@ import { ScreenRecordingBlockedModal } from '@/components/ai-interview/proctorin
 import PreInterviewLayout from '@/components/candidate/PreInterviewLayout';
 import StepConsent from '@/components/candidate/StepConsent';
 import StepIdentity from '@/components/candidate/StepIdentity';
-import { probeMediaDevices, deviceMissingMessage } from '@/lib/utils/mediaDeviceProbe';
+import { probeMediaDevices, deviceMissingMessage, keepAudioContextRunning } from '@/lib/utils/mediaDeviceProbe';
 import { revealAfterPaint } from '@/lib/utils/candidateScroll';
 import StepSystemCheck, { ENROLL_PASSAGE } from '@/components/candidate/StepSystemCheck';
 import StepIntroVideo from '@/components/candidate/StepIntroVideo';
 import StepLanguageSelect from '@/components/candidate/StepLanguageSelect';
 import StepSamplePractice from '@/components/candidate/StepSamplePractice';
+import { SingleInterviewTabGuard } from '@/components/candidate/SingleInterviewTabGuard';
 import InterviewFeedbackModal from '@/components/candidate/InterviewFeedbackModal';
 import CandidateHeader from '@/components/candidate/CandidateHeader';
 import { CloseWindowPill } from '@/components/candidate/CloseWindowPill';
@@ -78,6 +79,10 @@ interface Props {
 // S3 multipart upload requires every part except the last to be >= 5 MiB; the
 // margin keeps a slightly-undersized flush from failing CompleteMultipartUpload.
 const SCREEN_MIN_SEGMENT_BYTES = 5 * 1024 * 1024 + 256 * 1024; // ~5.25 MiB
+// Screen recorder with no data this long after start is stalled — see
+// armScreenStallWatchdog. Two 5 s timeslices plus slack.
+const SCREEN_STALL_CHECK_MS = 12_000;
+const SCREEN_STALL_RECHECK_MS = 6_000;
 // On a proctoring termination we keep the (entire-screen) recorder running for
 // a few more seconds BEFORE stopping/uploading, so the recording captures WHAT
 // the candidate switched to (the other tab/app/window from Alt+Tab, F11, the
@@ -400,6 +405,8 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   const isFinalizingScreenUploadRef = useRef(false);
   // Audio mixing for screen recording (Bina's TTS tap + candidate mic)
   const recordingAudioCtxRef = useRef<AudioContext | null>(null);
+  // Removes keepAudioContextRunning's listeners for the screen recording's mix.
+  const recordingAudioKeepAliveRef = useRef<(() => void) | null>(null);
   const recordingMicStreamRef = useRef<MediaStream | null>(null);
   // Live handles on the mic leg of the mix, so the mic can be re-targeted to the
   // device the interview actually pins (see retargetRecordingMic) without
@@ -417,6 +424,9 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     },
     onFaceIdentityChanged: (distance) => {
       InterviewEventBus.emit('face_identity_changed', { distance: distance.toFixed(3) });
+    },
+    onFaceUnverifiable: (reason, checks) => {
+      InterviewEventBus.emit('face_unverifiable', { reason, checks });
     },
   });
   const voiceVerification = useInterviewVoiceVerification({
@@ -481,6 +491,9 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   const POST_CHECK_STEPS: Step[] = ['intro_video', 'language_select', 'sample_practice', 'fullscreen_prompt'];
   // Session-auth marker — set after OTP verified; cleared when browser is closed (sessionStorage)
   const SESSION_AUTH_KEY = `tf_ai_authed_${token}`;
+  // The resumable step this browser last reached, mirrored to the server on the
+  // session-lease heartbeat (see the step-persistence effect).
+  const resumeStepRef = useRef<Step | null>(null);
 
   // State for the reauth (OTP re-verification) gate
   const [reauthTargetStep, setReauthTargetStep] = useState<Step>('system_check');
@@ -562,6 +575,15 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       // Gate 3: IN PROGRESS (resume active interview)
       if (info.status === 'in_progress') {
         clearInterviewStep(token);
+        // REOPENED link (new tab / browser / device — no OTP in this tab yet):
+        // re-verify by OTP first, THEN resume this same interview. Used to drop
+        // straight back into the live interview with no OTP at all. A refresh of
+        // a tab that already passed OTP keeps the marker and skips this.
+        if (sessionStorage.getItem(SESSION_AUTH_KEY) !== '1') {
+          setReauthTargetStep('interview');
+          setStep('reauth');
+          return;
+        }
         // Pre-create 24kHz AudioContext so TalkingHead uses the correct sample rate.
         // Without this, TalkingHead defaults to the device rate (48kHz) and plays
         // 24kHz PCM audio at 2× speed.
@@ -607,7 +629,9 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
         // step wins even if system_check_passed is stale/false (they clearly
         // progressed past it); only fall back to the default ordering otherwise.
         let targetStep: Step = 'system_check';
-        const savedStep = readInterviewStep(token) as Step | null;
+        // This browser's saved step first; the server's copy covers another
+        // device, cleared storage, or an expired local copy.
+        const savedStep = (readInterviewStep(token) || info.resume_step || null) as Step | null;
         if (savedStep && POST_CHECK_STEPS.includes(savedStep)) {
           targetStep = savedStep;
         } else if (info.system_check_passed) {
@@ -634,7 +658,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       // pages wrongly drops the candidate back to step 3 (system check). OTP
       // re-auth above still runs on a fresh browser, so this doesn't weaken
       // security. (sessionStorage first, localStorage mirror as tab-close fallback.)
-      const savedStep = readInterviewStep(token) as Step | null;
+      const savedStep = (readInterviewStep(token) || info.resume_step || null) as Step | null;
       if (savedStep && POST_CHECK_STEPS.includes(savedStep)) {
         // Skip language_select if language already confirmed
         if (savedStep === 'language_select' && info.selected_language) {
@@ -685,17 +709,30 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   // Persist post-check steps so refresh — and accidental tab close within the
   // TTL window — restores the correct position. See aiInterviewSessionStore.
   useEffect(() => {
+    let resumeAt: Step | null = null;
     if (POST_CHECK_STEPS.includes(step as Step)) {
-      writeInterviewStep(token, step);
+      resumeAt = step;
     } else if (step === 'final_consent' || step === 'hide_share_bar') {
       // The final consent gate + hide-share-bar gate run in fullscreen with
       // screen sharing active, both of which are lost on reload and must be
       // re-granted. So a refresh here must return to the fullscreen prompt (not
       // stay on this gate, and not drop to an earlier step). Persist as
       // 'fullscreen_prompt'.
-      writeInterviewStep(token, 'fullscreen_prompt');
+      resumeAt = 'fullscreen_prompt';
     } else if (step === 'interview' || step === 'completed' || step === 'terminated' || step === 'error') {
       clearInterviewStep(token);
+    }
+    if (resumeAt) {
+      writeInterviewStep(token, resumeAt);
+      // Also save it server-side, so reopening the link on ANY device resumes
+      // here after OTP. Sent right away (the heartbeat repeats it every 10 s) so
+      // a tab closed seconds after reaching a step still resumes at that step.
+      if (resumeStepRef.current !== resumeAt) {
+        resumeStepRef.current = resumeAt;
+        candidateAIInterviewService
+          .sessionLease(token, getAiClientSessionId(token), 'acquire', resumeAt)
+          .catch(() => { /* the next heartbeat retries */ });
+      }
     }
   }, [step, token]);
 
@@ -780,7 +817,9 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     const beat = async () => {
       if (cancelled) return;
       try {
-        const r = await candidateAIInterviewService.sessionLease(token, cid, 'acquire');
+        const r = await candidateAIInterviewService.sessionLease(
+          token, cid, 'acquire', resumeStepRef.current ?? undefined,
+        );
         if (cancelled) return;
         if (r?.blocked) {
           setPreInterviewBlocked(true);
@@ -871,13 +910,72 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   // shorter" gap). It was armed (created but not started) at screen-share grant.
   // Only starts an INACTIVE recorder → the mid-interview re-share recorder, which
   // starts itself immediately, is never double-started here.
+  // Stall watchdog for the screen recorder — the twin of InterviewUI's. If the
+  // mix's AudioContext isn't running, MediaRecorder emits nothing for the whole
+  // interview. keepAudioContextRunning usually prevents that; if the recorder is
+  // still empty after two timeslices AND the mix is not running, swap in a
+  // recorder on the raw screen video + raw mic (no Web Audio). With a running
+  // mix it only keeps checking — a slow first chunk under start-up load is not a
+  // stall, and swapping would discard it. The old recorder's onstop handler
+  // (checkpoint-timer cleanup) is handed over so the swap is invisible to the
+  // rest of the screen pipeline.
+  const armScreenStallWatchdog = useCallback((sr: MediaRecorder) => {
+    let gotData = false;
+    const push = sr.ondataavailable;
+    sr.ondataavailable = (e: BlobEvent) => {
+      if (e.data.size > 0) gotData = true;
+      push?.call(sr, e);
+    };
+    const startedAt = performance.now();
+    const checkStall = () => {
+      if (gotData || isFinalizingScreenUploadRef.current) return;
+      if (screenRecorderRef.current !== sr || sr.state !== 'recording') return;
+      const live = (t: MediaStreamTrack) => t.readyState === 'live';
+      const video = screenStreamRef.current?.getVideoTracks().filter(live) ?? [];
+      const mic = recordingMicStreamRef.current?.getAudioTracks().filter(live) ?? [];
+      const mixState = recordingAudioCtxRef.current?.state ?? 'none';
+      if (mixState === 'running' || mixState === 'none' || video.length === 0) {
+        window.setTimeout(checkStall, SCREEN_STALL_RECHECK_MS);
+        return;
+      }
+      console.error(
+        `[ScreenRecording] No data ${Math.round((performance.now() - startedAt) / 1000)}s after start and the audio mix is '${mixState}' — restarting on the raw screen + mic tracks`,
+      );
+      candidateAIInterviewService.reportProctorEvent(token, {
+        event_type: 'screen_recording_stalled',
+        severity: 'medium',
+        details: { audio_mix_state: mixState, fell_back_to_raw_audio: true },
+      }).catch(() => { /* best-effort */ });
+      let fallback: MediaRecorder;
+      try {
+        fallback = new MediaRecorder(new MediaStream([...video, ...mic]), {
+          ...(sr.mimeType ? { mimeType: sr.mimeType } : {}),
+          videoBitsPerSecond: 300_000,
+        });
+      } catch (e) {
+        console.error('[ScreenRecording] Raw fallback recorder could not be created:', e);
+        return;
+      }
+      fallback.ondataavailable = (e) => { if (e.data.size > 0) screenChunksRef.current.push(e.data); };
+      const handOver = sr.onstop;
+      sr.onstop = null;
+      sr.ondataavailable = null;
+      try { sr.stop(); } catch { /* already stopped */ }
+      fallback.onstop = handOver;
+      screenChunksRef.current = [];
+      fallback.start(5000);
+      screenRecorderRef.current = fallback;
+    };
+    window.setTimeout(checkStall, SCREEN_STALL_CHECK_MS);
+  }, [token]);
+
   useEffect(() => {
     if (step !== 'interview') return;
     const sr = screenRecorderRef.current;
     if (sr && sr.state === 'inactive') {
-      try { sr.start(5000); } catch { /* already started / not startable */ }
+      try { sr.start(5000); armScreenStallWatchdog(sr); } catch { /* already started / not startable */ }
     }
-  }, [step]);
+  }, [step, armScreenStallWatchdog]);
 
   // Stop screen recording and upload (fire-and-forget)
   // Must be declared here (before any early returns) to satisfy Rules of Hooks
@@ -885,6 +983,9 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     const recorder = screenRecorderRef.current;
     if (!recorder || isFinalizingScreenUploadRef.current) return;
     isFinalizingScreenUploadRef.current = true;
+    // Started during the interview (vs. armed and never started because the
+    // interview never began) — only then is "nothing recorded" a failure.
+    const wasRecording = recorder.state !== 'inactive';
 
     const doUpload = async () => {
       // Let any in-flight checkpoint finish first so the final multipart
@@ -901,6 +1002,16 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       // prior segments AND empty buffer) there's no upload to complete — skip
       // straight to cleanup.
       const nothingRecorded = chunks.length === 0 && segmentIndex === 0;
+      if (nothingRecorded && wasRecording) {
+        // Used to be skipped silently — the interview then simply had no screen
+        // recording and nothing anywhere said why.
+        console.error(`[ScreenRecording] EMPTY — the screen recording captured no data (audio mix '${recordingAudioCtxRef.current?.state ?? 'none'}')`);
+        candidateAIInterviewService.reportProctorEvent(token, {
+          event_type: 'recording_failed',
+          severity: 'high',
+          details: { error: 'empty_screen_recording', audio_mix_state: recordingAudioCtxRef.current?.state ?? 'none' },
+        }).catch(() => { /* best-effort */ });
+      }
       if (!nothingRecorded) {
         const mimeType = (recorder.mimeType || 'video/webm').split(';')[0];
         const blob = new Blob(chunks, { type: mimeType });
@@ -942,6 +1053,8 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       recordingMicSrcRef.current = null;
       recordingMicChainRef.current = null;
       recordingMicDeviceIdRef.current = undefined;
+      recordingAudioKeepAliveRef.current?.();
+      recordingAudioKeepAliveRef.current = null;
       recordingAudioCtxRef.current?.close().catch(() => {});
       recordingAudioCtxRef.current = null;
       (window as any).__interviewRecordingDest = null;
@@ -1139,6 +1252,8 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     recordingMicSrcRef.current = null;
     recordingMicChainRef.current = null;
     recordingMicDeviceIdRef.current = undefined;
+    recordingAudioKeepAliveRef.current?.();
+    recordingAudioKeepAliveRef.current = null;
     recordingAudioCtxRef.current?.close().catch(() => {});
     recordingAudioCtxRef.current = null;
 
@@ -1157,6 +1272,10 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       // ── 2. Mix: Bina + mic + tab audio → one track for MediaRecorder ──
       const mixCtx = new AudioContext({ sampleRate: 48000 });
       recordingAudioCtxRef.current = mixCtx;
+      // Built after the share picker's await, i.e. outside the click — Chrome may
+      // leave it 'suspended', and a recorder fed by a suspended mix saves NOTHING
+      // (staging ai-d7eff074: no screen recording at all). Keep it running.
+      recordingAudioKeepAliveRef.current = keepAudioContextRunning(mixCtx, 'Screen');
       const mixDest = mixCtx.createMediaStreamDestination();
 
       // Bina's TTS voice (guaranteed path — no dependency on getDisplayMedia "Share audio").
@@ -2859,6 +2978,23 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
         const result = await candidateAIInterviewService.verifyOtp(token, candidateEmail, reauthOtpCode.trim());
         if (result.verified) {
           sessionStorage.setItem(SESSION_AUTH_KEY, '1');
+          if (reauthTargetStep === 'interview') {
+            // Resuming an interview that is already in progress — the same
+            // preparation Gate 3 does on load: a 24 kHz AudioContext for
+            // TalkingHead (created inside this click, so it starts running) and
+            // the screen re-share prompt (the screen recorder can't survive a
+            // reopen).
+            if (!(window as any).__interviewAudioContext) {
+              try {
+                const ctx = new AudioContext({ sampleRate: 24000 });
+                ctx.resume().catch(() => {});
+                (window as any).__interviewAudioContext = ctx;
+              } catch (e) {
+                console.warn('[Portal] Failed to pre-create AudioContext on resume:', e);
+              }
+            }
+            if (!screenRecorderRef.current) setScreenReshareOnResume(true);
+          }
           setStep(reauthTargetStep);
         } else {
           setReauthOtpError('Invalid OTP code. Please check and try again.');
@@ -3543,6 +3679,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
         sr.ondataavailable = (e) => { if (e.data.size > 0) screenChunksRef.current.push(e.data); };
         sr.start(5000);
         screenRecorderRef.current = sr;
+        armScreenStallWatchdog(sr);
         // Re-attach ended listener — finalize/upload the tail instead of discarding it
         // (see the matching fix on the initial share listener above for why).
         screenStream.getVideoTracks()[0]?.addEventListener('ended', () => {
@@ -4012,7 +4149,9 @@ export function CandidateAIInterviewPortal(props: Props) {
   return (
     <>
       <ScreenRecordingBlockedModal />
-      <CandidateAIInterviewPortalInner {...props} />
+      <SingleInterviewTabGuard token={props.token}>
+        <CandidateAIInterviewPortalInner {...props} />
+      </SingleInterviewTabGuard>
     </>
   );
 }

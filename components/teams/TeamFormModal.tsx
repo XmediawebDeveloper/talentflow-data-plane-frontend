@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { X, Loader2, Plus, Users, Layers3 } from 'lucide-react';
+import { Plus, Users } from 'lucide-react';
+import AppModal, { AppModalAction } from '@/components/ui/app-modal';
 import { ApiUser } from '@/lib/services/userService';
 import MemberSelector from './MemberSelector';
 
@@ -71,43 +72,37 @@ export default function TeamFormModal({
 
   const isValid = teamName.trim().length >= 2;
 
-  if (!isOpen) return null;
+  const actions: AppModalAction[] = [];
+  if (mode === 'edit' && onDelete) {
+    actions.push({
+      label: isDeleting ? 'Deleting...' : 'Delete Team',
+      onClick: onDelete,
+      variant: 'destructive',
+      disabled: isSubmitting || isDeleting,
+      loading: isDeleting,
+    });
+  }
+  actions.push({
+    label: isSubmitting ? (mode === 'create' ? 'Creating...' : 'Saving...') : mode === 'create' ? 'Create Team' : 'Save Changes',
+    onClick: handleSubmit,
+    disabled: isSubmitting || isDeleting || !isValid,
+    loading: isSubmitting,
+    icon: mode === 'create' ? <Plus className="h-4 w-4" /> : undefined,
+  });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
-      <div className="flex max-h-[calc(100dvh-2rem)] w-full max-w-[95vw] flex-col overflow-hidden rounded-3xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:max-w-2xl">
-        <div className="shrink-0 overflow-hidden rounded-t-3xl border-b border-white/10 bg-brand-blue px-4 py-5 text-white sm:px-6">
-          <div className="pointer-events-none absolute -top-10 right-0 h-40 w-40 rounded-full bg-white/10 blur-3xl" />
-          <div className="relative flex items-start justify-between gap-4">
-            <div className="flex min-w-0 items-start gap-3">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15">
-                <Users className="h-5 w-5 text-white" />
-              </div>
-              <div className="min-w-0">
-                <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-2xs font-medium text-white/90 ring-1 ring-white/15">
-                  <Layers3 className="h-3 w-3 text-white" />
-                  {mode === 'create' ? 'New team setup' : 'Team configuration'}
-                </div>
-                <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">
-                  {mode === 'create' ? 'Create New Team' : 'Edit Team'}
-                </h2>
-                <p className="mt-1 text-sm text-white/80">
-                  Define the team profile, assign members, and optionally choose a lead.
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={onClose}
-              disabled={isSubmitting}
-              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white transition-colors hover:bg-white/15 disabled:opacity-50"
-              aria-label="Close modal"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-        </div>
-
-        <div className="flex-1 space-y-6 overflow-y-auto p-4 sm:p-6">
+    <AppModal
+      open={isOpen}
+      onCancel={onClose}
+      cancelDisabled={isSubmitting}
+      size="md"
+      zIndexClass="z-50"
+      icon={<Users />}
+      title={mode === 'create' ? 'Create New Team' : 'Edit Team'}
+      subtitle="Define the team profile, assign members, and optionally choose a lead."
+      actions={actions}
+    >
+        <div className="space-y-6">
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
             <div>
               <label htmlFor="team-name" className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">
@@ -160,44 +155,6 @@ export default function TeamFormModal({
           />
         </div>
 
-        <div className="shrink-0 space-y-3 border-t border-gray-100 dark:border-slate-700/60 bg-white/95 dark:bg-slate-900 px-4 py-4 backdrop-blur-sm sm:px-6">
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <button
-              onClick={handleSubmit}
-              disabled={isSubmitting || isDeleting || !isValid}
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-brand-blue px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  {mode === 'create' ? 'Creating...' : 'Saving...'}
-                </>
-              ) : (
-                <>
-                  {mode === 'create' && <Plus className="h-4 w-4" />}
-                  {mode === 'create' ? 'Create Team' : 'Save Changes'}
-                </>
-              )}
-            </button>
-          </div>
-          {mode === 'edit' && onDelete && (
-            <button
-              onClick={onDelete}
-              disabled={isSubmitting || isDeleting}
-              className="w-full rounded-lg border border-destructive-line bg-destructive-subtle px-4 py-2.5 text-sm font-medium text-destructive transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isDeleting ? (
-                <span className="inline-flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Deleting...
-                </span>
-              ) : (
-                'Delete Team'
-              )}
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
+    </AppModal>
   );
 }

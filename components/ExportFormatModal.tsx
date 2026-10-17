@@ -1,9 +1,9 @@
 'use client';
 
+import AppModal from '@/components/ui/app-modal';
 import { useEffect, useState } from 'react';
-import { Download, FileDown, FileSpreadsheet, FileText, Info, Loader2 } from 'lucide-react';
+import { Download, FileDown, FileSpreadsheet, FileText, Info } from 'lucide-react';
 import { toast } from 'sonner';
-import { Button } from '@/components/ui/button';
 import type { ExportFileFormat } from '@/lib/utils/exportUtils';
 
 export type { ExportFileFormat };
@@ -105,13 +105,7 @@ export default function ExportFormatModal({
     }
   }, [open, defaultFormat]);
 
-  // Escape closes, as every other modal in the app does.
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !exporting) onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, exporting, onClose]);
+  // Escape closes via AppModal (disabled while exporting).
 
   if (!open) return null;
 
@@ -128,37 +122,33 @@ export default function ExportFormatModal({
     }
   };
 
-  return (
-    <div
-      className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-[60] p-4 sm:p-6"
-      onClick={() => { if (!exporting) onClose(); }}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="export-format-modal-title"
-        onClick={(e) => e.stopPropagation()}
-        className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] flex flex-col"
-      >
-        <div className="flex items-start gap-3 p-5 border-b border-gray-200 dark:border-slate-700 shrink-0">
-          <div className="flex items-start gap-3 min-w-0">
-            <div className="w-11 h-11 rounded-full bg-blue-50 dark:bg-blue-500/15 flex items-center justify-center flex-shrink-0">
-              <FileDown className="w-5 h-5 text-blue-600 dark:text-blue-300" />
-            </div>
-            <div className="min-w-0">
-              <h3 id="export-format-modal-title" className="text-lg font-bold text-gray-900 dark:text-slate-50">{title}</h3>
-              {(recordCount !== undefined || (columns && columns.length > 0)) && (
-                <p className="text-sm text-gray-500 dark:text-slate-400 mt-1 flex items-center gap-1.5">
-                  {recordCount !== undefined && `${recordCount}${selected ? ' selected' : ''} record${recordCount === 1 ? '' : 's'}`}
-                  {recordCount !== undefined && columns && columns.length > 0 && <span className="w-1 h-1 rounded-full bg-blue-500" />}
-                  {columns && columns.length > 0 && `${pickedColumns.length} columns`}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
+  const subtitle = (recordCount !== undefined || (columns && columns.length > 0)) ? (
+    <span className="flex items-center gap-1.5">
+      {recordCount !== undefined && `${recordCount}${selected ? ' selected' : ''} record${recordCount === 1 ? '' : 's'}`}
+      {recordCount !== undefined && columns && columns.length > 0 && <span className="w-1 h-1 rounded-full bg-white/70" />}
+      {columns && columns.length > 0 && `${pickedColumns.length} columns`}
+    </span>
+  ) : undefined;
 
-        <div className="p-5 overflow-y-auto flex-1">
+  return (
+    <AppModal
+      open={open}
+      onCancel={onClose}
+      cancelDisabled={exporting}
+      size="md"
+      icon={<FileDown />}
+      title={title}
+      subtitle={subtitle}
+      actions={[
+        {
+          label: exporting ? 'Exporting...' : 'Export',
+          onClick: () => void handleExport(),
+          disabled: exporting || (pickable && pickedColumns.length === 0),
+          loading: exporting,
+          icon: <Download className="w-4 h-4" />,
+        },
+      ]}
+    >
           <p className="text-sm font-bold text-gray-900 dark:text-slate-100 mb-3">Choose export format</p>
           <div className="space-y-3" role="radiogroup" aria-label="Export format">
             {FORMATS.map(option => {
@@ -235,28 +225,6 @@ export default function ExportFormatModal({
               </p>
             </div>
           )}
-        </div>
-
-        <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-3 p-5 border-t border-gray-200 dark:border-slate-700 shrink-0">
-          <Button
-            variant="secondary"
-            size="md"
-            onClick={onClose}
-            disabled={exporting}
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            size="md"
-            onClick={() => void handleExport()}
-            disabled={exporting || (pickable && pickedColumns.length === 0)}
-            icon={exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-          >
-            {exporting ? 'Exporting...' : 'Export'}
-          </Button>
-        </div>
-      </div>
-    </div>
+    </AppModal>
   );
 }

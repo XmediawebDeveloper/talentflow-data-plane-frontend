@@ -82,6 +82,7 @@ const UI_COOLDOWN_PER_TYPE: Record<ProctoringEventType, number> = {
   face_identity_changed: 15000,
   // Fires at most once per session anyway.
   face_verification_unavailable: 600000,
+  face_unverifiable: 15000,
   voice_mismatch: 10000,
   voice_identity_changed: 15000,
   screen_share_stopped: 10000,
@@ -1247,7 +1248,7 @@ export function useInterviewProctoringMonitor({
     // These bypass emitEvent (go directly to the bus), so we listen here and
     // queue them for backend logging without re-emitting to the bus.
     const IDENTITY_EVENTS: ProctoringEventType[] = [
-      'face_mismatch', 'face_identity_changed',
+      'face_mismatch', 'face_identity_changed', 'face_unverifiable',
       'voice_mismatch', 'voice_identity_changed',
     ];
     const unsubIdentity = InterviewEventBus.subscribe((event) => {
@@ -1364,6 +1365,7 @@ function getSeverity(type: ProctoringEventType): 'minor' | 'moderate' | 'severe'
     voice_mismatch:           'severe',
     face_mismatch:            'severe',
     face_verification_unavailable: 'severe',
+    face_unverifiable:        'severe',
     camera_disabled:          'severe',
     microphone_disabled:      'severe',
     // Allowed fallback to a system-check-verified mic — recorded, not halting.

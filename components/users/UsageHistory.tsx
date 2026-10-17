@@ -1,5 +1,6 @@
 'use client';
 
+import AppModal from '@/components/ui/app-modal';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import OrganizationTabs from '@/components/organization/OrganizationTabs';
 
@@ -26,7 +27,6 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronUp,
-  X,
   FileText,
   FileSpreadsheet,
   CheckCircle2,
@@ -282,22 +282,21 @@ function ExportModal({
 }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-6">
-      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] flex flex-col">
-        <div className="flex items-center justify-between p-5 bg-brand-blue rounded-t-2xl shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/15 ring-1 ring-white/20 backdrop-blur">
-              <Download className="w-5 h-5 text-white" />
-            </div>
-            <h3 className="text-base font-semibold text-white">Export Usage History</h3>
-          </div>
-          <Tooltip content="Close">
-            <button onClick={onClose} className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors ring-1 ring-white/20" aria-label="Close">
-              <X className="w-4 h-4" />
-            </button>
-          </Tooltip>
-        </div>
-        <div className="p-5 space-y-3 flex-1 overflow-y-auto">
+    <AppModal
+      open={open}
+      onCancel={onClose}
+      size="sm"
+      zIndexClass="z-50"
+      icon={<Download />}
+      title="Export Usage History"
+      footerStart={isExporting ? (
+        <span className="flex items-center gap-2 text-sm text-brand-blue">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Preparing export…
+        </span>
+      ) : null}
+    >
+        <div className="space-y-3">
           <p className="text-sm text-gray-500">Choose export format:</p>
           <button
             onClick={() => onExport('csv')}
@@ -326,16 +325,7 @@ function ExportModal({
             </div>
           </button>
         </div>
-        <div className="px-5 py-4 border-t border-gray-100 bg-slate-50/50 rounded-b-2xl flex items-center justify-between gap-3 shrink-0">
-          {isExporting ? (
-            <span className="flex items-center gap-2 text-sm text-brand-blue">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Preparing export…
-            </span>
-          ) : <span />}
-        </div>
-      </div>
-    </div>
+    </AppModal>
   );
 }
 

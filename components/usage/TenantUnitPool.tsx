@@ -5,11 +5,11 @@
  * Displays tenant's shared unit pool status for Resume Scoring, Assessment, and AI Interview
  */
 
+import AppModal from '@/components/ui/app-modal';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
 import {
-  Loader2,
   ClipboardList,
   ClipboardCheck,
   Video,
@@ -26,7 +26,6 @@ import {
   Download,
   FileSpreadsheet,
   FileText,
-  X,
   type LucideIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -732,20 +731,24 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
       )}
 
       {/* Export Modal */}
-      {showExportModal && (
-        <div className="fixed inset-0 bg-gray-500/75 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
-          <div className="bg-white rounded-xl sm:rounded-lg shadow-2xl w-full max-w-[95vw] sm:max-w-lg max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
-            <div className="px-4 pt-5 pb-4 sm:p-6 sm:pb-4 overflow-y-auto flex-1">
-              <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Export Usage Data</h3>
-                  <button
-                    onClick={() => setShowExportModal(false)}
-                    className="text-gray-400 hover:text-gray-600"
-                   aria-label="Close">
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-
+      <AppModal
+        open={showExportModal}
+        onCancel={() => setShowExportModal(false)}
+        cancelDisabled={isExporting}
+        size="md"
+        zIndexClass="z-50"
+        icon={<Download />}
+        title="Export Usage Data"
+        actions={[
+          {
+            label: isExporting ? 'Exporting...' : 'Export',
+            onClick: handleExport,
+            disabled: isExporting,
+            loading: isExporting,
+            icon: <Download className="w-4 h-4" />,
+          },
+        ]}
+      >
                 <div className="space-y-4">
                   {/* Export Type Selection */}
                   <div>
@@ -882,30 +885,7 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
                     </div>
                   )}
                 </div>
-            </div>
-            <div className="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6 gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={handleExport}
-                disabled={isExporting}
-                className="inline-flex w-full justify-center items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed sm:w-auto"
-              >
-                {isExporting ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Exporting...
-                  </>
-                ) : (
-                  <>
-                    <Download className="w-4 h-4" />
-                    Export
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      </AppModal>
     </div>
   );
 }
