@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import rbacService from '@/lib/services/rbacService';
 import {
   ALWAYS_ON_PERMISSION_CODES,
   getPermissionDisplaySections,
@@ -58,6 +59,23 @@ export function AlwaysOnPermissionsNote() {
 
 export const countGrantedPermissions = (codes: Iterable<string>): number =>
   getGrantedPermissionSections(codes).reduce((sum, section) => sum + section.items.length, 0);
+
+/**
+ * Each role's count as shown everywhere (role list, role popup, role chips):
+ * tickable permissions + the always-on pair. The role-list API only returns a
+ * raw DB total, so each role's codes are fetched (a handful of roles). Roles
+ * whose fetch fails are simply absent from the map — callers fall back.
+ */
+export async function fetchRoleShownCounts(roleIds: number[]): Promise<Record<number, number>> {
+  const details = await Promise.allSettled(roleIds.map((id) => rbacService.getRoleById(id)));
+  const counts: Record<number, number> = {};
+  details.forEach((d, i) => {
+    if (d.status === 'fulfilled') {
+      counts[roleIds[i]] = countGrantedPermissions(withAlwaysOnPermissions((d.value.permissions || []).map((p) => p.code)));
+    }
+  });
+  return counts;
+}
 
 interface PermissionSectionsViewProps {
   codes: Iterable<string>;

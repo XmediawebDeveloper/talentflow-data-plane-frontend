@@ -231,9 +231,14 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     // actions are). Declared here so disabling a role's Job Description
     // access warns about breaking Assessment creation and editing, not just
     // Resume Scoring.
+    // Add Question requires Edit (app/services/permission_dependencies.py:
+    // assessments:add_question -> assessments:update) — adding a question edits
+    // the assessment, so ticking it without Edit left a combination the
+    // server rejects.
     dependencies: {
       'assessments:create': ['jd:read'],
       'assessments:update': ['jd:read'],
+      'assessments:add_question': ['assessments:update'],
     },
   },
   {
@@ -509,3 +514,42 @@ export const getPermissionDisplaySections = (): PermissionDisplaySection[] =>
     });
     return { id: category.id, name: category.name, items };
   });
+
+/** Screen label for any catalogue code, with its section for actions:
+ *  "View Job Description", "Score Resume (Resume Scoring)", "Manage (General Settings)". */
+export const getPermissionLabel = (code: string): string => {
+  for (const cat of CUSTOM_PERMISSION_CATEGORIES) {
+    if (cat.viewCode === code) return `View ${cat.name}`;
+    const action = cat.actions?.find((a) => a.code === code);
+    if (action) return `${action.label} (${cat.name})`;
+    for (const sub of cat.subCategories || []) {
+      if (sub.viewCode === code) return `View ${sub.name}`;
+      const subAction = sub.actions.find((a) => a.code === code);
+      if (subAction) return subAction.label === 'View' ? `View ${sub.name}` : `${subAction.label} (${sub.name})`;
+    }
+  }
+  return code;
+};
+
+/**
+ * The permission dependency rules exactly as the Edit User / Edit Role screens
+ * apply them (each category's `dependencies` above, which mirror the server's
+ * app/services/permission_dependencies.py). The Feature Dependency Matrix popup
+ * renders THIS, so it always shows the rules that are really enforced. Implicit
+ * "every action needs its section's View" rules are not listed.
+ */
+export const getCatalogDependencyMatrix = () => {
+  const dependencies: Record<string, string[]> = {};
+  CUSTOM_PERMISSION_CATEGORIES.forEach((cat) => {
+    Object.entries(cat.dependencies || {}).forEach(([code, deps]) => {
+      dependencies[code] = Array.from(new Set([...(dependencies[code] || []), ...deps]));
+    });
+  });
+  const reverse_dependencies: Record<string, string[]> = {};
+  Object.entries(dependencies).forEach(([code, deps]) =>
+    deps.forEach((d) => (reverse_dependencies[d] ||= []).push(code)),
+  );
+  const features = Array.from(new Set([...Object.keys(dependencies), ...Object.keys(reverse_dependencies)]));
+  const feature_names = Object.fromEntries(features.map((c) => [c, getPermissionLabel(c)]));
+  return { features, dependencies, reverse_dependencies, feature_names };
+};

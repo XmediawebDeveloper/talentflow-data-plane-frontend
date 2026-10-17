@@ -34,6 +34,7 @@ import { getPermissionDisplaySections } from '@/lib/constants/permissionCategori
 import PermissionSectionsView, {
   AlwaysOnPermissionsNote,
   countGrantedPermissions,
+  fetchRoleShownCounts,
   withAlwaysOnPermissions,
 } from './PermissionSectionsView';
 import AppModal from '@/components/ui/app-modal';
@@ -157,18 +158,8 @@ export default function RoleManagement() {
       ]);
       setRoles(rolesData.roles);
       setPermissions(permissionsData.permissions);
-      // Fill in the popup-matching counts (a handful of roles; failures fall
-      // back to the raw total for that role).
-      const details = await Promise.allSettled(rolesData.roles.map((r) => rbacService.getRoleById(r.id)));
-      const counts: Record<number, number> = {};
-      details.forEach((d, i) => {
-        if (d.status === 'fulfilled') {
-          counts[rolesData.roles[i].id] = countGrantedPermissions(
-            withAlwaysOnPermissions((d.value.permissions || []).map((p) => p.code)),
-          );
-        }
-      });
-      setRoleShownCounts(counts);
+      // Fill in the popup-matching counts (failures fall back to the raw total).
+      setRoleShownCounts(await fetchRoleShownCounts(rolesData.roles.map((r) => r.id)));
     } catch (error) {
       console.error('Failed to load roles and permissions:', error);
       toast.error('Failed to load roles and permissions');

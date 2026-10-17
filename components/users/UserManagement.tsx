@@ -60,6 +60,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import AppModal from '@/components/ui/app-modal';
 import PermissionSectionsView, {
   PermissionSectionsSkeleton,
+  fetchRoleShownCounts,
   AlwaysOnPermissionsNote,
   withAlwaysOnPermissions,
   countGrantedPermissions,
@@ -610,6 +611,19 @@ export default function UserManagement() {
   const [editingUser, setEditingUser] = useState<ApiUser | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [availableRoles, setAvailableRoles] = useState<RoleListItem[]>([]);
+  // Default permission count per role, shown on the role chips/cards — the same
+  // number the Roles list and role popup show (tickable + 2 always on).
+  const [roleDefaultCounts, setRoleDefaultCounts] = useState<Record<number, number>>({});
+  useEffect(() => {
+    if (availableRoles.length === 0) return;
+    let cancelled = false;
+    fetchRoleShownCounts(availableRoles.map((r) => r.id)).then((counts) => {
+      if (!cancelled) setRoleDefaultCounts(counts);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [availableRoles]);
   const [allPermissions, setAllPermissions] = useState<Permission[]>([]);
   const [selectedRoleId, setSelectedRoleId] = useState<number | null>(null);
   const [editSelectedRoleId, setEditSelectedRoleId] = useState<number | null>(null);
@@ -1809,9 +1823,11 @@ export default function UserManagement() {
       console.log(`[EDIT USER] Permission codes:`, Array.from(currentPermissionCodes));
     } catch (error) {
       console.error('Error fetching user permissions for edit:', error);
-      // Fallback to empty permissions if fetch fails
-      setEditSelectedPermissionIds(new Set());
-      setEditOriginalPermissionIds(new Set());
+      // Don't leave the popup open with nothing (or the previous user's ticks)
+      // loaded: Save Changes would REPLACE this user's real permissions with
+      // that. Close it and let the admin retry.
+      resetEditModal();
+      toast.error("Couldn't load this user's permissions (network error). Nothing was changed — please try again.");
     } finally {
       setIsLoadingPermissions(false);
     }
@@ -2892,6 +2908,14 @@ export default function UserManagement() {
                                 Default role
                               </span>
                             )}
+                            {roleDefaultCounts[role.id] !== undefined && (
+                              <span
+                                title={`${roleDefaultCounts[role.id]} default permissions in this role`}
+                                className="text-2xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/15 px-1.5 py-0.5 rounded flex-shrink-0"
+                              >
+                                {roleDefaultCounts[role.id]} permissions
+                              </span>
+                            )}
                           </div>
                           {isSelected && (
                             <div className="w-5 h-5 bg-brand-blue rounded-full flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
@@ -3039,6 +3063,16 @@ export default function UserManagement() {
                         }`}
                       >
                         {role.name}
+                        {roleDefaultCounts[role.id] !== undefined && (
+                          <span
+                            title={`${roleDefaultCounts[role.id]} default permissions in this role`}
+                            className={`ml-2 inline-flex min-w-[1.5rem] items-center justify-center rounded-full px-1.5 py-0.5 text-2xs font-semibold align-middle ${
+                              isSelected ? 'bg-white/20 text-white' : 'bg-brand-blue/10 text-brand-blue'
+                            }`}
+                          >
+                            {roleDefaultCounts[role.id]}
+                          </span>
+                        )}
                         {isSelected && <Check className="w-3.5 h-3.5 ml-1.5 inline" />}
                       </button>
                     );
