@@ -662,7 +662,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
     {
       id: 'plan',
       icon: CreditCard,
-      title: 'Current Plan',
+      title: 'Upgrade Plans',
       subtitle: 'Billing & subscription',
       href: '/subscription/current-plan',
     },
