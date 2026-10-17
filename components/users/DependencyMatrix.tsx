@@ -5,7 +5,7 @@
  * Visualizes feature permission dependencies
  */
 
-import { getCatalogDependencyMatrix } from '@/lib/constants/permissionCategories';
+import { getCatalogDependencyMatrix, ENTRY_POINT_GROUPS, getPermissionLabel } from '@/lib/constants/permissionCategories';
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Loader2,
@@ -219,6 +219,34 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
                           </div>
                         </button>
                       ))}
+                  </div>
+                </div>
+
+                {/* Main permission → entry points in other sections */}
+                <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 sm:p-5">
+                  <h3 className="text-xs sm:text-sm font-semibold text-gray-700 mb-1 flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-brand-orange/90 flex items-center justify-center shadow-sm">
+                      <ArrowRight className="w-4 h-4 text-white" />
+                    </div>
+                    Can also be started from other sections
+                  </h3>
+                  <p className="mb-3 text-2xs sm:text-xs text-gray-500">
+                    An entry point only works while its main permission is on. Turning the main permission on offers to turn these on too; turning it off turns them off.
+                  </p>
+                  <div className="space-y-2.5">
+                    {ENTRY_POINT_GROUPS.map(group => (
+                      <div key={group.main} className="flex items-start gap-2 flex-wrap text-xs sm:text-sm">
+                        <Badge variant="info" className="text-2xs sm:text-xs">{getPermissionLabel(group.main)}</Badge>
+                        <ArrowRight className="w-3.5 h-3.5 text-brand-cyan mt-1 flex-shrink-0" />
+                        <div className="flex flex-wrap gap-1.5">
+                          {group.entries.map(entry => (
+                            <span key={entry} className="text-2xs sm:text-xs px-2 py-0.5 rounded-full font-medium ring-1 bg-gray-50 text-gray-700 ring-gray-200">
+                              {getPermissionLabel(entry)}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
 

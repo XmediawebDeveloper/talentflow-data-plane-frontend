@@ -4003,7 +4003,7 @@ export default function MyResumesPage() {
             onAITalentMatchDisabledReason={PLAN_LOCKED_MESSAGE}
             // No `my_resumes:ai_interview` action code exists yet, so this
             // follows the AI Interviews module's own share permission.
-            onAIInterview={!isArchivedContext && (isTenantAdmin || hasPermission('canInviteAIInterviews')) ? handleAIInterview : undefined}
+            onAIInterview={!isArchivedContext && (isTenantAdmin || (hasPermission('canInviteAIInterviews') && hasPermissionCode('my_resumes:invite_ai_interview'))) ? handleAIInterview : undefined}
             onAIInterviewDisabled={isPlanLocked('ai_interview')}
             onAIInterviewDisabledReason={PLAN_LOCKED_MESSAGE}
           />

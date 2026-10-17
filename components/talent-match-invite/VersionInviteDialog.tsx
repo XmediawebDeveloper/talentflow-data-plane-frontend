@@ -77,6 +77,8 @@ export default function VersionInviteDialog({
   onAssessmentsSent,
   onInterviewsSent,
   hideDuplicate = false,
+  inviteAllowed = true,
+  inviteDeniedReason,
 }: {
   kind: InviteKind;
   onClose: () => void;
@@ -103,6 +105,11 @@ export default function VersionInviteDialog({
   onInterviewsSent?: (sentCount: number) => void;
   /** Leave Duplicate out of the version cards' ⋯ menu. */
   hideDuplicate?: boolean;
+  /** Host-specific invite gate (e.g. AI Talent Match's own "Invite to …"
+   *  entry-point permission). Omitted = no extra gate (default behaviour). */
+  inviteAllowed?: boolean;
+  /** Shown when `inviteAllowed` is false. */
+  inviteDeniedReason?: string;
 }) {
   const { user, isTenantAdmin } = useAuth();
   const p = (user?.permissions || {}) as Record<string, boolean | undefined>;
@@ -124,6 +131,7 @@ export default function VersionInviteDialog({
         canInvite: can('canInviteAIInterviews'),
         canDelete: can('canDeleteAIInterviews'),
       };
+  if (!inviteAllowed) perms.canInvite = false;
   const label = KIND_LABEL[kind];
   const off = disabledReason || null;
 
@@ -759,7 +767,7 @@ export default function VersionInviteDialog({
                   <button
                     onClick={shareBrowse}
                     disabled={browseCount === 0 || !hasCandidatesForNext || !perms.canInvite}
-                    title={!perms.canInvite ? `You do not have permission to invite to ${label.plural.toLowerCase()}` : undefined}
+                    title={!perms.canInvite ? (!inviteAllowed && inviteDeniedReason ? inviteDeniedReason : `You do not have permission to invite to ${label.plural.toLowerCase()}`) : undefined}
                     className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <ArrowRight className="w-4 h-4" />
@@ -789,7 +797,7 @@ export default function VersionInviteDialog({
                   <button
                     onClick={askSend}
                     disabled={!canSend}
-                    title={!perms.canInvite ? `You do not have permission to invite to ${label.plural.toLowerCase()}` : undefined}
+                    title={!perms.canInvite ? (!inviteAllowed && inviteDeniedReason ? inviteDeniedReason : `You do not have permission to invite to ${label.plural.toLowerCase()}`) : undefined}
                     className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {handsOff ? <ArrowRight className="w-4 h-4" /> : method === 'link' ? <Link2 className="w-4 h-4" /> : <Mail className="w-4 h-4" />}

@@ -160,7 +160,7 @@ export default function AppModal({
               </div>
             )}
             <div className="min-w-0">
-              <h2 className="truncate text-base font-bold text-white sm:text-lg">{title}</h2>
+              <h2 className="line-clamp-2 break-words text-base font-bold leading-snug text-white sm:text-lg">{title}</h2>
               {subtitle && <p className="truncate text-xs text-white/80 sm:text-sm">{subtitle}</p>}
             </div>
           </div>
