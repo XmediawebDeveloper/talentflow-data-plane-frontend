@@ -291,6 +291,11 @@ interface ScoredResumesTableProps {
    *  All Candidates" host, which instead relies on each row's own `jobCode`
    *  since rows there span different jobs. */
   jobCode?: string;
+  /** This single-job host's JD version — the version every score here was
+   *  fetched for. Only the View Score Table popup reads it, as a fallback for
+   *  a row without its own `jobVersion`; the table's Job Version column stays
+   *  on the rows' own values. */
+  jobVersion?: number | null;
   availableUnits?: number;
   initialMatchStatus?: 'all' | 'Exact Match' | 'Partial Match' | 'No Match';
   /**
@@ -643,6 +648,7 @@ export default function ScoredResumesTable({
   jobTitle: rawJobTitle,
   jobId = 'jd-1',
   jobCode,
+  jobVersion: hostJobVersion,
   availableUnits = 10,
   initialMatchStatus = 'all',
   hideMatchStatusFilter = false,
@@ -3953,6 +3959,7 @@ Best regards`);
             resume={scoreTableCandidate}
             jobId={jobId}
             jobCode={jobCode}
+            jobVersion={hostJobVersion}
             jobTitle={scoreTableCandidate.jobTitle || jobTitle}
             onClose={() => setScoreTableCandidate(null)}
             jobPager={jobRows && jobIdx >= 0 ? {

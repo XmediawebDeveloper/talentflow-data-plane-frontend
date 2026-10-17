@@ -15,6 +15,8 @@ import { createPortal } from 'react-dom';
 import UnsavedChangesModal from '@/components/UnsavedChangesModal';
 import { useEmbeddedWizard, useWizardRouter, useWizardSearchParams, WizardLayer } from './embeddedWizardNav';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { loadAllInterviewConfigs } from '@/components/talent-match-invite/inviteVersions';
+import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
 import { Button } from '@/components/ui/button';
 import type {
   PublishedJD,
@@ -1644,6 +1646,33 @@ export default function AIInterviewConfig() {
             `/recruitment/ai-interviews/${liveConfig.id}${fromJobDetails ? '?from=job-details' : ''}`
           );
           return;
+        }
+
+        /* Nor may a job version whose AI interview is in any other status
+           (archived, completed, cancelled) get a second fresh V1: an AI
+           interview is one per job version, and its later versions are clones
+           of it (Create / Send AI Interview's New version, the AI Interviews
+           page's Duplicate), up to the 5-version cap. A draft is no blocker -
+           it is restored below. A failed lookup does not block, like the live
+           check above. */
+        if (!configId) {
+          const ofJob = (await loadAllInterviewConfigs().catch(() => [] as AIInterviewResponse[]))
+            .filter((c) => c.jd_id === jdId);
+          if (ofJob.length > 0 && !ofJob.some((c) => c.status === 'draft')) {
+            const latest = ofJob.reduce((best, c) =>
+              (interviewVersionOrdinal(c, ofJob) > interviewVersionOrdinal(best, ofJob) ? c : best));
+            setRedirecting(true);
+            toast.info(
+              `This job version already has an AI interview (V${interviewVersionOrdinal(latest, ofJob)}). ` +
+              (latest.status === 'archived' ? 'Unarchive it to continue.' : 'Duplicate it to create a new version.'),
+            );
+            if (fromInviteOrigin) {
+              router.replace(inviteOriginReturn);
+              return;
+            }
+            router.replace(`/recruitment/ai-interviews/${latest.id}${fromJobDetails ? '?from=job-details' : ''}`);
+            return;
+          }
         }
 
         setSelectedJd(jd);

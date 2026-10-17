@@ -219,17 +219,38 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
    * Completed AND Terminated — the two states with a result to show (a
    * terminated interview has its partial evaluation).
    */
+  /* Bumped by every loadAllSessions run, so a slower, older run (mount and a
+     Refresh click overlapping) can't overwrite the newer one's rows. */
+  const loadSeqRef = useRef(0);
   const loadAllSessions = useCallback(async () => {
+    const seq = ++loadSeqRef.current;
+    const isStale = () => seq !== loadSeqRef.current;
     setIsLoading(true);
     setError(null);
     try {
-      const configsResp = await aiInterviewService.listConfigs({ page: 1, page_size: 500, compact: true });
-      const configs = configsResp.items ?? [];
+      /* Every config, archived included and every page of each — the same set
+         the page's Total Interviewed card counts sessions over. A config past
+         the first page, or one archived after its candidates finished, used
+         to drop its sessions from this tab while the card still counted
+         them. A page that fails throws, rather than ending the list early. */
+      const listAllConfigs = async (status?: string) => {
+        const all: AIInterviewResponse[] = [];
+        for (let page = 1; ; page += 1) {
+          const res = await aiInterviewService.listConfigs({ status, page, page_size: 500, compact: true });
+          const items = res.items ?? [];
+          all.push(...items);
+          if (items.length < 500 || all.length >= (res.total ?? all.length)) break;
+        }
+        return all;
+      };
+      const [activeConfigs, archivedConfigs] = await Promise.all([listAllConfigs(), listAllConfigs('archived')]);
+      if (isStale()) return;
+      const configById = new Map([...activeConfigs, ...archivedConfigs].map((c) => [c.id, c]));
+      const configs = [...configById.values()];
       if (configs.length === 0) {
         setRows([]);
         return;
       }
-      const configById = new Map(configs.map((c) => [c.id, c]));
 
       /* Interview version — the Nth config created against a given job
        * version (jd_id), oldest first. Same derivation as the All Interviews
@@ -255,17 +276,16 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
       // sessions than fit on one page.
       const sessions: AIInterviewResponse[] = [];
       for (let page = 1; page <= 40; page += 1) {
-        const res = await aiInterviewService
-          .list({ status: 'completed,terminated', page, page_size: 1000 })
-          .catch(() => ({ items: [] as AIInterviewResponse[], total: 0 }));
+        // No catch: a failed page is a load error, not the end of the list.
+        const res = await aiInterviewService.list({ status: 'completed,terminated', page, page_size: 1000 });
+        if (isStale()) return;
         const items = res.items ?? [];
         sessions.push(...items);
         if (items.length < 1000 || sessions.length >= (res.total ?? sessions.length)) break;
       }
 
-      // A session's config may be archived (excluded from `configs`, which
-      // only lists non-archived by default) — drop it, matching the old
-      // behaviour of only ever iterating non-archived configs.
+      // `configs` includes archived interviews, so this only drops a session
+      // whose config no longer exists at all.
       const merged = sessions
         .filter((session) => session.config_id && configById.has(session.config_id))
         .map((session): CandidateSessionRow => {
@@ -294,10 +314,12 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
       // useListStatePersistence above), and safePage clamps it if the
       // reload left fewer pages.
     } catch (err: any) {
+      if (isStale()) return;
       setError(err?.message || 'Failed to load candidate results');
       setRows([]);
     } finally {
-      setIsLoading(false);
+      // A stale run leaves the spinner to the run that replaced it.
+      if (!isStale()) setIsLoading(false);
     }
   }, []);
 

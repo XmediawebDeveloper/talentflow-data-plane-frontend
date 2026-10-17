@@ -668,6 +668,12 @@ function CurrentPlanContent() {
 
   // Use shared quota context - prevents duplicate API calls
   const { quotaData: sharedQuotaData, loading: quotaLoading, refetch: refetchQuota } = useQuota();
+  /* The latest context value, for fetchData. fetchData is a plain function
+     re-created each render, so a call made after an await (payment, plan
+     change) ran the closure of the render it started in — still holding the
+     quota from before the change. */
+  const sharedQuotaDataRef = useRef(sharedQuotaData);
+  useEffect(() => { sharedQuotaDataRef.current = sharedQuotaData; }, [sharedQuotaData]);
 
   // Plan change acceptance
   const { hasPendingChanges, daysRemaining, currentChange, openReviewModal } = usePlanChange();
@@ -850,7 +856,9 @@ function CurrentPlanContent() {
     }
   }, [companySettings]);
 
-  const fetchData = async () => {
+  // `freshQuota`: what refetchQuota() just returned, after a plan/payment
+  // change — newer than any value this render has seen.
+  const fetchData = async (freshQuota?: typeof sharedQuotaData) => {
     try {
       setIsLoading(true);
       setError(null);
@@ -858,7 +866,7 @@ function CurrentPlanContent() {
 
       // Use shared quota data from context (prevents duplicate API calls)
       // The sharedQuotaData comes from QuotaContext which is fetched once at dashboard layout level
-      const quotaData: any = sharedQuotaData;
+      const quotaData: any = freshQuota ?? sharedQuotaDataRef.current;
       console.log('[CurrentPlan] Using shared quota data from context:', quotaData ? 'available' : 'not yet loaded');
       console.log('[CurrentPlan] quotaData:', quotaData);
       console.log('[CurrentPlan] quotaLoading:', quotaLoading);
@@ -1939,8 +1947,8 @@ function CurrentPlanContent() {
           return; // Exit early, no need to update local state
         }
 
-        // Refresh data after queued upgrade
-        await fetchData();
+        // Refresh data after queued upgrade — quota first, so the plan reads new.
+        await fetchData(await refetchQuota());
 
         // Notify Header component to refresh quota/plan display and notifications
         window.dispatchEvent(new CustomEvent('planChanged'));
@@ -2031,7 +2039,8 @@ function CurrentPlanContent() {
         }
       }
 
-      await fetchData();
+      // Quota first: the payment may have changed the plan and its limits.
+      await fetchData(await refetchQuota());
     } catch (err) {
       console.error('Error processing payment:', err);
       setError(err instanceof Error ? err.message : 'Failed to process payment');
@@ -3615,7 +3624,7 @@ function CurrentPlanContent() {
                       onClick={async () => {
                         setShowPaymentModal(false);
                         setModalStep('isolation');
-                        await fetchData();
+                        await fetchData(await refetchQuota());
                         await fetchQueuedUpgrades();
                       }}
                     >
@@ -3753,8 +3762,8 @@ function CurrentPlanContent() {
                       onClick={async () => {
                         setShowPaymentModal(false);
                         setModalStep('isolation');
-                        // Refresh data to show updated plan
-                        await fetchData();
+                        // Refresh data to show updated plan (quota first)
+                        await fetchData(await refetchQuota());
                       }}
                     >
                       Done

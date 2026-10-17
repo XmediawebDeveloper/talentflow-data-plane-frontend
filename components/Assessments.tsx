@@ -254,13 +254,29 @@ function InlinePageNav({ page, totalPages, onPageChange }: { page: number; total
 function JobCompletedCandidateCounts({
   ids,
   onCounted,
+  onUncounted,
 }: {
   ids: string[];
   /* The page's own setter, passed as-is because React keeps it stable — an
      inline callback would be a new dependency on every render. */
   onCounted: Dispatch<SetStateAction<Record<string, number>>>;
+  /* Ids this mount could not get a count for (a failed batch, or an id the
+     answer left out) — the page's setter again. Without it the row would wait
+     on a figure that is never coming. */
+  onUncounted: Dispatch<SetStateAction<Set<string>>>;
 }) {
   const requestedRef = useRef<Set<string>>(new Set());
+  /* False once this mount is gone. A recount remounts the loader (by `key`),
+     and a request the old mount left in flight must not land on top of the
+     new mount's fresher answer. Set in the effect, not the initializer, so a
+     Strict Mode remount turns it back on. */
+  const aliveRef = useRef(true);
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
   /* One dependency that changes exactly when there is new work, rather than on
      every render that mints a new array. */
   const idsKey = ids.join(',');
@@ -278,8 +294,13 @@ function JobCompletedCandidateCounts({
         const batch = pending.slice(start, start + COUNT_BATCH);
         try {
           const counts = await assessmentService.getCompletedCounts(batch);
+          if (!aliveRef.current) return;
           if (Object.keys(counts).length > 0) {
             onCounted((previous) => ({ ...previous, ...counts }));
+          }
+          const missing = batch.filter((id) => counts[id] === undefined);
+          if (missing.length > 0) {
+            onUncounted((previous) => new Set([...previous, ...missing]));
           }
         } catch (error) {
           /* A failed batch must not stop the others, and must not be remembered
@@ -287,11 +308,13 @@ function JobCompletedCandidateCounts({
              released, so paging to another set of jobs and back, or a refresh,
              asks again rather than being told no. */
           console.log('[TalentFlow] Failed to count completed candidates for assessments:', error);
+          if (!aliveRef.current) return;
           for (const id of batch) requestedRef.current.delete(id);
+          onUncounted((previous) => new Set([...previous, ...batch]));
         }
       }
     })();
-  }, [idsKey, onCounted]);
+  }, [idsKey, onCounted, onUncounted]);
 
   return null;
 }
@@ -714,6 +737,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const [shareReturnToTracking, setShareReturnToTracking] = useState<{ assessment: typeof selectedAssessmentForTracking; job: typeof trackingJob } | null>(null);
   const [trackingInvitations, setTrackingInvitations] = useState<any[]>([]);
   const [isLoadingInvitations, setIsLoadingInvitations] = useState(false);
+  /* Bumped by every tracking-popup list / summary load, and on close, so an
+     older answer (the previous page or filter, a poll that started before
+     them, a popup already closed or opened on another job) is dropped when it
+     lands instead of overwriting the newer one. */
+  const trackingListSeqRef = useRef(0);
+  const trackingSummarySeqRef = useRef(0);
   const [isRefreshingTracking, setIsRefreshingTracking] = useState(false);
   /* Holds the tracking dialog's height while a manual Refresh runs, so the
      content-driven box cannot move under the pointer. Shared with every other
@@ -805,6 +834,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   // of components that need to re-evaluate based on the ref.
   const [revokedTick, setRevokedTick] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  /* Bumped by every `loadAssessmentsPage` run, so a slower earlier run (the
+     tab the recruiter just left, say) is dropped when it lands instead of
+     replacing the newer list, and only the latest run clears `isLoading`. */
+  const assessmentsFetchSeqRef = useRef(0);
   const [apiAssessments, setApiAssessments] = useState<any[]>([]);
   /* What the page-level Send Invite offers. Loaded on click, with no status
      filter, because `apiAssessments` is narrowed to the active tab: on Draft or
@@ -885,6 +918,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
    * ever asks about the jobs on screen.
    */
   const [completedCandidatesByAssessment, setCompletedCandidatesByAssessment] = useState<Record<string, number>>({});
+  /* The counts from before the last recount, still drawn while it is in
+     flight — a reload swaps each figure for its fresh one as it lands, rather
+     than blanking every row and redrawing it. Never asked about again: what
+     is fetched is decided by `completedCandidatesByAssessment` alone. */
+  const [previousCompletedCandidates, setPreviousCompletedCandidates] = useState<Record<string, number>>({});
+  /* Ids the loader could not count (see `JobCompletedCandidateCounts`). Only
+     these fall back to the assessment row's own `completed_count`; an id
+     merely not counted YET shows a placeholder instead. */
+  const [uncountedCompletedIds, setUncountedCompletedIds] = useState<Set<string>>(() => new Set());
   /* Bumped to recount from scratch. It is the loader's `key`, so a bump
      remounts it and every count is asked for again — see `reloadAssessments`,
      where a refresh is exactly the moment a candidate may have finished. */
@@ -1088,19 +1130,29 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
    *      This one is tab-filtered — the Active tab never loaded the drafts —
    *      so it can only undercount, never over-, which is why it is second.
    *
-   * Archived versions are excluded from both: archiving is what the cap
-   * message tells a recruiter to do to make room, so counting archived rows
-   * would make that advice do nothing.
+   * Archived versions count too (same as Create on the job page and the
+   * Create / Send Assessment popup).
    */
   const countAssessmentVersions = (
     assessment: { jd_id?: string },
     lineage?: AssessmentVersionRow[],
-  ) => {
-    if (!assessment.jd_id) return 0;
-    const fetched = lineage ?? assessmentLineages[assessment.jd_id];
-    // Archived versions count toward the cap (same as Create on the job page).
-    if (fetched?.length) return fetched.length;
-    return apiAssessments.filter((x: any) => x.jd_id === assessment.jd_id).length;
+  ) => jobVersionRows(assessment, lineage).length;
+
+  /** The versions of THIS assessment's job version (its JD row) — what the
+   *  cap, the latest-version rule and the one-draft rule are judged on, as on
+   *  Job Details and its Create / Send Assessment popup. The fetched lineage
+   *  holds every job version of the job, and assessment version numbers
+   *  restart per job version, so it is narrowed to the row first. */
+  const jobVersionRows = (
+    assessment: { jd_id?: string },
+    lineage?: AssessmentVersionRow[],
+  ): AssessmentVersionRow[] => {
+    if (!assessment.jd_id) return [];
+    const fetched = (lineage ?? assessmentLineages[assessment.jd_id])
+      ?.filter((x) => x.jd_id === assessment.jd_id);
+    return fetched?.length
+      ? fetched
+      : (apiAssessments.filter((x: any) => x.jd_id === assessment.jd_id) as AssessmentVersionRow[]);
   };
 
   /** Why this version is not the one to duplicate, or null when it is. Only the
@@ -1111,10 +1163,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     lineage?: AssessmentVersionRow[],
   ): string | null => {
     if (!assessment.jd_id) return null;
-    const fetched = lineage ?? assessmentLineages[assessment.jd_id];
-    const rows: any[] = fetched?.length
-      ? fetched
-      : apiAssessments.filter((x: any) => x.jd_id === assessment.jd_id);
+    const rows: any[] = jobVersionRows(assessment, lineage);
     const mine = assessment.version || 1;
     const latest = rows.reduce((best: any, v: any) => ((v.version || 1) > (best?.version || 0) ? v : best), null);
     const latestVersion = latest?.version || 1;
@@ -1146,11 +1195,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     lineage?: AssessmentVersionRow[],
   ): AssessmentVersionRow | undefined => {
     if (!assessment.jd_id) return undefined;
-    const fetched = lineage ?? assessmentLineages[assessment.jd_id];
-    const rows: AssessmentVersionRow[] = fetched?.length
-      ? fetched
-      : (apiAssessments.filter((x: any) => x.jd_id === assessment.jd_id) as AssessmentVersionRow[]);
-    return rows.find(
+    return jobVersionRows(assessment, lineage).find(
       v => String(v.status || '').toLowerCase() === 'draft' && v.id !== assessment.id,
     );
   };
@@ -1550,7 +1595,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     average_score: null as number | null,
     units_consumed: 0,
   });
-  const [isLoadingStats, setIsLoadingStats] = useState(false);
+  /* Starts true: the mount effect (`loadAllData`) is what fills `stats`, and
+     until it has run the five cards would otherwise print their 0 defaults
+     for a frame. Its `finally` always clears this, on every path. */
+  const [isLoadingStats, setIsLoadingStats] = useState(true);
 
   // Persist scroll position + view state so returning from a detail/results
   // page lands the user exactly where they left off. Re-detect the scroll
@@ -2416,6 +2464,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     : !!selectedAssessmentForTracking?.coding_enabled;
 
   const closeTrackInvitesModal = () => {
+    trackingListSeqRef.current += 1;
+    trackingSummarySeqRef.current += 1;
+    /* The load just invalidated cannot clear its own spinner any more. */
+    setIsLoadingInvitations(false);
     setShowTrackInvitesModal(false);
     setSelectedAssessmentForTracking(null);
     setTrackingJob(null);
@@ -2447,10 +2499,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       if (items.length < FULL_SET_BATCH_SIZE || collected.length >= total) break;
       apiPage++;
     }
-    return collected.map((a: any, index: number) => mapAssessmentFromApi(a, index));
+    /* Offset paging over a list that can change between batches can hand the
+       same assessment back on two pages — one row per id. */
+    const seen = new Set<string>();
+    return collected
+      .filter((a) => !seen.has(a.id) && !!seen.add(a.id))
+      .map((a: any, index: number) => mapAssessmentFromApi(a, index));
   };
 
   const loadAssessmentsPage = async (page: number) => {
+    const seq = ++assessmentsFetchSeqRef.current;
+    const isStale = () => seq !== assessmentsFetchSeqRef.current;
     setIsLoading(true);
     try {
       const filters: any = {};
@@ -2482,6 +2541,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
          assessments. */
       {
         const collected = await fetchAllAssessments(filters);
+        if (isStale()) return;
         setApiAssessments(collected);
         /* The count of everything that matched, before the browser-side
            filters and the version collapse narrow it further. What the footer
@@ -2496,10 +2556,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         }
       }
     } catch (error) {
+      if (isStale()) return;
       console.log('[TalentFlow] Failed to load assessments:', error);
       setApiAssessments([]);
     } finally {
-      setIsLoading(false);
+      if (!isStale()) setIsLoading(false);
     }
   };
 
@@ -2531,12 +2592,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const inviteRecency = (invitation: any) =>
     new Date(invitation.sent_at || invitation.created_at || 0).getTime();
 
-  /* One page per assessment is enough to merge from: a job's assessments are
-     few (the create flow caps them at 3 per job version), and the merged list
-     is then paged in the browser at the popup's own page size. */
+  /* Every invitation of every assessment of the job, paged through in
+     batches of this size (`collectAllPages`) — one page per assessment
+     silently dropped everything past the 200th — and the merged list is then
+     paged in the browser at the popup's own page size. */
   const JOB_TRACKING_FETCH_SIZE = 200;
 
   const loadTrackingInvitationSummary = async (assessment: any) => {
+    const seq = ++trackingSummarySeqRef.current;
+    const isStale = () => seq !== trackingSummarySeqRef.current;
     try {
       if (trackingJob) {
         /* Job scope: the same summary call per assessment, added up. The
@@ -2551,6 +2615,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             }
           }),
         );
+        if (isStale()) return;
         const sum = (read: (response: any) => number) =>
           summaries.reduce((total, response) => total + (response ? read(response) : 0), 0);
         setInvitationStats({
@@ -2569,6 +2634,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         page: 1,
         page_size: 1,
       });
+      if (isStale()) return;
       setInvitationStats({
         total: response.total || 0,
         expired: response.expired || 0,
@@ -2580,6 +2646,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         revoked: response.revoked || 0,
       });
     } catch (error) {
+      if (isStale()) return;
       console.error('Failed to load invitation summary:', error);
       setInvitationStats({
         total: 0,
@@ -2595,6 +2662,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   };
 
   const loadTrackingInvitations = async (assessment: any, page: number, filters: InviteFilterState, silent = false) => {
+    const seq = ++trackingListSeqRef.current;
+    const isStale = () => seq !== trackingListSeqRef.current;
     if (!silent) setIsLoadingInvitations(true);
     try {
       const query = {
@@ -2612,12 +2681,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         const perAssessment = await Promise.all(
           trackingJob.assessments.map(async (scoped) => {
             try {
-              const scopedResponse = await assessmentService.listInvitations(scoped.id, {
-                ...query,
-                page: 1,
-                page_size: JOB_TRACKING_FETCH_SIZE,
-              });
-              return (scopedResponse.items || []).map((invitation: any) =>
+              const scopedItems = await collectAllPages(
+                (scopedPage, page_size) => assessmentService.listInvitations(scoped.id, {
+                  ...query,
+                  page: scopedPage,
+                  page_size,
+                }),
+                JOB_TRACKING_FETCH_SIZE,
+              );
+              return scopedItems.map((invitation: any) =>
                 stampJobScopedInvite(invitation, scoped, trackingJob.jobVersionByJdId),
               );
             } catch (error) {
@@ -2626,6 +2698,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             }
           }),
         );
+        if (isStale()) return;
         const merged = perAssessment.flat().sort((a, b) => inviteRecency(b) - inviteRecency(a));
         const totalPages = Math.max(1, Math.ceil(merged.length / INVITATIONS_PAGE_SIZE));
         const currentPage = Math.min(Math.max(1, page), totalPages);
@@ -2644,6 +2717,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         page,
         page_size: INVITATIONS_PAGE_SIZE,
       });
+      if (isStale()) return;
       const invitations = response.items || [];
       setTrackingInvitations(invitations);
       setTrackingTotalItems(response.total || 0);
@@ -2654,22 +2728,19 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         setTrackingCurrentPage(Math.min(page - 1, totalPages));
       }
     } catch (error) {
+      if (isStale()) return;
       console.error('Failed to load invitations:', error);
+      /* The summary cards are not touched here: they have their own request
+         (`loadTrackingInvitationSummary`), which may well have succeeded, and
+         zeroing them on a failed LIST put the popup's counts at 0. */
       setTrackingInvitations([]);
       setTrackingTotalItems(0);
       setTrackingTotalPages(1);
-      setInvitationStats({
-        total: 0,
-        expired: 0,
-        started: 0,
-        completed: 0,
-        failed: 0,
-        terminated: 0,
-        invited: 0,
-        revoked: 0,
-      });
     } finally {
-      if (!silent) setIsLoadingInvitations(false);
+      /* Only the latest run clears the spinner — a superseded load must not
+         end the newer one's — and a silent latest run may clear the spinner
+         a load it superseded had set. */
+      if (!isStale()) setIsLoadingInvitations(false);
     }
   };
 
@@ -2907,13 +2978,24 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      the assessment it belongs to so the table can name it. Unfiltered on the
      request: the tab's stat cards must keep counting the whole set while the
      table is narrowed, so narrowing happens client-side over these rows. */
+  /* Bumped by every load, so only the latest one's rows land — the full
+     fan-out takes long enough for a 15s poll, a Refresh or a status action's
+     reload to overlap it. `inviteStatusInFlightRef` counts the loads still
+     running, and the poll skips a tick while it is non-zero rather than
+     stacking another fan-out on top. */
+  const inviteStatusSeqRef = useRef(0);
+  const inviteStatusInFlightRef = useRef(0);
   const loadAllInviteStatuses = async (silent = false) => {
+    const seq = ++inviteStatusSeqRef.current;
+    const isStale = () => seq !== inviteStatusSeqRef.current;
+    inviteStatusInFlightRef.current += 1;
     if (!silent) setIsLoadingInviteStatus(true);
     if (!silent) setInviteStatusError(null);
     try {
       /* Every assessment of every job version, paged to the end — see the same
          call in `loadAllCompletedCandidates`. */
       const items = await listAllAssessments();
+      if (isStale()) return;
       if (items.length === 0) {
         setInviteStatusRows([]);
         return;
@@ -2985,6 +3067,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         const ty = new Date(y.sent_at || y.created_at || 0).getTime();
         return ty - tx;
       });
+      if (isStale()) return;
       setInviteStatusRows(merged);
       /* A background poll must not yank the recruiter back to page 1 or drop
          their selection — only an explicit load does. */
@@ -2995,12 +3078,16 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         setSelectedInviteIds(new Set());
       }
     } catch (err: any) {
-      if (silent) return;
+      if (silent || isStale()) return;
       console.error('Failed to load invitation statuses:', err);
       setInviteStatusError(err?.message || 'Failed to load invitation statuses');
       setInviteStatusRows([]);
     } finally {
-      if (!silent) setIsLoadingInviteStatus(false);
+      inviteStatusInFlightRef.current -= 1;
+      /* Only the latest load clears the spinner; a superseded one must not
+         end the newer load's, and a silent latest one may clear what a load
+         it superseded had set. */
+      if (!isStale()) setIsLoadingInviteStatus(false);
     }
   };
 
@@ -3011,7 +3098,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
        instead of waiting for a page refresh. Skipped while the browser tab is
        hidden. */
     const timer = setInterval(() => {
-      if (document.visibilityState === 'visible') loadAllInviteStatuses(true);
+      if (document.visibilityState === 'visible' && inviteStatusInFlightRef.current === 0) {
+        loadAllInviteStatuses(true);
+      }
     }, 15000);
     return () => clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3180,7 +3269,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     // The advanced filters belong here too: turning one on switches the loader
     // between "one server page" and "the whole result set", and without the
     // dependency that switch never happened.
-  }, [activeTab, preSelectedJdId, assessmentCurrentPage, assessmentItemsPerPage,
+    // Not the page or the page size: the loader always fetches the whole set
+    // and the list pages it in the browser (`visibleAssessments`), so paging
+    // used to refetch everything just to slice it differently.
+  }, [activeTab, preSelectedJdId,
       filterType, filterCreatedBy, filterCreatedFrom, filterCreatedTo]);
 
   // The hook's `onChange` covers query/filter changes; this handles the rest.
@@ -3565,8 +3657,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
          to recount rather than redraw what it counted last time: a candidate
          finishing an assessment is exactly the change this refresh is for, and
          it moves no field on the assessment rows themselves. Dropping the cache
-         and remounting the loader is what makes it ask again. */
+         and remounting the loader is what makes it ask again. The dropped
+         counts stay on screen until their recount lands. */
+      setPreviousCompletedCandidates((previous) => ({ ...previous, ...completedCandidatesByAssessment }));
       setCompletedCandidatesByAssessment({});
+      setUncountedCompletedIds(new Set());
       setCompletedCandidatesGeneration((generation) => generation + 1);
       await loadAssessmentsPage(assessmentCurrentPage);
       // Also reload stats and quota
@@ -3745,7 +3840,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       await dialog.alert({
         title: 'Maximum versions reached',
         message: `All ${MAX_ASSESSMENT_VERSIONS} versions are used (the maximum allowed): ${
-          (lineage?.length ? lineage : apiAssessments.filter((x: any) => x.jd_id === assessment.jd_id))
+          jobVersionRows(assessment, lineage)
             .slice()
             .sort((a: any, b: any) => (Number(a.version) || 1) - (Number(b.version) || 1))
             .map((v: any) => `V${Number(v.version) || 1} (${assessmentStatusLabel(v.status)})`)
@@ -4602,9 +4697,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
    *
    * Summed over the job's whole assessment set (see `jobAssessmentIndex`), one
    * term per assessment, each term counted from that assessment's own
-   * candidate records (`completedCandidatesByAssessment`) and falling back to
-   * the row's `completed_count` until its count has landed. So the figure is
-   * never blank while it resolves, and never narrower than the job.
+   * candidate records (`completedCandidatesByAssessment`). Null - drawn as a
+   * placeholder - until every term has landed, rather than a provisional sum
+   * of the row's `completed_count`, a different counter that the figure then
+   * jumped away from. A recount keeps the previous figure meanwhile, and only
+   * an assessment the loader could not count falls back to `completed_count`.
    *
    * Summing per assessment - rather than asking one endpoint for a job-wide
    * number - is what makes it correct across the hierarchy: there is no
@@ -4618,7 +4715,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     if (!entries) return 0;
     let total = 0;
     for (const [assessmentId, listedCount] of entries) {
-      total += completedCandidatesByAssessment[assessmentId] ?? listedCount;
+      const count = completedCandidatesByAssessment[assessmentId]
+        ?? previousCompletedCandidates[assessmentId]
+        ?? (uncountedCompletedIds.has(assessmentId) ? listedCount : undefined);
+      if (count === undefined) return null;
+      total += count;
     }
     return total;
   };
@@ -4678,10 +4779,24 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
    * page's whole loaded set, so the figure is right before the panel opens.
    * Versions are counted by NUMBER, as the panel groups them, and a version
    * the lineage shows as Draft is left out, as the panel leaves it out.
+   *
+   * Null - drawn as a placeholder - while the job's lineage is still in
+   * flight: without it every assessment falls back to its `jd_version`, so the
+   * row read "1" and then jumped to the real figure. A lineage that FAILED is
+   * cached as an empty list (see `getJobLineageRows`), which counts as landed,
+   * so a failure falls through to that fallback rather than waiting forever.
    */
   const getJobVersionsWithAssessmentCount = (
     assessment: { id: string; jd_id?: string; jd_short_id?: string; jd_version?: number },
   ) => {
+    if (
+      assessment.jd_id
+      && getJobLineageRows(assessment) === undefined
+      && jdLineage.lineages[assessment.jd_id] === undefined
+      && jdLineage.filterLineages[assessment.jd_short_id || assessment.jd_id] === undefined
+    ) {
+      return null;
+    }
     const lineageRows = getJobLineageRows(assessment) ?? [];
     const versionByJdId = new Map<string, number>();
     const draftVersions = new Set<number>();
@@ -5023,7 +5138,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             >
               <div className="flex items-center gap-1.5">
                 <MetricIcon className={`w-4 h-4 flex-shrink-0 ${iconClass}`} />
-                <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">{value}</span>
+                {/* Null while the figure is still resolving - the same "..." the
+                    stat cards above show, rather than a provisional number. */}
+                <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">{value ?? '...'}</span>
               </div>
               <p className="text-2xs text-gray-500 dark:text-slate-500 truncate mt-0.5">{label}</p>
             </div>
@@ -6804,6 +6921,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   /* Active tab: the same ⋮ items an Active row has on Total Jobs. */
                   extraRowActions={config.fixedStatus === 'published' ? buildActiveTabExtraActions : undefined}
                   reloadSignal={flatTableReloadSignal}
+                  /* The table's own Archive / Unarchive / Delete: re-read the
+                     stat cards and the page's loaded set, which those actions
+                     moved. Not `reloadAssessments` — the table has already
+                     refetched its own rows. */
+                  onMutated={() => {
+                    void reloadStats();
+                    void loadAssessmentsPage(assessmentCurrentPage);
+                  }}
                 />
               );
             })() : activeTab === 'completed-candidates' ? (() => {
@@ -9152,6 +9277,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   key={completedCandidatesGeneration}
                   ids={jobCompletedCountsToFetch}
                   onCounted={setCompletedCandidatesByAssessment}
+                  onUncounted={setUncountedCompletedIds}
                 />
                 {visibleAssessments.map((assessment) => renderJobListRow(assessment))}
               </div>

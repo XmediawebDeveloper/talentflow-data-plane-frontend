@@ -79,6 +79,15 @@ const STATUS_OPTIONS = [
   { value: 'rejected', label: 'Rejected' },
 ];
 
+/* One status rule for the filter dropdown and the stat cards that open it.
+   "Completed" gathers every settled spelling; every other option (Pending,
+   Processing, …) is its own status, as the dropdown lists them separately. */
+const COMPLETED_REFUND_STATUSES = ['paid', 'refunded', 'completed', 'success'];
+const matchesRefundStatus = (status: string, filter: string) => {
+  const s = status.toLowerCase();
+  return filter === 'completed' ? COMPLETED_REFUND_STATUSES.includes(s) : s === filter.toLowerCase();
+};
+
 const EXPORT_HEADERS = ['Refund #', 'Date', 'Original Invoice', 'Reason', 'Amount', 'Status', 'Refund Method', 'Processed By'];
 
 export default function RefundHistoryPage() {
@@ -170,9 +179,13 @@ export default function RefundHistoryPage() {
       const refundData = refundResult.data?.invoices || [];
       setRefunds(refundData);
 
-      // Calculate stats from refunds
-      const completedRefunds = refundData.filter((r: RefundInvoice) => ['PAID', 'REFUNDED', 'COMPLETED'].includes(r.status.toUpperCase()));
-      const pendingRefunds = refundData.filter((r: RefundInvoice) => ['PENDING', 'PROCESSING'].includes(r.status.toUpperCase()));
+      // Calculate stats from refunds — with the same rule as the status filter
+      // each card opens (`matchesRefundStatus`), so a card's count always
+      // equals the rows its list shows. The cards used to leave SUCCESS out of
+      // Completed and fold PROCESSING into Pending, which the filter (with its
+      // own Processing option) didn't.
+      const completedRefunds = refundData.filter((r: RefundInvoice) => matchesRefundStatus(r.status, 'completed'));
+      const pendingRefunds = refundData.filter((r: RefundInvoice) => matchesRefundStatus(r.status, 'pending'));
       const totalAmount = refundData.reduce((sum: number, r: RefundInvoice) => sum + Math.abs(r.total_amount_inr || 0), 0);
 
       setStats({
@@ -199,9 +212,7 @@ export default function RefundHistoryPage() {
         (inv.line_items?.[0]?.description && inv.line_items[0].description.toLowerCase().includes(searchQuery.toLowerCase()));
 
       // Status filter
-      const matchesStatus = statusFilter === 'all' ||
-        inv.status.toLowerCase() === statusFilter.toLowerCase() ||
-        (statusFilter === 'completed' && ['paid', 'refunded', 'completed', 'success'].includes(inv.status.toLowerCase()));
+      const matchesStatus = statusFilter === 'all' || matchesRefundStatus(inv.status, statusFilter);
 
       // Date filter
       let matchesDate = true;

@@ -713,15 +713,19 @@ export default function UserManagement() {
   // (GET /users/count), used by the Active/Inactive stat cards below instead
   // of `users.filter(...)` — `users` only ever holds the current page of
   // `GET /users` (default page_size=20), so filtering it undercounts any
-  // tenant with more users than one page. `null` until that call resolves,
-  // during which the cards fall back to the old (possibly-undercounted but
-  // available) client tally rather than showing nothing.
+  // tenant with more users than one page. All three cards (Total too) read
+  // only this — `null` until the call resolves, during which they show a
+  // placeholder rather than a provisional client tally that then jumps.
   const [userCounts, setUserCounts] = useState<{ active_users: number; inactive_users: number; total_users: number } | null>(null);
   // Total = active + inactive (every account), so the three cards always add up.
   // Active is what counts against the plan's seat limit, so the limit sits on that card.
   const activeUsersCount = userCounts ? userCounts.active_users : users.filter(u => u.is_active).length;
   const inactiveUsersCount = userCounts ? userCounts.inactive_users : users.filter(u => !u.is_active).length;
   const totalUsersCount = activeUsersCount + inactiveUsersCount;
+  // The last /users/count call failed — the cards show '—', not a guess.
+  const [userCountsFailed, setUserCountsFailed] = useState(false);
+  // Bumped per loadUsers, so an older /users/count response can't land last.
+  const userCountsSeqRef = useRef(0);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   // The page always opens on the Total Users list (client request 2026-10-17);
@@ -1523,8 +1527,15 @@ export default function UserManagement() {
     // mount, so toggling a user's status left the Inactive/Active cards stale
     // until a manual page refresh. Fired in parallel and independent of the
     // list fetch so it still updates even if the list request fails.
-    userService.getUserCounts().then(setUserCounts).catch((error) => {
+    const countsSeq = ++userCountsSeqRef.current;
+    userService.getUserCounts().then((counts) => {
+      if (countsSeq !== userCountsSeqRef.current) return;
+      setUserCounts(counts);
+      setUserCountsFailed(false);
+    }).catch((error) => {
+      if (countsSeq !== userCountsSeqRef.current) return;
       console.warn('Failed to load user counts:', error);
+      setUserCountsFailed(true);
     });
     try {
       const response = await fetch(`${API_URL}/users`, {

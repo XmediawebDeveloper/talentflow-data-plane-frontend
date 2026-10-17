@@ -27,6 +27,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { PageHeader } from '@/components/ui/page-header';
+import { StatValuePlaceholder } from '@/components/ui/stats-card';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 // Main API - Local backend handles everything including support tickets
@@ -492,9 +493,18 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
   const [internalActionLoading, setInternalActionLoading] = useState<string | null>(null);
   const [internalFilterAssignment, setInternalFilterAssignment] = useState<string>('all');
 
+  // The last stats call failed — the cards show '—' instead of a number.
+  const [statsFailed, setStatsFailed] = useState(false);
+  const [internalStatsFailed, setInternalStatsFailed] = useState(false);
+
   // Prevent duplicate API calls
   const hasFetched = useRef(false);
   const hasInternalFetched = useRef(false);
+  /* Bumped by every list fetch, so only the latest request's rows apply. The
+     mount fetch runs with default filters before the saved ones are restored,
+     then again with them; whichever lands last used to win. */
+  const ticketsFetchSeqRef = useRef(0);
+  const internalTicketsFetchSeqRef = useRef(0);
 
   // Persist scroll + list view state so returning to Support restores it.
   // 'detail'/'submit' are excluded from restore since they depend on a selected
@@ -583,6 +593,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
     if (!token) {
       console.warn('No auth token found, user may need to login');
       setLoading(false);
+      setStatsFailed(true);
       return;
     }
 
@@ -591,6 +602,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
   }, []);
 
   const fetchTickets = async () => {
+    const seq = ++ticketsFetchSeqRef.current;
+    const isStale = () => seq !== ticketsFetchSeqRef.current;
     try {
       setLoading(true);
       const params = new URLSearchParams();
@@ -604,21 +617,25 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
       const response = await fetch(url, {
         headers: getAuthHeaders(),
       });
+      if (isStale()) return;
 
       if (response.ok) {
         const data = await response.json();
+        if (isStale()) return;
         setTickets(data.items.map(transformTicket));
       } else {
         const errorData = await response.json().catch(() => ({}));
+        if (isStale()) return;
         console.error('Failed to fetch tickets:', response.status, errorData);
         // Keep empty array on error
         setTickets([]);
       }
     } catch (error) {
+      if (isStale()) return;
       console.error('Error fetching tickets:', error);
       setTickets([]);
     } finally {
-      setLoading(false);
+      if (!isStale()) setLoading(false);
     }
   };
 
@@ -631,9 +648,13 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
       if (response.ok) {
         const data = await response.json();
         setStats(data);
+        setStatsFailed(false);
+      } else {
+        setStatsFailed(true);
       }
     } catch (error) {
       console.error('Error fetching stats:', error);
+      setStatsFailed(true);
     }
   };
 
@@ -674,6 +695,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
   }, [filterStatus, filterPriority, internalFilterAssignment]);
 
   const fetchInternalTickets = async () => {
+    const seq = ++internalTicketsFetchSeqRef.current;
+    const isStale = () => seq !== internalTicketsFetchSeqRef.current;
     try {
       setInternalLoading(true);
       const response = await internalTicketService.adminListAllTickets({
@@ -683,12 +706,14 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
         assigned_to_me: internalFilterAssignment === 'mine' ? true : undefined,
         unassigned: internalFilterAssignment === 'unassigned' ? true : undefined,
       });
+      if (isStale()) return;
       setInternalTickets(response.items);
     } catch (error) {
+      if (isStale()) return;
       console.error('Error fetching internal tickets:', error);
       setInternalTickets([]);
     } finally {
-      setInternalLoading(false);
+      if (!isStale()) setInternalLoading(false);
     }
   };
 
@@ -696,8 +721,10 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
     try {
       const data = await internalTicketService.adminGetStats();
       setInternalStats(data);
+      setInternalStatsFailed(false);
     } catch (error) {
       console.error('Error fetching internal stats:', error);
+      setInternalStatsFailed(true);
     }
   };
 
@@ -1119,18 +1146,25 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
   }, [searchQuery, filterStatus, filterPriority, internalFilterAssignment, activeTab, teamCategoryFilter, teamSort]);
 
 
-  // Use stats from API or calculate from tickets
-  const openTickets = stats?.open_tickets ?? tickets.filter(t => t.status === 'open').length;
-  const inProgressTickets = stats?.in_progress_tickets ?? tickets.filter(t => t.status === 'in-progress').length;
-  const resolvedTickets = stats?.resolved_tickets ?? tickets.filter(t => t.status === 'resolved').length;
-  const totalTickets = stats?.total_tickets ?? tickets.length;
+  /* Card counts come only from the stats endpoints. They used to fall back to
+     a tally of `tickets` — the filtered/searched list, so a different rule —
+     and the internal cards to 0, then jump once stats landed. Placeholder
+     until they arrive; '—' if the stats call failed. */
+  const statCount = (value: number | undefined, failed: boolean) =>
+    value !== undefined ? value : failed ? '—' : <StatValuePlaceholder />;
+  const openTickets = statCount(stats?.open_tickets, statsFailed);
+  const inProgressTickets = statCount(stats?.in_progress_tickets, statsFailed);
+  const resolvedTickets = statCount(stats?.resolved_tickets, statsFailed);
+  const totalTickets = statCount(stats?.total_tickets, statsFailed);
 
   // Internal ticket stats
-  const internalOpenTickets = internalStats?.open_tickets ?? 0;
-  const internalInProgressTickets = internalStats?.in_progress_tickets ?? 0;
-  const internalResolvedTickets = internalStats?.resolved_tickets ?? 0;
+  const internalOpenTickets = statCount(internalStats?.open_tickets, internalStatsFailed);
+  const internalInProgressTickets = statCount(internalStats?.in_progress_tickets, internalStatsFailed);
+  const internalResolvedTickets = statCount(internalStats?.resolved_tickets, internalStatsFailed);
+  // Numeric for the "needs attention" badges, which simply stay hidden at 0.
   const internalUnassignedTickets = internalStats?.unassigned_tickets ?? 0;
-  const internalTotalTickets = internalStats?.total_tickets ?? 0;
+  const internalUnassignedCount = statCount(internalStats?.unassigned_tickets, internalStatsFailed);
+  const internalTotalTickets = statCount(internalStats?.total_tickets, internalStatsFailed);
 
   return (
     <div ref={rootRef} className="flex-1 bg-slate-50 overflow-x-clip">

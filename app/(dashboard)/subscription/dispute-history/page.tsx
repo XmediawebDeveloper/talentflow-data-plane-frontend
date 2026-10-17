@@ -84,6 +84,22 @@ const STATUS_OPTIONS = [
   { value: 'resolved', label: 'Resolved' },
 ];
 
+/* One status rule for the filter dropdown and the Open / Resolved cards that
+   open it, so a card's count always equals the rows its list shows. "Open"
+   and "Resolved" each gather their in-flight / settled statuses; any other
+   option matches its own status. VOID used to count on the Resolved card but
+   was never matched by the Resolved filter (nor offered in the dropdown), so
+   it is left out of both. */
+const DISPUTE_STATUS_GROUPS: Record<string, string[]> = {
+  open: ['open', 'pending', 'under_review'],
+  resolved: ['won', 'lost', 'resolved', 'rejected'],
+};
+const getDisputeStatus = (d: DisputeInvoice) => (d.metadata?.dispute_status || d.dispute_status || d.status || '').toLowerCase();
+const matchesDisputeStatus = (d: DisputeInvoice, filter: string) => {
+  const s = getDisputeStatus(d);
+  return s === filter.toLowerCase() || !!DISPUTE_STATUS_GROUPS[filter]?.includes(s);
+};
+
 const EXPORT_HEADERS = ['Dispute #', 'Date', 'Deadline', 'Original Invoice', 'Reason', 'Customer Claim', 'Amount', 'Status', 'Bank Reference'];
 
 export default function DisputeHistoryPage() {
@@ -174,12 +190,8 @@ export default function DisputeHistoryPage() {
       setDisputes(disputeData);
 
       // Calculate stats from disputes
-      const openDisputes = disputeData.filter((d: DisputeInvoice) =>
-        ['OPEN', 'PENDING', 'UNDER_REVIEW'].includes((d.metadata?.dispute_status || d.dispute_status || d.status || '').toUpperCase())
-      );
-      const resolvedDisputes = disputeData.filter((d: DisputeInvoice) =>
-        ['WON', 'LOST', 'RESOLVED', 'REJECTED', 'VOID'].includes((d.metadata?.dispute_status || d.dispute_status || d.status || '').toUpperCase())
-      );
+      const openDisputes = disputeData.filter((d: DisputeInvoice) => matchesDisputeStatus(d, 'open'));
+      const resolvedDisputes = disputeData.filter((d: DisputeInvoice) => matchesDisputeStatus(d, 'resolved'));
       const totalAmount = disputeData.reduce((sum: number, d: DisputeInvoice) => sum + (d.total_amount_inr || 0), 0);
 
       setStats({
@@ -206,11 +218,7 @@ export default function DisputeHistoryPage() {
         (inv.line_items?.[0]?.description && inv.line_items[0].description.toLowerCase().includes(searchQuery.toLowerCase()));
 
       // Status filter
-      const disputeStatus = (inv.metadata?.dispute_status || inv.dispute_status || inv.status || '').toLowerCase();
-      const matchesStatus = statusFilter === 'all' ||
-        disputeStatus === statusFilter.toLowerCase() ||
-        (statusFilter === 'open' && ['open', 'pending', 'under_review'].includes(disputeStatus)) ||
-        (statusFilter === 'resolved' && ['won', 'lost', 'resolved', 'rejected'].includes(disputeStatus));
+      const matchesStatus = statusFilter === 'all' || matchesDisputeStatus(inv, statusFilter);
 
       // Date filter
       let matchesDate = true;

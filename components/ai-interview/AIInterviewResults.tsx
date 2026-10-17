@@ -520,7 +520,13 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
     return { items: matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), total: matching.length, pages };
   }, [needsClientFilter, matchesClientFilters, currentPage, sortSessions]);
 
+  /* Bumped by every loadSessions run. A response from an older run (a filter
+     or page changed while it was in flight), or a 5s poll that started before
+     the latest load, is dropped instead of overwriting newer rows and cards. */
+  const loadSeqRef = useRef(0);
   const loadSessions = useCallback(async () => {
+    const seq = ++loadSeqRef.current;
+    const isStale = () => seq !== loadSeqRef.current;
     setIsLoading(true);
     try {
       // The aggregate response reports completed/in_progress/terminated but
@@ -536,6 +542,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
         // Every invite, whatever its status — decides "nobody invited yet".
         aiInterviewService.getConfigInvitations(configId, { ...requestParams, status: undefined, page: 1, page_size: 1 }),
       ]);
+      if (isStale()) return;
       const shown = pageBySource(result);
       // A restored page past the end (rows removed since) — step back to the
       // last real page; that change re-runs this load.
@@ -558,9 +565,11 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
         revoked: revokedProbe.total || 0,
       });
     } catch (error: any) {
+      if (isStale()) return;
       toast.error(error.message || 'Failed to load candidate sessions');
     } finally {
-      setIsLoading(false);
+      // A stale run leaves the spinner to the run that replaced it.
+      if (!isStale()) setIsLoading(false);
     }
   }, [configId, requestParams, pageBySource, currentPage]);
 
@@ -573,6 +582,9 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
     const hasLive = sessions.some((s) => s.status === 'in_progress');
     if (!hasLive) return;
     const id = setInterval(() => {
+      // Polls don't bump the counter (that would strand loadSessions' spinner);
+      // they only check it, so a load started after this poll wins.
+      const seq = loadSeqRef.current;
       Promise.all([
         aiInterviewService.getConfigInvitations(configId, requestParams),
         aiInterviewService.getConfigInvitations(configId, { ...requestParams, status: 'expired', page: 1, page_size: 1 }),
@@ -582,6 +594,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
         aiInterviewService.getConfigInvitations(configId, { ...requestParams, status: undefined, page: 1, page_size: 1 }),
       ])
         .then(([r, expiredProbe, revokedProbe, invitedProbe, allProbe]) => {
+          if (seq !== loadSeqRef.current) return;
           const shown = pageBySource(r);
           setSessions(shown.items);
           setTotalSessions(shown.total);

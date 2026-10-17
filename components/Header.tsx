@@ -167,14 +167,21 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
     // update) must not disconnect a healthy WebSocket.
   }, [user]);
 
+  /* Bumped by every fetchNotifications run, so a response for a tab the user
+     has since left (or an older poll) can't overwrite the newer list. */
+  const notificationsFetchSeqRef = useRef(0);
+
   // Fetch notifications
   const fetchNotifications = useCallback(async () => {
     if (!user) return;
+    const seq = ++notificationsFetchSeqRef.current;
+    const isStale = () => seq !== notificationsFetchSeqRef.current;
     setNotificationsLoading(true);
     try {
       const response = await notificationService.getNotifications(
         20, 0, activeNotificationTab === 'unread'
       );
+      if (isStale()) return;
       setNotifications(response.notifications);
       setUnreadCount(response.unread_count);
       // Only the All tab's response counts everything; the Unread tab's total
@@ -183,7 +190,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
     } catch (error) {
       console.error('Error fetching notifications:', error);
     } finally {
-      setNotificationsLoading(false);
+      if (!isStale()) setNotificationsLoading(false);
     }
   }, [user, activeNotificationTab]);
 
@@ -530,7 +537,10 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
 
         totalRemaining += (quota.total_remaining as number) || 0;
         totalLimit += (quota.subscription?.limit as number || 0) + (quota.addon?.total_purchased || 0);
-        totalUsed += quota.subscription?.used || 0;
+        // Same "used" as each row of the breakdown below: plan plus add-on
+        // consumption, matching a limit that includes add-on units. Raw
+        // counters rather than `limit - remaining` — see the rows' note.
+        totalUsed += ((quota.subscription?.used as number) ?? 0) + ((quota.addon?.total_consumed as number) ?? 0);
       }
     });
 
