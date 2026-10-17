@@ -273,7 +273,7 @@ export async function exportEvalReportPDF(
 
       let status: { label: string; color: RGB; isScore: boolean };
       if (key === 'hr') status = { label: 'For Reference', color: faint, isScore: false };
-      else if (q.notDelivered) status = { label: `Not Delivered · ${formatScore1(q.questionScore)}/10`, color: scoreRGB(q.questionScore), isScore: false };
+      else if (q.notDelivered) status = { label: 'Not Delivered · 0.0/10', color: scoreRGB(0), isScore: false };
       else if (rt === 'skipped' || src === 'candidate') status = { label: 'Skipped', color: sub, isScore: false };
       else if (_nonEnglish) status = { label: 'Not Scored (non-English)', color: faint, isScore: false };
       else if (['not_answered', 'idk', 'timeout', 'low_coverage'].includes(rt)) {
