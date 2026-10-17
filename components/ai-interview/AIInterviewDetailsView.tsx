@@ -366,6 +366,16 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
     }
   }, [config.id]);
 
+  /* A send / copied link from the Share dialog: reload the activity list, the
+     header's invite counts and the Invites-tab tracker at once, instead of
+     leaving them stale until the tracker's next poll or a page refresh. */
+  const [inviteRefreshTick, setInviteRefreshTick] = useState(0);
+  const refreshAfterInvite = useCallback(() => {
+    loadActivity();
+    void onRefresh?.();
+    setInviteRefreshTick((t) => t + 1);
+  }, [loadActivity, onRefresh]);
+
   // Always load activity on mount (needed for invite count in header)
   useEffect(() => {
     if (configureOnly) return;
@@ -1470,7 +1480,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     type="button"
                     variant="secondary"
                     size="sm"
-                    onClick={editBlockedReason ? undefined : () => router.push(aiInterviewDraftResumeHref(config))}
+                    onClick={editBlockedReason ? undefined : () => router.push(aiInterviewConfigureHref(config.id, config.jd_id || ''))}
                     disabled={!!editBlockedReason}
                     aria-label="Edit AI interview"
                     title={editBlockedReason || 'Edit this version'}
@@ -2285,6 +2295,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
               // Resend / revoke / edit here also change the activity list and
               // the header's invite counts — refresh both at once.
               onChanged={async () => { await Promise.all([loadActivity(), onRefresh?.()]); }}
+              refreshSignal={inviteRefreshTick}
               // Completed rows offer View Result — swap the popup for the
               // same inline candidate result view the Results tab opens.
               onViewResult={(inv) => handleCandidateClick(inv.id)}
@@ -2303,8 +2314,8 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
           config={config}
           interviewVersion={interviewVersionOrdinal}
           onClose={() => setShowShareModal(false)}
-          onInvitesChanged={() => { loadActivity(); }}
-          onInviteSent={() => { loadActivity(); }}
+          onInvitesChanged={refreshAfterInvite}
+          onInviteSent={refreshAfterInvite}
         />
       )}
 

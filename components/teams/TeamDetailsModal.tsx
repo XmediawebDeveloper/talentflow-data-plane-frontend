@@ -1,6 +1,7 @@
 'use client';
 
-import { X, Users, Shield, Briefcase, FileText } from 'lucide-react';
+import { Users, Shield, Briefcase, FileText } from 'lucide-react';
+import AppModal from '@/components/ui/app-modal';
 import { Team } from '@/lib/services/teamService';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 
@@ -15,31 +16,16 @@ export default function TeamDetailsModal({ isOpen, onClose, team }: TeamDetailsM
   if (!isOpen || !team) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm sm:p-6">
-      <div className="flex max-h-[calc(100dvh-2rem)] w-full max-w-[95vw] flex-col rounded-3xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:max-h-[calc(100dvh-3rem)] sm:max-w-4xl">
-        <div className="relative shrink-0 overflow-hidden rounded-t-3xl border-b border-white/10 bg-brand-blue px-4 py-5 text-white sm:px-6">
-          <div className="pointer-events-none absolute -top-10 right-0 h-40 w-40 rounded-full bg-white/10 blur-3xl" />
-          <div className="relative flex items-start justify-between gap-4">
-            <div className="flex min-w-0 items-start gap-3">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15">
-                <Shield className="h-5 w-5 text-white" />
-              </div>
-              <div className="min-w-0">
-                <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">Team Details</h2>
-                <p className="mt-1 text-sm text-white/80">Review team composition, lead ownership, and core activity indicators.</p>
-              </div>
-            </div>
-            <button
-              onClick={onClose}
-              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white transition-colors hover:bg-white/15"
-              aria-label="Close modal"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-        </div>
-
-        <div className="flex-1 space-y-6 overflow-y-auto p-4 sm:p-6">
+    <AppModal
+      open={isOpen}
+      onCancel={onClose}
+      size="lg"
+      zIndexClass="z-50"
+      icon={<Shield />}
+      title="Team Details"
+      subtitle="Review team composition, lead ownership, and core activity indicators."
+    >
+        <div className="space-y-6">
           <div>
             <h3 className="text-2xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">{team.name}</h3>
             {team.description && <p className="mt-2 text-sm text-gray-600 dark:text-slate-400">{team.description}</p>}
@@ -134,8 +120,6 @@ export default function TeamDetailsModal({ isOpen, onClose, team }: TeamDetailsM
             </div>
           </div>
         </div>
-
-      </div>
-    </div>
+    </AppModal>
   );
 }

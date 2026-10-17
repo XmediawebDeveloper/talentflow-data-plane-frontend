@@ -15,8 +15,14 @@ import { ScrollableTabs } from '@/components/subscription/ScrollableTabs';
  * page keeps its own content — and the active tab is derived from the pathname.
  * Visibility mirrors the quick-links that used to live on the User Management
  * page, so non-admins only see the tabs they can actually open.
+ *
+ * `stickyTop`: pin the bar just below the page's sticky breadcrumb — pass the
+ * breadcrumb's measured height (useBreadcrumbOffset). The bar must then be a
+ * DIRECT child of the page card (a sticky element only travels inside its
+ * parent), and it paints the card's background edge to edge so content scrolls
+ * cleanly underneath. Omit it on pages whose header never scrolls (Chat).
  */
-export default function OrganizationTabs() {
+export default function OrganizationTabs({ stickyTop }: { stickyTop?: number } = {}) {
   const pathname = usePathname();
   const { isTenantAdmin, hasPermission } = useAuth();
   const { hasPlanFeature, loading: planLoading } = usePlanFeaturesContext();
@@ -40,7 +46,16 @@ export default function OrganizationTabs() {
   if (tabs.length <= 1) return null;
 
   return (
-    <section className="mb-3 lg:mb-5">
+    <section
+      style={stickyTop !== undefined ? { top: stickyTop } : undefined}
+      className={
+        stickyTop !== undefined
+          // Negative margins = the page card's padding (p-4 md:p-8), so the band
+          // spans the card and nothing shows through at its sides.
+          ? 'sticky z-20 -mx-4 md:-mx-8 px-4 md:px-8 pt-1 mb-3 lg:mb-5 bg-white dark:bg-slate-900'
+          : 'mb-3 lg:mb-5'
+      }
+    >
       {/* Mobile + tablet (< lg): scrollable pills with an always-visible scrollbar */}
       <ScrollableTabs className="lg:hidden" ariaLabel="User management tabs">
         {tabs.map((tab) => {

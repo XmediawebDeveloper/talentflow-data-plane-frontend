@@ -727,7 +727,7 @@ ${job.certifications?.join(', ') || 'N/A'}
                 {/* 1. Invite for Assessment - Permission + Feature flag */}
                 {permissions.canCreateAssessments && (
                   <QuickActionButton
-                    icon={<Users className="w-4 h-4" />}
+                    icon={<ClipboardList className="w-4 h-4" />}
                     label="Invite for Assessment"
                     onClick={() => router.push(`/recruitment/assessments/create?jd_id=${job.id}`)}
                     disabled={!features.assessment}

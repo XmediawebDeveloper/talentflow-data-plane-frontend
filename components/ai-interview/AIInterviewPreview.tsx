@@ -467,6 +467,23 @@ export default function AIInterviewPreview() {
   }, [published, listHref, router, embedded]);
 
   const handleSaveAsDraft = async () => {
+    // Stamp this step so the draft reopens on Preview; a published version
+    // being edited is also taken off "published".
+    if (id && interview) {
+      try {
+        let si: Record<string, unknown> = {};
+        try { si = JSON.parse(interview.special_instructions || '{}') ?? {}; } catch { /* keep {} */ }
+        si.wizard_step = CURRENT_STEP;
+        await aiInterviewService.update(id, {
+          special_instructions: JSON.stringify(si),
+          save_and_exit: true,
+          ...(interview.status === 'published' && { status: 'draft' as const }),
+        });
+      } catch {
+        toast.error('Failed to save draft');
+        return;
+      }
+    }
     toast.success('Draft saved!');
     router.push(exitHref ?? '/recruitment/ai-interviews');
   };

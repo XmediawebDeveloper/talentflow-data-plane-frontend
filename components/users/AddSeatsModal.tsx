@@ -9,7 +9,6 @@
 import React, { useState, useEffect } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
 import {
-  X,
   Users,
   Zap,
   CreditCard,
@@ -24,7 +23,7 @@ import {
 import { toast } from 'sonner';
 import { useRazorpay } from '@/lib/hooks/useRazorpay';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Button } from '@/components/ui/button';
+import AppModal from '@/components/ui/app-modal';
 import { Badge } from '@/components/ui/badge';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
@@ -271,44 +270,42 @@ export default function AddSeatsModal({
   const addonDisplayName = (pricing?.addon_name || 'User Seat Pack').replace(/\s*-?\s*Pro$/i, '').trim();
 
   return (
-    <div className="fixed inset-0 bg-gray-900/60 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-[95vw] sm:max-w-2xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-300 max-h-[95dvh] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
-
-        {/* Header */}
-        <div className="relative px-5 sm:px-7 py-5 sm:py-6 bg-brand-blue flex-shrink-0 overflow-hidden">
-          <div className="absolute -top-8 -right-6 w-36 h-36 bg-white/10 rounded-full blur-2xl" />
-          <div className="absolute -bottom-10 -left-6 w-28 h-28 bg-brand-cyan/25 rounded-full blur-2xl" />
-          <div className="relative flex items-center gap-4">
-            <div className="w-12 h-12 sm:w-14 sm:h-14 bg-white/15 backdrop-blur-sm rounded-2xl flex items-center justify-center flex-shrink-0 ring-1 ring-white/25 shadow-lg shadow-brand-blue/40">
-              <Users className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                <h2 className="text-lg sm:text-xl font-bold text-white">Add User Seats</h2>
-                <span className="inline-flex items-center gap-1 text-2xs font-semibold bg-white/20 text-white px-2 py-0.5 rounded-full ring-1 ring-white/30 backdrop-blur-sm">
-                  <Sparkles className="w-2.5 h-2.5" />
-                  INSTANT
-                </span>
-              </div>
-              <p className="text-xs sm:text-sm text-white/80">Add seats to your team capacity</p>
-            </div>
-          </div>
-          <Button
-            variant="secondary"
-            tone="onColor"
-            size="sm"
-            onClick={onClose}
-            aria-label="Close"
-            className="absolute top-4 right-4 px-2"
-            icon={<X className="w-5 h-5 text-white" />}
-          >
-            <span className="sr-only">Close</span>
-          </Button>
-        </div>
-
-        {/* Scrollable Body */}
-        <div className="overflow-y-auto flex-1 bg-white dark:bg-slate-900">
-          <div className="p-5 sm:p-7 space-y-5">
+    <AppModal
+      open
+      size="md"
+      zIndexClass="z-50"
+      onCancel={onClose}
+      cancelDisabled={isPurchasing || razorpayProcessing}
+      icon={<Users />}
+      title={
+        <span className="inline-flex items-center gap-2">
+          Add User Seats
+          <span className="inline-flex items-center gap-1 text-2xs font-semibold bg-white/20 text-white px-2 py-0.5 rounded-full ring-1 ring-white/30 backdrop-blur-sm">
+            <Sparkles className="w-2.5 h-2.5" />
+            INSTANT
+          </span>
+        </span>
+      }
+      subtitle="Add seats to your team capacity"
+      bodyClassName="bg-white dark:bg-slate-900"
+      footerStart={
+        <span className="flex items-center gap-1.5 text-2xs text-gray-500 dark:text-slate-500">
+          <ShieldCheck className="w-3 h-3 text-brand-cyan" />
+          Secured by Razorpay · 256-bit SSL encryption
+        </span>
+      }
+      actions={[
+        {
+          label: isPurchasing || razorpayProcessing ? 'Processing...' : `Pay ₹${total.toFixed(2)}`,
+          onClick: handlePurchase,
+          disabled: isPurchasing || razorpayProcessing || !pricing || !!purchaseSuccess,
+          icon: isPurchasing || razorpayProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4 flex-shrink-0" />,
+        },
+      ]}
+    >
+        {/* Body (AppModal scrolls it) */}
+        <div>
+          <div className="space-y-5">
 
             {isLoading ? (
               <>
@@ -510,30 +507,6 @@ export default function AddSeatsModal({
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="p-4 sm:p-5 border-t border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 flex-shrink-0">
-          <div className="flex gap-3">
-            <Button
-              variant="primary"
-              onClick={handlePurchase}
-              disabled={isPurchasing || razorpayProcessing || !pricing || !!purchaseSuccess}
-              className="flex-1 py-3 font-semibold active:scale-[0.98] shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
-              icon={isPurchasing || razorpayProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4 flex-shrink-0" />}
-            >
-              {isPurchasing || razorpayProcessing ? (
-                <span>Processing...</span>
-              ) : (
-                <span>Pay ₹{total.toFixed(2)}</span>
-              )}
-            </Button>
-          </div>
-          <p className="text-center text-2xs text-gray-500 dark:text-slate-500 mt-3 flex items-center justify-center gap-1.5">
-            <ShieldCheck className="w-3 h-3 text-brand-cyan" />
-            <span>Secured by Razorpay · 256-bit SSL encryption</span>
-          </p>
-        </div>
-
-      </div>
-    </div>
+    </AppModal>
   );
 }

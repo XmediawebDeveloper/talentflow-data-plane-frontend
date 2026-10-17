@@ -6,6 +6,23 @@
  *
  * ⚠️  Edit THIS file only. All three UIs will automatically reflect your changes.
  *     Do NOT duplicate this list in any of the three files above.
+ *
+ * The read-only views (Role details popup, Permissions Catalog in
+ * components/roles/RoleManagement.tsx) render through getPermissionDisplaySections()
+ * below, so they show these same section names and labels — never raw DB
+ * names or codes like "JD:CREATE".
+ *
+ * NAMING RULE — one capability, one label, in every section:
+ *   Score Resume          scoring a resume against a JD, whatever the entry point
+ *                         (JD page, Resume Scoring, AI Talent Match, My Resumes,
+ *                         Shared Database). 'my_resumes:apply_job' /
+ *                         'internal_db:apply_job' were a second checkbox for the
+ *                         same thing and are no longer listed — the resume-list
+ *                         "Score Resume" button checks '<source>:score'.
+ *   Invite Candidates     sending invitations from a module
+ *   Invite to Assessment  sending a resume to an assessment from a resume list
+ *   Run AI Talent Match   running AI Talent Match
+ *   Upgrade Plan          plan upgrade from Current Plan / Usage
  */
 
 export interface CustomPermissionAction {
@@ -47,8 +64,8 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       { code: 'jd:archive', label: 'Archive' },
       { code: 'jd:disable', label: 'Disable' },
       { code: 'jd:export', label: 'Export' },
-      { code: 'jd:invite', label: 'Invite' },
-      { code: 'jd:add_applicants', label: 'Add Applicants' },
+      { code: 'jd:invite', label: 'Invite Candidates' },
+      { code: 'jd:add_applicants', label: 'Score Resume' },
     ],
     // Rule: JD Invite requires Assessment Invite (this is what actually sends
     // the invitation server-side — see app/routers/assessments.py's
@@ -76,9 +93,9 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     description: 'Resume scoring permissions (auto-enables Resume Upload)',
     viewCode: 'scoring:read',
     actions: [
-      { code: 'scoring:score', label: 'Score Resumes' },
+      { code: 'scoring:score', label: 'Score Resume' },
       { code: 'scoring:export', label: 'Export' },
-      { code: 'scoring:invite', label: 'Invite' },
+      { code: 'scoring:invite', label: 'Invite Candidates' },
       { code: 'scoring:download', label: 'Download Scorecard' },
     ],
     // Rule: Enable Score Resumes → auto-enable Job Description view + My
@@ -118,8 +135,8 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     description: 'AI-powered talent matching permissions',
     viewCode: 'ai_match:read',
     actions: [
-      { code: 'ai_match:run', label: 'Run AI Match' },
-      { code: 'ai_match:score', label: 'Score Resumes' },
+      { code: 'ai_match:run', label: 'Run AI Talent Match' },
+      { code: 'ai_match:score', label: 'Score Resume' },
       { code: 'ai_match:export', label: 'Export' },
     ],
     // Rule: Run AI Match requires both Job Description and Shared Database
@@ -141,9 +158,8 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       { code: 'my_resumes:upload', label: 'Upload' },
       { code: 'my_resumes:delete', label: 'Delete' },
       { code: 'my_resumes:archive', label: 'Archive' },
-      { code: 'my_resumes:apply_job', label: 'Apply to Job' },
-      { code: 'my_resumes:assessment', label: 'Assessment' },
-      { code: 'my_resumes:ai_match', label: 'AI Talent Match' },
+      { code: 'my_resumes:assessment', label: 'Invite to Assessment' },
+      { code: 'my_resumes:ai_match', label: 'Run AI Talent Match' },
       { code: 'my_resumes:score', label: 'Score Resume' },
       { code: 'my_resumes:share', label: 'Share Resume' },
     ],
@@ -161,9 +177,8 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     actions: [
       { code: 'internal_db:archive', label: 'Archive' },
       { code: 'internal_db:delete', label: 'Delete' },
-      { code: 'internal_db:apply_job', label: 'Apply to Job' },
-      { code: 'internal_db:assessment', label: 'Assessment' },
-      { code: 'internal_db:ai_match', label: 'AI Talent Match' },
+      { code: 'internal_db:assessment', label: 'Invite to Assessment' },
+      { code: 'internal_db:ai_match', label: 'Run AI Talent Match' },
       { code: 'internal_db:score', label: 'Score Resume' },
       { code: 'internal_db:share', label: 'Share Resume' },
     ],
@@ -200,7 +215,7 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       // 'scoring:invite' etc. above were pointed at 'assessments:share' (a
       // different, real permission that only gates the "Share" link action)
       // instead.
-      { code: 'assessments:invite', label: 'Invite' },
+      { code: 'assessments:invite', label: 'Invite Candidates' },
       { code: 'assessments:share', label: 'Share' },
       { code: 'assessments:download_report', label: 'Download Report' },
       { code: 'assessments:batch_download', label: 'Batch Download' },
@@ -216,9 +231,14 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     // actions are). Declared here so disabling a role's Job Description
     // access warns about breaking Assessment creation and editing, not just
     // Resume Scoring.
+    // Add Question requires Edit (app/services/permission_dependencies.py:
+    // assessments:add_question -> assessments:update) — adding a question edits
+    // the assessment, so ticking it without Edit left a combination the
+    // server rejects.
     dependencies: {
       'assessments:create': ['jd:read'],
       'assessments:update': ['jd:read'],
+      'assessments:add_question': ['assessments:update'],
     },
   },
   {
@@ -229,7 +249,7 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     actions: [
       { code: 'ai_interview:create', label: 'Create' },
       { code: 'ai_interview:update', label: 'Edit' },
-      { code: 'ai_interview:invite', label: 'Invite' },
+      { code: 'ai_interview:invite', label: 'Invite Candidates' },
       { code: 'ai_interview:publish', label: 'Publish' },
       { code: 'ai_interview:archive', label: 'Archive' },
       { code: 'ai_interview:delete', label: 'Delete' },
@@ -318,14 +338,14 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
         name: 'Current Plan',
         viewCode: 'current_plan:read',
         actions: [
-          { code: 'billing:upgrade', label: 'Upgrade' },
+          { code: 'billing:upgrade', label: 'Upgrade Plan' },
         ],
       },
       {
         name: 'Usage & Quotas',
         viewCode: 'usage:read',
         actions: [
-          { code: 'usage:upgrade', label: 'Upgrade' },
+          { code: 'usage:upgrade', label: 'Upgrade Plan' },
           { code: 'usage:export', label: 'Export' },
         ],
       },
@@ -456,3 +476,80 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     ],
   },
 ];
+
+/**
+ * Granted to EVERY user regardless of role — the backend re-adds them on every
+ * save (app/config/mandatory_permissions.py BASELINE_PERMISSIONS) and the Edit
+ * User popup shows them as "(always on)". Role popups include them so a role's
+ * count matches what its users actually get (Standard User = 2, not 0).
+ */
+export const ALWAYS_ON_PERMISSION_CODES = ['analytics:read', 'support:read'] as const;
+
+export interface PermissionDisplayItem {
+  code: string;
+  label: string;
+}
+
+export interface PermissionDisplaySection {
+  id: string;
+  name: string;
+  items: PermissionDisplayItem[];
+}
+
+const subActionLabel = (label: string, subName: string): string =>
+  label === 'View' ? `View ${subName}` : `${label} (${subName})`;
+
+/**
+ * Every permission the UI exposes, grouped and labelled exactly as the Edit User
+ * popup shows them (section name, "View <section>" for the view code, action labels).
+ */
+export const getPermissionDisplaySections = (): PermissionDisplaySection[] =>
+  CUSTOM_PERMISSION_CATEGORIES.map((category) => {
+    const items: PermissionDisplayItem[] = [];
+    if (category.viewCode) items.push({ code: category.viewCode, label: `View ${category.name}` });
+    category.actions?.forEach((action) => items.push({ code: action.code, label: action.label }));
+    category.subCategories?.forEach((sub) => {
+      if (sub.viewCode) items.push({ code: sub.viewCode, label: `View ${sub.name}` });
+      sub.actions.forEach((action) => items.push({ code: action.code, label: subActionLabel(action.label, sub.name) }));
+    });
+    return { id: category.id, name: category.name, items };
+  });
+
+/** Screen label for any catalogue code, with its section for actions:
+ *  "View Job Description", "Score Resume (Resume Scoring)", "Manage (General Settings)". */
+export const getPermissionLabel = (code: string): string => {
+  for (const cat of CUSTOM_PERMISSION_CATEGORIES) {
+    if (cat.viewCode === code) return `View ${cat.name}`;
+    const action = cat.actions?.find((a) => a.code === code);
+    if (action) return `${action.label} (${cat.name})`;
+    for (const sub of cat.subCategories || []) {
+      if (sub.viewCode === code) return `View ${sub.name}`;
+      const subAction = sub.actions.find((a) => a.code === code);
+      if (subAction) return subAction.label === 'View' ? `View ${sub.name}` : `${subAction.label} (${sub.name})`;
+    }
+  }
+  return code;
+};
+
+/**
+ * The permission dependency rules exactly as the Edit User / Edit Role screens
+ * apply them (each category's `dependencies` above, which mirror the server's
+ * app/services/permission_dependencies.py). The Feature Dependency Matrix popup
+ * renders THIS, so it always shows the rules that are really enforced. Implicit
+ * "every action needs its section's View" rules are not listed.
+ */
+export const getCatalogDependencyMatrix = () => {
+  const dependencies: Record<string, string[]> = {};
+  CUSTOM_PERMISSION_CATEGORIES.forEach((cat) => {
+    Object.entries(cat.dependencies || {}).forEach(([code, deps]) => {
+      dependencies[code] = Array.from(new Set([...(dependencies[code] || []), ...deps]));
+    });
+  });
+  const reverse_dependencies: Record<string, string[]> = {};
+  Object.entries(dependencies).forEach(([code, deps]) =>
+    deps.forEach((d) => (reverse_dependencies[d] ||= []).push(code)),
+  );
+  const features = Array.from(new Set([...Object.keys(dependencies), ...Object.keys(reverse_dependencies)]));
+  const feature_names = Object.fromEntries(features.map((c) => [c, getPermissionLabel(c)]));
+  return { features, dependencies, reverse_dependencies, feature_names };
+};

@@ -1376,6 +1376,7 @@ export default function AIInterviewConfig() {
   // Set when loadJD decides to navigate elsewhere, so the loader stays on screen
   // through the handoff instead of flashing an empty page.
   const [redirecting, setRedirecting] = useState(false);
+  const loadedStatusRef = useRef<string | null>(null); // status of the config this page opened (published → editing a live version)
   const existingDraftIdRef = useRef<string | null>(null); // track draft id for auto-save updates
   // True only when existingDraftIdRef was populated from a draft that already
   // existed before this page loaded (resumed via "Continue Editing" / found by
@@ -1662,6 +1663,7 @@ export default function AIInterviewConfig() {
         // when the user navigates back from the Clusters page.
         if (existingDraft) {
           existingDraftIdRef.current = existingDraft.id;
+          loadedStatusRef.current = existingDraft.status ?? null;
           draftExistedOnLoadRef.current = true;
           setMode(modeFromConfig(
             (existingDraft as any).special_instructions,
@@ -2537,6 +2539,9 @@ export default function AIInterviewConfig() {
 
   /* Cluster config as JSON for special_instructions */
   const buildClusterJson = () => JSON.stringify({
+    // The step this save was made from — a draft reopens here (see
+    // aiInterviewDraftResume), even when clusters were generated earlier.
+    wizard_step: CURRENT_STEP,
     interview_mode: mode,
     per_question_seconds: mode === 'fixed' ? perQuestionSeconds : undefined,
     // Speech-to-Text model the backend uses to transcribe the candidate.
@@ -2611,6 +2616,9 @@ export default function AIInterviewConfig() {
         title: `${selectedJd.title} - AI Interview`,
         save_as_draft: true,
         save_and_exit: isExiting,
+        // Saving a published (not yet invited) version as a draft takes it
+        // off "published" — otherwise it kept showing Published after Save as Draft.
+        ...(isExiting && loadedStatusRef.current === 'published' && { status: 'draft' }),
         semantic_skill_check: false,
         special_instructions: buildClusterJson(),
         introduction_video_url: introVideoUrl || undefined,
@@ -2625,6 +2633,7 @@ export default function AIInterviewConfig() {
       // This save carried the exit flag, so the server has just written the
       // visit's checkpoint row — the unmount net must not write a second one.
       if (isExiting) exitCheckpointedRef.current = true;
+      if (isExiting && loadedStatusRef.current === 'published') loadedStatusRef.current = 'draft';
       if (!silent) toast.success('Draft saved!');
       return true;
     } catch (err: any) {

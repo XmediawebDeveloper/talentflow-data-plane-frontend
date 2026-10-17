@@ -2447,6 +2447,7 @@ export default function AIInterviewClusters() {
             }
           }
 
+          si.wizard_step = CURRENT_STEP;
           const _updated = await aiInterviewService.update(id, {
             special_instructions: JSON.stringify(si),
             rounds_config: rounds,
@@ -2802,6 +2803,7 @@ export default function AIInterviewClusters() {
           console.warn('[Clusters] AI skill distribution failed; falling back to local preview', distErr);
         }
       }
+      si.wizard_step = CURRENT_STEP;
       await aiInterviewService.update(id, {
         special_instructions: JSON.stringify(si),
         rounds_config: buildUpdatedRoundsConfig(),
@@ -2924,6 +2926,8 @@ export default function AIInterviewClusters() {
       if (isFlexible) {
         si.flexible_finalized = isFinalized;
       }
+      // A draft saved here reopens here, not on Configure.
+      si.wizard_step = CURRENT_STEP;
       await aiInterviewService.update(id, {
         special_instructions: JSON.stringify(si),
         rounds_config: buildUpdatedRoundsConfig(),
@@ -2933,6 +2937,9 @@ export default function AIInterviewClusters() {
         // trail should show "Saved as Draft" / "Draft Updated" once — see
         // update_interview in routers/ai_interview.py.
         save_and_exit: true,
+        // Editing a published (uninvited) version: saving it as a draft takes
+        // it off "published" instead of leaving it live.
+        ...(config.status === 'published' && { status: 'draft' }),
       });
       toast.success('Draft saved!');
       router.push(exitHref);

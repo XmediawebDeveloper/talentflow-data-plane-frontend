@@ -17,7 +17,6 @@ import { ArrowLeft,
   Plus,
   Pencil,
   Ban,
-  X,
   Mail,
   Calendar,
   Loader2,
@@ -39,7 +38,7 @@ import { ArrowLeft,
 import { toast } from 'sonner';
 import { handleUnauthorized } from '@/lib/services/api';
 import authService from '@/lib/services/authService';
-import rbacService from '@/lib/services/rbacService';
+import rbacService, { formatRoleName } from '@/lib/services/rbacService';
 import userService from '@/lib/services/userService';
 import { RoleListItem, Permission } from '@/lib/types/rbac';
 import { UserRole } from '@/lib/types/tenant';
@@ -58,6 +57,15 @@ import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { formatISTDate, formatIST } from '@/lib/utils/dateUtils';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { Skeleton } from '@/components/ui/skeleton';
+import AppModal from '@/components/ui/app-modal';
+import PermissionSectionsView, {
+  PermissionSectionsSkeleton,
+  fetchRoleShownCounts,
+  AlwaysOnPermissionsNote,
+  withAlwaysOnPermissions,
+  countGrantedPermissions,
+  permissionBadgeClass,
+} from '@/components/roles/PermissionSectionsView';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -65,6 +73,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Tooltip } from '@/components/ui/tooltip';
+import { useBreadcrumbOffset } from '@/components/ai-interview/AIInterviewStepIndicator';
 
 // Types
 interface UserPermissions {
@@ -169,7 +178,7 @@ const getPermissionDisplayName = (code: string): string => {
   for (const cat of CUSTOM_PERMISSION_CATEGORIES) {
     if (cat.viewCode === code) return cat.name;
     const action = cat.actions?.find(a => a.code === code);
-    if (action) return action.label;
+    if (action) return `${action.label} (${cat.name})`;
     for (const sub of cat.subCategories || []) {
       if (sub.viewCode === code) return `View ${sub.name}`;
       const subAction = sub.actions.find(a => a.code === code);
@@ -384,8 +393,9 @@ const hashString = (str: string): number => {
 // Get role label - use RBAC name or fallback to defaults
 const getRoleLabel = (role: string, availableRoles: RoleListItem[]): string => {
   const rbacRole = availableRoles.find(r => r.code.toLowerCase() === role.toLowerCase());
-  if (rbacRole) return rbacRole.name;
-  return defaultRoleLabels[role.toLowerCase()] || role.charAt(0).toUpperCase() + role.slice(1);
+  // Role names are always shown in CAPITALS (see formatRoleName in rbacService).
+  if (rbacRole) return formatRoleName(rbacRole.name);
+  return formatRoleName(defaultRoleLabels[role.toLowerCase()] || role);
 };
 
 // Get role badge color - system roles use default colors, custom roles get distinct colors from palette
@@ -516,6 +526,8 @@ const mockUsers: ApiUser[] = [
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
 export default function UserManagement() {
+  // Org tab bar pins just below the sticky breadcrumb (measured height).
+  const [orgCrumbRef, orgCrumbHeight] = useBreadcrumbOffset();
   const router = useRouter();
   const { user: currentUser, refreshUser } = useAuth();
   const dialog = useGlobalDialog();
@@ -567,12 +579,17 @@ export default function UserManagement() {
   // during which the cards fall back to the old (possibly-undercounted but
   // available) client tally rather than showing nothing.
   const [userCounts, setUserCounts] = useState<{ active_users: number; inactive_users: number; total_users: number } | null>(null);
+  // Total = active + inactive (every account), so the three cards always add up.
+  // Active is what counts against the plan's seat limit, so the limit sits on that card.
+  const activeUsersCount = userCounts ? userCounts.active_users : users.filter(u => u.is_active).length;
+  const inactiveUsersCount = userCounts ? userCounts.inactive_users : users.filter(u => !u.is_active).length;
+  const totalUsersCount = activeUsersCount + inactiveUsersCount;
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  // Drill-in pattern: cards-first overview, switch to list+search when a stat
-  // card is clicked. `statusFilter` carries the card that was clicked so the
-  // list is pre-filtered.
-  const [pageView, setPageView] = useState<'cards' | 'list'>('cards');
+  // The page always opens on the Total Users list (client request 2026-10-17);
+  // clicking a stat card re-filters it. `statusFilter` carries the card that was
+  // clicked so the list is pre-filtered.
+  const [pageView, setPageView] = useState<'cards' | 'list'>('list');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const listSectionRef = useRef<HTMLDivElement | null>(null);
   const [listScrollRequest, setListScrollRequest] = useState(0);
@@ -594,6 +611,19 @@ export default function UserManagement() {
   const [editingUser, setEditingUser] = useState<ApiUser | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [availableRoles, setAvailableRoles] = useState<RoleListItem[]>([]);
+  // Default permission count per role, shown on the role chips/cards — the same
+  // number the Roles list and role popup show (tickable + 2 always on).
+  const [roleDefaultCounts, setRoleDefaultCounts] = useState<Record<number, number>>({});
+  useEffect(() => {
+    if (availableRoles.length === 0) return;
+    let cancelled = false;
+    fetchRoleShownCounts(availableRoles.map((r) => r.id)).then((counts) => {
+      if (!cancelled) setRoleDefaultCounts(counts);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [availableRoles]);
   const [allPermissions, setAllPermissions] = useState<Permission[]>([]);
   const [selectedRoleId, setSelectedRoleId] = useState<number | null>(null);
   const [editSelectedRoleId, setEditSelectedRoleId] = useState<number | null>(null);
@@ -643,7 +673,13 @@ export default function UserManagement() {
 
   // View role permissions popup (same as RoleManagement view modal)
   const [viewingRolePopup, setViewingRolePopup] = useState<RoleListItem | null>(null);
+  // Same popup, opened from a user row's "+N more" permissions chip.
+  const [viewingUserPermissions, setViewingUserPermissions] = useState<ApiUser | null>(null);
   const [viewingRolePopupPermissions, setViewingRolePopupPermissions] = useState<Permission[]>([]);
+  // Role / user permission popups include the always-on pair every user gets,
+  // so the count matches Edit User (Standard User = 2, not 0).
+  const viewingRolePopupCodes = withAlwaysOnPermissions(viewingRolePopupPermissions.map((p) => p.code));
+  const viewingRolePopupShownCount = countGrantedPermissions(viewingRolePopupCodes);
   const [isViewingRolePopupLoading, setIsViewingRolePopupLoading] = useState(false);
 
   // Reset Password modal — offers BOTH "email a temp password" and "set directly".
@@ -698,11 +734,10 @@ export default function UserManagement() {
   const rootRef = useScrollRestoration<HTMLElement>('org-user-management', !isLoading, [pageView]);
   useListStatePersistence(
     'org-user-management',
-    { statusFilter, searchQuery, itemsPerPage },
+    { searchQuery, itemsPerPage },
     (s) => {
-      if (s.statusFilter === 'all' || s.statusFilter === 'active' || s.statusFilter === 'inactive') {
-        setStatusFilter(s.statusFilter as typeof statusFilter);
-      }
+      // statusFilter is deliberately NOT restored — the page always opens on
+      // Total Users.
       if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
       if (typeof s.itemsPerPage === 'number') setItemsPerPage(s.itemsPerPage);
     },
@@ -850,18 +885,49 @@ export default function UserManagement() {
     }
   };
 
+  const [isResettingEditPermissions, setIsResettingEditPermissions] = useState(false);
+  // Last role chip applied in the Edit User popup (so re-clicking it is a no-op).
+  const editingRoleSelectionRef = useRef<number | null>(null);
+
+  // Load a role's default permissions into the Edit User checklist (role chip
+  // click and Reset). Kept to the codes the checklist shows — the same filter
+  // used when the popup loads a user's saved permissions — plus the baseline.
+  const applyRoleDefaultsToEditor = async (roleId: number) => {
+    const requestId = ++selectRoleRequestIdRef.current;
+    setIsResettingEditPermissions(true);
+    try {
+      const role = await rbacService.getRoleById(roleId);
+      if (requestId !== selectRoleRequestIdRef.current) return; // a newer click won
+      const shown = new Set(getAllCustomPermissionCodes());
+      const codes = new Set<string>((role.permissions || []).map(p => p.code).filter(c => shown.has(c)));
+      setEditSelectedPermissionCodes(codes);
+      toast.success(`Permissions set to ${role.name} defaults`);
+    } catch (error) {
+      if (requestId !== selectRoleRequestIdRef.current) return;
+      console.error('Failed to load role default permissions:', error);
+      toast.error('Failed to load role permissions');
+    } finally {
+      if (requestId === selectRoleRequestIdRef.current) setIsResettingEditPermissions(false);
+    }
+  };
+
   const selectRole = async (roleId: number, isEdit: boolean = false) => {
     if (isEdit) {
-      // Switching an EXISTING user's assigned role must not discard whatever
-      // permission customizations are currently shown in the editor — this
-      // used to fetch the clicked role's raw default template and overwrite
-      // editSelectedPermissionCodes/Ids with it, silently wiping out the
-      // user's real saved permission overrides (or edits made earlier in the
-      // same session) out from under the admin. Role assignment and
-      // permission overrides are edited independently in this modal: the
-      // permissions checklist keeps whatever it already shows, and role only
-      // changes the `role`/`role_id` columns that get saved.
+      // Picking a role in Edit User applies that role's default permissions to
+      // the checklist. Picking the user's ORIGINAL role again restores their
+      // saved permissions (not the role template), so custom overrides are never
+      // silently lost; Reset is the explicit "role defaults" action. Nothing is
+      // persisted until Save Changes — Cancel discards it all.
       setEditSelectedRoleId(roleId);
+      if (roleId === editingRoleSelectionRef.current) return; // same chip clicked again
+      editingRoleSelectionRef.current = roleId;
+      if (roleId === editOriginalRoleId) {
+        ++selectRoleRequestIdRef.current; // drop any in-flight role-defaults load
+        setEditSelectedPermissionCodes(new Set(editOriginalPermissionCodes));
+        toast.info("Restored this user's saved permissions");
+        return;
+      }
+      await applyRoleDefaultsToEditor(roleId);
       return;
     }
 
@@ -905,6 +971,62 @@ export default function UserManagement() {
       }
     }
   };
+
+  // "+N more" in the Permissions column: the user's real permissions in the shared
+  // read-only popup. Resolved the same way the Edit User popup resolves them:
+  // the user's saved permission_ids, else the list-cached ids, else role defaults.
+  const handleViewUserPermissions = async (user: ApiUser) => {
+    setViewingUserPermissions(user);
+    setIsViewingRolePopupLoading(true);
+    setViewingRolePopupPermissions([]);
+    try {
+      const perms = await loadAllPermissions();
+      const fresh = await userService.getUser(user.id);
+      const ids: number[] =
+        Array.isArray(fresh.permission_ids) && fresh.permission_ids.length > 0
+          ? fresh.permission_ids
+          : user.permission_ids ?? [];
+      let granted = perms.filter((p) => ids.includes(p.id));
+      if (granted.length === 0) {
+        const role = availableRoles.find((r) => r.code.toLowerCase() === user.role.toLowerCase());
+        if (role) {
+          const rolePerms = await userService.getRolePermissions(role.id);
+          granted = perms.filter((p) => rolePerms.permission_codes.includes(p.code));
+        }
+      }
+      setViewingRolePopupPermissions(granted);
+    } catch (error) {
+      console.error('Failed to load user permissions:', error);
+      toast.error('Failed to load permissions');
+    } finally {
+      setIsViewingRolePopupLoading(false);
+    }
+  };
+
+  const closePermissionsPopup = () => {
+    setViewingRolePopup(null);
+    setViewingUserPermissions(null);
+    setViewingRolePopupPermissions([]);
+  };
+
+  // "Allocated Permissions" list shared by the role and user permission popups.
+  const renderAllocatedPermissions = () => (
+    <>
+      <h3 className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide mb-3 sm:mb-4 flex items-center gap-1.5">
+        <Shield className="w-3.5 h-3.5 text-brand-blue" />
+        Allocated Permissions ({viewingRolePopupShownCount})
+      </h3>
+
+      {isViewingRolePopupLoading ? (
+        <PermissionSectionsSkeleton sections={2} Skeleton={Skeleton} />
+      ) : (
+        <>
+          <AlwaysOnPermissionsNote />
+          <PermissionSectionsView codes={viewingRolePopupCodes} showAll />
+        </>
+      )}
+    </>
+  );
 
   const handleViewRolePopup = async (role: RoleListItem, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1153,6 +1275,18 @@ export default function UserManagement() {
       // Select all
       setEditSelectedPermissionCodes(new Set(allCodes));
     }
+  };
+
+  // Reset: replace the editor's checklist with the selected role's default
+  // permissions (the role chip alone deliberately keeps the user's
+  // customizations — see selectRole). Baseline permissions stay on. Not saved
+  // until Save Changes.
+  const handleResetEditPermissionsToRole = async () => {
+    if (!editSelectedRoleId) {
+      toast.error('Select a role first');
+      return;
+    }
+    await applyRoleDefaultsToEditor(editSelectedRoleId);
   };
 
   // Select/Deselect all permissions in a module for create modal
@@ -1661,6 +1795,7 @@ export default function UserManagement() {
       // Store original permissions for comparison later
       setEditOriginalPermissionIds(new Set(currentPermissionIds));
       setEditOriginalRoleId(matchingRole?.id || null);
+      editingRoleSelectionRef.current = matchingRole?.id ?? null;
 
       // Also initialize permission codes based on permission IDs
       // Only include codes that are recognized in CUSTOM_PERMISSION_CATEGORIES to prevent
@@ -1688,9 +1823,11 @@ export default function UserManagement() {
       console.log(`[EDIT USER] Permission codes:`, Array.from(currentPermissionCodes));
     } catch (error) {
       console.error('Error fetching user permissions for edit:', error);
-      // Fallback to empty permissions if fetch fails
-      setEditSelectedPermissionIds(new Set());
-      setEditOriginalPermissionIds(new Set());
+      // Don't leave the popup open with nothing (or the previous user's ticks)
+      // loaded: Save Changes would REPLACE this user's real permissions with
+      // that. Close it and let the admin retry.
+      resetEditModal();
+      toast.error("Couldn't load this user's permissions (network error). Nothing was changed — please try again.");
     } finally {
       setIsLoadingPermissions(false);
     }
@@ -1705,6 +1842,7 @@ export default function UserManagement() {
     setEditSelectedPermissionCodes(new Set());
     setEditOriginalPermissionCodes(new Set()); // ⚠️ FIX: was missing — stale original codes caused incorrect permissionsChanged detection
     setEditOriginalRoleId(null);
+    editingRoleSelectionRef.current = null;
   };
 
   const handleDeleteUser = async (id: string) => {
@@ -2208,10 +2346,10 @@ export default function UserManagement() {
     <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
-      <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users' }]} />
+      <PageBreadcrumb barRef={orgCrumbRef} className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users' }]} />
 
       {/* Shared organization tab bar — Users is the first tab */}
-      <OrganizationTabs />
+      <OrganizationTabs stickyTop={orgCrumbHeight} />
 
       {/* Active tab + its data enclosed together in one bordered panel that
           connects to the tab bar's baseline (-mt-5 cancels the tab bar's mb-5). */}
@@ -2273,37 +2411,37 @@ export default function UserManagement() {
       <StatsCardGrid columns={3}>
         <StatsCard
           label="Total Users"
-          value={
-            <span className="flex items-baseline gap-1">
-              {limits?.current_users ?? userCounts?.total_users ?? users.length}
-              <span className="text-sm font-normal text-gray-400 dark:text-slate-500">
-                / {limits?.max_users === -1 ? '∞' : (limits?.max_users ?? '—')}
-              </span>
-            </span>
-          }
+          value={totalUsersCount}
           icon={UsersIcon}
           tone="neutral"
-          sparkVariant={0}
+          sparkline={false}
           onClick={() => openListView('all')}
           active={isOverviewCardActive('all')}
           showClickArrow
         />
         <StatsCard
           label="Active Users"
-          value={userCounts ? userCounts.active_users : users.filter(u => u.is_active).length}
+          value={
+            <span className="flex items-baseline gap-1">
+              {activeUsersCount}
+              <span className="text-sm font-normal text-gray-400 dark:text-slate-500">
+                / {limits?.max_users === -1 ? '∞' : (limits?.max_users ?? '—')}
+              </span>
+            </span>
+          }
           icon={UserCheck}
           tone="neutral"
-          sparkVariant={1}
+          sparkline={false}
           onClick={() => openListView('active')}
           active={isOverviewCardActive('active')}
           showClickArrow
         />
         <StatsCard
           label="Inactive Users"
-          value={userCounts ? userCounts.inactive_users : users.filter(u => !u.is_active).length}
+          value={inactiveUsersCount}
           icon={UserX}
           tone="neutral"
-          sparkVariant={2}
+          sparkline={false}
           onClick={() => openListView('inactive')}
           active={isOverviewCardActive('inactive')}
           showClickArrow
@@ -2510,9 +2648,14 @@ export default function UserManagement() {
                             </span>
                           ))}
                         {Object.values(user.permissions).filter(v => v).length > 3 && (
-                          <span className="px-2 py-0.5 text-xs font-medium bg-brand-cyan/5 text-brand-cyan rounded ring-1 ring-brand-cyan/15">
+                          <button
+                            type="button"
+                            onClick={() => handleViewUserPermissions(user)}
+                            title="View all permissions"
+                            className="px-2 py-0.5 text-xs font-medium bg-brand-cyan/5 text-brand-cyan rounded ring-1 ring-brand-cyan/15 hover:bg-brand-cyan/10 hover:ring-brand-cyan/30 transition-colors cursor-pointer"
+                          >
                             +{Object.values(user.permissions).filter(v => v).length - 3} more
-                          </span>
+                          </button>
                         )}
                       </div>
                     </td>
@@ -2662,32 +2805,25 @@ export default function UserManagement() {
 
       {/* Create User Modal */}
       {isCreateModalOpen && (
-        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-[95vw] sm:max-w-2xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col tf-round-edges">
-            {/* Header strip */}
-            <div className="bg-brand-blue px-4 sm:px-6 py-4 flex items-center justify-between gap-3 shrink-0">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25 backdrop-blur-sm flex-shrink-0">
-                  <Plus className="w-5 h-5 text-white" />
-                </div>
-                <div className="min-w-0">
-                  <h2 className="text-base sm:text-lg font-bold text-white truncate">Invite New User</h2>
-                  <p className="text-xs text-white/80 mt-0.5 truncate">Create an account and send an invite email</p>
-                </div>
-              </div>
-              <Button
-                variant="secondary"
-                tone="onColor"
-                size="sm"
-                onClick={resetCreateModal}
-                className="px-2 flex-shrink-0"
-                aria-label="Close"
-              >
-                <X className="w-5 h-5" />
-              </Button>
-            </div>
-
-            <div className="space-y-4 px-4 sm:px-6 py-4 sm:py-5 overflow-y-auto flex-1">
+        <AppModal
+          open
+          size="md"
+          zIndexClass="z-50"
+          onCancel={resetCreateModal}
+          cancelDisabled={isSaving}
+          icon={<Plus />}
+          title="Invite New User"
+          subtitle="Create an account and send an invite email"
+          actions={[
+            {
+              label: 'Create User',
+              onClick: handleCreateUser,
+              disabled: isSaving || !emailCheckResult.available || isCheckingEmail,
+              icon: isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />,
+            },
+          ]}
+        >
+            <div className="space-y-4">
               <div>
                 <Label className="mb-1.5">
                   Full Name <span className="text-destructive">*</span>
@@ -2769,7 +2905,15 @@ export default function UserManagement() {
                             </span>
                             {isSystemRole && (
                               <span className="text-2xs font-medium text-brand-cyan bg-brand-cyan/10 ring-1 ring-brand-cyan/20 px-1.5 py-0.5 rounded flex-shrink-0">
-                                System
+                                Default role
+                              </span>
+                            )}
+                            {roleDefaultCounts[role.id] !== undefined && (
+                              <span
+                                title={`${roleDefaultCounts[role.id]} default permissions in this role`}
+                                className="text-2xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/15 px-1.5 py-0.5 rounded flex-shrink-0"
+                              >
+                                {roleDefaultCounts[role.id]} permissions
                               </span>
                             )}
                           </div>
@@ -2782,14 +2926,23 @@ export default function UserManagement() {
                         {role.description && (
                           <p className="text-xs text-gray-500 dark:text-slate-500 mt-1 line-clamp-1">{role.description}</p>
                         )}
-                        <button
-                          type="button"
+                        {/* span, not <button>: a button inside the role-card <button> is
+                            invalid HTML and raised a hydration error. */}
+                        <span
+                          role="button"
+                          tabIndex={0}
                           onClick={(e) => handleViewRolePopup(role, e)}
-                          className="mt-2 flex items-center gap-1 text-xs font-medium text-brand-cyan hover:text-brand-blue transition-colors"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              handleViewRolePopup(role, e as unknown as React.MouseEvent);
+                            }
+                          }}
+                          className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-brand-cyan hover:text-brand-blue transition-colors cursor-pointer"
                         >
                           <Eye className="w-3 h-3" />
                           View Permissions
-                        </button>
+                        </span>
                       </button>
                     );
                   })}
@@ -2818,119 +2971,59 @@ export default function UserManagement() {
                       <span className="ml-2 text-sm text-gray-500 dark:text-slate-500">Loading...</span>
                     </div>
                   ) : (
-                    <div className="space-y-3 max-h-[250px] overflow-y-auto border border-gray-200 dark:border-slate-700 rounded-lg p-3 bg-gray-50 dark:bg-slate-800/50">
-                      {CUSTOM_PERMISSION_CATEGORIES.map(category => {
-                        // Check if any permission in this category is selected
-                        const hasAnyPermission = () => {
-                          if (category.actions) {
-                            if (category.actions.some(a => selectedPermissionCodes.has(a.code))) return true;
-                          }
-                          if (category.subCategories) {
-                            for (const sub of category.subCategories) {
-                              if (sub.actions.some(a => selectedPermissionCodes.has(a.code))) return true;
-                            }
-                          }
-                          return false;
-                        };
-
-                        // Only show categories that have at least one permission
-                        if (!hasAnyPermission()) return null;
-
-                        // Feature not in the plan: shown greyed with the plan hover, not hidden.
-                        if (!isCategoryVisible(category.id)) return renderPlanLockedCategory(category.id, category.name);
-
-                        // Collect all selected actions for this category
-                        const selectedActions: string[] = [];
-                        if (category.actions) {
-                          category.actions.filter(a => selectedPermissionCodes.has(a.code)).forEach(a => selectedActions.push(a.label));
-                        }
-                        if (category.subCategories) {
-                          category.subCategories.forEach(sub => {
-                            sub.actions.filter(a => selectedPermissionCodes.has(a.code)).forEach(a => {
-                              selectedActions.push(`${sub.name}: ${a.label}`);
-                            });
-                          });
-                        }
-
-                        return (
-                          <div key={category.id} className="flex items-start gap-2">
-                            <div className="flex-shrink-0 w-5 h-5 bg-success-subtle rounded flex items-center justify-center mt-0.5">
-                              <Check className="w-3 h-3 text-success" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm font-medium text-gray-900 dark:text-slate-50">
-                                {category.name}
-                                {category.isMenuToggle && (
-                                  <span className="ml-2 text-xs text-success bg-success-subtle px-1.5 py-0.5 rounded">
-                                    Menu Access
-                                  </span>
-                                )}
-                              </div>
-                              <div className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">
-                                {selectedActions.join(' • ')}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-
-                      {/* Show message if no custom permissions found */}
-                      {selectedPermissionCodes.size === 0 && (
-                        <div className="text-center py-4 text-gray-500 dark:text-slate-500 text-sm">
-                          No permissions assigned to this role yet.
-                          <br />
-                          <span className="text-xs">Configure permissions in Role Management.</span>
-                        </div>
-                      )}
-                    </div>
+                    selectedPermissionCodes.size === 0 ? (
+                      <div className="text-center py-4 text-gray-500 dark:text-slate-500 text-sm">
+                        No permissions assigned to this role yet.
+                        <br />
+                        <span className="text-xs">Configure permissions in Role Management.</span>
+                      </div>
+                    ) : (
+                      // Same read-only view as the Role details popup (PermissionSectionsView).
+                      <PermissionSectionsView
+                        codes={selectedPermissionCodes}
+                        renderLockedSection={(id, name) => (isCategoryVisible(id) ? null : renderPlanLockedCategory(id, name))}
+                      />
+                    )
                   )}
                 </div>
               )}
             </div>
-
-            <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50/50 dark:bg-slate-800/50 shrink-0">
-              <Button
-                variant="primary"
-                onClick={handleCreateUser}
-                disabled={isSaving || !emailCheckResult.available || isCheckingEmail}
-                icon={isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-              >
-                Create User
-              </Button>
-            </div>
-          </div>
-        </div>
+        </AppModal>
       )}
 
       {/* Edit User Modal - Redesigned */}
       {editingUser && (
-        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-[95vw] sm:max-w-2xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col tf-round-edges">
-            {/* Header */}
-            <div className="bg-brand-blue flex items-center justify-between px-4 sm:px-6 py-4 gap-3 shrink-0">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25 backdrop-blur-sm flex-shrink-0">
-                  <Pencil className="w-4 h-4 text-white" />
-                </div>
-                <div className="min-w-0">
-                  <h2 className="text-base sm:text-lg font-bold text-white truncate">Edit User</h2>
-                  <p className="text-xs text-white/80 mt-0.5 truncate">{editingUser.email}</p>
-                </div>
-              </div>
-              <Button
-                variant="secondary"
-                tone="onColor"
-                size="sm"
-                onClick={resetEditModal}
-                className="px-2 flex-shrink-0"
-                aria-label="Close"
-              >
-                <X className="w-5 h-5" />
-              </Button>
-            </div>
-
-            {/* Body - Scrollable */}
-            <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 sm:py-5 space-y-4 sm:space-y-5">
+        <AppModal
+          open
+          size="lg"
+          zIndexClass="z-50"
+          onCancel={resetEditModal}
+          cancelDisabled={isSaving}
+          icon={<Pencil />}
+          title="Edit User"
+          subtitle={editingUser.email}
+          footerStart={
+            <span className="text-2xs sm:text-xs font-medium text-brand-orange hidden sm:inline-flex items-center gap-1.5">
+              {editSelectedPermissionCodes.size !== editOriginalPermissionCodes.size ||
+               ![...editSelectedPermissionCodes].every(c => editOriginalPermissionCodes.has(c)) ? (
+                <>
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-brand-orange" />
+                  Unsaved changes
+                </>
+              ) : ''}
+            </span>
+          }
+          actions={[
+            {
+              label: 'Save Changes',
+              onClick: handleUpdateUser,
+              disabled: isSaving,
+              icon: isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : undefined,
+            },
+          ]}
+        >
+            {/* Body - Scrollable (AppModal) */}
+            <div className="space-y-4 sm:space-y-5">
               {/* User Details Row */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
@@ -2970,6 +3063,16 @@ export default function UserManagement() {
                         }`}
                       >
                         {role.name}
+                        {roleDefaultCounts[role.id] !== undefined && (
+                          <span
+                            title={`${roleDefaultCounts[role.id]} default permissions in this role`}
+                            className={`ml-2 inline-flex min-w-[1.5rem] items-center justify-center rounded-full px-1.5 py-0.5 text-2xs font-semibold align-middle ${
+                              isSelected ? 'bg-white/20 text-white' : 'bg-brand-blue/10 text-brand-blue'
+                            }`}
+                          >
+                            {roleDefaultCounts[role.id]}
+                          </span>
+                        )}
                         {isSelected && <Check className="w-3.5 h-3.5 ml-1.5 inline" />}
                       </button>
                     );
@@ -2986,45 +3089,46 @@ export default function UserManagement() {
                       Permissions
                     </label>
                     <div className="flex items-center gap-2">
-                      <button
+                      <Button
                         type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={handleResetEditPermissionsToRole}
+                        disabled={!editSelectedRoleId || isResettingEditPermissions || isLoadingPermissions}
+                        loading={isResettingEditPermissions}
+                        title="Reset to the selected role's default permissions"
+                        className="min-w-[96px]"
+                      >
+                        Reset
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
                         onClick={handleSelectAllEditPermissions}
-                        className="text-2xs font-medium text-brand-blue hover:underline"
+                        disabled={isLoadingPermissions}
+                        className="min-w-[96px]"
                       >
                         {getAllCustomPermissionCodes().every(code => editSelectedPermissionCodes.has(code))
                           ? 'Deselect all'
                           : 'Select all'}
-                      </button>
+                      </Button>
                       <span className="text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 px-2 py-0.5 rounded-full">
-                        {editSelectedPermissionCodes.size} active
+                        {/* Count only permissions shown as tiles below — a role's defaults can
+                            include legacy codes that have no checkbox. */}
+                        {getAllCustomPermissionCodes().filter(code => editSelectedPermissionCodes.has(code)).length} active
+                      </span>
+                      <span
+                        className="text-2xs font-medium text-gray-500 dark:text-slate-500 whitespace-nowrap"
+                        title="View Analytics and View Support are included for every user and can't be switched off"
+                      >
+                        incl. {MANDATORY_PERMISSION_CODES.size} always on
                       </span>
                     </div>
                   </div>
 
                   {isLoadingPermissions ? (
-                    <div className="space-y-4">
-                      {Array.from({ length: 3 }).map((_, ci) => (
-                        <div key={ci} className="border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-sm">
-                          {/* Module Header */}
-                          <div className="px-3 sm:px-4 py-2.5 border-b border-gray-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <Skeleton className="w-8 h-[18px] rounded-full flex-shrink-0" />
-                              <Skeleton className="h-4 w-32" />
-                            </div>
-                            <Skeleton className="h-3 w-16" />
-                          </div>
-                          {/* Permission Cards Grid */}
-                          <div className="p-2 sm:p-4 grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
-                            {Array.from({ length: 4 }).map((_, pi) => (
-                              <div key={pi} className="flex items-start gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border border-gray-100 dark:border-slate-800">
-                                <Skeleton className="w-6 h-6 sm:w-8 sm:h-8 rounded flex-shrink-0" />
-                                <Skeleton className="h-4 flex-1" />
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                    <PermissionSectionsSkeleton sections={3} Skeleton={Skeleton} />
                   ) : (
                     <div className="space-y-4">
                       {CUSTOM_PERMISSION_CATEGORIES.map(category => {
@@ -3143,14 +3247,15 @@ export default function UserManagement() {
                           });
                         };
 
-                        // Badge color + letter derived from permission code action segment
+                        // Badge color from the permission code's action segment; letter from the
+                        // label shown beside it ("Score Resume" -> S, a view row -> V), so the badge
+                        // never contradicts the label (e.g. "A" from jd:add_applicants).
                         const getActionBadge = (code: string) => {
                           const action = code.split(':').pop() || '';
-                          if (action === 'read') return { cls: 'bg-brand-blue/10 text-brand-blue', letter: 'R' };
-                          if (action === 'create') return { cls: 'bg-success-subtle text-success', letter: 'C' };
-                          if (action === 'update') return { cls: 'bg-warning-subtle text-warning', letter: 'U' };
-                          if (action === 'delete') return { cls: 'bg-destructive-subtle text-destructive', letter: 'D' };
-                          return { cls: 'bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-300', letter: (action[0] || 'A').toUpperCase() };
+                          const letter = action === 'read' || action === 'view'
+                            ? 'V'
+                            : (getPermissionDisplayName(code)[0] || 'A').toUpperCase();
+                          return { cls: permissionBadgeClass(action), letter };
                         };
 
                         const allCodes = [
@@ -3164,14 +3269,10 @@ export default function UserManagement() {
                         const selectedCount = allCodes.filter(c => editSelectedPermissionCodes.has(c)).length;
 
                         return (
-                          <div key={category.id} className="border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-sm">
+                          <div key={category.id} className="overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
                             {/* Module Header */}
                             <div
-                              className={`px-3 sm:px-4 py-2.5 border-b flex items-center justify-between select-none transition-colors ${
-                                isCategoryActive
-                                  ? 'bg-gradient-to-r from-brand-blue/5 to-brand-cyan/5 border-brand-blue/15'
-                                  : 'bg-slate-50 dark:bg-slate-800/50 border-gray-200 dark:border-slate-700'
-                              }`}
+                              className="flex items-center justify-between gap-3 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-3 sm:px-5 select-none"
                               onClick={category.viewCode ? toggleCategory : undefined}
                               style={category.viewCode ? { cursor: 'pointer' } : undefined}
                             >
@@ -3181,9 +3282,12 @@ export default function UserManagement() {
                                     <div className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white shadow-sm transition-transform ${isCategoryActive ? 'left-[17px]' : 'left-[2px]'}`} />
                                   </div>
                                 )}
-                                <h4 className={`font-semibold capitalize text-xs sm:text-sm ${isCategoryActive ? 'text-brand-blue' : 'text-gray-500 dark:text-slate-500'}`}>
-                                  {category.name} ({allCodes.length})
-                                </h4>
+                                <div>
+                                  <h4 className={`text-sm font-semibold ${isCategoryActive ? 'text-gray-900 dark:text-slate-50' : 'text-gray-500 dark:text-slate-500'}`}>
+                                    {category.name}
+                                  </h4>
+                                  <p className="text-xs text-gray-500 dark:text-slate-500">{allCodes.length} permission{allCodes.length !== 1 ? 's' : ''}</p>
+                                </div>
                                 {category.isMenuToggle && isCategoryActive && (
                                   <span className="text-2xs text-brand-orange bg-brand-orange/10 ring-1 ring-brand-orange/20 px-1.5 py-0.5 rounded-full font-medium">
                                     Menu
@@ -3194,7 +3298,7 @@ export default function UserManagement() {
                             </div>
 
                             {/* Permission Cards Grid */}
-                            <div className="p-2 sm:p-4 grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
+                            <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
                               {/* View card */}
                               {category.viewCode && (() => {
                                 const badge = getActionBadge(category.viewCode);
@@ -3207,13 +3311,13 @@ export default function UserManagement() {
                                       ? () => toast.info(`"View ${category.name}" is a baseline permission every account keeps — it can't be disabled.`)
                                       : () => toggleCode(category.viewCode!)}
                                     title={isMandatory ? 'Baseline permission — always enabled for every account' : undefined}
-                                    className={`flex items-start gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border transition-all select-none ${isMandatory ? 'cursor-default' : 'cursor-pointer'} ${isOn ? 'bg-brand-blue/5 border-brand-blue/30 ring-1 ring-brand-blue/20 shadow-sm' : 'bg-slate-50/50 dark:bg-slate-800/50 border-gray-100 dark:border-slate-700/60 opacity-50 hover:opacity-90 hover:border-brand-blue/30 hover:bg-brand-blue/5'}`}
+                                    className={`rounded-2xl border p-4 transition-all select-none flex items-center gap-3 ${isMandatory ? 'cursor-default' : 'cursor-pointer'} ${isOn ? 'border-brand-blue/30 bg-gradient-to-br from-white to-brand-blue/5 dark:from-slate-900 dark:to-brand-blue/10 ring-1 ring-brand-blue/20 shadow-sm' : 'border-gray-100 dark:border-slate-700/60 bg-gradient-to-br from-white to-gray-50 dark:from-slate-900 dark:to-slate-800/50 opacity-50 hover:opacity-90 hover:border-brand-blue/30'}`}
                                   >
-                                    <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded flex items-center justify-center flex-shrink-0 ${badge.cls}`}>
-                                      <span className="text-2xs sm:text-xs font-bold">{badge.letter}</span>
+                                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ring-1 ${badge.cls}`}>
+                                      <span className="text-xs font-semibold uppercase">{badge.letter}</span>
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                      <div className="font-semibold text-xs sm:text-sm text-gray-900 dark:text-slate-50">
+                                      <div className="text-sm font-semibold text-gray-900 dark:text-slate-50">
                                         View {category.name}
                                         {isMandatory && (
                                           <span className="ml-1.5 text-2xs font-normal text-gray-500 dark:text-slate-500 italic">(always on)</span>
@@ -3231,13 +3335,13 @@ export default function UserManagement() {
                                   <div
                                     key={action.code}
                                     onClick={() => toggleCode(action.code)}
-                                    className={`flex items-start gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border cursor-pointer transition-all select-none ${isOn ? 'bg-brand-blue/5 border-brand-blue/30 ring-1 ring-brand-blue/20 shadow-sm' : 'bg-slate-50/50 dark:bg-slate-800/50 border-gray-100 dark:border-slate-700/60 opacity-50 hover:opacity-90 hover:border-brand-blue/30 hover:bg-brand-blue/5'}`}
+                                    className={`rounded-2xl border p-4 transition-all select-none flex items-center gap-3 cursor-pointer ${isOn ? 'border-brand-blue/30 bg-gradient-to-br from-white to-brand-blue/5 dark:from-slate-900 dark:to-brand-blue/10 ring-1 ring-brand-blue/20 shadow-sm' : 'border-gray-100 dark:border-slate-700/60 bg-gradient-to-br from-white to-gray-50 dark:from-slate-900 dark:to-slate-800/50 opacity-50 hover:opacity-90 hover:border-brand-blue/30'}`}
                                   >
-                                    <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded flex items-center justify-center flex-shrink-0 ${badge.cls}`}>
-                                      <span className="text-2xs sm:text-xs font-bold">{badge.letter}</span>
+                                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ring-1 ${badge.cls}`}>
+                                      <span className="text-xs font-semibold uppercase">{badge.letter}</span>
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                      <div className="font-semibold text-xs sm:text-sm text-gray-900 dark:text-slate-50">{action.label}</div>
+                                      <div className="text-sm font-semibold text-gray-900 dark:text-slate-50">{action.label}</div>
                                     </div>
                                   </div>
                                 );
@@ -3323,13 +3427,13 @@ export default function UserManagement() {
                                         <div className={`absolute top-[2px] w-[10px] h-[10px] rounded-full bg-white shadow-sm transition-transform ${isSubActive ? 'left-[13px]' : 'left-[2px]'}`} />
                                       </div>
                                       <span className={`text-xs font-semibold ${isSubActive ? 'text-brand-cyan' : 'text-gray-500 dark:text-slate-500'}`}>
-                                        {sub.name} ({subAllCodes.length})
+                                        {sub.name}
                                       </span>
                                     </div>
                                     <span className="text-2xs font-medium text-gray-500 dark:text-slate-500">{subSelectedCount} selected</span>
                                   </div>
                                   {/* Sub-category cards */}
-                                  <div className="p-2 sm:p-4 grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
+                                  <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
                                     {sub.viewCode && (() => {
                                       const badge = getActionBadge(sub.viewCode);
                                       const isOn = editSelectedPermissionCodes.has(sub.viewCode);
@@ -3349,13 +3453,13 @@ export default function UserManagement() {
                                               setEditSelectedPermissionCodes(prev => { const next = new Set(prev); next.add(sub.viewCode!); if (category.viewCode) next.add(category.viewCode); return next; });
                                             }
                                           }}
-                                          className={`flex items-start gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border cursor-pointer transition-all select-none ${isOn ? 'bg-brand-cyan/5 border-brand-cyan/30 ring-1 ring-brand-cyan/20 shadow-sm' : 'bg-slate-50/50 dark:bg-slate-800/50 border-gray-100 dark:border-slate-700/60 opacity-50 hover:opacity-90 hover:border-brand-cyan/30 hover:bg-brand-cyan/5'}`}
+                                          className={`rounded-2xl border p-4 transition-all select-none flex items-center gap-3 cursor-pointer ${isOn ? 'border-brand-blue/30 bg-gradient-to-br from-white to-brand-blue/5 dark:from-slate-900 dark:to-brand-blue/10 ring-1 ring-brand-blue/20 shadow-sm' : 'border-gray-100 dark:border-slate-700/60 bg-gradient-to-br from-white to-gray-50 dark:from-slate-900 dark:to-slate-800/50 opacity-50 hover:opacity-90 hover:border-brand-blue/30'}`}
                                         >
-                                          <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded flex items-center justify-center flex-shrink-0 ${badge.cls}`}>
-                                            <span className="text-2xs sm:text-xs font-bold">{badge.letter}</span>
+                                          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ring-1 ${badge.cls}`}>
+                                            <span className="text-xs font-semibold uppercase">{badge.letter}</span>
                                           </div>
                                           <div className="flex-1 min-w-0">
-                                            <div className="font-semibold text-xs sm:text-sm text-gray-900 dark:text-slate-50">View {sub.name}</div>
+                                            <div className="text-sm font-semibold text-gray-900 dark:text-slate-50">View {sub.name}</div>
                                           </div>
                                         </div>
                                       );
@@ -3411,13 +3515,13 @@ export default function UserManagement() {
                                               }
                                             }
                                           }}
-                                          className={`flex items-start gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border cursor-pointer transition-all select-none ${isOn ? 'bg-brand-cyan/5 border-brand-cyan/30 ring-1 ring-brand-cyan/20 shadow-sm' : 'bg-slate-50/50 dark:bg-slate-800/50 border-gray-100 dark:border-slate-700/60 opacity-50 hover:opacity-90 hover:border-brand-cyan/30 hover:bg-brand-cyan/5'}`}
+                                          className={`rounded-2xl border p-4 transition-all select-none flex items-center gap-3 cursor-pointer ${isOn ? 'border-brand-blue/30 bg-gradient-to-br from-white to-brand-blue/5 dark:from-slate-900 dark:to-brand-blue/10 ring-1 ring-brand-blue/20 shadow-sm' : 'border-gray-100 dark:border-slate-700/60 bg-gradient-to-br from-white to-gray-50 dark:from-slate-900 dark:to-slate-800/50 opacity-50 hover:opacity-90 hover:border-brand-blue/30'}`}
                                         >
-                                          <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded flex items-center justify-center flex-shrink-0 ${badge.cls}`}>
-                                            <span className="text-2xs sm:text-xs font-bold">{badge.letter}</span>
+                                          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ring-1 ${badge.cls}`}>
+                                            <span className="text-xs font-semibold uppercase">{badge.letter}</span>
                                           </div>
                                           <div className="flex-1 min-w-0">
-                                            <div className="font-semibold text-xs sm:text-sm text-gray-900 dark:text-slate-50">{action.label}</div>
+                                            <div className="text-sm font-semibold text-gray-900 dark:text-slate-50">{action.label}</div>
                                           </div>
                                         </div>
                                       );
@@ -3434,31 +3538,7 @@ export default function UserManagement() {
                 </div>
               )}
             </div>
-
-            {/* Footer */}
-            <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50/50 dark:bg-slate-800/50 shrink-0">
-              <span className="text-2xs sm:text-xs font-medium text-brand-orange hidden sm:inline-flex items-center gap-1.5">
-                {editSelectedPermissionCodes.size !== editOriginalPermissionCodes.size ||
-                 ![...editSelectedPermissionCodes].every(c => editOriginalPermissionCodes.has(c)) ? (
-                  <>
-                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-brand-orange" />
-                    Unsaved changes
-                  </>
-                ) : ''}
-              </span>
-              <div className="flex gap-2">
-                <Button
-                  variant="primary"
-                  onClick={handleUpdateUser}
-                  disabled={isSaving}
-                  icon={isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : undefined}
-                >
-                  Save Changes
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
+        </AppModal>
       )}
 
       {/* RBAC06: Feature Permission Manager Modal */}
@@ -3475,24 +3555,31 @@ export default function UserManagement() {
 
       {/* Reset Password Modal — choose: email a temp password OR set one directly */}
       {resetPwUser && (
-        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4 sm:p-6">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-md ring-1 ring-black/5 max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
-            <div className="flex-shrink-0 flex items-center justify-between gap-3 px-4 sm:px-6 py-4 bg-brand-orange text-white">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25 backdrop-blur-sm flex-shrink-0">
-                  <KeyRound className="w-5 h-5" />
-                </div>
-                <div className="min-w-0">
-                  <p className="font-semibold leading-tight">Reset Password</p>
-                  <p className="text-xs text-white/80 truncate">{resetPwUser.email}</p>
-                </div>
-              </div>
-              <Button variant="secondary" tone="onColor" size="sm" onClick={closeResetPwModal} className="px-2 flex-shrink-0" aria-label="Close">
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-
-            <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-4 sm:py-5 space-y-4">
+        <AppModal
+          open
+          size="sm"
+          onCancel={closeResetPwModal}
+          cancelDisabled={resetPwSubmitting}
+          icon={<KeyRound />}
+          title="Reset Password"
+          subtitle={resetPwUser.email}
+          actions={resetPwMode === 'choose' ? [] : [
+            {
+              label: 'Back',
+              variant: 'secondary',
+              onClick: () => setResetPwMode('choose'),
+              disabled: resetPwSubmitting,
+              icon: <ArrowLeft className="w-4 h-4" />,
+            },
+            {
+              label: 'Set Password',
+              onClick: () => handleSetPasswordDirect(resetPwUser),
+              disabled: resetPwSubmitting,
+              icon: resetPwSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : undefined,
+            },
+          ]}
+        >
+            <div className="space-y-4">
               {resetPwMode === 'choose' ? (
                 <>
                   <button
@@ -3559,32 +3646,10 @@ export default function UserManagement() {
                     />
                     <span className="text-xs text-gray-600 dark:text-slate-400">Require the user to change this password on next login</span>
                   </label>
-                  <div className="flex items-center gap-2 pt-1">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setResetPwMode('choose')}
-                      disabled={resetPwSubmitting}
-                      icon={<ArrowLeft className="w-4 h-4" />}
-                    >
-                      Back
-                    </Button>
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      onClick={() => handleSetPasswordDirect(resetPwUser)}
-                      disabled={resetPwSubmitting}
-                      className="flex-1"
-                      icon={resetPwSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : undefined}
-                    >
-                      Set Password
-                    </Button>
-                  </div>
                 </>
               )}
             </div>
-          </div>
-        </div>
+        </AppModal>
       )}
 
       {/* RBAC07: Dependency Matrix Modal */}
@@ -3609,34 +3674,56 @@ export default function UserManagement() {
       />
 
       {/* View Role Permissions Popup */}
-      {viewingRolePopup && (
-        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4 sm:p-6">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-4xl w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col tf-round-edges">
-            {/* Header */}
-            <div className="bg-brand-blue px-4 sm:px-6 py-4 flex items-center justify-between gap-3 shrink-0">
-              <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25 backdrop-blur-sm flex-shrink-0">
-                  <Eye className="w-5 h-5 text-white" />
-                </div>
-                <div className="min-w-0">
-                  <h2 className="text-base sm:text-xl font-bold text-white truncate">{viewingRolePopup.name}</h2>
-                  <p className="text-white/80 text-xs sm:text-sm truncate">{viewingRolePopup.description}</p>
-                </div>
+      {viewingUserPermissions && !viewingRolePopup && (
+        <AppModal
+          open
+          size="lg"
+          onCancel={closePermissionsPopup}
+          icon={<Eye />}
+          title={viewingUserPermissions.name || viewingUserPermissions.email}
+          subtitle={viewingUserPermissions.email}
+          bodyClassName="bg-slate-50/30 dark:bg-slate-800/30"
+        >
+          <div>
+            <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-6 p-3 sm:p-4 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl shadow-sm">
+              <div>
+                <div className="text-2xs sm:text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Role</div>
+                <div className="font-semibold text-brand-blue text-xs sm:text-base truncate">{getRoleLabel(viewingUserPermissions.role, availableRoles)}</div>
               </div>
-              <Button
-                variant="secondary"
-                tone="onColor"
-                size="sm"
-                onClick={() => { setViewingRolePopup(null); setViewingRolePopupPermissions([]); }}
-                className="px-2 flex-shrink-0"
-                aria-label="Close"
-              >
-                <X className="w-4 h-4 sm:w-5 sm:h-5" />
-              </Button>
+              <div>
+                <div className="text-2xs sm:text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Status</div>
+                <div className="font-bold text-gray-900 dark:text-slate-50 text-xs sm:text-base">{viewingUserPermissions.is_active ? 'Active' : 'Inactive'}</div>
+              </div>
+              <div>
+                <div className="text-2xs sm:text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Permissions</div>
+                <div className="font-bold text-gray-900 dark:text-slate-50 text-xs sm:text-base">{viewingRolePopupShownCount}</div>
+              </div>
             </div>
 
-            {/* Body */}
-            <div className="p-3 sm:p-6 overflow-y-auto flex-1 bg-slate-50/30 dark:bg-slate-800/30">
+            {renderAllocatedPermissions()}
+          </div>
+        </AppModal>
+      )}
+
+      {viewingRolePopup && (
+        <AppModal
+          open
+          size="lg"
+          onCancel={closePermissionsPopup}
+          icon={<Eye />}
+          title={viewingRolePopup.name}
+          subtitle={viewingRolePopup.description}
+          bodyClassName="bg-slate-50/30 dark:bg-slate-800/30"
+          footerStart={
+            viewingRolePopup.is_system ? (
+              <span className="inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-1 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded-full text-2xs sm:text-xs font-semibold">
+                <Lock className="w-3 h-3" />
+                Default Role (Read-Only)
+              </span>
+            ) : null
+          }
+        >
+            <div>
               <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-6 p-3 sm:p-4 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl shadow-sm">
                 <div>
                   <div className="text-2xs sm:text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Role Code</div>
@@ -3648,96 +3735,13 @@ export default function UserManagement() {
                 </div>
                 <div>
                   <div className="text-2xs sm:text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Permissions</div>
-                  <div className="font-bold text-gray-900 dark:text-slate-50 text-xs sm:text-base">{viewingRolePopupPermissions.length}</div>
+                  <div className="font-bold text-gray-900 dark:text-slate-50 text-xs sm:text-base">{viewingRolePopupShownCount}</div>
                 </div>
               </div>
 
-              <h3 className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide mb-3 sm:mb-4 flex items-center gap-1.5">
-                <Shield className="w-3.5 h-3.5 text-brand-blue" />
-                Allocated Permissions ({viewingRolePopupPermissions.length})
-              </h3>
-
-              {isViewingRolePopupLoading ? (
-                <div className="space-y-4 sm:space-y-6">
-                  {Array.from({ length: 2 }).map((_, mi) => (
-                    <div key={mi} className="border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-sm">
-                      <div className="bg-slate-50 dark:bg-slate-800/50 px-3 sm:px-4 py-2.5 border-b border-gray-200 dark:border-slate-700">
-                        <Skeleton className="h-4 w-28" />
-                      </div>
-                      <div className="p-2 sm:p-4 grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
-                        {Array.from({ length: 4 }).map((_, pi) => (
-                          <div key={pi} className="flex items-start gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-slate-700">
-                            <Skeleton className="w-6 h-6 sm:w-8 sm:h-8 rounded flex-shrink-0" />
-                            <Skeleton className="h-4 flex-1 mt-1" />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : viewingRolePopupPermissions.length === 0 ? (
-                <div className="text-center py-10 sm:py-12">
-                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/20 mb-3">
-                    <Shield className="w-7 h-7 text-brand-blue" />
-                  </div>
-                  <p className="text-gray-700 dark:text-slate-300 font-semibold text-sm">No permissions allocated</p>
-                </div>
-              ) : (
-                <div className="space-y-4 sm:space-y-6">
-                  {Object.entries(
-                    viewingRolePopupPermissions.reduce((acc, perm) => {
-                      const module = perm.module || 'other';
-                      if (!acc[module]) acc[module] = [];
-                      acc[module].push(perm);
-                      return acc;
-                    }, {} as Record<string, Permission[]>)
-                  ).map(([module, perms]) => (
-                    <div key={module} className="border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-sm">
-                      <div className="bg-gradient-to-r from-brand-blue/5 to-brand-cyan/5 px-3 sm:px-4 py-2.5 border-b border-brand-blue/15">
-                        <h4 className="font-semibold text-brand-blue capitalize text-xs sm:text-sm">
-                          {module.replace(/_/g, ' ')} ({perms.length})
-                        </h4>
-                      </div>
-                      <div className="p-2 sm:p-4 grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
-                        {perms.map((perm) => (
-                          <div
-                            key={perm.id}
-                            className="flex items-start gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-slate-700 hover:border-brand-blue/30 hover:bg-brand-blue/5 transition-all"
-                          >
-                            <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded flex items-center justify-center flex-shrink-0 ${
-                              perm.action === 'read'   ? 'bg-brand-blue/10 text-brand-blue' :
-                              perm.action === 'create' ? 'bg-success-subtle text-success' :
-                              perm.action === 'update' ? 'bg-warning-subtle text-warning' :
-                              perm.action === 'delete' ? 'bg-destructive-subtle text-destructive' :
-                              'bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-300'
-                            }`}>
-                              <span className="text-2xs sm:text-xs font-bold uppercase">{perm.action[0]}</span>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="font-semibold text-xs sm:text-sm text-gray-900 dark:text-slate-50">{perm.name}</div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+              {renderAllocatedPermissions()}
             </div>
-
-            {/* Footer */}
-            <div className="bg-slate-50/50 dark:bg-slate-800/50 px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 border-t border-gray-200 dark:border-slate-700 shrink-0">
-              <div className="text-sm text-gray-500 dark:text-slate-500">
-                {viewingRolePopup.is_system && (
-                  <span className="inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-1 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded-full text-2xs sm:text-xs font-semibold">
-                    <Lock className="w-3 h-3" />
-                    System Role (Read-Only)
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
+        </AppModal>
       )}
       </div>
       </div>

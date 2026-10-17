@@ -1,4 +1,4 @@
-import { User, Clock, Timer, Award, XCircle, ChevronUp, ChevronDown, FileText, FileDown, FileSpreadsheet, TrendingUp, AlertCircle, Filter, ArrowUpDown, Loader2, BarChart3, SlidersHorizontal, Columns3, Trash2, Users, Download, Play, Eye, ArrowUp, ArrowDown, MoreVertical, Video } from 'lucide-react';
+import { User, Clock, Timer, Award, XCircle, ChevronUp, ChevronDown, FileText, ClipboardList, FileDown, FileSpreadsheet, TrendingUp, AlertCircle, Filter, ArrowUpDown, Loader2, BarChart3, SlidersHorizontal, Columns3, Trash2, Users, Download, Play, Eye, ArrowUp, ArrowDown, MoreVertical, Video } from 'lucide-react';
 import { Fragment, useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
@@ -2248,14 +2248,14 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                                 className={`flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer ${canCreateAssessments ? '' : 'text-gray-400 opacity-60'}`}
                                 onSelect={openInvite('assessment', canCreateAssessments, assessmentDeniedReason)}
                               >
-                                <FileText className="w-4 h-4 text-menu-icon-view" />
+                                <ClipboardList className="w-4 h-4 text-menu-icon-view" />
                                 <span className={MENU_ITEM_SCALE_CLASS}>Create / Send Assessment</span>
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 className={`flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer ${mayInviteAIInterview ? '' : 'text-gray-400 opacity-60'}`}
                                 onSelect={openInvite('interview', mayInviteAIInterview, aiInterviewDeniedReason)}
                               >
-                                <Video className="w-4 h-4 text-menu-icon-share" />
+                                <Video className="w-4 h-4 text-menu-icon-ai" />
                                 <span className={MENU_ITEM_SCALE_CLASS}>Create / Send AI Interview</span>
                               </DropdownMenuItem>
                             </>
@@ -2297,7 +2297,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   <option value="In Progress">In Progress</option>
                   <option value="Completed">Completed</option>
                   <option value="Terminated">Terminated</option>
-                  <option value="Pending">{PENDING_STATUS_LABEL}</option>
                 </ToolbarFilterSelect>
                 {resultsSortControl}
               </>
@@ -2434,7 +2433,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 ['In Progress', 'In Progress'],
                 ['Completed', 'Completed'],
                 ['Terminated', 'Terminated'],
-                ['Pending', PENDING_STATUS_LABEL],
               ] as const).map(([value, label]) => (
                 <button
                   key={value}

@@ -1,5 +1,6 @@
 'use client';
 
+import { MODAL_FOOTER_BUTTON_CLASS, MODAL_FOOTER_ROW_CLASS } from '@/components/ui/app-modal';
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
@@ -58,7 +59,7 @@ const getPermissionDisplayName = (code: string): string => {
   for (const category of CUSTOM_PERMISSION_CATEGORIES) {
     if (category.viewCode === code) return category.name;
     const action = category.actions?.find((a) => a.code === code);
-    if (action) return action.label;
+    if (action) return `${action.label} (${category.name})`;
     for (const sub of category.subCategories || []) {
       if (sub.viewCode === code) return `View ${sub.name}`;
       const subAction = sub.actions.find((a) => a.code === code);
@@ -520,7 +521,7 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
 
   if (isLoading || !role) {
     // Skeleton mirroring the role editor: gradient hero, the Role Details form
-    // card (Name/Code, Description, Priority/Inherits, Permissions) and the
+    // card (Name/Code, Description, Copy permissions from, Permissions) and the
     // right-hand summary sidebar.
     return (
       <main className={embedded ? '' : 'flex-1 overflow-x-clip bg-slate-50'}>
@@ -625,7 +626,7 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
                   <input
                     type="text"
                     value={role.name}
-                    onChange={(e) => setRole({ ...role, name: e.target.value })}
+                    onChange={(e) => setRole({ ...role, name: e.target.value.toUpperCase() })}
                     onBlur={() => setNameTouched(true)}
                     aria-invalid={!!showNameError}
                     className={showNameError ? fieldErrorClassName : fieldClassName}
@@ -654,21 +655,9 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
               </label>
 
               <div className="grid gap-5 md:grid-cols-2">
-                <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-gray-700">Priority</span>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={role.priority}
-                    onChange={(e) => setRole({ ...role, priority: parseInt(e.target.value, 10) || 0 })}
-                    className={fieldClassName}
-                  />
-                  <span className="mt-2 block text-xs text-gray-500">Higher priority roles take precedence in overlap scenarios.</span>
-                </label>
 
                 <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-gray-700">Inherits From</span>
+                  <span className="mb-2 block text-sm font-medium text-gray-700">Copy permissions from</span>
                   <select
                     value={role.parent_role_id || ''}
                     onChange={(e) => handleParentRoleChange(e.target.value)}
@@ -683,7 +672,7 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
                         </option>
                       ))}
                   </select>
-                  <span className="mt-2 block text-xs text-gray-500">Selecting a parent role replaces the current permission set with inherited permissions.</span>
+                  <span className="mt-2 block text-xs text-gray-500">Replaces this role&apos;s current permissions with a copy of that role&apos;s. Later changes to that role won&apos;t affect this one.</span>
                 </label>
               </div>
 
@@ -696,18 +685,22 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
               </div>
             </div>
 
-            <div className="flex flex-col gap-3 border-t border-gray-100 px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
-              <Button variant="secondary" onClick={handleClose} disabled={isSaving}>
+            <div className="border-t border-gray-100 px-5 py-4 sm:px-6">
+              <div className={MODAL_FOOTER_ROW_CLASS}>
+              <Button variant="secondary" size="md" onClick={handleClose} disabled={isSaving} className={MODAL_FOOTER_BUTTON_CLASS}>
                 Cancel
               </Button>
               <Button
                 variant="primary"
+                size="md"
+                className={MODAL_FOOTER_BUTTON_CLASS}
                 onClick={handleSubmit}
                 disabled={isSaving}
                 icon={isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUpRight className="h-4 w-4" />}
               >
                 Save Changes
               </Button>
+              </div>
             </div>
           </section>
 
@@ -733,9 +726,9 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
                   <div className="mt-1 text-sm font-semibold text-gray-900">{role.code}</div>
                 </div>
                 <div className="rounded-xl bg-gray-50 px-4 py-3 ring-1 ring-gray-100">
-                  <div className="text-xs uppercase tracking-[0.16em] text-gray-400">Inheritance</div>
+                  <div className="text-xs uppercase tracking-[0.16em] text-gray-400">Copied from</div>
                   <div className="mt-1 text-sm font-semibold text-gray-900">
-                    {roles.find((roleOption) => roleOption.id === role.parent_role_id)?.name || 'Independent'}
+                    {roles.find((roleOption) => roleOption.id === role.parent_role_id)?.name || 'None'}
                   </div>
                 </div>
                 <div className="rounded-xl bg-gray-50 px-4 py-3 ring-1 ring-gray-100">
