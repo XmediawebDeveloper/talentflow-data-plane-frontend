@@ -10,7 +10,7 @@ import SelectSourceModal from '@/components/SelectSourceModal';
 import ArchiveJobModal from '@/components/ArchiveJobModal';
 import DisableJobModal from '@/components/DisableJobModal';
 import { Job } from '@/lib/types/types';
-import { jdService, JDListResponse } from '@/lib/services/jdService';
+import { jdService } from '@/lib/services/jdService';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -110,17 +110,23 @@ function JobOpeningsSkeleton() {
 export default function JobOpeningsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
-  // Total/Published/Draft/Archived, precomputed server-side (page 1 of the same
-  // `/jd` call) so the stat cards can show the right number immediately. `jobs`
-  // itself still fills in two steps below (page 1, then the rest in parallel) —
-  // without this, the cards read page 1's partial tally first and then jump to
-  // the correct one once every page has landed. `jobsFullyLoaded` marks the
-  // point where `jobs` itself is complete and can take over as the live source
-  // (so a publish/archive/delete action keeps updating the cards instantly,
-  // the way it did before this existed) — the handover is silent because by
-  // then the two sources agree.
-  const [statusCounts, setStatusCounts] = useState<JDListResponse['status_counts']>(null);
+  /* Whether `jobs` holds every page yet. The stat cards show a placeholder
+     until it does, then count straight from `jobs` — the same rows, and the
+     same version rules, as the table below them. They used to show the
+     server's page-1 `status_counts` first and then hand over to that tally,
+     but the two count differently (the server by each lineage's latest
+     version, the cards by "any version has the status", so each card equals
+     its tab's row count) — the handover was the jump from one set of numbers
+     to another on every load. */
   const [jobsFullyLoaded, setJobsFullyLoaded] = useState(false);
+  /* Bumped by every fetchJobs run and by unmount / user change, so a response
+     belonging to an older run is dropped instead of overwriting newer data
+     (or appending its pages onto another run's list). */
+  const fetchSeqRef = useRef(0);
+  /* Lineages deleted on this mount. A delete can land while later pages are
+     still loading; those pages may carry the lineage's older versions, which
+     would otherwise bring the deleted job back. */
+  const deletedLineagesRef = useRef(new Set<string>());
   const [quotaInfo, setQuotaInfo] = useState<{ remaining: number; limit: number; used: number } | undefined>();
   const [activeFilter, setActiveFilter] = useState<FilterStatus>('all');
   /* The modules holding the JD, not pre-formatted strings: the dialog draws
@@ -166,7 +172,7 @@ export default function JobOpeningsPage() {
   const { user, isTenantAdmin, hasPermission } = useAuth();
   const canManageMasters = hasPermission('canManageSettings');
 
-  // "?view=list" is a one-shot instruction from the JD flow's "View All Jobs":
+  // "?view=list" is a one-shot instruction from the JD flow's "Go to All Jobs":
   // open the full list with every job showing, rather than the stat-tile overview
   // or whatever narrowed view was last persisted. Captured on the first render so
   // it stays stable for this mount, then stripped from the URL below.
@@ -225,10 +231,11 @@ export default function JobOpeningsPage() {
 
   // Re-fetch jobs and quota when user changes
   useEffect(() => {
-    if (user) {
-      fetchJobs();
-      fetchQuotaInfo();
-    }
+    if (!user) return;
+    fetchJobs();
+    fetchQuotaInfo();
+    // Invalidate this run's in-flight pages on user change / unmount.
+    return () => { fetchSeqRef.current += 1; };
   }, [user?.id]);
 
   const fetchQuotaInfo = async () => {
@@ -248,6 +255,8 @@ export default function JobOpeningsPage() {
   };
 
   const fetchJobs = async () => {
+    const seq = ++fetchSeqRef.current;
+    const isStale = () => seq !== fetchSeqRef.current;
     setLoading(true);
     setJobsFullyLoaded(false);
     // Pull "my JDs" in smaller pages. The previous page_size=total request
@@ -259,6 +268,7 @@ export default function JobOpeningsPage() {
         page_size: JD_BATCH_SIZE,
         source: 'my-jds',
       });
+      if (isStale()) return;
 
       /* One mapping for every surface that lists JDs — this page and the Apply
          to Job dialog both build their rows with it, so neither can end up
@@ -268,9 +278,8 @@ export default function JobOpeningsPage() {
          `?? []` guards a backend response without an `items` array — otherwise
          `.map` would throw and (crucially) leave the page stuck on the skeleton. */
       setJobs((firstPage.items ?? []).map(mapJDToJob));
-      // Precomputed on this same call — see fetchJobs' jobsFullyLoaded comment.
-      setStatusCounts(firstPage.status_counts ?? null);
     } catch (error) {
+      if (isStale()) return;
       // First-page failure (or a bad shape) is a real load failure — surface it.
       // The `finally` below still clears the skeleton so the page never hangs.
       console.error('Failed to fetch jobs:', error);
@@ -279,8 +288,8 @@ export default function JobOpeningsPage() {
     } finally {
       // ALWAYS drop the skeleton after the first page attempt, success or not —
       // this is the guarantee that the page can never be stuck showing only the
-      // skeleton with no data.
-      setLoading(false);
+      // skeleton with no data. A stale run leaves it to the run that replaced it.
+      if (!isStale()) setLoading(false);
     }
 
     // Fetch any remaining pages in PARALLEL (not one after another) so the full
@@ -301,14 +310,30 @@ export default function JobOpeningsPage() {
         jdService.list({ page, page_size: JD_BATCH_SIZE, source: 'my-jds' })
       )
     );
+    if (isStale()) return;
     const restJobs = results.flatMap((r) =>
       r.status === 'fulfilled' ? (r.value.items ?? []).map(mapJDToJob) : []
     );
     if (restJobs.length) {
-      setJobs((prev) => [...prev, ...restJobs]);
+      setJobs((prev) => {
+        /* A JD created between the page requests shifts rows across page
+           boundaries, so the same row can arrive twice — count it once. The
+           row already on screen wins: it may carry a status the recruiter has
+           changed since page 1 loaded. */
+        const seen = new Set(prev.map((j) => j.id));
+        const fresh = restJobs.filter((j) => {
+          if (seen.has(j.id) || deletedLineagesRef.current.has(j.job_id || j.id)) return false;
+          seen.add(j.id);
+          return true;
+        });
+        return fresh.length ? [...prev, ...fresh] : prev;
+      });
+    }
+    if (results.some((r) => r.status === 'rejected')) {
+      toast.error('Some job openings could not be loaded — counts may be incomplete. Refresh to try again.');
     }
     // `jobs` now has every page (or every page that didn't fail) — the stat
-    // cards can safely switch from `statusCounts` to their own live tally.
+    // cards can drop their placeholder and count it.
     setJobsFullyLoaded(true);
   };
 
@@ -611,6 +636,7 @@ export default function JobOpeningsPage() {
       // Remove the whole lineage (every version), not just this row — otherwise an
       // older version collapses back onto the All Jobs list. See bulk delete above.
       const deletedLineage = job.job_id || job.id;
+      deletedLineagesRef.current.add(deletedLineage);
       setJobs(prev => prev.filter(j => (j.job_id || j.id) !== deletedLineage));
       toast.success(`"${job.title}" has been deleted`);
     } catch (error: any) {
@@ -755,6 +781,7 @@ export default function JobOpeningsPage() {
           .filter(job => deletedIds.includes(job.id))
           .map(job => job.job_id || job.id),
       );
+      deletedLineages.forEach((lineage) => deletedLineagesRef.current.add(lineage));
       setJobs(prev => prev.filter(job => !deletedLineages.has(job.job_id || job.id)));
     }
 
@@ -784,7 +811,6 @@ export default function JobOpeningsPage() {
     <div ref={rootRef} className="relative flex-1 flex flex-col overflow-x-clip bg-slate-50">
       <JobsListing
         jobs={jobs}
-        statusCounts={statusCounts}
         jobsFullyLoaded={jobsFullyLoaded}
         onCreateNew={handleCreateNew}
         onCreateNewDisabled={!(hasPermission('canCreateJD') || isTenantAdmin)}

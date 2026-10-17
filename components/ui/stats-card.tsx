@@ -91,6 +91,13 @@ const TONES = {
 
 export type StatsCardTone = keyof typeof TONES;
 
+/* Stands in for a count that hasn't loaded yet — sized like the number, in the
+   page skeleton's pulse style, so the card doesn't shift when it arrives and
+   never shows a provisional 0. Same markup as the Job Openings cards'. */
+export const StatValuePlaceholder = () => (
+  <span role="status" aria-label="Loading count" className="my-1 block h-6 w-12 rounded bg-gray-200 dark:bg-slate-700 animate-pulse" />
+);
+
 // A handful of sparkline paths so cards visually vary; consumer may override.
 const SPARK_PATHS = [
   'M4 27C12 26 15 20 22 20C29 20 31 23 38 18C45 13 49 17 56 14C63 11 66 4 84 4',
@@ -119,6 +126,8 @@ export interface StatsCardProps {
   children?: React.ReactNode;
   /** Hover tooltip explaining what the numbers mean. */
   title?: string;
+  /** Count still loading — show a placeholder in place of `value`. */
+  loading?: boolean;
 }
 
 export function StatsCard({
@@ -135,6 +144,7 @@ export function StatsCard({
   className,
   children,
   title,
+  loading = false,
 }: StatsCardProps) {
   const t = TONES[tone];
   const path = sparkPath ?? SPARK_PATHS[sparkVariant];
@@ -158,7 +168,7 @@ export function StatsCard({
           <div className="min-w-0">
             <p className="text-sm sm:text-xs lg:text-sm font-medium text-slate-700 dark:text-slate-300">{label}</p>
             <div className="mt-0.5 text-2xl sm:text-xl lg:text-[1.75rem] font-semibold tracking-tight text-slate-950 dark:text-slate-50">
-              {value}
+              {loading ? <StatValuePlaceholder /> : value}
             </div>
             {children}
           </div>

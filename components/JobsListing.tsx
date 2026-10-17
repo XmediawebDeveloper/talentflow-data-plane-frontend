@@ -79,18 +79,11 @@ const JOBS_EXPORT_HEADERS = [
 
 interface JobsListingProps {
   jobs: Job[];
-  /** Tenant-wide Total/Published/Draft/Archived, precomputed server-side so the
-   *  stat cards can show the right number immediately instead of the wrong
-   *  page-1-only tally `jobs` briefly holds while the rest of it loads. Used
-   *  only until `jobsFullyLoaded` — see that prop. `null`/absent falls back to
-   *  computing straight from `jobs`, the previous (flicker-prone) behaviour. */
-  statusCounts?: { total?: number; published?: number; draft?: number; archived?: number } | null;
-  /** Whether `jobs` itself holds every page yet. Once true, the stat cards
-   *  switch from `statusCounts` to their own live tally over `jobs` — by then
-   *  the two agree, so the switch is invisible, and it's what keeps the cards
-   *  updating instantly after a publish/archive/delete action (those mutate
-   *  `jobs` directly, not `statusCounts`). Defaults to true, so a host that
-   *  doesn't pass it just gets the live tally, as before. */
+  /** Whether `jobs` holds every page yet. Until it does, the stat cards show a
+   *  placeholder rather than the partial tally of the pages loaded so far; once
+   *  it does, they count `jobs` live (so a publish/archive/delete action updates
+   *  them instantly). Defaults to true, so a host that loads `jobs` in one go
+   *  doesn't need to pass it. */
   jobsFullyLoaded?: boolean;
   onCreateNew: () => void;
   /** Permission gate for onCreateNew — action/icon must stay visible and only
@@ -147,7 +140,7 @@ interface JobsListingProps {
   initialStatusFilter?: string;
   // Land straight on the full jobs list instead of the stat-tile overview, showing
   // every job. Set when the caller's intent is explicitly "show me all the jobs" —
-  // e.g. "View All Jobs" after publishing a JD, where stopping on the tiles (or on
+  // e.g. "Go to All Jobs" after publishing a JD, where stopping on the tiles (or on
   // a persisted narrowed view) hides the job the recruiter just created.
   // Unlike a status deep-link this also clears the restored search/status/page, so
   // "all jobs" really means all of them.
@@ -179,10 +172,19 @@ const StatVersions = ({ count }: { count: number }) => (
   </span>
 );
 
+/* Placeholders sized like the number and the pill, in the page skeleton's
+   pulse style, so the cards don't shift when the counts arrive. */
+const StatValuePlaceholder = () => (
+  <span role="status" aria-label="Loading count" className="my-1 block h-6 w-12 rounded bg-gray-200 dark:bg-slate-700 animate-pulse" />
+);
+const StatVersionsPlaceholder = () => (
+  <span aria-hidden className="mt-1.5 block h-5 w-20 rounded-full bg-gray-100 dark:bg-slate-800 animate-pulse" />
+);
+
 /** The status transitions the bulk Actions menu can apply. */
 export type BulkStatusAction = 'disable' | 'reenable' | 'archive' | 'unarchive';
 
-export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded = true, onCreateNew, onCreateNewDisabled = false, onViewJob, onViewApplicants, onAIMatch, onAIMatchDisabled = false, onAIMatchDisabledReason = 'You do not have permission to run AI Talent Match', onScoreResumes, onScoreResumesDisabled = false, onScoreResumesDisabledReason = 'You do not have permission to run resume scoring', onUpdateJobStatus, onEditJob, versionStatusOverrides, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, onBulkDelete, onBulkStatusChange, onCheckJobsInUse, onAllJobsInUse, quotaInfo, initialStatusFilter, forceListView, configHref }: JobsListingProps) {
+export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew, onCreateNewDisabled = false, onViewJob, onViewApplicants, onAIMatch, onAIMatchDisabled = false, onAIMatchDisabledReason = 'You do not have permission to run AI Talent Match', onScoreResumes, onScoreResumesDisabled = false, onScoreResumesDisabledReason = 'You do not have permission to run resume scoring', onUpdateJobStatus, onEditJob, versionStatusOverrides, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, onBulkDelete, onBulkStatusChange, onCheckJobsInUse, onAllJobsInUse, quotaInfo, initialStatusFilter, forceListView, configHref }: JobsListingProps) {
   const router = useRouter();
   const { isTenantAdmin, user, hasPermissionCode } = useAuth();
   // NOTE: canUpdateJD/canDeleteJD/canArchiveJD/canDisableJD (capital JD) are the
@@ -832,19 +834,11 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
     archivedVersions: versionsWithStatus('archived'),
   };
 
-  /* The four headline numbers on the stat cards: `statusCounts` (server-
-   * computed, right from first paint) until `jobs` itself is fully loaded and
-   * can take over live — see the prop doc on `jobsFullyLoaded` above. Every
-   * other stat (version pills, applicants, etc.) still reads `stats` directly;
-   * only these four had a server-computed alternative to flicker against. */
-  const headlineStats = (!jobsFullyLoaded && statusCounts)
-    ? {
-        total: statusCounts.total ?? stats.total,
-        published: statusCounts.published ?? stats.published,
-        draft: statusCounts.draft ?? stats.draft,
-        archived: statusCounts.archived ?? stats.archived,
-      }
-    : stats;
+  /* The stat cards (number and versions pill) only ever show a count of the
+   * complete list — while later pages are still loading they show a
+   * placeholder, never a partial tally that would then jump. */
+  const statValue = (count: number) => (jobsFullyLoaded ? count : <StatValuePlaceholder />);
+  const statVersions = (count: number) => (jobsFullyLoaded ? <StatVersions count={count} /> : <StatVersionsPlaceholder />);
 
   const activeFiltersCount = search.activeFilterCount;
   const filtersActive = search.filtersApplied;
@@ -1068,17 +1062,17 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
           </div>
 
           <StatsCardGrid>
-            <StatsCard tone="neutral" active={isOverviewCardActive('all')} showClickArrow icon={Briefcase} label="Total Jobs" value={headlineStats.total} sparkline={false} onClick={() => openListView('all')}>
-              <StatVersions count={stats.totalVersions} />
+            <StatsCard tone="neutral" active={isOverviewCardActive('all')} showClickArrow icon={Briefcase} label="Total Jobs" value={statValue(stats.total)} sparkline={false} onClick={() => openListView('all')}>
+              {statVersions(stats.totalVersions)}
             </StatsCard>
-            <StatsCard tone="neutral" active={isOverviewCardActive('published')} showClickArrow icon={CheckCircle2} label="Published" value={headlineStats.published} sparkline={false} onClick={() => openListView('published')}>
-              <StatVersions count={stats.publishedVersions} />
+            <StatsCard tone="neutral" active={isOverviewCardActive('published')} showClickArrow icon={CheckCircle2} label="Published" value={statValue(stats.published)} sparkline={false} onClick={() => openListView('published')}>
+              {statVersions(stats.publishedVersions)}
             </StatsCard>
-            <StatsCard tone="neutral" active={isOverviewCardActive('draft')} showClickArrow icon={FileText} label="Drafts" value={headlineStats.draft} sparkline={false} onClick={() => openListView('draft')}>
-              <StatVersions count={stats.draftVersions} />
+            <StatsCard tone="neutral" active={isOverviewCardActive('draft')} showClickArrow icon={FileText} label="Drafts" value={statValue(stats.draft)} sparkline={false} onClick={() => openListView('draft')}>
+              {statVersions(stats.draftVersions)}
             </StatsCard>
-            <StatsCard tone="neutral" active={isOverviewCardActive('archived')} showClickArrow icon={Archive} label="Archived" value={headlineStats.archived} sparkline={false} onClick={() => openListView('archived')}>
-              <StatVersions count={stats.archivedVersions} />
+            <StatsCard tone="neutral" active={isOverviewCardActive('archived')} showClickArrow icon={Archive} label="Archived" value={statValue(stats.archived)} sparkline={false} onClick={() => openListView('archived')}>
+              {statVersions(stats.archivedVersions)}
             </StatsCard>
           </StatsCardGrid>
 

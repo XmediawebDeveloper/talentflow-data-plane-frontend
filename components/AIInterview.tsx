@@ -330,16 +330,23 @@ export default function AIInterview() {
   const [trackerShowVersions, setTrackerShowVersions] = useState(false);
   const [invitationTotal, setInvitationTotal] = useState(0);
   const [invitationTotalPages, setInvitationTotalPages] = useState(1);
-  const [invitationOverview, setInvitationOverview] = useState({
-    total: 0,
-    invited: 0,
-    completed: 0,
-    inProgress: 0,
-    terminated: 0,
-    cancelled: 0,
-    revoked: 0,
-    expired: 0,
-  });
+  /* Null until the open tracker's counts have landed — the cards show a
+     placeholder meanwhile rather than zeros or the previous tracker's numbers. */
+  const [invitationOverview, setInvitationOverview] = useState<{
+    total: number;
+    invited: number;
+    completed: number;
+    inProgress: number;
+    terminated: number;
+    cancelled: number;
+    revoked: number;
+    expired: number;
+  } | null>(null);
+  /* Bumped by every loadInvitationOverview / loadInvitations run (and on each
+     tracker open), so a response for an earlier tracker, filter or page that
+     lands late is dropped instead of overwriting the newer one. */
+  const overviewSeqRef = useRef(0);
+  const invitationsSeqRef = useRef(0);
   const [configListPage, setConfigListPage] = useState(1);
   const [configListItemsPerPage, setConfigListItemsPerPage] = useState(10);
   const [processingPage, setProcessingPage] = useState(1);
@@ -372,6 +379,9 @@ export default function AIInterview() {
      cross-config endpoint — the backend has none — the same approach the
      Assessments page's own cross-assessment tab uses. */
   const [inviteStatusRows, setInviteStatusRows] = useState<any[]>([]);
+  /* Bumped by every loadAllInviteStatuses run, so only the latest run's rows
+     are applied when two overlap (tab open, poll, refresh after an action). */
+  const inviteStatusSeqRef = useRef(0);
   const [isLoadingInviteStatus, setIsLoadingInviteStatus] = useState(false);
   const [inviteStatusError, setInviteStatusError] = useState<string | null>(null);
   const [inviteStatusFilters, setInviteStatusFilters] = useState<InviteFilterState>(EMPTY_INVITE_FILTERS);
@@ -404,6 +414,24 @@ export default function AIInterview() {
      from it, so the job row and version rows prefer this once it lands. */
   const [invitationTotals, setInvitationTotals] = useState<Record<string, number>>({});
   const completedCountsRequested = useRef<Set<string>>(new Set());
+  /* Per-interview request generation for those two counts. An invite action
+     invalidates them (below); a response to a request made before that is
+     dropped, so an older answer can't land after — and overwrite — a newer one. */
+  const inviteCountsGenRef = useRef<Map<string, number>>(new Map());
+  /* Bumped on invalidation so the effects that request the visible rows'
+     counts run again even when nothing else about the page changed. */
+  const [inviteCountsTick, setInviteCountsTick] = useState(0);
+  /** Re-fetch Invitations Sent / Completed after something changed them (a
+   *  send, resend, revoke, or Refresh). Without this an interview's counts
+   *  were fetched once per mount and stayed frozen at that first answer. The
+   *  figures on screen stay until the new ones land. */
+  const invalidateInviteCounts = useCallback(() => {
+    for (const id of completedCountsRequested.current) {
+      inviteCountsGenRef.current.set(id, (inviteCountsGenRef.current.get(id) ?? 0) + 1);
+    }
+    completedCountsRequested.current.clear();
+    setInviteCountsTick((n) => n + 1);
+  }, []);
   /* The chosen interview version, one per job, exactly as the Assessments Job
      List holds its own pick (`selectedAssessmentVersionByJob`): the panel's
      radio group already enforces "one at a time" in the markup, and keying the
@@ -513,6 +541,7 @@ export default function AIInterview() {
     setIsRefreshingTab(true);
     try {
       if (isConfigListTab) {
+        invalidateInviteCounts();
         await Promise.all([loadData(), loadArchivedConfigs()]);
       } else if (activeTab === 'processing') {
         await loadProcessingSessions();
@@ -590,9 +619,42 @@ export default function AIInterview() {
     ];
   }, []);
 
-  const loadData = useCallback(async () => {
+  /* Bumped by every loadArchivedConfigs run — tab switches, Refresh and the
+     row actions all call it, and an older response landing last must not
+     overwrite a newer list. */
+  const archivedSeqRef = useRef(0);
+  const loadArchivedConfigs = useCallback(async () => {
+    const seq = ++archivedSeqRef.current;
     try {
-      setLoading(true);
+      const probe = await aiInterviewService.listConfigs({ status: 'archived', page_size: 1, compact: true });
+      const result = probe.total > probe.items.length
+        ? await aiInterviewService.listConfigs({ status: 'archived', page_size: probe.total, compact: true })
+        : probe;
+      if (seq !== archivedSeqRef.current) return;
+      setArchivedConfigs(result.items);
+    } catch (error) {
+      console.error('Failed to load archived configs:', error);
+    }
+  }, []);
+
+  /* Bumped by every loadData run, so overlapping runs (a row action's refresh
+     landing beside a Refresh click) apply only the newest one's results. */
+  const loadDataSeqRef = useRef(0);
+  /* Set once the first load has finished. Only that load shows the full-page
+     skeleton: later runs are refreshes after a send / revoke / publish etc.,
+     and swapping the page for the skeleton then unmounted every open popup
+     and dropped the list's scroll. */
+  const hasLoadedRef = useRef(false);
+  const loadData = useCallback(async () => {
+    const seq = ++loadDataSeqRef.current;
+    const isStale = () => seq !== loadDataSeqRef.current;
+    const firstLoad = !hasLoadedRef.current;
+    /* The first load brings the archived configs in the same pass, so Total
+       Jobs / Total Interviews appear once with archived included instead of
+       showing the live-only figure and then jumping when they land. */
+    const archivedLoad = firstLoad ? loadArchivedConfigs() : null;
+    try {
+      if (firstLoad) setLoading(true);
       let configItems: AIInterviewResponse[] = [];
       try {
         configItems = await loadAllConfigs();
@@ -602,10 +664,12 @@ export default function AIInterview() {
         await new Promise((resolve) => window.setTimeout(resolve, 300));
         configItems = await loadAllConfigs();
       }
+      if (isStale()) return;
       setConfigs(configItems);
 
       try {
         const statsRes = await aiInterviewService.getConfigStats();
+        if (isStale()) return;
         setStats(statsRes);
       } catch (statsError) {
         console.error('Failed to load AI interview stats:', statsError);
@@ -614,13 +678,18 @@ export default function AIInterview() {
       try {
         // Same query Candidate Results loads; only the total is needed, so one row will do.
         const interviewedRes = await aiInterviewService.list({ status: 'completed,terminated', page: 1, page_size: 1 });
+        if (isStale()) return;
         setInterviewedCount(typeof interviewedRes.total === 'number' ? interviewedRes.total : null);
       } catch (countError) {
+        if (isStale()) return;
         console.error('Failed to load interviewed count:', countError);
         setInterviewedCount(null);
       }
     } catch (error) {
-      setConfigs([]);
+      if (isStale()) return;
+      // A failed refresh keeps the list already on screen; only a failed
+      // first load has nothing to keep.
+      if (firstLoad) setConfigs([]);
       if (error instanceof Error) {
         console.error('Failed to load AI interview configs:', error);
         toast.error(error.message || 'AI interview configurations failed to load.');
@@ -629,9 +698,14 @@ export default function AIInterview() {
         toast.error('Failed to load data. Please refresh.');
       }
     } finally {
-      setLoading(false);
+      if (archivedLoad) await archivedLoad;
+      // A stale run leaves the skeleton to the run that replaced it.
+      if (!isStale()) {
+        hasLoadedRef.current = true;
+        setLoading(false);
+      }
     }
-  }, [loadAllConfigs]);
+  }, [loadAllConfigs, loadArchivedConfigs]);
 
   const loadSettings = useCallback(async () => {
     try {
@@ -644,18 +718,6 @@ export default function AIInterview() {
       setSettingsSentiment(settingsRes.ai_sentiment_analysis);
     } catch (error) {
       console.error('Failed to load settings:', error);
-    }
-  }, []);
-
-  const loadArchivedConfigs = useCallback(async () => {
-    try {
-      const probe = await aiInterviewService.listConfigs({ status: 'archived', page_size: 1, compact: true });
-      const result = probe.total > probe.items.length
-        ? await aiInterviewService.listConfigs({ status: 'archived', page_size: probe.total, compact: true })
-        : probe;
-      setArchivedConfigs(result.items);
-    } catch (error) {
-      console.error('Failed to load archived configs:', error);
     }
   }, []);
 
@@ -692,6 +754,7 @@ export default function AIInterview() {
   }, []);
 
   const loadInvitationOverview = useCallback(async (configId: string) => {
+    const seq = ++overviewSeqRef.current;
     try {
       /* Three calls, all page_size 1 — the list endpoint returns aggregate counts
          for completed/in_progress/terminated/cancelled but not for `invited` or
@@ -707,6 +770,7 @@ export default function AIInterview() {
         aiInterviewService.getConfigInvitations(id, { page: 1, page_size: 1, compact: true, status: 'revoked' }),
         aiInterviewService.getConfigInvitations(id, { page: 1, page_size: 1, compact: true, status: 'expired' }),
       ])));
+      if (seq !== overviewSeqRef.current) return;
       const sum = (pick: (calls: (typeof perConfig)[number]) => number | undefined) =>
         perConfig.reduce((acc, calls) => acc + (pick(calls) || 0), 0);
       setInvitationOverview({
@@ -720,21 +784,16 @@ export default function AIInterview() {
         expired: sum(([, , , expiredOnly]) => expiredOnly.total),
       });
     } catch (error) {
+      /* Keep the last good numbers (or the placeholder): zeroing every card
+         on a failed fetch — the silent 15s poll included — read as "all
+         invitations gone" until the next poll happened to succeed. */
       console.error('Failed to load invitation overview:', error);
-      setInvitationOverview({
-        total: 0,
-        invited: 0,
-        completed: 0,
-        inProgress: 0,
-        terminated: 0,
-        cancelled: 0,
-        revoked: 0,
-        expired: 0,
-      });
     }
   }, []);
 
   const loadInvitations = useCallback(async (configId: string, page: number, filters: InviteFilterState, source = '', resultFilter = '', silent = false) => {
+    const seq = ++invitationsSeqRef.current;
+    const isStale = () => seq !== invitationsSeqRef.current;
     if (!silent) setLoadingInvitations(true);
     try {
       /* Source (email / resume) and Result (the Score column's Pass / Fail)
@@ -764,6 +823,7 @@ export default function AIInterview() {
             _jd_version: entry.jobVersion,
             _interview_version: entry.interviewVersion,
           })))));
+        if (isStale()) return;
         const sentAt = (inv: any) => new Date(inv.invitation_sent_at || inv.created_at || 0).getTime();
         const matching = lists.flat()
           .filter((inv: any) =>
@@ -786,6 +846,7 @@ export default function AIInterview() {
           page: 1,
           page_size: 1000,
         });
+        if (isStale()) return;
         const matching = (all.items || []).filter((inv: any) =>
           (!source || inv.invite_source === source) && matchesInviteResultFilter(inv, displayInviteScore(inv), resultFilter));
         const totalPages = Math.max(1, Math.ceil(matching.length / INVITATION_PAGE_SIZE));
@@ -812,6 +873,7 @@ export default function AIInterview() {
            The Job Details tracker has always fetched these rows non-compact,
            which is why its Score column was already right. */
       });
+      if (isStale()) return;
       setInvitations(result.items);
       setInvitationTotal(result.total);
       setInvitationTotalPages(Math.max(1, result.total_pages || 1));
@@ -819,10 +881,13 @@ export default function AIInterview() {
         setInvitationPage((current) => Math.min(current - 1, Math.max(1, result.total_pages || 1)));
       }
     } catch (error) {
+      if (isStale()) return;
       console.error('Failed to load invitations:', error);
       if (!silent) toast.error('Failed to load invitations');
     } finally {
-      if (!silent) setLoadingInvitations(false);
+      /* Cleared by the latest run, silent or not: a poll that superseded a
+         visible load must still end that load's spinner. */
+      if (!isStale()) setLoadingInvitations(false);
     }
   }, []);
 
@@ -843,11 +908,14 @@ export default function AIInterview() {
      table is narrowed, so narrowing happens client-side over these rows —
      same rule the Assessments page's own cross-assessment tab follows. */
   const loadAllInviteStatuses = useCallback(async (silent = false) => {
+    const seq = ++inviteStatusSeqRef.current;
+    const isStale = () => seq !== inviteStatusSeqRef.current;
     if (!silent) setIsLoadingInviteStatus(true);
     if (!silent) setInviteStatusError(null);
     try {
       const allConfigs = [...configs, ...archivedConfigs];
       if (allConfigs.length === 0) {
+        if (isStale()) return;
         setInviteStatusRows([]);
         return;
       }
@@ -891,6 +959,9 @@ export default function AIInterview() {
         }
       }
 
+      if (isStale()) return;
+      // Configs whose invitations could not be fetched — see below.
+      let failedConfigs = 0;
       const perConfig = await Promise.all(
         allConfigs.map(async (config) => {
           try {
@@ -914,10 +985,19 @@ export default function AIInterview() {
             }));
           } catch {
             // One config's invitations being unavailable must not empty the tab.
+            failedConfigs += 1;
             return [];
           }
         }),
       );
+      if (isStale()) return;
+      if (failedConfigs > 0) {
+        /* A background poll keeps the rows it already has rather than
+           replacing them with a set missing those configs' invites; a visible
+           load shows what it got, but says the counts may be short. */
+        if (silent) return;
+        toast.error(`Invitations for ${failedConfigs} interview${failedConfigs === 1 ? '' : 's'} could not be loaded — counts may be incomplete. Refresh to try again.`);
+      }
       const merged = perConfig.flat();
       // Newest invite first: invitation_sent_at is the moment a recruiter cares
       // about; created_at covers a row that never made it out of the queue.
@@ -930,12 +1010,14 @@ export default function AIInterview() {
       // coming back from a candidate / job page, and the render clamps it
       // (safePage) if the reload left fewer pages.
     } catch (err: any) {
-      if (silent) return;
+      if (silent || isStale()) return;
       console.error('Failed to load invitation statuses:', err);
       setInviteStatusError(err?.message || 'Failed to load invitation statuses');
       setInviteStatusRows([]);
     } finally {
-      if (!silent) setIsLoadingInviteStatus(false);
+      /* Cleared by the latest run, silent or not: a poll that superseded a
+         visible load must still end that load's spinner. */
+      if (!isStale()) setIsLoadingInviteStatus(false);
     }
   }, [configs, archivedConfigs]);
 
@@ -949,13 +1031,22 @@ export default function AIInterview() {
     return () => clearInterval(timer);
   }, [activeTab, loadAllInviteStatuses]);
 
+  /* Also re-fires when the SET of configs changes (one created, deleted or
+     archived configs landing) — but not on every loadData refresh that hands
+     back the same configs as new objects, which used to restart the whole
+     fan-out (spinner included) after each action. The 15s poll above covers
+     changes to the invitations themselves. */
+  const inviteStatusConfigKey = useMemo(
+    () => [...configs, ...archivedConfigs].map((c) => c.id).sort().join('|'),
+    [configs, archivedConfigs],
+  );
+  const loadAllInviteStatusesRef = useRef(loadAllInviteStatuses);
   useEffect(() => {
-    // Also re-fires as `configs`/`archivedConfigs` finish loading (both
-    // change `loadAllInviteStatuses`'s identity) — archived configs load on
-    // their own delayed fetch, so without this an invite from an archived
-    // interview could be missing until the tab was left and reopened.
-    if (activeTab === 'invitation-status') loadAllInviteStatuses();
-  }, [activeTab, loadAllInviteStatuses]);
+    loadAllInviteStatusesRef.current = loadAllInviteStatuses;
+  }, [loadAllInviteStatuses]);
+  useEffect(() => {
+    if (activeTab === 'invitation-status') loadAllInviteStatusesRef.current();
+  }, [activeTab, inviteStatusConfigKey]);
 
   /* Shared by the Resend/Revoke/Edit confirms below: both the single-config
      popup (viewInvitationsConfig) and this tab can be the thing on screen
@@ -964,9 +1055,10 @@ export default function AIInterview() {
     if (viewInvitationsConfig && configId) await refreshInvitationsView(configId);
     if (activeTab === 'invitation-status') await loadAllInviteStatuses();
     // The interview cards/tables carry invite counts too — refresh them with it.
+    invalidateInviteCounts();
     await loadData();
     setRefreshSignal((n) => n + 1);
-  }, [viewInvitationsConfig, refreshInvitationsView, activeTab, loadAllInviteStatuses, loadData]);
+  }, [viewInvitationsConfig, refreshInvitationsView, activeTab, loadAllInviteStatuses, loadData, invalidateInviteCounts]);
 
   /* Manual Refresh in the tracking popup — same refetch the row actions use,
      in place with no page reload. Guarded so rapid clicks (or a click while
@@ -1128,8 +1220,9 @@ export default function AIInterview() {
     // Invitation Status spans every config too — an invite sent before its
     // interview was archived must not silently drop out of the aggregate.
     // Every tab: Duplicate's latest-version and cap rules count archived versions,
-    // so the row menu on Active/Draft/All Interviews needs them too.
-    loadArchivedConfigs();
+    // so the row menu on Active/Draft/All Interviews needs them too. Skipped
+    // until the first loadData has finished — that run loads them itself.
+    if (hasLoadedRef.current) loadArchivedConfigs();
     if (activeTab === 'audit') loadAuditTrail();
     if (activeTab === 'processing') loadProcessingSessions();
   }, [activeTab, loadSettings, loadArchivedConfigs, loadAuditTrail, loadProcessingSessions, settingsSubTab, loadProctoringSettings, auditCategory, auditPage]);
@@ -1274,6 +1367,11 @@ export default function AIInterview() {
        config rendered the previous one's candidates until the fetch returned,
        at the previous one's height. */
     setInvitations([]);
+    /* Same for the stat cards: placeholders until this tracker's counts land,
+       and anything still in flight for the previous one is dropped. */
+    overviewSeqRef.current += 1;
+    invitationsSeqRef.current += 1;
+    setInvitationOverview(null);
     setViewInvitationsConfig(config);
     setInviteFilters(EMPTY_INVITE_FILTERS);
     setTrackerJobVersionFilter('');
@@ -1791,13 +1889,18 @@ export default function AIInterview() {
      currently select. */
   const configLineageKeyOf = (c: AIInterviewResponse) =>
     c.jd_short_id || c.jd_id || `__unlinked__:${c.id}`;
-  const jobRowTotals = new Map<string, { interviews: number; active: number; invitations: number; completed: number; completedKnown: boolean }>();
+  const jobRowTotals = new Map<string, { interviews: number; active: number; invitations: number; invitationsKnown: boolean; completed: number; completedKnown: boolean }>();
   for (const config of filteredConfigs) {
     const key = configLineageKeyOf(config);
-    const entry = jobRowTotals.get(key) ?? { interviews: 0, active: 0, invitations: 0, completed: 0, completedKnown: true };
+    const entry = jobRowTotals.get(key) ?? { interviews: 0, active: 0, invitations: 0, invitationsKnown: true, completed: 0, completedKnown: true };
     entry.interviews += 1;
     if (normalizeConfigStatus(config.status) === 'published') entry.active += 1;
-    entry.invitations += invitationTotals[config.id] ?? config.invitations_count ?? 0;
+    /* Invitations Sent — from the same summary as Completed, and likewise
+       known only once every interview's total landed. It used to show the
+       list's `invitations_count` first and then switch to this total, which
+       can differ, so the figure changed under the recruiter on every load. */
+    if (typeof invitationTotals[config.id] === 'number') entry.invitations += invitationTotals[config.id];
+    else entry.invitationsKnown = false;
     // Completed candidates — known only once every interview's count landed.
     if (typeof completedCounts[config.id] === 'number') entry.completed += completedCounts[config.id];
     else entry.completedKnown = false;
@@ -1813,8 +1916,16 @@ export default function AIInterview() {
     const fresh = list.filter((c) => !completedCountsRequested.current.has(c.id));
     if (fresh.length === 0) return;
     for (const c of fresh) completedCountsRequested.current.add(c.id);
+    // This request's generation per interview — see inviteCountsGenRef.
+    const genOf = (id: string) => inviteCountsGenRef.current.get(id) ?? 0;
+    const requestGen = new Map(fresh.map((c) => [c.id, genOf(c.id)]));
+    const isCurrent = (id: string) => requestGen.get(id) === genOf(id);
+    // A failed request frees its interview for a retry — unless a newer
+    // request has taken it over since.
+    const release = (id: string) => { if (isCurrent(id)) completedCountsRequested.current.delete(id); };
 
     const apply = (id: string, total: number, completed: number) => {
+      if (!isCurrent(id)) return;
       setCompletedCounts((prev) => ({ ...prev, [id]: completed || 0 }));
       setInvitationTotals((prev) => ({ ...prev, [id]: total || 0 }));
     };
@@ -1828,7 +1939,7 @@ export default function AIInterview() {
           for (const c of batch) {
             const entry = counts[c.id];
             if (entry) apply(c.id, entry.total, entry.completed);
-            else completedCountsRequested.current.delete(c.id);
+            else release(c.id);
           }
         })
         .catch(() => {
@@ -1838,7 +1949,7 @@ export default function AIInterview() {
           for (const c of batch) {
             aiInterviewService.getConfigInvitations(c.id, { page: 1, page_size: 1 })
               .then((res) => apply(c.id, res.total, res.completed))
-              .catch(() => { completedCountsRequested.current.delete(c.id); });
+              .catch(() => release(c.id));
           }
         });
     }
@@ -1912,7 +2023,7 @@ export default function AIInterview() {
       paginatedConfigs.map((c) => c.jd_id).filter((id): id is string => !!id),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleLineageKeys, configs, archivedConfigs]);
+  }, [visibleLineageKeys, configs, archivedConfigs, inviteCountsTick]);
   /* ── View Versions: interview configs as the version panel's child rows ──
      The panel joins a child to a job version on `jd_id` — every job version is
      a JD row of its own, so that id names one version exactly. Configs are
@@ -1952,8 +2063,10 @@ export default function AIInterview() {
     status: normalizeConfigStatus(config.status),
     created_at: config.created_at,
     created_by_name: config.created_by_name,
-    invitations_count: invitationTotals[config.id] ?? config.invitations_count,
-    // Undefined until fetched — the cell shows a dash rather than a false 0.
+    /* Both undefined until /invitation-counts lands — the cells (and the job
+       version's totals) show a dash rather than the list's `invitations_count`
+       first and this total after, or a false 0. Same source as the job row. */
+    invitations_count: invitationTotals[config.id],
     completed_count: completedCounts[config.id],
     jd_id: config.jd_id,
     jd_version: config.jd_version,
@@ -2000,7 +2113,7 @@ export default function AIInterview() {
     const key = configLineageKeyOf(row);
     requestCompletedCounts(all.filter((c) => configLineageKeyOf(c) === key));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openVersionsFor, configs, archivedConfigs]);
+  }, [openVersionsFor, configs, archivedConfigs, inviteCountsTick]);
 
   /* The panel's wording for this page. Everything else about it — columns,
      spacing, chips, date format, the nesting — is the Assessments page's and is
@@ -3048,7 +3161,7 @@ export default function AIInterview() {
                       || 'bg-slate-100 text-gray-700 ring-gray-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700';
                     const statusPillLabel = statusPillLabels[normalizedStatus] || getStatusLabel(config.status);
                     const totals = jobRowTotals.get(configLineageKeyOf(config))
-                      ?? { interviews: 0, active: 0, invitations: 0, completed: 0, completedKnown: false };
+                      ?? { interviews: 0, active: 0, invitations: 0, invitationsKnown: false, completed: 0, completedKnown: false };
                     /* The Assessments Job List's four figures, in its order and
                        colours, for interviews. The fourth is Active Interviews
                        where that row has Completed: an interview config carries
@@ -3056,7 +3169,7 @@ export default function AIInterview() {
                     const rowMetrics = [
                       { key: 'job-versions', icon: Layers, iconClass: 'text-brand-blue', value: getJobVersionCount(config), label: 'Job Versions' },
                       { key: 'interviews', icon: Video, iconClass: 'text-brand-cyan', value: totals.interviews, label: 'Interviews' },
-                      { key: 'invitations', icon: Send, iconClass: 'text-brand-orange', value: totals.invitations, label: 'Invitations Sent' },
+                      { key: 'invitations', icon: Send, iconClass: 'text-brand-orange', value: totals.invitationsKnown ? totals.invitations : '—', label: 'Invitations Sent' },
                       /* Candidates who COMPLETED an interview for this job —
                          summed from each interview's completed-session count
                          (requestCompletedCounts). It once showed the published-
@@ -3081,7 +3194,9 @@ export default function AIInterview() {
                     const trackReason = !canInviteAIInterviews
                       ? 'You do not have permission to track invitations'
                       : jobInvitations > 0
-                        ? `Track invitations for this job (${totals.invitations} invitation${totals.invitations === 1 ? '' : 's'} sent)`
+                        ? totals.invitationsKnown
+                          ? `Track invitations for this job (${totals.invitations} invitation${totals.invitations === 1 ? '' : 's'} sent)`
+                          : 'Track invitations for this job'
                         : 'No invitations have been sent for this job yet';
                     const hasBeenShared = (config.invitations_count ?? 0) > 0;
                     const resultReason = hasBeenShared
@@ -3514,7 +3629,9 @@ export default function AIInterview() {
               ) : (() => {
                 const totalInvites = inviteStatusRows.length;
                 const bucketCount = (predicate: (inv: any) => boolean) => inviteStatusRows.filter(predicate).length;
-                const invitedCount = bucketCount((inv) => inv.status === 'invited');
+                /* Same resolved status the Invited pill filters on: an invite
+                   past its deadline is counted under Expired only, not both. */
+                const invitedCount = bucketCount((inv) => resolveInviteStatus(inv) === 'invited');
                 const expiredCount = bucketCount((inv) => resolveInviteStatus(inv) === 'expired');
                 const inProgressCount = bucketCount((inv) => inv.status === 'in_progress');
                 const completedCount = bucketCount((inv) => inv.status === 'completed');
@@ -4278,6 +4395,7 @@ export default function AIInterview() {
           onInvitesChanged={() => {
             // Immediate, silent refresh the moment an invite / copied link
             // exists — the 2s success popup no longer delays the trackers.
+            invalidateInviteCounts();
             loadData();
             if (viewInvitationsConfig) {
               loadInvitations(viewInvitationsConfig.id, invitationPage, inviteFilters, trackerSourceFilter, trackerResultFilter, true);
@@ -4286,6 +4404,7 @@ export default function AIInterview() {
             if (activeTab === 'invitation-status') loadAllInviteStatuses(true);
           }}
           onInviteSent={() => {
+            invalidateInviteCounts();
             loadData();
             // loadData() only refreshes the config list's own counters — the
             // Candidate Invitations popup (if it's the one Share was opened
@@ -4358,9 +4477,12 @@ export default function AIInterview() {
           ? `${invitationTotal} matching candidate${invitationTotal === 1 ? '' : 's'}`
           : `Showing ${startIndex} to ${endIndex} of ${invitationTotal} invites`;
 
-        const completionRate = invitationOverview.total > 0
+        const completionRate = invitationOverview && invitationOverview.total > 0
           ? Math.round((invitationOverview.completed / invitationOverview.total) * 100)
           : 0;
+        // Until the counts land each card shows a dash, not a false 0.
+        const overviewValue = (pick: (o: NonNullable<typeof invitationOverview>) => number) =>
+          (invitationOverview ? pick(invitationOverview) : '—');
 
         const pageBtn =
           'px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm border border-gray-200 dark:border-slate-700 ' +
@@ -4455,13 +4577,13 @@ export default function AIInterview() {
                   setInvitationPage(1);
                 }}
                 cards={[
-                  { key: 'all', label: 'Total', Icon: Users, value: invitationOverview.total, ...INVITE_CARD_TONES.slate },
-                  { key: 'invited', label: 'Invited', Icon: Mail, value: invitationOverview.invited, ...INVITE_CARD_TONES.blue },
-                  { key: 'in_progress', label: 'In Progress', Icon: Play, value: invitationOverview.inProgress, ...INVITE_CARD_TONES.orange },
-                  { key: 'completed', label: 'Completed', Icon: CheckCircle, value: invitationOverview.completed, ...INVITE_CARD_TONES.green },
-                  { key: 'expired', label: 'Expired', Icon: Clock, value: invitationOverview.expired, ...INVITE_CARD_TONES.orange },
-                  { key: 'terminated', label: 'Terminated', Icon: Ban, value: invitationOverview.terminated, ...INVITE_CARD_TONES.red },
-                  { key: 'revoked', label: 'Revoked', Icon: Ban, value: invitationOverview.revoked, ...INVITE_CARD_TONES.indigo },
+                  { key: 'all', label: 'Total', Icon: Users, value: overviewValue((o) => o.total), ...INVITE_CARD_TONES.slate },
+                  { key: 'invited', label: 'Invited', Icon: Mail, value: overviewValue((o) => o.invited), ...INVITE_CARD_TONES.blue },
+                  { key: 'in_progress', label: 'In Progress', Icon: Play, value: overviewValue((o) => o.inProgress), ...INVITE_CARD_TONES.orange },
+                  { key: 'completed', label: 'Completed', Icon: CheckCircle, value: overviewValue((o) => o.completed), ...INVITE_CARD_TONES.green },
+                  { key: 'expired', label: 'Expired', Icon: Clock, value: overviewValue((o) => o.expired), ...INVITE_CARD_TONES.orange },
+                  { key: 'terminated', label: 'Terminated', Icon: Ban, value: overviewValue((o) => o.terminated), ...INVITE_CARD_TONES.red },
+                  { key: 'revoked', label: 'Revoked', Icon: Ban, value: overviewValue((o) => o.revoked), ...INVITE_CARD_TONES.indigo },
                 ]}
               />
 
@@ -4480,7 +4602,7 @@ export default function AIInterview() {
                       exist. Solid and bold so it reads at a glance. */}
                   <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs sm:text-sm font-bold whitespace-nowrap flex-shrink-0 bg-brand-blue text-white shadow-sm shadow-brand-blue/25">
                     <TrendingUp className="w-4 h-4" strokeWidth={2.5} />
-                    {completionRate}% Completion
+                    {invitationOverview ? `${completionRate}%` : '—'} Completion
                   </span>
                 </div>
               </div>

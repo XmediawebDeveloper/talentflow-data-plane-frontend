@@ -1848,15 +1848,21 @@ export default function AITalentMatchPage({
    * rows and release both build guards, and whichever path runs next (prefetch
    * if the user is elsewhere, the restore effect if they're on the tab) builds
    * again from the fuller history.
+   *
+   * Keyed on the set of session ids, not the count: re-running a match on a
+   * job that already has one replaces its entry (same length, new session),
+   * and the later server refetch swaps the optimistic id for the real one —
+   * neither changes the length, so a count key never rebuilt for them.
    */
-  const candidateRowsHistoryCountRef = useRef(matchHistory.length);
+  const historySessionKey = matchHistory.map(item => item.id).sort().join('|');
+  const candidateRowsHistoryKeyRef = useRef(historySessionKey);
   useEffect(() => {
-    if (candidateRowsHistoryCountRef.current === matchHistory.length) return;
-    candidateRowsHistoryCountRef.current = matchHistory.length;
+    if (candidateRowsHistoryKeyRef.current === historySessionKey) return;
+    candidateRowsHistoryKeyRef.current = historySessionKey;
     setCandidateRows([]);
     prefetchedCandidateRowsRef.current = false;
     rebuiltRestoredCandidatesRef.current = false;
-  }, [matchHistory.length]);
+  }, [historySessionKey]);
 
   useEffect(() => {
     if (historyListScrollRequest === 0) return;
@@ -3568,8 +3574,11 @@ export default function AITalentMatchPage({
     const jobCandidatesInBand = (item: MatchHistory) =>
       candidateRatingBand ? jobCandidates(item).filter(c => bandOf(c) === candidateRatingBand) : jobCandidates(item);
 
-    // Pill counts: the loaded sessions' tally once every one is in; until
-    // then the server's band counts (Rating 10 / 9 – 7) and the runs' totals.
+    // Pill counts: the loaded sessions' tally — the same rows the drill-down
+    // lists — once every one is in; a placeholder (null) until then. They used
+    // to show the server's band counts and the runs' totals first, but those
+    // count differently (every match result vs. each job's latest session),
+    // so the pills jumped from one number to another once the tally landed.
     const loadedTally = matchHistory.reduce(
       (acc, item) => {
         const t = jobTally(item);
@@ -3578,15 +3587,9 @@ export default function AITalentMatchPage({
       },
       { exact: 0, partial: 0, no_match: 0 } as Record<RatingBand, number>,
     );
-    const runsTotal = matchHistory.reduce((sum, item) => sum + (item.totalMatches || 0), 0);
     const pillCounts: Record<RatingBand | 'all', number | null> = topStatsReady
       ? { all: loadedTally.exact + loadedTally.partial + loadedTally.no_match, ...loadedTally }
-      : {
-          all: runsTotal,
-          exact: ratingBandCounts?.exact ?? null,
-          partial: ratingBandCounts?.partial ?? null,
-          no_match: ratingBandCounts ? Math.max(0, runsTotal - ratingBandCounts.exact - ratingBandCounts.partial) : null,
-        };
+      : { all: null, exact: null, partial: null, no_match: null };
 
     /* View by Job under a rating pill: only jobs with such a match. A job
        whose candidates haven't loaded yet stays listed — an unloaded list

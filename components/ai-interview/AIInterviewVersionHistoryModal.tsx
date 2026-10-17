@@ -123,15 +123,26 @@ export default function AIInterviewVersionHistoryModal({
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const live: AIInterviewResponse[] = [];
-      for (let page = 1; ; page += 1) {
-        const batch = await aiInterviewService.listConfigs({ page, page_size: 100, compact: true });
-        live.push(...(batch.items || []));
-        if ((batch.items || []).length < 100 || live.length >= (batch.total ?? live.length)) break;
-      }
-      const archived = await aiInterviewService.listConfigs({ status: 'archived', page_size: 100, compact: true }).catch(() => ({ items: [] as AIInterviewResponse[] }));
+      const listAll = async (status?: string) => {
+        const items: AIInterviewResponse[] = [];
+        for (let page = 1; ; page += 1) {
+          const batch = await aiInterviewService.listConfigs({ status, page, page_size: 100, compact: true });
+          items.push(...(batch.items || []));
+          if ((batch.items || []).length < 100 || items.length >= (batch.total ?? items.length)) break;
+        }
+        return items;
+      };
+      const live = await listAll();
+      /* Archived versions page through too — a tenant with more than 100 of
+         them used to lose the rest. A failure here still shows the live
+         versions, but says the list may be missing archived ones rather than
+         passing it off as complete. */
+      const archived = await listAll('archived').catch(() => {
+        toast.error('Archived interview versions could not be loaded — the list may be incomplete.');
+        return [] as AIInterviewResponse[];
+      });
       const seen = new Set<string>();
-      const all = [...live, ...(archived.items || [])].filter((c) => (seen.has(c.id) ? false : (seen.add(c.id), true)));
+      const all = [...live, ...archived].filter((c) => (seen.has(c.id) ? false : (seen.add(c.id), true)));
       setAllConfigs(all);
       const versions = jobInterviewConfigs(all, jobId);
       const entries = await Promise.all(versions.map(async (c) => [c.id, await loadStats(c.id).catch(() => null)] as const));

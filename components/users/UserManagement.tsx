@@ -563,10 +563,14 @@ export default function UserManagement() {
   // (GET /users/count), used by the Active/Inactive stat cards below instead
   // of `users.filter(...)` — `users` only ever holds the current page of
   // `GET /users` (default page_size=20), so filtering it undercounts any
-  // tenant with more users than one page. `null` until that call resolves,
-  // during which the cards fall back to the old (possibly-undercounted but
-  // available) client tally rather than showing nothing.
+  // tenant with more users than one page. All three cards (Total too) read
+  // only this — `null` until the call resolves, during which they show a
+  // placeholder rather than a provisional client tally that then jumps.
   const [userCounts, setUserCounts] = useState<{ active_users: number; inactive_users: number; total_users: number } | null>(null);
+  // The last /users/count call failed — the cards show '—', not a guess.
+  const [userCountsFailed, setUserCountsFailed] = useState(false);
+  // Bumped per loadUsers, so an older /users/count response can't land last.
+  const userCountsSeqRef = useRef(0);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   // Drill-in pattern: cards-first overview, switch to list+search when a stat
@@ -1240,8 +1244,15 @@ export default function UserManagement() {
     // mount, so toggling a user's status left the Inactive/Active cards stale
     // until a manual page refresh. Fired in parallel and independent of the
     // list fetch so it still updates even if the list request fails.
-    userService.getUserCounts().then(setUserCounts).catch((error) => {
+    const countsSeq = ++userCountsSeqRef.current;
+    userService.getUserCounts().then((counts) => {
+      if (countsSeq !== userCountsSeqRef.current) return;
+      setUserCounts(counts);
+      setUserCountsFailed(false);
+    }).catch((error) => {
+      if (countsSeq !== userCountsSeqRef.current) return;
       console.warn('Failed to load user counts:', error);
+      setUserCountsFailed(true);
     });
     try {
       const response = await fetch(`${API_URL}/users`, {
@@ -2275,12 +2286,13 @@ export default function UserManagement() {
           label="Total Users"
           value={
             <span className="flex items-baseline gap-1">
-              {limits?.current_users ?? userCounts?.total_users ?? users.length}
+              {userCounts ? userCounts.total_users : '—'}
               <span className="text-sm font-normal text-gray-400 dark:text-slate-500">
                 / {limits?.max_users === -1 ? '∞' : (limits?.max_users ?? '—')}
               </span>
             </span>
           }
+          loading={!userCounts && !userCountsFailed}
           icon={UsersIcon}
           tone="neutral"
           sparkVariant={0}
@@ -2290,7 +2302,8 @@ export default function UserManagement() {
         />
         <StatsCard
           label="Active Users"
-          value={userCounts ? userCounts.active_users : users.filter(u => u.is_active).length}
+          value={userCounts ? userCounts.active_users : '—'}
+          loading={!userCounts && !userCountsFailed}
           icon={UserCheck}
           tone="neutral"
           sparkVariant={1}
@@ -2300,7 +2313,8 @@ export default function UserManagement() {
         />
         <StatsCard
           label="Inactive Users"
-          value={userCounts ? userCounts.inactive_users : users.filter(u => !u.is_active).length}
+          value={userCounts ? userCounts.inactive_users : '—'}
+          loading={!userCounts && !userCountsFailed}
           icon={UserX}
           tone="neutral"
           sparkVariant={2}

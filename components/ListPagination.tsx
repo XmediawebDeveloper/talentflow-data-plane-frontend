@@ -87,6 +87,15 @@ export default function ListPagination({
   const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
   const safePage = Math.min(currentPage, totalPages);
 
+  /* The clamp above is display-only — the parent still holds the old page.
+     After the last row of the last page is deleted (or a filter shrinks the
+     list) that left an empty table under "Showing 11 to 20 of 20". Hand the
+     parent the last real page instead. Only with rows to page through, so a
+     list that is momentarily empty while it loads keeps its page. */
+  useEffect(() => {
+    if (totalItems > 0 && currentPage > totalPages) onPageChange(totalPages);
+  }, [currentPage, totalPages, totalItems, onPageChange]);
+
   // Local text so a partial edit doesn't get clobbered by the currentPage
   // prop until Enter/blur commits it.
   const [goToPage, setGoToPage] = useState(String(safePage));

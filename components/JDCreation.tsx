@@ -5,6 +5,7 @@ import UnsavedChangesModal from '@/components/UnsavedChangesModal';
 import SuccessAnimation from '@/components/ui/success-animation';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
+import PublishedSummaryCard, { PublishedActions } from '@/components/ui/published-summary-card';
 import FileFormatIcon from '@/components/ui/file-format-icon';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -7841,7 +7842,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const backDestinationLabel =
     flowOrigin === 'assessment' ? 'Create AI Assessment'
     : flowOrigin ? 'Select Job Description'
-    : 'View All Jobs';
+    : 'Go to All Jobs';
   const createAnotherJdUrl = originQuery
     ? `/recruitment/jd-creation?${originQuery}`
     : '/recruitment/jd-creation';
@@ -11481,60 +11482,53 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
         {/* Displayed Step 4: Publish — the published success state. */}
         {step === 'review' && isPublished && (
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-5 sm:p-8 text-center">
+          <div className="py-4 sm:py-6 text-center">
             {/* The published tick, animated. It replaces the whole tinted disc
                 rather than sitting inside it: the animation brings its own
                 circle and throws particles past its edge, so the old ring would
                 have drawn a hard line straight through the burst. */}
-            <div className="flex justify-center mb-4 sm:mb-6">
+            <div className="flex justify-center mb-4 sm:mb-5">
               <SuccessAnimation />
             </div>
-            <h2 className="text-lg sm:text-2xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight mb-3 sm:mb-4">{publishedVersion && publishedVersion > 1 ? 'Job Description Republished!' : 'Job Description Published!'}</h2>
+            {/* Laid out as Assessment Published and AI Interview Published are:
+                headline, the one-line card naming what was published (the
+                shared PublishedSummaryCard — JD ID badge, job name, job
+                version), then the compact row of ways on from here. */}
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-slate-50 tracking-tight mb-4 sm:mb-5">{publishedVersion && publishedVersion > 1 ? 'Job Description Republished!' : 'Job Description Published!'}</h2>
 
-            {/* JD Code, Name and Version - the Recruitment JD row (`JobOpeningSummary`,
-                as the Review header draws it): the shared JobIdBadge, the job
-                name in its typography and the dotted version pill, gap-2 apart,
-                on one row that wraps instead of clipping on a narrow screen. */}
-            <div className="bg-brand-blue/[0.04] ring-1 ring-brand-blue/15 rounded-lg px-4 sm:px-6 py-2 sm:py-3 mb-4 sm:mb-6 inline-flex max-w-full items-center gap-2 flex-wrap justify-center">
-              {publishedJobCode && (
-                <JobIdBadge className="flex-shrink-0">{publishedJobCode}</JobIdBadge>
-              )}
-              <span className="min-w-0 text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 [overflow-wrap:anywhere]">{jobTitle}</span>
-              {publishedVersionNumber != null && (
-                <span className="px-2 py-0.5 rounded-full text-xs bg-gray-50 text-gray-700 border border-gray-200 flex items-center gap-1.5 flex-shrink-0 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
-                  <span className="w-1.5 h-1.5 rounded-full bg-gray-500" />
-                  v{publishedVersionNumber}
-                </span>
-              )}
-            </div>
+            <PublishedSummaryCard
+              className="mx-auto mb-5 sm:mb-6 w-fit max-w-full sm:max-w-3xl"
+              icon={<Briefcase className="w-5 h-5 text-brand-blue" />}
+              jobId={publishedJobCode}
+              jobName={jobTitle}
+              jobVersion={publishedVersionNumber}
+            />
 
-            <p className="text-sm sm:text-base text-gray-600 dark:text-slate-400 mb-2">
-              {publishedVersion && publishedVersion > 1
-                ? 'Your job description has been successfully republished with a new version.'
-                : 'Your job description has been successfully published and is now live.'}
-            </p>
-            <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 justify-center">
-              <Button
-                variant="secondary"
-                onClick={() => router.push(createAnotherJdUrl)}
-              >
-                Create Another JD
-              </Button>
+            <PublishedActions>
               {publishedJdId && (
                 <Button
                   variant="secondary"
                   onClick={() => router.push(viewPublishedJdUrl)}
+                  icon={<Eye className="w-4 h-4" />}
                 >
                   View JD
                 </Button>
               )}
               <Button
+                variant="secondary"
+                onClick={() => router.push(createAnotherJdUrl)}
+                icon={<Plus className="w-4 h-4" />}
+              >
+                Create New JD
+              </Button>
+              <Button
                 variant="primary"
                 onClick={onBack}
+                icon={<ArrowRight className="w-4 h-4" />}
               >
                 {backDestinationLabel}
               </Button>
-            </div>
+            </PublishedActions>
           </div>
         )}
         </div>

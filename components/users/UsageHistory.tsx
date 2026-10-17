@@ -9,7 +9,7 @@ import OrganizationTabs from '@/components/organization/OrganizationTabs';
  * Shows feature-wise, user-wise, team-wise usage with analytics, filters, export, and pagination
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   ClipboardList,
   ClipboardCheck,
@@ -1228,6 +1228,15 @@ export default function UsageHistory() {
   const [showExportModal, setShowExportModal] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
+  /* Bumped by every loadConsumption / loadPoolData run, so only the latest
+     request applies. The By Feature and By User tabs share the consumption
+     state, and the mount loads run with defaults before the saved filters
+     and dates are restored — an older response landing last used to show
+     the other tab's rows / totals or the default period's numbers. Declared
+     here, above the access guard's early return, with the other hooks. */
+  const consumptionSeqRef = useRef(0);
+  const poolSeqRef = useRef(0);
+
   // ── Computed date range (memoized to prevent infinite effect loops) ────────
   const { dateStart, dateEnd } = useMemo(() => {
     const start = startDateInput ? new Date(startDateInput) : null;
@@ -1284,6 +1293,8 @@ export default function UsageHistory() {
 
   // ── Load pool status & summary ────────────────────────────────────────────
   const loadPoolData = useCallback(async () => {
+    const seq = ++poolSeqRef.current;
+    const isStale = () => seq !== poolSeqRef.current;
     setIsLoadingPools(true);
     try {
       const days = Math.max(1, Math.ceil((dateEnd.getTime() - dateStart.getTime()) / (1000 * 60 * 60 * 24)));
@@ -1293,19 +1304,23 @@ export default function UsageHistory() {
         dashboardService.getDashboard().catch(() => null),
         featurePermissionService.getUserLimits().catch(() => null),
       ]);
+      if (isStale()) return;
       setPools(poolsRes);
       setSummary(summaryRes);
       if (dashRes?.subscription_units) setSubscriptionUnits(dashRes.subscription_units);
       if (limitsRes) setUserLimits(limitsRes);
     } catch (err: any) {
+      if (isStale()) return;
       toast.error(err.message || 'Failed to load pool data');
     } finally {
-      setIsLoadingPools(false);
+      if (!isStale()) setIsLoadingPools(false);
     }
   }, [dateStart, dateEnd]);
 
   // ── Load consumption history ───────────────────────────────────────────────
   const loadConsumption = useCallback(async (page: number, mode: 'feature' | 'user' = 'feature') => {
+    const seq = ++consumptionSeqRef.current;
+    const isStale = () => seq !== consumptionSeqRef.current;
     setIsLoadingConsumption(true);
     try {
       const res = await unitPoolService.getConsumptionHistory({
@@ -1316,13 +1331,15 @@ export default function UsageHistory() {
         limit: mode === 'user' ? 10000 : PAGE_SIZE,
         offset: mode === 'user' ? 0 : (page - 1) * PAGE_SIZE,
       });
+      if (isStale()) return;
       setConsumptionItems(res.items);
       setExistingUsers(res.users || []);
       setConsumptionTotal(mode === 'user' ? (res.users?.length ?? res.items.length) : res.total);
     } catch (err: any) {
+      if (isStale()) return;
       toast.error(err.message || 'Failed to load consumption history');
     } finally {
-      setIsLoadingConsumption(false);
+      if (!isStale()) setIsLoadingConsumption(false);
     }
   }, [filterUnitType, filterStatus, dateStart, dateEnd]);
 
