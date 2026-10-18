@@ -1133,6 +1133,104 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
               <p className="mt-0.5 text-gray-500 dark:text-slate-500">Usage will be deducted from the combined units.</p>
             </div>
           </div>
+          {/* Low Quota Warning — hide for expired/inactive plans */}
+          {quotaSummary?.has_low_quotas && !['expired', 'inactive', 'suspended'].includes(subscriptionSummary?.status?.toLowerCase() || '') && (
+            <div className="rounded-xl bg-brand-orange/[0.08] p-3 dark:bg-brand-orange/10">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-start gap-3">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-orange/20 text-brand-orange-deep">
+                    <AlertTriangle className="h-[18px] w-[18px]" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Quota Running Low</h3>
+                    <p className="mt-0.5 text-xs text-gray-600 dark:text-slate-400 sm:text-sm">Some quotas are below 20%. Purchase add-on units to continue without interruption.</p>
+                  </div>
+                </div>
+                  {/* Show each low quota with its own Add Credits button */}
+                  <div className="flex flex-wrap gap-2 sm:shrink-0 sm:justify-end">
+                    {quotaSummary.quotas
+                      ?.filter((q: QuotaInfo) => {
+                        if (!(q.is_low || q.is_exhausted || q.is_exceeded)) return false;
+                        // No low-quota warning for features not in the plan (the
+                        // quota card already says so). Uses isNotInPlan, not
+                        // hasPlanFeature — the latter is false for EXCEEDED quotas,
+                        // which are exactly the ones this banner must list.
+                        const featureKey = quotaFeatureMap[q.quota_type];
+                        if (featureKey && isNotInPlan(featureKey)) return false;
+                        return true;
+                      })
+                      .map((quota: QuotaInfo) => {
+                        // Map quota_type to addon name pattern for matching
+                        const quotaToAddonMap: Record<string, string> = {
+                          'RU': 'resume upload',
+                          'RS': 'resume scoring',
+                          'AS': 'assessment',
+                          'AIU': 'ai interview',
+                          'max_seats': 'max seats',
+                        };
+                        const addonPattern = quotaToAddonMap[quota.quota_type] || '';
+
+                        // Find matching addon
+                        const matchingAddon = addons.find(addon =>
+                          (addon.name || addon.addon_name || '').toLowerCase().includes(addonPattern)
+                        );
+
+                        return (
+                          <button
+                            key={quota.quota_type}
+                            onClick={() => {
+                              if (!canPurchaseAddons) {
+                                toast.error('You do not have permission to purchase add-ons');
+                                return;
+                              }
+                              if (isAddonPurchaseBlocked) {
+                                setAddonPurchaseError(
+                                  subscriptionSummary?.is_trial
+                                    ? 'Addon purchases are only available for paid plans. Please upgrade from your free trial.'
+                                    : 'Addon purchases are not available. Please renew your subscription first.'
+                                );
+                                return;
+                              }
+                              if (matchingAddon) {
+                                handleBuyAddon(matchingAddon);
+                              } else {
+                                const addonsSection = document.querySelector('[data-section="addons"]');
+                                if (addonsSection) {
+                                  addonsSection.scrollIntoView({ behavior: 'smooth' });
+                                }
+                              }
+                            }}
+                            aria-disabled={!canPurchaseAddons}
+                            title={!canPurchaseAddons ? 'You do not have permission to purchase add-ons' : isAddonPurchaseBlocked ? addonBlockedMessage : ""}
+                            className={`px-2.5 py-1.5 text-xs font-semibold rounded-lg transition-colors inline-flex items-center gap-1.5 ring-1 ${
+                              !canPurchaseAddons
+                                ? 'bg-gray-200 text-gray-500 ring-gray-300 cursor-not-allowed'
+                                : isAddonPurchaseBlocked
+                                ? 'bg-gray-200 text-gray-500 ring-gray-300 cursor-not-allowed'
+                                : quota.is_exceeded_critical
+                                  ? 'bg-destructive text-white ring-destructive-line hover:bg-destructive'
+                                  : quota.is_exceeded
+                                    ? 'bg-brand-orange text-white ring-brand-orange-deep hover:bg-brand-orange-deep'
+                                    : quota.is_exhausted
+                                    ? 'bg-brand-blue text-white ring-white/10 shadow-sm shadow-brand-blue/25'
+                                    : 'bg-white text-gray-800 ring-gray-200 shadow-sm hover:bg-brand-blue/5 hover:text-brand-blue hover:ring-brand-blue/30'
+                            }`}
+                          >
+                            <Plus className="w-3 h-3" />
+                            {canPurchaseAddons ? `Add ${quota.name}` : `${quota.name} Read Only`}
+                            {quota.is_exceeded && canPurchaseAddons && !isAddonPurchaseBlocked && (
+                              <span className="text-2xs bg-white/20 px-1.5 py-0.5 rounded-full">+{formatNum(quota.exceeded_by)} over</span>
+                            )}
+                            {quota.is_exhausted && canPurchaseAddons && !isAddonPurchaseBlocked && (
+                              <span className="text-2xs bg-white/20 px-1.5 py-0.5 rounded-full">Exhausted</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                  </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Quota Summary Cards */}
@@ -1158,105 +1256,6 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
                 <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-gray-200 dark:bg-slate-600" />Remaining</span>
               </div>
             </div>
-
-            {/* Low Quota Warning — hide for expired/inactive plans */}
-            {quotaSummary.has_low_quotas && !['expired', 'inactive', 'suspended'].includes(subscriptionSummary?.status?.toLowerCase() || '') && (
-              <div className="rounded-xl bg-brand-orange/[0.08] p-3 dark:bg-brand-orange/10">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex min-w-0 items-start gap-3">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-orange/20 text-brand-orange-deep">
-                      <AlertTriangle className="h-[18px] w-[18px]" />
-                    </div>
-                    <div className="min-w-0">
-                      <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Quota Running Low</h3>
-                      <p className="mt-0.5 text-xs text-gray-600 dark:text-slate-400 sm:text-sm">Some quotas are below 20%. Purchase add-on units to continue without interruption.</p>
-                    </div>
-                  </div>
-                    {/* Show each low quota with its own Add Credits button */}
-                    <div className="flex flex-wrap gap-2 sm:shrink-0 sm:justify-end">
-                      {quotaSummary.quotas
-                        ?.filter((q: QuotaInfo) => {
-                          if (!(q.is_low || q.is_exhausted || q.is_exceeded)) return false;
-                          // No low-quota warning for features not in the plan (the
-                          // quota card already says so). Uses isNotInPlan, not
-                          // hasPlanFeature — the latter is false for EXCEEDED quotas,
-                          // which are exactly the ones this banner must list.
-                          const featureKey = quotaFeatureMap[q.quota_type];
-                          if (featureKey && isNotInPlan(featureKey)) return false;
-                          return true;
-                        })
-                        .map((quota: QuotaInfo) => {
-                          // Map quota_type to addon name pattern for matching
-                          const quotaToAddonMap: Record<string, string> = {
-                            'RU': 'resume upload',
-                            'RS': 'resume scoring',
-                            'AS': 'assessment',
-                            'AIU': 'ai interview',
-                            'max_seats': 'max seats',
-                          };
-                          const addonPattern = quotaToAddonMap[quota.quota_type] || '';
-
-                          // Find matching addon
-                          const matchingAddon = addons.find(addon =>
-                            (addon.name || addon.addon_name || '').toLowerCase().includes(addonPattern)
-                          );
-
-                          return (
-                            <button
-                              key={quota.quota_type}
-                              onClick={() => {
-                                if (!canPurchaseAddons) {
-                                  toast.error('You do not have permission to purchase add-ons');
-                                  return;
-                                }
-                                if (isAddonPurchaseBlocked) {
-                                  setAddonPurchaseError(
-                                    subscriptionSummary?.is_trial
-                                      ? 'Addon purchases are only available for paid plans. Please upgrade from your free trial.'
-                                      : 'Addon purchases are not available. Please renew your subscription first.'
-                                  );
-                                  return;
-                                }
-                                if (matchingAddon) {
-                                  handleBuyAddon(matchingAddon);
-                                } else {
-                                  const addonsSection = document.querySelector('[data-section="addons"]');
-                                  if (addonsSection) {
-                                    addonsSection.scrollIntoView({ behavior: 'smooth' });
-                                  }
-                                }
-                              }}
-                              aria-disabled={!canPurchaseAddons}
-                              title={!canPurchaseAddons ? 'You do not have permission to purchase add-ons' : isAddonPurchaseBlocked ? addonBlockedMessage : ""}
-                              className={`px-2.5 py-1.5 text-xs font-semibold rounded-lg transition-colors inline-flex items-center gap-1.5 ring-1 ${
-                                !canPurchaseAddons
-                                  ? 'bg-gray-200 text-gray-500 ring-gray-300 cursor-not-allowed'
-                                  : isAddonPurchaseBlocked
-                                  ? 'bg-gray-200 text-gray-500 ring-gray-300 cursor-not-allowed'
-                                  : quota.is_exceeded_critical
-                                    ? 'bg-destructive text-white ring-destructive-line hover:bg-destructive'
-                                    : quota.is_exceeded
-                                      ? 'bg-brand-orange text-white ring-brand-orange-deep hover:bg-brand-orange-deep'
-                                      : quota.is_exhausted
-                                      ? 'bg-brand-blue text-white ring-white/10 shadow-sm shadow-brand-blue/25'
-                                      : 'bg-white text-gray-800 ring-gray-200 shadow-sm hover:bg-brand-blue/5 hover:text-brand-blue hover:ring-brand-blue/30'
-                              }`}
-                            >
-                              <Plus className="w-3 h-3" />
-                              {canPurchaseAddons ? `Add ${quota.name}` : `${quota.name} Read Only`}
-                              {quota.is_exceeded && canPurchaseAddons && !isAddonPurchaseBlocked && (
-                                <span className="text-2xs bg-white/20 px-1.5 py-0.5 rounded-full">+{formatNum(quota.exceeded_by)} over</span>
-                              )}
-                              {quota.is_exhausted && canPurchaseAddons && !isAddonPurchaseBlocked && (
-                                <span className="text-2xs bg-white/20 px-1.5 py-0.5 rounded-full">Exhausted</span>
-                              )}
-                            </button>
-                          );
-                        })}
-                    </div>
-                </div>
-              </div>
-            )}
 
             {/* Quota Cards Grid - Dynamic */}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
