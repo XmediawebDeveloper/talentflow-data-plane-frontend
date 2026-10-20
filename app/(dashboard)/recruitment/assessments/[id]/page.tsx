@@ -360,7 +360,13 @@ function AssessmentDetailsContent() {
     shareOnArrivalHandledRef.current = true;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setShowShareModal(true);
-  }, [openShareOnArrival, isLoading, assessment, canInvite]);
+    /* Consumed: drop `?share=1` so a refresh (which resets the ref above)
+       does not pop the Share dialog open again. */
+    const params = new URLSearchParams(window.location.search);
+    params.delete('share');
+    const qs = params.toString();
+    router.replace(`${window.location.pathname}${qs ? `?${qs}` : ''}`, { scroll: false });
+  }, [openShareOnArrival, isLoading, assessment, canInvite, router]);
 
   const handleViewResults = () => {
     router.push(`/recruitment/assessments/${assessmentId}/results`);
