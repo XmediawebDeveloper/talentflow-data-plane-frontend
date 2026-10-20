@@ -44,6 +44,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { usePlanFeatures, usePlanLock } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
+import { RESUME_VIEW_SOURCE_PARAM } from '@/lib/constants/resumePools';
 
 interface SearchFilters {
   skills?: string[];
@@ -209,8 +210,17 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
     return params;
   }, [filters]);
 
-  // Fetch data with filters
+  /* Bumped by every fetchData run and on unmount, so a response belonging to
+     an older run (e.g. one for filters the user has since changed) is dropped
+     instead of overwriting newer data. */
+  const fetchSeqRef = useRef(0);
+
+  // Fetch data with filters. Not keyed on the search text: search runs
+  // client-side over the full list (see filteredAndSortedResumes), so typing
+  // must not refetch the whole database on every debounced keystroke.
   const fetchData = useCallback(async () => {
+    const seq = ++fetchSeqRef.current;
+    const isStale = () => seq !== fetchSeqRef.current;
     setLoading(true);
     try {
       const params = buildSearchParams();
@@ -220,10 +230,12 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
         resumeService.list({ ...params, page_size: 1 }),
         folderService.list().catch(() => []),
       ]);
+      if (isStale()) return;
       const resumeResponse =
         probe.total > probe.items.length
           ? await resumeService.list({ ...params, page_size: probe.total })
           : probe;
+      if (isStale()) return;
 
       // Convert API Resume to component Resume type
       const convertedResumes: Resume[] = resumeResponse.items.map((r: ApiResume) => ({
@@ -279,8 +291,6 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
           name: typeof lang === 'string' ? lang : (lang.name || lang.language || ''),
           proficiency: typeof lang === 'string' ? 'Fluent' : (lang.proficiency || lang.level || 'Fluent'),
         })),
-        // Store search query for highlighting
-        _searchQuery: appliedSearchQuery,
       }));
 
       // Convert API Folder to component Folder type
@@ -299,17 +309,21 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
       setTotalResumes(resumeResponse.total || 0);
       setTotalIncludingVersions(resumeResponse.total_including_versions);
     } catch (error) {
+      if (isStale()) return;
       console.error('Failed to fetch data:', error);
       toast.error('Failed to load resume database');
     } finally {
-      setLoading(false);
+      // A stale run leaves the loading state to the run that replaced it.
+      if (!isStale()) setLoading(false);
     }
-  }, [buildSearchParams, appliedSearchQuery]);
+  }, [buildSearchParams]);
 
   // Fetch data when search params change
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+  // Invalidate the in-flight run on unmount.
+  useEffect(() => () => { fetchSeqRef.current += 1; }, []);
 
   // Self-heal admin-API resume usage on page mount. Fire-and-forget — never
   // blocks rendering. The backend caps deltas at ±200 to keep this safe.
@@ -1028,8 +1042,11 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
             <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1">
               <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Shared Resume Database</h1>
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-brand-blue/10 dark:bg-brand-blue/20 text-brand-blue ring-1 ring-brand-blue/20 dark:ring-brand-blue/30">
-                {resumes.length.toLocaleString()} Resumes
-                {typeof totalIncludingVersions === 'number' && totalIncludingVersions > totalResumes && (
+                {/* The same rows the table lists (search applied). The
+                    versions note is a server total for the whole list, so it
+                    only shows while no search is narrowing it. */}
+                {filteredAndSortedResumes.length.toLocaleString()} Resumes
+                {!appliedSearchQuery && typeof totalIncludingVersions === 'number' && totalIncludingVersions > totalResumes && (
                   <> ({totalIncludingVersions - totalResumes} versions)</>
                 )}
               </span>
@@ -1058,8 +1075,8 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
             onAssessmentDisabled={isPlanLocked('assessment') || !(isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('internal_db:assessment')))}
             onAssessmentDisabledReason={!(isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('internal_db:assessment'))) ? "You do not have permission to invite candidates to an assessment" : PLAN_LOCKED_MESSAGE}
             onAIInterview={handleBulkAIInterview}
-            onAIInterviewDisabled={isPlanLocked('ai_interview') || !(isTenantAdmin || hasPermission('canInviteAIInterviews'))}
-            onAIInterviewDisabledReason={!(isTenantAdmin || hasPermission('canInviteAIInterviews')) ? "You do not have permission to invite candidates to an AI interview" : PLAN_LOCKED_MESSAGE}
+            onAIInterviewDisabled={isPlanLocked('ai_interview') || !(isTenantAdmin || (hasPermission('canInviteAIInterviews') && hasPermissionCode('internal_db:invite_ai_interview')))}
+            onAIInterviewDisabledReason={!(isTenantAdmin || (hasPermission('canInviteAIInterviews') && hasPermissionCode('internal_db:invite_ai_interview'))) ? "You do not have permission to invite candidates to an AI interview" : PLAN_LOCKED_MESSAGE}
             onAITalentMatch={handleBulkAITalentMatch}
             onAITalentMatchDisabled={isPlanLocked('ai_talent_match') || !(isTenantAdmin || (hasPermission('canRunAiMatch') && hasPermissionCode('internal_db:ai_match')))}
             onAITalentMatchDisabledReason={!(isTenantAdmin || (hasPermission('canRunAiMatch') && hasPermissionCode('internal_db:ai_match'))) ? "You do not have permission to run AI talent match" : PLAN_LOCKED_MESSAGE}
@@ -1143,7 +1160,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
           onViewDetails={(resume) => {
             sessionStorage.setItem('resumeNavList', JSON.stringify(paginatedResumes.map((r) => r.id)));
             sessionStorage.setItem('resumeNavSource', 'resume-database');
-            router.push(`/recruitment/resume-view/${resume.id}`);
+            router.push(`/recruitment/resume-view/${resume.id}?${RESUME_VIEW_SOURCE_PARAM}=internal-db`);
           }}
           onVersion={handleShowVersionHistory}
           highlightQuery={appliedSearchQuery}

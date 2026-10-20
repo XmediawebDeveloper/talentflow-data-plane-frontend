@@ -1698,8 +1698,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  // Hand raise detection
+  // Hand raise detection — DISABLED (2026-10-17). It ran MediaPipe Hands on
+  // the main thread at 10 fps for the whole interview, yet nothing shows the
+  // result: the Webcam hand indicator is off (showHandIndicator={false}) and
+  // TalkingHeadAvatar never receives avatarState. Its lazy WASM load also
+  // overlapped FaceMesh's and clobbered MediaPipe's shared global `Module`
+  // (the "dependency: … hands … face_mesh …" warnings every 10 s). Set
+  // disabled: false only together with a visible use of the result.
   const handDetection = useHandRaiseDetection({
+    disabled: true,
     enabled: webcamReady,
     onHandRaised: () => avatarState.raiseHand(),
     onHandLowered: () => avatarState.lowerHand(),

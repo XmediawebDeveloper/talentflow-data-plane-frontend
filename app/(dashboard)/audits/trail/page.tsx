@@ -44,6 +44,7 @@ import {
 import { formatIST } from '@/lib/utils/dateUtils';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
+import { StatValuePlaceholder } from '@/components/ui/stats-card';
 import { TableSkeleton } from '@/components/ui/skeleton';
 import { DateField } from '@/components/ui/date-field';
 import { Button } from '@/components/ui/button';
@@ -292,8 +293,10 @@ export default function AuditTrailPage() {
   const [availableActions, setAvailableActions] = useState<Array<{value: string; label: string}>>([]);
   const [availableEntities, setAvailableEntities] = useState<Array<{value: string; label: string}>>([]);
 
-  // Total users count
-  const [totalUsers, setTotalUsers] = useState(0);
+  // Total users count — null until /users answers, so the card shows a
+  // placeholder instead of a provisional 0.
+  const [totalUsers, setTotalUsers] = useState<number | null>(null);
+  const [totalUsersFailed, setTotalUsersFailed] = useState(false);
 
   // Export state
   const [exportDropdownOpen, setExportDropdownOpen] = useState(false);
@@ -312,6 +315,12 @@ export default function AuditTrailPage() {
   // Prevent duplicate fetches in development mode
   const hasFetched = useRef(false);
   const prevFilters = useRef({ page, actionFilter, entityFilter, dateRange, errorOriginFilter, userFilter });
+  /* Bumped by every fetchAuditLogs / fetchStats run, so only the latest
+     request applies. The mount fetch runs with default filters before the
+     saved ones are restored, then again with them; whichever landed last
+     used to win — rows and counts for the wrong filters. */
+  const logsFetchSeqRef = useRef(0);
+  const statsFetchSeqRef = useRef(0);
 
   // Persist the cards<->list view, filters and pagination + scroll position so
   // returning to this page restores exactly where the user left off. The
@@ -334,6 +343,8 @@ export default function AuditTrailPage() {
   );
 
   const fetchAuditLogs = useCallback(async () => {
+    const seq = ++logsFetchSeqRef.current;
+    const isStale = () => seq !== logsFetchSeqRef.current;
     setLoading(true);
     setError(null);
 
@@ -381,6 +392,7 @@ export default function AuditTrailPage() {
         },
       });
 
+      if (isStale()) return;
       if (!response.ok) {
         // Handle 401 - logout and redirect to login
         if (response.status === 401) {
@@ -397,18 +409,22 @@ export default function AuditTrailPage() {
       }
 
       const data = await response.json();
+      if (isStale()) return;
       setAuditLogs(data.items || []);
       setTotal(data.total || 0);
       setTotalPages(data.total_pages || 1);
     } catch (err: any) {
+      if (isStale()) return;
       console.error('Error fetching audit logs:', err);
       setError(err.message || 'Failed to load audit logs');
     } finally {
-      setLoading(false);
+      if (!isStale()) setLoading(false);
     }
   }, [page, pageSize, actionFilter, entityFilter, dateRange, errorOriginFilter, userFilter]);
 
   const fetchStats = useCallback(async () => {
+    const seq = ++statsFetchSeqRef.current;
+    const isStale = () => seq !== statsFetchSeqRef.current;
     try {
       const token = localStorage.getItem('accessToken');
       const response = await fetch(`${API_URL}/audits/stats?days=${dateRange}`, {
@@ -425,6 +441,7 @@ export default function AuditTrailPage() {
 
       if (response.ok) {
         const data = await response.json();
+        if (isStale()) return;
         setStats(data);
       }
     } catch (err) {
@@ -483,9 +500,12 @@ export default function AuditTrailPage() {
       if (response.ok) {
         const data = await response.json();
         setTotalUsers(data.total ?? (Array.isArray(data.users || data) ? (data.users || data).length : 0));
+      } else {
+        setTotalUsersFailed(true);
       }
     } catch (err) {
       console.error('Error fetching users count:', err);
+      setTotalUsersFailed(true);
     }
   }, []);
 
@@ -894,7 +914,7 @@ export default function AuditTrailPage() {
                 <div className="flex items-start justify-between">
                   <div className="min-w-0">
                     <p className="text-2xs sm:text-xs md:text-sm font-medium text-gray-600 dark:text-slate-400">Active Users</p>
-                    <p className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-slate-50 mt-1 sm:mt-2">{totalUsers}</p>
+                    <p className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-slate-50 mt-1 sm:mt-2">{totalUsers !== null ? totalUsers : totalUsersFailed ? '—' : <StatValuePlaceholder />}</p>
                     <p className="text-2xs sm:text-xs text-gray-500 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1">
                       <TrendingUp className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
                       {userFilter ? 'Filtering by 1 user' : 'Click to filter'}

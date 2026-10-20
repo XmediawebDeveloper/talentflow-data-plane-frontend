@@ -992,6 +992,11 @@ export default function ResumeScoringPage({
      hide) from that list, so until it lands the job list is shown unfiltered
      with no counts rather than wrongly emptied. */
   const [globalLoaded, setGlobalLoaded] = useState(false);
+  /* The last fetch of that list failed. The job rows' Scored Count shows a
+     placeholder while it loads (not the version's own total, which counts
+     fewer rows than the lineage-wide tally it then switches to); on failure
+     there is no tally coming, so it falls back to the version's total. */
+  const [globalFailed, setGlobalFailed] = useState(false);
   /* First-paint gate. The page is held on its skeleton until the job list,
      the candidate scores (the job cards' Exact / Partial / No Match chips and
      the pill counts) and the units have all arrived — then shown in one step,
@@ -1080,6 +1085,7 @@ export default function ResumeScoringPage({
    */
   const fetchGlobalScoredResumes = async ({ silent = false }: { silent?: boolean } = {}) => {
     setIsLoadingGlobal(true);
+    setGlobalFailed(false);
     try {
       // Probe for the real total, then pull everything in one request — the
       // same pattern every other list on this page uses (see e.g. the JD
@@ -1136,6 +1142,7 @@ export default function ResumeScoringPage({
       setGlobalLoaded(true);
     } catch (error) {
       console.error('Failed to fetch global scored resumes:', error);
+      setGlobalFailed(true);
       if (!silent) toast.error('Failed to load all scored candidates');
     } finally {
       setIsLoadingGlobal(false);
@@ -1362,7 +1369,17 @@ export default function ResumeScoringPage({
   const invalidateGlobalScoredResumes = () => {
     setGlobalScoredResumes([]);
     setGlobalLoaded(false);
+    setGlobalFailed(false);
     globalPrefetchedRef.current = false;
+  };
+
+  /** A job row's Scored Count: its verdict tally (every version) once the
+   *  scored list is in, a placeholder until then — never the version's own
+   *  total first, which would then jump to the tally. See `globalFailed`. */
+  const scoredCountValue = (versionTotal: number, tally: { exact: number; partial: number; none: number }) => {
+    if (globalLoaded) return tally.exact + tally.partial + tally.none;
+    if (globalFailed) return versionTotal;
+    return <span className="inline-block h-4 w-6 rounded bg-gray-100 dark:bg-slate-800 animate-pulse align-middle" aria-label="Loading" />;
   };
 
   /**
@@ -4235,12 +4252,12 @@ export default function ResumeScoringPage({
                           </span>
                           {/* How many scores this job has — every version, the
                               same rows the Exact / Partial / No Match badges
-                              add up to. Until those load, the version's own
-                              total. */}
+                              add up to. A placeholder until those load (see
+                              `globalFailed`). */}
                           <span className="flex items-center gap-1">
                             <span className="font-medium text-gray-700 dark:text-slate-300">Scored Count:</span>
                             <span className="font-normal text-gray-500 dark:text-slate-400 tabular-nums">
-                              {globalLoaded ? verdictTally.exact + verdictTally.partial + verdictTally.none : item.totalScored}
+                              {scoredCountValue(item.totalScored, verdictTally)}
                             </span>
                           </span>
                           {/* Grid only: the verdict counts inline. The list
@@ -4250,7 +4267,7 @@ export default function ResumeScoringPage({
                           {jobListDisplayMode !== 'grid' ? null : !globalLoaded ? (
                             <span className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
                               <FileText className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-                              {item.totalScored} {item.totalScored === 1 ? 'candidate' : 'candidates'} scored
+                              {scoredCountValue(item.totalScored, verdictTally)} {item.totalScored === 1 ? 'candidate' : 'candidates'} scored
                             </span>
                           ) : (
                             <span className="flex flex-wrap items-center gap-1.5">
@@ -4292,14 +4309,14 @@ export default function ResumeScoringPage({
                             Job Descriptions cards' Applicants / Assessed /
                             Interviewed stack, in the verdict colours. Across
                             every version of this job; under a verdict filter,
-                            only that one. Until the scores load, the version's
-                            own total. */}
+                            only that one. Until the scores load, a placeholder
+                            (see `scoredCountValue`). */}
                         {jobListDisplayMode !== 'grid' && (
                           <div className="flex flex-col items-stretch gap-1.5 flex-shrink-0">
                             {!globalLoaded ? (
                               <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs bg-info-subtle text-info-strong whitespace-nowrap">
                                 <FileText className="w-4 h-4" />
-                                {item.totalScored} Scored
+                                {scoredCountValue(item.totalScored, verdictTally)} Scored
                               </span>
                             ) : ([
                               { id: 'Exact Match' as const, count: verdictTally.exact, Icon: CheckCircle2, cls: 'bg-success-subtle text-success-strong' },
@@ -4479,14 +4496,14 @@ export default function ResumeScoringPage({
                       </td>
                       <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 hidden md:table-cell">
                         <span className="text-sm font-semibold tabular-nums text-gray-900 dark:text-slate-50">
-                          {globalLoaded ? verdictTally.exact + verdictTally.partial + verdictTally.none : item.totalScored}
+                          {scoredCountValue(item.totalScored, verdictTally)}
                         </span>
                       </td>
                       <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
                         {!globalLoaded ? (
                           <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs bg-info-subtle text-info-strong whitespace-nowrap">
                             <FileText className="w-3.5 h-3.5" />
-                            {item.totalScored}
+                            {scoredCountValue(item.totalScored, verdictTally)}
                           </span>
                         ) : (
                           <div className="flex flex-wrap items-center gap-1.5">

@@ -920,12 +920,17 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   // in-progress candidates have no result yet.
   const [assessmentFinishedCount, setAssessmentFinishedCount] = useState(0);
   /* The Assessments Results tab's BADGE: the table's own record count while
-     the tab is open (reported by AssessmentResults — every status, every
-     page, its current filters), else every result row of this job's
-     assessments, any status — what the table lists with no filter. */
-  const [assessmentResultTotal, setAssessmentResultTotal] = useState(0);
+     the tab is open (reported by AssessmentResults — every page, its current
+     filters), else the rows that table lists with no filter: this job's
+     result rows it shows as Completed or Terminated (see
+     `isListedAssessmentResult`). Null until the first fetch settles, so the
+     badge shows a placeholder instead of a provisional 0. */
+  const [assessmentResultTotal, setAssessmentResultTotal] = useState<number | null>(null);
   const [assessmentTableTotal, setAssessmentTableTotal] = useState<number | null>(null);
   const [loadingAssessmentResults, setLoadingAssessmentResults] = useState(false);
+  /* Bumped by every fetchAssessmentResults run, so an older run (e.g. the
+     mount load) cannot overwrite the counts of a newer one (after a send). */
+  const assessmentResultsSeqRef = useRef(0);
   const [viewingAssessmentResult, setViewingAssessmentResult] = useState<any | null>(null);
   /* The Assessment objects themselves (not the per-candidate results above) —
      kept for Recent Activity's "Assessment Created (Vn)" entry, which needs
@@ -975,7 +980,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   const permissions = {
     canCreateAssessments: hasPermission('canCreateAssessments'),
     canUpdateAssessments: hasPermission('canUpdateAssessments'),
-    canRunAiMatch: hasPermission('canRunAiMatch'),
+    // Run AI Talent Match from a JD needs the main (AI Talent Match → Run) AND
+    // this JD entry point (jd:ai_match). Gates every AI-match trigger on this page.
+    canRunAiMatch: hasPermission('canRunAiMatch') && (isAdminUser || hasPermissionCode('jd:ai_match')),
     canReadJD: hasPermission('canReadJD'),
     canViewAssessments: hasPermission('canViewAssessments'),
     canUploadResumes: hasPermission('canUploadResumes'),
@@ -988,7 +995,13 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     canViewAIInterviews: hasPermission('canViewAIInterviews') || hasPermission('canRunAiInterviews') || hasPermission('canInviteAIInterviews'),
   };
 
-  const canInviteJd = isTenantAdmin || hasPermissionCode('jd:invite');
+  // Job Description → "Invite to Assessment" / "Invite to AI Interview" are
+  // separate permissions; each target also needs its module's own Invite
+  // (the server checks assessments:invite / ai_interview:invite on send).
+  const canInviteJdAssessment =
+    isTenantAdmin || (hasPermissionCode('jd:invite_assessment') && hasPermissionCode('assessments:invite'));
+  const canInviteJdAIInterview =
+    isTenantAdmin || (hasPermissionCode('jd:invite_ai_interview') && hasPermissionCode('ai_interview:invite'));
 
   // ✅ PERMISSIONS: Get feature flags for Quick Actions
   const features = {
@@ -1033,12 +1046,18 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   // candidate has no result yet.
   const [aiInterviewResultCount, setAiInterviewResultCount] = useState(0);
   /* The AI Interview Result tab's BADGE, the assessment rule: the table's
-     record count while the tab is open, else every invitation of the live
-     interview (`aiInterviewCount`) — what the table lists with no filter. */
+     record count while the tab is open, else what the table lists with no
+     filter — In Progress, Completed and Terminated sessions of the live
+     interview (AIInterviewResults' RESULT_STATUSES), not every invitation.
+     Null until the config load settles, so the badge shows a placeholder. */
+  const [aiInterviewResultTotal, setAiInterviewResultTotal] = useState<number | null>(null);
   const [aiInterviewTableTotal, setAiInterviewTableTotal] = useState<number | null>(null);
   const [loadingAIInterviewConfig, setLoadingAIInterviewConfig] = useState(false);
   const [aiInterviewConfigError, setAiInterviewConfigError] = useState<string | null>(null);
   const aiInterviewConfigFetchedRef = useRef(false);
+  /* Bumped by every loadAIInterviewConfig run, so an older run (e.g. the mount
+     load) cannot overwrite the counts of a newer one (after a send/publish). */
+  const aiInterviewConfigSeqRef = useRef(0);
   /* The interview config's own edit/publish version — for Recent Activity's
      "AI Interview Created (Vn)" entry. `AIInterviewResponse` itself carries no
      version number (only `jd_current_version`, which is the linked JD's
@@ -1125,10 +1144,13 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   const loadAIInterviewConfig = async () => {
     if (aiInterviewConfigFetchedRef.current) return;
     aiInterviewConfigFetchedRef.current = true;
+    const seq = ++aiInterviewConfigSeqRef.current;
+    const isStale = () => seq !== aiInterviewConfigSeqRef.current;
     setLoadingAIInterviewConfig(true);
     setAiInterviewConfigError(null);
     try {
       const liveConfig = await aiInterviewService.findLiveConfigForJd(job.id);
+      if (isStale()) return;
       setAiInterviewConfig(liveConfig);
 
       // Does this JD have an interview at all? A live one obviously counts; if
@@ -1141,6 +1163,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         const draftResult = await aiInterviewService
           .listConfigs({ status: 'draft', page_size: 50, compact: true })
           .catch(() => null);
+        if (isStale()) return;
         setHasAnyAIInterview(
           (draftResult?.items ?? []).some((c: AIInterviewResponse) => c.jd_id === job.id)
         );
@@ -1153,20 +1176,32 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         const invitations = await aiInterviewService
           .getConfigInvitations(liveConfig.id, { page_size: 1, compact: true })
           .catch(() => null);
+        if (isStale()) return;
         setAiInterviewCount(invitations?.total ?? 0);
         setAiInterviewResultCount((invitations?.completed ?? 0) + (invitations?.terminated ?? 0));
+        // The badge: what the results table lists unfiltered (see its state).
+        setAiInterviewResultTotal(
+          (invitations?.in_progress ?? 0) + (invitations?.completed ?? 0) + (invitations?.terminated ?? 0)
+        );
       } else {
         setAiInterviewCount(0);
         setAiInterviewResultCount(0);
+        setAiInterviewResultTotal(0);
       }
     } catch {
+      if (isStale()) return;
       // Allow a retry — clear the guard so re-opening the tab tries again.
       aiInterviewConfigFetchedRef.current = false;
       setAiInterviewConfigError('Could not load AI interview results. Please try again.');
+      // Settle the badge rather than leave its placeholder pulsing.
+      setAiInterviewResultTotal((prev) => prev ?? 0);
     } finally {
-      setLoadingAIInterviewConfig(false);
-      // Same release-on-failure rule as the assessment side above.
-      setAiInterviewExistenceChecked(true);
+      // A stale run leaves these to the run that replaced it.
+      if (!isStale()) {
+        setLoadingAIInterviewConfig(false);
+        // Same release-on-failure rule as the assessment side above.
+        setAiInterviewExistenceChecked(true);
+      }
     }
   };
 
@@ -1745,7 +1780,20 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   const countAssessmentVersionsFor = (rows: { jd_id?: string | null }[], jdId: string) =>
     rows.filter(a => a.jd_id === jdId).length;
 
+  /* The rows AssessmentResults lists with no filter — the same mapping it
+     applies (pending and in-progress attempts, and completed ones still being
+     scored, read as not yet a result; anything else is Completed/Terminated).
+     The tab badge counts with this so it does not change when the tab opens. */
+  const isListedAssessmentResult = (result: { status?: string | null; scoring_status?: string | null }) => {
+    const status = result.status;
+    if (status === 'pending' || status === 'in_progress') return false;
+    if (status === 'completed') return (result.scoring_status || 'pending') === 'completed';
+    return true;
+  };
+
   const fetchAssessmentResults = async () => {
+    const seq = ++assessmentResultsSeqRef.current;
+    const isStale = () => seq !== assessmentResultsSeqRef.current;
     setLoadingAssessmentResults(true);
     /* A different job version: nothing of the previous one's Create state may
        carry over - the gate reads "checking" until THIS version's count lands. */
@@ -1758,6 +1806,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     try {
       // First, get all assessments for this JD
       const assessmentsResponse = await assessmentService.list({ jd_id: job.id, page_size: 100 });
+      if (isStale()) return;
       const assessments = assessmentsResponse.items || [];
       setJdAssessments(assessments);
       // Derived here rather than in a separate request — this list is already
@@ -1788,11 +1837,33 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       // For each assessment, get the completed results
       const allResults: any[] = [];
       let resultInviteCount = 0;
+      let listedResultCount = 0;
       for (const assessment of assessments) {
         try {
-          const resultsResponse = await assessmentService.listResults(assessment.id, { page_size: 100 });
-          const results = resultsResponse.items || [];
-          resultInviteCount += Number(resultsResponse.total ?? results.length) || 0;
+          /* Every page, not just the first 100: the badge counts these rows,
+             and the results table itself lists the whole set. */
+          const RESULTS_PAGE_SIZE = 100;
+          const firstPage = await assessmentService.listResults(assessment.id, { page: 1, page_size: RESULTS_PAGE_SIZE });
+          if (isStale()) return;
+          const results = [...(firstPage.items || [])];
+          const reportedTotal = Number(firstPage.total ?? results.length) || 0;
+          for (
+            let page = 2;
+            results.length < reportedTotal && (page - 1) * RESULTS_PAGE_SIZE < reportedTotal;
+            page++
+          ) {
+            // A later page failing keeps the rows already fetched.
+            const nextPage = await assessmentService
+              .listResults(assessment.id, { page, page_size: RESULTS_PAGE_SIZE })
+              .catch(() => null);
+            if (isStale()) return;
+            if (!nextPage) break;
+            const items = nextPage.items || [];
+            results.push(...items);
+            if (items.length < RESULTS_PAGE_SIZE) break;
+          }
+          resultInviteCount += reportedTotal;
+          listedResultCount += results.filter(isListedAssessmentResult).length;
 
           // Add assessment context to each result and map to expected format
           results.forEach((result: any) => {
@@ -1892,13 +1963,14 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       }
 
       setAssessmentInviteCount(Math.max(listedInviteCount, resultInviteCount));
-      setAssessmentResultTotal(resultInviteCount);
+      setAssessmentResultTotal(listedResultCount);
       setAssessmentFinishedCount(allResults.filter((r: any) => {
         const st = String(r.status || '').toLowerCase();
         return !!r.completed_at || st === 'completed' || st === 'terminated' || st === 'abandoned';
       }).length);
       setAssessmentResults(allResults);
     } catch (error) {
+      if (isStale()) return;
       console.error('Failed to fetch assessment results:', error);
       setAssessmentInviteCount(0);
       setAssessmentResultTotal(0);
@@ -1906,12 +1978,15 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       setAssessmentResults([]);
       setJdAssessments([]);
     } finally {
-      setLoadingAssessmentResults(false);
-      /* Settled either way. A failed lookup deliberately RELEASES the Create
-         gate rather than holding it shut: `handleCreateAssessment` re-queries
-         on the click and refuses there if an assessment turns up, so a flaky
-         request costs a redirect, not the ability to ever create one. */
-      setAssessmentExistenceChecked(true);
+      // A stale run leaves these to the run that replaced it.
+      if (!isStale()) {
+        setLoadingAssessmentResults(false);
+        /* Settled either way. A failed lookup deliberately RELEASES the Create
+           gate rather than holding it shut: `handleCreateAssessment` re-queries
+           on the click and refuses there if an assessment turns up, so a flaky
+           request costs a redirect, not the ability to ever create one. */
+        setAssessmentExistenceChecked(true);
+      }
     }
   };
 
@@ -2586,7 +2661,20 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   const versionInviteDialogEl = inviteDialog ? (
         <VersionInviteDialog
           kind={inviteDialog.kind}
-          onClose={() => setInviteDialog(null)}
+          onClose={() => {
+            const closedKind = inviteDialog.kind;
+            setInviteDialog(null);
+            /* The popup creates, edits, publishes, archives and duplicates
+               versions in place, so this page's own reads of them (Create's
+               cap and gate, Send Invite, the results tabs and their badges)
+               are re-read once it closes — the AI one past its fetched-once
+               guard, as Publish on this page does. */
+            if (closedKind === 'assessment') void fetchAssessmentResults();
+            else {
+              aiInterviewConfigFetchedRef.current = false;
+              void loadAIInterviewConfig();
+            }
+          }}
           jdId={job.id}
           jdCode={job.job_id}
           jdTitle={job.title}
@@ -3290,7 +3378,14 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               <ClipboardList className="w-4 h-4" />
               Scored Resumes
               <span className={detailTabBadge(activeTab === 'scored-resumes')}>
-                {scoringPlanLocked ? <Lock className="inline-block w-3 h-3 align-middle" aria-label="Not in plan" /> : scoredResumesStats.total}
+                {/* Placeholder, not a provisional 0, until the first fetch settles. */}
+                {scoringPlanLocked ? (
+                  <Lock className="inline-block w-3 h-3 align-middle" aria-label="Not in plan" />
+                ) : !scoredResumesLoaded ? (
+                  <span className="inline-block h-3 w-4 rounded bg-current opacity-30 animate-pulse align-middle" aria-label="Loading count" />
+                ) : (
+                  scoredResumesStats.total
+                )}
               </span>
             </button>
           )}
@@ -3319,7 +3414,13 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               <BarChart3 className="w-4 h-4" />
               Assessments Results
               <span className={detailTabBadge(activeTab === 'assessment-results')}>
-                {assessmentPlanLocked ? <Lock className="inline-block w-3 h-3 align-middle" aria-label="Not in plan" /> : (assessmentTableTotal ?? assessmentResultTotal)}
+                {assessmentPlanLocked ? (
+                  <Lock className="inline-block w-3 h-3 align-middle" aria-label="Not in plan" />
+                ) : (assessmentTableTotal ?? assessmentResultTotal) === null ? (
+                  <span className="inline-block h-3 w-4 rounded bg-current opacity-30 animate-pulse align-middle" aria-label="Loading count" />
+                ) : (
+                  assessmentTableTotal ?? assessmentResultTotal
+                )}
               </span>
             </button>
           )}
@@ -3346,7 +3447,13 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               <MessageSquare className="w-4 h-4" />
               AI Interview Result
               <span className={detailTabBadge(activeTab === 'ai-interview-results')}>
-                {aiInterviewPlanLocked ? <Lock className="inline-block w-3 h-3 align-middle" aria-label="Not in plan" /> : (aiInterviewTableTotal ?? aiInterviewCount)}
+                {aiInterviewPlanLocked ? (
+                  <Lock className="inline-block w-3 h-3 align-middle" aria-label="Not in plan" />
+                ) : (aiInterviewTableTotal ?? aiInterviewResultTotal) === null ? (
+                  <span className="inline-block h-3 w-4 rounded bg-current opacity-30 animate-pulse align-middle" aria-label="Loading count" />
+                ) : (
+                  aiInterviewTableTotal ?? aiInterviewResultTotal
+                )}
               </span>
             </button>
           )}
@@ -3679,10 +3786,10 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                         planLocked={assessmentPlanLocked}
                         onClick={openCreateSendAssessment}
                         loading={isLoadingShareAssessments}
-                        disabled={!canInviteJd || !canInviteToAssessment}
+                        disabled={!canInviteJdAssessment || !canInviteToAssessment}
                         disabledTooltip={
-                          !canInviteJd
-                            ? 'You do not have permission to invite candidates from a job description'
+                          !canInviteJdAssessment
+                            ? 'You do not have permission to invite candidates to an assessment from a job description'
                             : !features.assessment
                               ? 'Assessments not enabled'
                               : job.status === 'Disabled'
@@ -3797,10 +3904,10 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                       accent="orange"
                       planLocked={aiInterviewPlanLocked}
                       onClick={() => handleInviteAIInterview()}
-                      disabled={!canInviteJd || !canInviteToAIInterview}
+                      disabled={!canInviteJdAIInterview || !canInviteToAIInterview}
                       disabledTooltip={
-                        !canInviteJd
-                          ? 'You do not have permission to invite candidates from a job description'
+                        !canInviteJdAIInterview
+                          ? 'You do not have permission to invite candidates to an AI interview from a job description'
                           : !features.ai_interview
                             ? 'AI Interviews not enabled'
                             : job.status === 'Disabled'
@@ -4279,6 +4386,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               jobTitle={job.title}
               jobId={job.id}
               jobCode={job.job_id}
+              jobVersion={job.versionNumber}
               availableUnits={15}
               /* JD ID and Job Title are this page's header — not repeated per
                  row (Resume Scoring's View by Job hides the same two). */

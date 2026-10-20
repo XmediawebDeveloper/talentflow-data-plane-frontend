@@ -53,6 +53,13 @@ export function MiniPagination({
   const current = Math.min(Math.max(1, page), total);
   const slots = Math.min(VISIBLE, total);
 
+  /* `current` only clamps what is drawn; the parent keeps the out-of-range
+     page. Hand it the last real page so its list isn't left empty. Not while
+     `totalPages` is 0 (nothing loaded yet), which would otherwise loop. */
+  React.useEffect(() => {
+    if (totalPages >= 1 && page > totalPages) onPageChange(totalPages);
+  }, [page, totalPages, onPageChange]);
+
   // Keep the active page centred where possible; pin the window at the ends.
   const windowStart = Math.min(Math.max(1, current - 1), Math.max(1, total - VISIBLE + 1));
 
