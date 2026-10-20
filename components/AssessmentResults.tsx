@@ -2980,7 +2980,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                             </button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className={portaled ? ROW_MENU_CONTENT_CLASS : onOpenInviteDialog ? 'w-56' : 'w-48'}>
-                            <DropdownMenuItem className={portaled ? ROW_MENU_ITEM_CLASS : 'gap-2'} onClick={() => viewCandidateDetails(candidate)}>
+                            <DropdownMenuItem className={portaled ? ROW_MENU_ITEM_CLASS : 'gap-2'} disabled={candidate.status === 'Pending'} onClick={() => viewCandidateDetails(candidate)}>
                               <Eye className="w-4 h-4 text-menu-icon-view" />
                               <span className={MENU_ITEM_SCALE_CLASS}>View Details</span>
                             </DropdownMenuItem>
@@ -3003,10 +3003,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                                 <DropdownMenuSeparator className="my-1 bg-gray-100" />
                               </>
                             )}
-                            <DropdownMenuItem className={portaled ? ROW_MENU_ITEM_CLASS : 'gap-2'} disabled={candidate.status === 'Pending'} onClick={() => viewCandidateDetails(candidate)}>
-                              <Eye className="w-4 h-4 text-menu-icon-view" />
-                              <span className={MENU_ITEM_SCALE_CLASS}>View Details</span>
-                            </DropdownMenuItem>
                             <DropdownMenuItem
                               className={portaled ? ROW_MENU_ITEM_CLASS : 'gap-2'}
                               disabled={downloadingPDF === candidate.id || !canDownloadResultPdf(candidate)}
