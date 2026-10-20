@@ -235,6 +235,14 @@ import CandidateActivityCard from '@/components/resumes/CandidateActivityCard';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { formatCandidateExperience } from '@/lib/utils/resumeExperience';
+import {
+  INTERNAL_DB_PERMISSIONS,
+  MY_RESUMES_PERMISSIONS,
+  RESUME_TAB_LABEL,
+  RESUME_VIEW_SOURCE_PARAM,
+  resumeDatabaseTabHref,
+  type ResumeTab,
+} from '@/lib/constants/resumePools';
 
 export default function ResumeViewPage() {
   const params = useParams();
@@ -264,7 +272,9 @@ export default function ResumeViewPage() {
   // to the right place — for the two resume pools that now means the right TAB
   // of Resume Database. The originating list stores this in sessionStorage as
   // `resumeNavSource`; its values are unchanged ('my-resumes' is the tab, not a
-  // route, since the /recruitment/my-resumes page became a redirect).
+  // route — /recruitment/my-resumes is a redirect into that tab).
+  // `viewSource` also decides which permission set the page's actions use;
+  // the breadcrumb reads `crumbPool` below instead.
   const [viewSource, setViewSource] = useState<'my-resumes' | 'resume-database' | 'ai-talent-match' | 'job-details'>('resume-database');
   const [jobDetailsReturnUrl, setJobDetailsReturnUrl] = useState<string | null>(null);
   const [jobDetailsTitle, setJobDetailsTitle] = useState('');
@@ -276,8 +286,17 @@ export default function ResumeViewPage() {
   /** The Job Details job and tab this resume was opened from. */
   const [jobDetailsJobId, setJobDetailsJobId] = useState<string | null>(null);
   const [jobDetailsTab, setJobDetailsTab] = useState<string | null>(null);
+  /* The resume pool the breadcrumb leads back to, from the link's `?source=`.
+     Read from the URL only — never from sessionStorage, which keeps whichever
+     list was used last in the tab and so named the wrong pool for a resume
+     opened from search, an upload or a scoring screen. Null = not opened from
+     a pool (or opened from another module, below). */
+  const [crumbPool, setCrumbPool] = useState<ResumeTab | null>(null);
   useEffect(() => {
     try {
+      const pool = new URLSearchParams(window.location.search).get(RESUME_VIEW_SOURCE_PARAM);
+      setCrumbPool(pool === 'my-resumes' || pool === 'internal-db' ? pool : null);
+
       const s = sessionStorage.getItem('resumeNavSource');
       if (s === 'my-resumes' || s === 'resume-database' || s === 'ai-talent-match' || s === 'job-details') {
         setViewSource(s);
@@ -302,14 +321,47 @@ export default function ResumeViewPage() {
       }
     } catch { /* ignore */ }
   }, []);
-  /* My Resumes and Internal Database are tabs of one Resume Database page, so
-     the trail names both the page and the tab the recruiter actually came
-     from, and the link carries `?tab=` to land them back on it rather than on
-     whichever tab happens to be their default. */
+  /* The job the resume was opened from (Job Details, or one job's AI Talent
+     Match list), named from the job record — title and job version — rather
+     than the title the opener left in sessionStorage. The stored title stands
+     in only until the record arrives, or if it cannot be loaded. */
+  const crumbJobId =
+    viewSource === 'job-details' ? jobDetailsJobId
+    : viewSource === 'ai-talent-match' ? aiMatchJobId
+    : null;
+  const [crumbJob, setCrumbJob] = useState<{ id: string; title: string; version: number | null } | null>(null);
+  useEffect(() => {
+    if (crumbPool || !crumbJobId) return;
+    let cancelled = false;
+    jdService.get(crumbJobId)
+      .then((jd) => {
+        if (cancelled || !jd?.title) return;
+        setCrumbJob({ id: crumbJobId, title: jd.title, version: mapJDToJob(jd).versionNumber ?? null });
+      })
+      .catch(() => { /* keep the opener's stored title */ });
+    return () => { cancelled = true; };
+  }, [crumbPool, crumbJobId]);
+  const crumbJobLabel = (storedTitle: string, fallback: string) =>
+    crumbJob && crumbJob.id === crumbJobId
+      ? `${crumbJob.title}${crumbJob.version != null ? ` · V${crumbJob.version}` : ''}`
+      : storedTitle || fallback;
+
+  /* My Resumes and the Shared Database are tabs of one Resume Database page:
+     Resume Database › <the tab the resume was opened from>. The two crumbs go
+     to different places — the page, then that tab (`?tab=`) — instead of both
+     to the tab. A pool the user cannot see is never named, and a resume not
+     opened from a pool (search, an upload, a scoring screen) gets the page
+     alone rather than a guessed tab. */
+  const canSeePool = (pool: ResumeTab) =>
+    isTenantAdmin ||
+    (pool === 'my-resumes' ? MY_RESUMES_PERMISSIONS : INTERNAL_DB_PERMISSIONS).some((k) => hasPermission(k));
+  const resumeDatabaseCrumb = { label: 'Resume Database', href: '/recruitment/resume-database' };
   const sourceCrumbs =
-    viewSource === 'my-resumes' ? [
-      { label: 'Resume Database', href: '/recruitment/resume-database?tab=my-resumes' },
-      { label: 'My Resumes', href: '/recruitment/resume-database?tab=my-resumes' },
+    crumbPool ? [
+      resumeDatabaseCrumb,
+      ...(canSeePool(crumbPool)
+        ? [{ label: RESUME_TAB_LABEL[crumbPool], href: resumeDatabaseTabHref(crumbPool) }]
+        : []),
     ]
     // The "Match Details" step only exists when the resume was opened from a
     // specific job's match list. The candidate roll-up spans jobs and stores no
@@ -317,7 +369,7 @@ export default function ResumeViewPage() {
     : viewSource === 'ai-talent-match' ? [
       { label: 'AI Talent Match', href: '/recruitment/ai-talent-match' },
       ...(aiMatchDetailsReturnUrl
-        ? [{ label: aiMatchJobTitle || 'Match Details', href: aiMatchDetailsReturnUrl }]
+        ? [{ label: crumbJobLabel(aiMatchJobTitle, 'Match Details'), href: aiMatchDetailsReturnUrl }]
         : []),
     ]
     // Every step the recruiter walked, not just the last one: the jobs list,
@@ -325,12 +377,13 @@ export default function ResumeViewPage() {
     // record, and skipped the list the job was reached from.
     : viewSource === 'job-details' ? [
       { label: 'Job Descriptions', href: '/recruitment/job-openings' },
-      { label: jobDetailsTitle || 'Job Details', href: jobDetailsReturnUrl || '/recruitment/job-openings' },
+      { label: crumbJobLabel(jobDetailsTitle, 'Job Details'), href: jobDetailsReturnUrl || '/recruitment/job-openings' },
     ]
-    : [
-      { label: 'Resume Database', href: '/recruitment/resume-database?tab=internal-db' },
-      { label: 'Shared Database', href: '/recruitment/resume-database?tab=internal-db' },
-    ];
+    : [resumeDatabaseCrumb];
+  /* Keeps `?source=` on links back to this page and on to its neighbours, so
+     the trail does not fall back to the page alone after Prev / Next or a
+     return from Candidate Activity. */
+  const sourceQuery = crumbPool ? `?${RESUME_VIEW_SOURCE_PARAM}=${crumbPool}` : '';
 
   // Apply to Job modal state
   const [isApplyToJobModalOpen, setIsApplyToJobModalOpen] = useState(false);
@@ -405,7 +458,16 @@ export default function ResumeViewPage() {
         viewSource === 'resume-database' ? 'internal_db:assessment' : 'my_resumes:assessment'
       )
     );
-  const canInviteAIInterview = isTenantAdmin || hasPermission('canInviteAIInterviews');
+  // "Invite to AI Interview" is its own permission per resume source (My
+  // Resumes / Shared Database), plus AI Interview's own Invite.
+  const canInviteAIInterview =
+    isTenantAdmin ||
+    (hasPermission('canInviteAIInterviews') &&
+      (viewSource === 'resume-database'
+        ? hasPermissionCode('internal_db:invite_ai_interview')
+        : viewSource === 'my-resumes'
+          ? hasPermissionCode('my_resumes:invite_ai_interview')
+          : true));
   const assessmentPlanLocked = isPlanLocked('assessment');
   const aiInterviewPlanLocked = isPlanLocked('ai_interview');
   const canInvite = canInviteAssessment || canInviteAIInterview;
@@ -1257,6 +1319,8 @@ Best regards`);
             <div className="mb-4 md:mb-6 flex items-center gap-2">
               <Skeleton className="h-3 w-16" />
               <Skeleton className="h-3 w-3" />
+              <Skeleton className="h-3 w-24" />
+              <Skeleton className="h-3 w-3" />
               <Skeleton className="h-3 w-20" />
               <Skeleton className="h-3 w-3" />
               <Skeleton className="h-3 w-28" />
@@ -1372,8 +1436,8 @@ Best regards`);
               <RecordPager
                 currentIndex={navIndex}
                 totalCount={navList.length}
-                onPrev={prevId ? () => router.replace(`/recruitment/resume-view/${prevId}`) : undefined}
-                onNext={nextId ? () => router.replace(`/recruitment/resume-view/${nextId}`) : undefined}
+                onPrev={prevId ? () => router.replace(`/recruitment/resume-view/${prevId}${sourceQuery}`) : undefined}
+                onNext={nextId ? () => router.replace(`/recruitment/resume-view/${nextId}${sourceQuery}`) : undefined}
               />
             ) : undefined}
           />
@@ -2305,7 +2369,7 @@ Best regards`);
             // "Dashboard › Resume Database › My Resumes › <candidate>".
             trail={[
               ...sourceCrumbs.filter((c): c is { label: string; href: string } => !!c.href),
-              { label: resume?.name || 'Resume Details', href: `/recruitment/resume-view/${resumeId}` },
+              { label: resume?.name || 'Resume Details', href: `/recruitment/resume-view/${resumeId}${sourceQuery}` },
             ]}
             /* File Properties — the icon that opens its drawer. */
             headerAction={

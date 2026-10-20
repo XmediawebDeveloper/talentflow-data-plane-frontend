@@ -275,7 +275,13 @@ export default function AIInterviewTrackInvitesModal({
     await onChanged?.();
   };
 
+  /* Bumped by every loadInvitations run (filter/page change, poll, Refresh),
+     so an older response landing late can't overwrite a newer one's rows and
+     cards. */
+  const loadSeqRef = useRef(0);
   const loadInvitations = useCallback(async (silent = false) => {
+    const seq = ++loadSeqRef.current;
+    const isStale = () => seq !== loadSeqRef.current;
     if (!silent) setIsLoading(true);
     try {
       /* Four page_size-1-or-N calls in parallel: the filtered page itself, the
@@ -301,6 +307,7 @@ export default function AIInterviewTrackInvitesModal({
         aiInterviewService.getConfigInvitations(configId, { page: 1, page_size: 1, status: 'revoked' }),
         aiInterviewService.getConfigInvitations(configId, { page: 1, page_size: 1, status: 'expired' }),
       ]);
+      if (isStale()) return;
 
       if (fetchAllForClientFilters) {
         const matching = (result.items || []).filter((inv: any) =>
@@ -333,10 +340,12 @@ export default function AIInterviewTrackInvitesModal({
         setPage(current => Math.min(current - 1, Math.max(1, result.total_pages || 1)));
       }
     } catch (error) {
+      if (isStale()) return;
       console.error('Failed to load AI interview invitations:', error);
       if (!silent) toast.error('Could not load invitations. Please try again.');
     } finally {
-      setIsLoading(false);
+      // A stale run leaves the spinner to the run that replaced it.
+      if (!isStale()) setIsLoading(false);
     }
   }, [configId, page, filters, sourceFilter, resultFilter, fetchAllForClientFilters]);
 

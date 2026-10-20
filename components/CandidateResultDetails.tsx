@@ -2161,6 +2161,15 @@ export default function CandidateResultDetails({
                                   return !!q.candidate_answer_text?.trim();
                                 })();
                                 const isNotAnswered = !hasAnyAnswer;
+                                // Coding and multi-select earn partial credit. Coding is
+                                // "Correct" only when every judged test passed, so a
+                                // partial pass must not read as a red "Incorrect" either.
+                                const isPartiallyCorrect = !q.is_correct
+                                  && ['coding', 'multiple_choice'].includes(String(q.question_type || '').toLowerCase())
+                                  && Number(q.points_earned || 0) > 0;
+                                const hardcodedFlag = q.question_type === 'coding'
+                                  ? q.candidate_test_results?.flags?.find(f => f.type === 'hardcoded_output')
+                                  : undefined;
                                 return (
                                   <>
                               {/* Question Header */}
@@ -2169,7 +2178,7 @@ export default function CandidateResultDetails({
                                   ? 'bg-slate-50'
                                   : isNotAnswered
                                     ? 'bg-slate-50'
-                                    : (q.is_correct ? 'bg-success-subtle' : 'bg-destructive-subtle')
+                                    : (q.is_correct ? 'bg-success-subtle' : isPartiallyCorrect ? 'bg-warning-subtle' : 'bg-destructive-subtle')
                               }`}>
                                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
                                   <div className="flex-1 min-w-0">
@@ -2189,9 +2198,19 @@ export default function CandidateResultDetails({
                                           <span className="px-2 py-0.5 bg-gray-100 text-gray-600 ring-1 ring-gray-200 rounded text-xs font-medium">Not Answered</span>
                                         ) : q.is_correct ? (
                                           <span className="px-2 py-0.5 bg-success-subtle text-success ring-1 ring-success-line rounded text-xs font-medium">Correct</span>
+                                        ) : isPartiallyCorrect ? (
+                                          <span className="px-2 py-0.5 bg-warning-subtle text-warning-strong ring-1 ring-warning-line rounded text-xs font-medium">Partially Correct</span>
                                         ) : (
                                           <span className="px-2 py-0.5 bg-destructive-subtle text-destructive ring-1 ring-destructive-line rounded text-xs font-medium">Incorrect</span>
                                         )
+                                      )}
+                                      {hardcodedFlag && (
+                                        <span
+                                          title={hardcodedFlag.message}
+                                          className="px-2 py-0.5 bg-destructive-subtle text-destructive ring-1 ring-destructive-line rounded text-xs font-medium"
+                                        >
+                                          Hardcoded output suspected
+                                        </span>
                                       )}
                                     </div>
                                     {q.question_type === 'coding' ? (
@@ -2578,7 +2597,7 @@ export default function CandidateResultDetails({
                                               <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                                                 <div className="text-sm font-medium text-gray-900">
                                                   Test Case {testCase.test_number}
-                                                  {testCase.is_hidden ? ' (Hidden)' : ''}
+                                                  {testCase.is_hidden ? ' (Hidden from candidate)' : ''}
                                                 </div>
                                                 <span className={`inline-flex w-fit items-center rounded px-2 py-0.5 text-xs font-medium uppercase ring-1 ${
                                                   testCase.passed
@@ -2608,20 +2627,41 @@ export default function CandidateResultDetails({
                                                 </div>
                                               </div>
 
-                                              {(testCase.error || testCase.improvement_hint) && (
-                                                <div className="mt-3 grid gap-3 md:grid-cols-2">
-                                                  {testCase.error && (
-                                                    <div>
-                                                      <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">
-                                                        Why It Failed
-                                                      </div>
-                                                      <div className="rounded border border-destructive-line ring-1 ring-destructive-line bg-destructive-subtle p-3 font-mono text-sm text-destructive-strong">
-                                                        <pre className="whitespace-pre-wrap [overflow-wrap:anywhere]">{testCase.error}</pre>
-                                                      </div>
-                                                    </div>
-                                                  )}
+                                              {/* What the candidate's code printed for THIS test's
+                                                  input - for hidden tests too. Next to the expected
+                                                  output it shows at a glance whether the code computed
+                                                  an answer or printed a fixed one. */}
+                                              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                                                <div>
+                                                  <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">
+                                                    Candidate Output
+                                                  </div>
+                                                  <div className={`rounded p-3 font-mono text-sm border ${
+                                                    testCase.passed
+                                                      ? 'bg-white text-gray-800 border-gray-200 dark:border-slate-700'
+                                                      : 'bg-destructive-subtle text-destructive-strong border-destructive-line'
+                                                  }`}>
+                                                    <pre className="whitespace-pre-wrap [overflow-wrap:anywhere]">{
+                                                      testCase.actual_output
+                                                      || (testCase.status === 'syntax_error'
+                                                        ? '(code did not compile)'
+                                                        : testCase.status === 'timeout'
+                                                          ? '(timed out)'
+                                                          : '(no output)')
+                                                    }</pre>
+                                                  </div>
                                                 </div>
-                                              )}
+                                                {testCase.error && (
+                                                  <div>
+                                                    <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">
+                                                      Why It Failed
+                                                    </div>
+                                                    <div className="rounded border border-destructive-line ring-1 ring-destructive-line bg-destructive-subtle p-3 font-mono text-sm text-destructive-strong">
+                                                      <pre className="whitespace-pre-wrap [overflow-wrap:anywhere]">{testCase.error}</pre>
+                                                    </div>
+                                                  </div>
+                                                )}
+                                              </div>
 
                                               {testCase.improvement_hint && (
                                                 <div className="mt-3">

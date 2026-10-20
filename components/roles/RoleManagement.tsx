@@ -463,6 +463,7 @@ export default function RoleManagement() {
               <StatsCard
                 label="Total Roles"
                 value={roles.length}
+                loading={isLoading}
                 icon={Shield}
                 tone="neutral"
                 sparkline={false}
@@ -473,6 +474,7 @@ export default function RoleManagement() {
               <StatsCard
                 label="Default Roles"
                 value={systemRolesCount}
+                loading={isLoading}
                 icon={Lock}
                 tone="neutral"
                 sparkline={false}
@@ -483,6 +485,7 @@ export default function RoleManagement() {
               <StatsCard
                 label="Assigned Users"
                 value={assignedUsersCount}
+                loading={isLoading}
                 icon={Users}
                 tone="neutral"
                 sparkline={false}
@@ -493,6 +496,7 @@ export default function RoleManagement() {
               <StatsCard
                 label="Permissions Catalog"
                 value={managedPermissionsCount}
+                loading={isLoading}
                 icon={Sparkles}
                 tone="neutral"
                 sparkline={false}

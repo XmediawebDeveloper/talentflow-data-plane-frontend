@@ -466,8 +466,18 @@ export default function AITalentMatchPage({
   // module's own "Score Resume" checkbox (ai_match:score).
   const canRunScoring =
     isTenantAdmin || ((user?.permissions?.canRunScoring ?? false) && hasPermissionCode('ai_match:score'));
-  const canCreateAssessments = isTenantAdmin || hasPermission('canCreateAssessments');
-  const canCreateAIInterviews = isTenantAdmin || hasPermission('canCreateAIInterviews');
+  // Invites started from AI Talent Match need this module's entry point
+  // ("Invite to Assessment" / "Invite to AI Interview" under AI Talent Match)
+  // AND the target module's own Invite (what the server checks on send).
+  // Creating an assessment / interview inside the popup keeps its own checks.
+  const canInviteAssessmentFromMatch =
+    isTenantAdmin || (hasPermissionCode('ai_match:invite_assessment') && hasPermissionCode('assessments:invite'));
+  const canInviteAIInterviewFromMatch =
+    isTenantAdmin || (hasPermissionCode('ai_match:invite_ai_interview') && hasPermission('canInviteAIInterviews'));
+  const ASSESSMENT_INVITE_DENIED =
+    "You do not have permission to invite to an assessment from AI Talent Match (needs 'Invite to Assessment' under AI Talent Match and 'Invite Candidates' under Assessment)";
+  const AI_INTERVIEW_INVITE_DENIED =
+    "You do not have permission to invite to an AI interview from AI Talent Match (needs 'Invite to AI Interview' under AI Talent Match and 'Invite Candidates' under AI Interview)";
 
 
   /* 'details' used to be its own viewMode (the "Match Details" page) — it and
@@ -1224,8 +1234,8 @@ export default function AITalentMatchPage({
     candidate: { name?: string; email?: string; key: string },
     job: { resumeId?: string; jobId: string },
   ) => {
-    if (!canCreateAssessments) {
-      toast.error('You do not have permission to invite to an assessment');
+    if (!canInviteAssessmentFromMatch) {
+      toast.error(ASSESSMENT_INVITE_DENIED);
       return;
     }
     if (!candidate.email) {
@@ -1247,8 +1257,8 @@ export default function AITalentMatchPage({
     candidate: { name?: string; email?: string },
     job: { jobId: string; historyId: string; resumeId?: string },
   ) => {
-    if (!canCreateAIInterviews) {
-      toast.error('You do not have permission to invite to an AI interview');
+    if (!canInviteAIInterviewFromMatch) {
+      toast.error(AI_INTERVIEW_INVITE_DENIED);
       return;
     }
     if (!candidate.email) {
@@ -1851,15 +1861,21 @@ export default function AITalentMatchPage({
    * rows and release both build guards, and whichever path runs next (prefetch
    * if the user is elsewhere, the restore effect if they're on the tab) builds
    * again from the fuller history.
+   *
+   * Keyed on the set of session ids, not the count: re-running a match on a
+   * job that already has one replaces its entry (same length, new session),
+   * and the later server refetch swaps the optimistic id for the real one —
+   * neither changes the length, so a count key never rebuilt for them.
    */
-  const candidateRowsHistoryCountRef = useRef(matchHistory.length);
+  const historySessionKey = matchHistory.map(item => item.id).sort().join('|');
+  const candidateRowsHistoryKeyRef = useRef(historySessionKey);
   useEffect(() => {
-    if (candidateRowsHistoryCountRef.current === matchHistory.length) return;
-    candidateRowsHistoryCountRef.current = matchHistory.length;
+    if (candidateRowsHistoryKeyRef.current === historySessionKey) return;
+    candidateRowsHistoryKeyRef.current = historySessionKey;
     setCandidateRows([]);
     prefetchedCandidateRowsRef.current = false;
     rebuiltRestoredCandidatesRef.current = false;
-  }, [matchHistory.length]);
+  }, [historySessionKey]);
 
   useEffect(() => {
     if (historyListScrollRequest === 0) return;
@@ -2494,7 +2510,15 @@ export default function AITalentMatchPage({
   const openCreateSend = (kind: InviteHandoffKind, jdId: string, candidates: InviteCandidate[], title?: string) =>
     setCreateSendRequest({ kind, job: inviteDialogJobOf(jdId, title), candidates });
   const createSendDialogEl = (
-    <JobInviteDialogHost request={createSendRequest} onClose={() => setCreateSendRequest(null)} />
+    <JobInviteDialogHost
+      request={createSendRequest}
+      onClose={() => setCreateSendRequest(null)}
+      inviteGate={(kind) =>
+        kind === 'assessment'
+          ? { allowed: canInviteAssessmentFromMatch, reason: ASSESSMENT_INVITE_DENIED }
+          : { allowed: canInviteAIInterviewFromMatch, reason: AI_INTERVIEW_INVITE_DENIED }
+      }
+    />
   );
   const [createInviteTarget, setCreateInviteTarget] = useState<{
     kind: InviteHandoffKind;
@@ -2582,11 +2606,11 @@ export default function AITalentMatchPage({
           target: { state: 'ready' },
           label: 'Create / Send Assessment',
           itemClass: actionsMenuItemClass,
-          allowed: canCreateAssessments,
+          allowed: canInviteAssessmentFromMatch,
           onInvite: (e) => {
-            if (!canCreateAssessments) {
+            if (!canInviteAssessmentFromMatch) {
               e.preventDefault();
-              toast.error('You do not have permission to invite to an assessment');
+              toast.error(ASSESSMENT_INVITE_DENIED);
               return;
             }
             if (guardEmail()) openInviteForRows('assessment', row.jobId, [row]);
@@ -2598,11 +2622,11 @@ export default function AITalentMatchPage({
           target: { state: 'ready' },
           label: 'Create / Send AI Interview',
           itemClass: actionsMenuItemClass,
-          allowed: canCreateAIInterviews,
+          allowed: canInviteAIInterviewFromMatch,
           onInvite: (e) => {
-            if (!canCreateAIInterviews) {
+            if (!canInviteAIInterviewFromMatch) {
               e.preventDefault();
-              toast.error('You do not have permission to invite to an AI interview');
+              toast.error(AI_INTERVIEW_INVITE_DENIED);
               return;
             }
             if (!guardEmail()) return;
@@ -3571,8 +3595,11 @@ export default function AITalentMatchPage({
     const jobCandidatesInBand = (item: MatchHistory) =>
       candidateRatingBand ? jobCandidates(item).filter(c => bandOf(c) === candidateRatingBand) : jobCandidates(item);
 
-    // Pill counts: the loaded sessions' tally once every one is in; until
-    // then the server's band counts (Rating 10 / 9 – 7) and the runs' totals.
+    // Pill counts: the loaded sessions' tally — the same rows the drill-down
+    // lists — once every one is in; a placeholder (null) until then. They used
+    // to show the server's band counts and the runs' totals first, but those
+    // count differently (every match result vs. each job's latest session),
+    // so the pills jumped from one number to another once the tally landed.
     const loadedTally = matchHistory.reduce(
       (acc, item) => {
         const t = jobTally(item);
@@ -3581,15 +3608,9 @@ export default function AITalentMatchPage({
       },
       { exact: 0, partial: 0, no_match: 0 } as Record<RatingBand, number>,
     );
-    const runsTotal = matchHistory.reduce((sum, item) => sum + (item.totalMatches || 0), 0);
     const pillCounts: Record<RatingBand | 'all', number | null> = topStatsReady
       ? { all: loadedTally.exact + loadedTally.partial + loadedTally.no_match, ...loadedTally }
-      : {
-          all: runsTotal,
-          exact: ratingBandCounts?.exact ?? null,
-          partial: ratingBandCounts?.partial ?? null,
-          no_match: ratingBandCounts ? Math.max(0, runsTotal - ratingBandCounts.exact - ratingBandCounts.partial) : null,
-        };
+      : { all: null, exact: null, partial: null, no_match: null };
 
     /* View by Job under a rating pill: only jobs with such a match. A job
        whose candidates haven't loaded yet stays listed — an unloaded list
@@ -3943,11 +3964,11 @@ export default function AITalentMatchPage({
                 target: resolveInviteTargetState('assessment', targets, () => true),
                 label: 'Create / Send Assessment',
                 itemClass: actionsMenuItemClass,
-                allowed: canCreateAssessments,
+                allowed: canInviteAssessmentFromMatch,
                 onInvite: (e) => {
-                  if (!canCreateAssessments) {
+                  if (!canInviteAssessmentFromMatch) {
                     e.preventDefault();
-                    toast.error('You do not have permission to invite to an assessment');
+                    toast.error(ASSESSMENT_INVITE_DENIED);
                     return;
                   }
                   if (!guard()) return;
@@ -3963,11 +3984,11 @@ export default function AITalentMatchPage({
                   : { state: 'ready' },
                 label: 'Create / Send AI Interview',
                 itemClass: actionsMenuItemClass,
-                allowed: canCreateAIInterviews,
+                allowed: canInviteAIInterviewFromMatch,
                 onInvite: (e) => {
-                  if (!canCreateAIInterviews) {
+                  if (!canInviteAIInterviewFromMatch) {
                     e.preventDefault();
-                    toast.error('You do not have permission to invite to an AI interview');
+                    toast.error(AI_INTERVIEW_INVITE_DENIED);
                     return;
                   }
                   if (!guard()) return;
@@ -5221,11 +5242,11 @@ export default function AITalentMatchPage({
                       <DropdownMenuContent align="end" className="w-56 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
                         <DropdownMenuItem
                           className={actionsMenuItemClass}
-                          disabled={!(hasPermission('canCreateAssessments') || isTenantAdmin)}
-                          title={!(hasPermission('canCreateAssessments') || isTenantAdmin) ? 'You do not have permission to invite to an assessment' : undefined}
+                          disabled={!canInviteAssessmentFromMatch}
+                          title={!canInviteAssessmentFromMatch ? ASSESSMENT_INVITE_DENIED : undefined}
                           onSelect={() => {
-                            if (!(hasPermission('canCreateAssessments') || isTenantAdmin)) {
-                              toast.error('You do not have permission to invite to an assessment');
+                            if (!canInviteAssessmentFromMatch) {
+                              toast.error(ASSESSMENT_INVITE_DENIED);
                               return;
                             }
                             handleInviteAssessmentSelectedAllResumes();
@@ -5235,12 +5256,12 @@ export default function AITalentMatchPage({
                           <span className={MENU_ITEM_SCALE_CLASS}>Invite Assessment</span>
                         </DropdownMenuItem>
                         <DropdownMenuItem
-                          className={`${actionsMenuItemClass} ${!canCreateAIInterviews ? 'opacity-50' : ''}`}
-                          aria-disabled={!canCreateAIInterviews}
-                          title={!canCreateAIInterviews ? 'You do not have permission to invite to an AI interview' : undefined}
+                          className={`${actionsMenuItemClass} ${!canInviteAIInterviewFromMatch ? 'opacity-50' : ''}`}
+                          aria-disabled={!canInviteAIInterviewFromMatch}
+                          title={!canInviteAIInterviewFromMatch ? AI_INTERVIEW_INVITE_DENIED : undefined}
                           onSelect={() => {
-                            if (!canCreateAIInterviews) {
-                              toast.error('You do not have permission to invite to an AI interview');
+                            if (!canInviteAIInterviewFromMatch) {
+                              toast.error(AI_INTERVIEW_INVITE_DENIED);
                               return;
                             }
                             handleInviteAIInterviewSelectedAllResumes();
@@ -5736,18 +5757,18 @@ export default function AITalentMatchPage({
                                 </DropdownMenuItem>
                                 {/* Same two invites as View by Candidates' per-job menu. */}
                                 <DropdownMenuItem
-                                  className={`${actionsMenuItemClass} ${!canCreateAssessments ? 'opacity-50' : ''}`}
+                                  className={`${actionsMenuItemClass} ${!canInviteAssessmentFromMatch ? 'opacity-50' : ''}`}
                                   disabled={!row.email}
-                                  title={!canCreateAssessments ? 'You do not have permission to invite to an assessment' : !row.email ? 'Candidate has no email on file' : undefined}
+                                  title={!canInviteAssessmentFromMatch ? ASSESSMENT_INVITE_DENIED : !row.email ? 'Candidate has no email on file' : undefined}
                                   onSelect={() => inviteAssessmentForJobMatch(row, job)}
                                 >
                                   <ClipboardList className="w-4 h-4 text-menu-icon-view" />
                                   <span className={MENU_ITEM_SCALE_CLASS}>Create / Send Assessment</span>
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                  className={`${actionsMenuItemClass} ${!canCreateAIInterviews ? 'opacity-50' : ''}`}
+                                  className={`${actionsMenuItemClass} ${!canInviteAIInterviewFromMatch ? 'opacity-50' : ''}`}
                                   disabled={!row.email}
-                                  title={!canCreateAIInterviews ? 'You do not have permission to invite to an AI interview' : !row.email ? 'Candidate has no email on file' : undefined}
+                                  title={!canInviteAIInterviewFromMatch ? AI_INTERVIEW_INVITE_DENIED : !row.email ? 'Candidate has no email on file' : undefined}
                                   onSelect={() => inviteAIInterviewForJobMatch(row, job)}
                                 >
                                   <Video className="w-4 h-4 text-menu-icon-ai" />
@@ -8060,11 +8081,11 @@ export default function AITalentMatchPage({
                               target: resolveInviteTargetState('assessment', target, () => true),
                               label: 'Create / Send Assessment',
                               itemClass: actionsMenuItemClass,
-                              allowed: canCreateAssessments,
+                              allowed: canInviteAssessmentFromMatch,
                               onInvite: (e) => {
-                                if (!canCreateAssessments) {
+                                if (!canInviteAssessmentFromMatch) {
                                   e.preventDefault();
-                                  toast.error('You do not have permission to invite to an assessment');
+                                  toast.error(ASSESSMENT_INVITE_DENIED);
                                   return;
                                 }
                                 openInviteForRows('assessment', selectedJob, rows);
@@ -8076,11 +8097,11 @@ export default function AITalentMatchPage({
                               target: resolveInviteTargetState('interview', target, () => true),
                               label: 'Create / Send AI Interview',
                               itemClass: actionsMenuItemClass,
-                              allowed: canCreateAIInterviews,
+                              allowed: canInviteAIInterviewFromMatch,
                               onInvite: (e) => {
-                                if (!canCreateAIInterviews) {
+                                if (!canInviteAIInterviewFromMatch) {
                                   e.preventDefault();
-                                  toast.error('You do not have permission to invite to an AI interview');
+                                  toast.error(AI_INTERVIEW_INVITE_DENIED);
                                   return;
                                 }
                                 openInviteForRows('interview', selectedJob, rows);

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import {
@@ -24,7 +24,10 @@ export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [total, setTotal] = useState(0);
+  /* Every notification, from the All filter's response — the Unread filter's
+     `total` is only the unread subset. null until an All response lands, so
+     the header never reads "0 total" before anything has loaded. */
+  const [total, setTotal] = useState<number | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string | undefined>(undefined);
@@ -41,7 +44,16 @@ export default function NotificationsPage() {
     },
   );
 
+  /* Bumped by every reset (filter change, refresh, unmount), so a page still in
+     flight from the previous filter — the mount fetch with defaults before the
+     saved filter is restored, or a Load More — is dropped instead of replacing
+     or being appended onto the new list. */
+  const fetchSeqRef = useRef(0);
+  useEffect(() => () => { fetchSeqRef.current += 1; }, []);
+
   const fetchNotifications = useCallback(async (reset = false) => {
+    const seq = reset ? ++fetchSeqRef.current : fetchSeqRef.current;
+    const isStale = () => seq !== fetchSeqRef.current;
     if (reset) {
       setLoading(true);
     } else {
@@ -56,6 +68,7 @@ export default function NotificationsPage() {
         filter === 'unread',
         categoryFilter
       );
+      if (isStale()) return;
 
       if (reset) {
         setNotifications(response.notifications);
@@ -63,13 +76,16 @@ export default function NotificationsPage() {
         setNotifications(prev => [...prev, ...response.notifications]);
       }
       setUnreadCount(response.unread_count);
-      setTotal(response.total);
+      if (filter === 'all') setTotal(response.total);
       setHasMore(response.has_more);
     } catch (error) {
       console.error('Error fetching notifications:', error);
     } finally {
-      setLoading(false);
-      setLoadingMore(false);
+      // A stale run leaves the spinners to the run that replaced it.
+      if (!isStale()) {
+        setLoading(false);
+        setLoadingMore(false);
+      }
     }
   }, [filter, categoryFilter, notifications.length]);
 
@@ -84,6 +100,8 @@ export default function NotificationsPage() {
         prev.map(n => n.id === notificationId ? { ...n, is_read: true } : n)
       );
       setUnreadCount(prev => Math.max(0, prev - 1));
+      // The header bell keeps its own count — tell it to refresh.
+      window.dispatchEvent(new CustomEvent('notificationTrigger'));
     } catch (error) {
       console.error('Error marking as read:', error);
     }
@@ -94,6 +112,7 @@ export default function NotificationsPage() {
       await notificationService.markAllAsRead();
       setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
       setUnreadCount(0);
+      window.dispatchEvent(new CustomEvent('notificationTrigger'));
     } catch (error) {
       console.error('Error marking all as read:', error);
     }
@@ -103,7 +122,8 @@ export default function NotificationsPage() {
     try {
       await notificationService.deleteNotification(notificationId);
       setNotifications(prev => prev.filter(n => n.id !== notificationId));
-      setTotal(prev => prev - 1);
+      setTotal(prev => (prev === null ? prev : Math.max(0, prev - 1)));
+      window.dispatchEvent(new CustomEvent('notificationTrigger'));
     } catch (error) {
       console.error('Error deleting notification:', error);
     }
@@ -175,7 +195,9 @@ export default function NotificationsPage() {
           <div>
             <h1 className="text-lg sm:text-xl font-semibold text-gray-900 tracking-tight">Notifications</h1>
             <p className="text-xs sm:text-sm text-gray-500">
-              {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up!'} · {total} total
+              {loading && total === null
+                ? 'Loading…'
+                : <>{unreadCount > 0 ? `${unreadCount} unread` : 'All caught up!'}{total !== null && ` · ${total} total`}</>}
             </p>
           </div>
         </div>

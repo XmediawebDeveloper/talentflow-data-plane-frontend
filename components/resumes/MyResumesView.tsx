@@ -65,6 +65,7 @@ import { usePlanFeatures, usePlanLock } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { formatOverallScore } from '@/lib/utils/matchStatus';
+import { RESUME_VIEW_SOURCE_PARAM } from '@/lib/constants/resumePools';
 
 const formatDateIST = formatISTDate;
 const formatDateTimeIST = formatIST;
@@ -1642,6 +1643,11 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   const MAX_FOLDERS_TO_RECONCILE = 30;
   const reconcilingFoldersRef = useRef(false);
   const lastReconciledRef = useRef('');
+  /* Set by the first fetch. That one waits for the reconcile pass before
+     showing the folder tree, so the badges never paint the raw server count
+     and then drop to the corrected one. Later fetches reuse the cached
+     corrections (see below) and reconcile in the background as before. */
+  const folderCountsPrimedRef = useRef(false);
 
   /* Corrections have to outlive the fetch that produced them. Every fetch
      rebuilds the tree from the API, which reinstalls the raw count — so a
@@ -1948,6 +1954,13 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       // Raw server counts, kept aside — the reconcile pass has to compare
       // against these, not against numbers it corrected itself.
       const rawFolders: FolderType[] = [allResumesFolder, ...apiFolders];
+
+      // First load only (see folderCountsPrimedRef): the page is still on its
+      // skeleton, so correct the badges before the tree first appears. Bounded
+      // like every reconcile — one parallel round of small requests.
+      const primeFolderCounts = !folderCountsPrimedRef.current;
+      folderCountsPrimedRef.current = true;
+      if (primeFolderCounts && isUnfiltered) await reconcileFolderCounts(rawFolders);
 
       setResumes(convertedResumes);
       setTotalItems(resumeResponse.total);
@@ -2391,11 +2404,11 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       }));
 
       setSelectedResumes([]);
-      /* Re-query the view the same way unarchive does: removing the rows above
-         keeps the page correct, but the server owns the page's totals and what
-         backfills from the next page. */
-      isFetchingRef.current = false;
-      fetchData(appliedSearchQuery, filters, selectedFolder, true);
+      /* No explicit re-query here: removing the rows above keeps the page
+         correct, and the moves above fire RESUMES_CHANGED_EVENT, whose
+         listener re-reads the view (totals, what backfills from the next page)
+         through fetchData's queue. A second, forced fetch here used to bypass
+         that queue and race the listener's. */
       toast.success(`${resumeIds.length} resume(s) archived`);
     } catch (error) {
       toast.error('Failed to archive resumes');
@@ -2483,11 +2496,10 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       }));
 
       setSelectedResumes([]);
-      // Refetch the current folder view — the displayed list (`filteredResumes`)
-      // is the server-returned page for the selected folder, so the
-      // just-unarchived row won't disappear until we re-query.
-      isFetchingRef.current = false;
-      fetchData(appliedSearchQuery, filters, selectedFolder, true);
+      // The displayed list (`filteredResumes`) is the server-returned page for
+      // the selected folder, so the just-unarchived row won't disappear until
+      // it is re-queried — the moves above fire RESUMES_CHANGED_EVENT, whose
+      // listener does that through fetchData's queue (see archive above).
 
       const restoredToOriginal = restorations.filter(r => r.target !== rootFolder.id).length;
       toast.success(
@@ -3201,7 +3213,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
          rather than trying to guess the delta from the server's summary. */
       refreshAllResumesTotal();
       if (deleteResumes && result.deleted_resumes > 0) {
-        isFetchingRef.current = false;
+        // Through fetchData's queue, not around it — forcing the guard open
+        // let this run alongside an in-flight fetch and land in either order.
         fetchData(appliedSearchQuery, filters, selectedFolder, true);
       }
 
@@ -3410,7 +3423,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
 
         // Background refresh to get correct uploaded_by_name, version counts, etc.
         setTimeout(async () => {
-          isFetchingRef.current = false; // Reset guard so fetchData can run
+          // Queued behind any in-flight fetch rather than forced past it (see
+          // the folder-delete refresh above).
           // Refresh the view the user is actually on, and update the pinned
           // All Resumes count separately — an unfiltered refresh here made the
           // folder view and its badge jump to the whole library for a moment.
@@ -3858,7 +3872,6 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
 
       // Refresh full list from server to get correct data
       setTimeout(async () => {
-        isFetchingRef.current = false;
         fetchData(appliedSearchQuery, filters, selectedFolder, true);
         refreshAllResumesTotal();
         await adoptNewBatchIds(priorBatchIds);
@@ -4048,8 +4061,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
             // No `my_resumes:ai_interview` action code exists yet, so this
             // follows the AI Interviews module's own share permission.
             onAIInterview={!isArchivedContext ? handleAIInterview : undefined}
-            onAIInterviewDisabled={isPlanLocked('ai_interview') || !(isTenantAdmin || hasPermission('canInviteAIInterviews'))}
-            onAIInterviewDisabledReason={!(isTenantAdmin || hasPermission('canInviteAIInterviews')) ? "You do not have permission to invite candidates to an AI interview" : PLAN_LOCKED_MESSAGE}
+            onAIInterviewDisabled={isPlanLocked('ai_interview') || !(isTenantAdmin || (hasPermission('canInviteAIInterviews') && hasPermissionCode('my_resumes:invite_ai_interview')))}
+            onAIInterviewDisabledReason={!(isTenantAdmin || (hasPermission('canInviteAIInterviews') && hasPermissionCode('my_resumes:invite_ai_interview'))) ? "You do not have permission to invite candidates to an AI interview" : PLAN_LOCKED_MESSAGE}
           />
           );
         })()}
@@ -4079,7 +4092,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   onSelectResume={(resume) => {
                     sessionStorage.setItem('resumeNavList', JSON.stringify(resumes.map((r) => r.id)));
                     sessionStorage.setItem('resumeNavSource', 'my-resumes');
-                    router.push(`/recruitment/resume-view/${resume.id}`);
+                    router.push(`/recruitment/resume-view/${resume.id}?${RESUME_VIEW_SOURCE_PARAM}=my-resumes`);
                   }}
                 />
               </div>
@@ -4268,7 +4281,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   onViewDetails={(resume) => {
                     sessionStorage.setItem('resumeNavList', JSON.stringify(filteredResumes.map((r) => r.id)));
                     sessionStorage.setItem('resumeNavSource', 'my-resumes');
-                    router.push(`/recruitment/resume-view/${resume.id}`);
+                    router.push(`/recruitment/resume-view/${resume.id}?${RESUME_VIEW_SOURCE_PARAM}=my-resumes`);
                   }}
                   highlightQuery={appliedSearchQuery}
                   /* Rows can be dragged into an order of your own, kept per
@@ -4804,7 +4817,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                             onViewDetails={(resume) => {
                               sessionStorage.setItem('resumeNavList', JSON.stringify(visibleFolderResumes.map((x) => x.id)));
                               sessionStorage.setItem('resumeNavSource', 'my-resumes');
-                              router.push(`/recruitment/resume-view/${resume.id}`);
+                              router.push(`/recruitment/resume-view/${resume.id}?${RESUME_VIEW_SOURCE_PARAM}=my-resumes`);
                             }}
                             highlightQuery={appliedSearchQuery}
                             enableRowReorder
@@ -4903,7 +4916,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
           onViewResume={(resumeId) => {
             setIsUploadModalOpen(false);
             sessionStorage.setItem('resumeNavSource', 'my-resumes');
-            router.push(`/recruitment/resume-view/${resumeId}`);
+            router.push(`/recruitment/resume-view/${resumeId}?${RESUME_VIEW_SOURCE_PARAM}=my-resumes`);
           }}
           onDuplicateDetected={(duplicateData) => {
             // Set duplicate files for the DuplicateResumeModal
@@ -6199,7 +6212,6 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
             setSelectedVersionedItems(new Map());
             // Refresh batch data, without pulling the view out of its folder
             fetchUploadHistory();
-            isFetchingRef.current = false;
             fetchData(appliedSearchQuery, filters, selectedFolder, true);
             refreshAllResumesTotal();
           }}

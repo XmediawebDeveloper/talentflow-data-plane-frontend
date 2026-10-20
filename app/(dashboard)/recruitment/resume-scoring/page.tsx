@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ResumeScoringPage from '@/components/ResumeScoringPage';
 import { jdService, JDResponse } from '@/lib/services/jdService';
@@ -401,7 +401,18 @@ export default function ResumeScoringRoute() {
     };
   }, [pendingBatchId]);
 
+  /* Bumped by every loadScoredHistory run (and per JD by every loadJdScores
+     run), so a response belonging to an older run is dropped instead of
+     overwriting newer data. A finished batch refreshes the history from two
+     places (the poll above and ResumeScoringPage's own completion handler) a
+     few seconds apart; without this, whichever response landed last won,
+     even when it was the older read. */
+  const historySeqRef = useRef(0);
+  const jdScoresSeqRef = useRef(new Map<string, number>());
+
   const loadScoredHistory = async () => {
+    const seq = ++historySeqRef.current;
+    const isStale = () => seq !== historySeqRef.current;
     // Load scored history sidebar from the API - only page 1 (sorted by created_at DESC)
     // Recently scored items always appear on page 1. Full JD scores are loaded on-demand via loadJdScores.
     setHistoryLoading(true);
@@ -414,6 +425,7 @@ export default function ResumeScoringRoute() {
       // below, which exists only to build the "View by Job"/"View by
       // Candidates" list bodies, not to answer these counts.
       const probe = await scoringService.getAllScoredResumes({ page_size: 1, page: 1 });
+      if (isStale()) return;
       setScoreCounts({
         total: probe.total || 0,
         exact: probe.excellent_count || 0,
@@ -423,6 +435,7 @@ export default function ResumeScoringRoute() {
       const firstPage = probe.total > (probe.items || []).length
         ? await scoringService.getAllScoredResumes({ page_size: probe.total, page: 1 })
         : probe;
+      if (isStale()) return;
       const allItems = firstPage.items || [];
 
       // Group scores by JD
@@ -583,6 +596,7 @@ export default function ResumeScoringRoute() {
         // Ignore localStorage errors
       }
     } catch (error) {
+      if (isStale()) return;
       console.error('Failed to load scored history from API:', error);
       // Fallback to localStorage if API fails
       try {
@@ -599,18 +613,23 @@ export default function ResumeScoringRoute() {
         console.error('Failed to load from localStorage:', e);
       }
     } finally {
-      setHistoryLoading(false);
+      // A stale run leaves the loading state to the run that replaced it.
+      if (!isStale()) setHistoryLoading(false);
     }
   };
 
   // Load ALL scores for a specific JD on-demand via /jd/{jd_id} (paginated, deduped latest-per-resume)
   const loadJdScores = async (jdId: string, jdTitle?: string) => {
+    const seq = (jdScoresSeqRef.current.get(jdId) ?? 0) + 1;
+    jdScoresSeqRef.current.set(jdId, seq);
+    const isStale = () => seq !== jdScoresSeqRef.current.get(jdId);
     try {
       // Probe for total then pull every score for this JD in one request
       const probe = await scoringService.getJDScoredResumes(jdId, { page_size: 1, page: 1 });
       const firstPage = probe.total > (probe.items || []).length
         ? await scoringService.getJDScoredResumes(jdId, { page_size: probe.total, page: 1 })
         : probe;
+      if (isStale()) return;
       const allItems = [...(firstPage.items || [])];
       // /scoring/jd/{id} returns newest-first — capture the most recent score's
       // date here, before `scores` below gets re-sorted by score descending for
@@ -683,7 +702,11 @@ export default function ResumeScoringRoute() {
       setScoredHistory(prev => {
         const existing = prev.find(h => h.jobId === jdId);
         const title = jdTitle || existing?.jobTitle || 'Unknown Job';
+        // Spread the existing entry first so the JD metadata loadScoredHistory
+        // set (jdJobId, jdVersionNumber, jdStatus, …) survives — this endpoint
+        // isn't mapped here, so replacing the entry wholesale lost it.
         const updatedEntry: ScoredResumeData = {
+          ...existing,
           id: jdId,
           jobId: jdId,
           jobTitle: title,

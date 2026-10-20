@@ -377,6 +377,8 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
                   </div>
                   {isHR ? (
                     <div className="text-xs font-medium text-gray-400 text-right italic">Review only</div>
+                  ) : q.notDelivered ? (
+                    <div className={`text-xs font-semibold ${sc.text} text-right`}>Not Delivered · 0.0/10</div>
                   ) : (
                     <div className={`text-base font-bold ${sc.text} text-right`}>{formatScore1(q.questionScore)}</div>
                   )}

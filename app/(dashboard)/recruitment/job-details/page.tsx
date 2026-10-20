@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import JobDetailView from '@/components/JobDetailView';
@@ -8,7 +8,7 @@ import JDEditBlockedModal, { type JobDetailsTab } from '@/components/JDEditBlock
 import ArchiveJobModal from '@/components/ArchiveJobModal';
 import DisableJobModal from '@/components/DisableJobModal';
 import { Job } from '@/lib/types/types';
-import { jdService, JDResponse, JDUsageStatus } from '@/lib/services/jdService';
+import { jdService, JDResponse, JDUsageStatus, JDLocation } from '@/lib/services/jdService';
 import { formatJobExperienceText } from '@/lib/utils/jobExperience';
 import { getJDUsageModules, type JDUsageModule } from '@/lib/utils/jdUsageModules';
 import { formatJobVersionLabel } from '@/lib/utils/jobOpeningDisplay';
@@ -61,6 +61,10 @@ interface ExtendedJob extends Job {
   jobHoppingEnabled?: boolean | null;
   // JD13: Usage status for edit/republish logic
   usageStatus?: JDUsageStatus;
+  // Full per-location detail (city/state/country/radius_km), for views that need
+  // to show every location rather than the single joined `location` string - see
+  // ExtractedDataSummary's `locations` prop.
+  locations?: JDLocation[];
 }
 
 // Loading skeleton for Job Details — mirrors JobDetailView's real layout: white
@@ -200,6 +204,10 @@ function JobDetailsContent() {
 
   const [job, setJob] = useState<ExtendedJob | null>(null);
   const [loading, setLoading] = useState(true);
+  /* Bumped by every fetchJobDetails run and on jobId change / unmount, so a
+     response for an older run (e.g. the previous id after Back/Forward) is
+     dropped instead of rendering — or redirecting — the wrong JD. */
+  const fetchSeqRef = useRef(0);
   const [rawJdData, setRawJdData] = useState<JDResponse | null>(null);
   // One entry per Job (lineage), not per version — Prev/Next below steps
   // through this list, so it must never contain a job's older versions as
@@ -237,6 +245,8 @@ function JobDetailsContent() {
       // through to the "Job not found" state below.
       setLoading(false);
     }
+    // Invalidate this run's in-flight requests on id change / unmount.
+    return () => { fetchSeqRef.current += 1; };
   }, [jobId]);
 
   useEffect(() => {
@@ -306,9 +316,16 @@ function JobDetailsContent() {
 
   const fetchJobDetails = async () => {
     if (!jobId) return;
-    setLoading(true);
+    const seq = ++fetchSeqRef.current;
+    const isStale = () => seq !== fetchSeqRef.current;
+    /* Skeleton only when this id isn't on screen yet. A refresh after
+       disable / enable / archive / unarchive / republish keeps JobDetailView
+       mounted, so its tab badges and open tab don't reset to their initial
+       values; the refreshed `job` prop simply flows in. */
+    if (!job || job.id !== jobId) setLoading(true);
     try {
       const data = await jdService.getById(jobId);
+      if (isStale()) return;
       setRawJdData(data);
 
       // For Draft JDs, redirect to JD creation with the current stage
@@ -324,7 +341,14 @@ function JobDetailsContent() {
         job_id: data.job_id,  // Human-readable ID like JD-076
         title: data.title || 'Untitled',
         status: mapStatus(data.status),
-        location: data.location || (data.locations && data.locations.length > 0 ? data.locations.map(l => l.city).join(', ') : ''),
+        // Prefer the full locations array (ALL saved cities) over the legacy
+        // `location` column, which is only ever the FIRST city - see JDCreation.tsx's
+        // save payload. Falling back to `data.location` only when there is no
+        // locations array at all keeps old/legacy JDs working.
+        location: (data.locations && data.locations.length > 0)
+          ? data.locations.map(l => l.city).filter(Boolean).join(', ')
+          : (data.location || ''),
+        locations: data.locations || [],
         daysActive: calculateDaysActive(data.created_at),
         requiredMatch: 70,
         department: data.department,
@@ -380,6 +404,7 @@ function JobDetailsContent() {
       } catch (e) {
         // Ignore error
       }
+      if (isStale()) return;
 
       // JD13: Fetch usage status for edit/republish logic
       try {
@@ -389,13 +414,16 @@ function JobDetailsContent() {
         // Usage status not available
         console.warn('Could not fetch usage status:', e);
       }
+      if (isStale()) return;
 
       setJob(convertedJob);
     } catch (error) {
+      if (isStale()) return;
       console.error('Failed to fetch job details:', error);
       toast.error('Failed to load job details');
     } finally {
-      setLoading(false);
+      // A stale run leaves the skeleton to the run that replaced it.
+      if (!isStale()) setLoading(false);
     }
   };
 
@@ -801,8 +829,10 @@ function JobDetailsContent() {
         breadcrumbItems={breadcrumbItems}
         prevId={jobNavPrevId}
         nextId={jobNavNextId}
-        currentIndex={jobNavCurrentIndex}
-        totalCount={jobNavList.length}
+        /* A job outside the nav list (archived, disabled, or none published)
+           has no position in it — hide the pager rather than show "0 / N". */
+        currentIndex={jobNavCurrentIndex >= 0 ? jobNavCurrentIndex : undefined}
+        totalCount={jobNavCurrentIndex >= 0 ? jobNavList.length : undefined}
       />
     </div>
   );

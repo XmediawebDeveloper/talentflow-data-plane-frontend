@@ -5,7 +5,7 @@
  * Standard User view: Shows only own consumption history
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { IconComponent } from '@/lib/types/icon';
 import {
   ClipboardList,
@@ -47,6 +47,9 @@ const UNIT_TYPE_COLORS: Record<UnitType, { bg: string; text: string }> = {
   AIU: { bg: 'bg-green-50', text: 'text-green-700' },
 };
 
+// Page size for walking the whole period in loadHistory (the old fixed limit).
+const HISTORY_PAGE_SIZE = 100;
+
 export default function MyConsumptionHistory() {
   const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
@@ -82,6 +85,11 @@ export default function MyConsumptionHistory() {
     },
   );
 
+  /* Bumped by every loadHistory run, so only the latest period's rows apply —
+     the mount load (default period) and the one after the saved period is
+     restored used to race. */
+  const loadSeqRef = useRef(0);
+
   useEffect(() => {
     loadHistory();
   }, [dateRange]);
@@ -91,22 +99,38 @@ export default function MyConsumptionHistory() {
   }, [history, selectedType, selectedStatus]);
 
   const loadHistory = async () => {
+    const seq = ++loadSeqRef.current;
+    const isStale = () => seq !== loadSeqRef.current;
     setIsLoading(true);
     try {
       const endDate = new Date();
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - dateRange);
 
-      const data = await unitPoolService.getConsumptionHistory({
-        start_date: startDate.toISOString(),
-        end_date: endDate.toISOString(),
-        limit: 100,
-      });
-      setHistory(data.items);
+      /* Page through the whole period. Only the first 100 entries used to
+         load, so the summary cards — sums over this list — silently stopped
+         counting at 100. The server's `total`, a short page, or a page with
+         nothing new (an ignored `offset`) ends the walk. */
+      const items: ConsumptionLogEntry[] = [];
+      const seen = new Set<string>();
+      for (let offset = 0; ; offset += HISTORY_PAGE_SIZE) {
+        const data = await unitPoolService.getConsumptionHistory({
+          start_date: startDate.toISOString(),
+          end_date: endDate.toISOString(),
+          limit: HISTORY_PAGE_SIZE,
+          offset,
+        });
+        if (isStale()) return;
+        const fresh = data.items.filter((item) => !seen.has(item.id));
+        fresh.forEach((item) => { seen.add(item.id); items.push(item); });
+        if (data.items.length < HISTORY_PAGE_SIZE || fresh.length === 0 || items.length >= data.total) break;
+      }
+      setHistory(items);
     } catch (error: any) {
+      if (isStale()) return;
       toast.error(error.message || 'Failed to load consumption history');
     } finally {
-      setIsLoading(false);
+      if (!isStale()) setIsLoading(false);
     }
   };
 

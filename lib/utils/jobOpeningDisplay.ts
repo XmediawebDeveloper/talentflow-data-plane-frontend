@@ -210,7 +210,14 @@ export const mapJDToJob = (jd: JDListRow): Job => ({
   job_id: jd.job_id, // Human-readable ID like JD-001
   title: jd.title || 'Untitled',
   status: mapJDStatus(jd.status),
-  location: jd.location || (jd.locations || []).map((loc) => loc?.city).filter(Boolean).join(', ') || '',
+  // Prefer the full array (ALL saved cities) over the legacy `location` column,
+  // which is only ever the FIRST city - see JDCreation.tsx's save payload. `||`
+  // here would make `jd.location` (always truthy once any location exists) win
+  // and the join below would never run.
+  location: (jd.locations && jd.locations.length > 0)
+    ? jd.locations.map((loc) => loc?.city).filter(Boolean).join(', ')
+    : (jd.location || ''),
+  locations: jd.locations || [],
   daysActive: calculateDaysActive(jd.created_at),
   requiredMatch: jd.required_match || 70,
   department: jd.department,

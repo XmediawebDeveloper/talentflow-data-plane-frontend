@@ -76,6 +76,27 @@ export const parseSalaryInput = (raw?: string | number | null): number | undefin
   return Math.round(numericValue * 100) / 100;
 };
 
+/**
+ * Convert a salary figure using an already-fetched exchange `rate` (from
+ * lib/services/exchangeRateService, backed by GET /jd/exchange-rate), where
+ * `rate` converts FROM the input's currency TO the target currency:
+ * amount_in_target = amount * rate. Rounded to 2 decimals to match the
+ * NUMERIC(12,2) column and the rest of this file's precision. Blank,
+ * unparseable input, or an invalid rate stays blank - there is nothing
+ * trustworthy to convert.
+ */
+export const convertSalaryAmount = (
+  value: string | number | null | undefined,
+  rate: number,
+): string => {
+  const numericValue = parseSalaryInput(value);
+  if (numericValue === undefined || !Number.isFinite(rate) || rate <= 0) {
+    return '';
+  }
+
+  return String(Math.round(numericValue * rate * 100) / 100);
+};
+
 export const formatSalaryAmount = (
   value?: number | string | null,
   currency?: string | null,
