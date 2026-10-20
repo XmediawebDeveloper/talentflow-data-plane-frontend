@@ -41,6 +41,35 @@ export function loadDotlottieWc(): Promise<void> {
   return dotlottieWcLoadPromise;
 }
 
+const SUCCESS_ANIMATION_URL = '/animations/success.json';
+
+const lottieDataLoads = new Map<string, Promise<string>>();
+
+/**
+ * Fetches a Lottie JSON once per page, so the player can be handed the data
+ * itself rather than a `src`.
+ *
+ * Given only `src`, `<dotlottie-wc>` starts its own fetch as soon as it is
+ * attached and aborts it when it is detached - and it reports that abort as
+ * "Failed to load animation data from URL: ... AbortError". A loading screen
+ * that is swapped out before the file arrives (a fast assessment load, or
+ * React's dev-mode mount/unmount/mount) logged that on every such swap. With
+ * `data` the player never fetches, so there is nothing to abort. A failed fetch
+ * is forgotten so the next mount retries it.
+ */
+export function loadLottieData(url: string): Promise<string> {
+  let load = lottieDataLoads.get(url);
+  if (!load) {
+    load = fetch(url).then((response) => {
+      if (!response.ok) throw new Error(`HTTP ${response.status} for ${url}`);
+      return response.text();
+    });
+    load.catch(() => lottieDataLoads.delete(url));
+    lottieDataLoads.set(url, load);
+  }
+  return load;
+}
+
 /**
  * What this degrades to: the tinted disc and tick that were here before the
  * animation existed.
@@ -113,18 +142,18 @@ export default function SuccessAnimation({
   placeholder,
 }: SuccessAnimationProps) {
   const reducedMotion = usePrefersReducedMotion();
-  const [playerReady, setPlayerReady] = useState(false);
+  const [animationData, setAnimationData] = useState<string | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
     if (reducedMotion) return;
     let cancelled = false;
-    loadDotlottieWc()
-      .then(() => {
-        if (!cancelled) setPlayerReady(true);
+    Promise.all([loadDotlottieWc(), loadLottieData(SUCCESS_ANIMATION_URL)])
+      .then(([, data]) => {
+        if (!cancelled) setAnimationData(data);
       })
       .catch(() => {
-        /* CDN fetch failed — settle on the fallback badge below. */
+        /* CDN or animation fetch failed — settle on the fallback badge below. */
         if (!cancelled) setLoadFailed(true);
       });
     return () => {
@@ -132,18 +161,18 @@ export default function SuccessAnimation({
     };
   }, [reducedMotion]);
 
-  if (!reducedMotion && !playerReady && !loadFailed && placeholder !== undefined) return <>{placeholder}</>;
-  if (reducedMotion || !playerReady) return <>{fallback ?? <StaticBadge />}</>;
+  if (!reducedMotion && !animationData && !loadFailed && placeholder !== undefined) return <>{placeholder}</>;
+  if (reducedMotion || !animationData) return <>{fallback ?? <StaticBadge />}</>;
 
   const DotlottieWc = 'dotlottie-wc' as unknown as React.ElementType<{
-    src: string;
+    data: string;
     autoplay?: boolean;
     class?: string;
   }>;
 
   return (
     <div className={className} aria-hidden>
-      <DotlottieWc src="/animations/success.json" autoplay class="h-full w-full" />
+      <DotlottieWc data={animationData} autoplay class="h-full w-full" />
     </div>
   );
 }
