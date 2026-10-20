@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { X, Users, Mail, Play, Square, CheckSquare, CheckCircle, Clock, Ban, TrendingUp, Loader2, RefreshCw, Info, Send } from 'lucide-react';
 import { toast } from 'sonner';
-import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
 import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { INVITE_SOURCE_FILTER_OPTIONS, RESULT_FILTER_OPTIONS } from '@/components/ai-interview/ColumnFilterFields';
@@ -70,6 +70,10 @@ interface AIInterviewTrackInvitesModalProps {
    *  (there is nothing to close back to); everything else — stats, filters,
    *  bulk resend, the table, pagination — is unchanged. */
   embedded?: boolean;
+  /** The interview's job is disabled — invites stay viewable, but Invite More,
+   *  Resend, Edit and Revoke are blocked. Omit it and the tracker looks the
+   *  config's job status up itself. */
+  jdDisabled?: boolean;
   /** Footer "Invite More" — the host closes this tracker and opens its own
    *  invite flow. Left out, the button is not shown. */
   onInviteMore?: () => void;
@@ -107,11 +111,24 @@ export default function AIInterviewTrackInvitesModal({
   hideJobVersionFilter = false,
   onViewResult,
   embedded = false,
+  jdDisabled: jdDisabledProp,
   onInviteMore,
   onChanged,
   refreshSignal,
 }: AIInterviewTrackInvitesModalProps) {
   const [isLoading, setIsLoading] = useState(true);
+
+  const [lookedUpJdDisabled, setLookedUpJdDisabled] = useState(false);
+  useEffect(() => {
+    if (!isOpen || jdDisabledProp !== undefined || !configId) return;
+    let cancelled = false;
+    aiInterviewService
+      .get(configId)
+      .then((cfg) => { if (!cancelled) setLookedUpJdDisabled(isJdDisabled(cfg?.jd_status)); })
+      .catch(() => { /* Unknown — the server still refuses actions on a disabled job. */ });
+    return () => { cancelled = true; };
+  }, [isOpen, jdDisabledProp, configId]);
+  const jdDisabled = jdDisabledProp ?? lookedUpJdDisabled;
 
   /* Job / interview version for the two version columns. Taken from the host
      when it knows them; otherwise derived here from the config list — the
@@ -208,8 +225,9 @@ export default function AIInterviewTrackInvitesModal({
   /* Selection follows the selected card, as on the AI Interviews page: the
      Invited card ticks revocable rows and offers Revoke; the Expired card
      ticks resendable rows and offers Resend. Other cards have no bulk action. */
-  const bulkMode: 'revoke' | 'resend' | null =
-    filters.status === 'invited' ? 'revoke' : filters.status === 'expired' ? 'resend' : null;
+  const bulkMode: 'revoke' | 'resend' | null = jdDisabled
+    ? null
+    : filters.status === 'invited' ? 'revoke' : filters.status === 'expired' ? 'resend' : null;
   const bulkResendMode = bulkMode === 'resend';
   const rowSelectable = bulkMode === 'revoke' ? isRevocableInvite : isBulkResendable;
   const selectableIds = bulkMode ? invitations.filter(rowSelectable).map((inv: any) => inv.id) : [];
@@ -645,6 +663,7 @@ export default function AIInterviewTrackInvitesModal({
           {/* Same list and action rules as the AI Interviews tracker. */}
           <AIInterviewInviteTable
             invitations={invitations}
+            jdDisabled={jdDisabled}
             isLoading={initialLoading}
             hasActiveFilters={filtersActive}
             emptyHint="Use Send Invite to invite candidates to this job's AI interview."
@@ -819,6 +838,8 @@ export default function AIInterviewTrackInvitesModal({
                 variant="primary"
                 size="sm"
                 onClick={onInviteMore}
+                disabled={jdDisabled}
+                title={jdDisabled ? JD_DISABLED_ACTION_MESSAGE : undefined}
                 icon={<Send className="w-3.5 h-3.5" />}
               >
                 Invite More

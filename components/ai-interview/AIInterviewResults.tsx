@@ -82,6 +82,9 @@ interface AIInterviewResultsProps {
    *  by the page, so the Job Version column and filter are left out while
    *  Interview Version stays. */
   hideJobVersion?: boolean;
+  /** The interview's job is disabled: results stay viewable, but the bulk
+   *  Revoke / Resend actions are withheld until the job is enabled again. */
+  readOnly?: boolean;
   /** How a candidate's name is SHOWN in the table rows and cards (Job Details:
    *  first name capitalised). Display only — search, sort, filters and exports
    *  keep the name as it is; other hosts leave it unset. */
@@ -279,7 +282,7 @@ const SCORE_INPUT_CLASS = 'w-full min-w-0 h-9 px-3 text-sm text-black dark:text-
 const RESULT_STATUSES = new Set(['in_progress', 'completed', 'terminated']);
 const isResultStatus = (v: unknown) => RESULT_STATUS_OPTIONS.some((o) => o.value === v);
 
-export default function AIInterviewResults({ configId, configTitle, jdTitle, jdShortId, embedded = false, showStats, hideVersionDetails = false, hideJobVersion = false, onViewCandidate, breadcrumbItems, toolbarActions, emptyStateAction, jobVersion: jobVersionProp, interviewVersion: interviewVersionProp, toolbarPortal, formatCandidateName, onOpenInviteDialog, onTotalItemsChange }: AIInterviewResultsProps) {
+export default function AIInterviewResults({ configId, configTitle, jdTitle, jdShortId, embedded = false, showStats, hideVersionDetails = false, hideJobVersion = false, readOnly = false, onViewCandidate, breadcrumbItems, toolbarActions, emptyStateAction, jobVersion: jobVersionProp, interviewVersion: interviewVersionProp, toolbarPortal, formatCandidateName, onOpenInviteDialog, onTotalItemsChange }: AIInterviewResultsProps) {
   /* Create / Send Assessment | AI Interview's gates — the AI Talent Match tab's own. */
   const { canCreateAssessments, assessmentDeniedReason, mayInviteAIInterview, aiInterviewDeniedReason } = useScoringActionPermissions(true);
   const showName = (name?: string | null) => (formatCandidateName && name ? formatCandidateName(name) : name);
@@ -781,7 +784,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
      can go to. Shown wherever the cards are, since they decide which applies.
      Ticked rows that do not qualify are left out and the button's count says
      how many will actually be acted on. */
-  const showInviteActions = showStats ?? !embedded;
+  const showInviteActions = (showStats ?? !embedded) && !readOnly;
   const selectedSessions = Array.from(selected.values());
   const revocableSelected = showInviteActions && statusFilter === 'invited'
     ? selectedSessions.filter(isRevocableInvite) : [];

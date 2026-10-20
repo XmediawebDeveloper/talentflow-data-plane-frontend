@@ -2174,6 +2174,9 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       const detail = err?.response?.data?.detail || 'Failed to start interview';
       if (detail.includes('completed') || detail.includes('cancelled') || detail.includes('expired')) {
         await loadInterview();
+      } else if (err?.response?.status === 409) {
+        // The job behind this interview is disabled — retrying won't help.
+        toast.error(detail);
       } else {
         toast.error(detail + ' Please try again.');
       }

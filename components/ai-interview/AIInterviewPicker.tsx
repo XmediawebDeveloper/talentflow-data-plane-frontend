@@ -15,6 +15,7 @@ import ToolbarSelectAll from '@/components/ui/toolbar-select-all';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import { modeFromConfig } from '@/lib/constants/aiInterviewMode';
 import { formatIST } from '@/lib/utils/dateUtils';
+import { isJdDisabled } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import ConfigurePreviewDialog from './ConfigurePreviewDialog';
 
@@ -209,8 +210,9 @@ export default function AIInterviewPicker({
   /* Active interview versions, newest first, searchable by job title, Job ID
      or interview ID. */
   const q = search.trim().toLowerCase();
+  // A disabled job's interviews can't take invites until it is enabled again.
   const activeConfigs = configs
-    .filter((c) => normalizeConfigStatus(c.status) === 'published')
+    .filter((c) => normalizeConfigStatus(c.status) === 'published' && !isJdDisabled(c.jd_status))
     .sort((x, y) => new Date(y.created_at || 0).getTime() - new Date(x.created_at || 0).getTime());
   const pickerRows = activeConfigs.filter((c) =>
     !q ||

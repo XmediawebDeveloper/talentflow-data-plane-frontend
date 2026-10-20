@@ -9,7 +9,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useFolderPanelCollapsed, folderColumnClasses, FolderCollapseButton, FolderPanelRail } from '@/components/ui/folder-panel-collapse';
 import { createPortal } from 'react-dom';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import api from '@/lib/services/api';
 import { toast } from 'sonner';
@@ -115,6 +115,8 @@ const ROUND_LABELS: Record<string, string> = {
 export default function ShareAIInterviewModal({ isOpen, onClose, config, onInviteSent, onInvitesChanged, embedded = false, initialCandidates, interviewVersion: interviewVersionProp, onBack, inPopupStep = false, footerTarget = null, jobVersion }: ShareAIInterviewModalProps) {
   const { user } = useAuth();
   const { quotaData } = useQuota();
+  // A disabled job's interview can't be shared until the job is enabled again.
+  const jdDisabled = isJdDisabled(config?.jd_status);
 
   /* Interview version for the header. A config stores no number of its own —
      it is this config's place among its job version's configs, which only
@@ -754,6 +756,10 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
   );
 
   const handleCopyLinkForCandidate = async (candidateId: string) => {
+    if (jdDisabled) {
+      toast.error(JD_DISABLED_ACTION_MESSAGE);
+      return;
+    }
     const candidate = candidates.find(c => c.id === candidateId);
     if (!candidate) return;
 
@@ -820,6 +826,10 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
   const sendCandidates = pendingDbSelection ? mergeSelectedResumes() : candidates;
 
   const handleSend = async () => {
+    if (jdDisabled) {
+      toast.error(JD_DISABLED_ACTION_MESSAGE);
+      return;
+    }
     setIsSubmitting(true);
     try {
       // Fold the ticked resumes into the list so it matches what was sent.
@@ -1017,7 +1027,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
       sendCandidates.some((o) => o.id !== c.id && o.email.trim().toLowerCase() === c.email.trim().toLowerCase())
     );
   });
-  const isValid = hasAtLeastOneValid && !hasBlockingRowError;
+  const isValid = hasAtLeastOneValid && !hasBlockingRowError && !jdDisabled;
 
   // Success screen
   if (showSuccess) {
@@ -2033,6 +2043,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
             <Button
               variant="primary"
               onClick={handleSend}
+              title={jdDisabled ? JD_DISABLED_ACTION_MESSAGE : undefined}
               disabled={!isValid || isSubmitting || (quotaStats !== null && quotaStats.available === 0 && quotaStats.total_quota < 999999)}
             >
               {isSubmitting ? (
