@@ -2579,6 +2579,11 @@ export default function CandidateResultDetails({
                                         <div className="font-semibold pt-2 border-t border-brand-blue/20 text-brand-blue">
                                           Final: {formatMark(q.points_earned)}/{formatMark(q.points_possible)} ({formatMark(q.score)}%)
                                         </div>
+                                        {q.candidate_test_results.marks_breakdown.pass_requirement && (
+                                          <div className="text-xs text-gray-600">
+                                            {q.candidate_test_results.marks_breakdown.pass_requirement}
+                                          </div>
+                                        )}
                                       </div>
                                     </div>
                                   )}
@@ -2622,7 +2627,12 @@ export default function CandidateResultDetails({
                                                     Expected Output
                                                   </div>
                                                   <div className="rounded bg-white p-3 font-mono text-sm text-gray-800 border border-gray-200 dark:border-slate-700">
-                                                    <pre className="whitespace-pre-wrap [overflow-wrap:anywhere]">{testCase.expected_output || (testCase.is_hidden ? 'Hidden expected output' : 'No expected output')}</pre>
+                                                    <pre className="whitespace-pre-wrap [overflow-wrap:anywhere]">{testCase.expected_output
+                                                      // '' is a real answer (the correct program prints nothing),
+                                                      // not a missing value - say so rather than "Hidden expected output".
+                                                      || (testCase.expected_output === ''
+                                                        ? '(empty output expected)'
+                                                        : testCase.is_hidden ? 'Hidden expected output' : 'No expected output')}</pre>
                                                   </div>
                                                 </div>
                                               </div>
@@ -2643,11 +2653,13 @@ export default function CandidateResultDetails({
                                                   }`}>
                                                     <pre className="whitespace-pre-wrap [overflow-wrap:anywhere]">{
                                                       testCase.actual_output
-                                                      || (testCase.status === 'syntax_error'
-                                                        ? '(code did not compile)'
-                                                        : testCase.status === 'timeout'
-                                                          ? '(timed out)'
-                                                          : '(no output)')
+                                                      || (testCase.passed
+                                                        ? '(no output, as expected)'
+                                                        : testCase.status === 'syntax_error'
+                                                          ? '(code did not compile)'
+                                                          : testCase.status === 'timeout'
+                                                            ? '(timed out)'
+                                                            : '(no output)')
                                                     }</pre>
                                                   </div>
                                                 </div>
