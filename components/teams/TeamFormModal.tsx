@@ -20,6 +20,8 @@ interface TeamFormModalProps {
   availableUsers: ApiUser[];
   isSubmitting?: boolean;
   onDelete?: () => void;
+  /** false = user lacks teams:delete — Delete stays visible but greyed with a tooltip. */
+  canDelete?: boolean;
   isDeleting?: boolean;
 }
 
@@ -42,6 +44,7 @@ export default function TeamFormModal({
   availableUsers,
   isSubmitting = false,
   onDelete,
+  canDelete = true,
   isDeleting = false,
 }: TeamFormModalProps) {
   const [teamName, setTeamName] = useState(initialData?.name || '');
@@ -76,10 +79,11 @@ export default function TeamFormModal({
   if (mode === 'edit' && onDelete) {
     actions.push({
       label: isDeleting ? 'Deleting...' : 'Delete Team',
-      onClick: onDelete,
+      onClick: canDelete ? onDelete : () => {},
       variant: 'destructive',
-      disabled: isSubmitting || isDeleting,
+      disabled: isSubmitting || isDeleting || !canDelete,
       loading: isDeleting,
+      title: !canDelete ? 'You do not have permission to delete teams' : undefined,
     });
   }
   actions.push({

@@ -224,10 +224,7 @@ export default function AIInterviewJDSelection() {
                     variant="primary"
                     size="md"
                     onClick={() => {
-                      if (!canCreateJD) {
-                        toast.error('You do not have permission to create job descriptions');
-                        return;
-                      }
+                      if (!canCreateJD) return;
                       router.push('/recruitment/jd-creation?from=ai-interview');
                     }}
                     aria-disabled={!canCreateJD}
@@ -400,7 +397,7 @@ export default function AIInterviewJDSelection() {
                         >
                           <div className="flex flex-wrap sm:flex-nowrap items-start gap-2 sm:gap-4">
                             <label
-                              className={`flex items-center pt-1 ${latestSelectable ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                              className={`flex items-center h-5 sm:h-auto sm:pt-1 ${latestSelectable ? 'cursor-pointer' : 'cursor-not-allowed'}`}
                               title={
                                 blockedByOtherPick
                                   ? otherPickReason
@@ -458,7 +455,10 @@ export default function AIInterviewJDSelection() {
                             <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3 w-full sm:w-auto sm:flex-shrink-0">
                               <button
                                 type="button"
-                                disabled={!cardAddEnabled}
+                                /* Permission lock: aria-disabled (not native) so the
+                                   tooltip still shows on hover. */
+                                disabled={!cardAddEnabled && canCreateAIInterviews}
+                                aria-disabled={!cardAddEnabled}
                                 onClick={() => cardAddEnabled && handleCreateForVersion(cardTarget.id)}
                                 className={`h-7 w-7 flex items-center justify-center rounded-md ring-1 transition-all flex-shrink-0 ${
                                   cardAddEnabled
@@ -619,10 +619,7 @@ export default function AIInterviewJDSelection() {
                             variant="primary"
                             size="md"
                             onClick={() => {
-                              if (!canCreateJD) {
-                                toast.error('You do not have permission to create job descriptions');
-                                return;
-                              }
+                              if (!canCreateJD) return;
                               router.push('/recruitment/jd-creation?from=ai-interview');
                             }}
                             aria-disabled={!canCreateJD}

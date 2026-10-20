@@ -445,10 +445,7 @@ export default function HRQuestionBank() {
         </div>
         <button
           onClick={() => {
-            if (!canCreateHRQuestionBank) {
-              toast.error({ title: 'You do not have permission to add questions' });
-              return;
-            }
+            if (!canCreateHRQuestionBank) return;
             setShowAddForm(true); setEditingId(null); setFormData(EMPTY_QUESTION);
           }}
           aria-disabled={!canCreateHRQuestionBank}
@@ -679,10 +676,7 @@ export default function HRQuestionBank() {
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (!canUpdateHRQuestionBank) {
-                        toast.error({ title: 'You do not have permission to edit questions' });
-                        return;
-                      }
+                      if (!canUpdateHRQuestionBank) return;
                       handleEdit(question);
                     }}
                     aria-disabled={!canUpdateHRQuestionBank}
@@ -699,10 +693,7 @@ export default function HRQuestionBank() {
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (!canDeleteHRQuestionBank) {
-                        toast.error({ title: 'You do not have permission to delete questions' });
-                        return;
-                      }
+                      if (!canDeleteHRQuestionBank) return;
                       setDeleteTarget(question);
                     }}
                     aria-disabled={!canDeleteHRQuestionBank}

@@ -28,17 +28,37 @@ import type { ReactNode } from 'react';
 export const JOB_ID_BADGE_CLASS =
   'px-2 py-0.5 text-xs font-mono font-semibold bg-brand-blue text-white rounded shadow-sm shadow-brand-blue/25 ring-1 ring-white/10';
 
+/**
+ * A job card's headline: [selection control] + Job ID + Job Name on ONE line at
+ * every width. The row never wraps; the name truncates (`truncate min-w-0` on
+ * it, full name in its `title`) and a long id is capped by `JOB_ID_BADGE_FIT`.
+ * Sits inside the card's wrapping badge row, where `max-w-full` lets it take a
+ * whole line of its own when the name is long, so the version / status pills
+ * after it drop below instead of pushing the name onto a line by itself.
+ */
+export const JOB_HEADLINE_ROW = 'flex items-center gap-2 min-w-0 max-w-full';
+
+/**
+ * Layout for the badge inside `JOB_HEADLINE_ROW`: on phones a very long id is
+ * capped at 9rem and ellipsed (full id in the badge's `title`), so it can never
+ * squeeze the job name out of the row. `sm` and up: no cap, as before.
+ */
+export const JOB_ID_BADGE_FIT = 'flex-shrink-0 max-w-[9rem] sm:max-w-none truncate';
+
 export default function JobIdBadge({
   children,
   className,
+  title,
 }: {
   /** The Job ID itself, e.g. `job.job_id` or `assessment.jd_short_id`. */
   children: ReactNode;
   /** Layout classes for the surrounding row — never colours. */
   className?: string;
+  /** Hover text — the full id where `JOB_ID_BADGE_FIT` may truncate it. */
+  title?: string;
 }) {
   return (
-    <span className={className ? `${JOB_ID_BADGE_CLASS} ${className}` : JOB_ID_BADGE_CLASS}>
+    <span title={title} className={className ? `${JOB_ID_BADGE_CLASS} ${className}` : JOB_ID_BADGE_CLASS}>
       {children}
     </span>
   );

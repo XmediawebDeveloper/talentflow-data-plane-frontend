@@ -17,6 +17,7 @@ import dynamic from 'next/dynamic';
 import { toast } from 'sonner';
 import { usePlanLock } from '@/lib/hooks/usePlanFeature';
 import { useAuth } from '@/components/providers/AuthProvider';
+import PermissionLockedOverlay from '@/components/shared/PermissionLockedOverlay';
 import SuccessAnimation from '@/components/ui/success-animation';
 import PageBreadcrumb, { type BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import JDVersionHistoryModal from '@/components/JDVersionHistoryModal';
@@ -633,6 +634,13 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
   // add/edit/delete-question affordance this builder actually has (the bank
   // has no per-question edit or delete UI here to gate).
   const canAddQuestion = isTenantAdmin || hasPermissionCode('assessments:add_question');
+  // "HR Question Bank View" under Assessment: shows the bank's questions in the
+  // HR section. Without it the list is hidden — the questions still load so the
+  // default / saved HR questions are kept when the assessment is saved.
+  const canViewQuestionBank = isTenantAdmin || hasPermissionCode('assessments:view_question_bank');
+  // Publish Assessment is checked against assessments:update by the backend.
+  // Without it the Publish button stays visible, greyed, tooltip only.
+  const canPublishAssessment = isTenantAdmin || (user?.permissions?.canUpdateAssessments ?? false);
   // Locked only once plan features have loaded — `available` is false while
   // loading, which used to toast "not available" and blank the form on every load.
   const { isPlanLocked } = usePlanLock();
@@ -1357,10 +1365,8 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
      had no other caller, so leaving them would have been dead code. */
 
   const openAddHRQuizModal = () => {
-    if (!canAddQuestion) {
-      toast.error('You do not have permission to add questions');
-      return;
-    }
+    // Locked: the Add Quiz button is greyed with a tooltip; click is a no-op.
+    if (!canAddQuestion) return;
     const hrSection = sections.find(s => s.name === 'HR');
     if (!hrSection?.enabled) return;
 
@@ -3478,10 +3484,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                 <Button
                   variant="primary"
                   onClick={() => {
-                    if (!canCreateJd) {
-                      toast.error('You do not have permission to create job descriptions');
-                      return;
-                    }
+                    if (!canCreateJd) return;
                     handleCreateNewJD();
                   }}
                   aria-disabled={!canCreateJd}
@@ -3725,7 +3728,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                             sibling version that does not — and off while
                             another job holds the pick. */}
                         <label
-                          className={`flex items-center pt-1 ${latestSelectable ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                          className={`flex items-center h-5 sm:h-auto sm:pt-1 ${latestSelectable ? 'cursor-pointer' : 'cursor-not-allowed'}`}
                           title={
                             blockedByOtherPick
                               ? otherPickReason
@@ -4172,10 +4175,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                       <Button
                         variant="primary"
                         onClick={() => {
-                          if (!canCreateJd) {
-                            toast.error('You do not have permission to create job descriptions');
-                            return;
-                          }
+                          if (!canCreateJd) return;
                           handleCreateNewJD();
                         }}
                         aria-disabled={!canCreateJd}
@@ -4351,6 +4351,9 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
           <span className={selectedHRQuestions.length >= HR_QUESTION_LIMIT ? 'text-brand-orange-deep font-medium' : 'text-gray-500'}>{selectedHRQuestions.length}/{HR_QUESTION_LIMIT} selected (max {HR_QUESTION_LIMIT})</span>
         </div>
 
+        {/* No "HR Question Bank View": the list stays visible but greyed and
+            unclickable, with the reason on hover (never hidden). */}
+        <PermissionLockedOverlay locked={!canViewQuestionBank} message='You do not have permission to view the HR Question Bank'>
         <div className="space-y-1.5 max-h-72 overflow-y-auto">
           {hrQuestionBank.length === 0 ? (
             <div className="rounded-xl border border-dashed border-gray-200 bg-slate-50 px-4 py-6 text-center text-sm text-gray-500">
@@ -4395,6 +4398,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
             );
           })}
         </div>
+        </PermissionLockedOverlay>
 
         {/* The "synced with the HR Question Bank" note is not repeated here.
             It now sits immediately after the selected-questions count on the
@@ -5349,16 +5353,22 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                       and publish calls run. The same two gates still apply. */}
                   <Button
                     variant="primary"
-                    onClick={() => handleGenerateAssessment(false)}
+                    onClick={() => {
+                      if (!canPublishAssessment) return;
+                      handleGenerateAssessment(false);
+                    }}
                     disabled={!isPercentageValid || !hasValidHRSelection || isGenerating}
+                    aria-disabled={!canPublishAssessment || !isPercentageValid || !hasValidHRSelection || isGenerating}
                     title={
-                      !isPercentageValid
+                      !canPublishAssessment
+                        ? 'You do not have permission to publish assessments'
+                        : !isPercentageValid
                         ? 'Section percentages must total 100%'
                         : !hasValidHRSelection
                           ? 'Select at least one HR question before publishing'
                           : ''
                     }
-                    className="flex-1"
+                    className={`flex-1 ${!canPublishAssessment ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     {generatingAction === 'publish' ? (
                       <>

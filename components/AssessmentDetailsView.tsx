@@ -49,6 +49,12 @@ interface AssessmentDetailsViewProps {
   onEdit: () => void;
   onPreview: () => void;
   onShare?: () => void;
+  /** False when the viewer lacks the share/invite permission — Share stays
+   *  visible but greyed out with a tooltip (RBAC: never hidden). */
+  canShare?: boolean;
+  /** False when the viewer lacks the edit permission — Edit stays visible but
+   *  greyed out with a tooltip. */
+  canEdit?: boolean;
   onViewResults: () => void;
   onRefresh?: () => void | Promise<void>;
   /**
@@ -274,6 +280,8 @@ export default function AssessmentDetailsView({
   onEdit,
   onPreview,
   onShare,
+  canShare = true,
+  canEdit = true,
   onViewResults,
   onRefresh,
   isReloading = false,
@@ -296,6 +304,9 @@ export default function AssessmentDetailsView({
   const { confirmArchive, archiveConfirmModal } = useArchiveAssessmentConfirm();
   const { isTenantAdmin, user, hasPermissionCode } = useAuth();
   const canCreateAssessments = isTenantAdmin || (user?.permissions?.canCreateAssessments ?? false);
+  /* Edit / Continue Editing: the view's own create gate plus the host's edit
+     permission (`canEdit`). Locked = greyed with a tooltip, never hidden. */
+  const canEditAssessment = canCreateAssessments && canEdit;
   /* The All Assessments table's Unarchive gate (`canDeleteAssessments`), so the
      action is offered here to exactly who it is offered to there. */
   const canUnarchiveAssessments = isTenantAdmin || (user?.permissions?.canDeleteAssessments ?? false);
@@ -1954,22 +1965,23 @@ export default function AssessmentDetailsView({
                   Share: a labelled primary "Continue Editing", the AI Interview
                   details page's draft button (`AIInterviewDetailsView`), in
                   place of the pencil. */}
-              {onEdit && canCreateAssessments && draftLocked && (
+              {onEdit && draftLocked && (
                 <Button
                   type="button"
                   variant="primary"
                   size="sm"
-                  onClick={onEdit}
+                  onClick={canEditAssessment ? onEdit : undefined}
+                  aria-disabled={!canEditAssessment}
                   aria-label="Continue editing this draft assessment"
-                  title="Continue editing this draft assessment"
+                  title={!canEditAssessment ? 'You do not have permission to edit assessments' : 'Continue editing this draft assessment'}
                   icon={<Edit2 className="w-3.5 h-3.5 flex-shrink-0" />}
-                  className="gap-1.5 px-3 sm:px-4 min-h-[40px] text-xs sm:text-sm flex-shrink-0 whitespace-nowrap ring-2 ring-brand-blue/40 shadow-md shadow-brand-blue/20"
+                  className={`gap-1.5 px-3 sm:px-4 min-h-[40px] text-xs sm:text-sm flex-shrink-0 whitespace-nowrap ${canEditAssessment ? 'ring-2 ring-brand-blue/40 shadow-md shadow-brand-blue/20' : 'opacity-50 cursor-not-allowed'}`}
                 >
                   <span className="hidden sm:inline">Continue Editing</span>
                   <span className="sm:hidden">Edit</span>
                 </Button>
               )}
-              {onShare && canCreateAssessments && (() => {
+              {onShare && (() => {
         // Share is blocked for Archived (out of circulation) AND
         // once invites have been revoked (assessment is sealed —
         // recruiter should clone a new version for a fresh round).
@@ -1988,14 +2000,18 @@ export default function AssessmentDetailsView({
           ? 'Invites for this assessment have been revoked. Duplicate it to start fresh.'
           : '';
         const disabled = !!blockedReason;
+        /* RBAC: no share permission keeps Share visible, greyed, tooltip only. */
+        const shareDenied = !canCreateAssessments || !canShare;
         return (
           <div {...draftLockProps} className={draftLockProps.className || 'contents'}>
           <Button
             variant="primary"
             size="sm"
-            onClick={disabled ? undefined : onShare}
+            onClick={disabled || shareDenied ? undefined : onShare}
             disabled={disabled}
-            title={blockedReason}
+            aria-disabled={disabled || shareDenied}
+            title={shareDenied ? 'You do not have permission to share assessments' : blockedReason}
+            className={shareDenied && !disabled ? 'opacity-50 cursor-not-allowed' : ''}
             icon={<Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
           >
             Share
@@ -2008,35 +2024,37 @@ export default function AssessmentDetailsView({
                   Assessments table's menu uses for the same two actions.
                   Active offers Archive; Archived offers Unarchive (and has no
                   pencil - an archived assessment is restored, not edited). */}
-              {assessment.status === 'Active' && canUnarchiveAssessments && (
+              {assessment.status === 'Active' && (
                 <Button
                   type="button"
                   variant="secondary"
                   size="sm"
-                  onClick={handleArchive}
+                  onClick={canUnarchiveAssessments ? handleArchive : undefined}
                   disabled={isArchiving}
+                  aria-disabled={!canUnarchiveAssessments}
                   aria-label="Archive assessment"
-                  title="Archive assessment"
-                  className="h-8 w-8 px-0 flex-shrink-0"
+                  title={canUnarchiveAssessments ? 'Archive assessment' : 'You do not have permission to archive assessments'}
+                  className={`h-8 w-8 px-0 flex-shrink-0 ${canUnarchiveAssessments ? '' : 'opacity-50 cursor-not-allowed'}`}
                 >
                   {isArchiving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Archive className="w-4 h-4 text-menu-icon-archive" />}
                 </Button>
               )}
-              {isArchivedAssessment && canUnarchiveAssessments && (
+              {isArchivedAssessment && (
                 <Button
                   type="button"
                   variant="secondary"
                   size="sm"
-                  onClick={handleUnarchive}
+                  onClick={canUnarchiveAssessments ? handleUnarchive : undefined}
                   disabled={isUnarchiving}
+                  aria-disabled={!canUnarchiveAssessments}
                   aria-label="Unarchive assessment"
-                  title="Unarchive assessment"
-                  className="h-8 w-8 px-0 flex-shrink-0"
+                  title={canUnarchiveAssessments ? 'Unarchive assessment' : 'You do not have permission to unarchive assessments'}
+                  className={`h-8 w-8 px-0 flex-shrink-0 ${canUnarchiveAssessments ? '' : 'opacity-50 cursor-not-allowed'}`}
                 >
                   {isUnarchiving ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArchiveRestore className="w-4 h-4 text-menu-icon-archive" />}
                 </Button>
               )}
-              {onEdit && canCreateAssessments && !isArchivedAssessment && (() => {
+              {onEdit && !isArchivedAssessment && (() => {
                 /* The Assessments page's own edit rule (`handleEditAssessment`):
                    an Active assessment that has gone out to even one candidate
                    is locked, so every candidate sits the same questions. Read
@@ -2052,13 +2070,16 @@ export default function AssessmentDetailsView({
                   type="button"
                   variant="secondary"
                   size="sm"
-                  onClick={editLocked ? undefined : onEdit}
+                  onClick={editLocked || !canEditAssessment ? undefined : onEdit}
                   disabled={editLocked}
+                  aria-disabled={editLocked || !canEditAssessment}
                   aria-label="Edit assessment"
-                  title={editLocked
+                  title={!canEditAssessment
+                    ? 'You do not have permission to edit assessments'
+                    : editLocked
                     ? 'Cannot edit — this assessment has already been sent to candidates'
                     : 'Edit assessment'}
-                  className="h-8 w-8 px-0 flex-shrink-0"
+                  className={`h-8 w-8 px-0 flex-shrink-0 ${!canEditAssessment && !editLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <Edit2 className="w-4 h-4 text-menu-icon-edit" />
                 </Button>

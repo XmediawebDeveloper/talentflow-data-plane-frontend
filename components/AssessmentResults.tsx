@@ -1901,13 +1901,16 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 Filters. The cards view has no toolbar, so it keeps them here. */}
             {pageView !== 'list' && (
             <div className="flex flex-wrap items-center gap-2 sm:gap-3 flex-shrink-0">
-              {/* AS-26: Bulk PDF Download Button — only for users with download_pdf permission */}
-              {canBatchDownload && selectedRows.length > 0 && (
+              {/* AS-26: Bulk PDF Download Button — greyed (tooltip only) for users
+                  without the batch-download permission; never hidden by RBAC. */}
+              {selectedRows.length > 0 && (
                 <Button
                   variant="primary"
-                  onClick={handleDownloadBulkPDFs}
+                  onClick={canBatchDownload ? handleDownloadBulkPDFs : undefined}
                   disabled={downloadingBulkPDF}
-                  className="whitespace-nowrap"
+                  aria-disabled={!canBatchDownload}
+                  title={!canBatchDownload ? 'You do not have permission to download PDF reports' : undefined}
+                  className={`whitespace-nowrap ${!canBatchDownload ? 'opacity-50 cursor-not-allowed' : ''}`}
                   icon={downloadingBulkPDF ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
                   ) : (
@@ -2182,7 +2185,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         <Button
                           variant="secondary"
                           size="sm"
-                          className="rounded-full h-9"
+                          className="rounded-full sm:h-9"
                           aria-label={`Actions for ${selectedRows.length} selected`}
                         >
                           {downloadingBulkPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
@@ -2208,18 +2211,21 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           <FileDown className="w-4 h-4 text-menu-icon-download" />
                           <span className={MENU_ITEM_SCALE_CLASS}>Export</span>
                         </DropdownMenuItem>
-                        {canBatchDownload && (
-                          <DropdownMenuItem
-                            className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer"
-                            disabled={downloadingBulkPDF}
-                            onSelect={() => handleDownloadBulkPDFs()}
-                          >
-                            <Download className="w-4 h-4 text-menu-icon-download" />
-                            <span className={MENU_ITEM_SCALE_CLASS}>
-                              {downloadingBulkPDF ? 'Downloading...' : 'Download PDF Reports'}
-                            </span>
-                          </DropdownMenuItem>
-                        )}
+                        <DropdownMenuItem
+                          className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canBatchDownload ? 'cursor-pointer' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
+                          disabled={downloadingBulkPDF}
+                          aria-disabled={!canBatchDownload}
+                          title={!canBatchDownload ? 'You do not have permission to download PDF reports' : undefined}
+                          onSelect={(e) => {
+                            if (!canBatchDownload) { e.preventDefault(); return; }
+                            handleDownloadBulkPDFs();
+                          }}
+                        >
+                          <Download className={`w-4 h-4 ${canBatchDownload ? 'text-menu-icon-download' : 'text-gray-300'}`} />
+                          <span className={MENU_ITEM_SCALE_CLASS}>
+                            {downloadingBulkPDF ? 'Downloading...' : 'Download PDF Reports'}
+                          </span>
+                        </DropdownMenuItem>
                         {/* Create / Send Assessment | AI Interview — the AI
                             Talent Match tab's items: the ticked candidates
                             (once each, as a candidate can have several
@@ -2228,8 +2234,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         {onOpenInviteDialog && (() => {
                           const openInvite = (kind: 'assessment' | 'interview', allowed: boolean, deniedReason: string) => (e: Event) => {
                             if (!allowed) {
+                              // Locked: tooltip only (title on the item), no toast.
                               e.preventDefault();
-                              toast.error(deniedReason);
                               return;
                             }
                             const picked = new Set(selectedRows);
@@ -2245,14 +2251,18 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           return (
                             <>
                               <DropdownMenuItem
-                                className={`flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer ${canCreateAssessments ? '' : 'text-gray-400 opacity-60'}`}
+                                className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canCreateAssessments ? 'cursor-pointer' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
+                                aria-disabled={!canCreateAssessments}
+                                title={canCreateAssessments ? undefined : assessmentDeniedReason}
                                 onSelect={openInvite('assessment', canCreateAssessments, assessmentDeniedReason)}
                               >
                                 <ClipboardList className="w-4 h-4 text-menu-icon-view" />
                                 <span className={MENU_ITEM_SCALE_CLASS}>Create / Send Assessment</span>
                               </DropdownMenuItem>
                               <DropdownMenuItem
-                                className={`flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer ${mayInviteAIInterview ? '' : 'text-gray-400 opacity-60'}`}
+                                className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${mayInviteAIInterview ? 'cursor-pointer' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
+                                aria-disabled={!mayInviteAIInterview}
+                                title={mayInviteAIInterview ? undefined : aiInterviewDeniedReason}
                                 onSelect={openInvite('interview', mayInviteAIInterview, aiInterviewDeniedReason)}
                               >
                                 <Video className="w-4 h-4 text-menu-icon-ai" />
@@ -2317,7 +2327,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 ariaLabel="Filter by result"
               />
             )}
-            trailing={portaled ? <ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-9" /> : undefined}
+            trailing={portaled ? <ListViewToggle value={displayMode} onChange={setDisplayMode} className="sm:h-9" /> : undefined}
             onToggleFilters={() => setShowMoreFilters((open) => !open)}
             filtersOpen={showMoreFilters}
             activeFilterCount={activeFilterCount}
@@ -2395,7 +2405,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 onClear={() => setSelectedRows([])}
               />
               {/* AS-26: Bulk PDF download — once a row is ticked. */}
-              {canBatchDownload && selectedRows.length > 0 && (
+              {selectedRows.length > 0 && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
@@ -2414,11 +2424,16 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       {selectedRows.length.toLocaleString()} selected
                     </div>
                     <DropdownMenuItem
-                      className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer"
+                      className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canBatchDownload ? 'cursor-pointer' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
                       disabled={downloadingBulkPDF}
-                      onSelect={() => handleDownloadBulkPDFs()}
+                      aria-disabled={!canBatchDownload}
+                      title={!canBatchDownload ? 'You do not have permission to download PDF reports' : undefined}
+                      onSelect={(e) => {
+                        if (!canBatchDownload) { e.preventDefault(); return; }
+                        handleDownloadBulkPDFs();
+                      }}
                     >
-                      <Download className="w-4 h-4 text-menu-icon-download" />
+                      <Download className={`w-4 h-4 ${canBatchDownload ? 'text-menu-icon-download' : 'text-gray-300'}`} />
                       <span className={MENU_ITEM_SCALE_CLASS}>
                         {downloadingBulkPDF ? 'Downloading...' : 'Download PDF Reports'}
                       </span>
@@ -2980,7 +2995,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                             </button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className={portaled ? ROW_MENU_CONTENT_CLASS : onOpenInviteDialog ? 'w-56' : 'w-48'}>
-                            <DropdownMenuItem className={portaled ? ROW_MENU_ITEM_CLASS : 'gap-2'} onClick={() => viewCandidateDetails(candidate)}>
+                            <DropdownMenuItem className={portaled ? ROW_MENU_ITEM_CLASS : 'gap-2'} disabled={candidate.status === 'Pending'} onClick={() => viewCandidateDetails(candidate)}>
                               <Eye className="w-4 h-4 text-menu-icon-view" />
                               <span className={MENU_ITEM_SCALE_CLASS}>View Details</span>
                             </DropdownMenuItem>
@@ -3003,10 +3018,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                                 <DropdownMenuSeparator className="my-1 bg-gray-100" />
                               </>
                             )}
-                            <DropdownMenuItem className={portaled ? ROW_MENU_ITEM_CLASS : 'gap-2'} disabled={candidate.status === 'Pending'} onClick={() => viewCandidateDetails(candidate)}>
-                              <Eye className="w-4 h-4 text-menu-icon-view" />
-                              <span className={MENU_ITEM_SCALE_CLASS}>View Details</span>
-                            </DropdownMenuItem>
                             <DropdownMenuItem
                               className={portaled ? ROW_MENU_ITEM_CLASS : 'gap-2'}
                               disabled={downloadingPDF === candidate.id || !canDownloadResultPdf(candidate)}

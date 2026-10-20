@@ -1,7 +1,6 @@
 'use client';
 
 import { Users, Briefcase, FileText, ArrowUpRight, Shield } from 'lucide-react';
-import { toast } from 'sonner';
 import { Team } from '@/lib/services/teamService';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -91,10 +90,7 @@ export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false 
           </button>
           <button
             onClick={() => {
-              if (!canManage) {
-                toast.error('You do not have permission to manage this team');
-                return;
-              }
+              if (!canManage) return;
               onManageTeam(team.id);
             }}
             aria-disabled={!canManage}

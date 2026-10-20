@@ -1,7 +1,6 @@
 'use client';
 
 import { Users, Plus } from 'lucide-react';
-import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 
 interface EmptyStateProps {
@@ -31,10 +30,7 @@ export default function EmptyState({
         size="lg"
         icon={<Plus className="w-5 h-5" />}
         onClick={() => {
-          if (!canCreateTeams) {
-            toast.error('You do not have permission to create teams');
-            return;
-          }
+          if (!canCreateTeams) return;
           onCreateTeam();
         }}
         aria-disabled={!canCreateTeams}

@@ -688,15 +688,15 @@ export default function TeamUsageAnalytics() {
           <div className="relative" ref={exportMenuRef}>
               <button
                 onClick={() => {
-                  if (!canExport) {
-                    toast.error({ title: 'You do not have permission to export team usage data' });
-                    return;
-                  }
+                  if (!canExport) return;
                   if (teams.length > 0 && !loading) setShowExportMenu(v => !v);
                 }}
-                disabled={teams.length === 0 || loading || !canExport}
+                disabled={canExport && (teams.length === 0 || loading)}
+                aria-disabled={!canExport || teams.length === 0 || loading}
                 title={!canExport ? 'You do not have permission to export team usage data' : ''}
-                className="flex h-9 shrink-0 items-center gap-2 px-3 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                className={`flex h-9 shrink-0 items-center gap-2 px-3 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-lg text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed ${
+                  canExport ? 'hover:bg-gray-50 dark:hover:bg-slate-800' : 'text-gray-400 cursor-not-allowed opacity-60'
+                }`}
               >
                 <Download className="w-4 h-4" />
                 Export

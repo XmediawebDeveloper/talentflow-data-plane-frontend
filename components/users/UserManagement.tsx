@@ -59,8 +59,8 @@ import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { formatISTDate, formatIST } from '@/lib/utils/dateUtils';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { Skeleton } from '@/components/ui/skeleton';
-import { planTurnOn, planTurnOff, withoutOrphanEntryPoints, isEntryPointLocked, isGroupFullyOn, labelOf } from '@/lib/permissions/permissionRules';
-import { usePermissionChangeDialog } from '@/components/roles/PermissionChangeDialog';
+import { planTurnOn, planTurnOff, withoutOrphanEntryPoints, isEntryPointLocked, isGroupFullyOn, labelOf, rememberTurnOff, forgetTurnOff, TurnOffMemory } from '@/lib/permissions/permissionRules';
+import { askTurnOnWithDependents, askUnlockEntryPoint, usePermissionChangeDialog } from '@/components/roles/PermissionChangeDialog';
 import AppModal from '@/components/ui/app-modal';
 import PermissionSectionsView, {
   PermissionSectionsSkeleton,
@@ -74,6 +74,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { GroupCheckbox, groupCheckState } from '@/components/ui/group-checkbox';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Tooltip } from '@/components/ui/tooltip';
@@ -624,6 +625,10 @@ export default function UserManagement() {
   // must go — permissions that need them, the section's actions (for a View) and
   // a main permission's entry points in other sections. Compact popup, full list
   // behind "Show details". Returns the codes to remove, or null if cancelled.
+  // What each turn-off in the open Edit User took with it, so turning it on
+  // again can restore it ("Restore previous"). Cleared when another user opens.
+  const turnOffMemory = useRef<TurnOffMemory>(new Map());
+
   const confirmCascadeDisable = async (
     label: string,
     codesBeingDisabled: string[],
@@ -632,12 +637,16 @@ export default function UserManagement() {
     const plan = planTurnOff(codesBeingDisabled, currentCodes, MANDATORY_PERMISSION_CODES);
     const removal = new Set(Array.from(currentCodes).filter(c => !plan.next.has(c)));
     codesBeingDisabled.forEach(c => { if (!MANDATORY_PERMISSION_CODES.has(c)) removal.add(c); });
+    const remember = () => rememberTurnOff(
+      turnOffMemory.current, codesBeingDisabled, currentCodes,
+      new Set(Array.from(currentCodes).filter(c => !removal.has(c))),
+    );
     const extra = plan.entryPointsOff.length + plan.dependentsOff.length;
-    if (extra === 0) return removal;
+    if (extra === 0) { remember(); return removal; }
 
     const parts: string[] = [];
     if (plan.entryPointsOff.length) {
-      parts.push(`its ${plan.entryPointsOff.length} entry point${plan.entryPointsOff.length === 1 ? '' : 's'} in other sections`);
+      parts.push(`${plan.entryPointsOff.length} permission${plan.entryPointsOff.length === 1 ? '' : 's'} from other modules`);
     }
     if (plan.dependentsOff.length) {
       parts.push(`${plan.dependentsOff.length} permission${plan.dependentsOff.length === 1 ? '' : 's'} that need${plan.dependentsOff.length === 1 ? 's' : ''} it`);
@@ -647,12 +656,14 @@ export default function UserManagement() {
       tone: 'off',
       summary: <>This will also turn off {parts.join(' and ')}.</>,
       details: [
-        { heading: 'Entry points in other sections', codes: plan.entryPointsOff },
+        { heading: 'Permissions from other modules', codes: plan.entryPointsOff },
         { heading: 'Also turned off (they need it)', codes: plan.dependentsOff },
       ],
       actions: [{ id: 'off', label: 'Turn off', variant: 'destructive' }],
     });
-    return choice === 'off' ? removal : null;
+    if (choice !== 'off') return null;
+    remember();
+    return removal;
   };
 
   // Turning permissions ON (tile, View, section). Locked entry points (main off)
@@ -663,16 +674,24 @@ export default function UserManagement() {
     const current = editSelectedPermissionCodes;
     const plan = planTurnOn(codes, current);
     if (codes.length === 1 && plan.skippedLocked.includes(codes[0])) {
-      const main = getMainPermission(codes[0]);
-      toast.info(`Turn on "${main ? labelOf(main) : 'its main permission'}" first — "${labelOf(codes[0])}" can only be used while it is on.`);
-      return null;
+      // Locked entry point: offer to turn on its main (and what it needs).
+      return askUnlockEntryPoint(askPermissionChange, codes[0], current, MANDATORY_PERMISSION_CODES);
+    }
+    // Something other sections depend on (View Job Description…): offer
+    // [Only this] [Restore previous] [Turn on all].
+    const withDeps = await askTurnOnWithDependents(
+      askPermissionChange, codes, label, current, turnOffMemory.current, MANDATORY_PERMISSION_CODES,
+    );
+    if (withDeps !== undefined) {
+      if (withDeps) forgetTurnOff(turnOffMemory.current, withDeps);
+      return withDeps;
     }
     const offered = plan.offeredEntryPoints.flatMap(g => g.entries);
     if (offered.length > 0 || plan.skippedLocked.length > 0) {
       const summary = offered.length > 0
         ? (plan.offeredEntryPoints.length === 1
             ? <>&quot;{labelOf(plan.offeredEntryPoints[0].main)}&quot; can also be started from {offered.length} other section{offered.length === 1 ? '' : 's'}. Turn {offered.length === 1 ? 'it' : 'those'} on too?</>
-            : <>{offered.length} entry points in other sections can be turned on too. Turn them on?</>)
+            : <>{offered.length} permissions from other modules can be turned on too. Turn them on?</>)
         : <>Some permissions in this section were not turned on because their main permission is off.</>;
       const choice = await askPermissionChange({
         title: `Turn on "${label}"?`,
@@ -688,8 +707,11 @@ export default function UserManagement() {
           : [{ id: 'only', label: 'Turn on' }],
       });
       if (!choice) return null;
-      return choice === 'all' ? plan.all : plan.only;
+      const turnedOn = choice === 'all' ? plan.all : plan.only;
+      forgetTurnOff(turnOffMemory.current, turnedOn);
+      return turnedOn;
     }
+    forgetTurnOff(turnOffMemory.current, plan.only);
     const auto = plan.autoRequired.filter(c => !MANDATORY_PERMISSION_CODES.has(c));
     if (auto.length > 0) {
       toast.info(`Also turned on: ${auto.map(labelOf).join(', ')} — needed by "${label}"`);
@@ -751,6 +773,8 @@ export default function UserManagement() {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<ApiUser | null>(null);
+  // Restore memory belongs to one Edit User session.
+  useEffect(() => { turnOffMemory.current.clear(); }, [editingUser?.id]);
   const [isSaving, setIsSaving] = useState(false);
   const [availableRoles, setAvailableRoles] = useState<RoleListItem[]>([]);
   // Default permission count per role, shown on the role chips/cards — the same
@@ -1608,17 +1632,19 @@ export default function UserManagement() {
   // hides the word next to the switch on tablet widths so the table fits.
   const renderUserStatus = (user: (typeof users)[number], compact = false) => (
     <>
-    {/* Toggle Switch for Active/Inactive — requires users:disable */}
-    {(user.role || '').toLowerCase() !== 'tenant_admin' && user.id !== currentUserId && canDisableUser ? (
+    {/* Toggle Switch for Active/Inactive — requires users:disable. Without
+        it the switch stays visible but greyed (hover tooltip, no-op click). */}
+    {(user.role || '').toLowerCase() !== 'tenant_admin' && user.id !== currentUserId ? (
       <div className="flex items-center gap-2">
         <button
-          onClick={() => handleToggleActive(user)}
+          onClick={() => { if (canDisableUser) handleToggleActive(user); }}
+          aria-disabled={!canDisableUser}
           className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:ring-offset-2 ring-1 ring-inset ${
             user.is_active
               ? 'bg-success ring-success-line shadow-sm'
               : 'bg-gray-300 ring-black/5'
-          }`}
-          title={user.is_active ? 'Active - Click to deactivate' : 'Inactive - Click to activate'}
+          } ${!canDisableUser ? 'cursor-not-allowed opacity-60 grayscale' : ''}`}
+          title={!canDisableUser ? 'You do not have permission to activate or deactivate users' : user.is_active ? 'Active - Click to deactivate' : 'Inactive - Click to activate'}
         >
           <span
             className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
@@ -2767,26 +2793,29 @@ export default function UserManagement() {
             >
               Dependencies
             </Button>
-            {/* RBAC01: Check user limits before showing Add User button — also requires users:create */}
-            {canCreateUser && (
-              <Button
-                variant="primary"
-                icon={<Plus className="w-4 h-4" />}
-                onClick={() => {
-                  if (isAtLimit) {
-                    if (isTrial) {
-                      toast.error('User limit reached. Add-on seat purchases are only available for paid subscriptions. Please upgrade your plan.');
-                    } else {
-                      setShowAddSeatsModal(true);
-                    }
-                    return;
+            {/* RBAC01: Check user limits before showing Add User button — also
+                requires users:create (greyed with a hover tooltip, never hidden). */}
+            <Button
+              variant="primary"
+              icon={<Plus className="w-4 h-4" />}
+              aria-disabled={!canCreateUser}
+              title={!canCreateUser ? 'You do not have permission to invite users' : undefined}
+              className={!canCreateUser ? 'opacity-60 cursor-not-allowed' : undefined}
+              onClick={() => {
+                if (!canCreateUser) return;
+                if (isAtLimit) {
+                  if (isTrial) {
+                    toast.error('User limit reached. Add-on seat purchases are only available for paid subscriptions. Please upgrade your plan.');
+                  } else {
+                    setShowAddSeatsModal(true);
                   }
-                  setIsCreateModalOpen(true);
-                }}
-              >
-                {isAtLimit && !isTrial ? 'Buy More Seats' : 'Invite User'}
-              </Button>
-            )}
+                  return;
+                }
+                setIsCreateModalOpen(true);
+              }}
+            >
+              {isAtLimit && !isTrial ? 'Buy More Seats' : 'Invite User'}
+            </Button>
           </div>
         }
       />
@@ -3629,17 +3658,18 @@ export default function UserManagement() {
                             >
                               <div className="flex items-center gap-3">
                                 {category.viewCode && (
-                                  <div className={`w-8 h-[18px] rounded-full relative transition-colors flex-shrink-0 ring-1 ring-inset ${isCategoryActive ? 'bg-brand-blue ring-white/20' : 'bg-gray-300 ring-black/5'}`}>
-                                    <div className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white shadow-sm transition-transform ${isCategoryActive ? 'left-[17px]' : 'left-[2px]'}`} />
-                                  </div>
+                                  <GroupCheckbox
+                                    state={groupCheckState(isCategoryActive, allCategoryCodes.filter(c => editSelectedPermissionCodes.has(c)).length)}
+                                    label={category.name}
+                                  />
                                 )}
                                 <div>
-                                  <h4 className={`text-sm font-semibold ${isCategoryActive ? 'text-gray-900 dark:text-slate-50' : 'text-gray-500 dark:text-slate-500'}`}>
+                                  <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-50">
                                     {category.name}
                                   </h4>
                                   <p className="text-xs text-gray-500 dark:text-slate-500">{allCodes.length} permission{allCodes.length !== 1 ? 's' : ''}</p>
                                 </div>
-                                {category.isMenuToggle && isCategoryActive && (
+                                {category.isMenuToggle && selectedCount > 0 && (
                                   <span className="text-2xs text-brand-orange bg-brand-orange/10 ring-1 ring-brand-orange/20 px-1.5 py-0.5 rounded-full font-medium">
                                     Menu
                                   </span>
@@ -3689,9 +3719,8 @@ export default function UserManagement() {
                                   <div
                                     key={action.code}
                                     onClick={() => toggleCode(action.code)}
-                                    title={lockedMain ? `Turn on "${labelOf(lockedMain)}" first` : undefined}
-                                    aria-disabled={lockedMain ? true : undefined}
-                                    className={`rounded-2xl border p-4 transition-all select-none flex items-center gap-3 ${lockedMain ? 'cursor-not-allowed border-dashed border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/40 opacity-40' : `cursor-pointer ${isOn ? 'border-brand-blue/30 bg-gradient-to-br from-white to-brand-blue/5 dark:from-slate-900 dark:to-brand-blue/10 ring-1 ring-brand-blue/20 shadow-sm' : 'border-gray-100 dark:border-slate-700/60 bg-gradient-to-br from-white to-gray-50 dark:from-slate-900 dark:to-slate-800/50 opacity-50 hover:opacity-90 hover:border-brand-blue/30'}`}`}
+                                    title={lockedMain ? `Needs "${labelOf(lockedMain)}" — click to turn both on` : undefined}
+                                    className={`rounded-2xl border p-4 transition-all select-none flex items-center gap-3 ${lockedMain ? 'cursor-pointer border-dashed border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/40 opacity-40' : `cursor-pointer ${isOn ? 'border-brand-blue/30 bg-gradient-to-br from-white to-brand-blue/5 dark:from-slate-900 dark:to-brand-blue/10 ring-1 ring-brand-blue/20 shadow-sm' : 'border-gray-100 dark:border-slate-700/60 bg-gradient-to-br from-white to-gray-50 dark:from-slate-900 dark:to-slate-800/50 opacity-50 hover:opacity-90 hover:border-brand-blue/30'}`}`}
                                   >
                                     <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ring-1 ${badge.cls}`}>
                                       <span className="text-xs font-semibold uppercase">{badge.letter}</span>
@@ -3785,14 +3814,12 @@ export default function UserManagement() {
                                 <div key={sub.name} className="ml-4 mr-3 mb-3 sm:ml-8 sm:mr-4 overflow-hidden rounded-xl border border-gray-200 dark:border-slate-700 border-l-4 border-l-brand-blue/30">
                                   {/* Sub-category header */}
                                   <div
-                                    className={`px-3 sm:px-4 py-2 flex items-center justify-between cursor-pointer select-none transition-colors ${isSubActive ? 'bg-brand-cyan/5' : 'bg-slate-50 dark:bg-slate-800/50'}`}
+                                    className="px-3 sm:px-4 py-2 flex items-center justify-between cursor-pointer select-none transition-colors bg-slate-50 dark:bg-slate-800/50"
                                     onClick={toggleSub}
                                   >
                                     <div className="flex items-center gap-2">
-                                      <div className={`w-6 h-[14px] rounded-full relative transition-colors flex-shrink-0 ring-1 ring-inset ${isSubActive ? 'bg-gradient-to-r from-brand-cyan to-brand-blue ring-white/20' : 'bg-gray-300 ring-black/5'}`}>
-                                        <div className={`absolute top-[2px] w-[10px] h-[10px] rounded-full bg-white shadow-sm transition-transform ${isSubActive ? 'left-[13px]' : 'left-[2px]'}`} />
-                                      </div>
-                                      <span className={`text-xs font-semibold ${isSubActive ? 'text-brand-cyan' : 'text-gray-500 dark:text-slate-500'}`}>
+                                      <GroupCheckbox size="sm" state={groupCheckState(isSubActive, subSelectedCount)} label={sub.name} />
+                                      <span className="text-xs font-semibold text-gray-800 dark:text-slate-200">
                                         {sub.name}
                                       </span>
                                     </div>

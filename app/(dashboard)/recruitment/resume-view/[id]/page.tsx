@@ -244,6 +244,10 @@ import {
   type ResumeTab,
 } from '@/lib/constants/resumePools';
 
+/** Create / Send button when the user lacks the permission: shown, greyed, hover explains. */
+const PERMISSION_LOCKED_BUTTON_CLASS =
+  'flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium whitespace-nowrap bg-gray-50 border border-gray-200 text-gray-400 cursor-not-allowed opacity-60';
+
 export default function ResumeViewPage() {
   const params = useParams();
   const router = useRouter();
@@ -1560,10 +1564,16 @@ Best regards`);
                     the action bar above the card had. */}
                 <div className="mt-5 pt-5 border-t border-brand-blue/10 flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3">
                   <div className="flex flex-wrap items-center gap-2">
-                    {RESUME_EMAIL_SHARE_ENABLED && canShareResume && (
+                    {RESUME_EMAIL_SHARE_ENABLED && (
                       <button
-                        onClick={handleShare}
-                        className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-sm"
+                        onClick={() => { if (!canShareResume) return; handleShare(); }}
+                        aria-disabled={!canShareResume}
+                        title={!canShareResume ? 'You do not have permission to share resumes' : undefined}
+                        className={`flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg transition-colors text-sm ${
+                          canShareResume
+                            ? 'text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
+                            : 'text-gray-400 cursor-not-allowed opacity-60'
+                        }`}
                       >
                         <Share2 className="w-4 h-4" />
                         Share
@@ -1572,39 +1582,48 @@ Best regards`);
                     {/* From a job's AI Talent Match Result: the Invite menu's two
                         actions as their own buttons — Job Details' Create / Send
                         popup for that job, with this candidate. */}
-                    {fromJobAIMatch && canInviteAssessment && (
+                    {fromJobAIMatch && (
                       <button
-                        onClick={() => openCreateSend('assessment')}
+                        onClick={() => { if (!canInviteAssessment) return; openCreateSend('assessment'); }}
                         disabled={!jobForInvite || assessmentPlanLocked}
-                        title={assessmentPlanLocked ? PLAN_LOCKED_MESSAGE : undefined}
-                        className={CREATE_SEND_BUTTON_CLASS.assessment}
+                        aria-disabled={!canInviteAssessment}
+                        title={assessmentPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAssessment ? 'You do not have permission to invite candidates to an assessment' : undefined}
+                        className={canInviteAssessment ? CREATE_SEND_BUTTON_CLASS.assessment : PERMISSION_LOCKED_BUTTON_CLASS}
                       >
                         <ClipboardList className="w-4 h-4" />
                         Create / Send Assessment
                       </button>
                     )}
-                    {fromJobAIMatch && canInviteAIInterview && (
+                    {fromJobAIMatch && (
                       <button
-                        onClick={() => openCreateSend('interview')}
+                        onClick={() => { if (!canInviteAIInterview) return; openCreateSend('interview'); }}
                         disabled={!jobForInvite || aiInterviewPlanLocked}
-                        title={aiInterviewPlanLocked ? PLAN_LOCKED_MESSAGE : undefined}
-                        className={CREATE_SEND_BUTTON_CLASS.interview}
+                        aria-disabled={!canInviteAIInterview}
+                        title={aiInterviewPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAIInterview ? 'You do not have permission to invite candidates to an AI interview' : undefined}
+                        className={canInviteAIInterview ? CREATE_SEND_BUTTON_CLASS.interview : PERMISSION_LOCKED_BUTTON_CLASS}
                       >
                         <Video className="w-4 h-4" />
                         Create / Send AI Interview
                       </button>
                     )}
-                    {canInvite && !fromJobAIMatch && (
+                    {!fromJobAIMatch && (
                       <div className="relative" ref={inviteMenuRef}>
                         <button
-                          onClick={() => setShowInviteMenu(!showInviteMenu)}
-                          disabled={loadingInvite || invitePlanLocked}
-                          title={invitePlanLocked ? PLAN_LOCKED_MESSAGE : undefined}
+                          onClick={() => { if (!canInvite) return; setShowInviteMenu(!showInviteMenu); }}
+                          disabled={loadingInvite || (canInvite && invitePlanLocked)}
+                          aria-disabled={!canInvite}
+                          title={
+                            assessmentPlanLocked && aiInterviewPlanLocked
+                              ? PLAN_LOCKED_MESSAGE
+                              : !canInvite
+                                ? 'You do not have permission to invite candidates'
+                                : invitePlanLocked ? PLAN_LOCKED_MESSAGE : undefined
+                          }
                           aria-haspopup="menu"
                           aria-expanded={showInviteMenu}
                           className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${
-                            invitePlanLocked
-                              ? 'bg-gray-50 border border-gray-200 text-gray-400 cursor-not-allowed'
+                            invitePlanLocked || !canInvite
+                              ? `bg-gray-50 border border-gray-200 text-gray-400 cursor-not-allowed${!canInvite ? ' opacity-60' : ''}`
                               : 'bg-white border border-brand-blue/40 text-brand-blue hover:bg-brand-blue/5'
                           }`}
                         >
@@ -1615,14 +1634,15 @@ Best regards`);
 
                         {showInviteMenu && (
                           <div role="menu" className={`absolute left-0 top-full mt-2 ${assessmentMissing || aiInterviewMissing ? 'w-64' : 'w-52'} max-w-[calc(100vw-1.5rem)] bg-white rounded-xl border border-gray-200 shadow-lg shadow-gray-900/10 py-1.5 z-[60]`}>
-                            {canInviteAssessment && !assessmentPlanLocked && assessmentMissing ? renderCreateInviteItems('assessment') : canInviteAssessment && (
+                            {canInviteAssessment && !assessmentPlanLocked && assessmentMissing ? renderCreateInviteItems('assessment') : (
                               <button
                                 role="menuitem"
-                                onClick={() => startInvite('assessment')}
+                                onClick={() => { if (!canInviteAssessment) return; startInvite('assessment'); }}
                                 disabled={assessmentPlanLocked}
-                                title={assessmentPlanLocked ? PLAN_LOCKED_MESSAGE : undefined}
+                                aria-disabled={!canInviteAssessment}
+                                title={assessmentPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAssessment ? 'You do not have permission to invite candidates to an assessment' : undefined}
                                 className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${
-                                  assessmentPlanLocked ? 'opacity-50 cursor-not-allowed' : 'hover:bg-brand-blue/5'
+                                  assessmentPlanLocked ? 'opacity-50 cursor-not-allowed' : !canInviteAssessment ? 'text-gray-400 cursor-not-allowed opacity-60' : 'hover:bg-brand-blue/5'
                                 }`}
                               >
                                 <span className="w-8 h-8 rounded-lg bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
@@ -1631,14 +1651,15 @@ Best regards`);
                                 <span className="min-w-0 text-sm font-medium text-gray-900">Assessment</span>
                               </button>
                             )}
-                            {canInviteAIInterview && !aiInterviewPlanLocked && aiInterviewMissing ? renderCreateInviteItems('interview') : canInviteAIInterview && (
+                            {canInviteAIInterview && !aiInterviewPlanLocked && aiInterviewMissing ? renderCreateInviteItems('interview') : (
                               <button
                                 role="menuitem"
-                                onClick={() => startInvite('ai-interview')}
+                                onClick={() => { if (!canInviteAIInterview) return; startInvite('ai-interview'); }}
                                 disabled={aiInterviewPlanLocked}
-                                title={aiInterviewPlanLocked ? PLAN_LOCKED_MESSAGE : undefined}
+                                aria-disabled={!canInviteAIInterview}
+                                title={aiInterviewPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAIInterview ? 'You do not have permission to invite candidates to an AI interview' : undefined}
                                 className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${
-                                  aiInterviewPlanLocked ? 'opacity-50 cursor-not-allowed' : 'hover:bg-brand-blue/5'
+                                  aiInterviewPlanLocked ? 'opacity-50 cursor-not-allowed' : !canInviteAIInterview ? 'text-gray-400 cursor-not-allowed opacity-60' : 'hover:bg-brand-blue/5'
                                 }`}
                               >
                                 <span className="w-8 h-8 rounded-lg bg-brand-cyan/10 flex items-center justify-center flex-shrink-0">
@@ -1654,14 +1675,15 @@ Best regards`);
                     {/* Not offered when the resume was opened FROM an AI Talent Match
                         result — the AI Talent Match page's or a job's AI Talent Match
                         Result tab — the candidate is already a match there. */}
-                    {canRunAITalentMatch && viewSource !== 'ai-talent-match' && !fromJobAIMatch && (
+                    {viewSource !== 'ai-talent-match' && !fromJobAIMatch && (
                       <button
-                        onClick={handleAITalentMatch}
+                        onClick={() => { if (!canRunAITalentMatch) return; handleAITalentMatch(); }}
                         disabled={aiMatchPlanLocked}
-                        title={aiMatchPlanLocked ? PLAN_LOCKED_MESSAGE : undefined}
+                        aria-disabled={!canRunAITalentMatch}
+                        title={aiMatchPlanLocked ? PLAN_LOCKED_MESSAGE : !canRunAITalentMatch ? 'You do not have permission to run AI Talent Match' : undefined}
                         className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${
-                          aiMatchPlanLocked
-                            ? 'bg-gray-50 border border-gray-200 text-gray-400 cursor-not-allowed'
+                          aiMatchPlanLocked || !canRunAITalentMatch
+                            ? `bg-gray-50 border border-gray-200 text-gray-400 cursor-not-allowed${!canRunAITalentMatch ? ' opacity-60' : ''}`
                             : 'bg-white border border-brand-cyan/40 text-brand-cyan hover:bg-brand-cyan/5'
                         }`}
                       >
@@ -1671,10 +1693,16 @@ Best regards`);
                     )}
                     {/* Not offered when opened from an AI Talent Match result — the
                         AI Talent Match page's or a job's AI Talent Match Result tab. */}
-                    {canDeleteResume && viewSource !== 'ai-talent-match' && !fromJobAIMatch && (
+                    {viewSource !== 'ai-talent-match' && !fromJobAIMatch && (
                       <button
-                        onClick={handleDelete}
-                        className="flex items-center gap-2 px-4 py-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50 hover:border-red-300 transition-colors text-sm"
+                        onClick={() => { if (!canDeleteResume) return; handleDelete(); }}
+                        aria-disabled={!canDeleteResume}
+                        title={!canDeleteResume ? 'You do not have permission to delete resumes' : undefined}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm ${
+                          canDeleteResume
+                            ? 'bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300'
+                            : 'bg-gray-50 border border-gray-200 text-gray-400 cursor-not-allowed opacity-60'
+                        }`}
                       >
                         <Trash2 className="w-4 h-4" />
                         Delete
@@ -1694,14 +1722,15 @@ Best regards`);
                         {loadingScoreTable ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
                         View Score Table
                       </button>
-                    ) : canApplyResumeToJob && (
+                    ) : (
                       <button
-                        onClick={handleApplyToJob}
+                        onClick={() => { if (!canApplyResumeToJob) return; handleApplyToJob(); }}
                         disabled={applyPlanLocked || jobScoreStatus === 'checking'}
-                        title={applyPlanLocked ? PLAN_LOCKED_MESSAGE : jobScoreStatus === 'checking' ? 'Checking whether this resume is already scored…' : undefined}
+                        aria-disabled={!canApplyResumeToJob}
+                        title={applyPlanLocked ? PLAN_LOCKED_MESSAGE : !canApplyResumeToJob ? 'You do not have permission to score resumes' : jobScoreStatus === 'checking' ? 'Checking whether this resume is already scored…' : undefined}
                         className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-all text-sm ${
-                          applyPlanLocked || jobScoreStatus === 'checking'
-                            ? 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed'
+                          applyPlanLocked || jobScoreStatus === 'checking' || !canApplyResumeToJob
+                            ? `bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed${!canApplyResumeToJob ? ' opacity-60' : ''}`
                             : 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
                         }`}
                       >
@@ -1717,14 +1746,15 @@ Best regards`);
                       <FileText className="w-4 h-4" />
                       Scored Resumes
                     </button>
-                  ) : canApplyResumeToJob && (
+                  ) : (
                     <button
-                      onClick={handleApplyToJob}
+                      onClick={() => { if (!canApplyResumeToJob) return; handleApplyToJob(); }}
                       disabled={applyPlanLocked}
-                      title={applyPlanLocked ? PLAN_LOCKED_MESSAGE : undefined}
+                      aria-disabled={!canApplyResumeToJob}
+                      title={applyPlanLocked ? PLAN_LOCKED_MESSAGE : !canApplyResumeToJob ? 'You do not have permission to score resumes' : undefined}
                       className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-all text-sm ${
-                        applyPlanLocked
-                          ? 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed'
+                        applyPlanLocked || !canApplyResumeToJob
+                          ? `bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed${!canApplyResumeToJob ? ' opacity-60' : ''}`
                           : 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
                       }`}
                     >

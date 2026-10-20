@@ -330,6 +330,12 @@ function JobDetailsContent() {
 
       // For Draft JDs, redirect to JD creation with the current stage
       if (data.status === 'draft' || (data.status as string) === 'Draft') {
+        // A Draft only opens in the editor; without Edit permission (e.g. a
+        // direct link) go back to the list instead of the JD editor.
+        if (!(isTenantAdmin || hasPermission('canUpdateJD'))) {
+          router.replace('/recruitment/job-openings');
+          return;
+        }
         const stage = data.creation_stage || 'create';
         router.replace(`/recruitment/jd-creation?id=${jobId}&stage=${stage}${fromAiInterview ? '&from=ai-interview' : ''}`);
         return;
@@ -522,6 +528,8 @@ function JobDetailsContent() {
      assessments, interviews and scores already hanging off it keep pointing at
      the text they were produced from. */
   const handleCreateNewVersion = async () => {
+    // A new version is a new JD — needs Create JD permission, not just Edit.
+    if (!(isTenantAdmin || hasPermission('canCreateJD'))) return;
     if (!jobId || creatingVersion) return;
     setCreatingVersion(true);
     try {
@@ -776,6 +784,7 @@ function JobDetailsContent() {
         reason={editBlock?.reason}
         jdId={jobId || undefined}
         atMaxVersions={(job.versionNumber ?? 1) >= 5}
+        canCreate={isTenantAdmin || hasPermission('canCreateJD')}
         onOpenJobTab={(tab) => {
           setEditBlock(null);
           setTabOverride({ tab, n: Date.now() });
@@ -802,7 +811,11 @@ function JobDetailsContent() {
         onBack={handleBack}
         initialTab={tabOverride?.tab || tabParam || undefined}
         initialAction={actionParam || undefined}
-        onEdit={isTenantAdmin || hasPermission('canUpdateJD') ? handleEdit : undefined}
+        /* RBAC: Edit / Disable / Re-enable / Archive are always rendered; the
+           *Locked flags grey them out (tooltip only) without the permission
+           instead of hiding them. */
+        onEdit={handleEdit}
+        editLocked={!(isTenantAdmin || hasPermission('canUpdateJD'))}
         /* Only the latest version keeps a live Edit — see
            VERSION_EDIT_LOCK_REASON above. `editDisabled` is false for it, so
            the latest version's Edit button renders exactly as it always has.
@@ -816,9 +829,11 @@ function JobDetailsContent() {
            for the "in use" case. */
         editDisabled={versionEditLocked}
         editDisabledReason={VERSION_EDIT_LOCK_REASON}
-        onDisable={isTenantAdmin || hasPermission('canDisableJD') ? handleDisable : undefined}
-        onEnable={isTenantAdmin || hasPermission('canDisableJD') ? handleEnable : undefined}
-        onArchive={isTenantAdmin || hasPermission('canArchiveJD') ? handleArchive : undefined}
+        onDisable={handleDisable}
+        onEnable={handleEnable}
+        disableLocked={!(isTenantAdmin || hasPermission('canDisableJD'))}
+        onArchive={handleArchive}
+        archiveLocked={!(isTenantAdmin || hasPermission('canArchiveJD'))}
         onUnarchive={handleUnarchive}
         onDelete={handleDelete}
         onNavigateToAITalentMatch={handleNavigateToAITalentMatch}

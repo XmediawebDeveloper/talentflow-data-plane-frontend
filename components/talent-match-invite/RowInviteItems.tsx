@@ -23,19 +23,19 @@ export default function RowInviteItems({ onInvite }: { onInvite: (kind: InviteKi
   return (
     <>
       <DropdownMenuItem
-        className={MENU_ITEM_CLASS}
-        disabled={!canCreateAssessments}
+        className={`${MENU_ITEM_CLASS} ${!canCreateAssessments ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
+        aria-disabled={!canCreateAssessments || undefined}
         title={!canCreateAssessments ? assessmentDeniedReason : undefined}
-        onSelect={() => onInvite('assessment')}
+        onSelect={(e) => { if (!canCreateAssessments) { e.preventDefault(); return; } onInvite('assessment'); }}
       >
         <ClipboardList className="w-4 h-4 text-menu-icon-view" />
         <span className={MENU_ITEM_SCALE_CLASS}>Create / Send Assessment</span>
       </DropdownMenuItem>
       <DropdownMenuItem
-        className={MENU_ITEM_CLASS}
-        disabled={!mayInviteAIInterview}
+        className={`${MENU_ITEM_CLASS} ${!mayInviteAIInterview ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
+        aria-disabled={!mayInviteAIInterview || undefined}
         title={!mayInviteAIInterview ? aiInterviewDeniedReason : undefined}
-        onSelect={() => onInvite('interview')}
+        onSelect={(e) => { if (!mayInviteAIInterview) { e.preventDefault(); return; } onInvite('interview'); }}
       >
         <Video className="w-4 h-4 text-menu-icon-ai" />
         <span className={MENU_ITEM_SCALE_CLASS}>Create / Send AI Interview</span>

@@ -446,10 +446,8 @@ export default function TeamChatPage() {
   };
 
   const openCreateModal = async () => {
-    if (!permissions.can_create_channel) {
-      toast.error('Only administrators and team leads can create channels');
-      return;
-    }
+    // Locked controls are greyed with a hover tooltip; the click is a no-op.
+    if (!permissions.can_create_channel) return;
     await fetchAvailableUsers();
     setShowCreateModal(true);
   };
@@ -579,15 +577,19 @@ export default function TeamChatPage() {
               <div className="mb-2">
                 <div className="flex items-center justify-between px-2 py-1.5">
                   <span className="text-2xs font-semibold uppercase tracking-[0.16em] text-gray-400">Channels</span>
-                  {permissions.can_create_channel && (
-                    <button
-                      onClick={openCreateModal}
-                      className="inline-flex h-6 w-6 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-brand-blue/[0.06] hover:text-brand-blue"
-                      aria-label="Create channel" title="Create channel"
-                    >
-                      <Plus className="h-4 w-4" />
-                    </button>
-                  )}
+                  <button
+                    onClick={openCreateModal}
+                    aria-disabled={!permissions.can_create_channel}
+                    className={`inline-flex h-6 w-6 items-center justify-center rounded-md transition-colors ${
+                      permissions.can_create_channel
+                        ? 'text-gray-400 hover:bg-brand-blue/[0.06] hover:text-brand-blue'
+                        : 'text-gray-400 cursor-not-allowed opacity-60'
+                    }`}
+                    aria-label="Create channel"
+                    title={permissions.can_create_channel ? 'Create channel' : 'You do not have permission to create channels'}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
                 </div>
                 {filteredChannels.length === 0 ? (
                   <p className="px-3 py-4 text-center text-xs text-gray-400">No channels yet</p>
@@ -860,10 +862,16 @@ export default function TeamChatPage() {
                               <LogOut className="h-4 w-4 text-gray-400" /> Leave channel
                             </button>
                           )}
-                          {selectedChannel.type === 'channel' && permissions.can_create_channel && (
+                          {selectedChannel.type === 'channel' && (
                             <button
-                              onClick={handleDeleteChannel}
-                              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-destructive transition-colors hover:bg-destructive-subtle"
+                              onClick={() => { if (permissions.can_create_channel) handleDeleteChannel(); }}
+                              aria-disabled={!permissions.can_create_channel}
+                              title={!permissions.can_create_channel ? 'You do not have permission to delete channels' : undefined}
+                              className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm transition-colors ${
+                                permissions.can_create_channel
+                                  ? 'text-destructive hover:bg-destructive-subtle'
+                                  : 'text-gray-400 cursor-not-allowed opacity-60'
+                              }`}
                             >
                               <Trash2 className="h-4 w-4" /> Delete channel
                             </button>
@@ -1129,10 +1137,16 @@ export default function TeamChatPage() {
                     ? 'No channels yet. Create one to bring your team into the conversation.'
                     : 'Pick a channel or direct message from the left to start the conversation.'}
                 </p>
-                {permissions.can_create_channel && channels.length === 0 && (
+                {channels.length === 0 && (
                   <button
                     onClick={openCreateModal}
-                    className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg"
+                    aria-disabled={!permissions.can_create_channel}
+                    title={!permissions.can_create_channel ? 'You do not have permission to create channels' : undefined}
+                    className={`mt-5 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-all ${
+                      permissions.can_create_channel
+                        ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25 hover:-translate-y-0.5 hover:shadow-lg'
+                        : 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-60'
+                    }`}
                   >
                     <Plus className="h-4 w-4" />
                     Create your first channel

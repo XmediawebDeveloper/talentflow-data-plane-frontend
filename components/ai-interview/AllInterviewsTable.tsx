@@ -1169,12 +1169,15 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className={`w-44 ${MENU_PANEL_BORDER_CLASS}`}>
                           {rowActions(row).map(({ key, label, icon: Icon, run, disabled, reason }) => (
+                            /* aria-disabled, not Radix `disabled`: its pointer-events:none
+                               swallowed the permission tooltip. Locked = no-op click. */
                             <DropdownMenuItem
                               key={key}
-                              onClick={run}
-                              disabled={disabled}
+                              onClick={disabled ? undefined : run}
+                              onSelect={disabled ? (e) => e.preventDefault() : undefined}
+                              aria-disabled={disabled || undefined}
                               title={disabled ? reason : undefined}
-                              className={`group gap-2 ${MENU_ITEM_LIGHT_HIGHLIGHT_CLASS}`}
+                              className={`group gap-2 ${MENU_ITEM_LIGHT_HIGHLIGHT_CLASS} ${disabled ? 'text-gray-400 cursor-not-allowed opacity-60' : ''}`}
                             >
                               <Icon className="w-4 h-4" />
                               <span className={MENU_ITEM_SCALE_CLASS}>{label}</span>
