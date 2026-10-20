@@ -646,7 +646,7 @@ export default function UserManagement() {
 
     const parts: string[] = [];
     if (plan.entryPointsOff.length) {
-      parts.push(`its ${plan.entryPointsOff.length} entry point${plan.entryPointsOff.length === 1 ? '' : 's'} in other sections`);
+      parts.push(`${plan.entryPointsOff.length} permission${plan.entryPointsOff.length === 1 ? '' : 's'} from other modules`);
     }
     if (plan.dependentsOff.length) {
       parts.push(`${plan.dependentsOff.length} permission${plan.dependentsOff.length === 1 ? '' : 's'} that need${plan.dependentsOff.length === 1 ? 's' : ''} it`);
@@ -656,7 +656,7 @@ export default function UserManagement() {
       tone: 'off',
       summary: <>This will also turn off {parts.join(' and ')}.</>,
       details: [
-        { heading: 'Entry points in other sections', codes: plan.entryPointsOff },
+        { heading: 'Permissions from other modules', codes: plan.entryPointsOff },
         { heading: 'Also turned off (they need it)', codes: plan.dependentsOff },
       ],
       actions: [{ id: 'off', label: 'Turn off', variant: 'destructive' }],
@@ -691,7 +691,7 @@ export default function UserManagement() {
       const summary = offered.length > 0
         ? (plan.offeredEntryPoints.length === 1
             ? <>&quot;{labelOf(plan.offeredEntryPoints[0].main)}&quot; can also be started from {offered.length} other section{offered.length === 1 ? '' : 's'}. Turn {offered.length === 1 ? 'it' : 'those'} on too?</>
-            : <>{offered.length} entry points in other sections can be turned on too. Turn them on?</>)
+            : <>{offered.length} permissions from other modules can be turned on too. Turn them on?</>)
         : <>Some permissions in this section were not turned on because their main permission is off.</>;
       const choice = await askPermissionChange({
         title: `Turn on "${label}"?`,

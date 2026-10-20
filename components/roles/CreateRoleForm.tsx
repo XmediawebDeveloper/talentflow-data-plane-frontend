@@ -292,17 +292,17 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
     }
     const parts: string[] = [];
     if (plan.entryPointsOff.length) {
-      parts.push(`${plan.entryPointsOff.length} entry point${plan.entryPointsOff.length === 1 ? '' : 's'} in other sections`);
+      parts.push(`${plan.entryPointsOff.length} permission${plan.entryPointsOff.length === 1 ? '' : 's'} from other modules`);
     }
     if (plan.dependentsOff.length) {
-      parts.push(`${plan.dependentsOff.length} other permission${plan.dependentsOff.length === 1 ? '' : 's'} that need${plan.dependentsOff.length === 1 ? 's' : ''} it`);
+      parts.push(`${plan.dependentsOff.length} permission${plan.dependentsOff.length === 1 ? '' : 's'} that need${plan.dependentsOff.length === 1 ? 's' : ''} it`);
     }
     const choice = await ask({
       title: `Turn off "${label}"?`,
       tone: 'off',
       summary: `This will also turn off ${parts.join(' and ')}.`,
       details: [
-        { heading: 'Entry points in other sections', codes: plan.entryPointsOff },
+        { heading: 'Permissions from other modules', codes: plan.entryPointsOff },
         { heading: 'Also turned off (they need it)', codes: plan.dependentsOff },
       ],
       actions: [{ id: 'off', label: 'Turn off', variant: 'destructive' }],

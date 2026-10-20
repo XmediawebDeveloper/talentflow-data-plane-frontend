@@ -528,6 +528,8 @@ function JobDetailsContent() {
      assessments, interviews and scores already hanging off it keep pointing at
      the text they were produced from. */
   const handleCreateNewVersion = async () => {
+    // A new version is a new JD — needs Create JD permission, not just Edit.
+    if (!(isTenantAdmin || hasPermission('canCreateJD'))) return;
     if (!jobId || creatingVersion) return;
     setCreatingVersion(true);
     try {
@@ -782,6 +784,7 @@ function JobDetailsContent() {
         reason={editBlock?.reason}
         jdId={jobId || undefined}
         atMaxVersions={(job.versionNumber ?? 1) >= 5}
+        canCreate={isTenantAdmin || hasPermission('canCreateJD')}
         onOpenJobTab={(tab) => {
           setEditBlock(null);
           setTabOverride({ tab, n: Date.now() });

@@ -470,6 +470,8 @@ export default function JobOpeningsPage() {
   // editor then opens on the new version; the previous version keeps all its
   // assessments/interviews/scores untouched.
   const handleCreateNewVersion = async () => {
+    // A new version is a new JD — needs Create JD permission, not just Edit.
+    if (!(isTenantAdmin || hasPermission('canCreateJD'))) return;
     const sourceId = editWarningDialog.jobId;
     if (!sourceId) return;
     setEditWarningDialog(prev => ({ ...prev, creating: true }));
@@ -921,6 +923,7 @@ export default function JobOpeningsPage() {
         jdId={editWarningDialog.jobId}
         creating={!!editWarningDialog.creating}
         atMaxVersions={(editWarningDialog.versionNumber ?? 1) >= 5}
+        canCreate={isTenantAdmin || hasPermission('canCreateJD')}
         cancelInFooter
         onClose={() => setEditWarningDialog({ open: false, jobTitle: '', modules: [] })}
         onCreateNewVersion={handleCreateNewVersion}
