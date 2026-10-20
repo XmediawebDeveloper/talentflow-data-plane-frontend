@@ -18,6 +18,7 @@ import { useNotificationWebSocket } from '@/hooks/useNotificationWebSocket';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { toast } from 'sonner';
 import { PERMISSION_DENIED_MESSAGE } from '@/components/shared/PermissionLockedOverlay';
+import { isRouteAuthorized } from '@/lib/navigation/routeAccess';
 
 /* Highest unread count the bell badge spells out. 1-9 show as themselves;
    anything from 10 up reads "9+" — the count keeps growing behind the scenes
@@ -680,6 +681,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
       title: 'Upgrade Plans',
       subtitle: 'Billing & subscription',
       href: '/subscription/current-plan',
+      deniedMessage: 'You do not have permission to view the subscription plan',
     },
     {
       id: 'company',
@@ -687,7 +689,6 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
       title: 'Company Profile',
       subtitle: 'Organization details',
       href: '/organization/company-profile',
-      permitted: isTenantAdmin || hasPermission('canManageSettings'),
       deniedMessage: 'You do not have permission to manage the company profile',
     },
     {
@@ -696,6 +697,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
       title: 'Audit Log',
       subtitle: 'View your recent activity',
       href: '/audits/activity',
+      deniedMessage: 'You do not have permission to view the audit log',
     },
     {
       id: 'audit-trail',
@@ -723,8 +725,17 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
       subtitle: 'Help & support requests',
       href: '/support-tickets',
       alwaysEnabled: true,
+      deniedMessage: 'You do not have permission to view support tickets',
     },
   ];
+  // Every row is greyed by the SAME rule the page guard (RouteGuard) uses, so a
+  // row is never clickable when its page would refuse the user, and never greyed
+  // when the page would open. An explicit `permitted` still wins.
+  profileMenuItems.forEach((item) => {
+    if (item.permitted === undefined) {
+      item.permitted = isRouteAuthorized(item.href, { isTenantAdmin, hasPermission });
+    }
+  });
 
   return (
     <header className="h-14 sm:h-16 lg:h-[72px] bg-white border-b border-gray-200">
