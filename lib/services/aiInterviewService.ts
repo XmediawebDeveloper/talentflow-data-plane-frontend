@@ -174,6 +174,15 @@ export interface PublishedJD {
   version_number?: number;   // job version (v1, v2, ...)
   created_by_name?: string;
   has_published_config?: boolean;
+  status?: 'published' | 'disabled';  // disabled JDs are listed read-only
+}
+
+export const JD_DISABLED_ACTION_MESSAGE = 'This job is disabled. Enable the job to make changes or run interviews.';
+
+/** A disabled JD stays visible in AI Interview, but nothing can be done with
+ *  it — edit, delete, publish, invite, archive — until it is enabled again. */
+export function isJdDisabled(jdStatus?: string | null): boolean {
+  return (jdStatus || '').toLowerCase() === 'disabled';
 }
 
 /** One thing worth saying about one skill the recruiter is trying to add.
@@ -280,6 +289,7 @@ export interface AIInterviewResponse {
   revoked_by?: string | null;
   jd_short_id?: string;  // JD's short display ID e.g. "JD-003", injected by list endpoint
   jd_industry_type?: string;
+  jd_status?: string;  // linked JD's live status — "disabled" makes the config read-only
   // Child-session counts for this config, batch-aggregated server-side at
   // list time — lets callers sum these directly instead of calling
   // /invitations per config per status.

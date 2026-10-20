@@ -16,7 +16,7 @@ import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { useUrlTab } from '@/lib/hooks/useUrlTab';
-import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
 import {
   interviewVersionOrdinal as storedInterviewVersionOrdinal,
   interviewDuplicateBlockedReason,
@@ -203,6 +203,9 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   // send a candidate their interview link) — checked via the Invite
   // permission so both entry points across the app agree on one gate.
   const canShareAIInterviews = isTenantAdmin || !!user?.permissions?.canInviteAIInterviews;
+  // A disabled JD keeps its interview visible but read-only: every action
+  // below is blocked until the job is enabled again (the backend refuses too).
+  const jdDisabled = isJdDisabled(config.jd_status);
   /* In the URL (`?detailTab=`), so a refresh reopens the same tab; a link's
      own `initialTab` is the default. Moving to another version is a new URL
      without the param, so it opens on the requested tab again. Not in the
@@ -515,10 +518,14 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
     () => (config.jd_id ? siblingConfigsByJdId.get(config.jd_id) ?? [] : []),
     [siblingConfigsByJdId, config.jd_id],
   );
-  const duplicateBlockedReason = interviewDuplicateBlockedReason(config, lineageConfigs, canCreateAIInterviews);
-  const editBlockedReason = !canUpdateAIInterviews
-    ? 'You do not have permission to edit AI interviews'
-    : interviewEditBlockedReason(config);
+  const duplicateBlockedReason = jdDisabled
+    ? JD_DISABLED_ACTION_MESSAGE
+    : interviewDuplicateBlockedReason(config, lineageConfigs, canCreateAIInterviews);
+  const editBlockedReason = jdDisabled
+    ? JD_DISABLED_ACTION_MESSAGE
+    : !canUpdateAIInterviews
+      ? 'You do not have permission to edit AI interviews'
+      : interviewEditBlockedReason(config);
 
   // Lazy-fetch the full JD record when the View JD tab is opened — cached
   // per config.jd_id so switching tabs (or back to it) doesn't re-fetch.
@@ -548,6 +555,10 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
 
   // Quick actions
   const handleCopyLink = async () => {
+    if (jdDisabled) {
+      toast.error(JD_DISABLED_ACTION_MESSAGE);
+      return;
+    }
     if (config.interview_link) {
       const fullLink = `${window.location.origin}${config.interview_link}`;
       await navigator.clipboard.writeText(fullLink);
@@ -577,6 +588,11 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   };
 
   const handleArchive = async () => {
+    if (jdDisabled) {
+      toast.error(JD_DISABLED_ACTION_MESSAGE);
+      setConfirmAction(null);
+      return;
+    }
     setActionLoading(true);
     try {
       await aiInterviewService.archive(config.id);
@@ -593,6 +609,10 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   /* The AI Interviews list's Unarchive (AIInterview.tsx handleUnarchiveConfig):
      the backend restores it to Draft or Active, the toast names which. */
   const handleUnarchive = async () => {
+    if (jdDisabled) {
+      toast.error(JD_DISABLED_ACTION_MESSAGE);
+      return;
+    }
     if (!canArchiveAIInterviews) {
       toast.error('You do not have permission to unarchive AI interviews');
       return;
@@ -614,6 +634,11 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   };
 
   const handleDelete = async () => {
+    if (jdDisabled) {
+      toast.error(JD_DISABLED_ACTION_MESSAGE);
+      setConfirmAction(null);
+      return;
+    }
     setActionLoading(true);
     try {
       await aiInterviewService.delete(config.id);
@@ -1274,6 +1299,12 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
           card, brand-blue border/ring, a solid ID pill + plain-weight title
           + status on row 1, and a quiet bulleted fact line ending on the
           mode/round/version chips on row 2. */}
+      {jdDisabled && (
+        <div role="status" className="mb-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+          <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" aria-hidden="true" />
+          <span>{JD_DISABLED_ACTION_MESSAGE} You can still view its details and results.</span>
+        </div>
+      )}
       <div className="mb-4">
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-brand-blue/30 dark:border-brand-blue/40 ring-1 ring-brand-blue/10 dark:ring-brand-blue/20 shadow-sm shadow-brand-blue/10 p-4 sm:p-5">
           <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3">
@@ -1458,12 +1489,16 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   variant="primary"
                   size="sm"
                   onClick={() => {
+                    if (jdDisabled) {
+                      toast.error(JD_DISABLED_ACTION_MESSAGE);
+                      return;
+                    }
                     if (!canShareAIInterviews) return;
                     setShowShareModal(true);
                   }}
-                  aria-disabled={!canShareAIInterviews}
-                  className={!canShareAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}
-                  title={!canShareAIInterviews ? 'You do not have permission to invite candidates to an AI interview' : ''}
+                  aria-disabled={jdDisabled || !canShareAIInterviews}
+                  className={jdDisabled || !canShareAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}
+                  title={jdDisabled ? JD_DISABLED_ACTION_MESSAGE : !canShareAIInterviews ? 'You do not have permission to invite candidates to an AI interview' : ''}
                   icon={<Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
                 >
                   Invite
@@ -1509,14 +1544,18 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   variant="primary"
                   size="sm"
                   onClick={() => {
+                    if (jdDisabled) {
+                      toast.error(JD_DISABLED_ACTION_MESSAGE);
+                      return;
+                    }
                     if (!canUpdateAIInterviews) return;
                     // Resumes at the step the draft was left on.
                     router.push(aiInterviewDraftResumeHref(config));
                   }}
-                  aria-disabled={!canUpdateAIInterviews}
-                  title={!canUpdateAIInterviews ? 'You do not have permission to edit AI interviews' : ''}
+                  aria-disabled={jdDisabled || !canUpdateAIInterviews}
+                  title={jdDisabled ? JD_DISABLED_ACTION_MESSAGE : !canUpdateAIInterviews ? 'You do not have permission to edit AI interviews' : ''}
                   icon={<Pencil className="w-3.5 h-3.5 flex-shrink-0" />}
-                  className={`gap-1.5 px-3 sm:px-4 min-h-[40px] text-xs sm:text-sm ${!canUpdateAIInterviews ? 'opacity-50 cursor-not-allowed' : ''} ${draftLocked ? 'ring-2 ring-brand-blue/40 shadow-md shadow-brand-blue/20' : ''}`}
+                  className={`gap-1.5 px-3 sm:px-4 min-h-[40px] text-xs sm:text-sm ${jdDisabled || !canUpdateAIInterviews ? 'opacity-50 cursor-not-allowed' : ''} ${draftLocked ? 'ring-2 ring-brand-blue/40 shadow-md shadow-brand-blue/20' : ''}`}
                 >
                   <span className="hidden sm:inline">Continue Editing</span>
                   <span className="sm:hidden">Edit</span>
@@ -1542,10 +1581,10 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   size="sm"
                   onClick={canArchiveAIInterviews ? handleUnarchive : undefined}
                   disabled={actionLoading}
-                  aria-disabled={!canArchiveAIInterviews}
-                  title={!canArchiveAIInterviews ? 'You do not have permission to unarchive AI interviews' : ''}
+                  aria-disabled={jdDisabled || !canArchiveAIInterviews}
+                  title={jdDisabled ? JD_DISABLED_ACTION_MESSAGE : !canArchiveAIInterviews ? 'You do not have permission to unarchive AI interviews' : ''}
                   icon={actionLoading ? <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" /> : <ArchiveRestore className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-menu-icon-archive" />}
-                  className={`${!canArchiveAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  className={`${jdDisabled || !canArchiveAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   Unarchive
                 </Button>
@@ -2265,6 +2304,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
               <AIInterviewResults
                 embedded
                 showStats
+                readOnly={jdDisabled}
                 // This page is one interview version — the rows all share it.
                 hideVersionDetails
                 configId={config.id}
@@ -2307,7 +2347,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
 
       {/* Share — a dialog off the header's Share button / Invites tab's
           "Invite More", not embedded in a tab. */}
-      {config.status === 'published' && canShareAIInterviews && (
+      {config.status === 'published' && canShareAIInterviews && !jdDisabled && (
         <ShareAIInterviewModal
           isOpen={showShareModal}
           config={config}

@@ -39,7 +39,7 @@ import { CoverageV2 } from './evaluation-dashboard/CoverageV2';
 import { buildDashboardData } from './evaluation-dashboard/adapter';
 import { downloadSessionReport, hasEvaluationReport } from './evaluation-dashboard/downloadSessionReport';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
-import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
 import { toast } from 'sonner';
 import api from '@/lib/services/api';
 import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
@@ -1178,8 +1178,14 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
   // background this banner does NOT show at all — `evaluationPending` renders the
   // "Generating results" spinner instead (see the partial-banner gate below).
   const [reEvaluating, setReEvaluating] = useState(false);
+  // A disabled JD's results stay viewable, but re-evaluating is an action.
+  const jdDisabled = isJdDisabled(liveSession.jd_status);
   const handleReEvaluate = async () => {
     if (reEvaluating) return;
+    if (jdDisabled) {
+      toast.error(JD_DISABLED_ACTION_MESSAGE);
+      return;
+    }
     setReEvaluating(true);
     const _t = toast.loading('Re-evaluating the interview — this can take a minute…');
     try {
@@ -1189,7 +1195,9 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
       toast.success('Interview re-evaluated. The full results are now available.', { id: _t });
     } catch (err: any) {
       const status = err?.response?.status;
-      const detail = err?.response?.data?.detail;
+      const rawDetail = err?.response?.data?.detail;
+      // A disabled-JD refusal arrives as {error, message}, not a string.
+      const detail = typeof rawDetail === 'string' ? rawDetail : rawDetail?.message;
       const msg =
         status === 409 ? (detail || 'This interview has already been re-evaluated.')
         : status === 400 ? (detail || 'Re-evaluation is only available once the candidate reached the end of the interview.')
@@ -2289,8 +2297,8 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                 size="sm"
                 type="button"
                 onClick={handleReEvaluate}
-                disabled={reEvaluating}
-                title="The candidate answered all questions — re-run the full evaluation. This can be done only once."
+                disabled={reEvaluating || jdDisabled}
+                title={jdDisabled ? JD_DISABLED_ACTION_MESSAGE : 'The candidate answered all questions — re-run the full evaluation. This can be done only once.'}
                 className="shrink-0"
               >
                 {reEvaluating ? 'Re-Evaluating…' : 'Re-Evaluate'}
