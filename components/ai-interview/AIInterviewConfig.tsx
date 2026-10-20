@@ -10,10 +10,13 @@ import {
   Trash2, Settings2,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import UnsavedChangesModal from '@/components/UnsavedChangesModal';
-import { useEmbeddedWizard, useWizardRouter, useWizardSearchParams } from './embeddedWizardNav';
+import { useEmbeddedWizard, useWizardRouter, useWizardSearchParams, WizardLayer } from './embeddedWizardNav';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { loadAllInterviewConfigs } from '@/components/talent-match-invite/inviteVersions';
+import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
 import { Button } from '@/components/ui/button';
 import type {
   PublishedJD,
@@ -24,6 +27,8 @@ import type {
 } from '@/lib/services/aiInterviewService';
 import api from '@/lib/services/api';
 import { toast } from 'sonner';
+import { useAuth } from '@/components/providers/AuthProvider';
+import PermissionLockedOverlay from '@/components/shared/PermissionLockedOverlay';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { getPriorityLabel } from '@/lib/constants/aiInterviewPriority';
@@ -35,6 +40,7 @@ import { AIInterviewStepIndicator, useBreadcrumbOffset } from './AIInterviewStep
 import AIInterviewFlowLoader from './AIInterviewFlowLoader';
 import { SectionHeader, SummaryLocation } from './ConfigSummary';
 import WizardDiscardButton from './WizardDiscardButton';
+import { markUnsavedVersion, isUnsavedVersion, clearUnsavedVersion } from '@/lib/utils/aiInterviewDraftResume';
 import JobOpeningSummary from '@/components/jobs/JobOpeningSummary';
 import JDFullViewModal from '@/components/jobs/JDFullViewModal';
 import { publishedJdToJob } from '@/lib/utils/publishedJdToJob';
@@ -922,6 +928,12 @@ function HRSection({
   onSelectedTypeOverridesChange,
   onBankAdd,
 }: HRSectionProps) {
+  // "HR Question Bank Add" under AI Interview (Roles & Permissions) — same
+  // gate Assessment's builder uses with assessments:add_question.
+  const { isTenantAdmin, hasPermissionCode } = useAuth();
+  const canAddQuestion = isTenantAdmin || hasPermissionCode('ai_interview:add_question');
+  // "HR Question Bank View" under AI Interview: shows the bank's questions to pick from.
+  const canViewQuestionBank = isTenantAdmin || hasPermissionCode('ai_interview:view_question_bank');
   const [hrWeightError, setHrWeightError] = useState(false);
   const [addingQuestion, setAddingQuestion] = useState(false);
   const [newQText, setNewQText] = useState('');
@@ -974,6 +986,10 @@ function HRSection({
   };
 
   const saveNewQuestion = async () => {
+    if (!canAddQuestion) {
+      toast.error('You do not have permission to add questions');
+      return;
+    }
     const text = newQText.trim().replace(/\s+/g, ' ');
     if (!text) {
       setQuestionError('Enter a question');
@@ -1007,7 +1023,9 @@ function HRSection({
   };
 
   return (
-    <div className={`rounded-xl transition-all ${enabled ? 'bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5' : 'border border-gray-100 bg-slate-50 opacity-60'}`}>
+    /* The same card on or off, as the Nice-To-Have Skills section — off is
+       told by the switch and the hidden body, not by greying the card. */
+    <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
       <div className="flex flex-wrap items-start justify-between gap-3 px-4 py-3 border-b border-gray-100">
         <SectionHeader
           icon={Users}
@@ -1110,7 +1128,9 @@ function HRSection({
               </div>
             )}
 
-            {/* Question list */}
+            {/* Question list — without "HR Question Bank View" it stays visible
+                but greyed and unclickable, with the reason on hover. */}
+            <PermissionLockedOverlay locked={!canViewQuestionBank} message='You do not have permission to view the HR Question Bank'>
             <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
               {bankQuestions.length === 0 ? (
                 <p className="text-xs text-gray-400 text-center py-6">No questions in the bank yet. Add your first question below.</p>
@@ -1235,6 +1255,7 @@ function HRSection({
                 );})
               )}
             </div>
+            </PermissionLockedOverlay>
           </>
 
           {/* Add Question — available in both modes, persists to HR Question Bank */}
@@ -1317,8 +1338,13 @@ function HRSection({
             </div>
           ) : (
             <button
-              onClick={() => setAddingQuestion(true)}
-              className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-brand-blue border border-dashed border-gray-300 rounded-lg px-3 py-2 w-full hover:border-brand-blue/40 hover:bg-brand-blue/5 transition-colors"
+              onClick={() => {
+                if (!canAddQuestion) return;
+                setAddingQuestion(true);
+              }}
+              aria-disabled={!canAddQuestion}
+              title={!canAddQuestion ? 'You do not have permission to add questions' : undefined}
+              className={`flex items-center gap-1.5 text-xs border border-dashed border-gray-300 rounded-lg px-3 py-2 w-full transition-colors ${canAddQuestion ? 'text-gray-500 hover:text-brand-blue hover:border-brand-blue/40 hover:bg-brand-blue/5' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
             >
               <Plus className="w-3.5 h-3.5" />
               Add Question
@@ -1347,7 +1373,8 @@ export default function AIInterviewConfig() {
   const router = useWizardRouter();
   const searchParams = useWizardSearchParams();
   /* Run inside the Create / Send AI Interview popup (AIInterviewWizardDialog). */
-  const embedded = !!useEmbeddedWizard();
+  const wizardNav = useEmbeddedWizard();
+  const embedded = !!wizardNav;
   const jdId = searchParams.get('jd_id');
   const configId = searchParams.get('config_id'); // set when editing an existing config (any status)
   // Set when the flow was entered from a JD's Job Details page. Keeps the
@@ -1372,7 +1399,18 @@ export default function AIInterviewConfig() {
   // Set when loadJD decides to navigate elsewhere, so the loader stays on screen
   // through the handoff instead of flashing an empty page.
   const [redirecting, setRedirecting] = useState(false);
+  const loadedStatusRef = useRef<string | null>(null); // status of the config this page opened (published → editing a live version)
   const existingDraftIdRef = useRef<string | null>(null); // track draft id for auto-save updates
+  /* True while editing a DUPLICATED version's draft (V2+, minted by Duplicate /
+     New version). Its JD and job version were fixed when it was cloned, so the
+     wizard's "Back to JD" — which leads to picking a different job — is not
+     offered for it. A fresh interview's V1 draft and every other flow keep it. */
+  const [editingDuplicatedDraft, setEditingDuplicatedDraft] = useState(false);
+  /* The V-number of the draft on screen while it is still UNSAVED — the
+     version Duplicate just minted, or a new interview's first draft reopened
+     from Clusters — or null (see lib/utils/aiInterviewUnsavedVersion). Discard
+     deletes an unsaved version, and the prompt says so. */
+  const [unsavedVersionNumber, setUnsavedVersionNumber] = useState<number | null>(null);
   // True only when existingDraftIdRef was populated from a draft that already
   // existed before this page loaded (resumed via "Continue Editing" / found by
   // jd_id) — as opposed to one `ensureDraftId` creates fresh during this
@@ -1380,16 +1418,15 @@ export default function AIInterviewConfig() {
   // the former, or resuming a saved draft and discarding an in-session edit
   // deletes the recruiter's actual saved work, not just the edit.
   const draftExistedOnLoadRef = useRef(false);
-  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // In-flight POST /ai-interview/ for this wizard, shared by every path that
   // may need the draft to exist. See ensureDraftId.
   const draftCreateRef = useRef<Promise<string> | null>(null);
   /**
    * The id of this wizard's draft, creating it once if it does not exist yet.
    *
-   * Four paths can need the draft: the 2s debounced auto-save and the three
-   * `saveDraft()` callers (Save Draft, Continue to clusters, and the unsaved-
-   * changes dialog). All of them used to do `if (existingDraftIdRef.current)
+   * Three paths can need the draft: the `saveDraft()` callers (Save Draft,
+   * Continue to clusters, and the unsaved-changes dialog). (A 2s debounced
+   * auto-save used to be a fourth; it was removed so Discard can drop edits.) All of them used to do `if (existingDraftIdRef.current)
    * update() else create()` — but that ref is only assigned AFTER `await
    * create(...)` resolves, so the check and the assignment straddle an await.
    * Edit a field and click Continue within the same couple of seconds and both
@@ -1414,6 +1451,8 @@ export default function AIInterviewConfig() {
         .create(payload)
         .then((created) => {
           existingDraftIdRef.current = created.id;
+          // A new interview stays "unsaved" until Save as Draft keeps it.
+          markUnsavedVersion(created.id);
           return created.id;
         })
         .catch((err) => {
@@ -1583,6 +1622,8 @@ export default function AIInterviewConfig() {
   const [savingDraft, setSavingDraft] = useState(false);
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
+  /** `pendingNavigation` value for "leave to the interview list" (Back to JD). */
+  const LIST_TARGET = '__list__';
   const isNavigatingRef = useRef(false);
   // True once THIS visit has already written its exit checkpoint (the audit
   // row that records the recruiter leaving the wizard — "AI Interview Saved
@@ -1641,6 +1682,33 @@ export default function AIInterviewConfig() {
           return;
         }
 
+        /* Nor may a job version whose AI interview is in any other status
+           (archived, completed, cancelled) get a second fresh V1: an AI
+           interview is one per job version, and its later versions are clones
+           of it (Create / Send AI Interview's New version, the AI Interviews
+           page's Duplicate), up to the 5-version cap. A draft is no blocker -
+           it is restored below. A failed lookup does not block, like the live
+           check above. */
+        if (!configId) {
+          const ofJob = (await loadAllInterviewConfigs().catch(() => [] as AIInterviewResponse[]))
+            .filter((c) => c.jd_id === jdId);
+          if (ofJob.length > 0 && !ofJob.some((c) => c.status === 'draft')) {
+            const latest = ofJob.reduce((best, c) =>
+              (interviewVersionOrdinal(c, ofJob) > interviewVersionOrdinal(best, ofJob) ? c : best));
+            setRedirecting(true);
+            toast.info(
+              `This job version already has an AI interview (V${interviewVersionOrdinal(latest, ofJob)}). ` +
+              (latest.status === 'archived' ? 'Unarchive it to continue.' : 'Duplicate it to create a new version.'),
+            );
+            if (fromInviteOrigin) {
+              router.replace(inviteOriginReturn);
+              return;
+            }
+            router.replace(`/recruitment/ai-interviews/${latest.id}${fromJobDetails ? '?from=job-details' : ''}`);
+            return;
+          }
+        }
+
         setSelectedJd(jd);
 
         // Look for an existing config: specific config_id takes priority, then search drafts by jd_id
@@ -1658,6 +1726,15 @@ export default function AIInterviewConfig() {
         // when the user navigates back from the Clusters page.
         if (existingDraft) {
           existingDraftIdRef.current = existingDraft.id;
+          loadedStatusRef.current = existingDraft.status ?? null;
+          setEditingDuplicatedDraft(
+            existingDraft.status === 'draft' && (existingDraft.interview_version ?? 1) > 1,
+          );
+          setUnsavedVersionNumber(
+            existingDraft.status === 'draft' && isUnsavedVersion(existingDraft.id)
+              ? existingDraft.interview_version ?? 1
+              : null,
+          );
           draftExistedOnLoadRef.current = true;
           setMode(modeFromConfig(
             (existingDraft as any).special_instructions,
@@ -2117,6 +2194,13 @@ export default function AIInterviewConfig() {
         if (target.tagName === 'A' || target.getAttribute('role') === 'link') {
           const href = target.getAttribute('href');
           if (href && href.startsWith('/') && !href.startsWith('/#')) {
+            // Nothing changed: let the link (a breadcrumb crumb, say) go
+            // straight where it points, without asking — the AI Interviews
+            // crumb opening that page on its list, as Discard / Save do.
+            if (!hasUnsavedChanges()) {
+              if (href === '/recruitment/ai-interviews') openInterviewListView();
+              return;
+            }
             e.preventDefault(); e.stopPropagation();
             setPendingNavigation(href); setShowUnsavedDialog(true);
             return;
@@ -2129,52 +2213,25 @@ export default function AIInterviewConfig() {
     return () => document.removeEventListener('click', handleClick, true);
   }, [selectedJd]);
 
-  /* ── Auto-save draft (debounced 2s) whenever config changes ── */
+  /* Reload / tab close with unsaved edits: the browser's own "Leave site?"
+     prompt, since nothing is auto-saved any more. In-app navigation never
+     fires this — the guards above handle it. */
   useEffect(() => {
-    if (!selectedJd || loadingJd) return;
-
-    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
-
-    autoSaveTimerRef.current = setTimeout(async () => {
-      try {
-        const rounds = buildRounds(true);
-        const payload = {
-          position: selectedJd.title,
-          jd_id: selectedJd.id,
-          // Flexible mode has a real 30-min budget (35 with buffer). Store
-          // the real value, not the old 0-sentinel. Mode is determined by
-          // special_instructions.interview_mode.
-          duration_minutes: mode === 'flexible' ? 30 : totalFixed,
-          rounds_config: rounds,
-          recording_enabled: recordingEnabled,
-          environment_verification_enabled: PROXY_INTEGRITY_VERIFICATION_ENABLED && environmentVerificationEnabled,
-          available_languages: availableLanguages,
-          title: `${selectedJd.title} - AI Interview`,
-          save_as_draft: true,
-          // Word-level duplicate check only; the gpt-4o dedup runs on Continue.
-          semantic_skill_check: false,
-          special_instructions: buildClusterJson(),
-          introduction_video_url: introVideoUrl || null,
-        };
-
-        if (existingDraftIdRef.current) {
-          // Update existing draft
-          await aiInterviewService.update(existingDraftIdRef.current, payload);
-        } else {
-          // Create the draft once, even if an explicit save is racing this one.
-          const { id, mine } = await ensureDraftId(payload);
-          if (!mine) await aiInterviewService.update(id, payload);
-        }
-      } catch {
-        // Silent — don't toast on auto-save failures
-      }
-    }, 2000);
-
-    return () => {
-      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isNavigatingRef.current || !hasUnsavedChanges()) return;
+      e.preventDefault();
+      e.returnValue = '';
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mth, nth, hrPct, hrEnabled, hrSelectedIds, hrQuestionStages, hrQuestionTypeOverrides, mode, sttModel, recordingEnabled, environmentVerificationEnabled, availableLanguages, introVideoUrl, selectedJd, loadingJd]);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
+
+  /* No auto-save on this step. Only Save as Draft, Continue and the Unsaved
+     Changes prompt's Save write the configuration, so Discard can genuinely
+     drop this visit's edits — a draft or published version reopened here
+     stays exactly as it was saved. Unsaved edits are guarded instead: the
+     prompt on Back to JD / breadcrumbs / browser Back, and the browser's own
+     "Leave site?" warning on reload or tab close (below). */
 
   /* ── Derived values ── */
   const nthAvailable = nth.skills.length > 0 || nth.enabled;
@@ -2533,6 +2590,9 @@ export default function AIInterviewConfig() {
 
   /* Cluster config as JSON for special_instructions */
   const buildClusterJson = () => JSON.stringify({
+    // The step this save was made from — a draft reopens here (see
+    // aiInterviewDraftResume), even when clusters were generated earlier.
+    wizard_step: CURRENT_STEP,
     interview_mode: mode,
     per_question_seconds: mode === 'fixed' ? perQuestionSeconds : undefined,
     // Speech-to-Text model the backend uses to transcribe the candidate.
@@ -2607,6 +2667,9 @@ export default function AIInterviewConfig() {
         title: `${selectedJd.title} - AI Interview`,
         save_as_draft: true,
         save_and_exit: isExiting,
+        // Saving a published (not yet invited) version as a draft takes it
+        // off "published" — otherwise it kept showing Published after Save as Draft.
+        ...(isExiting && loadedStatusRef.current === 'published' && { status: 'draft' }),
         semantic_skill_check: false,
         special_instructions: buildClusterJson(),
         introduction_video_url: introVideoUrl || undefined,
@@ -2621,6 +2684,7 @@ export default function AIInterviewConfig() {
       // This save carried the exit flag, so the server has just written the
       // visit's checkpoint row — the unmount net must not write a second one.
       if (isExiting) exitCheckpointedRef.current = true;
+      if (isExiting && loadedStatusRef.current === 'published') loadedStatusRef.current = 'draft';
       if (!silent) toast.success('Draft saved!');
       return true;
     } catch (err: any) {
@@ -2639,6 +2703,7 @@ export default function AIInterviewConfig() {
   const handleSaveAsDraft = async () => {
     const ok = await saveDraft(false, undefined, true);
     if (!ok) return;
+    clearUnsavedVersion(existingDraftIdRef.current);
     // Started on a JD's Job Details page (including from its draft prompt) —
     // return there rather than to the AI Interviews list, matching the
     // breadcrumb this step already shows.
@@ -2919,21 +2984,76 @@ export default function AIInterviewConfig() {
       isNavigatingRef.current = false;
       return;
     }
+    clearUnsavedVersion(existingDraftIdRef.current);
     toast.success('Draft saved');
-    if (pendingNavigation === '__back__') router.back();
-    else if (pendingNavigation) router.push(pendingNavigation);
+    // Same place Discard would have gone: Back to JD → the interview list,
+    // a breadcrumb → the page it names.
+    goTo(pendingNavigation ?? LIST_TARGET);
     setPendingNavigation(null);
   };
 
-  /* Footer Discard — the same action the Clusters and Preview steps offer:
-     bin the draft this flow is building and leave. Kept identical to theirs so
-     the button does the same thing wherever the recruiter meets it. */
-  const handleDiscardDraft = async () => {
+  /* Where Discard lands: the list this flow was started from — the invite
+     origin or the Job Details page when the wizard was opened there, otherwise
+     the AI Interviews list itself, opened straight on its Total Jobs list
+     rather than the overview cards (never back on Step 1, Select JD). The
+     sessionStorage flag is the one the AI Interviews page reads on mount
+     (AIInterview.tsx, AI_INTERVIEWS_LIST_VIEW_REDIRECT_KEY); JD creation sets
+     it the same way. */
+  const openInterviewListView = () => {
+    try { sessionStorage.setItem('ai_interviews_open_list_view', 'pending'); } catch { /* list opens on its cards instead */ }
+  };
+  const navigateToInterviewList = () => {
+    if (fromInviteOrigin) {
+      router.push(inviteOriginReturn);
+    } else if (fromJobDetails && jdId) {
+      router.push(`/recruitment/job-details?id=${encodeURIComponent(jdId)}`);
+    } else {
+      openInterviewListView();
+      router.push('/recruitment/ai-interviews');
+    }
+  };
+
+  /* Where a leave lands. `LIST_TARGET` is Back to JD and the footer Discard
+     (the interview list above); `__back__` is the browser's Back; anything
+     else is the address a breadcrumb or link pointed at — the recruiter goes
+     where they clicked. */
+  const goTo = (target: string) => {
+    if (target === '__back__') router.back();
+    else if (target === LIST_TARGET) navigateToInterviewList();
+    else {
+      // The "AI Interviews" crumb: open that page on its list, like every
+      // other way out of this step, not on its overview cards.
+      if (target === '/recruitment/ai-interviews') openInterviewListView();
+      router.push(target);
+    }
+  };
+
+  /* Does Discard DELETE the version on screen, or only drop this visit's
+     edits? Deleted: a version the recruiter never saved — a new interview
+     (nothing is stored until Save; if Continue stored it this visit, that row
+     goes too) or the version Duplicate has just minted. Kept: a draft they
+     saved earlier and reopened (Continue Editing), and any published / live
+     version — its stored configuration is left exactly as it was, since
+     nothing on this step writes without Save. */
+  const discardDeletesVersion = unsavedVersionNumber !== null || !draftExistedOnLoadRef.current;
+
+  /* Discard — the footer button and the Unsaved Changes prompt's Discard do
+     the same thing; only the destination differs (see `goTo`). Nothing is
+     saved on the way out: Save as Draft (or the prompt's Save) is the only way
+     to keep edits. Every other version of the interview is untouched. */
+  const discardCurrentVersion = async (target: string) => {
+    setShowUnsavedDialog(false);
+    setPendingNavigation(null);
     isNavigatingRef.current = true;
+    // A create still in flight (a Save racing this click) lands its id first,
+    // so a version this visit created is removed rather than orphaned.
+    if (draftCreateRef.current) await draftCreateRef.current.catch(() => null);
     const draftId = existingDraftIdRef.current;
-    if (draftId) {
+    const createdThisVisit = !!draftId && !draftExistedOnLoadRef.current;
+    if (draftId && (createdThisVisit || unsavedVersionNumber !== null)) {
       try {
         await aiInterviewService.delete(draftId);
+        clearUnsavedVersion(draftId);
         existingDraftIdRef.current = null;
         toast.success('Draft discarded');
       } catch {
@@ -2941,44 +3061,63 @@ export default function AIInterviewConfig() {
         // draft in the list, where it can be removed directly.
       }
     }
-    router.push(
-      fromInviteOrigin
-        ? inviteOriginReturn
-        : fromJobDetails && jdId
-        ? `/recruitment/job-details?id=${encodeURIComponent(jdId)}`
-        : '/recruitment/ai-interviews',
-    );
+    goTo(target);
   };
 
-  const handleDiscardAndNavigate = async () => {
-    setShowUnsavedDialog(false);
+  /* ── Inside the wizard popup: the footer's Cancel ──
+     Asks to save or discard only when the form has changed. The baseline is
+     the form as it stands when the recruiter first touches it, so the values
+     the step settles into while it loads never count as a change. */
+  const editSnapshot = useMemo(
+    () => JSON.stringify([mth, nth, hrPct, hrEnabled, hrSelectedIds, hrQuestionStages, hrQuestionTypeOverrides, mode, sttModel, recordingEnabled, environmentVerificationEnabled, availableLanguages, introVideoUrl]),
+    [mth, nth, hrPct, hrEnabled, hrSelectedIds, hrQuestionStages, hrQuestionTypeOverrides, mode, sttModel, recordingEnabled, environmentVerificationEnabled, availableLanguages, introVideoUrl],
+  );
+  const editSnapshotRef = useRef(editSnapshot);
+  const editBaselineRef = useRef<string | null>(null);
+  useEffect(() => {
+    editSnapshotRef.current = editSnapshot;
+  }, [editSnapshot]);
+  const markEditStart = () => {
+    if (editBaselineRef.current === null) editBaselineRef.current = editSnapshotRef.current;
+  };
+  /** Has the recruiter changed anything on this step since it loaded? Read by
+   *  every leave path: no change means leave without the Unsaved Changes
+   *  prompt. Refs only, so handlers registered once still see the latest. */
+  function hasUnsavedChanges() {
+    return editBaselineRef.current !== null && editBaselineRef.current !== editSnapshotRef.current;
+  }
+  const requestCancel = async () => {
+    const changed = hasUnsavedChanges();
+    if (changed) {
+      // Any address outside the wizard ends the popup once saved / discarded.
+      setPendingNavigation(jdId ? `/recruitment/job-details?id=${encodeURIComponent(jdId)}` : '/recruitment/ai-interviews');
+      setShowUnsavedDialog(true);
+      return;
+    }
+    // Nothing changed: leave without asking, as Discard would — a draft this
+    // visit only auto-created goes; one that existed before stays.
     isNavigatingRef.current = true;
-    // Only delete a draft this session created itself (e.g. auto-save's
-    // optimistic create with no prior save to fall back to). A draft that
-    // already existed on load — resumed via "Continue Editing" — must survive
-    // discard: the recruiter is discarding this session's unsaved edits, not
-    // asking to remove the draft from the AI Interviews list.
     if (existingDraftIdRef.current && !draftExistedOnLoadRef.current) {
       try {
         await aiInterviewService.delete(existingDraftIdRef.current);
         existingDraftIdRef.current = null;
       } catch {
-        // Silent — don't block navigation on delete failure
+        // Silent — leaving is what was asked for.
       }
     } else {
-      // The draft stays. Record the visit's checkpoint before leaving, so
-      // reopening a config and walking away still appears in its activity
-      // log. Nothing of this page's state is sent — Discard must not push
-      // back anything the recruiter chose not to keep — so the server
-      // snapshots the config exactly as it stands and labels the row
-      // itself: untouched reads "Saved as Draft", edited (the 2s autosave
-      // has already persisted any edit by now) reads "Draft Updated".
       await checkpointExit();
     }
-    if (pendingNavigation === '__back__') router.back();
-    else if (pendingNavigation) router.push(pendingNavigation);
-    setPendingNavigation(null);
+    wizardNav?.exit();
   };
+  const requestCancelRef = useRef(requestCancel);
+  useEffect(() => {
+    requestCancelRef.current = requestCancel;
+  });
+  useEffect(() => {
+    if (!wizardNav) return;
+    wizardNav.setCancelHandler(() => void requestCancelRef.current());
+    return () => wizardNav.setCancelHandler(null);
+  }, [wizardNav]);
 
   /* ── Loading / null guards ── */
   // `redirecting` keeps the loader up while the router navigates away (JD not
@@ -2998,7 +3137,7 @@ export default function AIInterviewConfig() {
   /* ─────────────────────────────────────────────────────────────────── */
 
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
+    <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950" onPointerDownCapture={markEditStart} onKeyDownCapture={markEditStart}>
       <div className="mx-auto w-full max-w-[1400px]">
         <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
           <PageBreadcrumb
@@ -3066,6 +3205,10 @@ export default function AIInterviewConfig() {
                   View JD
                 </button>
               )}
+              {/* The wizard popup is opened for one job, so it has no Change JD;
+                  nor does a duplicated version's draft, whose JD was fixed
+                  when it was cloned (see `editingDuplicatedDraft`). */}
+              {!embedded && !editingDuplicatedDraft && (
               <button
                 type="button"
                 onClick={() => {
@@ -3076,6 +3219,7 @@ export default function AIInterviewConfig() {
               >
                 Change JD
               </button>
+              )}
             </div>
           </div>
         </div>
@@ -3954,66 +4098,103 @@ export default function AIInterviewConfig() {
             outcomes, and they now sit where the form ends rather than beside
             the summary the recruiter is still reading. Not sticky: it sits
             in normal flow at the end of the page, below the last section. */}
-        <div className="mt-6 pt-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3">
-          {/* On phones the bar is two rows (leave / advance) rather than four
-              stacked buttons. */}
-          <div className="flex items-center justify-between sm:justify-start gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setPendingNavigation('/recruitment/ai-interviews/jd-selection');
-                setShowUnsavedDialog(true);
-              }}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Back to JD
-            </button>
-            <WizardDiscardButton onClick={handleDiscardDraft} disabled={savingDraft} />
-          </div>
-
-          <div className="flex flex-row items-stretch sm:items-center gap-2">
-            <button
-              onClick={handleSaveAsDraft}
-              disabled={savingDraft}
-              className="flex-1 sm:flex-none whitespace-nowrap inline-flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 text-sm border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {savingDraft ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              {savingDraft ? 'Saving…' : 'Save as Draft'}
-            </button>
-
-            {/* No native `title` on the button — the styled bubble below
-                already shows `continueDisabledReason`, and setting both made
-                the browser draw a second plain tooltip over it. */}
-            <div className="relative group flex-1 sm:flex-none">
-              <button
-                onClick={handleContinueToClusters}
-                disabled={!canContinueToClusters}
-                aria-disabled={!canContinueToClusters}
-                className={`w-full whitespace-nowrap inline-flex items-center justify-center gap-2 px-3 sm:px-5 py-2.5 text-sm rounded-lg transition-colors ${
-                  canContinueToClusters
-                    ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
-                    : 'bg-slate-200 text-gray-400 cursor-not-allowed'
-                }`}
-              >
-                {savingDraft ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                {savingDraft ? 'Saving…' : (
-                  <>
-                    <span className="sm:hidden">Continue</span>
-                    <span className="hidden sm:inline">Continue to Clusters</span>
-                  </>
-                )}
-                {!savingDraft && <ChevronRight className="w-4 h-4" />}
-              </button>
-              {!canContinueToClusters && continueDisabledReason && (
-                <div className="pointer-events-none absolute bottom-full right-0 mb-2 px-3 py-2 text-xs text-white bg-gray-900 rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-normal w-max max-w-[calc(100vw-2rem)] sm:max-w-xs z-10">
-                  {continueDisabledReason}
-                  <div className="absolute top-full right-6 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900" />
-                </div>
+        {(() => {
+          /* Leaving (start) and advancing (end). In the wizard popup they sit in
+             its sticky footer, around its Cancel, and Back to JD is not offered:
+             the popup is opened for one job. Nor is it on a duplicated
+             version's draft (see `editingDuplicatedDraft`), whose JD is fixed. */
+          const leaveActions = (
+            <>
+              {!embedded && !editingDuplicatedDraft && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Leaves to the interview list (never Step 1, Select JD);
+                    // the prompt only when there is something to save or lose.
+                    if (!hasUnsavedChanges()) {
+                      navigateToInterviewList();
+                      return;
+                    }
+                    setPendingNavigation(LIST_TARGET);
+                    setShowUnsavedDialog(true);
+                  }}
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Exit
+                </button>
               )}
+              <WizardDiscardButton
+                onClick={() => void discardCurrentVersion(LIST_TARGET)}
+                disabled={savingDraft}
+                label={discardDeletesVersion ? 'Discard' : 'Discard changes'}
+              />
+            </>
+          );
+          const advanceActions = (
+            <>
+              <button
+                onClick={handleSaveAsDraft}
+                disabled={savingDraft}
+                className="flex-1 sm:flex-none whitespace-nowrap inline-flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 text-sm border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {savingDraft ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                {savingDraft ? 'Saving…' : 'Save as Draft'}
+              </button>
+
+              {/* No native `title` on the button — the styled bubble below
+                  already shows `continueDisabledReason`, and setting both made
+                  the browser draw a second plain tooltip over it. */}
+              <div className="relative group flex-1 sm:flex-none">
+                <button
+                  onClick={handleContinueToClusters}
+                  disabled={!canContinueToClusters}
+                  aria-disabled={!canContinueToClusters}
+                  className={`w-full whitespace-nowrap inline-flex items-center justify-center gap-2 px-3 sm:px-5 py-2.5 text-sm rounded-lg transition-colors ${
+                    canContinueToClusters
+                      ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
+                      : 'bg-slate-200 text-gray-400 cursor-not-allowed'
+                  }`}
+                >
+                  {savingDraft ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  {savingDraft ? 'Saving…' : (
+                    <>
+                      <span className="sm:hidden">Continue</span>
+                      <span className="hidden sm:inline">Continue to Clusters</span>
+                    </>
+                  )}
+                  {!savingDraft && <ChevronRight className="w-4 h-4" />}
+                </button>
+                {!canContinueToClusters && continueDisabledReason && (
+                  <div className="pointer-events-none absolute bottom-full right-0 mb-2 px-3 py-2 text-xs text-white bg-gray-900 rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-normal w-max max-w-[calc(100vw-2rem)] sm:max-w-xs z-10">
+                    {continueDisabledReason}
+                    <div className="absolute top-full right-6 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900" />
+                  </div>
+                )}
+              </div>
+            </>
+          );
+          if (embedded) {
+            return (
+              <>
+                {wizardNav?.footerStartEl && createPortal(leaveActions, wizardNav.footerStartEl)}
+                {wizardNav?.footerEndEl && createPortal(advanceActions, wizardNav.footerEndEl)}
+              </>
+            );
+          }
+          return (
+            <div className="mt-6 pt-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3">
+              {/* On phones the bar is two rows (leave / advance) rather than four
+                  stacked buttons. */}
+              <div className="flex items-center justify-between sm:justify-start gap-2">
+                {leaveActions}
+              </div>
+              <div className="flex flex-row items-stretch sm:items-center gap-2">
+                {advanceActions}
+              </div>
             </div>
-          </div>
-        </div>
+          );
+        })()}
       </div>
 
       {/* Video Preview Dialog */}
@@ -4048,21 +4229,38 @@ export default function AIInterviewConfig() {
 
       {/* ── Job description, in place ── */}
       {jdViewOpen && jdId && (
-        <JDFullViewModal
-          jdId={jdId}
-          jdTitle={selectedJd?.title}
-          onClose={() => setJdViewOpen(false)}
-        />
+        <WizardLayer>
+          <JDFullViewModal
+            jdId={jdId}
+            jdTitle={selectedJd?.title}
+            onClose={() => setJdViewOpen(false)}
+            /* In the popup, the job's card opens the JD, as on Job Details. */
+            showJobCard={embedded}
+            cancelInFooter={embedded}
+          />
+        </WizardLayer>
       )}
 
       {/* Unsaved Changes — the shared prompt. Its own wording, because what
           is being saved here is a configuration, not a job description. */}
       <UnsavedChangesModal
         isOpen={showUnsavedDialog}
-        description="Save your configuration as a draft before leaving?"
-        discardLabel="Discard"
+        {...(unsavedVersionNumber !== null && unsavedVersionNumber > 1
+          ? {
+              title: 'Discard this new version?',
+              description: `Delete this V${unsavedVersionNumber} draft? ${
+                unsavedVersionNumber === 2 ? 'V1 is' : `V1–V${unsavedVersionNumber - 1} are`
+              } not affected.`,
+              discardLabel: 'Delete draft',
+            }
+          : unsavedVersionNumber !== null || !draftExistedOnLoadRef.current
+          ? { description: 'Save your configuration as a draft before leaving?', discardLabel: 'Discard' }
+          : {
+              description: 'Save your changes, or discard them and keep this interview as it was saved?',
+              discardLabel: 'Discard changes',
+            })}
         onClose={() => setShowUnsavedDialog(false)}
-        onDiscard={handleDiscardAndNavigate}
+        onDiscard={() => void discardCurrentVersion(pendingNavigation ?? LIST_TARGET)}
         onSave={handleSaveAndNavigate}
         isSaving={savingDraft}
       />

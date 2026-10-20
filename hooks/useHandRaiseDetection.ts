@@ -7,6 +7,11 @@ interface UseHandRaiseDetectionConfig {
   onHandLowered?: () => void;
   onWaveDetected?: () => void;
   enabled?: boolean;
+  /**
+   * Never load MediaPipe Hands at all (no script, no WASM, no frame loop).
+   * Unlike enabled=false, which only pauses an already-loaded model.
+   */
+  disabled?: boolean;
 }
 
 export function useHandRaiseDetection(config?: UseHandRaiseDetectionConfig) {
@@ -36,7 +41,8 @@ export function useHandRaiseDetection(config?: UseHandRaiseDetectionConfig) {
   // Stabilization settings - MORE LENIENT
   const FRAMES_TO_CONFIRM_RAISED = 2; // Faster response
   const FRAMES_TO_CONFIRM_LOWERED = 4; // Faster lowering
-  const enabled = config?.enabled ?? true;
+  const disabled = config?.disabled ?? false;
+  const enabled = !disabled && (config?.enabled ?? true);
 
   // Detect if hand is raised - SIMPLER LOGIC
   const detectHandRaised = useCallback((landmarks: any[]): boolean => {
@@ -141,6 +147,10 @@ export function useHandRaiseDetection(config?: UseHandRaiseDetectionConfig) {
 
   // Initialize MediaPipe Hands (only once)
   useEffect(() => {
+    if (disabled) {
+      setIsLoading(false);
+      return;
+    }
     let mounted = true;
 
     const initializeHands = async () => {

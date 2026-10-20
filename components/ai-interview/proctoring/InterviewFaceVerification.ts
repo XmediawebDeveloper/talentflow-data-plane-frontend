@@ -9,23 +9,44 @@
  * - face_recognition_model (needs to be present in /public/models/)
  *
  * During system check: captures 3 face descriptors and averages them into a baseline.
- * During interview: every 10s, extracts a descriptor and compares with baseline.
+ * During interview: on a fixed cadence, extracts a descriptor and compares with baseline.
+ * A suspicious reading is confirmed by a quick re-check (CONFIRM_DELAY_MS) instead
+ * of waiting a whole interval, and verifyNow() runs an out-of-band check when the
+ * face comes back after being missing / a second face leaves / the tab is visible
+ * again — the moments a substitute candidate would sit down.
  *
  * Thresholds (euclidean distance):
  *   < 0.6 = same person
  *   0.6-0.8 = warning (face_mismatch)
  *   > 0.8 = different person (face_identity_changed)
+ *
+ * Runs OFF the main thread (2026-10-17). Measured on a live staging
+ * interview: every check (tiny detector + 68 landmarks + ResNet descriptor on
+ * the TF.js CPU backend) blocked the page for 5-9 s — every 30 s, plus the
+ * 3 s confirm re-checks — ~25% of the interview frozen (Bina, timer, mic
+ * meter, buttons) and "STUCK TIMER" restarts after each. The models now run in
+ * the shared face-identity Web Worker (lib/proctoring/faceIdentityWorker.ts,
+ * same one the assessment uses); the page only grabs a frame (a few ms). The
+ * main-thread face-api path is kept ONLY as a fallback when the worker cannot
+ * start (no OffscreenCanvas / blocked worker).
  */
 
-import { useRef, useCallback, useState } from 'react';
+import { useRef, useCallback, useState, useMemo, useEffect } from 'react';
 // Side-effect import: installs the global unhandledrejection guard for
 // face-api.js / TF.js WebGL backend crashes. Safe to import anywhere.
 import '@/lib/tfjs-rejection-guard';
 import { ensureFaceApiCpuBackend, loadFaceApiWithCpuBackend, type FaceApiModule } from '@/lib/face-api-loader';
+import { createFaceIdentityWorker, type FaceIdentityWorker } from '@/lib/proctoring/faceIdentityWorker';
+import { FACE_API_MODEL_URLS } from '@/lib/proctoring/faceDetection';
+
+/** Why a live frame could not be compared against the reference face. */
+export type FaceUnverifiableReason = 'no_face' | 'low_confidence' | 'cut_off' | 'too_close' | 'too_small';
 
 interface FaceVerificationCallbacks {
   onFaceMismatch?: (distance: number) => void;
   onFaceIdentityChanged?: (distance: number) => void;
+  /** Several checks in a row produced no usable face (once per episode). */
+  onFaceUnverifiable?: (reason: FaceUnverifiableReason, checks: number) => void;
 }
 
 // Models are self-hosted under /public/models/ (tiny_face_detector,
@@ -41,15 +62,62 @@ const IDENTITY_CHANGED_THRESHOLD = 0.8;
 // Require this many CONSECUTIVE readings in the same band before emitting — a
 // single bad frame (blur, head-turn, lighting) must not accuse the candidate.
 const FACE_CONSECUTIVE_TO_FLAG = 2;
+// After one suspicious reading, confirm this soon rather than a full interval
+// later — a 30s cadence x2 used to let a ~60s substitution slip through.
+const CONFIRM_DELAY_MS = 3000;
+// Frame-quality gate for the live comparison (staging 2026-10-16):
+//  - the registered candidate leaned in until the face filled the frame with
+//    the forehead cut off → distance 0.6-0.8 → FALSE face_mismatch;
+//  - a stranger sat half out of frame with a hand over the face → no usable
+//    detection → every check silently skipped → never flagged.
+// A face that is cut off / too close / too small / low-confidence is NOT
+// compared (it would distort the fingerprint) — it counts as unverifiable
+// instead, and that streak is reported.
+const LIVE_DETECT_SCORE = 0.3;      // find partial faces too…
+const USABLE_FACE_SCORE = 0.5;      // …but only compare confident ones
+const EDGE_MARGIN = 0.01;           // box within 1% of a frame edge = cut off
+const MAX_FACE_HEIGHT = 0.7;        // face taller than 70% of the frame = too close
+const MIN_FACE_WIDTH = 0.06;        // narrower than 6% of the frame = too far / background
+// Unverifiable checks in a row before reporting (~1 min at the 30s cadence,
+// with the 3s confirm in between) — long enough that leaning in briefly or
+// adjusting the chair never triggers it.
+const UNVERIFIABLE_CONSECUTIVE_TO_FLAG = 3;
 const REGISTRATION_CAPTURES = 3;
 const CAPTURE_DELAY_MS = 1500; // delay between registration captures
+// Worker frame grab: keep (close to) the camera's own resolution so the face
+// crop fed to the descriptor net is the same as on the old main-thread path —
+// a smaller frame would shift the distances the thresholds were tuned on.
+const WORKER_GRAB_MAX_WIDTH = 1280;
+const DETECTOR_INPUT_SIZE = 320;
+
+function euclidean(a: Float32Array, b: Float32Array): number {
+  let sum = 0;
+  for (let i = 0; i < a.length; i++) {
+    const d = a[i] - b[i];
+    sum += d * d;
+  }
+  return Math.sqrt(sum);
+}
+
+type Detection = {
+  descriptor?: Float32Array;
+  detection?: { score: number; box: { x: number; y: number; width: number; height: number } };
+};
 
 // Global TF.js/face-api rejection guard lives in @/lib/tfjs-rejection-guard
 // (imported at the top of this file as a side effect). Idempotent and safe
 // to import from every face-api caller.
 
 export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbacks) {
+  // Callers pass an inline callbacks object (new every render). Read it via a
+  // ref so startVerification — and the returned handle — stay referentially
+  // stable; see the useMemo at the bottom.
+  const callbacksRef = useRef(callbacks);
+  callbacksRef.current = callbacks;
   const faceApiRef = useRef<FaceApiModule | null>(null);
+  // Off-thread engine; null = not started / failed → main-thread fallback.
+  const workerRef = useRef<FaceIdentityWorker | null>(null);
+  const lastWorkerMsRef = useRef<number | null>(null);
   const baselineDescriptorRef = useRef<Float32Array | null>(null);
   const verificationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isLoadedRef = useRef(false);
@@ -57,7 +125,16 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
   const videoElementRef = useRef<HTMLVideoElement | null>(null);
   const isDetectingRef = useRef(false); // guard against concurrent TF.js calls
   const verificationActiveRef = useRef(false);
+  const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const runCheckRef = useRef<(() => Promise<void>) | null>(null);
+  const visibilityHandlerRef = useRef<(() => void) | null>(null);
   const [baselineReady, setBaselineReady] = useState(false);
+
+  useEffect(() => () => {
+    workerRef.current?.terminate();
+    workerRef.current = null;
+    isLoadedRef.current = false;
+  }, []);
 
   const isTfjsBackendError = useCallback((err: unknown): boolean => {
     const msg = err instanceof Error ? err.message : String(err ?? '');
@@ -83,10 +160,25 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
     }
   }, []);
 
+  // Returns the detection, undefined (ran, no face) or null (not run / error).
   const detectFaceWithDescriptor = useCallback(async (
     input: HTMLVideoElement | HTMLImageElement,
     scoreThreshold: number,
-  ) => {
+  ): Promise<Detection | null | undefined> => {
+    const worker = workerRef.current;
+    if (worker) {
+      if (!verificationActiveRef.current && input === videoElementRef.current) return null;
+      const r = await worker.detect(input, {
+        targetWidth: WORKER_GRAB_MAX_WIDTH,
+        inputSize: DETECTOR_INPUT_SIZE,
+        scoreThreshold,
+      });
+      if (!r) return null;
+      lastWorkerMsRef.current = r.workerMs;
+      if (!r.found || !r.descriptor || !r.box) return undefined;
+      return { descriptor: r.descriptor, detection: { score: r.score ?? 0, box: r.box } };
+    }
+
     const faceapi = faceApiRef.current;
     if (!faceapi) return null;
 
@@ -95,12 +187,12 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
       if (!backendReady) return null;
       try {
         if (!verificationActiveRef.current && input === videoElementRef.current) return null;
-        return await Promise.resolve(
+        return (await Promise.resolve(
           faceapi
-            .detectSingleFace(input, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold }))
+            .detectSingleFace(input, new faceapi.TinyFaceDetectorOptions({ inputSize: DETECTOR_INPUT_SIZE, scoreThreshold }))
             .withFaceLandmarks()
             .withFaceDescriptor()
-        );
+        )) as Detection | undefined;
       } catch (err) {
         if (isTfjsBackendError(err) && attempt === 0) {
           console.warn('[FaceVerification] TF.js backend crashed during detectSingleFace — retrying after backend recovery');
@@ -120,10 +212,23 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
    * Load face-api.js models (lazy — only when face verification is needed).
    */
   const loadModels = useCallback(async (): Promise<boolean> => {
-    if (isLoadedRef.current && faceApiRef.current) return true;
+    if (isLoadedRef.current && (workerRef.current || faceApiRef.current)) return true;
     if (loadPromiseRef.current) return loadPromiseRef.current;
 
     loadPromiseRef.current = (async () => {
+      // Preferred: the off-thread worker (see header).
+      if (typeof Worker !== 'undefined' && typeof OffscreenCanvas !== 'undefined') {
+        const worker = createFaceIdentityWorker({ modelUrls: FACE_API_MODEL_URLS, inputSize: DETECTOR_INPUT_SIZE });
+        if (await worker.ready) {
+          workerRef.current = worker;
+          isLoadedRef.current = true;
+          loadPromiseRef.current = null;
+          console.log('[FaceVerification] Models loaded successfully', { backend: 'worker' });
+          return true;
+        }
+        worker.terminate();
+        console.warn('[FaceVerification] worker unavailable — falling back to main-thread face-api (the page will stall during checks)');
+      }
       try {
         const faceapi = await loadFaceApiWithCpuBackend();
         faceApiRef.current = faceapi;
@@ -167,6 +272,13 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
     return loadPromiseRef.current;
   }, []);
 
+  // Warm the worker as soon as the portal mounts (consent / identity steps):
+  // the models (~7 MB) load in the background, so registering the identity
+  // photo (8 s budget) and the system-check face match only pay for the scan.
+  useEffect(() => {
+    void loadModels();
+  }, [loadModels]);
+
   /**
    * Extract a face descriptor from the current video frame.
    *
@@ -181,9 +293,8 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
    */
   const extractDescriptor = useCallback(async (): Promise<Float32Array | null> => {
     if (isDetectingRef.current) return null;
-    const faceapi = faceApiRef.current;
     const video = videoElementRef.current;
-    if (!faceapi || !video || !verificationActiveRef.current || video.paused || video.videoWidth === 0) return null;
+    if (!isLoadedRef.current || !video || !verificationActiveRef.current || video.paused || video.videoWidth === 0) return null;
     // Skip when tab is hidden — the WebGL context may have been
     // suspended/lost and the next tensor call will throw.
     if (typeof document !== 'undefined' && document.hidden) return null;
@@ -191,10 +302,51 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
     isDetectingRef.current = true;
     try {
       const detection = await detectFaceWithDescriptor(video, 0.5);
-      return (detection && (detection as { descriptor?: Float32Array }).descriptor) || null;
+      return detection?.descriptor || null;
     } catch (err) {
       if (!isTfjsBackendError(err)) {
         console.warn('[FaceVerification] extractDescriptor outer error:', err);
+      }
+      return null;
+    } finally {
+      isDetectingRef.current = false;
+    }
+  }, [detectFaceWithDescriptor, isTfjsBackendError]);
+
+  /**
+   * One live frame for continuous verification: either a usable descriptor or
+   * the reason the frame cannot be compared. null = check skipped (busy, tab
+   * hidden, video not playing) — that must count neither way.
+   */
+  const extractLiveReading = useCallback(async (): Promise<
+    { descriptor: Float32Array } | { unusable: FaceUnverifiableReason } | null
+  > => {
+    if (isDetectingRef.current) return null;
+    const video = videoElementRef.current;
+    if (!isLoadedRef.current || !video || !verificationActiveRef.current || video.paused || video.videoWidth === 0) return null;
+    if (typeof document !== 'undefined' && document.hidden) return null;
+
+    isDetectingRef.current = true;
+    try {
+      const detection = await detectFaceWithDescriptor(video, LIVE_DETECT_SCORE);
+      // null = backend not ready / TF error / stopped → skip this check.
+      // undefined = face-api ran and found no face → counts as unverifiable.
+      if (detection === null) return null;
+      if (!detection?.descriptor || !detection.detection) return { unusable: 'no_face' };
+      const W = video.videoWidth;
+      const H = video.videoHeight || 1;
+      const { score, box } = detection.detection;
+      if (score < USABLE_FACE_SCORE) return { unusable: 'low_confidence' };
+      if (box.height > MAX_FACE_HEIGHT * H) return { unusable: 'too_close' };
+      if (box.width < MIN_FACE_WIDTH * W) return { unusable: 'too_small' };
+      if (
+        box.x < EDGE_MARGIN * W || box.y < EDGE_MARGIN * H
+        || box.x + box.width > (1 - EDGE_MARGIN) * W || box.y + box.height > (1 - EDGE_MARGIN) * H
+      ) return { unusable: 'cut_off' };
+      return { descriptor: detection.descriptor };
+    } catch (err) {
+      if (!isTfjsBackendError(err)) {
+        console.warn('[FaceVerification] extractLiveReading error:', err);
       }
       return null;
     } finally {
@@ -212,9 +364,6 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
   const registerFaceFromBlob = useCallback(async (blob: Blob): Promise<boolean> => {
     const loaded = await loadModels();
     if (!loaded) return false;
-
-    const faceapi = faceApiRef.current;
-    if (!faceapi) return false;
 
     // Wait for any in-flight TF.js detection to finish, then claim the lock.
     // Concurrent WebGL calls corrupt the shared TF.js backend (tensor.backend → undefined → moveData crash).
@@ -269,8 +418,7 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
   const verifyCurrentFace = useCallback(async (
     videoElement: HTMLVideoElement,
   ): Promise<{ matched: boolean; distance: number } | null> => {
-    const faceapi = faceApiRef.current;
-    if (!faceapi || !baselineDescriptorRef.current) return null;
+    if (!isLoadedRef.current || !baselineDescriptorRef.current) return null;
 
     videoElementRef.current = videoElement;
     const previousActive = verificationActiveRef.current;
@@ -279,10 +427,7 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
       const descriptor = await extractDescriptor();
       if (!descriptor) return null;
 
-      const distance = faceapi.euclideanDistance(
-        Array.from(baselineDescriptorRef.current),
-        Array.from(descriptor),
-      );
+      const distance = euclidean(baselineDescriptorRef.current, descriptor);
 
       return { matched: distance < MISMATCH_THRESHOLD, distance };
     } finally {
@@ -368,8 +513,7 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
       clearInterval(verificationIntervalRef.current);
     }
 
-    const faceapi = faceApiRef.current;
-    if (!faceapi) {
+    if (!isLoadedRef.current) {
       verificationActiveRef.current = false;
       return;
     }
@@ -377,30 +521,62 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
     // Consecutive-agreement debounce (local to this run; reset on stop/restart).
     let mismatchStreak = 0;
     let changedStreak = 0;
+    let unverifiableStreak = 0;
+    let unverifiableReported = false;   // once per episode; a usable reading re-arms
 
-    verificationIntervalRef.current = setInterval(async () => {
+    const scheduleConfirm = () => {
+      if (confirmTimerRef.current) return;
+      confirmTimerRef.current = setTimeout(() => {
+        confirmTimerRef.current = null;
+        void runCheckRef.current?.();
+      }, CONFIRM_DELAY_MS);
+    };
+
+    const runCheck = async () => {
       try {
-        const descriptor = await extractDescriptor();
-        if (!descriptor || !baselineDescriptorRef.current) return;
+        if (!verificationActiveRef.current) return;
+        const reading = await extractLiveReading();
+        if (!reading || !baselineDescriptorRef.current) return;
+        if ('unusable' in reading) {
+          // Not compared — and not silently dropped either.
+          // No quick confirm here: the streak must span regular checks
+          // (~1 min), so briefly leaning in or adjusting never flags.
+          unverifiableStreak += 1;
+          console.log(`[FaceVerification] check unusable=${reading.unusable} streak=${unverifiableStreak}`);
+          if (unverifiableStreak >= UNVERIFIABLE_CONSECUTIVE_TO_FLAG && !unverifiableReported) {
+            unverifiableReported = true;
+            console.warn(`[FaceVerification] UNVERIFIABLE — ${reading.unusable} (x${unverifiableStreak})`);
+            callbacksRef.current?.onFaceUnverifiable?.(reading.unusable, unverifiableStreak);
+          }
+          return;
+        }
+        unverifiableStreak = 0;
+        unverifiableReported = false;
+        const descriptor = reading.descriptor;
 
-        const distance = faceapi.euclideanDistance(
-          Array.from(baselineDescriptorRef.current),
-          Array.from(descriptor),
-        );
+        const distance = euclidean(baselineDescriptorRef.current, descriptor);
+        // One line per check — the server log is the only place to tune the
+        // thresholds from (glasses, lighting) after a real interview.
+        const cost = workerRef.current ? ` (${lastWorkerMsRef.current ?? '?'}ms off-thread)` : ' (main thread)';
+        console.log(`[FaceVerification] check distance=${distance.toFixed(3)}${cost}`);
 
         if (distance > IDENTITY_CHANGED_THRESHOLD) {
           changedStreak += 1;
           mismatchStreak = 0;
           if (changedStreak >= FACE_CONSECUTIVE_TO_FLAG) {
             console.warn(`[FaceVerification] IDENTITY CHANGED — distance: ${distance.toFixed(3)} (x${changedStreak})`);
-            callbacks?.onFaceIdentityChanged?.(distance);
+            callbacksRef.current?.onFaceIdentityChanged?.(distance);
+          } else {
+            scheduleConfirm();
           }
         } else if (distance > MISMATCH_THRESHOLD) {
           mismatchStreak += 1;
           changedStreak = 0;
           if (mismatchStreak >= FACE_CONSECUTIVE_TO_FLAG) {
             console.warn(`[FaceVerification] MISMATCH — distance: ${distance.toFixed(3)} (x${mismatchStreak})`);
-            callbacks?.onFaceMismatch?.(distance);
+            callbacksRef.current?.onFaceMismatch?.(distance);
+          } else {
+            scheduleConfirm();
           }
         } else {
           // Clearly the same person — reset streaks.
@@ -412,10 +588,23 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
         // a single bad frame does not halt continuous verification.
         console.warn('[FaceVerification] Verification frame skipped:', err);
       }
-    }, intervalMs);
+    };
+    runCheckRef.current = runCheck;
+
+    verificationIntervalRef.current = setInterval(() => { void runCheck(); }, intervalMs);
+
+    // Checks are skipped while the tab is hidden — re-check the moment it is
+    // visible again (shortly after, so the camera frame is fresh).
+    if (visibilityHandlerRef.current) {
+      document.removeEventListener('visibilitychange', visibilityHandlerRef.current);
+    }
+    visibilityHandlerRef.current = () => {
+      if (!document.hidden) scheduleConfirm();
+    };
+    document.addEventListener('visibilitychange', visibilityHandlerRef.current);
 
     console.log(`[FaceVerification] Continuous verification started (every ${Math.round(intervalMs / 1000)}s)`);
-  }, [extractDescriptor, callbacks]);
+  }, [extractLiveReading]);
 
   /**
    * Stop verification and clean up.
@@ -426,6 +615,28 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
       clearInterval(verificationIntervalRef.current);
       verificationIntervalRef.current = null;
     }
+    if (confirmTimerRef.current) {
+      clearTimeout(confirmTimerRef.current);
+      confirmTimerRef.current = null;
+    }
+    if (visibilityHandlerRef.current) {
+      document.removeEventListener('visibilitychange', visibilityHandlerRef.current);
+      visibilityHandlerRef.current = null;
+    }
+    runCheckRef.current = null;
+  }, []);
+
+  /**
+   * Run an identity check now (out of the regular cadence) — e.g. when the face
+   * comes back after being missing. No-op unless continuous verification is
+   * running. Delayed by CONFIRM_DELAY_MS so the returning face has settled.
+   */
+  const verifyNow = useCallback(() => {
+    if (!verificationActiveRef.current || !runCheckRef.current || confirmTimerRef.current) return;
+    confirmTimerRef.current = setTimeout(() => {
+      confirmTimerRef.current = null;
+      void runCheckRef.current?.();
+    }, CONFIRM_DELAY_MS);
   }, []);
 
   /**
@@ -435,14 +646,19 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
     return baselineDescriptorRef.current !== null;
   }, []);
 
-  return {
+  // MUST be stable. The portal re-renders every second (interview timer) and
+  // passes this handle to InterviewUI, whose effect cleanup calls
+  // stopVerification() whenever the handle's identity changes — a fresh object
+  // per render silently stopped continuous verification ~1s after connect.
+  return useMemo(() => ({
     registerFace,
     registerFaceFromBlob,
     verifyCurrentFace,
     startVerification,
     stopVerification,
+    verifyNow,
     hasBaseline,
     baselineReady,
     baselineDescriptorRef,
-  };
+  }), [registerFace, registerFaceFromBlob, verifyCurrentFace, startVerification, stopVerification, verifyNow, hasBaseline, baselineReady]);
 }

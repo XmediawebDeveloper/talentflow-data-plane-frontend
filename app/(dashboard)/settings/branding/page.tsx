@@ -219,10 +219,7 @@ export default function BrandingPage() {
               tone="onColor"
               variant="primary"
               onClick={() => {
-                if (!canManage) {
-                  toast.error('You do not have permission to manage branding');
-                  return;
-                }
+                if (!canManage) return;
                 handleSave();
               }}
               disabled={isSaving || !canManage}
@@ -269,10 +266,7 @@ export default function BrandingPage() {
                   variant="secondary"
                   size="sm"
                   onClick={() => {
-                    if (!canManage) {
-                      toast.error('You do not have permission to manage branding');
-                      return;
-                    }
+                    if (!canManage) return;
                     logoInputRef.current?.click();
                   }}
                   disabled={isUploadingLogo}
@@ -289,10 +283,7 @@ export default function BrandingPage() {
                 {branding.logo_url && (
                   <button
                     onClick={() => {
-                      if (!canManage) {
-                        toast.error('You do not have permission to manage branding');
-                        return;
-                      }
+                      if (!canManage) return;
                       setBranding(prev => ({ ...prev, logo_url: '' }));
                     }}
                     aria-disabled={!canManage}

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useEffectEvent, useRef, useState, type ComponentProps } from 'react';
-import { ArrowLeft, ArrowRight, Brain, CheckCircle, ClipboardCheck, Link2, Loader2, Mail } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle, ClipboardList, Link2, Loader2, Mail, Video } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
@@ -58,7 +58,7 @@ interface PendingConfirm {
  * Job Details → AI Talent Match: "Create / Send Assessment" and "Create / Send
  * AI Interview" — two SEPARATE popups, this one component per `kind`. Built
  * on the Invite to Assessment / AI Interview popups' shell (InviteToAssessmentFlow,
- * class for class): the type's version cards (up to MAX_VERSIONS_PER_TYPE per
+ * class for class): the type's version cards (up to MAX_VERSIONS[kind] per
  * JD row, every status counted, the Latest Active one pre-ticked, one version
  * per send, New version = a Draft copy of the latest), the candidates and the
  * invitation, and one Send; the send's per-candidate results then replace
@@ -77,6 +77,8 @@ export default function VersionInviteDialog({
   onAssessmentsSent,
   onInterviewsSent,
   hideDuplicate = false,
+  inviteAllowed = true,
+  inviteDeniedReason,
 }: {
   kind: InviteKind;
   onClose: () => void;
@@ -103,6 +105,11 @@ export default function VersionInviteDialog({
   onInterviewsSent?: (sentCount: number) => void;
   /** Leave Duplicate out of the version cards' ⋯ menu. */
   hideDuplicate?: boolean;
+  /** Host-specific invite gate (e.g. AI Talent Match's own "Invite to …"
+   *  entry-point permission). Omitted = no extra gate (default behaviour). */
+  inviteAllowed?: boolean;
+  /** Shown when `inviteAllowed` is false. */
+  inviteDeniedReason?: string;
 }) {
   const { user, isTenantAdmin } = useAuth();
   const p = (user?.permissions || {}) as Record<string, boolean | undefined>;
@@ -124,6 +131,7 @@ export default function VersionInviteDialog({
         canInvite: can('canInviteAIInterviews'),
         canDelete: can('canDeleteAIInterviews'),
       };
+  if (!inviteAllowed) perms.canInvite = false;
   const label = KIND_LABEL[kind];
   const off = disabledReason || null;
 
@@ -426,7 +434,7 @@ export default function VersionInviteDialog({
             toast.success(`v${v.version} deleted.`);
           } else if (item.action === 'duplicate') {
             const fresh = (await reload()) ?? versions;
-            const why = createBlockedReason(fresh, perms, kind);
+            const why = createBlockedReason(fresh, perms, kind, fresh.find((x) => x.id === v.id) ?? v);
             if (why) { toast.error(why); return; }
             await duplicateVersion(v);
             toast.success(`v${nextVersionNumber(fresh)} created as a draft copy of v${v.version}.`);
@@ -517,7 +525,7 @@ export default function VersionInviteDialog({
           ? (handsOff ? 'No candidates ticked · add them in the next step' : '')
           : null;
 
-  const Icon = kind === 'assessment' ? ClipboardCheck : Brain;
+  const Icon = kind === 'assessment' ? ClipboardList : Video;
 
   return (
     <>
@@ -759,7 +767,7 @@ export default function VersionInviteDialog({
                   <button
                     onClick={shareBrowse}
                     disabled={browseCount === 0 || !hasCandidatesForNext || !perms.canInvite}
-                    title={!perms.canInvite ? `You do not have permission to invite to ${label.plural.toLowerCase()}` : undefined}
+                    title={!perms.canInvite ? (!inviteAllowed && inviteDeniedReason ? inviteDeniedReason : `You do not have permission to invite to ${label.plural.toLowerCase()}`) : undefined}
                     className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <ArrowRight className="w-4 h-4" />
@@ -789,7 +797,7 @@ export default function VersionInviteDialog({
                   <button
                     onClick={askSend}
                     disabled={!canSend}
-                    title={!perms.canInvite ? `You do not have permission to invite to ${label.plural.toLowerCase()}` : undefined}
+                    title={!perms.canInvite ? (!inviteAllowed && inviteDeniedReason ? inviteDeniedReason : `You do not have permission to invite to ${label.plural.toLowerCase()}`) : undefined}
                     className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {handsOff ? <ArrowRight className="w-4 h-4" /> : method === 'link' ? <Link2 className="w-4 h-4" /> : <Mail className="w-4 h-4" />}
@@ -839,7 +847,7 @@ export default function VersionInviteDialog({
         />
       )}
       {viewingInterviewId && (
-        <ConfigurePreviewDialog configId={viewingInterviewId} onClose={() => setViewingInterviewId(null)} />
+        <ConfigurePreviewDialog configId={viewingInterviewId} onClose={() => setViewingInterviewId(null)} cancelInFooter />
       )}
       {editing && (
         <AssessmentConfigureModal

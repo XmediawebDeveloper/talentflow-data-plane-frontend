@@ -189,7 +189,7 @@ function MemberRow({ member, fromDate }: { member: TeamMemberUsage; fromDate: st
     <>
       <tr
         onClick={toggle}
-        className="cursor-pointer hover:bg-indigo-50/40 transition-colors border-t border-gray-100 dark:border-slate-700/60 select-none"
+        className="cursor-pointer hover:bg-brand-blue/[0.04] dark:hover:bg-slate-800 transition-colors border-t border-gray-100 dark:border-slate-700/60 select-none"
       >
         {/* Member */}
         <td className="px-4 py-3 whitespace-nowrap">
@@ -197,7 +197,7 @@ function MemberRow({ member, fromDate }: { member: TeamMemberUsage; fromDate: st
             <div className="text-gray-300 dark:text-slate-500 shrink-0">
               {expanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
             </div>
-            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-gray-600 to-gray-800 text-white flex items-center justify-center text-xs font-semibold shrink-0">
+            <div className="w-7 h-7 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 text-brand-blue flex items-center justify-center text-xs font-semibold shrink-0">
               {initials(member.user_name || member.user_email)}
             </div>
             <div>
@@ -370,8 +370,8 @@ function TeamRow({
             <div className="text-gray-400 dark:text-slate-500">
               {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
             </div>
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center shrink-0">
-              <Users className="w-4 h-4 text-white" />
+            <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center shrink-0">
+              <Users className="w-4 h-4 text-brand-blue" />
             </div>
             <div>
               <p className="font-semibold text-gray-900 dark:text-slate-50 text-sm">{team.team_name || 'Unnamed Team'}</p>
@@ -479,13 +479,13 @@ function TeamRow({
                         </th>
                         <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">
                           <span className="flex flex-col items-center gap-0.5">
-                            <FileText className="w-3 h-3 text-indigo-400" />
+                            <FileText className="w-3 h-3 text-brand-blue" />
                             JDs
                           </span>
                         </th>
                         <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">
                           <span className="flex flex-col items-center gap-0.5">
-                            <ClipboardCheck className="w-3 h-3 text-purple-400" />
+                            <ClipboardCheck className="w-3 h-3 text-brand-blue" />
                             Assessments
                           </span>
                         </th>
@@ -522,17 +522,17 @@ function StatCard({ label, value, dot, loading, onClick, active }: {
   onClick?: () => void;
   active?: boolean;
 }) {
-  const className = `bg-white dark:bg-slate-900 rounded-xl border shadow-sm px-5 py-4 flex items-center gap-4 text-left w-full ${
+  const className = `bg-white dark:bg-slate-900 rounded-xl border shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] px-5 py-4 flex items-center gap-4 text-left w-full ${
     onClick ? 'transition-all hover:-translate-y-0.5 hover:shadow-md cursor-pointer' : ''
-  } ${active ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-200 dark:border-slate-700'}`;
+  } ${active ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60'}`;
   const content = (
     <>
       <span className={`w-3 h-3 rounded-full shrink-0 ${dot}`} />
-      <div>
-        <p className="text-xs text-gray-500 dark:text-slate-500">{label}</p>
+      <div className="min-w-0">
+        <p className="text-xs text-gray-500 dark:text-slate-500 truncate">{label}</p>
         {loading
           ? <div className="h-6 w-10 bg-gray-100 dark:bg-slate-800 rounded animate-pulse mt-1" />
-          : <p className="text-xl font-bold text-gray-900 dark:text-slate-50">{value}</p>}
+          : <p className="text-xl font-semibold tracking-tight tabular-nums text-gray-900 dark:text-slate-50">{value}</p>}
       </div>
     </>
   );
@@ -659,7 +659,7 @@ export default function TeamUsageAnalytics() {
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50">Team Usage</h2>
-              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${isTenantAdmin ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400'}`}>
+              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${isTenantAdmin ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15' : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400'}`}>
                 {isTenantAdmin ? 'All Teams' : 'Your Teams'}
               </span>
             </div>
@@ -667,36 +667,36 @@ export default function TeamUsageAnalytics() {
           </div>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex flex-col gap-2 min-w-0 lg:flex-row lg:items-center">
             <DateField
               aria-label="From date"
               value={fromDate}
               max={toDate}
               onChange={setFromDate}
-              className="min-w-0 flex-1 sm:flex-none sm:w-[150px]"
+              className="w-full lg:w-[150px]"
             />
-            <span className="shrink-0 text-xs font-medium text-gray-400 dark:text-slate-500">to</span>
+            <span className="shrink-0 text-xs font-medium text-gray-400 dark:text-slate-500 self-start lg:self-auto">to</span>
             <DateField
               aria-label="To date"
               value={toDate}
               min={fromDate}
               max={new Date().toISOString().split('T')[0]}
               onChange={setToDate}
-              className="min-w-0 flex-1 sm:flex-none sm:w-[150px]"
+              className="w-full lg:w-[150px]"
             />
           </div>
           <div className="relative" ref={exportMenuRef}>
               <button
                 onClick={() => {
-                  if (!canExport) {
-                    toast.error({ title: 'You do not have permission to export team usage data' });
-                    return;
-                  }
+                  if (!canExport) return;
                   if (teams.length > 0 && !loading) setShowExportMenu(v => !v);
                 }}
-                disabled={teams.length === 0 || loading || !canExport}
+                disabled={canExport && (teams.length === 0 || loading)}
+                aria-disabled={!canExport || teams.length === 0 || loading}
                 title={!canExport ? 'You do not have permission to export team usage data' : ''}
-                className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                className={`flex h-9 shrink-0 items-center gap-2 px-3 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-lg text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed ${
+                  canExport ? 'hover:bg-gray-50 dark:hover:bg-slate-800' : 'text-gray-400 cursor-not-allowed opacity-60'
+                }`}
               >
                 <Download className="w-4 h-4" />
                 Export
@@ -739,7 +739,7 @@ export default function TeamUsageAnalytics() {
       </div>
 
       {/* Summary stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
         <StatCard label="Resume Scoring"  value={totals.rs}  dot="bg-blue-500"   loading={loading} onClick={() => openList('rs')}  active={pageView === 'list' && activeCard === 'rs'} />
         <StatCard label="Assessments"     value={totals.as_} dot="bg-purple-500" loading={loading} onClick={() => openList('as')}  active={pageView === 'list' && activeCard === 'as'} />
         <StatCard label="AI Interviews"   value={totals.aiu} dot="bg-success"  loading={loading} onClick={() => openList('aiu')} active={pageView === 'list' && activeCard === 'aiu'} />
@@ -759,7 +759,7 @@ export default function TeamUsageAnalytics() {
       </div>
 
       {/* Outer team table — 7 cols (Team, RS, AS, AIU, RU, Total, expand) */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm overflow-hidden tf-table-shell">
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] overflow-hidden tf-table-shell">
         <table className="w-full">
           <thead className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-700">
             <tr>

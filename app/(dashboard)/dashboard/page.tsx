@@ -21,7 +21,6 @@
  */
 
 import Link from 'next/link';
-import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -687,7 +686,7 @@ export default function DashboardPage() {
   };
 
   // CTAs — always rendered; `enabled` drives disabled styling + a permission
-  // toast instead of hiding the tile (permission-off must stay visible/disabled).
+  // hover tooltip (click is a no-op) instead of hiding the tile (permission-off must stay visible/disabled).
   const featuredActions = [
     { label: 'Create Job', href: '/recruitment/jd-creation', onClick: handleCreateJob, enabled: isTenantAdmin || hasPermission('canCreateJD'), primary: true, icon: Plus },
   ];
@@ -767,7 +766,6 @@ export default function DashboardPage() {
                     onClick={(e) => {
                       if (!item.enabled) {
                         e.preventDefault();
-                        toast.error('You do not have permission to create job descriptions');
                         return;
                       }
                       item.onClick(e);

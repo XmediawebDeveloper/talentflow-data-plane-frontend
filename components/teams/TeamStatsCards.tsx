@@ -27,10 +27,10 @@ export default function TeamStatsCards({ stats, isLoading, onCardClick, activeCa
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3 mb-5">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="rounded-xl border border-gray-100 bg-white p-4 sm:p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+          <div key={i} className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 sm:p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
             <div className="flex items-start gap-2.5">
               <Skeleton className="w-9 h-9 rounded-xl" />
-              <div className="space-y-2">
+              <div className="min-w-0 space-y-2">
                 <Skeleton className="h-4 w-24" />
                 <Skeleton className="h-7 w-16" />
               </div>
@@ -48,7 +48,7 @@ export default function TeamStatsCards({ stats, isLoading, onCardClick, activeCa
         value={stats.total_teams}
         icon={Users}
         tone="neutral"
-        sparkVariant={0}
+        sparkline={false}
         onClick={onCardClick ? () => onCardClick('total') : undefined}
         active={activeCard === 'total'}
         showClickArrow={!!onCardClick}
@@ -58,7 +58,7 @@ export default function TeamStatsCards({ stats, isLoading, onCardClick, activeCa
         value={stats.total_members}
         icon={UserCheck}
         tone="neutral"
-        sparkVariant={1}
+        sparkline={false}
         onClick={onCardClick ? () => onCardClick('members') : undefined}
         active={activeCard === 'members'}
         showClickArrow={!!onCardClick}
@@ -68,7 +68,7 @@ export default function TeamStatsCards({ stats, isLoading, onCardClick, activeCa
         value={stats.avg_members_per_team.toFixed(1)}
         icon={Layers3}
         tone="neutral"
-        sparkVariant={2}
+        sparkline={false}
         onClick={onCardClick ? () => onCardClick('avg') : undefined}
         active={activeCard === 'avg'}
         showClickArrow={!!onCardClick}

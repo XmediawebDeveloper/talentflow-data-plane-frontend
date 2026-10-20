@@ -17,7 +17,6 @@ import {
   BellOff,
   Pin,
   Loader2,
-  X,
   Lock,
   Globe,
   ArrowUpRight,
@@ -37,6 +36,7 @@ import { useSearchParams } from 'next/navigation';
 import { formatISTTime, formatISTDate } from '@/lib/utils/dateUtils';
 import { PageSkeleton, Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import AppModal from '@/components/ui/app-modal';
 
 const quickEmojis = ['👍', '❤️', '😄', '🎉', '👀', '✅'];
 
@@ -446,10 +446,8 @@ export default function TeamChatPage() {
   };
 
   const openCreateModal = async () => {
-    if (!permissions.can_create_channel) {
-      toast.error('Only administrators and team leads can create channels');
-      return;
-    }
+    // Locked controls are greyed with a hover tooltip; the click is a no-op.
+    if (!permissions.can_create_channel) return;
     await fetchAvailableUsers();
     setShowCreateModal(true);
   };
@@ -520,7 +518,7 @@ export default function TeamChatPage() {
         <PageBreadcrumb className="mb-4" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Chat' }]} />
         <OrganizationTabs />
       </div>
-      <div className="flex flex-1 min-h-0 gap-3 md:gap-4 -mt-5 rounded-b-xl border border-t-0 border-gray-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 p-4 sm:p-5">
+      <div className="flex flex-1 min-h-0 gap-3 md:gap-4 rounded-xl border border-gray-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 p-4 sm:p-5 lg:-mt-5 lg:rounded-t-none lg:border-t-0">
         {/* Left Sidebar - Channels List */}
         <aside className="hidden md:flex md:w-72 lg:w-80 flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
           <div className="border-b border-gray-100 bg-gray-50 px-4 py-4">
@@ -579,15 +577,19 @@ export default function TeamChatPage() {
               <div className="mb-2">
                 <div className="flex items-center justify-between px-2 py-1.5">
                   <span className="text-2xs font-semibold uppercase tracking-[0.16em] text-gray-400">Channels</span>
-                  {permissions.can_create_channel && (
-                    <button
-                      onClick={openCreateModal}
-                      className="inline-flex h-6 w-6 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-brand-blue/[0.06] hover:text-brand-blue"
-                      aria-label="Create channel" title="Create channel"
-                    >
-                      <Plus className="h-4 w-4" />
-                    </button>
-                  )}
+                  <button
+                    onClick={openCreateModal}
+                    aria-disabled={!permissions.can_create_channel}
+                    className={`inline-flex h-6 w-6 items-center justify-center rounded-md transition-colors ${
+                      permissions.can_create_channel
+                        ? 'text-gray-400 hover:bg-brand-blue/[0.06] hover:text-brand-blue'
+                        : 'text-gray-400 cursor-not-allowed opacity-60'
+                    }`}
+                    aria-label="Create channel"
+                    title={permissions.can_create_channel ? 'Create channel' : 'You do not have permission to create channels'}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
                 </div>
                 {filteredChannels.length === 0 ? (
                   <p className="px-3 py-4 text-center text-xs text-gray-400">No channels yet</p>
@@ -860,10 +862,16 @@ export default function TeamChatPage() {
                               <LogOut className="h-4 w-4 text-gray-400" /> Leave channel
                             </button>
                           )}
-                          {selectedChannel.type === 'channel' && permissions.can_create_channel && (
+                          {selectedChannel.type === 'channel' && (
                             <button
-                              onClick={handleDeleteChannel}
-                              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-destructive transition-colors hover:bg-destructive-subtle"
+                              onClick={() => { if (permissions.can_create_channel) handleDeleteChannel(); }}
+                              aria-disabled={!permissions.can_create_channel}
+                              title={!permissions.can_create_channel ? 'You do not have permission to delete channels' : undefined}
+                              className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm transition-colors ${
+                                permissions.can_create_channel
+                                  ? 'text-destructive hover:bg-destructive-subtle'
+                                  : 'text-gray-400 cursor-not-allowed opacity-60'
+                              }`}
                             >
                               <Trash2 className="h-4 w-4" /> Delete channel
                             </button>
@@ -1129,10 +1137,16 @@ export default function TeamChatPage() {
                     ? 'No channels yet. Create one to bring your team into the conversation.'
                     : 'Pick a channel or direct message from the left to start the conversation.'}
                 </p>
-                {permissions.can_create_channel && channels.length === 0 && (
+                {channels.length === 0 && (
                   <button
                     onClick={openCreateModal}
-                    className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg"
+                    aria-disabled={!permissions.can_create_channel}
+                    title={!permissions.can_create_channel ? 'You do not have permission to create channels' : undefined}
+                    className={`mt-5 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-all ${
+                      permissions.can_create_channel
+                        ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25 hover:-translate-y-0.5 hover:shadow-lg'
+                        : 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-60'
+                    }`}
                   >
                     <Plus className="h-4 w-4" />
                     Create your first channel
@@ -1195,32 +1209,25 @@ export default function TeamChatPage() {
         )}
 
         {/* Create Channel Modal */}
-        {showCreateModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
-            <div className="max-h-[90dvh] flex flex-col w-full max-w-[95vw] sm:max-w-2xl overflow-hidden rounded-3xl border border-white/40 bg-white shadow-2xl ring-1 ring-black/5">
-              <div className="flex-shrink-0 relative overflow-hidden bg-brand-blue px-5 py-4 text-white">
-                <div className="pointer-events-none absolute -top-10 right-0 h-32 w-32 rounded-full bg-white/10 blur-3xl" />
-                <div className="relative flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15">
-                      <Hash className="h-5 w-5" />
-                    </span>
-                    <div>
-                      <h2 className="text-lg font-semibold">Create channel</h2>
-                      <p className="mt-0.5 text-sm text-white/75">Bring teammates together around a topic.</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setShowCreateModal(false)}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-white transition-colors hover:bg-white/15"
-                    aria-label="Close"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-5">
+        <AppModal
+          open={showCreateModal}
+          onCancel={() => setShowCreateModal(false)}
+          size="md"
+          icon={<Hash />}
+          title="Create channel"
+          subtitle="Bring teammates together around a topic."
+          cancelDisabled={isCreating}
+          bodyClassName="space-y-5"
+          actions={[
+            {
+              label: isCreating ? 'Creating...' : 'Create channel',
+              onClick: handleCreateChannel,
+              disabled: isCreating || !newChannelName.trim(),
+              loading: isCreating,
+              icon: <ArrowUpRight className="h-4 w-4" />,
+            },
+          ]}
+        >
                 <label className="block">
                   <span className="mb-2 block text-sm font-medium text-gray-700">
                     Channel name <span className="text-brand-orange">*</span>
@@ -1328,61 +1335,28 @@ export default function TeamChatPage() {
                     </div>
                   )}
                 </div>
-              </div>
-
-              <div className="flex flex-col gap-2 border-t border-gray-100 px-5 py-4 sm:flex-row sm:justify-end">
-                <button
-                  onClick={handleCreateChannel}
-                  disabled={isCreating || !newChannelName.trim()}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:opacity-70"
-                >
-                  {isCreating ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Creating...
-                    </>
-                  ) : (
-                    <>
-                      <ArrowUpRight className="h-4 w-4" />
-                      Create channel
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        </AppModal>
 
         {/* Add Members Modal */}
-        {showAddMembersModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
-            <div className="max-h-[90dvh] flex flex-col w-full max-w-[95vw] sm:max-w-2xl overflow-hidden rounded-3xl border border-white/40 bg-white shadow-2xl ring-1 ring-black/5">
-              <div className="flex-shrink-0 relative overflow-hidden bg-brand-blue px-5 py-4 text-white">
-                <div className="pointer-events-none absolute -top-10 right-0 h-32 w-32 rounded-full bg-white/10 blur-3xl" />
-                <div className="relative flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15">
-                      <Users className="h-5 w-5" />
-                    </span>
-                    <div>
-                      <h2 className="text-lg font-semibold">Add members</h2>
-                      <p className="mt-0.5 text-sm text-white/75">Invite teammates to this channel.</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setShowAddMembersModal(false);
-                      setSelectedMemberIds([]);
-                    }}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-white transition-colors hover:bg-white/15"
-                    aria-label="Close"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex-1 min-h-0 overflow-y-auto p-5">
+        <AppModal
+          open={showAddMembersModal}
+          onCancel={() => {
+            setShowAddMembersModal(false);
+            setSelectedMemberIds([]);
+          }}
+          size="md"
+          icon={<Users />}
+          title="Add members"
+          subtitle="Invite teammates to this channel."
+          actions={[
+            {
+              label: `Add${selectedMemberIds.length > 0 ? ` (${selectedMemberIds.length})` : ''}`,
+              onClick: handleAddMembers,
+              disabled: selectedMemberIds.length === 0,
+              icon: <Plus className="h-4 w-4" />,
+            },
+          ]}
+        >
                 {availableUsers.filter((user) => !selectedChannel?.members.some((m) => m.user_id === user.id))
                   .length === 0 ? (
                   <div className="rounded-xl border border-dashed border-gray-200 bg-slate-50 px-4 py-10 text-center">
@@ -1425,49 +1399,18 @@ export default function TeamChatPage() {
                       })}
                   </div>
                 )}
-              </div>
-
-              <div className="flex flex-col gap-2 border-t border-gray-100 px-5 py-4 sm:flex-row sm:justify-end">
-                <button
-                  onClick={handleAddMembers}
-                  disabled={selectedMemberIds.length === 0}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:opacity-70"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add {selectedMemberIds.length > 0 ? `(${selectedMemberIds.length})` : ''}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        </AppModal>
 
         {/* New Direct Message Modal */}
-        {showNewDMModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
-            <div className="max-h-[90dvh] flex flex-col w-full max-w-[95vw] sm:max-w-2xl overflow-hidden rounded-3xl border border-white/40 bg-white shadow-2xl ring-1 ring-black/5">
-              <div className="flex-shrink-0 relative overflow-hidden bg-brand-blue px-5 py-4 text-white">
-                <div className="pointer-events-none absolute -top-10 right-0 h-32 w-32 rounded-full bg-white/10 blur-3xl" />
-                <div className="relative flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15">
-                      <MessageCircle className="h-5 w-5" />
-                    </span>
-                    <div>
-                      <h2 className="text-lg font-semibold">New direct message</h2>
-                      <p className="mt-0.5 text-sm text-white/75">Pick a teammate to start a private chat.</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setShowNewDMModal(false)}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-white transition-colors hover:bg-white/15"
-                    aria-label="Close"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex-1 min-h-0 overflow-y-auto p-5">
+        <AppModal
+          open={showNewDMModal}
+          onCancel={() => setShowNewDMModal(false)}
+          size="md"
+          icon={<MessageCircle />}
+          title="New direct message"
+          subtitle="Pick a teammate to start a private chat."
+          cancelDisabled={isCreatingDM}
+        >
                 <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
                   {isLoadingUsers ? (
                     <div className="max-h-80 overflow-y-auto">
@@ -1513,11 +1456,7 @@ export default function TeamChatPage() {
                     </div>
                   )}
                 </div>
-              </div>
-
-            </div>
-          </div>
-        )}
+        </AppModal>
       </div>
       </div>
       </div>

@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { toast } from 'sonner';
 import {
   BarChart3,
   TrendingUp,
@@ -288,22 +287,22 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
           </div>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex flex-col gap-2 min-w-0 lg:flex-row lg:items-center">
             <DateField
               aria-label="Analytics date from"
               value={fromDate}
               max={toDate}
               onChange={(v) => setFromDate(v)}
-              className="min-w-0 flex-1 sm:flex-none sm:w-[150px]"
+              className="w-full lg:w-[150px]"
             />
-            <span className="shrink-0 text-xs font-medium text-gray-400 dark:text-slate-500">to</span>
+            <span className="shrink-0 text-xs font-medium text-gray-400 dark:text-slate-500 self-start lg:self-auto">to</span>
             <DateField
               aria-label="Analytics date to"
               value={toDate}
               min={fromDate}
               max={new Date().toISOString().split('T')[0]}
               onChange={(v) => setToDate(v)}
-              className="min-w-0 flex-1 sm:flex-none sm:w-[150px]"
+              className="w-full lg:w-[150px]"
             />
           </div>
           {teamsUsage?.teams && teamsUsage.teams.length > 0 && (
@@ -311,10 +310,7 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
               variant="primary"
               size="sm"
               onClick={() => {
-                if (!canExport) {
-                  toast.error('You do not have permission to export team analytics');
-                  return;
-                }
+                if (!canExport) return;
                 setShowExportModal(true);
               }}
               aria-disabled={!canExport}
@@ -338,30 +334,30 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
 
       {/* Summary Cards - Unit Consumption — clicking any card drills into the
           charts/tables below (cards → list drill-in, matching /recruitment/job-openings). */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4">
         {([
-          { key: 'RS',        label: 'Resume Scoring',      value: Math.round(totals.RS),        sub: `${actionCounts.RS} actions`,    Icon: FileText,        iconBg: 'bg-brand-blue/10 ring-1 ring-brand-blue/15',     iconColor: 'text-brand-blue',     shadow: 'shadow-brand-blue/5' },
-          { key: 'AS',        label: 'Assessment',          value: totals.AS.toFixed(1),         sub: `${actionCounts.AS} actions`,    Icon: ClipboardCheck,  iconBg: 'bg-brand-teal/10 ring-1 ring-brand-teal/15',     iconColor: 'text-brand-teal',     shadow: 'shadow-brand-teal/5' },
-          { key: 'AIU',       label: 'AI Interview',        value: Math.round(totals.AIU),       sub: `${actionCounts.AIU} actions`,   Icon: Users,           iconBg: 'bg-brand-cyan/10 ring-1 ring-brand-cyan/15',     iconColor: 'text-brand-cyan',     shadow: 'shadow-brand-cyan/5' },
-          { key: 'RU',        label: 'Resume Storage',      value: Math.round(totals.RU),        sub: `${actionCounts.RU} actions`,    Icon: Upload,          iconBg: 'bg-brand-orange/10 ring-1 ring-brand-orange/15', iconColor: 'text-brand-orange-deep', shadow: 'shadow-brand-orange/5' },
-          { key: 'JDS',       label: 'JDs Created',         value: creationCounts.jds,           sub: '',                              Icon: Briefcase,       iconBg: 'bg-brand-blue-2/10 ring-1 ring-brand-blue-2/15', iconColor: 'text-brand-blue-2',   shadow: 'shadow-brand-blue/5' },
-          { key: 'ASSESSED',  label: 'Assessments Created', value: creationCounts.assessments,   sub: '',                              Icon: ClipboardCheck,  iconBg: 'bg-brand-teal/10 ring-1 ring-brand-teal/15',     iconColor: 'text-brand-teal',     shadow: 'shadow-brand-teal/5' },
-          { key: 'TOTAL',     label: 'Total Units Used',    value: totals.total.toFixed(1),      sub: `${actionCounts.total} total actions`, Icon: BarChart3, iconBg: 'bg-brand-blue ring-1 ring-brand-blue/15',        iconColor: 'text-white',          shadow: 'shadow-brand-blue/5' },
-        ] as const).map(({ key, label, value, sub, Icon, iconBg, iconColor, shadow }) => {
+          { key: 'RS',        label: 'Resume Scoring',      value: Math.round(totals.RS),        sub: `${actionCounts.RS} actions`,    Icon: FileText,        iconBg: 'bg-brand-blue/10 ring-1 ring-brand-blue/15',     iconColor: 'text-brand-blue' },
+          { key: 'AS',        label: 'Assessment',          value: totals.AS.toFixed(1),         sub: `${actionCounts.AS} actions`,    Icon: ClipboardCheck,  iconBg: 'bg-brand-blue/10 ring-1 ring-brand-blue/15',     iconColor: 'text-brand-blue' },
+          { key: 'AIU',       label: 'AI Interview',        value: Math.round(totals.AIU),       sub: `${actionCounts.AIU} actions`,   Icon: Users,           iconBg: 'bg-brand-blue/10 ring-1 ring-brand-blue/15',     iconColor: 'text-brand-blue' },
+          { key: 'RU',        label: 'Resume Storage',      value: Math.round(totals.RU),        sub: `${actionCounts.RU} actions`,    Icon: Upload,          iconBg: 'bg-brand-blue/10 ring-1 ring-brand-blue/15',     iconColor: 'text-brand-blue' },
+          { key: 'JDS',       label: 'JDs Created',         value: creationCounts.jds,           sub: '',                              Icon: Briefcase,       iconBg: 'bg-brand-blue/10 ring-1 ring-brand-blue/15',     iconColor: 'text-brand-blue' },
+          { key: 'ASSESSED',  label: 'Assessments Created', value: creationCounts.assessments,   sub: '',                              Icon: ClipboardCheck,  iconBg: 'bg-brand-blue/10 ring-1 ring-brand-blue/15',     iconColor: 'text-brand-blue' },
+          { key: 'TOTAL',     label: 'Total Units Used',    value: totals.total.toFixed(1),      sub: `${actionCounts.total} total actions`, Icon: BarChart3, iconBg: 'bg-brand-blue ring-1 ring-brand-blue/15',        iconColor: 'text-white' },
+        ] as const).map(({ key, label, value, sub, Icon, iconBg, iconColor }) => {
           const isActive = pageView === 'list' && activeCard === key;
           return (
             <button
               key={key}
               type="button"
               onClick={() => openList(key)}
-              className={`text-left rounded-2xl border bg-white dark:bg-slate-900 p-5 shadow-sm ${shadow} ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:shadow-md ${isActive ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60'}`}
+              className={`text-left rounded-xl border bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:shadow-md ${isActive ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60'}`}
             >
               <div className="flex items-center justify-between mb-3">
                 <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${iconBg}`}>
                   <Icon className={`w-5 h-5 ${iconColor}`} />
                 </div>
               </div>
-              <p className="text-2xl font-bold text-gray-900 dark:text-slate-50">{value}</p>
+              <p className="text-2xl font-semibold tracking-tight tabular-nums text-gray-900 dark:text-slate-50">{value}</p>
               <p className="text-sm text-gray-600 dark:text-slate-400">{label}</p>
               {sub && <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">{sub}</p>}
             </button>
@@ -384,9 +380,9 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Team Comparison Bar Chart */}
         {teamComparisonData.length > 0 && (
-          <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-6 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-            <h4 className="text-md font-semibold text-gray-900 dark:text-slate-50 mb-4">Usage by Team</h4>
-            <div className="h-[300px]">
+          <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-6 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+            <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-50 mb-4">Usage by Team</h4>
+            <div className="h-[300px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={teamComparisonData} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--raw-e5e7eb)" />
@@ -418,9 +414,9 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
 
         {/* Unit Distribution Pie Chart */}
         {unitDistributionData.length > 0 && (
-          <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-6 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-            <h4 className="text-md font-semibold text-gray-900 dark:text-slate-50 mb-4">Unit Type Distribution</h4>
-            <div className="h-[300px]">
+          <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-6 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+            <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-50 mb-4">Unit Type Distribution</h4>
+            <div className="h-[300px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
@@ -467,30 +463,30 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
 
       {/* Top Performing Teams */}
       {topTeams.length > 0 && (
-        <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-6 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-          <h4 className="text-md font-semibold text-gray-900 dark:text-slate-50 mb-4">Top Performing Teams</h4>
+        <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-6 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+          <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-50 mb-4">Top Performing Teams</h4>
           <div className="space-y-3">
             {topTeams.map((team, index) => (
               <div
                 key={team.name}
-                className="flex items-center gap-4 rounded-2xl bg-gradient-to-r from-white to-brand-blue/[0.02] p-3 ring-1 ring-gray-100 dark:ring-slate-700/60"
+                className="flex flex-wrap items-center gap-4 rounded-xl bg-gray-50 dark:bg-slate-800/50 p-3 ring-1 ring-gray-100 dark:ring-slate-700/60"
               >
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-brand-blue-2 to-brand-blue text-sm font-bold text-white">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-blue text-sm font-semibold text-white">
                   {index + 1}
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="font-medium text-gray-900 dark:text-slate-50 truncate">{team.name}</p>
                   <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
-                    <span className="text-xs text-blue-600">RS: {Math.round(team.RS)}</span>
+                    <span className="text-xs text-blue-600 dark:text-blue-400">RS: {Math.round(team.RS)}</span>
                     <span className="text-xs text-success">AS: {team.AS.toFixed(1)}</span>
-                    <span className="text-xs text-purple-600">AIU: {Math.round(team.AIU)}</span>
-                    <span className="text-xs text-orange-600">RU: {Math.round(team.RU)}</span>
-                    <span className="text-xs text-indigo-600">JDs: {team.JDs}</span>
-                    <span className="text-xs text-teal-600">AS Created: {team.Assessments}</span>
+                    <span className="text-xs text-purple-600 dark:text-purple-400">AIU: {Math.round(team.AIU)}</span>
+                    <span className="text-xs text-orange-600 dark:text-orange-400">RU: {Math.round(team.RU)}</span>
+                    <span className="text-xs text-indigo-600 dark:text-indigo-400">JDs: {team.JDs}</span>
+                    <span className="text-xs text-teal-600 dark:text-teal-400">AS Created: {team.Assessments}</span>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-lg font-bold text-gray-900 dark:text-slate-50">{team.total.toFixed(1)}</p>
+                  <p className="text-lg font-semibold tracking-tight tabular-nums text-gray-900 dark:text-slate-50">{team.total.toFixed(1)}</p>
                   <p className="text-xs text-gray-500 dark:text-slate-500">total units</p>
                 </div>
               </div>
@@ -501,7 +497,7 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
 
       {/* Empty State */}
       {(!teamsUsage?.teams || teamsUsage.teams.length === 0) && (
-        <div className="rounded-2xl border border-dashed border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 p-8 text-center">
+        <div className="rounded-xl border border-dashed border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 p-8 text-center">
           <BarChart3 className="w-12 h-12 text-gray-400 dark:text-slate-500 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-700 dark:text-slate-300 mb-2">No Usage Data</h3>
           <p className="text-gray-600 dark:text-slate-400">

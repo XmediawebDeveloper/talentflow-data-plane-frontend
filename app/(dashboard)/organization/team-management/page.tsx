@@ -2,6 +2,7 @@
 
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import OrganizationTabs from '@/components/organization/OrganizationTabs';
+import { ScrollableTabs } from '@/components/subscription/ScrollableTabs';
 import {
   Users,
   UserCheck,
@@ -40,6 +41,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { useBreadcrumbOffset } from '@/components/ai-interview/AIInterviewStepIndicator';
 
 const ITEMS_PER_PAGE = 6;
 
@@ -58,6 +60,8 @@ const getErrorDetail = (error: unknown): string | undefined => {
 };
 
 export default function TeamManagementPage() {
+  // Org tab bar pins just below the sticky breadcrumb (measured height).
+  const [orgCrumbRef, orgCrumbHeight] = useBreadcrumbOffset();
   const router = useRouter();
   const { hasPermissionCode } = useAuth();
   const [teams, setTeams] = useState<Team[]>([]);
@@ -279,11 +283,24 @@ export default function TeamManagementPage() {
   const canViewUsageTab = isTenantAdmin || hasPermissionCode('teams:view_reports');
   const canViewAnalyticsTab = isTenantAdmin || hasPermissionCode('teams:view_reports');
 
+  // Inner view tabs — single source of truth so the mobile pill row and the
+  // desktop underline row stay identical (labels, icons, permission gating).
+  type InnerTabKey = 'teams' | 'usage' | 'analytics' | 'history';
+  const innerTabs: { key: InnerTabKey; label: string; icon: typeof Users; enabled: boolean; denyMsg?: string }[] = [
+    { key: 'teams', label: 'Teams', icon: Users, enabled: true },
+    { key: 'usage', label: 'Team Usage', icon: BarChart3, enabled: canViewUsageTab, denyMsg: 'You do not have permission to view team usage' },
+    { key: 'analytics', label: 'Analytics', icon: TrendingUp, enabled: canViewAnalyticsTab, denyMsg: 'You do not have permission to view team analytics' },
+    ...(isTenantAdmin ? [{ key: 'history' as const, label: 'Teams History', icon: History, enabled: true }] : []),
+  ];
+  const selectInnerTab = (t: { key: InnerTabKey; enabled: boolean; denyMsg?: string }) => {
+    // Locked tab: greyed with a hover tooltip; click is a no-op.
+    if (!t.enabled) return;
+    setActiveTab(t.key);
+  };
+
   const handleOpenCreateModal = async () => {
-    if (!canCreateTeams) {
-      toast.error('You do not have permission to create teams');
-      return;
-    }
+    // Locked: the button is greyed with a hover tooltip; click is a no-op.
+    if (!canCreateTeams) return;
 
     await fetchAvailableUsers();
     setShowCreateModal(true);
@@ -432,9 +449,9 @@ export default function TeamManagementPage() {
       <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
         <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
-          <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Teams' }]} />
-          <OrganizationTabs />
-          <div className="w-full -mt-5 rounded-b-xl border border-t-0 border-gray-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 p-4 sm:p-5">
+          <PageBreadcrumb barRef={orgCrumbRef} className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Teams' }]} />
+          <OrganizationTabs stickyTop={orgCrumbHeight} />
+          <div className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 p-4 sm:p-5 lg:-mt-5 lg:rounded-t-none lg:border-t-0">
             <PageHeader
               icon={<Users className="h-5 w-5" />}
               title="Team Management"
@@ -454,14 +471,12 @@ export default function TeamManagementPage() {
                   <Button
                     variant="primary"
                     onClick={() => {
-                      if (!canCreateTeams) {
-                        toast.error('You do not have permission to create teams');
-                        return;
-                      }
+                      if (!canCreateTeams) return;
                       handleOpenCreateModal();
                     }}
                     aria-disabled={!canCreateTeams}
                     title={!canCreateTeams ? 'You do not have permission to create teams' : ''}
+                    className={!canCreateTeams ? 'opacity-60 cursor-not-allowed' : ''}
                     icon={<Plus className="h-4 w-4" />}
                   >
                     Create Team
@@ -471,90 +486,67 @@ export default function TeamManagementPage() {
             />
 
             <div className="mb-6 overflow-hidden rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+              {/* Mobile / tablet (<lg): scrollable pills with an always-visible
+                  scrollbar — matches the current-plan / OrganizationTabs reference. */}
+              <div className="border-b border-gray-200 dark:border-slate-700 bg-gray-50/60 dark:bg-slate-800/40 px-3 py-3 lg:hidden">
+                <ScrollableTabs ariaLabel="Team management views">
+                  {innerTabs.map((t) => {
+                    const Icon = t.icon;
+                    const active = activeTab === t.key;
+                    return (
+                      <button
+                        key={t.key}
+                        role="tab"
+                        aria-selected={active}
+                        aria-disabled={!t.enabled}
+                        title={!t.enabled ? t.denyMsg : ''}
+                        onClick={() => selectInnerTab(t)}
+                        className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
+                          !t.enabled
+                            ? 'cursor-not-allowed border-gray-200 bg-white text-gray-300 opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-600'
+                            : active
+                              ? 'border-brand-blue bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
+                              : 'border-gray-200 bg-white text-gray-600 hover:border-brand-blue/30 hover:text-brand-blue dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400'
+                        }`}
+                      >
+                        <Icon className="h-4 w-4" />
+                        {t.label}
+                      </button>
+                    );
+                  })}
+                </ScrollableTabs>
+              </div>
+
+              {/* Desktop (lg+): underline tabs */}
               <div
                 role="tablist"
                 aria-label="Team management views"
-                className="flex overflow-x-auto scrollbar-hide border-b border-gray-200 dark:border-slate-700 bg-gray-50/60 dark:bg-slate-800/40 px-2 sm:px-3"
+                className="hidden overflow-x-auto scrollbar-hide border-b border-gray-200 dark:border-slate-700 bg-gray-50/60 dark:bg-slate-800/40 px-2 sm:px-3 lg:flex"
               >
-                <button
-                  role="tab"
-                  aria-selected={activeTab === 'teams'}
-                  onClick={() => setActiveTab('teams')}
-                  className={`inline-flex items-center justify-center gap-1.5 whitespace-nowrap border-b-2 px-3.5 py-3 text-sm font-medium transition-all ${
-                    activeTab === 'teams'
-                      ? 'border-brand-blue text-brand-blue'
-                      : 'border-transparent text-gray-600 dark:text-slate-400 hover:text-brand-blue'
-                  }`}
-                >
-                  <Users className="w-4 h-4" />
-                  Teams
-                </button>
-                <span aria-hidden="true" className={`h-5 w-px shrink-0 self-center ${activeTab === 'teams' || activeTab === 'usage' ? 'bg-transparent' : 'bg-gray-200 dark:bg-slate-700'}`} />
-                <button
-                  role="tab"
-                  aria-selected={activeTab === 'usage'}
-                  onClick={() => {
-                    if (!canViewUsageTab) {
-                      toast.error('You do not have permission to view team usage');
-                      return;
-                    }
-                    setActiveTab('usage');
-                  }}
-                  aria-disabled={!canViewUsageTab}
-                  title={!canViewUsageTab ? 'You do not have permission to view team usage' : ''}
-                  className={`inline-flex items-center justify-center gap-1.5 whitespace-nowrap border-b-2 px-3.5 py-3 text-sm font-medium transition-all ${
-                    !canViewUsageTab
-                      ? 'border-transparent text-gray-300 dark:text-slate-600 cursor-not-allowed opacity-60'
-                      : activeTab === 'usage'
-                        ? 'border-brand-blue text-brand-blue'
-                        : 'border-transparent text-gray-600 dark:text-slate-400 hover:text-brand-blue'
-                  }`}
-                >
-                  <BarChart3 className="w-4 h-4" />
-                  Team Usage
-                </button>
-                <span aria-hidden="true" className={`h-5 w-px shrink-0 self-center ${activeTab === 'usage' || activeTab === 'analytics' ? 'bg-transparent' : 'bg-gray-200 dark:bg-slate-700'}`} />
-                <button
-                  role="tab"
-                  aria-selected={activeTab === 'analytics'}
-                  onClick={() => {
-                    if (!canViewAnalyticsTab) {
-                      toast.error('You do not have permission to view team analytics');
-                      return;
-                    }
-                    setActiveTab('analytics');
-                  }}
-                  aria-disabled={!canViewAnalyticsTab}
-                  title={!canViewAnalyticsTab ? 'You do not have permission to view team analytics' : ''}
-                  className={`inline-flex items-center justify-center gap-1.5 whitespace-nowrap border-b-2 px-3.5 py-3 text-sm font-medium transition-all ${
-                    !canViewAnalyticsTab
-                      ? 'border-transparent text-gray-300 dark:text-slate-600 cursor-not-allowed opacity-60'
-                      : activeTab === 'analytics'
-                        ? 'border-brand-blue text-brand-blue'
-                        : 'border-transparent text-gray-600 dark:text-slate-400 hover:text-brand-blue'
-                  }`}
-                >
-                  <TrendingUp className="w-4 h-4" />
-                  Analytics
-                </button>
-                {isTenantAdmin && (
-                  <>
-                  <span aria-hidden="true" className={`h-5 w-px shrink-0 self-center ${activeTab === 'analytics' || activeTab === 'history' ? 'bg-transparent' : 'bg-gray-200 dark:bg-slate-700'}`} />
-                  <button
-                    role="tab"
-                    aria-selected={activeTab === 'history'}
-                    onClick={() => setActiveTab('history')}
-                    className={`inline-flex items-center justify-center gap-1.5 whitespace-nowrap border-b-2 px-3.5 py-3 text-sm font-medium transition-all ${
-                      activeTab === 'history'
-                        ? 'border-brand-blue text-brand-blue'
-                        : 'border-transparent text-gray-600 dark:text-slate-400 hover:text-brand-blue'
-                    }`}
-                  >
-                    <History className="w-4 h-4" />
-                    Teams History
-                  </button>
-                  </>
-                )}
+                {innerTabs.map((t) => {
+                  const Icon = t.icon;
+                  const active = activeTab === t.key;
+                  return (
+                    <button
+                      key={t.key}
+                      role="tab"
+                      aria-selected={active}
+                      aria-disabled={!t.enabled}
+                      title={!t.enabled ? t.denyMsg : ''}
+                      onClick={() => selectInnerTab(t)}
+                      className={`inline-flex items-center justify-center gap-1.5 whitespace-nowrap border-b-2 px-3.5 py-3 text-sm font-medium transition-all ${
+                        !t.enabled
+                          ? 'cursor-not-allowed border-transparent text-gray-300 opacity-60 dark:text-slate-600'
+                          : active
+                            ? 'border-brand-blue text-brand-blue'
+                            : 'border-transparent text-gray-600 hover:text-brand-blue dark:text-slate-400'
+                      }`}
+                    >
+                      <Icon className="h-4 w-4" />
+                      {t.label}
+                    </button>
+                  );
+                })}
               </div>
 
               <div className="p-4 sm:p-5">
@@ -686,11 +678,11 @@ export default function TeamManagementPage() {
 
                 {/* Team Members view — flat list of every assigned member across all teams. */}
                 {listView === 'members' && (
-                  <section className="overflow-hidden rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm shadow-brand-cyan/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+                  <section className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
                     {flattenedMembers.length === 0 ? (
                       <div className="px-6 py-16 text-center">
-                        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15">
-                          <UserCheck className="h-6 w-6 text-brand-cyan" />
+                        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
+                          <UserCheck className="h-6 w-6 text-brand-blue" />
                         </div>
                         <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">No members found</h3>
                         <p className="mt-1 text-sm text-gray-500 dark:text-slate-500">Try a different search query or assign users to a team.</p>
@@ -708,7 +700,7 @@ export default function TeamManagementPage() {
                           </thead>
                           <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                             {flattenedMembers.map((row) => (
-                              <tr key={row.id} className="transition-colors hover:bg-brand-cyan/[0.04]">
+                              <tr key={row.id} className="transition-colors hover:bg-brand-blue/[0.04]">
                                 <td className="px-6 py-4">
                                   <div className="flex items-center gap-3">
                                     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 text-sm font-semibold text-brand-blue">
@@ -834,7 +826,8 @@ export default function TeamManagementPage() {
           }
           availableUsers={availableUsers.filter((user) => !teams.filter((team) => team.id !== selectedTeam?.id).some((team) => team.members?.some((member) => member.id === user.id)))}
           isSubmitting={isUpdating}
-          onDelete={canDeleteTeams ? handleOpenDeleteDialog : undefined}
+          onDelete={handleOpenDeleteDialog}
+          canDelete={canDeleteTeams}
           isDeleting={isDeleting}
         />
 

@@ -38,6 +38,9 @@ interface JDEditBlockedModalProps {
    *  would fail on the backend anyway, so it is disabled here and the reason
    *  shown up front, rather than letting the click round-trip to an error. */
   atMaxVersions?: boolean;
+  /** RBAC: both "Create New JD" and "Create New Version" create a JD, so
+   *  without Create JD permission they are greyed (tooltip only, no-op). */
+  canCreate?: boolean;
   /** Swap the header's Close (X) icon for a Cancel button in the footer.
    *  Both just call `onClose` — nothing is saved either way. */
   cancelInFooter?: boolean;
@@ -63,6 +66,7 @@ export default function JDEditBlockedModal({
   jdId,
   onOpenJobTab,
   atMaxVersions = false,
+  canCreate = true,
   cancelInFooter = false,
 }: JDEditBlockedModalProps) {
   const router = useRouter();
@@ -283,16 +287,21 @@ export default function JDEditBlockedModal({
           )}
           <Button
             variant="secondary"
-            onClick={handleCreateNewJD}
+            onClick={() => { if (canCreate) handleCreateNewJD(); }}
             disabled={creating}
+            aria-disabled={!canCreate || undefined}
+            title={!canCreate ? 'You do not have permission to create job descriptions' : undefined}
+            className={!canCreate ? 'text-gray-400 cursor-not-allowed opacity-60' : undefined}
           >
             Create New JD
           </Button>
           <Button
             variant="primary"
-            onClick={onCreateNewVersion}
+            onClick={() => { if (canCreate) onCreateNewVersion(); }}
             disabled={creating || atMaxVersions}
-            title={atMaxVersions ? 'This JD has reached the maximum of 5 versions' : undefined}
+            aria-disabled={!canCreate || undefined}
+            title={!canCreate ? 'You do not have permission to create job descriptions' : atMaxVersions ? 'This JD has reached the maximum of 5 versions' : undefined}
+            className={!canCreate ? 'cursor-not-allowed opacity-60 grayscale' : undefined}
           >
             {creating ? (
               <>

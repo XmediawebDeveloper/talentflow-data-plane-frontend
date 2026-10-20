@@ -15,6 +15,7 @@ import type {
   Folder as ApiFolder,
 } from '@/lib/services/resumeService';
 import type { Resume, Folder as FolderType } from '@/lib/types/types';
+import { formatCandidateExperience } from '@/lib/utils/resumeExperience';
 
 /**
  * One API resume in the shape `ResumeTable`'s columns read.
@@ -30,7 +31,7 @@ export const convertApiResumeToRow = (r: ApiResume): Resume => ({
   email: r.email || 'No email',
   phone: r.phone || 'No phone',
   title: r.current_title || 'N/A',
-  experience: r.experience_years ? `${r.experience_years} years` : 'N/A',
+  experience: formatCandidateExperience(r.experience_months, r.experience_years) || 'N/A',
   education: (r.education as any)?.[0]?.degree || 'N/A',
   location: r.location || 'N/A',
   skills: r.skills || [],

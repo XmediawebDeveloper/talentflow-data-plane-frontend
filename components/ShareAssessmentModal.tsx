@@ -4,7 +4,7 @@ import { useFolderPanelCollapsed, folderColumnClasses, FolderCollapseButton, Fol
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { assessmentService } from '@/lib/services';
+import { assessmentService, userService } from '@/lib/services';
 import api from '@/lib/services/api';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
 import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
@@ -68,6 +68,10 @@ interface ShareAssessmentModalProps {
   prefilledCandidates?: CandidateEmail[]; // Optional pre-filled candidates from resume selection
   inviteSource?: string; // Source context: "Resume Scoring", "JD", "Assessment", "Internal DB", "Manual"
   onInviteSent?: (count: number) => void;
+  /** Fired the moment an invitation exists server-side (Send or Copy Link),
+   *  without waiting for the success popup — so a tracker behind the modal can
+   *  refresh at once. Distinct from onInviteSent, which is held back 2s. */
+  onInvitesChanged?: () => void;
   additionalAssessments?: Array<{
     id: string;
     title: string;
@@ -128,6 +132,17 @@ const isDuplicateInviteError = (error: unknown): boolean => {
     message.includes('DUPLICATE_INVITATION');
 };
 
+/* The email a refused invite named when it belongs to a team member (backend
+   TENANT_USER_EMAIL, "Cannot invite 'x@y.com' — ... existing team member").
+   The service wraps API errors in a plain Error, so the message is read too. */
+const teamMemberEmailFromError = (error: unknown): string | null => {
+  const e = error as { response?: { data?: { detail?: { error?: string; message?: string } } }; message?: string } | null;
+  const detail = e?.response?.data?.detail;
+  const message = detail?.message || e?.message || '';
+  if (detail?.error !== 'TENANT_USER_EMAIL' && !message.includes('existing team member')) return null;
+  return /'([^']+)'/.exec(message)?.[1]?.trim().toLowerCase() ?? null;
+};
+
 interface Resume {
   id: string;
   name: string;
@@ -147,7 +162,7 @@ type SidebarFolder = { id: string; name: string; parentId?: string | null; count
 const withEntryRow = (list: CandidateEmail[]): CandidateEmail[] =>
   list.some((c) => c.source !== 'database') ? list : [...list, { id: 'manual-entry', name: '', email: '', source: 'manual' }];
 
-export default function ShareAssessmentModal({ isOpen, onClose, assessment, prefilledCandidates, inviteSource, onInviteSent, additionalAssessments, onBack, embedded = false, footerTarget = null }: ShareAssessmentModalProps) {
+export default function ShareAssessmentModal({ isOpen, onClose, assessment, prefilledCandidates, inviteSource, onInviteSent, onInvitesChanged, additionalAssessments, onBack, embedded = false, footerTarget = null }: ShareAssessmentModalProps) {
   const router = useRouter();
   const { user } = useAuth();
   const { quotaData } = useQuota();
@@ -862,6 +877,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
           : c
       ));
 
+      onInvitesChanged?.();
       await navigator.clipboard.writeText(result.link);
       toast.success(`Link copied for ${candidate.name}! Expires in ${expiryDays} day${expiryDays !== 1 ? 's' : ''}. Share via WhatsApp, SMS, or send via email.`);
     } catch (err: any) {
@@ -883,9 +899,47 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
     }
   };
 
+  /* Every team-member email, read before a send so one can be stopped here
+     instead of failing the whole batch. Best effort: if the list cannot be
+     read this is empty and the backend's own check (which stays) decides. */
+  const loadTeamEmails = async (): Promise<Set<string>> => {
+    const emails = new Set<string>();
+    try {
+      for (let page = 1; page <= 20; page++) {
+        const rows = await userService.listUsers({ page, page_size: 100 });
+        rows.forEach((u) => { if (u.email) emails.add(u.email.trim().toLowerCase()); });
+        if (rows.length < 100) break;
+      }
+    } catch { /* backend check still applies */ }
+    return emails;
+  };
+
+  /* Drop these emails from the candidate list AND the ticked resumes, so the
+     send list, the footer count and the next send no longer carry them. */
+  const removeBlockedEmails = (blocked: Set<string>) => {
+    const isBlocked = (email: string) => blocked.has(email.trim().toLowerCase());
+    setCandidates((prev) => {
+      const kept = prev.filter((c) => !isBlocked(c.email));
+      return kept.length > 0 ? kept : [{ id: '1', name: '', email: '', source: 'manual' }];
+    });
+    setPicks((prev) => Object.fromEntries(Object.entries(prev).filter(([, p]) => !isBlocked(p.email))));
+  };
+
   const handleSend = async () => {
     setIsSubmitting(true);
     try {
+      // Stop team-member emails before anything is sent or committed to the
+      // list; the rest stay, and the footer count follows the cleaned list.
+      const teamEmails = await loadTeamEmails();
+      const teamRows = sendCandidates.filter((c) => c.email.trim() && teamEmails.has(c.email.trim().toLowerCase()));
+      if (teamRows.length > 0) {
+        removeBlockedEmails(new Set(teamRows.map((c) => c.email.trim().toLowerCase())));
+        toast.error(
+          `Cannot invite ${teamRows.map((c) => `'${c.email.trim()}'`).join(', ')} — ${teamRows.length > 1 ? 'these emails belong' : 'this email belongs'} to an existing team member. Assessment invitations are for external candidates only. ${teamRows.length > 1 ? 'They were' : 'It was'} removed from the list.`,
+        );
+        setIsSubmitting(false);
+        return;
+      }
       // Fold the ticked resumes into the list so it matches what was sent.
       if (pendingDbSelection) {
         setCandidates(sendCandidates);
@@ -956,6 +1010,14 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
             toast.loading(`Sent ${sentSoFar}/${totalInvites} invitations...`, { id: 'bulk-invite-multi' });
           } catch (error: any) {
             console.error(`Failed to send invitations for assessment ${assessmentToInvite.title}:`, error);
+            const teamEmail = teamMemberEmailFromError(error);
+            if (teamEmail) {
+              removeBlockedEmails(new Set([teamEmail]));
+              toast.dismiss('bulk-invite-multi');
+              toast.error(`Cannot invite '${teamEmail}' — this email belongs to an existing team member. Assessment invitations are for external candidates only. It was removed from the list.`);
+              setIsSubmitting(false);
+              return;
+            }
             failedCount += validCandidates.length;
           }
         }
@@ -985,6 +1047,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
 
         setSentCount(sentSoFar);
         setShowSuccess(true);
+        onInvitesChanged?.();
         // As in the AI Interview modal: the host is told AFTER the success popup
         // has had its moment, so a refresh it kicks off cannot disturb the popup.
         setTimeout(() => {
@@ -1068,6 +1131,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
 
       setSentCount(successCount);
       setShowSuccess(true);
+      onInvitesChanged?.();
       setTimeout(() => {
         setShowSuccess(false);
         onInviteSent?.(successCount);
@@ -1087,6 +1151,15 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                       'this candidate';
         setDuplicateEmail(email);
         setShowDuplicateError(true);
+        return;
+      }
+
+      // The backend refused a team-member email the pre-check could not see:
+      // take it off the list so the retry does not carry it again.
+      const teamEmail = teamMemberEmailFromError(error);
+      if (teamEmail) {
+        removeBlockedEmails(new Set([teamEmail]));
+        toast.error(`Cannot invite '${teamEmail}' — this email belongs to an existing team member. Assessment invitations are for external candidates only. It was removed from the list.`);
         return;
       }
 
@@ -1759,12 +1832,20 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
               <div className="border-2 border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden">
                 {/* Tabs */}
                 <div className="flex border-b border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 overflow-x-auto">
-                  {hasMyResumesAccess && (
+                  {/* RBAC: both source tabs are always listed; one the user
+                      cannot open is greyed with a tooltip (never hidden). */}
+                  {(() => {
+                    const myResumesLocked = !hasMyResumesAccess;
+                    return (
                     <button
                       type="button"
-                      onClick={() => setDbTab('my-resumes')}
+                      onClick={() => { if (!myResumesLocked) setDbTab('my-resumes'); }}
+                      aria-disabled={myResumesLocked}
+                      title={myResumesLocked ? 'You do not have permission to access My Resumes' : undefined}
                       className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${
-                        dbTab === 'my-resumes'
+                        myResumesLocked
+                          ? 'border-transparent text-gray-400 cursor-not-allowed opacity-60'
+                          : dbTab === 'my-resumes'
                           ? 'border-gray-800 text-gray-900 dark:text-slate-50 bg-white dark:bg-slate-900'
                           : 'border-transparent text-gray-500 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-300'
                       }`}
@@ -1776,13 +1857,22 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                         <span title="Selected from My Resumes" className="px-1.5 py-0.5 rounded-full text-xs font-semibold bg-brand-blue text-white tabular-nums">✓ {pickedBySource.myResumes}</span>
                       )}
                     </button>
-                  )}
-                  {(hasInternalDBAccess || (!hasMyResumesAccess && !hasInternalDBAccess)) && (
+                    );
+                  })()}
+                  {(() => {
+                    // Same rule as before: Shared Database opens with its own
+                    // access, or as the fallback when neither source is granted.
+                    const sharedDbLocked = !(hasInternalDBAccess || (!hasMyResumesAccess && !hasInternalDBAccess));
+                    return (
                     <button
                       type="button"
-                      onClick={() => setDbTab('internal-db')}
+                      onClick={() => { if (!sharedDbLocked) setDbTab('internal-db'); }}
+                      aria-disabled={sharedDbLocked}
+                      title={sharedDbLocked ? 'You do not have permission to access the Shared Database' : undefined}
                       className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${
-                        dbTab === 'internal-db'
+                        sharedDbLocked
+                          ? 'border-transparent text-gray-400 cursor-not-allowed opacity-60'
+                          : dbTab === 'internal-db'
                           ? 'border-gray-800 text-gray-900 dark:text-slate-50 bg-white dark:bg-slate-900'
                           : 'border-transparent text-gray-500 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-300'
                       }`}
@@ -1794,7 +1884,8 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                         <span title="Selected from Shared Database" className="px-1.5 py-0.5 rounded-full text-xs font-semibold bg-brand-blue text-white tabular-nums">✓ {pickedBySource.sharedDb}</span>
                       )}
                     </button>
-                  )}
+                    );
+                  })()}
                 </div>
 
                 {/* Content: folder sidebar + resume list */}

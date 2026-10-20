@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Clock, Calendar, User, BarChart3, CheckSquare, CheckCircle, XCircle, Briefcase, Award, Target, GraduationCap, MapPin, Building2, MessageSquare, TrendingUp, Info, Copy, Check, ChevronsUpDown, ChevronsDownUp } from 'lucide-react';
+import { Clock, Calendar, User, BarChart3, CheckSquare, CheckCircle, XCircle, Briefcase, Award, Target, GraduationCap, MapPin, Building2, MessageSquare, TrendingUp, Info, Copy, Check, ChevronsUpDown, ChevronsDownUp, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { Tooltip } from '@/components/ui/tooltip';
@@ -97,9 +97,13 @@ interface DetailedScorecardTabProps {
   getScoreColor: (score: number) => string;
   getScoreBgColor: (score: number) => string;
   getProgressBarColor: (score: number) => string;
+  /** Each criterion row opens and closes on its own (a ⌄ on the row), with
+   *  the header's Expand all / Collapse all over every row. Off by default:
+   *  the header alone switches the whole column. */
+  rowExpand?: boolean;
 }
 
-export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, getScoreColor, getScoreBgColor, getProgressBarColor }: DetailedScorecardTabProps) {
+export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, getScoreColor, getScoreBgColor, getProgressBarColor, rowExpand = false }: DetailedScorecardTabProps) {
   // The AI Reasoning pill's full-text hover box. Rendered through a portal
   // (see the end of this component) and positioned from real viewport
   // coordinates rather than CSS `absolute`/`group-hover` — the pill sits
@@ -157,11 +161,29 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
   // box still open when the column expands is dropped — the text it would
   // show is already on the page.
   const [reasoningExpanded, setReasoningExpanded] = useState(false);
+  /* `rowExpand`: the rows open, by index. Expand all opens every row,
+     Collapse all closes them. */
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   const toggleReasoningExpanded = () => {
     cancelHideReasoningTooltip();
     setReasoningTooltip(null);
+    if (rowExpand) {
+      setExpandedRows(allReasoningOpen ? new Set() : new Set(criteriaScores.map((_, i) => i)));
+      return;
+    }
     setReasoningExpanded(current => !current);
   };
+  const toggleRowExpanded = (index: number) => {
+    cancelHideReasoningTooltip();
+    setReasoningTooltip(null);
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  };
+  const isRowOpen = (index: number) => (rowExpand ? expandedRows.has(index) : reasoningExpanded);
 
   // Briefly swaps the copy icon for a checkmark on the row just copied —
   // cleared after a beat rather than left to the next click, so it always
@@ -605,6 +627,11 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
     return 'text-destructive font-semibold';
   };
 
+  /* The header's Expand all / Collapse all: in `rowExpand`, every row open. */
+  const allReasoningOpen = rowExpand
+    ? criteriaScores.length > 0 && criteriaScores.every((_, i) => expandedRows.has(i))
+    : reasoningExpanded;
+
   return (
     <div className="space-y-4">
       {/* Score Summary Header - Compact */}
@@ -714,7 +741,72 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
               complete. It grows to its content instead: the page is the only
               vertical scroller and every criterion is visible at once.
               globals.css calls the shell opt-in for exactly this reason. */}
-          <div className="overflow-x-auto">
+          {/* Mobile (below md): the 6-column table collapses to one letter per
+              line at phone widths, so render a stacked card per criterion
+              instead — every field label:value, reasoning in full. The table
+              below is shown from md up, where the columns have room. */}
+          <div className="md:hidden divide-y divide-gray-200">
+            {criteriaScores.map((criteria, index) => {
+              const Icon = criteria.icon;
+              const eligibility = getEligibleStatus(criteria.rating);
+              return (
+                <div key={index} className="p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Icon className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                      <span className="text-sm font-semibold text-gray-900 break-words">{criteria.name}</span>
+                    </div>
+                    <span className={`inline-flex items-center justify-center w-10 h-10 rounded-lg font-bold border flex-shrink-0 ${getRatingBgColor(criteria.rating)}`}>
+                      {criteria.rating}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                    <div>
+                      <div className="text-2xs font-semibold uppercase tracking-wider text-gray-500 mb-0.5">Range</div>
+                      <span className={`text-sm ${getRatingRangeColor(criteria.rating)}`}>{getRatingRange(criteria.rating)}</span>
+                    </div>
+                    <div>
+                      <div className="text-2xs font-semibold uppercase tracking-wider text-gray-500 mb-0.5">Eligible Status</div>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        {eligibility.icon}
+                        <span className={`text-sm font-medium ${eligibility.color}`}>{eligibility.status}</span>
+                      </div>
+                    </div>
+                    <div className="col-span-2">
+                      <div className="text-2xs font-semibold uppercase tracking-wider text-gray-500 mb-0.5">Criteria</div>
+                      <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
+                        criteria.criteriaType === 'Required'
+                          ? 'bg-destructive-subtle text-destructive border border-destructive-line'
+                          : 'bg-gray-100 text-gray-900 border border-gray-300'
+                      }`}>
+                        {criteria.criteriaType}
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <div className="text-2xs font-semibold uppercase tracking-wider text-gray-500">AI Reasoning</div>
+                      <button
+                        type="button"
+                        onClick={() => copyReasoning(index, criteria.aiReasoning)}
+                        className="p-1 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors flex-shrink-0"
+                        aria-label="Copy AI reasoning"
+                        title="Copy full text"
+                      >
+                        {copiedReasoningIndex === index
+                          ? <Check className="w-3.5 h-3.5 text-success" />
+                          : <Copy className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                    <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line break-words">
+                      {criteria.aiReasoning}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="overflow-x-auto hidden md:block">
             <table className="w-full table-fixed">
               <thead className="bg-brand-sky dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
                 <tr>
@@ -733,7 +825,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
                   <th className="w-[12%] px-3 py-2.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
                     Criteria
                   </th>
-                  <th className="w-[32%] px-3 py-2.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                  <th className={`${rowExpand ? 'w-[27%]' : 'w-[32%]'} px-3 py-2.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider`}>
                     {/* The toggle sits right after the label, not pushed to the
                         column's far edge, so it reads as part of this header. */}
                     <div className="flex items-center gap-2">
@@ -742,25 +834,29 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
                         <button
                           type="button"
                           onClick={toggleReasoningExpanded}
-                          aria-pressed={reasoningExpanded}
-                          aria-label={reasoningExpanded ? 'Collapse all AI reasoning' : 'Expand all AI reasoning'}
-                          title={reasoningExpanded ? 'Collapse all reasoning' : 'Expand all reasoning'}
+                          aria-pressed={allReasoningOpen}
+                          aria-label={allReasoningOpen ? 'Collapse all AI reasoning' : 'Expand all AI reasoning'}
+                          title={allReasoningOpen ? 'Collapse all reasoning' : 'Expand all reasoning'}
                           className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium normal-case tracking-normal text-brand-blue hover:bg-brand-blue/10 transition-colors cursor-pointer"
                         >
-                          {reasoningExpanded
+                          {allReasoningOpen
                             ? <ChevronsDownUp className="w-3.5 h-3.5" />
                             : <ChevronsUpDown className="w-3.5 h-3.5" />}
-                          {reasoningExpanded ? 'Collapse all' : 'Expand all'}
+                          {allReasoningOpen ? 'Collapse all' : 'Expand all'}
                         </button>
                       )}
                     </div>
                   </th>
+                  {rowExpand && (
+                    <th className="w-[5%] px-3 py-2.5" aria-label="Show reasoning" />
+                  )}
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {criteriaScores.map((criteria, index) => {
                   const Icon = criteria.icon;
                   const eligibility = getEligibleStatus(criteria.rating);
+                  const rowOpen = isRowOpen(index);
                   return (
                     <tr key={index} className="hover:bg-gray-50">
                       <td className="px-3 py-3">
@@ -797,8 +893,8 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
                         </span>
                       </td>
                       <td className="px-3 py-3">
-                        <div className={`flex gap-1.5 ${reasoningExpanded ? 'items-start' : 'items-center'}`}>
-                          {reasoningExpanded ? (
+                        <div className={`flex gap-1.5 ${rowOpen ? 'items-start' : 'items-center'}`}>
+                          {rowOpen ? (
                             <p className="flex-1 min-w-0 text-sm text-gray-700 leading-relaxed whitespace-pre-line break-words">
                               {criteria.aiReasoning}
                             </p>
@@ -806,10 +902,12 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
                             <span
                               onMouseEnter={(e) => showReasoningTooltip(e, criteria.aiReasoning)}
                               onMouseLeave={hideReasoningTooltip}
-                              className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 border border-gray-300 whitespace-nowrap cursor-default"
+                              /* Fills the column (copy button after it) and cuts the
+                                 full reasoning off with an ellipsis where the cell
+                                 ends, instead of a fixed first-four-words stub. */
+                              className="flex-1 min-w-0 block truncate px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 border border-gray-300 cursor-default"
                             >
-                              {criteria.aiReasoning.split(' ').slice(0, 4).join(' ')}
-                              {criteria.aiReasoning.split(' ').length > 4 ? '…' : ''}
+                              {criteria.aiReasoning}
                             </span>
                           )}
                           <button
@@ -825,6 +923,23 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
                           </button>
                         </div>
                       </td>
+                      {/* ⌄ — this row's full reasoning, open / closed. */}
+                      {rowExpand && (
+                        <td className="px-3 py-3 text-center">
+                          <button
+                            type="button"
+                            onClick={() => toggleRowExpanded(index)}
+                            aria-expanded={rowOpen}
+                            aria-label={rowOpen ? `Hide ${criteria.name} reasoning` : `Show ${criteria.name} reasoning`}
+                            title={rowOpen ? 'Hide reasoning' : 'Show reasoning'}
+                            className={`inline-flex items-center justify-center p-1.5 rounded-md transition-colors ${
+                              rowOpen ? 'bg-brand-blue/10 text-brand-blue' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
+                            }`}
+                          >
+                            <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${rowOpen ? 'rotate-180' : ''}`} />
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
@@ -834,35 +949,70 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
         </div>
       )}
 
-      {/* Summary Stats - Only show if real API data exists */}
-      {criteriaScores.length > 0 && (
-        <div className="grid grid-cols-4 gap-4">
-          <div className="bg-success-subtle border border-success-line rounded-lg p-4">
-            <div className="text-2xl font-bold text-success">
-              {criteriaScores.filter(c => c.rating >= RATING_PASS_THRESHOLD).length}
-            </div>
-            <div className="text-sm font-medium text-gray-800 mt-1">Eligible Criteria</div>
+      {/* Summary Stats - Only show if real API data exists.
+          One white card per count: a tinted icon tile, the label, the count
+          out of every criterion, and a bar showing that share. */}
+      {criteriaScores.length > 0 && (() => {
+        const total = criteriaScores.length;
+        const stats = [
+          {
+            label: 'Eligible Criteria',
+            count: criteriaScores.filter(c => c.rating >= RATING_PASS_THRESHOLD).length,
+            icon: CheckCircle,
+            tile: 'bg-success-subtle text-success',
+            value: 'text-success',
+            bar: 'bg-success',
+          },
+          {
+            label: 'Not Eligible Criteria',
+            count: criteriaScores.filter(c => c.rating < RATING_PASS_THRESHOLD).length,
+            icon: XCircle,
+            tile: 'bg-destructive-subtle text-destructive',
+            value: 'text-destructive',
+            bar: 'bg-destructive',
+          },
+          {
+            label: 'Required Criteria',
+            count: criteriaScores.filter(c => c.criteriaType === 'Required').length,
+            icon: Target,
+            tile: 'bg-brand-blue/10 text-brand-blue',
+            value: 'text-gray-900',
+            bar: 'bg-brand-blue',
+          },
+          {
+            label: 'Preferred Criteria',
+            count: criteriaScores.filter(c => c.criteriaType === 'Preferred').length,
+            icon: Award,
+            tile: 'bg-gray-100 text-gray-600',
+            value: 'text-gray-900',
+            bar: 'bg-gray-400',
+          },
+        ];
+        return (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            {stats.map(({ label, count, icon: Icon, tile, value, bar }) => (
+              <div
+                key={label}
+                className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm shadow-brand-blue/5 flex flex-col gap-3"
+              >
+                <div className="flex items-center gap-3">
+                  <span className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${tile}`}>
+                    <Icon className="w-[18px] h-[18px]" />
+                  </span>
+                  <span className="text-sm font-medium text-gray-700 leading-tight">{label}</span>
+                </div>
+                <div className="flex items-baseline gap-1.5">
+                  <span className={`text-2xl font-bold leading-none ${value}`}>{count}</span>
+                  <span className="text-xs text-gray-500">of {total}</span>
+                </div>
+                <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden" aria-hidden="true">
+                  <div className={`h-full rounded-full ${bar}`} style={{ width: `${total ? (count / total) * 100 : 0}%` }} />
+                </div>
+              </div>
+            ))}
           </div>
-          <div className="bg-destructive-subtle border border-destructive-line rounded-lg p-4">
-            <div className="text-2xl font-bold text-destructive">
-              {criteriaScores.filter(c => c.rating < RATING_PASS_THRESHOLD).length}
-            </div>
-            <div className="text-sm font-medium text-gray-800 mt-1">Not Eligible Criteria</div>
-          </div>
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-            <div className="text-2xl font-bold text-gray-900">
-              {criteriaScores.filter(c => c.criteriaType === 'Required').length}
-            </div>
-            <div className="text-sm font-medium text-gray-800 mt-1">Required Criteria</div>
-          </div>
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-            <div className="text-2xl font-bold text-gray-900">
-              {criteriaScores.filter(c => c.criteriaType === 'Preferred').length}
-            </div>
-            <div className="text-sm font-medium text-gray-800 mt-1">Preferred Criteria</div>
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* AI Reasoning pill's full-text hover box — see reasoningTooltip
           above for why this is a portal instead of a CSS-positioned child. */}

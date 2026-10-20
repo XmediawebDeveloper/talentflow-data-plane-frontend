@@ -28,7 +28,34 @@ export interface FaceIdentityWorker {
   ready: Promise<boolean>;
   /** Grab a frame from the video and compute its descriptor off-thread. */
   describe: (video: HTMLVideoElement, targetWidth?: number) => Promise<{ descriptor: Float32Array | null; workerMs: number; grabMs: number } | null>;
+  /**
+   * Like describe(), for a video OR an image, with the detection score and box
+   * (in source pixels) — what the interview's frame-quality gate needs.
+   * null = busy / not grabbable / timed out; found=false = ran, no face.
+   */
+  detect: (source: HTMLVideoElement | HTMLImageElement, opts?: FaceDetectOptions) => Promise<FaceDetectResult | null>;
   terminate: () => void;
+}
+
+export interface FaceDetectOptions {
+  /** Downscale the grabbed frame to at most this width (default 320). */
+  targetWidth?: number;
+  /** TinyFaceDetector input size (default: the worker's inputSize). */
+  inputSize?: number;
+  /** TinyFaceDetector score threshold (default 0.5). */
+  scoreThreshold?: number;
+}
+
+export interface FaceDetectResult {
+  found: boolean;
+  descriptor: Float32Array | null;
+  score: number | null;
+  /** Face box scaled back to the source's own pixel size. */
+  box: { x: number; y: number; width: number; height: number } | null;
+  sourceWidth: number;
+  sourceHeight: number;
+  workerMs: number;
+  grabMs: number;
 }
 
 const WORKER_SOURCE = String.raw`
@@ -87,12 +114,16 @@ self.onmessage = async (e) => {
     try {
       const pixels = { data: new Uint8Array(msg.data), width: msg.width, height: msg.height };
       tensor = faceapi.tf.browser.fromPixels(pixels, 3);
+      const scoreThreshold = typeof msg.scoreThreshold === 'number' ? msg.scoreThreshold : 0.5;
       const det = await faceapi
-        .detectSingleFace(tensor, new faceapi.TinyFaceDetectorOptions({ inputSize: msg.inputSize || 224, scoreThreshold: 0.5 }))
+        .detectSingleFace(tensor, new faceapi.TinyFaceDetectorOptions({ inputSize: msg.inputSize || 224, scoreThreshold }))
         .withFaceLandmarks()
         .withFaceDescriptor();
       const descriptor = det && det.descriptor ? det.descriptor : null;
-      self.postMessage({ type: 'descriptor', id: msg.id, descriptor, ms: Date.now() - t0 }, descriptor ? [descriptor.buffer] : []);
+      const d = det && det.detection;
+      const box = d && d.box ? { x: d.box.x, y: d.box.y, width: d.box.width, height: d.box.height } : null;
+      const score = d && typeof d.score === 'number' ? d.score : null;
+      self.postMessage({ type: 'descriptor', id: msg.id, descriptor, score, box, ms: Date.now() - t0 }, descriptor ? [descriptor.buffer] : []);
     } catch (err) {
       self.postMessage({ type: 'descriptor', id: msg.id, descriptor: null, error: String(err && err.message || err), ms: Date.now() - t0 });
     } finally {
@@ -161,12 +192,17 @@ export function createFaceIdentityWorker(options: {
     }
   });
 
-  const describe = async (video: HTMLVideoElement, targetWidth = 320) => {
+  const detect = async (
+    source: HTMLVideoElement | HTMLImageElement,
+    opts: FaceDetectOptions = {},
+  ): Promise<FaceDetectResult | null> => {
     if (!worker || busy) return null;
-    const vw = video.videoWidth, vh = video.videoHeight;
+    const isVideo = typeof HTMLVideoElement !== 'undefined' && source instanceof HTMLVideoElement;
+    const vw = isVideo ? (source as HTMLVideoElement).videoWidth : (source as HTMLImageElement).naturalWidth;
+    const vh = isVideo ? (source as HTMLVideoElement).videoHeight : (source as HTMLImageElement).naturalHeight;
     if (!vw || !vh) return null;
     const t0 = performance.now();
-    const scale = Math.min(1, targetWidth / vw);
+    const scale = Math.min(1, (opts.targetWidth ?? 320) / vw);
     const w = Math.max(1, Math.round(vw * scale)), h = Math.max(1, Math.round(vh * scale));
     if (!grabCanvas) grabCanvas = document.createElement('canvas');
     if (grabCanvas.width !== w || grabCanvas.height !== h) { grabCanvas.width = w; grabCanvas.height = h; }
@@ -174,7 +210,7 @@ export function createFaceIdentityWorker(options: {
     if (!ctx) return null;
     let imageData: ImageData;
     try {
-      ctx.drawImage(video, 0, 0, w, h);
+      ctx.drawImage(source, 0, 0, w, h);
       imageData = ctx.getImageData(0, 0, w, h);
     } catch {
       return null;
@@ -190,15 +226,42 @@ export function createFaceIdentityWorker(options: {
         resolve(null);
       }, requestTimeoutMs);
       pending.set(id, { resolve, timer });
-      worker!.postMessage({ type: 'describe', id, data: buffer, width: w, height: h, inputSize }, [buffer]);
+      worker!.postMessage({
+        type: 'describe', id, data: buffer, width: w, height: h,
+        inputSize: opts.inputSize ?? inputSize,
+        scoreThreshold: opts.scoreThreshold,
+      }, [buffer]);
     });
-    if (!result) return { descriptor: null, workerMs: requestTimeoutMs, grabMs };
-    if (result.error) console.warn('[FACE-IDENTITY-WORKER] describe error:', result.error);
+    if (!result) return null;
+    if (result.error) {
+      console.warn('[FACE-IDENTITY-WORKER] describe error:', result.error);
+      return null;
+    }
+    const inv = 1 / scale;
+    const box = result.box
+      ? { x: result.box.x * inv, y: result.box.y * inv, width: result.box.width * inv, height: result.box.height * inv }
+      : null;
     return {
+      found: Boolean(result.descriptor && box),
       descriptor: result.descriptor ? new Float32Array(result.descriptor) : null,
+      score: typeof result.score === 'number' ? result.score : null,
+      box,
+      sourceWidth: vw,
+      sourceHeight: vh,
       workerMs: Number(result.ms) || 0,
       grabMs,
     };
+  };
+
+  const describe = async (video: HTMLVideoElement, targetWidth = 320) => {
+    if (!worker || busy) return null;
+    const t0 = performance.now();
+    const r = await detect(video, { targetWidth });
+    if (r) return { descriptor: r.descriptor, workerMs: r.workerMs, grabMs: r.grabMs };
+    // Busy / not grabbable before posting → null, as before; a timeout or a
+    // worker error after posting → no descriptor (callers count it as a miss).
+    if (!worker || !video.videoWidth) return null;
+    return { descriptor: null, workerMs: Math.round(performance.now() - t0), grabMs: 0 };
   };
 
   const terminate = () => {
@@ -208,5 +271,5 @@ export function createFaceIdentityWorker(options: {
     worker = null;
   };
 
-  return { ready, describe, terminate };
+  return { ready, describe, detect, terminate };
 }

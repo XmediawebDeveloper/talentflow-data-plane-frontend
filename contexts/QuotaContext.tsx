@@ -81,7 +81,9 @@ interface QuotaContextType {
   loading: boolean;
   error: string | null;
   hasPermission: boolean;
-  refetch: () => Promise<void>;
+  /** Force a fresh fetch; resolves with the latest quota data once it lands —
+   *  read that rather than a `quotaData` captured before the call. */
+  refetch: () => Promise<QuotaData | null>;
   lastFetchTime: number | null;
 }
 
@@ -90,7 +92,7 @@ const QuotaContext = createContext<QuotaContextType>({
   loading: false,
   error: null,
   hasPermission: true,
-  refetch: async () => {},
+  refetch: async () => null,
   lastFetchTime: null,
 });
 
@@ -120,6 +122,11 @@ export function QuotaProvider({ children }: { children: React.ReactNode }) {
   const [hasPermission, setHasPermission] = useState(true);
   const [lastFetchTime, setLastFetchTime] = useState<number | null>(null);
   const fetchingRef = useRef(false);
+  /* A forced refresh (refetch / units consumed) that arrived mid-fetch. The
+     in-flight request may predate the change it was asked to pick up, so one
+     more fetch runs when it settles; the callers awaiting it resolve then. */
+  const pendingForceRef = useRef(false);
+  const pendingForceWaitersRef = useRef<Array<() => void>>([]);
 
   const lastFetchTimeRef = useRef<number | null>(null);
   const quotaDataRef = useRef<QuotaData | null>(null);
@@ -133,9 +140,13 @@ export function QuotaProvider({ children }: { children: React.ReactNode }) {
     quotaDataRef.current = quotaData;
   }, [lastFetchTime, quotaData]);
 
-  const fetchQuotaData = useCallback(async (force = false, tokenRetriesLeft = 5) => {
-    // Skip if already fetching
+  const fetchQuotaData = useCallback(async (force = false, tokenRetriesLeft = 5): Promise<void> => {
+    // Skip if already fetching — but a forced call is queued, not dropped.
     if (fetchingRef.current) {
+      if (force) {
+        pendingForceRef.current = true;
+        return new Promise<void>((resolve) => { pendingForceWaitersRef.current.push(resolve); });
+      }
       console.log('[QuotaContext] Already fetching, skipping duplicate call');
       return;
     }
@@ -208,6 +219,8 @@ export function QuotaProvider({ children }: { children: React.ReactNode }) {
 
       setQuotaData(data);
       setLastFetchTime(Date.now());
+      // Ahead of the effect that syncs it, so refetch() can hand it back now.
+      quotaDataRef.current = data;
       console.log('[QuotaContext] Quota data fetched successfully');
     } catch (err: any) {
       const statusCode = err?.response?.status;
@@ -230,6 +243,12 @@ export function QuotaProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoading(false);
       fetchingRef.current = false;
+      if (pendingForceRef.current) {
+        pendingForceRef.current = false;
+        const waiters = pendingForceWaitersRef.current;
+        pendingForceWaitersRef.current = [];
+        void fetchQuotaData(true).finally(() => waiters.forEach((resolve) => resolve()));
+      }
     }
   }, []); // ← FIX: Empty dependency array to prevent recreation
 
@@ -249,6 +268,7 @@ export function QuotaProvider({ children }: { children: React.ReactNode }) {
 
   const refetch = useCallback(async () => {
     await fetchQuotaData(true);
+    return quotaDataRef.current;
   }, [fetchQuotaData]);
 
   return (

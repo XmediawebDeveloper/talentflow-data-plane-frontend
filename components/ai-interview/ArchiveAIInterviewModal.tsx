@@ -1,6 +1,6 @@
 'use client';
 
-import { Archive, AlertTriangle, CheckCircle2, Loader2, X } from 'lucide-react';
+import { Archive, AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import AIInterviewConfigSummaryCard from '@/components/ai-interview/AIInterviewConfigSummaryCard';
 
@@ -53,20 +53,9 @@ export default function ArchiveAIInterviewModal({
   return (
     <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 sm:p-6">
       <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-2xl w-full animate-scale-in max-h-[calc(100dvh-2rem)] flex flex-col tf-round-edges">
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={onCancel}
-          disabled={isLoading}
-          aria-label="Close"
-          className="absolute top-4 right-4 px-2"
-        >
-          <X className="w-5 h-5" />
-        </Button>
-
         <div className="px-5 sm:px-8 pt-7 sm:pt-8 pb-5 overflow-y-auto">
           {/* Header: tinted disc + title */}
-          <div className="flex items-start gap-4 pr-8">
+          <div className="flex items-start gap-4">
             <div className="w-12 h-12 shrink-0 rounded-full bg-brand-orange/10 dark:bg-orange-500/15 flex items-center justify-center">
               <Archive className="w-6 h-6 text-brand-orange-deep dark:text-orange-300" />
             </div>
@@ -113,6 +102,9 @@ export default function ArchiveAIInterviewModal({
             Are you sure you want to archive this AI interview?
           </p>
           <div className="flex gap-3 justify-end">
+            <Button variant="secondary" onClick={onCancel} disabled={isLoading} className="px-6">
+              Cancel
+            </Button>
             <Button variant="destructive" onClick={onConfirm} disabled={isLoading} className="px-6">
               {isLoading ? (
                 <span className="flex items-center justify-center gap-2">

@@ -186,6 +186,26 @@ const PRACTICE_TOUR_STEPS: TourStep[] = [
 
 // ── Helper: pick a good SpeechSynthesis voice ────────────────────────────────
 
+// ── Leaving the practice: make sure the browser voice is really silent ───────
+// One cancel() is not always enough. Chrome's network "Google …" voices (the
+// ones pickVoice prefers) fetch each sentence's audio, and a sentence whose
+// audio was still in flight can start playing AFTER the cancel — Bina's practice
+// voice then talks over the real interview. pause() first, then cancel again
+// for a few seconds. Only the practice uses speechSynthesis (the interview
+// streams its own audio), so this can't cut the interview off; it stands down
+// if a practice step has mounted again in the meantime.
+let livePracticeInstances = 0;
+function silenceBrowserVoiceAfterPractice(): void {
+  if (typeof window === 'undefined' || !window.speechSynthesis) return;
+  const hush = () => {
+    if (livePracticeInstances > 0) return;
+    try { window.speechSynthesis.pause(); } catch { /* ignore */ }
+    try { window.speechSynthesis.cancel(); } catch { /* ignore */ }
+  };
+  hush();
+  [250, 1000, 3000].forEach((ms) => window.setTimeout(hush, ms));
+}
+
 function pickVoice(): SpeechSynthesisVoice | null {
   const voices = window.speechSynthesis.getVoices();
   if (voices.length === 0) return null;
@@ -497,6 +517,19 @@ export default function StepSamplePractice({
   const hasAutoSpokeRef = useRef(false);
   const startRecordingRef = useRef<() => void>(() => {});
   // Pre-turn countdown (3→1) shown after Bina finishes, before the mic opens.
+  // Set once the practice step unmounts (Start Interview). Anything that would
+  // speak, count down or open the mic checks it, so a callback still in flight
+  // can't restart the practice behind the real interview.
+  const unmountedRef = useRef(false);
+  useEffect(() => {
+    unmountedRef.current = false;  // React StrictMode re-mounts in dev
+    livePracticeInstances += 1;
+    return () => {
+      unmountedRef.current = true;
+      livePracticeInstances -= 1;
+      silenceBrowserVoiceAfterPractice();
+    };
+  }, []);
   const [preTurnCountdown, setPreTurnCountdown] = useState<number | null>(null);
   const preTurnTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const cancelPreTurnCountdown = useCallback(() => {
@@ -508,6 +541,7 @@ export default function StepSamplePractice({
   }, []);
   const runPreTurnCountdown = useCallback((onComplete: () => void) => {
     cancelPreTurnCountdown();
+    if (unmountedRef.current) return;
     let n = PRE_TURN_COUNTDOWN_FROM;
     setPreTurnCountdown(n);
     preTurnTimerRef.current = setInterval(() => {
@@ -724,6 +758,12 @@ export default function StepSamplePractice({
 
     return () => {
       cancelled = true;
+      // Retire Bina's current line BEFORE speechSynthesis.cancel() below: the
+      // cancel fires the utterance's onerror, and while the generation still
+      // matched, speakBina took that as "sentence done" and spoke the next one
+      // — then onEnd ran the countdown and reopened the mic, so the practice
+      // kept talking and listening behind the real interview.
+      ttsGenRef.current += 1;
       clearInterval(healId);
       navigator.mediaDevices?.removeEventListener?.('devicechange', onDeviceChange);
       if (animationFrameRef.current) {
@@ -809,6 +849,7 @@ export default function StepSamplePractice({
     a.pause();
     try { a.currentTime = 0; } catch { /* not seekable yet */ }
   }, []);
+  useEffect(() => () => stopBinaClip(), [stopBinaClip]);
 
   /** Plays one of Bina's clips. Returns false (nothing started) when that clip
    *  isn't available, so the caller uses the browser voice instead. `onFail`
@@ -818,6 +859,7 @@ export default function StepSamplePractice({
     key: PracticeClipKey,
     handlers: { onStart: () => void; onEnd: () => void; onFail: () => void },
   ): boolean => {
+    if (unmountedRef.current) return true;  // left the practice: nothing plays
     const a = clipAudioRef.current[key];
     if (!a || !clipReadyRef.current[key]) return false;
     stopBinaClip();
@@ -968,6 +1010,7 @@ export default function StepSamplePractice({
     text: string,
     handlers: { onStart?: () => void; onEnd: () => void },
   ) => {
+    if (unmountedRef.current) return;  // left the practice: say nothing, end nothing
     const gen = ++ttsGenRef.current;
     // A line cut off by this one still ends up fully shown.
     if (activeTtsTextRef.current && activeTtsTextRef.current !== text) endStreamingReveal(activeTtsTextRef.current);
@@ -1035,7 +1078,7 @@ export default function StepSamplePractice({
       synth.speak(u);
       if (chunkTimer) clearTimeout(chunkTimer);
       chunkTimer = setTimeout(() => {
-        if (current !== i) return;
+        if (current !== i || gen !== ttsGenRef.current) return;
         synth.cancel();
         next();
       }, estimateSpeechMs(chunks[i], BINA_TTS_RATE) * 2.5 + 3000);
@@ -1475,6 +1518,7 @@ export default function StepSamplePractice({
   }, []);
 
   const startRecording = useCallback(() => {
+    if (unmountedRef.current) return;  // never reopen the mic after Start Interview
     // Guard: don't start if already recording or TTS is still speaking
     if (mediaRecorderRef.current?.state === 'recording') return;
     // Paused for a mid-answer Repeat (pauseRecordingForBina) → carry on with

@@ -9,6 +9,10 @@ export type ListDisplayMode = 'list' | 'grid';
  * Assessment Results, AI Interview Results, AI Talent Match, AI Interview
  * Candidate Results, …) so every list that offers a card view uses the same
  * control rather than each growing its own.
+ *
+ * Below sm the buttons shrink (p-1, 14px icons) so the switch is 28px tall —
+ * the height of the toolbar pills on the Job Openings mobile layout. Callers
+ * that pin a desktop height pass it as `sm:h-9`.
  */
 export default function ListViewToggle({
   value,
@@ -29,13 +33,13 @@ export default function ListViewToggle({
         aria-pressed={value === 'list'}
         aria-label="List view"
         title="List view"
-        className={`p-1.5 rounded-md transition-colors ${
+        className={`p-1 sm:p-1.5 rounded-md transition-colors ${
           value === 'list'
             ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
             : 'text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-100 hover:bg-gray-50 dark:hover:bg-slate-800'
         }`}
       >
-        <List className="w-4 h-4" />
+        <List className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
       </button>
       <button
         type="button"
@@ -43,13 +47,13 @@ export default function ListViewToggle({
         aria-pressed={value === 'grid'}
         aria-label="Grid view"
         title="Grid view"
-        className={`p-1.5 rounded-md transition-colors ${
+        className={`p-1 sm:p-1.5 rounded-md transition-colors ${
           value === 'grid'
             ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
             : 'text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-100 hover:bg-gray-50 dark:hover:bg-slate-800'
         }`}
       >
-        <LayoutGrid className="w-4 h-4" />
+        <LayoutGrid className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
       </button>
     </div>
   );

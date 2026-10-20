@@ -87,7 +87,7 @@ export default function DashboardHero() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          {canRunMatch && matchPlanLocked && (
+          {matchPlanLocked ? (
             <span
               aria-disabled="true"
               title={PLAN_LOCKED_MESSAGE}
@@ -96,8 +96,16 @@ export default function DashboardHero() {
               AI Talent Match
               <ArrowUpRight className="h-4 w-4" />
             </span>
-          )}
-          {canRunMatch && !matchPlanLocked && (
+          ) : !canRunMatch ? (
+            <span
+              aria-disabled="true"
+              title="You do not have permission to run AI Talent Match"
+              className="inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-xl bg-white/5 px-4 py-2.5 text-sm font-medium text-white/50 opacity-60 ring-1 ring-white/10"
+            >
+              AI Talent Match
+              <ArrowUpRight className="h-4 w-4" />
+            </span>
+          ) : (
             <Link
               href="/recruitment/ai-talent-match"
               prefetch={false}
@@ -107,7 +115,7 @@ export default function DashboardHero() {
               <ArrowUpRight className="h-4 w-4" />
             </Link>
           )}
-          {canCreateJob && (
+          {canCreateJob ? (
             <Link
               href="/recruitment/jd-creation"
               prefetch={false}
@@ -116,6 +124,15 @@ export default function DashboardHero() {
               <Plus className="h-4 w-4 transition-transform group-hover:rotate-90" />
               Create Job
             </Link>
+          ) : (
+            <span
+              aria-disabled="true"
+              title="You do not have permission to create job descriptions"
+              className="inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-xl bg-white/40 px-4 py-2.5 text-sm font-semibold text-brand-blue/60 opacity-60 shadow-md"
+            >
+              <Plus className="h-4 w-4" />
+              Create Job
+            </span>
           )}
         </div>
       </div>

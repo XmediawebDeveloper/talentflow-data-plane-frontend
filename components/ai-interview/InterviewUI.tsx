@@ -37,11 +37,13 @@ import { INVALID_CAMERA_SELECTION_MESSAGE } from "@/lib/proctoring/virtualCamera
 // TF.js backend crashes AND benign browser-extension "message channel closed"
 // noise. Idempotent — safe even though face-verification also imports it.
 import "@/lib/tfjs-rejection-guard";
-import { loadVerifiedAudioInputs } from '@/lib/utils/mediaDeviceProbe';
+import { keepAudioContextRunning, loadVerifiedAudioInputs } from '@/lib/utils/mediaDeviceProbe';
 
 interface FaceVerificationHandle {
   startVerification: (videoElement: HTMLVideoElement, intervalMs?: number) => void;
   stopVerification: () => void;
+  /** Out-of-cadence identity check (face back after missing, 2nd face gone). */
+  verifyNow?: () => void;
   hasBaseline: () => boolean;
 }
 
@@ -270,6 +272,9 @@ const REPEAT_WINDOW_MS = 30000;
 // Live-interview face identity check cadence, same for every device tier
 // (CPU cost — see the startVerification call). Revisit after R&D.
 const FACE_VERIFY_INTERVAL_MS = 30000;
+// How long after connect a missing face baseline may still arrive (stored
+// Identity photo re-fetched after a reload) before it is logged as unavailable.
+const FACE_BASELINE_GRACE_MS = 15000;
 // Longest the "Preparing your interview…" warm-up may hold back the start.
 const PREPARE_MAX_WAIT_MS = 20000;
 
@@ -306,6 +311,11 @@ function nowIST(): string {
 // S3 multipart-upload requires every part except the last to be >= 5 MiB; we add
 // a small margin so a slightly-undersized flush can't fail CompleteMultipartUpload.
 const RECORDING_MIN_SEGMENT_BYTES = 5 * 1024 * 1024 + 256 * 1024; // ~5.25 MiB
+// A recorder that has produced no data this long after start is stalled (its
+// audio mix isn't running) — see the watchdog in startRecorder. Two 5 s
+// timeslices plus slack.
+const RECORDING_STALL_CHECK_MS = 12_000;
+const RECORDING_STALL_RECHECK_MS = 6_000;
 const REVEAL_DEBUG = true;
 // The text reveal is anchored to audio playback so caption ≈ voice. But tracking
 // the audio position EXACTLY makes the text always trail the word you already
@@ -1583,8 +1593,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // Keeps the recording-audio boost graph alive (a GC'd AudioContext would stop
   // the boost). Used to make quiet headset mics clearly audible in the saved video.
   const recordingAudioCtxRef = useRef<AudioContext | null>(null);
+  // Removes keepAudioContextRunning's listeners for the mix context.
+  const recordingAudioKeepAliveRef = useRef<(() => void) | null>(null);
   // Close the boost AudioContext on unmount so it doesn't leak across sessions.
   useEffect(() => () => {
+    recordingAudioKeepAliveRef.current?.();
+    recordingAudioKeepAliveRef.current = null;
     try { recordingAudioCtxRef.current?.close(); } catch { /* already closed */ }
     recordingAudioCtxRef.current = null;
   }, []);
@@ -1684,8 +1698,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  // Hand raise detection
+  // Hand raise detection — DISABLED (2026-10-17). It ran MediaPipe Hands on
+  // the main thread at 10 fps for the whole interview, yet nothing shows the
+  // result: the Webcam hand indicator is off (showHandIndicator={false}) and
+  // TalkingHeadAvatar never receives avatarState. Its lazy WASM load also
+  // overlapped FaceMesh's and clobbered MediaPipe's shared global `Module`
+  // (the "dependency: … hands … face_mesh …" warnings every 10 s). Set
+  // disabled: false only together with a visible use of the result.
   const handDetection = useHandRaiseDetection({
+    disabled: true,
     enabled: webcamReady,
     onHandRaised: () => avatarState.raiseHand(),
     onHandLowered: () => avatarState.lowerHand(),
@@ -2576,7 +2597,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     // We never blocked the interview — just take the held warning down and
     // log how long the face was gone.
     endAttentionEpisode('face_missing', 'restored');
-  }, [endAttentionEpisode]);
+    // A substitute sits down exactly here — check identity now, not up to
+    // FACE_VERIFY_INTERVAL_MS later.
+    faceVerification?.verifyNow?.();
+  }, [endAttentionEpisode, faceVerification]);
 
   const handleMultipleFaces = useCallback((count: number) => {
     startAttentionEpisode('multiple_faces', { face_count: count });
@@ -2584,7 +2608,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
   const handleMultipleFacesCleared = useCallback(() => {
     endAttentionEpisode('multiple_faces', 'restored');
-  }, [endAttentionEpisode]);
+    // Back to one face — make sure it is still the registered candidate.
+    faceVerification?.verifyNow?.();
+  }, [endAttentionEpisode, faceVerification]);
 
   const handleGazeAway = useCallback((direction: string, metrics?: Record<string, any>) => {
     startAttentionEpisode('gaze_away', { direction, ...(metrics ?? {}) });
@@ -2689,17 +2715,46 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   });
 
   // Face verification event handlers (identity check, not just presence)
+  // Webcam element continuous face verification runs against (set in handleVideoReady).
+  const faceVerifyVideoRef = useRef<HTMLVideoElement | null>(null);
   useEffect(() => {
     if (!faceVerification || !isConnected) return;
     // The faceVerification hook calls callbacks internally, but we need to wire
     // them to emitEvent. Since the callbacks are set at hook creation time in the
     // portal, we handle this via a subscription-like pattern in InterviewUI.
     // The callbacks are already set up in CandidateAIInterviewPortal if needed.
-    // Here we just ensure cleanup on unmount.
+    // The baseline can land AFTER the camera was ready (reload straight into the
+    // interview → the stored Identity photo is re-fetched), in which case
+    // handleVideoReady skipped starting — start it here. startVerification is
+    // idempotent (it replaces any running interval).
+    const video = faceVerifyVideoRef.current;
+    if (video && faceVerification.hasBaseline()) {
+      faceVerification.startVerification(video, FACE_VERIFY_INTERVAL_MS);
+    }
     return () => {
       faceVerification.stopVerification();
     };
   }, [faceVerification, isConnected]);
+
+  // No face baseline (face models failed to load, or no face found in the
+  // identity photo / system-check frames) → no identity check runs at all this
+  // session. Record it once the proctor pipeline is live (emitEvent drops
+  // events before connect) so "no identity flags" is never misread as
+  // "checked and clean".
+  // Grace period: after a reload the portal is still re-fetching the stored
+  // Identity photo (fetch + 8s registration cap) when the socket connects.
+  const faceVerifyUnavailableSentRef = useRef(false);
+  useEffect(() => {
+    if (!isConnected || faceVerifyUnavailableSentRef.current) return;
+    if (faceVerification?.hasBaseline()) return;
+    const t = setTimeout(() => {
+      if (faceVerifyUnavailableSentRef.current) return;
+      faceVerifyUnavailableSentRef.current = true;
+      console.warn('[INTERVIEW-DEBUG] Face verification unavailable — no baseline registered');
+      emitEvent('face_verification_unavailable', { reason: 'no_face_baseline' });
+    }, FACE_BASELINE_GRACE_MS);
+    return () => clearTimeout(t);
+  }, [isConnected, faceVerification, emitEvent]);
 
   const faceDetection = useInterviewFaceDetection({
     enabled: isConnected && webcamReady,
@@ -2878,7 +2933,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
           const actx = new Ctx();
           recordingAudioCtxRef.current = actx;
-          if (actx.state === 'suspended') actx.resume().catch(() => {});
+          // A mix context that isn't running makes the recorder save NOTHING
+          // (a 0-byte recording) — keep it running for the whole interview.
+          recordingAudioKeepAliveRef.current?.();
+          recordingAudioKeepAliveRef.current = keepAudioContextRunning(actx, 'Webcam');
           const dest = actx.createMediaStreamDestination();
 
           const srcNode = actx.createMediaStreamSource(new MediaStream(aTracks));
@@ -2963,9 +3021,48 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         }
         const recorder = new MediaRecorder(recordStream, opts);
         recordedChunksRef.current = [];
+        let gotData = false;
         recorder.ondataavailable = (e) => {
-          if (e.data.size > 0) recordedChunksRef.current.push(e.data);
+          if (e.data.size > 0) { gotData = true; recordedChunksRef.current.push(e.data); }
         };
+        // Stall watchdog. If the audio mix's AudioContext isn't running, Chrome's
+        // MediaRecorder emits nothing for the WHOLE interview and a 0-byte
+        // recording is saved (staging ai-d7eff074). keepAudioContextRunning
+        // usually prevents that. If the recorder is still empty after two
+        // timeslices AND the mix is not running, stop depending on Web Audio and
+        // record the raw mic track (Bina's voice tap is lost from this view, the
+        // candidate is not). "Empty" alone is not enough: under start-up load
+        // (face/object models loading) the first chunk can land after 12 s with a
+        // healthy mix — swapping then would throw that footage away. So with a
+        // running mix it just keeps checking until data arrives.
+        const checkStall = () => {
+          if (gotData || isUnmountedRef.current || isFinalizingUploadRef.current) return;
+          if (mediaRecorderRef.current !== recorder || recorder.state !== 'recording') return;
+          const mixState = recordingAudioCtxRef.current?.state ?? 'none';
+          const micTracks = stream.getAudioTracks();
+          // Already on the raw mic (the mix was never built) → nothing to fall back to.
+          const alreadyRaw = recordStream.getAudioTracks().some((t) => micTracks.includes(t));
+          if (mixState === 'running' || alreadyRaw || micTracks.length === 0) {
+            window.setTimeout(checkStall, RECORDING_STALL_RECHECK_MS);
+            return;
+          }
+          console.error(
+            `[Recording] No data ${Math.round((performance.now() - startedAt) / 1000)}s after start and the audio mix is '${mixState}' — restarting on the raw mic track`,
+          );
+          candidateAIInterviewService.reportProctorEvent(token, {
+            event_type: 'recording_stalled',
+            severity: 'medium',
+            details: { audio_mix_state: mixState, fell_back_to_raw_audio: true },
+          }).catch(() => { /* best-effort */ });
+          recorder.ondataavailable = null;
+          recorder.onerror = null;
+          try { recorder.stop(); } catch { /* already stopped */ }
+          recordStream = rawAudioFallbackStream();
+          recordStreamRef.current = recordStream;
+          startRecorder(opts);
+        };
+        const startedAt = performance.now();
+        window.setTimeout(checkStall, RECORDING_STALL_CHECK_MS);
         // The recorder dying used to be completely silent: the 30 s checkpoint
         // no-ops on a non-'recording' state and the final upload ships an empty
         // part, so a lost recording only surfaced when a recruiter opened it.
@@ -3021,6 +3118,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     // the old 10s cadence for non-low tiers tripled that load — noticeable
     // once 4-core machines started classifying as 'mid'. 30s still catches a
     // substituted candidate within ~30s.
+    faceVerifyVideoRef.current = video;
     if (faceVerification?.hasBaseline()) {
       faceVerification.startVerification(video, FACE_VERIFY_INTERVAL_MS);
       console.log(`[INTERVIEW-DEBUG] Continuous face verification started (${FACE_VERIFY_INTERVAL_MS / 1000}s cadence)`);
@@ -5459,6 +5557,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           serverVadActiveRef.current = true;
           console.log('[INTERVIEW-DEBUG] AII14-server: pause detection active for this answer', {
             turn: data.turn, doneAfterMs: data.done_after_ms, resumeSpeechMs: data.resume_speech_ms,
+            voiceVeto: data.voice_veto,
           });
         } else if (ev === 'unavailable') {
           serverVadActiveRef.current = false;
@@ -5491,6 +5590,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             turn: data.turn,
             serverSilenceMs: data.silence_ms,
             ignoredSoundsInPause: data.ignored_sounds_in_pause,
+            vetoedOtherVoiceSegments: data.vetoed_other_voice_segments,
             // Comparison with the browser clock (diagnostics only).
             clientClockSilenceMs: Date.now() - sc.voiceAt,
           });
@@ -7316,6 +7416,18 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       const blob = new Blob(chunks, { type: mimeType });
       const sizeMb = (blob.size / 1024 / 1024).toFixed(1);
       console.log(`[Recording] Final segment ${segmentIndex}: ${chunks.length} chunks, ${sizeMb} MB, recorder=${recorder?.state ?? 'null'}`);
+      // Nothing was ever recorded: no earlier segment and an empty buffer. The
+      // final marker still goes out (it closes the server's multipart upload),
+      // but this is a LOST recording, not a success — say so, loudly.
+      const recordingEmpty = segmentIndex === 0 && blob.size === 0;
+      if (recordingEmpty) {
+        console.error(`[Recording] EMPTY — the webcam recording captured no data (audio mix '${recordingAudioCtxRef.current?.state ?? 'none'}')`);
+        candidateAIInterviewService.reportProctorEvent(token, {
+          event_type: 'recording_failed',
+          severity: 'high',
+          details: { error: 'empty_recording', audio_mix_state: recordingAudioCtxRef.current?.state ?? 'none' },
+        }).catch(() => { /* best-effort */ });
+      }
 
       // RETRY the final upload. This request is what turns the already-uploaded
       // parts into a playable object — if it is the only attempt and it 502s,
@@ -7331,7 +7443,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           // Recording finalized — clear the persisted index so a fresh interview
           // in the same tab starts at segment 0 again.
           try { if (typeof window !== 'undefined') window.sessionStorage.removeItem(_recSegKey); } catch { /* ignore */ }
-          console.log(`[Recording] Final upload + multipart completion succeeded${attempt > 1 ? ` (attempt ${attempt})` : ''}`);
+          if (!recordingEmpty) console.log(`[Recording] Final upload + multipart completion succeeded${attempt > 1 ? ` (attempt ${attempt})` : ''}`);
           return;
         } catch (err: unknown) {
           const msg = getErrorMessage(err);
@@ -11482,9 +11594,35 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                   // used to make Bina ask a clarification after End — then tell the
                   // backend to close. The backend cancels any in-flight generation
                   // and plays ONLY the farewell.
+                  //
+                  // EXCEPT when the candidate has already spoken an answer to the
+                  // current question (still recording, or submitted and awaiting
+                  // its transcript). Aborting then threw the answer away and the
+                  // question showed as Skipped in Question Analysis. Submit it
+                  // (end_turn) and hold end_interview until its transcript commits
+                  // (see pendingEndAfterTranscriptRef in the transcript /
+                  // silent_discard handlers); the backend files that transcript
+                  // as the question's answer when it closes.
                   setIsClosing(true);
                   isClosingRef.current = true;
                   setStatus("Ending interview…");
+                  const _speakingAnswer = isRecordingRef.current && speechDetectedRef.current
+                    && !hrVoiceBlockedForQidRef.current;
+                  const _awaitingTranscript = isCandidateTranscriptProcessingRef.current;
+                  if (_speakingAnswer || _awaitingTranscript) {
+                    pendingEndAfterTranscriptRef.current = true;
+                    if (_speakingAnswer) stopRecording();
+                    // Safety net: never leave the interview open if the
+                    // transcript never arrives.
+                    setTimeout(() => {
+                      if (!pendingEndAfterTranscriptRef.current) return;
+                      pendingEndAfterTranscriptRef.current = false;
+                      if (wsRef.current?.readyState === WebSocket.OPEN) {
+                        wsRef.current.send(JSON.stringify({ type: 'end_interview' }));
+                      }
+                    }, 12000);
+                    return;
+                  }
                   try { abortRecordingForSkipRef.current?.(); } catch { /* mic already stopped */ }
                   if (wsRef.current?.readyState === WebSocket.OPEN) {
                     wsRef.current.send(JSON.stringify({ type: 'end_interview' }));

@@ -14,19 +14,93 @@ import {
   FileText, Upload, Trash2, Search, X, ArrowLeft, Filter, Download, ExternalLink,
   CheckCircle2, Circle, Clock3, XCircle, ChevronDown, Mail, Phone, Globe, Book,
   Video, FileQuestion, Tag, User, Calendar, Paperclip, Loader2, Inbox,
-  Users, UserCheck, RefreshCw, KeyRound, Bug, MessageCircleQuestion, MoreHorizontal, Sparkles, Lock,
-  LifeBuoy
+  Users, UserCheck, RefreshCw, KeyRound, Bug, MessageCircleQuestion, MoreHorizontal, Lock,
+  Headphones, CircleDashed, BarChart3, Eye, ChevronRight, Check, ChevronLeft, Copy, Flag, Settings2, Info, UploadCloud, History, Bold, Italic, List, ListOrdered, Link2, Smile
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { internalTicketService, InternalTicket, InternalTicketAdminStats, InternalTicketPriority } from '@/lib/services';
 import ListPagination from '@/components/ListPagination';
 import FeatureGate from '@/components/shared/FeatureGate';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import { Skeleton } from '@/components/ui/skeleton';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import { useAuth } from '@/lib/hooks/useAuth';
 import { PageHeader } from '@/components/ui/page-header';
+import { StatValuePlaceholder } from '@/components/ui/stats-card';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 // Main API - Local backend handles everything including support tickets
+// Character limits for the Create Support Ticket form.
+const TICKET_TITLE_MAX = 100;
+const TICKET_DESCRIPTION_MAX = 1500;
+
+// Create-ticket drafts are saved per user under this prefix. clearTokens() in
+// lib/services/api.ts removes every key with this prefix on logout.
+const TICKET_DRAFT_PREFIX = 'tf-support-ticket-draft:';
+
+// Marker for the optional "browser details" block appended to a description.
+const ENV_BLOCK_MARKER = '\n\n--- Browser details ---\n';
+
+// Description placeholder per category — tells the user what support needs.
+const CATEGORY_DESCRIPTION_HINTS: Record<string, string> = {
+  'resume-upload': 'Which file did you try to upload (type and size)? What happened — an error, or the upload never finished?',
+  'job-posting': 'Which job is affected (title or ID)? What were you trying to do, and what happened instead?',
+  'candidate-management': 'Which candidate or list is affected? What did you expect to see, and what did you see?',
+  'assessment': 'Which assessment is affected (name or ID)? Is the issue when creating, sending, or reviewing results?',
+  'billing': 'Please include the invoice number or payment date, the amount, and what looks wrong.',
+  'technical': 'Describe the steps to reproduce, the expected result, the actual result, and any error message you see.',
+  'feature-request': 'What would you like to do, and how would it help your hiring workflow?',
+  'other': 'Please provide detailed information about your request.',
+};
+
+// What each priority means — shown next to the Priority field.
+const PRIORITY_GUIDANCE: { label: string; text: string }[] = [
+  { label: 'Low', text: 'General question or minor issue; no impact on your work.' },
+  { label: 'Medium', text: 'Something is not working as expected, but you can continue working.' },
+  { label: 'High', text: 'An important feature is blocked and it is affecting your work.' },
+  { label: 'Urgent', text: 'Critical: you or your team cannot use TalentFlow at all.' },
+];
+
+// Starter descriptions for common ticket types.
+const DESCRIPTION_TEMPLATES: { label: string; text: string }[] = [
+  { label: 'Bug report', text: 'Steps to reproduce:\n1. \n2. \n3. \n\nExpected result:\n\nActual result:\n\nError message (if any):' },
+  { label: 'Feature request', text: 'What I would like to do:\n\nWhy it would help:\n\nHow I do it today (workaround):' },
+  { label: 'Billing question', text: 'Invoice number / payment date:\nAmount:\nWhat looks wrong:' },
+  { label: 'Access or login issue', text: 'Affected user (name or email):\nWhat happens when signing in:\nWhen it started:' },
+];
+
+// Readable browser / OS summary from the user agent (best effort, no extra libraries).
+function describeEnvironment(): string {
+  if (typeof window === 'undefined') return '';
+  const ua = navigator.userAgent;
+  const browser =
+    /Edg\/(\d+)/.exec(ua) ? `Edge ${/Edg\/(\d+)/.exec(ua)![1]}` :
+    /OPR\/(\d+)/.exec(ua) ? `Opera ${/OPR\/(\d+)/.exec(ua)![1]}` :
+    /Chrome\/(\d+)/.exec(ua) ? `Chrome ${/Chrome\/(\d+)/.exec(ua)![1]}` :
+    /Firefox\/(\d+)/.exec(ua) ? `Firefox ${/Firefox\/(\d+)/.exec(ua)![1]}` :
+    /Version\/(\d+).*Safari/.exec(ua) ? `Safari ${/Version\/(\d+).*Safari/.exec(ua)![1]}` :
+    'Unknown browser';
+  const os =
+    /Windows NT 10/.test(ua) ? 'Windows 10/11' :
+    /Windows/.test(ua) ? 'Windows' :
+    /Android/.test(ua) ? 'Android' :
+    /iPhone|iPad|iPod/.test(ua) ? 'iOS' :
+    /Mac OS X/.test(ua) ? 'macOS' :
+    /Linux/.test(ua) ? 'Linux' : 'Unknown OS';
+  return [
+    `- Browser: ${browser}`,
+    `- Operating system: ${os}`,
+    `- Screen: ${window.screen.width}×${window.screen.height}`,
+    `- Window: ${window.innerWidth}×${window.innerHeight}`,
+  ].join('\n');
+}
+
+// Lowercase words (3+ letters) used to spot possibly duplicate tickets.
+function titleWords(text: string): string[] {
+  return Array.from(new Set(text.toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length >= 3)));
+}
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
 interface SupportTicket {
@@ -103,6 +177,114 @@ function transformTicket(apiTicket: any): SupportTicket {
   };
 }
 
+// True when support has the last word on an active ticket — the user owes a reply.
+function isAwaitingUserReply(ticket: SupportTicket): boolean {
+  if (ticket.status !== 'open' && ticket.status !== 'in-progress') return false;
+  const last = ticket.responses?.[ticket.responses.length - 1];
+  return last?.from === 'support';
+}
+
+// Renders the light formatting the reply toolbar inserts (**bold**, _italic_,
+// [text](https://…), "- " bullets, "1. " numbered lines) as React nodes.
+// No HTML is injected; only http(s) links are turned into anchors.
+function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
+  const nodes: React.ReactNode[] = [];
+  const pattern = /(\*\*[^*]+\*\*|(?<![A-Za-z0-9])_[^_\s][^_]*_(?![A-Za-z0-9])|\[[^\]]+\]\(https?:\/\/[^\s)]+\))/g;
+  let last = 0;
+  let match: RegExpExecArray | null;
+  let i = 0;
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > last) nodes.push(text.slice(last, match.index));
+    const token = match[0];
+    const key = `${keyPrefix}-${i++}`;
+    if (token.startsWith('**')) {
+      nodes.push(<strong key={key} className="font-semibold">{token.slice(2, -2)}</strong>);
+    } else if (token.startsWith('_')) {
+      nodes.push(<em key={key}>{token.slice(1, -1)}</em>);
+    } else {
+      const linkMatch = /^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/.exec(token);
+      nodes.push(linkMatch
+        ? <a key={key} href={linkMatch[2]} target="_blank" rel="noopener noreferrer" className="font-medium text-brand-blue underline underline-offset-2 hover:text-brand-blue-2">{linkMatch[1]}</a>
+        : token);
+    }
+    last = match.index + token.length;
+  }
+  if (last < text.length) nodes.push(text.slice(last));
+  return nodes;
+}
+
+// Active team ticket where the team owes a response (nothing yet, or the employee spoke last).
+function isAwaitingTeamResponse(ticket: InternalTicket): boolean {
+  if (ticket.status !== 'open' && ticket.status !== 'in-progress') return false;
+  const last = ticket.responses?.[ticket.responses.length - 1];
+  return !last || last.user_role === 'user';
+}
+
+// Short relative time ("5m ago", "3h ago", "2d ago").
+function timeAgo(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (isNaN(then)) return '';
+  const mins = Math.max(0, Math.floor((new Date().getTime() - then) / 60000));
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  return `${months}mo ago`;
+}
+
+// Emoji picker set for reply boxes; rendered with colour-emoji fonts so they look the same on every OS.
+const EMOJI_GROUPS: { group: string; items: string[] }[] = [
+  { group: 'Smileys', items: ['😀', '😊', '🙂', '😉', '😅', '😂', '🤔', '😐', '😕', '😟', '😢', '😡'] },
+  { group: 'Gestures', items: ['👍', '👎', '👏', '🙏', '👋', '🙌', '🤝', '💪'] },
+  { group: 'Symbols', items: ['✅', '❌', '⚠️', '❗', '❓', '💡', '🔥', '⭐', '🎉', '🚀', '📌', '📎', '⏳', '🐞', '🔒', '❤️'] },
+];
+const EMOJI_FONT_STACK = '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", "Segoe UI Symbol", sans-serif';
+
+function AwaitingTeamTag() {
+  return (
+    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-brand-orange/10 px-2 py-0.5 text-[11px] font-semibold text-brand-orange-deep">
+      <MessageSquare className="h-3 w-3" />
+      Awaiting response
+    </span>
+  );
+}
+
+function AwaitingReplyTag() {
+  return (
+    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-brand-orange/10 px-2 py-0.5 text-[11px] font-semibold text-brand-orange-deep">
+      <MessageSquare className="h-3 w-3" />
+      Awaiting your reply
+    </span>
+  );
+}
+
+function renderFormattedMessage(message: string): React.ReactNode {
+  const lines = message.split('\n');
+  const blocks: React.ReactNode[] = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (/^\s*-\s+/.test(line)) {
+      const items: string[] = [];
+      while (i < lines.length && /^\s*-\s+/.test(lines[i])) items.push(lines[i++].replace(/^\s*-\s+/, ''));
+      blocks.push(<ul key={`b${i}`} className="ml-5 list-disc space-y-0.5">{items.map((it, j) => <li key={j}>{renderInline(it, `u${i}-${j}`)}</li>)}</ul>);
+    } else if (/^\s*\d+\.\s+/.test(line)) {
+      const items: string[] = [];
+      while (i < lines.length && /^\s*\d+\.\s+/.test(lines[i])) items.push(lines[i++].replace(/^\s*\d+\.\s+/, ''));
+      blocks.push(<ol key={`b${i}`} className="ml-5 list-decimal space-y-0.5">{items.map((it, j) => <li key={j}>{renderInline(it, `o${i}-${j}`)}</li>)}</ol>);
+    } else {
+      blocks.push(line.trim() === ''
+        ? <div key={`b${i}`} className="h-2" />
+        : <p key={`b${i}`} className="whitespace-pre-wrap break-words">{renderInline(line, `p${i}`)}</p>);
+      i++;
+    }
+  }
+  return blocks;
+}
+
 interface SupportCenterProps {
   isAdmin?: boolean;
 }
@@ -116,6 +298,173 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterPriority, setFilterPriority] = useState<string>('all');
   const [replyMessage, setReplyMessage] = useState('');
+  // Ticket detail view: Conversation / Attachments tab + dismissible reply tip.
+  // Tab is remembered per ticket id, so opening another ticket starts on Conversation.
+  const [detailTabState, setDetailTabState] = useState<{ id: string | null; tab: 'conversation' | 'activity' | 'attachments' }>({ id: null, tab: 'conversation' });
+  // Ticket detail: staged priority (applied with Update), menus and reply editor ref.
+  const [priorityDraft, setPriorityDraft] = useState<{ id: string | null; value: string }>({ id: null, value: '' });
+  const [ticketMenuOpen, setTicketMenuOpen] = useState(false);
+  const [templateMenuOpen, setTemplateMenuOpen] = useState(false);
+  const [emojiMenuOpen, setEmojiMenuOpen] = useState(false);
+  const replyRef = useRef<HTMLTextAreaElement>(null);
+  const { user: authUser } = useAuth();
+  // Last cursor/selection in the reply box. Null = not placed yet → insert at the end.
+  const lastReplySel = useRef<{ start: number; end: number } | null>(null);
+
+  // Reply editor helpers — insert plain-text formatting at the cursor.
+  const editReply = (build: (value: string, start: number, end: number) => { text: string; selStart: number; selEnd: number }) => {
+    const el = replyRef.current;
+    const len = replyMessage.length;
+    // Use the remembered cursor (clamped); if the user never placed one, append at the end.
+    const start = Math.min(lastReplySel.current?.start ?? len, len);
+    const end = Math.min(Math.max(lastReplySel.current?.end ?? len, start), len);
+    const { text, selStart, selEnd } = build(replyMessage, start, end);
+    setReplyMessage(text);
+    lastReplySel.current = { start: selStart, end: selEnd };
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(selStart, selEnd);
+    });
+  };
+  const wrapSelection = (before: string, after: string, placeholder: string) =>
+    editReply((v, s, e) => {
+      const sel = v.slice(s, e) || placeholder;
+      return { text: v.slice(0, s) + before + sel + after + v.slice(e), selStart: s + before.length, selEnd: s + before.length + sel.length };
+    });
+  const prefixLines = (prefix: (i: number) => string) =>
+    editReply((v, s, e) => {
+      const lineStart = v.lastIndexOf('\n', s - 1) + 1;
+      const block = v.slice(lineStart, e) || '';
+      const updated = block.split('\n').map((line, i) => prefix(i) + line).join('\n');
+      const text = v.slice(0, lineStart) + updated + v.slice(e);
+      return { text, selStart: lineStart + updated.length, selEnd: lineStart + updated.length };
+    });
+  const insertAtCursor = (snippet: string) =>
+    editReply((v, s, e) => ({ text: v.slice(0, s) + snippet + v.slice(e), selStart: s + snippet.length, selEnd: s + snippet.length }));
+  const editDescription = (build: (value: string, start: number, end: number) => { text: string; selStart: number; selEnd: number }) => {
+    const el = descriptionRef.current;
+    const len = description.length;
+    const start = Math.min(lastDescSel.current?.start ?? len, len);
+    const end = Math.min(Math.max(lastDescSel.current?.end ?? len, start), len);
+    const result = build(description, start, end);
+    if (result.text.length > TICKET_DESCRIPTION_MAX) {
+      toast.error(`Description can be at most ${TICKET_DESCRIPTION_MAX} characters`);
+      return;
+    }
+    setDescription(result.text);
+    lastDescSel.current = { start: result.selStart, end: result.selEnd };
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(result.selStart, result.selEnd);
+    });
+  };
+  const wrapDescription = (before: string, after: string, placeholder: string) =>
+    editDescription((v, s, e) => {
+      const sel = v.slice(s, e) || placeholder;
+      return { text: v.slice(0, s) + before + sel + after + v.slice(e), selStart: s + before.length, selEnd: s + before.length + sel.length };
+    });
+  const prefixDescriptionLines = (prefix: (i: number) => string) =>
+    editDescription((v, s, e) => {
+      const lineStart = v.lastIndexOf('\n', s - 1) + 1;
+      const updated = v.slice(lineStart, e).split('\n').map((line, i) => prefix(i) + line).join('\n');
+      return { text: v.slice(0, lineStart) + updated + v.slice(e), selStart: lineStart + updated.length, selEnd: lineStart + updated.length };
+    });
+  const handleDescEmojiPick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    const snippet = e.currentTarget.dataset.emoji || '';
+    editDescription((v, s, end) => ({ text: v.slice(0, s) + snippet + v.slice(end), selStart: s + snippet.length, selEnd: s + snippet.length }));
+    setDescEmojiOpen(false);
+  };
+  const applyDescriptionTemplate = (text: string) => {
+    const next = description.trim() ? `${description.trimEnd()}\n\n${text}` : text;
+    if (next.length > TICKET_DESCRIPTION_MAX) {
+      toast.error(`Description can be at most ${TICKET_DESCRIPTION_MAX} characters`);
+      return;
+    }
+    setDescription(next);
+    lastDescSel.current = null;
+    setDescTemplateOpen(false);
+    requestAnimationFrame(() => descriptionRef.current?.focus());
+  };
+  const handleDescTemplatePick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    const tpl = DESCRIPTION_TEMPLATES[Number(e.currentTarget.dataset.templateIndex)];
+    if (tpl) applyDescriptionTemplate(tpl.text);
+  };
+  const toggleEnvironmentDetails = (include: boolean) => {
+    const markerAt = description.indexOf(ENV_BLOCK_MARKER);
+    if (!include) {
+      if (markerAt >= 0) setDescription(description.slice(0, markerAt));
+      return;
+    }
+    if (markerAt >= 0) return;
+    const next = description.trimEnd() + ENV_BLOCK_MARKER + describeEnvironment();
+    if (next.length > TICKET_DESCRIPTION_MAX) {
+      toast.error('Not enough room in the description to add browser details');
+      return;
+    }
+    setDescription(next);
+  };
+
+  // ---- Drafts (per user, cleared on logout via clearTokens) ----
+  const draftKey = authUser?.id ? `${TICKET_DRAFT_PREFIX}${authUser.id}` : null;
+  // Opens the create form, restoring this user's saved draft into an empty form.
+  const openSubmitView = () => {
+    setSubmitAttempted(false);
+    setShowDescriptionPreview(false);
+    if (draftKey && !title.trim() && !description.trim()) {
+      try {
+        const saved = JSON.parse(localStorage.getItem(draftKey) || 'null');
+        if (saved && (saved.title || saved.description)) {
+          setTitle(String(saved.title || '').slice(0, TICKET_TITLE_MAX));
+          setDescription(String(saved.description || '').slice(0, TICKET_DESCRIPTION_MAX));
+          if (categories.some(c => c.value === saved.category)) setCategory(saved.category);
+          if (priorities.some(p => p.value === saved.priority)) setPriority(saved.priority);
+          setDraftRestored(true);
+        } else {
+          setDraftRestored(false);
+        }
+      } catch {
+        setDraftRestored(false);
+      }
+    }
+    setView('submit');
+  };
+  const discardDraft = () => {
+    if (draftKey) {
+      try { localStorage.removeItem(draftKey); } catch { /* storage unavailable */ }
+    }
+    setTitle('');
+    setDescription('');
+    setCategory('technical');
+    setPriority('medium');
+    setDraftRestored(false);
+    setSubmitAttempted(false);
+    lastDescSel.current = null;
+  };
+  const submitTicketFromForm = () => {
+    setSubmitAttempted(true);
+    if (!submitting) handleSubmitTicket();
+  };
+
+  const handleEmojiPick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    insertAtCursor(e.currentTarget.dataset.emoji || '');
+    setEmojiMenuOpen(false);
+  };
+  const [showReplyTip, setShowReplyTip] = useState(true);
+  // Ticket list sort ("default" keeps the API order) and the close-ticket confirmation.
+  const [ticketSort, setTicketSort] = useState<'default' | 'newest' | 'updated' | 'priority'>('default');
+  const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
+  // Create-ticket form helpers: inline validation, restored-draft note, preview,
+  // template/emoji menus and the description editor's cursor.
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [draftRestored, setDraftRestored] = useState(false);
+  const [showDescriptionPreview, setShowDescriptionPreview] = useState(false);
+  const [descTemplateOpen, setDescTemplateOpen] = useState(false);
+  const [descEmojiOpen, setDescEmojiOpen] = useState(false);
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
+  const lastDescSel = useRef<{ start: number; end: number } | null>(null);
+  // Team tickets: client-side category filter + sort ("default" keeps the API order).
+  const [teamCategoryFilter, setTeamCategoryFilter] = useState<string>('all');
+  const [teamSort, setTeamSort] = useState<'default' | 'newest' | 'updated' | 'priority'>('default');
 
   // Pagination state — separate per tab
   const [myCurrentPage, setMyCurrentPage] = useState(1);
@@ -144,9 +493,18 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
   const [internalActionLoading, setInternalActionLoading] = useState<string | null>(null);
   const [internalFilterAssignment, setInternalFilterAssignment] = useState<string>('all');
 
+  // The last stats call failed — the cards show '—' instead of a number.
+  const [statsFailed, setStatsFailed] = useState(false);
+  const [internalStatsFailed, setInternalStatsFailed] = useState(false);
+
   // Prevent duplicate API calls
   const hasFetched = useRef(false);
   const hasInternalFetched = useRef(false);
+  /* Bumped by every list fetch, so only the latest request's rows apply. The
+     mount fetch runs with default filters before the saved ones are restored,
+     then again with them; whichever lands last used to win. */
+  const ticketsFetchSeqRef = useRef(0);
+  const internalTicketsFetchSeqRef = useRef(0);
 
   // Persist scroll + list view state so returning to Support restores it.
   // 'detail'/'submit' are excluded from restore since they depend on a selected
@@ -209,6 +567,22 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
     return `${API_BASE_URL}/support-tickets${endpoint}`;
   };
 
+  // Auto-save the create-ticket form as a per-user draft while it is open.
+  useEffect(() => {
+    if (activeTab !== 'external' || view !== 'submit' || !authUser?.id) return;
+    const key = `${TICKET_DRAFT_PREFIX}${authUser.id}`;
+    // Only ever saves. An empty form never deletes a draft (the page can reopen
+    // straight onto this form before a draft is restored); drafts are removed
+    // only by "Discard draft", a successful submit, or logout.
+    if (!title.trim() && !description.trim()) return;
+    const timer = setTimeout(() => {
+      try {
+        localStorage.setItem(key, JSON.stringify({ title, description, category, priority, savedAt: new Date().toISOString() }));
+      } catch { /* storage unavailable — drafts are best effort */ }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [title, description, category, priority, view, activeTab, authUser?.id]);
+
   // Fetch tickets and stats on mount
   useEffect(() => {
     if (hasFetched.current) return;
@@ -219,6 +593,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
     if (!token) {
       console.warn('No auth token found, user may need to login');
       setLoading(false);
+      setStatsFailed(true);
       return;
     }
 
@@ -227,6 +602,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
   }, []);
 
   const fetchTickets = async () => {
+    const seq = ++ticketsFetchSeqRef.current;
+    const isStale = () => seq !== ticketsFetchSeqRef.current;
     try {
       setLoading(true);
       const params = new URLSearchParams();
@@ -240,21 +617,25 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
       const response = await fetch(url, {
         headers: getAuthHeaders(),
       });
+      if (isStale()) return;
 
       if (response.ok) {
         const data = await response.json();
+        if (isStale()) return;
         setTickets(data.items.map(transformTicket));
       } else {
         const errorData = await response.json().catch(() => ({}));
+        if (isStale()) return;
         console.error('Failed to fetch tickets:', response.status, errorData);
         // Keep empty array on error
         setTickets([]);
       }
     } catch (error) {
+      if (isStale()) return;
       console.error('Error fetching tickets:', error);
       setTickets([]);
     } finally {
-      setLoading(false);
+      if (!isStale()) setLoading(false);
     }
   };
 
@@ -267,9 +648,13 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
       if (response.ok) {
         const data = await response.json();
         setStats(data);
+        setStatsFailed(false);
+      } else {
+        setStatsFailed(true);
       }
     } catch (error) {
       console.error('Error fetching stats:', error);
+      setStatsFailed(true);
     }
   };
 
@@ -310,6 +695,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
   }, [filterStatus, filterPriority, internalFilterAssignment]);
 
   const fetchInternalTickets = async () => {
+    const seq = ++internalTicketsFetchSeqRef.current;
+    const isStale = () => seq !== internalTicketsFetchSeqRef.current;
     try {
       setInternalLoading(true);
       const response = await internalTicketService.adminListAllTickets({
@@ -319,12 +706,14 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
         assigned_to_me: internalFilterAssignment === 'mine' ? true : undefined,
         unassigned: internalFilterAssignment === 'unassigned' ? true : undefined,
       });
+      if (isStale()) return;
       setInternalTickets(response.items);
     } catch (error) {
+      if (isStale()) return;
       console.error('Error fetching internal tickets:', error);
       setInternalTickets([]);
     } finally {
-      setInternalLoading(false);
+      if (!isStale()) setInternalLoading(false);
     }
   };
 
@@ -332,8 +721,10 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
     try {
       const data = await internalTicketService.adminGetStats();
       setInternalStats(data);
+      setInternalStatsFailed(false);
     } catch (error) {
       console.error('Error fetching internal stats:', error);
+      setInternalStatsFailed(true);
     }
   };
 
@@ -492,10 +883,20 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
       ticket.ticket_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
       ticket.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
       ticket.created_by?.name?.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesSearch;
+    const matchesCategory = teamCategoryFilter === 'all' || ticket.category === teamCategoryFilter;
+    return matchesSearch && matchesCategory;
   });
 
-  const paginatedInternalTickets = filteredInternalTickets.slice(
+  const INTERNAL_PRIORITY_RANK: Record<string, number> = { high: 0, medium: 1, low: 2 };
+  const sortedInternalTickets = teamSort === 'default'
+    ? filteredInternalTickets
+    : [...filteredInternalTickets].sort((a, b) => {
+        if (teamSort === 'priority') return (INTERNAL_PRIORITY_RANK[a.priority] ?? 9) - (INTERNAL_PRIORITY_RANK[b.priority] ?? 9);
+        const key = teamSort === 'newest' ? 'created_at' : 'updated_at';
+        return new Date(b[key]).getTime() - new Date(a[key]).getTime();
+      });
+
+  const paginatedInternalTickets = sortedInternalTickets.slice(
     (teamCurrentPage - 1) * teamItemsPerPage,
     teamCurrentPage * teamItemsPerPage
   );
@@ -526,7 +927,12 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
         toast.success(`Ticket #${newTicket.ticketNumber} created. We'll respond within 24 hours.`);
 
-        // Reset form
+        // Reset form (and drop the saved draft — it has been submitted)
+        if (authUser?.id) {
+          try { localStorage.removeItem(`${TICKET_DRAFT_PREFIX}${authUser.id}`); } catch { /* storage unavailable */ }
+        }
+        setDraftRestored(false);
+        setSubmitAttempted(false);
         setTitle('');
         setDescription('');
         setCategory('technical');
@@ -717,7 +1123,15 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
     return matchesSearch;
   });
 
-  const paginatedTickets = filteredTickets.slice(
+  const PRIORITY_RANK: Record<SupportTicket['priority'], number> = { urgent: 0, high: 1, medium: 2, low: 3 };
+  const sortedTickets = ticketSort === 'default'
+    ? filteredTickets
+    : [...filteredTickets].sort((a, b) => {
+        if (ticketSort === 'priority') return PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority];
+        const key = ticketSort === 'newest' ? 'createdAt' : 'updatedAt';
+        return new Date(b[key]).getTime() - new Date(a[key]).getTime();
+      });
+  const paginatedTickets = sortedTickets.slice(
     (myCurrentPage - 1) * myItemsPerPage,
     myCurrentPage * myItemsPerPage
   );
@@ -729,34 +1143,52 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
   useEffect(() => {
     setTeamCurrentPage(1);
-  }, [searchQuery, filterStatus, filterPriority, internalFilterAssignment, activeTab]);
+  }, [searchQuery, filterStatus, filterPriority, internalFilterAssignment, activeTab, teamCategoryFilter, teamSort]);
 
 
-  // Use stats from API or calculate from tickets
-  const openTickets = stats?.open_tickets ?? tickets.filter(t => t.status === 'open').length;
-  const inProgressTickets = stats?.in_progress_tickets ?? tickets.filter(t => t.status === 'in-progress').length;
-  const resolvedTickets = stats?.resolved_tickets ?? tickets.filter(t => t.status === 'resolved').length;
-  const totalTickets = stats?.total_tickets ?? tickets.length;
+  /* Card counts come only from the stats endpoints. They used to fall back to
+     a tally of `tickets` — the filtered/searched list, so a different rule —
+     and the internal cards to 0, then jump once stats landed. Placeholder
+     until they arrive; '—' if the stats call failed. */
+  const statCount = (value: number | undefined, failed: boolean) =>
+    value !== undefined ? value : failed ? '—' : <StatValuePlaceholder />;
+  const openTickets = statCount(stats?.open_tickets, statsFailed);
+  const inProgressTickets = statCount(stats?.in_progress_tickets, statsFailed);
+  const resolvedTickets = statCount(stats?.resolved_tickets, statsFailed);
+  const totalTickets = statCount(stats?.total_tickets, statsFailed);
 
   // Internal ticket stats
-  const internalOpenTickets = internalStats?.open_tickets ?? 0;
-  const internalInProgressTickets = internalStats?.in_progress_tickets ?? 0;
-  const internalResolvedTickets = internalStats?.resolved_tickets ?? 0;
+  const internalOpenTickets = statCount(internalStats?.open_tickets, internalStatsFailed);
+  const internalInProgressTickets = statCount(internalStats?.in_progress_tickets, internalStatsFailed);
+  const internalResolvedTickets = statCount(internalStats?.resolved_tickets, internalStatsFailed);
+  // Numeric for the "needs attention" badges, which simply stay hidden at 0.
   const internalUnassignedTickets = internalStats?.unassigned_tickets ?? 0;
-  const internalTotalTickets = internalStats?.total_tickets ?? 0;
+  const internalUnassignedCount = statCount(internalStats?.unassigned_tickets, internalStatsFailed);
+  const internalTotalTickets = statCount(internalStats?.total_tickets, internalStatsFailed);
 
   return (
     <div ref={rootRef} className="flex-1 bg-slate-50 overflow-x-clip">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
-      <PageBreadcrumb className="mb-0" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Support Tickets' }]} />
-      <div className="mb-5 flex flex-col gap-4 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-5 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
-            <LifeBuoy className="h-5 w-5 text-brand-blue" />
+      <PageBreadcrumb
+        className="mb-4 md:mb-6"
+        items={
+          activeTab === 'external' && view === 'detail' && selectedTicket
+            ? [{ label: 'Dashboard', href: '/dashboard' }, { label: 'Support Tickets', onClick: () => setView('tickets') }, { label: selectedTicket.ticketNumber }]
+            : activeTab === 'team' && view === 'detail' && selectedInternalTicket
+            ? [{ label: 'Dashboard', href: '/dashboard' }, { label: 'Team Tickets', onClick: () => setView('tickets') }, { label: selectedInternalTicket.ticket_number }]
+            : activeTab === 'external' && view === 'submit'
+              ? [{ label: 'Dashboard', href: '/dashboard' }, { label: 'Support Tickets', onClick: () => setView('overview') }, { label: 'New Ticket' }]
+              : [{ label: 'Dashboard', href: '/dashboard' }, { label: 'Support Tickets' }]
+        }
+      />
+      <div className="mb-4 flex flex-col gap-4 rounded-xl border border-gray-100 bg-white p-4 shadow-sm dark:border-slate-700/60 dark:bg-slate-900 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-center gap-3 sm:gap-4">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 text-brand-blue sm:h-12 sm:w-12">
+            <Headphones className="h-5 w-5 sm:h-6 sm:w-6" />
           </div>
-          <div>
-            <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">Support Center</h1>
+          <div className="min-w-0">
+            <h1 className="text-lg font-semibold tracking-tight text-gray-900 dark:text-slate-50 sm:text-xl">Support Center</h1>
             <p className="mt-0.5 text-sm text-gray-600 dark:text-slate-400">{activeTab === 'external' ? 'Get help from the TalentFlow support team.' : 'Manage help requests from your team in one place.'}</p>
           </div>
         </div>
@@ -766,21 +1198,24 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
             feature="priority_support"
             mode="hidden"
             fallback={
-              <Badge
-                variant="secondary"
+              <span
                 aria-disabled="true"
                 title={PLAN_LOCKED_MESSAGE}
-                className="gap-1.5 cursor-not-allowed"
+                className="inline-flex cursor-not-allowed items-center gap-2 rounded-lg bg-gray-100 px-3 py-2 text-xs font-medium text-gray-500 dark:bg-slate-800 dark:text-slate-400"
               >
-                <Lock className="h-3 w-3" />
-                Priority Support is not included in your current plan.
-              </Badge>
+                <Lock className="h-3.5 w-3.5 shrink-0" />
+                <span className="sm:hidden">Priority Support not in plan</span>
+                <span className="hidden sm:inline">Priority Support is not included in your current plan.</span>
+              </span>
             }
           >
-            <Badge variant="success" className="gap-1.5">
-              <Sparkles className="h-3 w-3" />
-              Priority Support enabled — tickets handled with higher priority and faster response times.
-            </Badge>
+            <span title="Priority Support enabled — tickets handled with higher priority and faster response times." className="inline-flex items-center gap-2 rounded-lg bg-success-subtle px-3 py-2 text-xs font-medium text-success-strong">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-success text-white">
+                <Check className="h-3 w-3" strokeWidth={3} />
+              </span>
+              <span className="sm:hidden">Priority Support enabled</span>
+              <span className="hidden sm:inline">Priority Support enabled — tickets handled with higher priority and faster response times.</span>
+            </span>
           </FeatureGate>
           <div className="flex items-center gap-2 sm:gap-3">
             {activeTab === 'team' && isAdmin && (
@@ -795,7 +1230,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
             {activeTab === 'external' && view !== 'overview' && view !== 'submit' && (
               <Button
                 variant="primary"
-                onClick={() => setView('submit')}
+                onClick={openSubmitView}
                 icon={<Send className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />}
               >
                 New Ticket
@@ -806,31 +1241,31 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
       </div>
       {/* Tab Switcher - Only show for admins */}
       {isAdmin && (
-        <div className="flex gap-1 -mt-2 mb-5 border-b border-gray-200 dark:border-slate-700 overflow-x-auto">
+        <div className="mb-4 flex gap-1 border-b border-gray-200 dark:border-slate-700">
           <button
             onClick={() => { setActiveTab('external'); setView('overview'); setSelectedTicket(null); setSelectedInternalTicket(null); }}
-            className={`px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+            className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2.5 text-xs font-semibold transition-colors sm:px-5 sm:text-sm ${
               activeTab === 'external'
-                ? 'text-brand-blue border-brand-blue'
-                : 'text-gray-500 dark:text-slate-400 border-transparent hover:text-gray-800 dark:hover:text-slate-200 hover:border-gray-300'
+                ? 'border-brand-blue text-brand-blue'
+                : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-800 dark:text-slate-400 dark:hover:text-slate-200'
             }`}
           >
             <div className="flex items-center gap-1.5 sm:gap-2">
-              <HelpCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+              <User className="h-4 w-4 flex-shrink-0" />
               <span className="hidden sm:inline">My Support Tickets</span>
               <span className="sm:hidden">My Tickets</span>
             </div>
           </button>
           <button
             onClick={() => { setActiveTab('team'); setView('overview'); setSelectedTicket(null); setSelectedInternalTicket(null); }}
-            className={`px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+            className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2.5 text-xs font-semibold transition-colors sm:px-5 sm:text-sm ${
               activeTab === 'team'
-                ? 'text-brand-blue border-brand-blue'
-                : 'text-gray-500 dark:text-slate-400 border-transparent hover:text-gray-800 dark:hover:text-slate-200 hover:border-gray-300'
+                ? 'border-brand-blue text-brand-blue'
+                : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-800 dark:text-slate-400 dark:hover:text-slate-200'
             }`}
           >
             <div className="flex items-center gap-1.5 sm:gap-2">
-              <Inbox className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+              <Users className="h-4 w-4 flex-shrink-0" />
               <span className="hidden sm:inline">Team Support Tickets</span>
               <span className="sm:hidden">Team</span>
               {internalUnassignedTickets > 0 && (
@@ -849,367 +1284,691 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
         {/* Overview */}
         {activeTab === 'external' && view === 'overview' && (
-          <div className="space-y-4 sm:space-y-6">
+          <div className="space-y-4">
             {/* Stats Cards — clicking a card drills into the tickets list pre-filtered by that status */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
-              <button
-                type="button"
-                onClick={() => { setFilterStatus('open'); setView('tickets'); }}
-                className="text-left w-full bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden hover:border-brand-blue/30 hover:shadow-md transition-all"
-              >
-                <div className="flex items-center justify-between mb-1 sm:mb-2">
-                  <span className="text-2xs sm:text-xs md:text-sm text-gray-600">Open Tickets</span>
-                  <Circle className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800 flex-shrink-0" />
-                </div>
-                <div className="text-lg sm:text-2xl md:text-3xl text-gray-900 mb-0.5 sm:mb-1">{openTickets}</div>
-                <div className="text-2xs sm:text-xs text-gray-600">Awaiting response</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => { setFilterStatus('in_progress'); setView('tickets'); }}
-                className="text-left w-full bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden hover:border-brand-blue/30 hover:shadow-md transition-all"
-              >
-                <div className="flex items-center justify-between mb-1 sm:mb-2">
-                  <span className="text-2xs sm:text-xs md:text-sm text-gray-600">In Progress</span>
-                  <Clock3 className="w-4 h-4 sm:w-5 sm:h-5 text-warning flex-shrink-0" />
-                </div>
-                <div className="text-lg sm:text-2xl md:text-3xl text-gray-900 mb-0.5 sm:mb-1">{inProgressTickets}</div>
-                <div className="text-2xs sm:text-xs text-gray-600">Being worked on</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => { setFilterStatus('resolved'); setView('tickets'); }}
-                className="text-left w-full bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden hover:border-brand-blue/30 hover:shadow-md transition-all"
-              >
-                <div className="flex items-center justify-between mb-1 sm:mb-2">
-                  <span className="text-2xs sm:text-xs md:text-sm text-gray-600">Resolved</span>
-                  <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-success flex-shrink-0" />
-                </div>
-                <div className="text-lg sm:text-2xl md:text-3xl text-gray-900 mb-0.5 sm:mb-1">{resolvedTickets}</div>
-                <div className="text-2xs sm:text-xs text-gray-600">Successfully solved</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => { setFilterStatus('all'); setView('tickets'); }}
-                className="text-left w-full bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden hover:border-brand-blue/30 hover:shadow-md transition-all"
-              >
-                <div className="flex items-center justify-between mb-1 sm:mb-2">
-                  <span className="text-2xs sm:text-xs md:text-sm text-gray-600">Total Tickets</span>
-                  <Ticket className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 flex-shrink-0" />
-                </div>
-                <div className="text-lg sm:text-2xl md:text-3xl text-gray-900 mb-0.5 sm:mb-1">{totalTickets}</div>
-                <div className="text-2xs sm:text-xs text-gray-600">All time</div>
-              </button>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 sm:gap-4">
+              {[
+                { label: 'Open Tickets', value: openTickets, sub: 'Awaiting response', icon: FileText, tile: 'bg-brand-blue/10 text-brand-blue', badge: <Clock className="h-4 w-4 text-brand-orange" />, filter: 'open' },
+                { label: 'In Progress', value: inProgressTickets, sub: 'Being worked on', icon: CircleDashed, tile: 'bg-brand-blue/10 text-brand-blue', badge: <Clock className="h-4 w-4 text-brand-orange" />, filter: 'in-progress' },
+                { label: 'Resolved', value: resolvedTickets, sub: 'Successfully solved', icon: CheckCircle2, tile: 'bg-success-subtle text-success', badge: null, filter: 'resolved' },
+                { label: 'Total Tickets', value: totalTickets, sub: 'All time', icon: BarChart3, tile: 'bg-brand-blue/10 text-brand-blue', badge: null, filter: 'all' },
+              ].map(card => {
+                const CardIcon = card.icon;
+                return (
+                  <button
+                    key={card.label}
+                    type="button"
+                    onClick={() => { setFilterStatus(card.filter as typeof filterStatus); setView('tickets'); }}
+                    className="group relative flex w-full items-start gap-3 overflow-hidden rounded-xl border border-gray-200 bg-white p-4 text-left transition-all hover:-translate-y-0.5 hover:border-brand-blue/30 hover:shadow-md dark:border-slate-700 dark:bg-slate-900"
+                  >
+                    <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${card.tile}`}>
+                      <CardIcon className="h-5 w-5" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-gray-600 dark:text-slate-400">{card.label}</p>
+                      <p className="mt-0.5 text-2xl font-bold tracking-tight tabular-nums text-gray-900 dark:text-slate-50">{card.value}</p>
+                      <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">{card.sub}</p>
+                      <p className="mt-1.5 inline-flex items-center gap-0.5 text-[11px] font-semibold text-brand-blue opacity-70 transition-opacity group-hover:opacity-100">
+                        View tickets
+                        <ChevronRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+                      </p>
+                    </div>
+                    {card.badge && <span className="shrink-0">{card.badge}</span>}
+                  </button>
+                );
+              })}
             </div>
 
             {/* Quick Actions */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 md:gap-6">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 sm:gap-4">
               <button
-                onClick={() => setView('submit')}
-                className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6 md:p-8 text-left hover:border-brand-blue/30 hover:shadow-md transition-all"
+                onClick={openSubmitView}
+                className="group flex w-full flex-col gap-3 rounded-xl border border-gray-200 bg-white p-4 text-left transition-all hover:border-brand-blue/30 hover:shadow-md dark:border-slate-700 dark:bg-slate-900 sm:flex-row sm:items-center"
               >
-                <Send className="w-6 h-6 sm:w-8 sm:h-8 text-brand-blue mb-2 sm:mb-4" />
-                <h3 className="text-gray-900 dark:text-slate-50 text-sm sm:text-base mb-1 sm:mb-2">Submit New Ticket</h3>
-                <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
-                  Report an issue or request help from our support team
-                </p>
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 text-brand-blue">
+                  <Send className="h-5 w-5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">Submit New Ticket</h3>
+                  <p className="mt-0.5 text-sm text-gray-600 dark:text-slate-400">Report an issue or request help from our support team</p>
+                </div>
+                <span className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-brand-blue px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-brand-blue/25 transition-colors group-hover:bg-brand-blue-2">
+                  Submit New Ticket
+                  <ChevronRight className="h-4 w-4" />
+                </span>
               </button>
 
               <button
                 onClick={() => setView('tickets')}
-                className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6 md:p-8 text-left hover:border-brand-blue/30 hover:shadow-md transition-all"
+                className="group flex w-full flex-col gap-3 rounded-xl border border-gray-200 bg-white p-4 text-left transition-all hover:border-brand-blue/30 hover:shadow-md dark:border-slate-700 dark:bg-slate-900 sm:flex-row sm:items-center"
               >
-                <Ticket className="w-6 h-6 sm:w-8 sm:h-8 text-brand-blue mb-2 sm:mb-4" />
-                <h3 className="text-gray-900 dark:text-slate-50 text-sm sm:text-base mb-1 sm:mb-2">View My Tickets</h3>
-                <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
-                  Track and manage all your support requests
-                </p>
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 text-brand-blue">
+                  <Ticket className="h-5 w-5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">View My Tickets</h3>
+                  <p className="mt-0.5 text-sm text-gray-600 dark:text-slate-400">Track and manage all your support requests</p>
+                </div>
+                <span className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-brand-blue px-4 py-2 text-sm font-semibold text-brand-blue transition-colors group-hover:bg-brand-blue/5">
+                  View My Tickets
+                  <ChevronRight className="h-4 w-4" />
+                </span>
               </button>
             </div>
 
             {/* Recent Tickets */}
-            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6">
-              <div className="flex items-center justify-between mb-3 sm:mb-4 md:mb-6">
-                <h3 className="text-sm sm:text-base text-gray-900 font-semibold">Recent Tickets</h3>
+            <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">Recent Tickets</h3>
                 <button
                   onClick={() => setView('tickets')}
-                  className="text-sm text-gray-800 hover:text-gray-900"
+                  className="inline-flex items-center gap-1 text-sm font-medium text-brand-blue hover:text-brand-blue/80"
                 >
                   View All
+                  <ChevronRight className="h-4 w-4" />
                 </button>
               </div>
 
               {loading ? (
-                <div className="flex items-center justify-center py-8 sm:py-12 tf-loader-center">
-                  <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 animate-spin text-gray-800" />
+                <div className="space-y-2">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="flex items-center gap-4 rounded-lg border border-gray-100 px-4 py-3 dark:border-slate-700/60">
+                      <Skeleton className="h-4 w-28" />
+                      <Skeleton className="h-4 flex-1" />
+                      <Skeleton className="hidden h-5 w-16 rounded-md sm:block" />
+                      <Skeleton className="h-5 w-16 rounded-full" />
+                    </div>
+                  ))}
                 </div>
               ) : tickets.length === 0 ? (
                 <EmptyState
                   icon={Ticket}
                   title="No tickets yet"
                   description="You haven't created any support tickets yet. Create your first ticket to get help from our support team."
-                  action={{ label: 'Create your first ticket', onClick: () => setView('submit') }}
+                  action={{ label: 'Create your first ticket', onClick: openSubmitView }}
                 />
               ) : (
-                <div className="space-y-2 sm:space-y-3">
-                  {tickets.slice(0, 5).map(ticket => (
-                    <button
-                      key={ticket.id}
-                      onClick={() => {
-                        setSelectedTicket(ticket);
-                        fetchTicketDetail(ticket.id);
-                        setView('detail');
-                      }}
-                      className="w-full text-left p-3 sm:p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200"
-                    >
-                      <div className="flex items-start justify-between mb-1.5 sm:mb-2 gap-2">
-                        <div className="flex-1 min-w-0">
-                          <span className="text-2xs sm:text-xs text-gray-600 block mb-0.5 sm:mb-1">{ticket.ticketNumber}</span>
-                          <h4 className="text-xs sm:text-sm text-gray-900 truncate">{ticket.title}</h4>
+                <>
+                  {/* Mobile: compact cards */}
+                  <div className="space-y-2 md:hidden">
+                    {tickets.slice(0, 5).map(ticket => (
+                      <button
+                        key={ticket.id}
+                        onClick={() => {
+                          setSelectedTicket(ticket);
+                          fetchTicketDetail(ticket.id);
+                          setView('detail');
+                        }}
+                        className="w-full rounded-lg border border-gray-200 bg-gray-50 p-3 text-left transition-colors hover:bg-gray-100 dark:border-slate-700/60 dark:bg-slate-800/50 dark:hover:bg-slate-800"
+                      >
+                        <div className="mb-1.5 flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <span className="mb-0.5 block text-2xs text-gray-600 dark:text-slate-400">{ticket.ticketNumber}</span>
+                            <h4 className="truncate text-sm text-gray-900 dark:text-slate-50">{ticket.title}</h4>
+                          </div>
+                          <div className="flex shrink-0 flex-col items-end gap-1">
+                            {getStatusBadge(ticket.status)}
+                            {isAwaitingUserReply(ticket) && <AwaitingReplyTag />}
+                          </div>
                         </div>
-                        {getStatusBadge(ticket.status)}
-                      </div>
-                      <div className="flex items-center gap-2 sm:gap-3 text-2xs sm:text-xs text-gray-600 flex-wrap">
-                        <span className="truncate max-w-[80px] sm:max-w-none">{getCategoryLabel(ticket.category)}</span>
-                        <span className="hidden sm:inline">-</span>
-                        {getPriorityBadge(ticket.priority)}
-                        <span className="hidden sm:inline">-</span>
-                        <span>{formatISTDate(ticket.updatedAt)}</span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
+                        <div className="flex flex-wrap items-center gap-2 text-2xs text-gray-600 dark:text-slate-400">
+                          <span className="truncate">{getCategoryLabel(ticket.category)}</span>
+                          {getPriorityBadge(ticket.priority)}
+                          <span>{formatISTDate(ticket.createdAt)}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Desktop: table */}
+                  <div className="hidden overflow-x-auto md:block">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-gray-50 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:bg-slate-800/60 dark:text-slate-400">
+                          <th className="rounded-l-lg px-4 py-2.5">Ticket ID</th>
+                          <th className="px-4 py-2.5">Subject</th>
+                          <th className="px-4 py-2.5">Category</th>
+                          <th className="px-4 py-2.5">Priority</th>
+                          <th className="px-4 py-2.5">Created On</th>
+                          <th className="px-4 py-2.5">Status</th>
+                          <th className="rounded-r-lg px-4 py-2.5 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
+                        {tickets.slice(0, 5).map(ticket => (
+                          <tr key={ticket.id} className="transition-colors hover:bg-gray-50/70 dark:hover:bg-slate-800/40">
+                            <td className="whitespace-nowrap px-4 py-3 font-medium text-gray-900 dark:text-slate-100">{ticket.ticketNumber}</td>
+                            <td className="max-w-[240px] truncate px-4 py-3 text-gray-900 dark:text-slate-100" title={ticket.title}>{ticket.title}</td>
+                            <td className="whitespace-nowrap px-4 py-3 text-gray-600 dark:text-slate-400">{getCategoryLabel(ticket.category)}</td>
+                            <td className="px-4 py-3">{getPriorityBadge(ticket.priority)}</td>
+                            <td className="whitespace-nowrap px-4 py-3 text-gray-600 dark:text-slate-400">{formatISTDate(ticket.createdAt)}</td>
+                            <td className="px-4 py-3">
+                              <div className="flex flex-col items-start gap-1">
+                                {getStatusBadge(ticket.status)}
+                                {isAwaitingUserReply(ticket) && <AwaitingReplyTag />}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <button
+                                onClick={() => {
+                                  setSelectedTicket(ticket);
+                                  fetchTicketDetail(ticket.id);
+                                  setView('detail');
+                                }}
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-brand-blue/30 px-3 py-1.5 text-xs font-semibold text-brand-blue transition-colors hover:bg-brand-blue/5"
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                                View
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               )}
             </div>
 
             {/* Help Resources */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
-              <button
-                onClick={() => setView('knowledge-base')}
-                className="bg-white border border-gray-200 rounded-xl shadow-sm p-3 sm:p-4 md:p-6 text-left hover:border-gray-300 hover:shadow-md transition-all"
-              >
-                <Book className="w-5 h-5 sm:w-6 sm:h-6 text-gray-800 mb-2 sm:mb-3" />
-                <h4 className="text-sm sm:text-base text-gray-900 mb-1 sm:mb-2">Knowledge Base</h4>
-                <p className="text-xs sm:text-sm text-gray-600">
-                  Browse articles and guides
-                </p>
-              </button>
-
-              <a
-                href="#"
-                className="bg-white border border-gray-200 rounded-xl shadow-sm p-3 sm:p-4 md:p-6 text-left hover:border-gray-300 hover:shadow-md transition-all"
-              >
-                <Video className="w-5 h-5 sm:w-6 sm:h-6 text-gray-800 mb-2 sm:mb-3" />
-                <h4 className="text-sm sm:text-base text-gray-900 mb-1 sm:mb-2">Video Tutorials</h4>
-                <p className="text-xs sm:text-sm text-gray-600">
-                  Watch step-by-step guides
-                </p>
-              </a>
-
-              <a
-                href="#"
-                className="bg-white border border-gray-200 rounded-xl shadow-sm p-3 sm:p-4 md:p-6 text-left hover:border-gray-300 hover:shadow-md transition-all"
-              >
-                <FileQuestion className="w-5 h-5 sm:w-6 sm:h-6 text-gray-800 mb-2 sm:mb-3" />
-                <h4 className="text-sm sm:text-base text-gray-900 mb-1 sm:mb-2">FAQs</h4>
-                <p className="text-xs sm:text-sm text-gray-600">
-                  Find quick answers
-                </p>
-              </a>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
+              {[
+                { key: 'kb', title: 'Knowledge Base', desc: 'Browse articles and guides', icon: Book },
+                { key: 'video', title: 'Video Tutorials', desc: 'Watch step-by-step guides', icon: Video },
+                { key: 'faq', title: 'FAQs', desc: 'Find quick answers', icon: FileQuestion },
+              ].map(item => {
+                const ItemIcon = item.icon;
+                const inner = (
+                  <>
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 text-brand-blue">
+                      <ItemIcon className="h-5 w-5" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-50 sm:text-base">{item.title}</h4>
+                      <p className="text-xs text-gray-600 dark:text-slate-400 sm:text-sm">{item.desc}</p>
+                    </div>
+                    <ChevronRight className="h-5 w-5 shrink-0 text-gray-400 transition-transform group-hover:translate-x-0.5 group-hover:text-brand-blue" />
+                  </>
+                );
+                const cls = 'group flex w-full items-center gap-3 rounded-xl border border-gray-200 bg-white p-4 text-left transition-all hover:border-brand-blue/30 hover:shadow-md dark:border-slate-700 dark:bg-slate-900';
+                // Video tutorials and FAQs have no content yet — shown as "Coming soon" instead of a dead link.
+                return item.key === 'kb' ? (
+                  <button key={item.key} onClick={() => setView('knowledge-base')} className={cls}>{inner}</button>
+                ) : (
+                  <div key={item.key} aria-disabled="true" className="relative flex w-full cursor-default items-center gap-3 rounded-xl border border-dashed border-gray-200 bg-gray-50/60 p-4 text-left opacity-80 dark:border-slate-700 dark:bg-slate-800/30">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gray-100 text-gray-400 dark:bg-slate-800 dark:text-slate-500">
+                      <item.icon className="h-5 w-5" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <h4 className="text-sm font-semibold text-gray-700 dark:text-slate-300 sm:text-base">{item.title}</h4>
+                      <p className="text-xs text-gray-500 dark:text-slate-400 sm:text-sm">{item.desc}</p>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-600 dark:bg-slate-700 dark:text-slate-300">Coming soon</span>
+                  </div>
+                );
+              })}
             </div>
 
             {/* Contact Information */}
-            <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-3 sm:p-4 md:p-6">
-              <h3 className="text-sm sm:text-base text-gray-900 font-semibold mb-3 sm:mb-4">Need Immediate Help?</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <Mail className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800 flex-shrink-0" />
-                  <div className="min-w-0">
-                    <div className="text-2xs sm:text-xs text-gray-600">Email</div>
-                    <div className="text-xs sm:text-sm text-gray-900 truncate">support@talentflow.com</div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <Phone className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800 flex-shrink-0" />
-                  <div>
-                    <div className="text-2xs sm:text-xs text-gray-600">Phone</div>
-                    <div className="text-xs sm:text-sm text-gray-900">1-800-TALENT-1</div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <Globe className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800 flex-shrink-0" />
-                  <div>
-                    <div className="text-2xs sm:text-xs text-gray-600">Hours</div>
-                    <div className="text-xs sm:text-sm text-gray-900">Mon-Fri, 9AM-6PM EST</div>
-                  </div>
-                </div>
+            <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 sm:p-5">
+              <h3 className="mb-3 text-base font-semibold text-gray-900 dark:text-slate-50">Need Immediate Help?</h3>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-0 sm:divide-x sm:divide-gray-200 dark:sm:divide-slate-700">
+                {[
+                  { label: 'Email', value: 'support@talentflow.com', icon: Mail, href: 'mailto:support@talentflow.com' },
+                  { label: 'Phone', value: '1-800-TALENT-1', icon: Phone, href: undefined },
+                  { label: 'Hours', value: 'Mon-Fri, 9AM-6PM EST', icon: Clock, href: undefined },
+                ].map((c, i) => {
+                  const ContactIcon = c.icon;
+                  return (
+                    <div key={c.label} className={`flex min-w-0 items-center gap-3 ${i > 0 ? 'sm:pl-6' : ''}`}>
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-blue/10 text-brand-blue">
+                        <ContactIcon className="h-[18px] w-[18px]" />
+                      </span>
+                      <div className="min-w-0">
+                        <div className="text-xs text-gray-500 dark:text-slate-400">{c.label}</div>
+                        {c.href ? (
+                          <a href={c.href} className="block truncate text-sm font-medium text-brand-blue hover:underline">{c.value}</a>
+                        ) : (
+                          <div className="truncate text-sm font-medium text-gray-900 dark:text-slate-50">{c.value}</div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
         )}
 
         {/* Submit Ticket Form */}
-        {activeTab === 'external' && view === 'submit' && (
-          <div className="max-w-3xl mx-auto">
+        {activeTab === 'external' && view === 'submit' && (() => {
+          const titleMissing = submitAttempted && !title.trim();
+          const descriptionMissing = submitAttempted && !description.trim();
+          const envIncluded = description.includes(ENV_BLOCK_MARKER);
+          // Possible duplicates among this user's already-loaded active tickets (no extra API call).
+          const words = titleWords(title);
+          const similarTickets = title.trim().length >= 4 && words.length > 0
+            ? tickets
+                .filter(tk => tk.status === 'open' || tk.status === 'in-progress')
+                .map(tk => {
+                  const tkWords = titleWords(tk.title);
+                  return { tk, score: words.filter(w => tkWords.includes(w)).length };
+                })
+                .filter(({ score }) => score >= Math.min(2, words.length))
+                .sort((a, b) => b.score - a.score)
+                .slice(0, 3)
+                .map(({ tk }) => tk)
+            : [];
+          const toolBtn = 'flex h-8 w-8 items-center justify-center rounded-md text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-40 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100';
+
+          return (
+          <div>
             <button
               onClick={() => setView('overview')}
-              className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 hover:text-gray-900 mb-4 sm:mb-6"
+              className="mb-3 flex items-center gap-1.5 text-sm text-gray-600 hover:text-brand-blue dark:text-slate-400"
             >
-              <ArrowLeft className="w-4 h-4" />
+              <ArrowLeft className="h-4 w-4" />
               Back to Overview
             </button>
 
-            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-4 sm:p-6 md:p-8">
-              <h2 className="text-sm sm:text-base md:text-lg text-gray-900 font-semibold mb-4 sm:mb-6">Submit Support Ticket</h2>
-
-              <div className="space-y-4 sm:space-y-6">
-                <div>
-                  <Label className="mb-1.5">
-                    Title <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    type="text"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="Brief description of your issue"
-                  />
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+              {/* Form — Ctrl/⌘ + Enter submits (same Submit as the button) */}
+              <div
+                className="rounded-xl border border-gray-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 sm:p-6 lg:col-span-2"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault();
+                    submitTicketFromForm();
+                  }
+                }}
+              >
+                <div className="border-b border-gray-100 pb-4 dark:border-slate-700/60">
+                  <h2 className="text-xl font-bold tracking-tight text-gray-900 dark:text-slate-50 sm:text-2xl">Create Support Ticket</h2>
+                  <p className="mt-1 text-sm text-gray-600 dark:text-slate-400">Tell us about your issue or request. Our support team will get back to you as soon as possible.</p>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                  <div>
-                    <Label className="mb-1.5">
-                      Category <span className="text-destructive">*</span>
-                    </Label>
-                    <select
-                      value={category}
-                      onChange={(e) => setCategory(e.target.value as SupportTicket['category'])}
-                      className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
-                    >
-                      {categories.map(cat => (
-                        <option key={cat.value} value={cat.value}>{cat.label}</option>
-                      ))}
-                    </select>
+                {/* Draft status */}
+                {draftRestored ? (
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-brand-blue/[0.05] px-3 py-2 text-xs text-gray-700 ring-1 ring-brand-blue/10 dark:bg-slate-800/60 dark:text-slate-300 dark:ring-slate-700 sm:text-sm">
+                    <span className="inline-flex items-center gap-2">
+                      <RefreshCw className="h-4 w-4 shrink-0 text-brand-blue" />
+                      We restored your unsent draft.
+                    </span>
+                    <button type="button" onClick={discardDraft} className="font-semibold text-brand-blue hover:underline">
+                      Discard draft
+                    </button>
                   </div>
+                ) : (title.trim() || description.trim()) && authUser?.id ? (
+                  <p className="mt-3 flex items-center gap-1.5 text-xs text-gray-400 dark:text-slate-500">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Draft saved automatically on this device
+                  </p>
+                ) : null}
 
+                <div className="mt-5 space-y-5">
+                  {/* Title */}
                   <div>
-                    <Label className="mb-1.5">
-                      Priority <span className="text-destructive">*</span>
+                    <Label className="mb-1.5 font-semibold">
+                      Title <span className="text-destructive">*</span>
                     </Label>
-                    <select
-                      value={priority}
-                      onChange={(e) => setPriority(e.target.value as SupportTicket['priority'])}
-                      className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
-                    >
-                      {priorities.map(p => (
-                        <option key={p.value} value={p.value}>{p.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <Label className="mb-1.5">
-                    Description <span className="text-destructive">*</span>
-                  </Label>
-                  <Textarea
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Please provide detailed information about your issue..."
-                    rows={6}
-                  />
-                </div>
-
-                <div>
-                  <Label className="mb-1.5">
-                    Attachments (Optional)
-                  </Label>
-                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 sm:p-6 md:p-8 text-center hover:border-gray-400 transition-colors">
-                    <input
-                      type="file"
-                      id="file-upload"
-                      multiple
-                      onChange={handleFileSelect}
-                      className="hidden"
+                    <Input
+                      type="text"
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value.slice(0, TICKET_TITLE_MAX))}
+                      maxLength={TICKET_TITLE_MAX}
+                      aria-invalid={titleMissing || undefined}
+                      aria-describedby={titleMissing ? 'ticket-title-error' : undefined}
+                      placeholder="Brief description of your issue (e.g., Unable to upload resume)"
                     />
-                    <label
-                      htmlFor="file-upload"
-                      className="cursor-pointer flex flex-col items-center"
-                    >
-                      <Upload className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 text-gray-400 mb-2 sm:mb-3" />
-                      <span className="text-xs sm:text-sm text-gray-900 mb-1">
-                        Click to upload files
-                      </span>
-                      <span className="text-2xs sm:text-xs text-gray-600">
-                        Screenshots, logs, or documents (Max 10MB each)
+                    <div className="mt-1 flex items-center justify-between gap-2">
+                      {titleMissing ? (
+                        <p id="ticket-title-error" className="flex items-center gap-1 text-xs font-medium text-destructive">
+                          <AlertCircle className="h-3.5 w-3.5" /> Title is required
+                        </p>
+                      ) : <span />}
+                      <p className={`text-xs tabular-nums ${title.length >= TICKET_TITLE_MAX ? 'text-destructive' : 'text-gray-400 dark:text-slate-500'}`}>{title.length}/{TICKET_TITLE_MAX}</p>
+                    </div>
+
+                    {/* Possible duplicates */}
+                    {similarTickets.length > 0 && (
+                      <div className="mt-2 rounded-lg border border-warning-line bg-warning-subtle/60 p-3">
+                        <p className="flex items-center gap-1.5 text-xs font-semibold text-warning-strong sm:text-sm">
+                          <AlertCircle className="h-4 w-4 shrink-0" />
+                          You may already have a ticket about this
+                        </p>
+                        <ul className="mt-2 space-y-1.5">
+                          {similarTickets.map(tk => (
+                            <li key={tk.id} className="flex items-center justify-between gap-2 rounded-md bg-white px-2.5 py-1.5 text-xs dark:bg-slate-900 sm:text-sm">
+                              <span className="min-w-0 truncate">
+                                <span className="text-gray-500 dark:text-slate-400">{tk.ticketNumber}</span>
+                                <span className="mx-1.5 text-gray-300">·</span>
+                                <span className="text-gray-900 dark:text-slate-100">{tk.title}</span>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => { setSelectedTicket(tk); fetchTicketDetail(tk.id); setView('detail'); }}
+                                className="shrink-0 font-semibold text-brand-blue hover:underline"
+                              >
+                                View
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                        <p className="mt-2 text-[11px] text-gray-600 dark:text-slate-400">Adding to an existing ticket gets you a faster answer. Your draft is kept if you go and check.</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Category + Priority */}
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5">
+                    <div>
+                      <Label className="mb-1.5 font-semibold">
+                        Category <span className="text-destructive">*</span>
+                      </Label>
+                      <select
+                        value={category}
+                        onChange={(e) => setCategory(e.target.value as SupportTicket['category'])}
+                        className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                      >
+                        {categories.map(cat => (
+                          <option key={cat.value} value={cat.value}>{cat.label}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <div className="mb-1.5 flex items-center gap-1.5">
+                        <Label className="font-semibold">
+                          Priority <span className="text-destructive">*</span>
+                        </Label>
+                        <Tooltip
+                          content={
+                            <div className="max-w-[260px] space-y-1 text-left text-xs">
+                              {PRIORITY_GUIDANCE.map(g => (
+                                <p key={g.label}><strong>{g.label}:</strong> {g.text}</p>
+                              ))}
+                            </div>
+                          }
+                        >
+                          <span tabIndex={0} aria-label="What each priority means" className="inline-flex cursor-help text-gray-400 hover:text-brand-blue">
+                            <Info className="h-4 w-4" />
+                          </span>
+                        </Tooltip>
+                      </div>
+                      <select
+                        value={priority}
+                        onChange={(e) => setPriority(e.target.value as SupportTicket['priority'])}
+                        className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                      >
+                        {priorities.map(p => (
+                          <option key={p.value} value={p.value}>{p.label}</option>
+                        ))}
+                      </select>
+                      <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+                        {PRIORITY_GUIDANCE.find(g => g.label.toLowerCase() === priority)?.text}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Description */}
+                  <div>
+                    <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                      <Label className="font-semibold">
+                        Description <span className="text-destructive">*</span>
+                      </Label>
+                      <div className="flex items-center gap-3">
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() => { setDescTemplateOpen(o => !o); setDescEmojiOpen(false); }}
+                            aria-expanded={descTemplateOpen}
+                            className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-blue hover:underline sm:text-sm"
+                          >
+                            <FileText className="h-4 w-4" />
+                            Use Template
+                          </button>
+                          {descTemplateOpen && (
+                            <>
+                              <button type="button" aria-hidden="true" tabIndex={-1} className="fixed inset-0 z-10 cursor-default" onClick={() => setDescTemplateOpen(false)} />
+                              <div className="absolute right-0 z-20 mt-1 w-56 overflow-hidden rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-900">
+                                {DESCRIPTION_TEMPLATES.map((tpl, tplIndex) => (
+                                  <button
+                                    key={tpl.label}
+                                    type="button"
+                                    title={tpl.text}
+                                    data-template-index={tplIndex}
+                                    onClick={handleDescTemplatePick}
+                                    className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 hover:text-brand-blue dark:text-slate-300 dark:hover:bg-slate-800"
+                                  >
+                                    {tpl.label}
+                                  </button>
+                                ))}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowDescriptionPreview(p => !p)}
+                          aria-pressed={showDescriptionPreview}
+                          className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-600 hover:text-brand-blue dark:text-slate-400 sm:text-sm"
+                        >
+                          {showDescriptionPreview ? <><FileText className="h-4 w-4" /> Edit</> : <><Eye className="h-4 w-4" /> Preview</>}
+                        </button>
+                      </div>
+                    </div>
+
+                    {showDescriptionPreview ? (
+                      <div className="min-h-[132px] rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm leading-relaxed text-gray-800 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-200">
+                        {description.trim()
+                          ? <div className="space-y-1">{renderFormattedMessage(description)}</div>
+                          : <p className="text-gray-400 dark:text-slate-500">Nothing to preview yet.</p>}
+                      </div>
+                    ) : (
+                      <Textarea
+                        ref={descriptionRef}
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value.slice(0, TICKET_DESCRIPTION_MAX))}
+                        onSelect={(e) => { lastDescSel.current = { start: e.currentTarget.selectionStart, end: e.currentTarget.selectionEnd }; }}
+                        maxLength={TICKET_DESCRIPTION_MAX}
+                        aria-invalid={descriptionMissing || undefined}
+                        aria-describedby={descriptionMissing ? 'ticket-description-error' : undefined}
+                        placeholder={CATEGORY_DESCRIPTION_HINTS[category] || 'Please provide detailed information about your issue.'}
+                        rows={6}
+                      />
+                    )}
+
+                    {/* Toolbar + counter */}
+                    <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-0.5">
+                        <button type="button" disabled={showDescriptionPreview} onClick={() => wrapDescription('**', '**', 'bold text')} aria-label="Bold" title="Bold" className={toolBtn}><Bold className="h-4 w-4" /></button>
+                        <button type="button" disabled={showDescriptionPreview} onClick={() => wrapDescription('_', '_', 'italic text')} aria-label="Italic" title="Italic" className={toolBtn}><Italic className="h-4 w-4" /></button>
+                        <button type="button" disabled={showDescriptionPreview} onClick={() => prefixDescriptionLines(() => '- ')} aria-label="Bulleted list" title="Bulleted list" className={toolBtn}><List className="h-4 w-4" /></button>
+                        <button type="button" disabled={showDescriptionPreview} onClick={() => prefixDescriptionLines(i => `${i + 1}. `)} aria-label="Numbered list" title="Numbered list" className={toolBtn}><ListOrdered className="h-4 w-4" /></button>
+                        <button type="button" disabled={showDescriptionPreview} onClick={() => wrapDescription('[', '](https://)', 'link text')} aria-label="Insert link" title="Insert link" className={toolBtn}><Link2 className="h-4 w-4" /></button>
+                        <div className="relative">
+                          <button type="button" disabled={showDescriptionPreview} onClick={() => { setDescEmojiOpen(o => !o); setDescTemplateOpen(false); }} aria-label="Insert emoji" title="Insert emoji" aria-expanded={descEmojiOpen} className={toolBtn}><Smile className="h-4 w-4" /></button>
+                          {descEmojiOpen && !showDescriptionPreview && (
+                            <>
+                              <button type="button" aria-hidden="true" tabIndex={-1} className="fixed inset-0 z-10 cursor-default" onClick={() => setDescEmojiOpen(false)} />
+                              <div className="absolute left-0 top-full z-20 mt-1 max-h-64 w-[17.5rem] overflow-y-auto rounded-lg border border-gray-200 bg-white p-2 shadow-lg [scrollbar-width:thin] dark:border-slate-700 dark:bg-slate-900">
+                                {EMOJI_GROUPS.map(group => (
+                                  <div key={group.group} className="mb-1.5 last:mb-0">
+                                    <p className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">{group.group}</p>
+                                    <div className="grid grid-cols-8 gap-0.5">
+                                      {group.items.map(em => (
+                                        <button
+                                          key={em}
+                                          type="button"
+                                          aria-label={`Insert ${em}`}
+                                          data-emoji={em}
+                                          onClick={handleDescEmojiPick}
+                                          style={{ fontFamily: EMOJI_FONT_STACK }}
+                                          className="flex h-8 w-8 items-center justify-center rounded-md text-xl leading-none hover:bg-gray-100 dark:hover:bg-slate-800"
+                                        >
+                                          {em}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {descriptionMissing && (
+                          <p id="ticket-description-error" className="flex items-center gap-1 text-xs font-medium text-destructive">
+                            <AlertCircle className="h-3.5 w-3.5" /> Description is required
+                          </p>
+                        )}
+                        <p className={`text-xs tabular-nums ${description.length >= TICKET_DESCRIPTION_MAX ? 'text-destructive' : 'text-gray-400 dark:text-slate-500'}`}>{description.length}/{TICKET_DESCRIPTION_MAX}</p>
+                      </div>
+                    </div>
+
+                    {/* Optional browser details — inserted visibly into the description */}
+                    <label className="mt-3 flex cursor-pointer items-start gap-2.5 text-sm text-gray-700 dark:text-slate-300">
+                      <input
+                        type="checkbox"
+                        checked={envIncluded}
+                        onChange={(e) => toggleEnvironmentDetails(e.target.checked)}
+                        className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/30"
+                      />
+                      <span>
+                        Include my browser details
+                        <span className="block text-xs text-gray-500 dark:text-slate-400">Adds your browser, operating system and screen size to the description so support can reproduce the issue. You can edit it before sending.</span>
                       </span>
                     </label>
                   </div>
 
-                  {attachments.length > 0 && (
-                    <div className="mt-3 sm:mt-4 space-y-2">
-                      {attachments.map((file, index) => (
-                        <div key={index} className="flex items-center justify-between p-2.5 sm:p-3 bg-gray-50 rounded-lg">
-                          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                            <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 flex-shrink-0" />
-                            <div className="min-w-0">
-                              <div className="text-xs sm:text-sm text-gray-900 truncate">{file.name}</div>
-                              <div className="text-2xs sm:text-xs text-gray-600">
-                                {(file.size / 1024).toFixed(1)} KB
+                  {/* Attachments */}
+                  <div>
+                    <Label className="mb-1.5 font-semibold">
+                      Attachments <span className="font-normal text-gray-500 dark:text-slate-400">(Optional)</span>
+                    </Label>
+                    {/* Files are not sent with the ticket yet (the create API takes no files),
+                        so uploads stay disabled rather than being silently dropped. */}
+                    <div aria-disabled="true" className="rounded-xl border-2 border-dashed border-gray-200 bg-gray-50/60 p-5 text-center dark:border-slate-700 dark:bg-slate-800/30 sm:p-6">
+                      <input
+                        type="file"
+                        id="file-upload"
+                        multiple
+                        disabled
+                        onChange={handleFileSelect}
+                        className="hidden"
+                      />
+                      <div className="flex flex-col items-center">
+                        <UploadCloud className="mb-2 h-9 w-9 text-gray-300 dark:text-slate-600" />
+                        <span className="text-sm font-medium text-gray-600 dark:text-slate-300">File uploads are coming soon</span>
+                        <span className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+                          For now, paste error messages or describe what you see in the description above.
+                        </span>
+                      </div>
+                    </div>
+
+                    {attachments.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        {attachments.map((file, index) => (
+                          <div key={index} className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 p-2.5 dark:border-slate-700 dark:bg-slate-800/50">
+                            <div className="flex min-w-0 items-center gap-2.5">
+                              <FileText className="h-4 w-4 flex-shrink-0 text-brand-blue" />
+                              <div className="min-w-0">
+                                <div className="truncate text-sm text-gray-900 dark:text-slate-50">{file.name}</div>
+                                <div className="text-xs text-gray-500 dark:text-slate-400">
+                                  {(file.size / 1024).toFixed(1)} KB
+                                </div>
                               </div>
                             </div>
+                            <Tooltip content="Remove attachment">
+                              <button
+                                onClick={() => removeAttachment(index)}
+                                aria-label="Remove attachment"
+                                className="flex-shrink-0 rounded-lg p-1.5 transition-colors hover:bg-gray-200 dark:hover:bg-slate-700"
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </button>
+                            </Tooltip>
                           </div>
-                          <Tooltip content="Remove attachment">
-                            <button
-                              onClick={() => removeAttachment(index)}
-                              aria-label="Remove attachment"
-                              className="p-1.5 sm:p-2 hover:bg-gray-200 rounded-lg transition-colors flex-shrink-0"
-                            >
-                              <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-destructive" />
-                            </button>
-                          </Tooltip>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex gap-3 sm:gap-4 pt-3 sm:pt-4">
-                  <Button
-                    variant="secondary"
-                    onClick={() => setView('overview')}
-                    disabled={submitting}
-                    className="flex-1"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    variant="primary"
-                    onClick={handleSubmitTicket}
-                    disabled={submitting}
-                    className="flex-1"
-                    icon={submitting ? (
-                      <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" />
-                    ) : (
-                      <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                        ))}
+                      </div>
                     )}
-                  >
-                    {submitting ? 'Submitting...' : 'Submit Ticket'}
-                  </Button>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex flex-col gap-3 border-t border-gray-100 pt-4 dark:border-slate-700/60 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="hidden text-xs text-gray-400 dark:text-slate-500 sm:block">
+                      Tip: press <kbd className="rounded border border-gray-200 bg-gray-50 px-1 py-0.5 font-sans text-[10px] dark:border-slate-700 dark:bg-slate-800">Ctrl</kbd> + <kbd className="rounded border border-gray-200 bg-gray-50 px-1 py-0.5 font-sans text-[10px] dark:border-slate-700 dark:bg-slate-800">Enter</kbd> to submit
+                    </p>
+                    <div className="flex flex-col-reverse gap-2 sm:flex-row sm:gap-3">
+                      <Button
+                        variant="secondary"
+                        onClick={() => setView('overview')}
+                        disabled={submitting}
+                        className="w-full sm:w-36"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        variant="primary"
+                        onClick={submitTicketFromForm}
+                        disabled={submitting}
+                        className="w-full sm:w-48"
+                        icon={submitting ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Send className="h-4 w-4" />
+                        )}
+                      >
+                        {submitting ? 'Submitting...' : 'Submit Ticket'}
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </div>
+
+              {/* Tips */}
+              <aside className="h-fit rounded-xl border border-gray-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 sm:p-5 lg:sticky lg:top-4">
+                <div className="flex items-start gap-3 border-b border-gray-100 pb-4 dark:border-slate-700/60">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-blue/10 text-brand-blue">
+                    <Lightbulb className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">Tips for a better response</h3>
+                    <p className="mt-0.5 text-sm text-gray-500 dark:text-slate-400">Follow these guidelines to help us resolve your issue faster.</p>
+                  </div>
+                </div>
+                <ul className="mt-4 space-y-4">
+                  {[
+                    { title: 'Use a clear and concise title', desc: 'Summarize your issue in a few words.' },
+                    { title: 'Provide step-by-step details', desc: 'Include the exact steps to reproduce the issue.' },
+                    { title: 'Include error messages', desc: 'Paste any error text you see. File uploads are coming soon.' },
+                    { title: 'Mention expected and actual results', desc: 'Clearly explain what you expected and what actually happened.' },
+                    { title: 'Select the correct category and priority', desc: 'Choose the category and priority that best matches your issue.' },
+                  ].map(tip => (
+                    <li key={tip.title} className="flex items-start gap-3">
+                      <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-blue/10 text-brand-blue">
+                        <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">{tip.title}</p>
+                        <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400 sm:text-sm">{tip.desc}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </aside>
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {/* All Tickets List */}
         {activeTab === 'external' && view === 'tickets' && (
           <div>
             <button
               onClick={() => setView('overview')}
-              className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 hover:text-gray-900 mb-4 sm:mb-6"
+              className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue mb-4 sm:mb-6"
             >
               <ArrowLeft className="w-4 h-4" />
               Back to Overview
@@ -1217,7 +1976,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
             <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
               {/* Filters */}
-              <div className="p-3 sm:p-4 md:p-6 border-b border-gray-200">
+              <div className="p-3 sm:p-4 md:p-6 border-b border-gray-100 dark:border-slate-700/60">
                 <div className="flex flex-col gap-2 sm:gap-3 md:gap-4">
                   <div className="flex-1 relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-blue/60 z-10" />
@@ -1226,11 +1985,11 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder="Search tickets..."
-                      className="pl-9 pr-4"
+                      className="pl-9 pr-4 w-full"
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 sm:flex gap-2 sm:gap-3 md:gap-4">
+                  <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 sm:gap-3 md:gap-4">
                     <select
                       value={filterStatus}
                       onChange={(e) => setFilterStatus(e.target.value)}
@@ -1254,19 +2013,67 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       <option value="high">High</option>
                       <option value="urgent">Urgent</option>
                     </select>
+
+                    <select
+                      value={ticketSort}
+                      onChange={(e) => setTicketSort(e.target.value as typeof ticketSort)}
+                      aria-label="Sort tickets"
+                      className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                    >
+                      <option value="default">Sort: Default</option>
+                      <option value="newest">Sort: Newest first</option>
+                      <option value="updated">Sort: Last updated</option>
+                      <option value="priority">Sort: Priority (high → low)</option>
+                    </select>
                   </div>
+
+                  {/* Active filters — each removable, plus clear all */}
+                  {(filterStatus !== 'all' || filterPriority !== 'all' || searchQuery) && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs text-gray-500 dark:text-slate-400">Filters:</span>
+                      {searchQuery && (
+                        <button type="button" onClick={() => setSearchQuery('')} className="inline-flex items-center gap-1 rounded-full bg-brand-blue/10 px-2.5 py-1 text-xs font-medium text-brand-blue hover:bg-brand-blue/15">
+                          &ldquo;{searchQuery}&rdquo; <X className="h-3 w-3" />
+                        </button>
+                      )}
+                      {filterStatus !== 'all' && (
+                        <button type="button" onClick={() => setFilterStatus('all')} className="inline-flex items-center gap-1 rounded-full bg-brand-blue/10 px-2.5 py-1 text-xs font-medium capitalize text-brand-blue hover:bg-brand-blue/15">
+                          Status: {filterStatus.replace(/[-_]/g, ' ')} <X className="h-3 w-3" />
+                        </button>
+                      )}
+                      {filterPriority !== 'all' && (
+                        <button type="button" onClick={() => setFilterPriority('all')} className="inline-flex items-center gap-1 rounded-full bg-brand-blue/10 px-2.5 py-1 text-xs font-medium capitalize text-brand-blue hover:bg-brand-blue/15">
+                          Priority: {filterPriority} <X className="h-3 w-3" />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => { setSearchQuery(''); setFilterStatus('all'); setFilterPriority('all'); }}
+                        className="text-xs font-medium text-gray-500 underline-offset-2 hover:text-brand-blue hover:underline dark:text-slate-400"
+                      >
+                        Clear all
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
 
               {/* Tickets */}
               {loading ? (
-                <div className="flex items-center justify-center py-8 sm:py-12 tf-loader-center">
-                  <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 animate-spin text-gray-800" />
+                <div className="space-y-2 p-3 sm:p-4">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="flex items-center gap-4 rounded-lg border border-gray-100 px-4 py-3 dark:border-slate-700/60">
+                      <Skeleton className="h-4 w-28" />
+                      <Skeleton className="h-4 flex-1" />
+                      <Skeleton className="hidden h-5 w-16 rounded-md md:block" />
+                      <Skeleton className="h-5 w-20 rounded-full" />
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <>
                   {/* Mobile Card Layout */}
-                  <div className="md:hidden divide-y divide-gray-200">
+                  <div className="md:hidden divide-y divide-gray-100 dark:divide-slate-700/60">
                     {paginatedTickets.map(ticket => {
                       const CategoryIcon = getCategoryIcon(ticket.category);
                       return (
@@ -1277,22 +2084,25 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                             fetchTicketDetail(ticket.id);
                             setView('detail');
                           }}
-                          className="w-full text-left p-3 sm:p-4 hover:bg-gray-50 transition-colors"
+                          className="w-full text-left p-3 sm:p-4 hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors"
                         >
                           <div className="flex items-start justify-between gap-2 mb-1.5">
                             <div className="min-w-0 flex-1">
-                              <span className="text-2xs sm:text-xs text-gray-600 block mb-0.5">{ticket.ticketNumber}</span>
-                              <h4 className="text-xs sm:text-sm text-gray-900 font-medium truncate">{ticket.title}</h4>
+                              <span className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400 block mb-0.5">{ticket.ticketNumber}</span>
+                              <h4 className="text-xs sm:text-sm text-gray-900 dark:text-slate-50 font-medium truncate">{ticket.title}</h4>
                             </div>
-                            {getStatusBadge(ticket.status)}
+                            <div className="flex shrink-0 flex-col items-end gap-1">
+                              {getStatusBadge(ticket.status)}
+                              {isAwaitingUserReply(ticket) && <AwaitingReplyTag />}
+                            </div>
                           </div>
                           <div className="flex items-center gap-2 flex-wrap mt-1.5">
-                            <div className="flex items-center gap-1">
-                              <CategoryIcon className="w-3 h-3 text-gray-600 flex-shrink-0" />
-                              <span className="text-2xs sm:text-xs text-gray-600">{getCategoryLabel(ticket.category)}</span>
+                            <div className="flex items-center gap-1 min-w-0">
+                              <CategoryIcon className="w-3 h-3 text-gray-600 dark:text-slate-400 flex-shrink-0" />
+                              <span className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400 truncate">{getCategoryLabel(ticket.category)}</span>
                             </div>
                             {getPriorityBadge(ticket.priority)}
-                            <span className="text-2xs sm:text-xs text-gray-600">{formatISTDate(ticket.updatedAt)}</span>
+                            <span className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400">{formatISTDate(ticket.updatedAt)}</span>
                           </div>
                         </button>
                       );
@@ -1302,42 +2112,45 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   {/* Desktop Table */}
                   <div className="hidden md:block overflow-x-auto tf-table-shell">
                     <table className="w-full">
-                      <thead className="bg-gray-50 border-b border-gray-200">
+                      <thead className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60">
                         <tr>
-                          <th className="px-6 py-4 text-left text-xs text-gray-600">Ticket #</th>
-                          <th className="px-6 py-4 text-left text-xs text-gray-600">Title</th>
-                          <th className="px-6 py-4 text-left text-xs text-gray-600">Category</th>
-                          <th className="px-6 py-4 text-left text-xs text-gray-600">Priority</th>
-                          <th className="px-6 py-4 text-left text-xs text-gray-600">Status</th>
-                          <th className="px-6 py-4 text-left text-xs text-gray-600">Updated</th>
-                          <th className="px-6 py-4 text-left text-xs text-gray-600 tf-sticky-col">Actions</th>
+                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 dark:text-slate-400">Ticket #</th>
+                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 dark:text-slate-400">Title</th>
+                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 dark:text-slate-400">Category</th>
+                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 dark:text-slate-400">Priority</th>
+                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 dark:text-slate-400">Status</th>
+                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 dark:text-slate-400">Updated</th>
+                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 dark:text-slate-400 tf-sticky-col">Actions</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-200">
+                      <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                         {paginatedTickets.map(ticket => {
                           const CategoryIcon = getCategoryIcon(ticket.category);
                           return (
-                            <tr key={ticket.id} className="hover:bg-gray-50">
+                            <tr key={ticket.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/50">
                               <td className="px-6 py-4">
-                                <span className="text-sm text-gray-900">{ticket.ticketNumber}</span>
+                                <span className="text-sm text-gray-900 dark:text-slate-50">{ticket.ticketNumber}</span>
                               </td>
                               <td className="px-6 py-4">
-                                <div className="text-sm text-gray-900 max-w-md truncate">{ticket.title}</div>
+                                <div className="text-sm text-gray-900 dark:text-slate-50 max-w-md truncate">{ticket.title}</div>
                               </td>
                               <td className="px-6 py-4">
-                                <div className="flex items-center gap-2">
-                                  <CategoryIcon className="w-4 h-4 text-gray-600" />
-                                  <span className="text-sm text-gray-600">{getCategoryLabel(ticket.category)}</span>
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <CategoryIcon className="w-4 h-4 text-gray-600 dark:text-slate-400 flex-shrink-0" />
+                                  <span className="text-sm text-gray-600 dark:text-slate-400 truncate">{getCategoryLabel(ticket.category)}</span>
                                 </div>
                               </td>
                               <td className="px-6 py-4">
                                 {getPriorityBadge(ticket.priority)}
                               </td>
                               <td className="px-6 py-4">
-                                {getStatusBadge(ticket.status)}
+                                <div className="flex flex-col items-start gap-1">
+                                  {getStatusBadge(ticket.status)}
+                                  {isAwaitingUserReply(ticket) && <AwaitingReplyTag />}
+                                </div>
                               </td>
                               <td className="px-6 py-4">
-                                <span className="text-sm text-gray-600">{formatISTDate(ticket.updatedAt)}</span>
+                                <span className="text-sm text-gray-600 dark:text-slate-400">{formatISTDate(ticket.updatedAt)}</span>
                               </td>
                               <td className="px-6 py-4 tf-sticky-col">
                                 <button
@@ -1346,7 +2159,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                                     fetchTicketDetail(ticket.id);
                                     setView('detail');
                                   }}
-                                  className="text-sm text-gray-800 hover:text-gray-900"
+                                  className="text-sm font-medium text-brand-blue hover:text-brand-blue/80"
                                 >
                                   View Details
                                 </button>
@@ -1384,177 +2197,584 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
         )}
 
         {/* Ticket Detail View */}
-        {activeTab === 'external' && view === 'detail' && selectedTicket && (
-          <div className="max-w-5xl mx-auto">
-            <button
-              onClick={() => setView('tickets')}
-              className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 hover:text-gray-900 mb-4 sm:mb-6"
-            >
-              <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              Back to All Tickets
-            </button>
+        {activeTab === 'external' && view === 'detail' && selectedTicket && (() => {
+          const ticketIndex = tickets.findIndex(t => t.id === selectedTicket.id);
+          const prevTicket = ticketIndex > 0 ? tickets[ticketIndex - 1] : null;
+          const nextTicket = ticketIndex >= 0 && ticketIndex < tickets.length - 1 ? tickets[ticketIndex + 1] : null;
+          const openTicket = (t: SupportTicket) => {
+            setSelectedTicket(t);
+            fetchTicketDetail(t.id);
+            setTicketMenuOpen(false);
+          };
+          const copyTicketId = () => {
+            navigator.clipboard?.writeText(selectedTicket.ticketNumber)
+              .then(() => toast.success('Ticket ID copied'))
+              .catch(() => toast.error('Could not copy ticket ID'));
+          };
+          const detailTab = detailTabState.id === selectedTicket.id ? detailTabState.tab : 'conversation';
+          const draftPriority = priorityDraft.id === selectedTicket.id ? priorityDraft.value : selectedTicket.priority;
+          const attachments = selectedTicket.attachments || [];
+          const responses = selectedTicket.responses || [];
+          const responseCount = responses.length;
+          // The chat thread starts with the ticket's original message (its description),
+          // unless the API already returns that as the first reply.
+          const descriptionText = (selectedTicket.description || '').trim();
+          const descriptionAlreadyInReplies = responses[0]?.from === 'user' && responses[0].message.trim() === descriptionText;
+          const thread: NonNullable<SupportTicket['responses']> = descriptionText && !descriptionAlreadyInReplies
+            ? [{ id: `${selectedTicket.id}-description`, from: 'user', message: selectedTicket.description, timestamp: selectedTicket.createdAt }, ...responses]
+            : responses;
+          const myName = authUser?.name || 'You';
+          const myInitial = (authUser?.name || 'U').trim().charAt(0).toUpperCase();
+          const authorName = (r: NonNullable<SupportTicket['responses']>[number]) =>
+            r.from === 'user' ? myName : (r.agentName || 'Support Team');
+          const statusLabel = selectedTicket.status.charAt(0).toUpperCase() + selectedTicket.status.slice(1).replace('-', ' ');
+          const priorityLabel = priorities.find(p => p.value === selectedTicket.priority)?.label || selectedTicket.priority;
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+          // Plain-text transcript of the ticket, generated in the browser.
+          const downloadTranscript = () => {
+            const lines = [
+              `Ticket ${selectedTicket.ticketNumber}: ${selectedTicket.title}`,
+              `Status: ${statusLabel}`,
+              `Priority: ${priorityLabel}`,
+              `Category: ${getCategoryLabel(selectedTicket.category)}`,
+              `Created: ${formatIST(selectedTicket.createdAt)}`,
+              `Last updated: ${formatIST(selectedTicket.updatedAt)}`,
+              '',
+              'Description:',
+              selectedTicket.description || '-',
+              '',
+              'Conversation:',
+              ...(responses.length
+                ? responses.flatMap(r => [`[${formatIST(r.timestamp)}] ${authorName(r)}:`, r.message, ''])
+                : ['No messages yet.']),
+            ];
+            const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${selectedTicket.ticketNumber}-transcript.txt`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+            setTicketMenuOpen(false);
+          };
+
+          // Activity log derived from what the ticket already records.
+          const activity = [
+            { time: selectedTicket.createdAt, icon: Ticket, title: 'Ticket created', detail: `${getCategoryLabel(selectedTicket.category)} · ${priorityLabel} priority` },
+            ...responses.map(r => ({
+              time: r.timestamp,
+              icon: MessageSquare,
+              title: r.from === 'user' ? `${myName} replied` : `${authorName(r)} replied`,
+              detail: r.message.length > 120 ? `${r.message.slice(0, 120)}…` : r.message,
+            })),
+            ...(selectedTicket.assignedAgent ? [{ time: '', icon: UserCheck, title: `Assigned to ${selectedTicket.assignedAgent}`, detail: '' }] : []),
+            { time: selectedTicket.updatedAt, icon: Clock, title: `Current status: ${statusLabel}`, detail: 'As of last update' },
+          ];
+
+
+          const replyTemplates: { group: string; items: { label: string; text: string }[] }[] = [
+            {
+              group: 'Follow up',
+              items: [
+                { label: 'Request a status update', text: 'Hi team,\n\nFollowing up on this ticket — could you share an update on the status?\n\nThanks' },
+                { label: 'Still facing the issue', text: 'Hi team,\n\nI am still facing this issue. It is affecting our work, so a quick update would be appreciated.\n\nThanks' },
+                { label: 'Ask for an ETA', text: 'Hi team,\n\nCould you let me know the expected timeline for a fix?\n\nThanks' },
+                { label: 'Request a call back', text: 'Hi team,\n\nIt would be easier to explain this on a call. Could someone from support reach out at a convenient time?\n\nThanks' },
+              ],
+            },
+            {
+              group: 'Share details',
+              items: [
+                { label: 'Steps to reproduce', text: 'Additional details:\n- Steps to reproduce:\n  1. \n  2. \n  3. \n- Expected result:\n- Actual result:' },
+                { label: 'Error message', text: 'I am seeing the following error message:\n\n"<paste the error here>"\n\nIt appears when I:' },
+                { label: 'Environment details', text: 'Environment details:\n- Browser and version:\n- Operating system:\n- Device (desktop / mobile):\n- Time the issue occurred:' },
+                { label: 'Affected records', text: 'This issue affects the following records:\n- Job / candidate / assessment name or ID:\n- Number of records affected:' },
+                { label: 'How often it happens', text: 'How often this happens:\n- Every time / sometimes / once:\n- Started on (date):\n- Anything that changed before it started:' },
+              ],
+            },
+            {
+              group: 'Wrap up',
+              items: [
+                { label: 'Issue resolved', text: 'Thanks for the help — the issue is resolved on my side. You can close this ticket.' },
+                { label: 'Workaround is fine', text: 'Thanks — the suggested workaround works for now. Please keep this ticket open until a permanent fix is available.' },
+                { label: 'Thank the team', text: 'Thank you for the quick support. Much appreciated!' },
+              ],
+            },
+          ];
+
+          const cardCls = 'rounded-xl border border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-900';
+          const toolBtn = 'flex h-8 w-8 items-center justify-center rounded-md text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-40 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100';
+          const infoRow = (Icon: typeof Ticket, label: string, value: React.ReactNode) => (
+            <div className="flex items-center gap-3 py-2">
+              <Icon className="h-4 w-4 shrink-0 text-gray-400 dark:text-slate-500" />
+              <span className="w-24 shrink-0 text-sm text-gray-500 dark:text-slate-400">{label}</span>
+              <div className="min-w-0 flex-1 text-sm font-medium text-gray-900 dark:text-slate-100">{value}</div>
+            </div>
+          );
+
+          return (
+          <div>
+            <ConfirmationDialog
+              isOpen={confirmCloseOpen}
+              onClose={() => setConfirmCloseOpen(false)}
+              onConfirm={() => { setConfirmCloseOpen(false); handleCloseTicket(); }}
+              title="Close this ticket?"
+              description="The ticket will be marked as closed. You can reopen it later if the issue comes back."
+              confirmText="Close Ticket"
+              cancelText="Keep Open"
+              variant="warning"
+            />
+            {/* Back + previous / next */}
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <button
+                onClick={() => setView('tickets')}
+                className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-brand-blue dark:text-slate-400"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back to All Tickets
+              </button>
+              {tickets.length > 1 && ticketIndex >= 0 && (
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => prevTicket && openTicket(prevTicket)}
+                    disabled={!prevTicket}
+                    className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                    Previous
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => nextTicket && openTicket(nextTicket)}
+                    disabled={!nextTicket}
+                    className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                  >
+                    Next
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
               {/* Main Content */}
-              <div className="lg:col-span-2 space-y-4 sm:space-y-6">
+              <div className={`${cardCls} p-4 sm:p-5 lg:col-span-2`}>
                 {/* Ticket Header */}
-                <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6">
-                  <div className="flex items-start justify-between mb-3 sm:mb-4">
-                    <div>
-                      <span className="text-2xs sm:text-xs text-gray-600 block mb-1 sm:mb-2">{selectedTicket.ticketNumber}</span>
-                      <h2 className="text-sm sm:text-base md:text-lg text-gray-900 font-semibold mb-2 sm:mb-3">{selectedTicket.title}</h2>
-                      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                        {getStatusBadge(selectedTicket.status)}
-                        {getPriorityBadge(selectedTicket.priority)}
-                        <span className="text-2xs sm:text-xs text-gray-600">
-                          {getCategoryLabel(selectedTicket.category)}
-                        </span>
-                      </div>
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-400">
+                      <span>{selectedTicket.ticketNumber}</span>
+                      <button type="button" onClick={copyTicketId} aria-label="Copy ticket ID" className="rounded p-0.5 hover:bg-gray-100 hover:text-brand-blue dark:hover:bg-slate-800">
+                        <Copy className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    <h2 className="mt-1 break-words text-xl font-bold tracking-tight text-gray-900 dark:text-slate-50 sm:text-2xl">{selectedTicket.title}</h2>
+                    <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                      {getStatusBadge(selectedTicket.status)}
+                      {getPriorityBadge(selectedTicket.priority)}
+                      <span className="rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700 dark:bg-slate-800 dark:text-slate-300">
+                        {getCategoryLabel(selectedTicket.category)}
+                      </span>
+                      {isAwaitingUserReply(selectedTicket) && <AwaitingReplyTag />}
                     </div>
                   </div>
-                </div>
-
-                {/* Conversation */}
-                <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6">
-                  <h3 className="text-sm sm:text-base text-gray-900 font-semibold mb-4 sm:mb-6">Conversation</h3>
-
-                  <div className="space-y-4 sm:space-y-6">
-                    {selectedTicket.responses?.map((response) => (
-                      <div
-                        key={response.id}
-                        className={`${
-                          response.from === 'user'
-                            ? 'bg-gray-50 border-gray-200'
-                            : 'bg-gray-50 border-gray-200'
-                        } border rounded-lg p-3 sm:p-4 md:p-5`}
-                      >
-                        <div className="flex items-start gap-2.5 sm:gap-4 mb-2 sm:mb-3">
-                          {response.from === 'user' ? (
-                            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-800 rounded-full flex items-center justify-center text-white text-xs sm:text-sm flex-shrink-0">
-                              U
-                            </div>
-                          ) : (
-                            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-success rounded-full flex items-center justify-center text-white text-xs sm:text-sm flex-shrink-0">
-                              S
-                            </div>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between mb-1 gap-2">
-                              <span className="text-xs sm:text-sm text-gray-900 font-medium truncate">
-                                {response.from === 'user' ? 'You' : response.agentName || 'Support Team'}
-                              </span>
-                              <span className="text-2xs sm:text-xs text-gray-600 whitespace-nowrap flex-shrink-0">{formatISTDate(response.timestamp)}</span>
-                            </div>
-                            <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">{response.message}</p>
-                          </div>
+                  <div className="flex shrink-0 items-start gap-3">
+                    <div className="flex flex-row gap-4 sm:flex-col sm:gap-2 sm:border-l sm:border-gray-200 sm:pl-5 dark:sm:border-slate-700">
+                      <div className="flex items-start gap-2">
+                        <Calendar className="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-slate-500" />
+                        <div>
+                          <div className="text-[11px] text-gray-500 dark:text-slate-400">Created</div>
+                          <div className="text-xs font-medium text-gray-900 dark:text-slate-100">{formatIST(selectedTicket.createdAt)}</div>
                         </div>
                       </div>
-                    ))}
-                  </div>
-
-                  {/* Reply Box */}
-                  {selectedTicket.status !== 'closed' && (
-                    <div className="mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-gray-200">
-                      <Label className="mb-1.5">Add Reply</Label>
-                      <Textarea
-                        value={replyMessage}
-                        onChange={(e) => setReplyMessage(e.target.value)}
-                        placeholder="Type your message..."
-                        rows={3}
-                      />
-                      <div className="flex justify-end mt-2 sm:mt-3">
-                        <Button
-                          variant="primary"
-                          onClick={handleSendReply}
-                          disabled={!replyMessage.trim()}
-                          icon={<MessageSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
-                        >
-                          Send Reply
-                        </Button>
+                      <div className="flex items-start gap-2">
+                        <Clock className="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-slate-500" />
+                        <div>
+                          <div className="text-[11px] text-gray-500 dark:text-slate-400">Last Updated</div>
+                          <div className="text-xs font-medium text-gray-900 dark:text-slate-100">{formatIST(selectedTicket.updatedAt)}</div>
+                        </div>
                       </div>
                     </div>
-                  )}
+                    {/* More actions menu */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setTicketMenuOpen(o => !o)}
+                        aria-label="More actions"
+                        aria-expanded={ticketMenuOpen}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-600 transition-colors hover:bg-gray-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                      >
+                        <MoreHorizontal className="h-4 w-4" />
+                      </button>
+                      {ticketMenuOpen && (
+                        <>
+                          <button type="button" aria-hidden="true" tabIndex={-1} className="fixed inset-0 z-10 cursor-default" onClick={() => setTicketMenuOpen(false)} />
+                          <div className="absolute right-0 z-20 mt-1 w-48 overflow-hidden rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-900">
+                            <button type="button" onClick={() => { copyTicketId(); setTicketMenuOpen(false); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
+                              <Copy className="h-4 w-4" /> Copy ticket ID
+                            </button>
+                            <button type="button" onClick={downloadTranscript} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
+                              <Download className="h-4 w-4" /> Download transcript
+                            </button>
+                            {(selectedTicket.status === 'resolved' || selectedTicket.status === 'closed') && (
+                              <button type="button" onClick={() => { setTicketMenuOpen(false); handleReopenTicket(); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
+                                <ExternalLink className="h-4 w-4" /> Reopen ticket
+                              </button>
+                            )}
+                            {selectedTicket.status !== 'closed' && (
+                              <button type="button" onClick={() => { setTicketMenuOpen(false); setConfirmCloseOpen(true); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-destructive hover:bg-destructive-subtle">
+                                <Trash2 className="h-4 w-4" /> Close ticket
+                              </button>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
                 </div>
+
+                {/* Conversation / Activity Log / Attachments tabs */}
+                <div className="mt-5 flex gap-1 border-b border-gray-200 dark:border-slate-700">
+                  {[
+                    { id: 'conversation' as const, label: 'Conversation', icon: MessageSquare },
+                    { id: 'activity' as const, label: 'Activity Log', icon: History },
+                    { id: 'attachments' as const, label: `Attachments (${attachments.length})`, icon: Paperclip },
+                  ].map(tab => {
+                    const TabIcon = tab.icon;
+                    return (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setDetailTabState({ id: selectedTicket.id, tab: tab.id })}
+                        className={`-mb-px inline-flex items-center gap-1.5 whitespace-nowrap border-b-2 px-2.5 py-2 text-xs font-semibold transition-colors sm:px-3 sm:text-sm ${
+                          detailTab === tab.id
+                            ? 'border-brand-blue text-brand-blue'
+                            : 'border-transparent text-gray-500 hover:text-gray-800 dark:text-slate-400 dark:hover:text-slate-200'
+                        }`}
+                      >
+                        <TabIcon className="h-4 w-4" />
+                        {tab.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {detailTab === 'conversation' && (
+                  <>
+                    <div className="mt-4 space-y-3">
+                      {thread.length === 0 && (
+                        <p className="py-6 text-center text-sm text-gray-500 dark:text-slate-400">No messages yet.</p>
+                      )}
+                      {thread.map((response) => (
+                        <div
+                          key={response.id}
+                          className={`w-fit min-w-[240px] max-w-[90%] rounded-xl border p-3 sm:max-w-[75%] sm:p-4 ${
+                            response.from === 'user'
+                              ? 'ml-auto rounded-tr-sm border-brand-blue/15 bg-brand-blue/[0.06] dark:bg-brand-blue/10'
+                              : 'mr-auto rounded-tl-sm border-gray-200 bg-gray-50 dark:border-slate-700/60 dark:bg-slate-800/50'
+                          }`}
+                        >
+                          <div className={`flex items-start gap-3 ${response.from === 'user' ? 'flex-row-reverse' : ''}`}>
+                            <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white ${response.from === 'user' ? 'bg-brand-blue' : 'bg-gray-700 dark:bg-slate-600'}`}>
+                              {response.from === 'user' ? myInitial : 'S'}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="mb-1 flex items-center justify-between gap-2">
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <span className="truncate text-sm font-semibold text-gray-900 dark:text-slate-50">{authorName(response)}</span>
+                                  {response.from === 'user' ? (
+                                    <span className="rounded-full bg-brand-blue/10 px-1.5 py-0.5 text-[10px] font-semibold text-brand-blue">You</span>
+                                  ) : (
+                                    <span className="rounded-full bg-gray-200 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600 dark:bg-slate-700 dark:text-slate-300">Support</span>
+                                  )}
+                                </div>
+                                <span className="shrink-0 whitespace-nowrap text-[11px] text-gray-500 dark:text-slate-400">{formatIST(response.timestamp)}</span>
+                              </div>
+                              <div className="space-y-1 text-sm leading-relaxed text-gray-700 dark:text-slate-300">{renderFormattedMessage(response.message)}</div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Reply Box */}
+                    {selectedTicket.status !== 'closed' && (
+                      <>
+                        {showReplyTip && (
+                          <div className="mt-4 flex items-start gap-2.5 rounded-lg bg-success-subtle px-3 py-2.5 text-xs text-success-strong sm:text-sm">
+                            <Info className="mt-0.5 h-4 w-4 shrink-0 text-success" />
+                            <span className="flex-1">Keep the conversation updated with additional details to help us resolve the issue faster.</span>
+                            <button type="button" onClick={() => setShowReplyTip(false)} aria-label="Dismiss tip" className="shrink-0 rounded p-0.5 hover:bg-success/10">
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        )}
+                        <div className="mt-4 border-t border-gray-100 pt-4 dark:border-slate-700/60">
+                          <div className="mb-1.5 flex items-center justify-between">
+                            <Label className="text-sm font-semibold">Add a Reply</Label>
+                            <div className="relative">
+                              <button
+                                type="button"
+                                onClick={() => { setTemplateMenuOpen(o => !o); setEmojiMenuOpen(false); }}
+                                aria-expanded={templateMenuOpen}
+                                className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-blue hover:underline sm:text-sm"
+                              >
+                                <FileText className="h-4 w-4" />
+                                Use Template
+                              </button>
+                              {templateMenuOpen && (
+                                <>
+                                  <button type="button" aria-hidden="true" tabIndex={-1} className="fixed inset-0 z-10 cursor-default" onClick={() => setTemplateMenuOpen(false)} />
+                                  <div className="absolute right-0 z-20 mt-1 max-h-80 w-64 overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg [scrollbar-width:thin] dark:border-slate-700 dark:bg-slate-900">
+                                    {replyTemplates.map(group => (
+                                      <div key={group.group} className="py-1">
+                                        <p className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">{group.group}</p>
+                                        {group.items.map(tpl => (
+                                          <button
+                                            key={tpl.label}
+                                            type="button"
+                                            title={tpl.text}
+                                            onClick={() => {
+                                              setReplyMessage(prev => (prev.trim() ? `${prev.trimEnd()}\n\n${tpl.text}` : tpl.text));
+                                              lastReplySel.current = null; // next insert goes to the end
+                                              setTemplateMenuOpen(false);
+                                              requestAnimationFrame(() => replyRef.current?.focus());
+                                            }}
+                                            className="block w-full px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 hover:text-brand-blue dark:text-slate-300 dark:hover:bg-slate-800"
+                                          >
+                                            {tpl.label}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          <Textarea
+                            ref={replyRef}
+                            value={replyMessage}
+                            onChange={(e) => setReplyMessage(e.target.value)}
+                            onSelect={(e) => { lastReplySel.current = { start: e.currentTarget.selectionStart, end: e.currentTarget.selectionEnd }; }}
+                            placeholder="Type your message..."
+                            rows={4}
+                          />
+                          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            {/* Toolbar */}
+                            <div className="flex flex-wrap items-center gap-0.5">
+                              <Tooltip content="File attachments in replies are not supported yet">
+                                <span>
+                                  <button type="button" disabled className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-gray-600 disabled:cursor-not-allowed disabled:opacity-40 dark:text-slate-400">
+                                    <Paperclip className="h-4 w-4" />
+                                    Attach file
+                                  </button>
+                                </span>
+                              </Tooltip>
+                              <span className="mx-1 h-5 w-px bg-gray-200 dark:bg-slate-700" />
+                              <button type="button" onClick={() => wrapSelection('**', '**', 'bold text')} aria-label="Bold" title="Bold" className={toolBtn}><Bold className="h-4 w-4" /></button>
+                              <button type="button" onClick={() => wrapSelection('_', '_', 'italic text')} aria-label="Italic" title="Italic" className={toolBtn}><Italic className="h-4 w-4" /></button>
+                              <button type="button" onClick={() => prefixLines(() => '- ')} aria-label="Bulleted list" title="Bulleted list" className={toolBtn}><List className="h-4 w-4" /></button>
+                              <button type="button" onClick={() => prefixLines(i => `${i + 1}. `)} aria-label="Numbered list" title="Numbered list" className={toolBtn}><ListOrdered className="h-4 w-4" /></button>
+                              <button type="button" onClick={() => wrapSelection('[', '](https://)', 'link text')} aria-label="Insert link" title="Insert link" className={toolBtn}><Link2 className="h-4 w-4" /></button>
+                              <div className="relative">
+                                <button type="button" onClick={() => { setEmojiMenuOpen(o => !o); setTemplateMenuOpen(false); }} aria-label="Insert emoji" title="Insert emoji" aria-expanded={emojiMenuOpen} className={toolBtn}><Smile className="h-4 w-4" /></button>
+                                {emojiMenuOpen && (
+                                  <>
+                                    <button type="button" aria-hidden="true" tabIndex={-1} className="fixed inset-0 z-10 cursor-default" onClick={() => setEmojiMenuOpen(false)} />
+                                    <div className="absolute bottom-full left-0 z-20 mb-1 max-h-64 w-[17.5rem] overflow-y-auto rounded-lg border border-gray-200 bg-white p-2 shadow-lg [scrollbar-width:thin] dark:border-slate-700 dark:bg-slate-900">
+                                      {EMOJI_GROUPS.map(group => (
+                                        <div key={group.group} className="mb-1.5 last:mb-0">
+                                          <p className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">{group.group}</p>
+                                          <div className="grid grid-cols-8 gap-0.5">
+                                            {group.items.map(em => (
+                                              <button
+                                                key={em}
+                                                type="button"
+                                                aria-label={`Insert ${em}`}
+                                                data-emoji={em}
+                                                onClick={handleEmojiPick}
+                                                style={{ fontFamily: EMOJI_FONT_STACK }}
+                                                className="flex h-8 w-8 items-center justify-center rounded-md text-xl leading-none hover:bg-gray-100 dark:hover:bg-slate-800"
+                                              >
+                                                {em}
+                                              </button>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                            <Button
+                              variant="primary"
+                              onClick={handleSendReply}
+                              disabled={!replyMessage.trim()}
+                              icon={<Send className="h-4 w-4" />}
+                              className="w-full sm:w-auto"
+                            >
+                              Send Reply
+                            </Button>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </>
+                )}
+
+                {detailTab === 'activity' && (
+                  <ol className="relative mt-4 space-y-4 border-l border-gray-200 pl-5 dark:border-slate-700">
+                    {activity.map((item, idx) => {
+                      const ItemIcon = item.icon;
+                      return (
+                        <li key={idx} className="relative">
+                          <span className="absolute -left-[31px] flex h-6 w-6 items-center justify-center rounded-full bg-white text-brand-blue ring-1 ring-gray-200 dark:bg-slate-900 dark:ring-slate-700">
+                            <ItemIcon className="h-3.5 w-3.5" />
+                          </span>
+                          <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+                            <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">{item.title}</p>
+                            {item.time && <span className="text-[11px] text-gray-500 dark:text-slate-400">{formatIST(item.time)}</span>}
+                          </div>
+                          {item.detail && <p className="mt-0.5 break-words text-xs text-gray-600 dark:text-slate-400">{item.detail}</p>}
+                        </li>
+                      );
+                    })}
+                  </ol>
+                )}
+
+                {detailTab === 'attachments' && (
+                  <div className="mt-4">
+                    {attachments.length === 0 ? (
+                      <p className="py-6 text-center text-sm text-gray-500 dark:text-slate-400">No attachments on this ticket.</p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {attachments.map(file => (
+                          <li key={file.id} className="flex items-center gap-3 rounded-lg border border-gray-200 px-3 py-2.5 dark:border-slate-700">
+                            <FileText className="h-4 w-4 shrink-0 text-brand-blue" />
+                            <span className="min-w-0 flex-1 truncate text-sm text-gray-900 dark:text-slate-100" title={file.name}>{file.name}</span>
+                            <span className="shrink-0 text-xs text-gray-500 dark:text-slate-400">{file.size}</span>
+                            {file.url && (
+                              <a href={file.url} target="_blank" rel="noopener noreferrer" aria-label={`Open ${file.name}`} className="shrink-0 rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-brand-blue dark:hover:bg-slate-800">
+                                <Download className="h-4 w-4" />
+                              </a>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Sidebar */}
-              <div className="space-y-4 sm:space-y-6">
+              <div className="space-y-4">
                 {/* Ticket Info */}
-                <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6">
-                  <h4 className="text-xs sm:text-sm text-gray-900 font-semibold mb-3 sm:mb-4">Ticket Information</h4>
-
-                  <div className="space-y-3 sm:space-y-4">
-                    <div>
-                      <div className="text-2xs sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Created</div>
-                      <div className="text-xs sm:text-sm text-gray-900">{formatIST(selectedTicket.createdAt)}</div>
-                    </div>
-
-                    <div>
-                      <div className="text-2xs sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Last Updated</div>
-                      <div className="text-xs sm:text-sm text-gray-900">{formatIST(selectedTicket.updatedAt)}</div>
-                    </div>
-
-                    {selectedTicket.assignedAgent && (
-                      <div>
-                        <div className="text-2xs sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Assigned Agent</div>
-                        <div className="flex items-center gap-2">
-                          <div className="w-5 h-5 sm:w-6 sm:h-6 bg-success rounded-full flex items-center justify-center text-white text-2xs sm:text-xs flex-shrink-0">
-                            {selectedTicket.assignedAgent.split(' ').map(n => n[0]).join('')}
-                          </div>
-                          <div className="text-xs sm:text-sm text-gray-900">{selectedTicket.assignedAgent}</div>
-                        </div>
-                      </div>
-                    )}
-
-                    <div>
-                      <div className="text-2xs sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Responses</div>
-                      <div className="text-xs sm:text-sm text-gray-900">{selectedTicket.responses?.length || 0} messages</div>
-                    </div>
+                <div className={`${cardCls} p-4`}>
+                  <h4 className="mb-1 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-slate-50">
+                    <Ticket className="h-4 w-4 text-brand-blue" />
+                    Ticket Information
+                  </h4>
+                  <div className="divide-y divide-gray-100 dark:divide-slate-700/60">
+                    {infoRow(Tag, 'Ticket ID', (
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="truncate">{selectedTicket.ticketNumber}</span>
+                        <button type="button" onClick={copyTicketId} aria-label="Copy ticket ID" className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-brand-blue dark:hover:bg-slate-800">
+                          <Copy className="h-3.5 w-3.5" />
+                        </button>
+                      </span>
+                    ))}
+                    {infoRow(Circle, 'Status', getStatusBadge(selectedTicket.status))}
+                    {infoRow(AlertCircle, 'Priority', getPriorityBadge(selectedTicket.priority))}
+                    {infoRow(Inbox, 'Category', getCategoryLabel(selectedTicket.category))}
+                    {infoRow(Calendar, 'Created', formatIST(selectedTicket.createdAt))}
+                    {infoRow(Clock, 'Last Updated', formatIST(selectedTicket.updatedAt))}
+                    {selectedTicket.assignedAgent && infoRow(UserCheck, 'Agent', (
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-blue text-2xs text-white">
+                          {selectedTicket.assignedAgent.split(' ').map(n => n[0]).join('')}
+                        </span>
+                        <span className="truncate">{selectedTicket.assignedAgent}</span>
+                      </span>
+                    ))}
+                    {infoRow(MessageSquare, 'Responses', `${responseCount} message${responseCount === 1 ? '' : 's'}`)}
                   </div>
+                  {selectedTicket.status !== 'closed' && selectedTicket.status !== 'resolved' && (
+                    <div className="mt-3 flex items-start gap-2 rounded-lg bg-brand-blue/[0.05] px-3 py-2 text-xs text-gray-600 dark:bg-slate-800/60 dark:text-slate-400">
+                      <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-blue" />
+                      <span>
+                        Typical first response within <strong className="font-semibold text-gray-900 dark:text-slate-100">24 hours</strong>.
+                        <FeatureGate feature="priority_support" mode="hidden">
+                          {' '}Priority Support is on, so your tickets are handled first.
+                        </FeatureGate>
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Update Priority */}
                 {selectedTicket.status !== 'closed' && (
-                  <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6">
-                    <h4 className="text-xs sm:text-sm text-gray-900 font-semibold mb-3 sm:mb-4">Update Priority</h4>
-                    <select
-                      value={selectedTicket.priority}
-                      onChange={(e) => handleUpdateTicket({ priority: e.target.value })}
-                      className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
-                    >
-                      {priorities.map(p => (
-                        <option key={p.value} value={p.value}>{p.label}</option>
-                      ))}
-                    </select>
+                  <div className={`${cardCls} p-4`}>
+                    <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-slate-50">
+                      <Flag className="h-4 w-4 text-brand-blue" />
+                      Update Priority
+                    </h4>
+                    <div className="flex gap-2">
+                      <select
+                        value={draftPriority}
+                        onChange={(e) => setPriorityDraft({ id: selectedTicket.id, value: e.target.value })}
+                        className="min-w-0 flex-1 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-gray-900 dark:text-slate-50 outline-none focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                      >
+                        {priorities.map(p => (
+                          <option key={p.value} value={p.value}>{p.label}</option>
+                        ))}
+                      </select>
+                      <Button
+                        variant="primary"
+                        onClick={() => handleUpdateTicket({ priority: draftPriority })}
+                        disabled={draftPriority === selectedTicket.priority}
+                      >
+                        Update
+                      </Button>
+                    </div>
                   </div>
                 )}
 
                 {/* Actions */}
-                <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6">
-                  <h4 className="text-xs sm:text-sm text-gray-900 font-semibold mb-3 sm:mb-4">Actions</h4>
-
-                  <div className="space-y-2">
-                    <button className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-xs sm:text-sm text-left flex items-center gap-1.5 sm:gap-2">
-                      <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                <div className={`${cardCls} p-4`}>
+                  <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-slate-50">
+                    <Settings2 className="h-4 w-4 text-brand-blue" />
+                    Actions
+                  </h4>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                    <button
+                      onClick={downloadTranscript}
+                      className="flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                    >
+                      <Download className="h-4 w-4 flex-shrink-0" />
                       Download Transcript
                     </button>
 
                     {(selectedTicket.status === 'resolved' || selectedTicket.status === 'closed') && (
                       <button
                         onClick={handleReopenTicket}
-                        className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-gray-100 text-gray-900 rounded-lg hover:bg-gray-200 transition-colors text-xs sm:text-sm text-left flex items-center gap-1.5 sm:gap-2"
+                        className="flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm font-medium text-gray-900 transition-colors hover:bg-gray-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
                       >
-                        <ExternalLink className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                        <ExternalLink className="h-4 w-4 flex-shrink-0" />
                         Reopen Ticket
                       </button>
                     )}
 
                     {selectedTicket.status !== 'closed' && (
                       <button
-                        onClick={handleCloseTicket}
-                        className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-destructive-subtle text-destructive rounded-lg hover:bg-destructive-subtle transition-colors text-xs sm:text-sm text-left flex items-center gap-1.5 sm:gap-2"
+                        onClick={() => setConfirmCloseOpen(true)}
+                        className="flex items-center justify-center gap-2 rounded-lg border border-destructive-line bg-destructive-subtle px-3 py-2.5 text-sm font-medium text-destructive transition-colors hover:opacity-90"
                       >
-                        <X className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                        <Trash2 className="h-4 w-4 flex-shrink-0" />
                         Close Ticket
                       </button>
                     )}
@@ -1562,53 +2782,55 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 </div>
 
                 {/* Related Articles */}
-                <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-3 sm:p-4 md:p-6">
-                  <h4 className="text-xs sm:text-sm text-gray-900 font-semibold mb-3 sm:mb-4">Related Help Articles</h4>
-
-                  <div className="space-y-2">
-                    <a href="#" className="block text-xs sm:text-sm text-gray-800 hover:text-gray-900">
-                      How to upload resumes
-                    </a>
-                    <a href="#" className="block text-xs sm:text-sm text-gray-800 hover:text-gray-900">
-                      Resume upload troubleshooting
-                    </a>
-                    <a href="#" className="block text-xs sm:text-sm text-gray-800 hover:text-gray-900">
-                      File format requirements
-                    </a>
+                <div className={`${cardCls} p-4`}>
+                  <div className="mb-3 flex items-center justify-between">
+                    <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-slate-50">
+                      <Book className="h-4 w-4 text-brand-blue" />
+                      Related Help Articles
+                    </h4>
+                    <button type="button" onClick={() => setView('knowledge-base')} className="inline-flex items-center gap-1 text-xs font-medium text-brand-blue hover:underline">
+                      View All
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </button>
                   </div>
+                  <p className="flex items-start gap-2 text-sm text-gray-500 dark:text-slate-400">
+                    <FileText className="mt-0.5 h-4 w-4 shrink-0" />
+                    Articles for this topic are coming soon.
+                  </p>
                 </div>
               </div>
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {/* Knowledge Base */}
         {activeTab === 'external' && view === 'knowledge-base' && (
           <div>
             <button
               onClick={() => setView('overview')}
-              className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 hover:text-gray-900 mb-4 sm:mb-6"
+              className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue mb-4 sm:mb-6"
             >
               <ArrowLeft className="w-4 h-4" />
               Back to Overview
             </button>
 
             <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-4 sm:p-6 md:p-8">
-              <h2 className="text-sm sm:text-base md:text-lg text-gray-900 font-semibold mb-4 sm:mb-6">Knowledge Base</h2>
+              <h2 className="text-sm sm:text-base md:text-lg font-semibold text-gray-900 dark:text-slate-50 mb-4 sm:mb-6">Knowledge Base</h2>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
                 {categories.slice(0, 6).map(cat => {
                   const Icon = cat.icon;
                   return (
-                    <a
+                    <div
                       key={cat.value}
-                      href="#"
-                      className="p-3 sm:p-4 md:p-6 border border-gray-200 rounded-lg hover:border-gray-300 hover:shadow-md transition-all"
+                      aria-disabled="true"
+                      className="p-3 sm:p-4 md:p-6 border border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 rounded-lg hover:border-brand-blue/30 hover:shadow-md transition-all"
                     >
-                      <Icon className="w-6 h-6 sm:w-8 sm:h-8 text-gray-800 mb-2 sm:mb-3" />
-                      <h4 className="text-sm sm:text-base text-gray-900 mb-1 sm:mb-2">{cat.label}</h4>
-                      <p className="text-xs sm:text-sm text-gray-600">View articles and guides</p>
-                    </a>
+                      <Icon className="w-6 h-6 sm:w-8 sm:h-8 text-brand-blue mb-2 sm:mb-3" />
+                      <h4 className="text-sm sm:text-base text-gray-900 dark:text-slate-50 mb-1 sm:mb-2">{cat.label}</h4>
+                      <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">Articles coming soon</p>
+                    </div>
                   );
                 })}
               </div>
@@ -1620,70 +2842,71 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
         {/* Team Tickets Overview */}
         {activeTab === 'team' && isAdmin && view === 'overview' && (
-          <div className="space-y-4 sm:space-y-6">
+          <div className="space-y-4">
             {/* Stats Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4 md:gap-6">
-              <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
-                <div className="flex items-center justify-between mb-1 sm:mb-2">
-                  <span className="text-2xs sm:text-xs md:text-sm text-gray-600">Open</span>
-                  <Circle className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue flex-shrink-0" />
-                </div>
-                <div className="text-lg sm:text-2xl md:text-3xl font-semibold text-gray-900 mb-0.5 sm:mb-1">{internalOpenTickets}</div>
-                <div className="text-2xs sm:text-xs text-gray-600">Awaiting action</div>
-              </div>
-
-              <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
-                <div className="flex items-center justify-between mb-1 sm:mb-2">
-                  <span className="text-2xs sm:text-xs md:text-sm text-gray-600">In Progress</span>
-                  <Clock3 className="w-4 h-4 sm:w-5 sm:h-5 text-warning flex-shrink-0" />
-                </div>
-                <div className="text-lg sm:text-2xl md:text-3xl font-semibold text-gray-900 mb-0.5 sm:mb-1">{internalInProgressTickets}</div>
-                <div className="text-2xs sm:text-xs text-gray-600">Being handled</div>
-              </div>
-
-              <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
-                <div className="flex items-center justify-between mb-1 sm:mb-2">
-                  <span className="text-2xs sm:text-xs md:text-sm text-gray-600">Resolved</span>
-                  <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-success flex-shrink-0" />
-                </div>
-                <div className="text-lg sm:text-2xl md:text-3xl font-semibold text-gray-900 mb-0.5 sm:mb-1">{internalResolvedTickets}</div>
-                <div className="text-2xs sm:text-xs text-gray-600">Successfully resolved</div>
-              </div>
-
-              <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
-                <div className="flex items-center justify-between mb-1 sm:mb-2">
-                  <span className="text-2xs sm:text-xs md:text-sm text-gray-600">Unassigned</span>
-                  <Users className="w-4 h-4 sm:w-5 sm:h-5 text-brand-orange flex-shrink-0" />
-                </div>
-                <div className="text-lg sm:text-2xl md:text-3xl font-semibold text-gray-900 mb-0.5 sm:mb-1">{internalUnassignedTickets}</div>
-                <div className="text-2xs sm:text-xs text-gray-600">Need assignment</div>
-              </div>
-
-              <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
-                <div className="flex items-center justify-between mb-1 sm:mb-2">
-                  <span className="text-2xs sm:text-xs md:text-sm text-gray-600">Total</span>
-                  <Ticket className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 flex-shrink-0" />
-                </div>
-                <div className="text-lg sm:text-2xl md:text-3xl font-semibold text-gray-900 mb-0.5 sm:mb-1">{internalTotalTickets}</div>
-                <div className="text-2xs sm:text-xs text-gray-600">All time</div>
-              </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 sm:gap-4">
+              {[
+                { label: 'Open', value: internalOpenTickets, sub: 'Awaiting action', icon: FileText, tile: 'bg-brand-blue/10 text-brand-blue', status: 'open', assignment: 'all', attention: false },
+                { label: 'In Progress', value: internalInProgressTickets, sub: 'Being handled', icon: Clock, tile: 'bg-brand-orange/10 text-brand-orange-deep', status: 'in-progress', assignment: 'all', attention: false },
+                { label: 'Resolved', value: internalResolvedTickets, sub: 'Successfully resolved', icon: CheckCircle2, tile: 'bg-success-subtle text-success', status: 'resolved', assignment: 'all', attention: false },
+                { label: 'Unassigned', value: internalUnassignedTickets, sub: 'Need assignment', icon: Users, tile: 'bg-brand-orange/10 text-brand-orange-deep', status: 'all', assignment: 'unassigned', attention: internalUnassignedTickets > 0 },
+                { label: 'Total', value: internalTotalTickets, sub: 'All time', icon: BarChart3, tile: 'bg-brand-blue/10 text-brand-blue', status: 'all', assignment: 'all', attention: false },
+              ].map(card => {
+                const CardIcon = card.icon;
+                return (
+                  <button
+                    key={card.label}
+                    type="button"
+                    onClick={() => { setFilterStatus(card.status); setInternalFilterAssignment(card.assignment); setTeamCategoryFilter('all'); setView('tickets'); }}
+                    className={`group flex w-full items-start gap-3 overflow-hidden rounded-xl border p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-md ${
+                      card.attention
+                        ? 'border-brand-orange/30 bg-brand-orange/[0.04] hover:border-brand-orange/50'
+                        : 'border-gray-200 bg-white hover:border-brand-blue/30 dark:border-slate-700 dark:bg-slate-900'
+                    }`}
+                  >
+                    <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${card.tile}`}>
+                      <CardIcon className="h-5 w-5" />
+                    </span>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <p className="text-sm text-gray-600 dark:text-slate-400">{card.label}</p>
+                        {card.attention && (
+                          <span className="rounded-full bg-brand-orange/15 px-1.5 py-px text-[10px] font-semibold text-brand-orange-deep">Needs attention</span>
+                        )}
+                      </div>
+                      <p className="mt-0.5 text-2xl font-bold tracking-tight tabular-nums text-gray-900 dark:text-slate-50">{card.value}</p>
+                      <p className="mt-0.5 truncate text-xs text-gray-500 dark:text-slate-400">{card.sub}</p>
+                      <p className="mt-1.5 inline-flex items-center gap-0.5 text-[11px] font-semibold text-brand-blue opacity-70 transition-opacity group-hover:opacity-100">
+                        View tickets
+                        <ChevronRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
 
             {/* Category Breakdown */}
             {internalStats?.tickets_by_category && Object.keys(internalStats.tickets_by_category).length > 0 && (
-              <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6">
-                <h3 className="text-sm sm:text-base font-semibold text-gray-900 mb-3 sm:mb-4">Tickets by Category</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 md:gap-4">
+              <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+                <h3 className="mb-3 text-base font-semibold text-gray-900 dark:text-slate-50">Tickets by Category</h3>
+                <div className="flex flex-wrap gap-2">
                   {Object.entries(internalStats.tickets_by_category).map(([cat, count]) => {
                     const CategoryIcon = getInternalCategoryIcon(cat);
                     return (
-                      <div key={cat} className="flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3 bg-gray-50 rounded-lg">
-                        <CategoryIcon className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 flex-shrink-0" />
-                        <div className="min-w-0">
-                          <div className="text-sm sm:text-lg font-semibold text-gray-900">{count}</div>
-                          <div className="text-2xs sm:text-xs text-gray-600 truncate">{getInternalCategoryLabel(cat)}</div>
-                        </div>
-                      </div>
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => { setFilterStatus('all'); setInternalFilterAssignment('all'); setTeamCategoryFilter(cat); setView('tickets'); }}
+                        className="group flex min-w-[180px] items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-left transition-colors hover:border-brand-blue/30 hover:bg-white dark:border-slate-700 dark:bg-slate-800/50 dark:hover:bg-slate-800"
+                      >
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white text-brand-blue ring-1 ring-gray-200 dark:bg-slate-900 dark:ring-slate-700">
+                          <CategoryIcon className="h-4 w-4" />
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium text-gray-800 dark:text-slate-200">{getInternalCategoryLabel(cat)}</span>
+                        <span className="shrink-0 rounded-md bg-white px-2 py-0.5 text-xs font-semibold tabular-nums text-gray-700 ring-1 ring-gray-200 dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700">{count}</span>
+                        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-gray-400 group-hover:text-brand-blue" />
+                      </button>
                     );
                   })}
                 </div>
@@ -1691,103 +2914,149 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
             )}
 
             {/* Quick Actions */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
-              <button
-                onClick={() => { setInternalFilterAssignment('unassigned'); setView('tickets'); }}
-                className="bg-warning text-white rounded-xl shadow-lg p-4 sm:p-6 text-left hover:opacity-90 transition-all"
-              >
-                <Users className="w-6 h-6 sm:w-8 sm:h-8 mb-2 sm:mb-3" />
-                <h3 className="text-sm sm:text-lg font-semibold text-white mb-0.5 sm:mb-1">Unassigned Tickets</h3>
-                <p className="text-xs sm:text-sm text-white/80">
-                  {internalUnassignedTickets} tickets need attention
-                </p>
-              </button>
-
-              <button
-                onClick={() => { setInternalFilterAssignment('mine'); setView('tickets'); }}
-                className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6 text-left hover:border-brand-blue/30 hover:shadow-md transition-all"
-              >
-                <UserCheck className="w-6 h-6 sm:w-8 sm:h-8 text-brand-blue mb-2 sm:mb-3" />
-                <h3 className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-slate-50 mb-0.5 sm:mb-1">My Assigned Tickets</h3>
-                <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
-                  View tickets assigned to you
-                </p>
-              </button>
-
-              <button
-                onClick={() => { setInternalFilterAssignment('all'); setView('tickets'); }}
-                className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6 text-left hover:border-brand-blue/30 hover:shadow-md transition-all"
-              >
-                <Ticket className="w-6 h-6 sm:w-8 sm:h-8 text-brand-blue mb-2 sm:mb-3" />
-                <h3 className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-slate-50 mb-0.5 sm:mb-1">All Team Tickets</h3>
-                <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
-                  View all team support requests
-                </p>
-              </button>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3 sm:gap-4">
+              {[
+                { key: 'unassigned', title: 'Unassigned Tickets', desc: `${internalUnassignedTickets} tickets need attention`, icon: Users, accent: true, onClick: () => { setInternalFilterAssignment('unassigned'); setTeamCategoryFilter('all'); setView('tickets'); } },
+                { key: 'mine', title: 'My Assigned Tickets', desc: 'View tickets assigned to you', icon: UserCheck, accent: false, onClick: () => { setInternalFilterAssignment('mine'); setTeamCategoryFilter('all'); setView('tickets'); } },
+                { key: 'all', title: 'All Team Tickets', desc: 'View all team support requests', icon: Ticket, accent: false, onClick: () => { setInternalFilterAssignment('all'); setTeamCategoryFilter('all'); setView('tickets'); } },
+              ].map(action => {
+                const ActionIcon = action.icon;
+                return (
+                  <button
+                    key={action.key}
+                    onClick={action.onClick}
+                    className={`group flex w-full items-center gap-3 rounded-xl border p-4 text-left transition-all hover:shadow-md ${
+                      action.accent
+                        ? 'border-brand-orange/20 bg-brand-orange/[0.05] hover:border-brand-orange/40'
+                        : 'border-gray-200 bg-white hover:border-brand-blue/30 dark:border-slate-700 dark:bg-slate-900'
+                    }`}
+                  >
+                    <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${action.accent ? 'bg-brand-orange/15 text-brand-orange-deep' : 'bg-brand-blue/10 text-brand-blue'}`}>
+                      <ActionIcon className="h-5 w-5" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">{action.title}</h3>
+                      <p className="text-sm text-gray-600 dark:text-slate-400">{action.desc}</p>
+                    </div>
+                    <ChevronRight className="h-5 w-5 shrink-0 text-gray-400 transition-transform group-hover:translate-x-0.5 group-hover:text-brand-blue" />
+                  </button>
+                );
+              })}
             </div>
 
             {/* Recent Team Tickets */}
-            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6">
-              <div className="flex items-center justify-between mb-3 sm:mb-4 md:mb-6">
-                <h3 className="text-sm sm:text-base font-semibold text-gray-900">Recent Team Tickets</h3>
+            <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">Recent Team Tickets</h3>
                 <button
                   onClick={() => setView('tickets')}
-                  className="text-xs sm:text-sm text-gray-700 hover:text-gray-900"
+                  className="inline-flex items-center gap-1 text-sm font-medium text-brand-blue hover:text-brand-blue/80"
                 >
                   View All
+                  <ChevronRight className="h-4 w-4" />
                 </button>
               </div>
 
               {internalLoading ? (
                 <div className="flex items-center justify-center py-8 sm:py-12 tf-loader-center">
-                  <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 animate-spin text-gray-600" />
+                  <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 animate-spin text-brand-blue" />
                 </div>
               ) : internalTickets.length === 0 ? (
                 <div className="text-center py-8 sm:py-12">
-                  <Inbox className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 sm:mb-4 text-gray-400" />
-                  <p className="text-xs sm:text-sm text-gray-600">No team tickets yet</p>
+                  <Inbox className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 sm:mb-4 text-gray-400 dark:text-slate-500" />
+                  <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">No team tickets yet</p>
                 </div>
-              ) : (
-                <div className="space-y-2 sm:space-y-3">
-                  {internalTickets.slice(0, 5).map(ticket => (
-                    <button
-                      key={ticket.id}
-                      onClick={() => {
-                        setSelectedInternalTicket(ticket);
-                        fetchInternalTicketDetail(ticket.id);
-                        setView('detail');
-                      }}
-                      className="w-full text-left p-3 sm:p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200"
-                    >
-                      <div className="flex items-start justify-between mb-1.5 sm:mb-2 gap-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5 sm:gap-2 mb-0.5 sm:mb-1 flex-wrap">
-                            <span className="text-2xs sm:text-xs text-gray-600">{ticket.ticket_number}</span>
-                            <span className="text-2xs sm:text-xs text-gray-400 hidden sm:inline">-</span>
-                            <span className="text-2xs sm:text-xs text-gray-600 truncate">from {ticket.created_by?.name}</span>
+              ) : (() => {
+                const openInternal = (ticket: InternalTicket) => {
+                  setSelectedInternalTicket(ticket);
+                  fetchInternalTicketDetail(ticket.id);
+                  setView('detail');
+                };
+                return (
+                <>
+                  {/* Mobile: compact cards */}
+                  <div className="space-y-2 md:hidden">
+                    {internalTickets.slice(0, 5).map(ticket => (
+                      <button
+                        key={ticket.id}
+                        onClick={() => openInternal(ticket)}
+                        className="w-full rounded-lg border border-gray-200 bg-gray-50 p-3 text-left transition-colors hover:bg-gray-100 dark:border-slate-700/60 dark:bg-slate-800/50 dark:hover:bg-slate-800"
+                      >
+                        <div className="mb-1.5 flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <span className="mb-0.5 block truncate text-2xs text-gray-600 dark:text-slate-400">{ticket.ticket_number} · from {ticket.created_by?.name}</span>
+                            <h4 className="truncate text-sm font-medium text-gray-900 dark:text-slate-50">{ticket.title}</h4>
                           </div>
-                          <h4 className="text-xs sm:text-sm font-medium text-gray-900 truncate">{ticket.title}</h4>
+                          <div className="flex shrink-0 items-center gap-1.5">
+                            {!ticket.assigned_to && (
+                              <span className="rounded border border-warning-line bg-warning-subtle px-1.5 py-0.5 text-2xs text-warning-strong">Unassigned</span>
+                            )}
+                            {getInternalStatusBadge(ticket.status)}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
-                          {!ticket.assigned_to && (
-                            <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 bg-warning-subtle text-warning-strong text-2xs sm:text-xs rounded border border-warning-line">
-                              Unassigned
-                            </span>
-                          )}
-                          {getInternalStatusBadge(ticket.status)}
+                        {isAwaitingTeamResponse(ticket) && <div className="mb-1.5"><AwaitingTeamTag /></div>}
+                        <div className="flex flex-wrap items-center gap-2 text-2xs text-gray-600 dark:text-slate-400">
+                          <span className="truncate">{getInternalCategoryLabel(ticket.category)}</span>
+                          {getInternalPriorityBadge(ticket.priority)}
+                          <span>{formatISTDate(ticket.created_at)}</span>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-2 sm:gap-3 text-2xs sm:text-xs text-gray-600 flex-wrap">
-                        <span className="truncate max-w-[80px] sm:max-w-none">{getInternalCategoryLabel(ticket.category)}</span>
-                        <span className="hidden sm:inline">-</span>
-                        {getInternalPriorityBadge(ticket.priority)}
-                        <span className="hidden sm:inline">-</span>
-                        <span>{formatISTDate(ticket.updated_at)}</span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Desktop: table */}
+                  <div className="hidden overflow-x-auto md:block">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-gray-50 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:bg-slate-800/60 dark:text-slate-400">
+                          <th className="rounded-l-lg px-4 py-2.5">Ticket ID</th>
+                          <th className="px-4 py-2.5">Subject</th>
+                          <th className="px-4 py-2.5">Category</th>
+                          <th className="px-4 py-2.5">Priority</th>
+                          <th className="px-4 py-2.5">Created</th>
+                          <th className="px-4 py-2.5">Status</th>
+                          <th className="rounded-r-lg px-4 py-2.5 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
+                        {internalTickets.slice(0, 5).map(ticket => (
+                          <tr key={ticket.id} className="transition-colors hover:bg-gray-50/70 dark:hover:bg-slate-800/40">
+                            <td className="whitespace-nowrap px-4 py-3 font-medium text-gray-900 dark:text-slate-100">{ticket.ticket_number}</td>
+                            <td className="max-w-[240px] px-4 py-3">
+                              <div className="truncate text-gray-900 dark:text-slate-100" title={ticket.title}>{ticket.title}</div>
+                              <div className="flex items-center gap-1.5 truncate text-[11px] text-gray-500 dark:text-slate-400">
+                                <span className="truncate">from {ticket.created_by?.name}</span>
+                                {!ticket.assigned_to && (
+                                  <span className="shrink-0 rounded border border-warning-line bg-warning-subtle px-1 py-px text-[10px] font-medium text-warning-strong">Unassigned</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="whitespace-nowrap px-4 py-3 text-gray-600 dark:text-slate-400">{getInternalCategoryLabel(ticket.category)}</td>
+                            <td className="px-4 py-3">{getInternalPriorityBadge(ticket.priority)}</td>
+                            <td className="whitespace-nowrap px-4 py-3 text-gray-600 dark:text-slate-400">{formatISTDate(ticket.created_at)}</td>
+                            <td className="px-4 py-3">
+                              <div className="flex flex-col items-start gap-1">
+                                {getInternalStatusBadge(ticket.status)}
+                                {isAwaitingTeamResponse(ticket) && <AwaitingTeamTag />}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <button
+                                onClick={() => openInternal(ticket)}
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-brand-blue/30 px-3 py-1.5 text-xs font-semibold text-brand-blue transition-colors hover:bg-brand-blue/5"
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                                View
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+                );
+              })()}
             </div>
           </div>
         )}
@@ -1796,32 +3065,33 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
         {activeTab === 'team' && isAdmin && view === 'tickets' && (
           <div>
             <button
-              onClick={() => { setInternalFilterAssignment('all'); setView('overview'); }}
-              className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 hover:text-gray-900 mb-4 sm:mb-6"
+              onClick={() => { setInternalFilterAssignment('all'); setTeamCategoryFilter('all'); setView('overview'); }}
+              className="mb-3 flex items-center gap-1.5 text-sm text-gray-600 hover:text-brand-blue dark:text-slate-400"
             >
-              <ArrowLeft className="w-4 h-4" />
+              <ArrowLeft className="h-4 w-4" />
               Back to Overview
             </button>
 
-            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+            <div className="rounded-xl border border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-900">
               {/* Filters */}
-              <div className="p-3 sm:p-4 md:p-6 border-b border-gray-200">
-                <div className="flex flex-col gap-2 sm:gap-3 md:gap-4">
-                  <div className="flex-1 relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-blue/60 z-10" />
+              <div className="border-b border-gray-100 p-3 dark:border-slate-700/60 sm:p-4">
+                <div className="flex flex-col gap-3">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-brand-blue/60" />
                     <Input
                       type="text"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder="Search by ticket, title, or user..."
-                      className="pl-9 pr-4"
+                      className="w-full pl-9 pr-4"
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 md:gap-4">
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5 sm:gap-3">
                     <select
                       value={filterStatus}
                       onChange={(e) => setFilterStatus(e.target.value)}
+                      aria-label="Filter by status"
                       className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                     >
                       <option value="all">All Status</option>
@@ -1834,6 +3104,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     <select
                       value={internalFilterAssignment}
                       onChange={(e) => setInternalFilterAssignment(e.target.value)}
+                      aria-label="Filter by assignment"
                       className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                     >
                       <option value="all">All Tickets</option>
@@ -1844,26 +3115,98 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     <select
                       value={filterPriority}
                       onChange={(e) => setFilterPriority(e.target.value)}
-                      className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10 col-span-2 sm:col-span-1"
+                      aria-label="Filter by priority"
+                      className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                     >
                       <option value="all">All Priority</option>
                       <option value="low">Low</option>
                       <option value="medium">Medium</option>
                       <option value="high">High</option>
                     </select>
+
+                    <select
+                      value={teamCategoryFilter}
+                      onChange={(e) => setTeamCategoryFilter(e.target.value)}
+                      aria-label="Filter by category"
+                      className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                    >
+                      <option value="all">All Categories</option>
+                      {internalCategories.map(c => (
+                        <option key={c.value} value={c.value}>{c.label}</option>
+                      ))}
+                    </select>
+
+                    <select
+                      value={teamSort}
+                      onChange={(e) => setTeamSort(e.target.value as typeof teamSort)}
+                      aria-label="Sort tickets"
+                      className="col-span-2 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10 sm:col-span-1"
+                    >
+                      <option value="default">Sort: Default</option>
+                      <option value="newest">Sort: Newest first</option>
+                      <option value="updated">Sort: Last updated</option>
+                      <option value="priority">Sort: Priority (high → low)</option>
+                    </select>
                   </div>
+
+                  {/* Active filters — each removable, plus clear all */}
+                  {(filterStatus !== 'all' || filterPriority !== 'all' || internalFilterAssignment !== 'all' || teamCategoryFilter !== 'all' || searchQuery) && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs text-gray-500 dark:text-slate-400">Filters:</span>
+                      {searchQuery && (
+                        <button type="button" onClick={() => setSearchQuery('')} className="inline-flex items-center gap-1 rounded-full bg-brand-blue/10 px-2.5 py-1 text-xs font-medium text-brand-blue hover:bg-brand-blue/15">
+                          &ldquo;{searchQuery}&rdquo; <X className="h-3 w-3" />
+                        </button>
+                      )}
+                      {filterStatus !== 'all' && (
+                        <button type="button" onClick={() => setFilterStatus('all')} className="inline-flex items-center gap-1 rounded-full bg-brand-blue/10 px-2.5 py-1 text-xs font-medium capitalize text-brand-blue hover:bg-brand-blue/15">
+                          Status: {filterStatus.replace(/[-_]/g, ' ')} <X className="h-3 w-3" />
+                        </button>
+                      )}
+                      {internalFilterAssignment !== 'all' && (
+                        <button type="button" onClick={() => setInternalFilterAssignment('all')} className="inline-flex items-center gap-1 rounded-full bg-brand-blue/10 px-2.5 py-1 text-xs font-medium text-brand-blue hover:bg-brand-blue/15">
+                          {internalFilterAssignment === 'mine' ? 'Assigned to me' : 'Unassigned'} <X className="h-3 w-3" />
+                        </button>
+                      )}
+                      {filterPriority !== 'all' && (
+                        <button type="button" onClick={() => setFilterPriority('all')} className="inline-flex items-center gap-1 rounded-full bg-brand-blue/10 px-2.5 py-1 text-xs font-medium capitalize text-brand-blue hover:bg-brand-blue/15">
+                          Priority: {filterPriority} <X className="h-3 w-3" />
+                        </button>
+                      )}
+                      {teamCategoryFilter !== 'all' && (
+                        <button type="button" onClick={() => setTeamCategoryFilter('all')} className="inline-flex items-center gap-1 rounded-full bg-brand-blue/10 px-2.5 py-1 text-xs font-medium text-brand-blue hover:bg-brand-blue/15">
+                          {getInternalCategoryLabel(teamCategoryFilter)} <X className="h-3 w-3" />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => { setSearchQuery(''); setFilterStatus('all'); setFilterPriority('all'); setInternalFilterAssignment('all'); setTeamCategoryFilter('all'); }}
+                        className="text-xs font-medium text-gray-500 underline-offset-2 hover:text-brand-blue hover:underline dark:text-slate-400"
+                      >
+                        Clear all
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
 
               {/* Tickets */}
               {internalLoading ? (
-                <div className="flex items-center justify-center py-8 sm:py-12 tf-loader-center">
-                  <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 animate-spin text-gray-600" />
+                <div className="space-y-2 p-3 sm:p-4">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="flex items-center gap-4 rounded-lg border border-gray-100 px-4 py-3 dark:border-slate-700/60">
+                      <Skeleton className="h-4 w-28" />
+                      <Skeleton className="h-4 flex-1" />
+                      <Skeleton className="hidden h-6 w-6 rounded-full md:block" />
+                      <Skeleton className="hidden h-5 w-16 rounded-md md:block" />
+                      <Skeleton className="h-5 w-20 rounded-full" />
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <>
                   {/* Mobile Card Layout */}
-                  <div className="md:hidden divide-y divide-gray-200">
+                  <div className="divide-y divide-gray-100 dark:divide-slate-700/60 md:hidden">
                     {paginatedInternalTickets.map(ticket => {
                       const CategoryIcon = getInternalCategoryIcon(ticket.category);
                       return (
@@ -1874,34 +3217,37 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                             fetchInternalTicketDetail(ticket.id);
                             setView('detail');
                           }}
-                          className="w-full text-left p-3 sm:p-4 hover:bg-gray-50 transition-colors"
+                          className="w-full p-3 text-left transition-colors hover:bg-gray-50 dark:hover:bg-slate-800/50 sm:p-4"
                         >
-                          <div className="flex items-start justify-between gap-2 mb-1.5">
+                          <div className="mb-1.5 flex items-start justify-between gap-2">
                             <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
-                                <span className="text-2xs sm:text-xs text-gray-600">{ticket.ticket_number}</span>
-                                <span className="text-2xs sm:text-xs text-gray-600 truncate">from {ticket.created_by?.name}</span>
+                              <div className="mb-0.5 flex flex-wrap items-center gap-1.5 text-2xs text-gray-600 dark:text-slate-400">
+                                <span>{ticket.ticket_number}</span>
+                                <span aria-hidden="true">·</span>
+                                <span className="truncate">from {ticket.created_by?.name}</span>
                               </div>
-                              <h4 className="text-xs sm:text-sm text-gray-900 font-medium truncate">{ticket.title}</h4>
+                              <h4 className="truncate text-sm font-medium text-gray-900 dark:text-slate-50">{ticket.title}</h4>
                             </div>
-                            <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                            <div className="flex flex-shrink-0 flex-col items-end gap-1">
                               {getInternalStatusBadge(ticket.status)}
                               {!ticket.assigned_to && (
-                                <span className="px-1.5 py-0.5 bg-warning-subtle text-warning-strong text-2xs rounded border border-warning-line">
-                                  Unassigned
-                                </span>
+                                <span className="rounded border border-warning-line bg-warning-subtle px-1.5 py-0.5 text-2xs text-warning-strong">Unassigned</span>
                               )}
                             </div>
                           </div>
-                          <div className="flex items-center gap-2 flex-wrap mt-1.5">
-                            <div className="flex items-center gap-1">
-                              <CategoryIcon className="w-3 h-3 text-gray-600 flex-shrink-0" />
-                              <span className="text-2xs sm:text-xs text-gray-600">{getInternalCategoryLabel(ticket.category)}</span>
-                            </div>
+                          {isAwaitingTeamResponse(ticket) && <div className="mb-1.5"><AwaitingTeamTag /></div>}
+                          <div className="mt-1.5 flex flex-wrap items-center gap-2 text-2xs text-gray-600 dark:text-slate-400">
+                            <span className="inline-flex min-w-0 items-center gap-1">
+                              <CategoryIcon className="h-3 w-3 flex-shrink-0" />
+                              <span className="truncate">{getInternalCategoryLabel(ticket.category)}</span>
+                            </span>
                             {getInternalPriorityBadge(ticket.priority)}
-                            <span className="text-2xs sm:text-xs text-gray-600">{formatISTDate(ticket.updated_at)}</span>
+                            <span title={formatIST(ticket.updated_at)}>{timeAgo(ticket.updated_at)}</span>
                             {ticket.assigned_to && (
-                              <span className="text-2xs sm:text-xs text-gray-600 truncate max-w-[80px]">{ticket.assigned_to.name}</span>
+                              <span className="inline-flex max-w-[120px] items-center gap-1 truncate">
+                                <UserCheck className="h-3 w-3 shrink-0" />
+                                <span className="truncate">{ticket.assigned_to.name}</span>
+                              </span>
                             )}
                           </div>
                         </button>
@@ -1910,73 +3256,89 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   </div>
 
                   {/* Desktop Table */}
-                  <div className="hidden md:block overflow-x-auto tf-table-shell">
-                    <table className="w-full">
-                      <thead className="bg-gray-50 border-b border-gray-200">
-                        <tr>
-                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">Ticket #</th>
-                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">Title</th>
-                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">From</th>
-                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">Category</th>
-                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">Priority</th>
-                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">Status</th>
-                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">Assigned</th>
-                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">Updated</th>
-                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 tf-sticky-col">Actions</th>
+                  <div className="hidden overflow-x-auto md:block tf-table-shell">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-gray-50 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:bg-slate-800/60 dark:text-slate-400">
+                          <th className="px-4 py-3">Ticket #</th>
+                          <th className="px-4 py-3">Subject</th>
+                          <th className="px-4 py-3">From</th>
+                          <th className="px-4 py-3">Category</th>
+                          <th className="px-4 py-3">Priority</th>
+                          <th className="px-4 py-3">Status</th>
+                          <th className="px-4 py-3">Assigned</th>
+                          <th className="px-4 py-3">Updated</th>
+                          <th className="px-4 py-3 text-right tf-sticky-col">Actions</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-200">
+                      <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                         {paginatedInternalTickets.map(ticket => {
                           const CategoryIcon = getInternalCategoryIcon(ticket.category);
+                          const canAssign = !ticket.assigned_to && ticket.status !== 'closed';
                           return (
-                            <tr key={ticket.id} className="hover:bg-gray-50">
-                              <td className="px-6 py-4">
-                                <span className="text-sm font-medium text-gray-900">{ticket.ticket_number}</span>
+                            <tr key={ticket.id} className="transition-colors hover:bg-gray-50/70 dark:hover:bg-slate-800/40">
+                              <td className="whitespace-nowrap px-4 py-3 font-medium text-gray-900 dark:text-slate-100">{ticket.ticket_number}</td>
+                              <td className="max-w-[260px] px-4 py-3">
+                                <div className="truncate text-gray-900 dark:text-slate-100" title={ticket.title}>{ticket.title}</div>
+                                {isAwaitingTeamResponse(ticket) && <div className="mt-1"><AwaitingTeamTag /></div>}
                               </td>
-                              <td className="px-6 py-4">
-                                <div className="text-sm text-gray-900 max-w-xs truncate">{ticket.title}</div>
-                              </td>
-                              <td className="px-6 py-4">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center text-xs font-medium text-gray-700">
+                              <td className="px-4 py-3">
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-blue/10 text-xs font-semibold text-brand-blue ring-1 ring-brand-blue/15">
                                     {ticket.created_by?.name?.charAt(0) || 'U'}
-                                  </div>
-                                  <span className="text-sm text-gray-600">{ticket.created_by?.name}</span>
+                                  </span>
+                                  <span className="truncate text-gray-700 dark:text-slate-300">{ticket.created_by?.name}</span>
                                 </div>
                               </td>
-                              <td className="px-6 py-4">
-                                <div className="flex items-center gap-2">
-                                  <CategoryIcon className="w-4 h-4 text-gray-600" />
-                                  <span className="text-sm text-gray-600">{getInternalCategoryLabel(ticket.category)}</span>
+                              <td className="px-4 py-3">
+                                <div className="flex min-w-0 items-center gap-2 text-gray-600 dark:text-slate-400">
+                                  <CategoryIcon className="h-4 w-4 flex-shrink-0" />
+                                  <span className="truncate">{getInternalCategoryLabel(ticket.category)}</span>
                                 </div>
                               </td>
-                              <td className="px-6 py-4">
-                                {getInternalPriorityBadge(ticket.priority)}
-                              </td>
-                              <td className="px-6 py-4">
-                                {getInternalStatusBadge(ticket.status)}
-                              </td>
-                              <td className="px-6 py-4">
+                              <td className="px-4 py-3">{getInternalPriorityBadge(ticket.priority)}</td>
+                              <td className="px-4 py-3">{getInternalStatusBadge(ticket.status)}</td>
+                              <td className="px-4 py-3">
                                 {ticket.assigned_to ? (
-                                  <span className="text-sm text-gray-600">{ticket.assigned_to.name}</span>
+                                  <div className="flex min-w-0 items-center gap-2">
+                                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-700 text-xs font-semibold text-white dark:bg-slate-600">
+                                      {ticket.assigned_to.name.charAt(0)}
+                                    </span>
+                                    <span className="truncate text-gray-700 dark:text-slate-300">{ticket.assigned_to.name}</span>
+                                  </div>
                                 ) : (
-                                  <span className="text-xs text-warning-strong bg-warning-subtle px-2 py-1 rounded">Unassigned</span>
+                                  <span className="rounded border border-warning-line bg-warning-subtle px-2 py-0.5 text-xs text-warning-strong">Unassigned</span>
                                 )}
                               </td>
-                              <td className="px-6 py-4">
-                                <span className="text-sm text-gray-600">{formatISTDate(ticket.updated_at)}</span>
+                              <td className="whitespace-nowrap px-4 py-3">
+                                <div className="text-gray-700 dark:text-slate-300">{formatISTDate(ticket.updated_at)}</div>
+                                <div className="text-[11px] text-gray-400 dark:text-slate-500">{timeAgo(ticket.updated_at)}</div>
                               </td>
-                              <td className="px-6 py-4 tf-sticky-col">
-                                <button
-                                  onClick={() => {
-                                    setSelectedInternalTicket(ticket);
-                                    fetchInternalTicketDetail(ticket.id);
-                                    setView('detail');
-                                  }}
-                                  className="text-sm text-gray-700 hover:text-gray-900"
-                                >
-                                  View
-                                </button>
+                              <td className="px-4 py-3 tf-sticky-col">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  {canAssign && (
+                                    <button
+                                      onClick={() => handleAssignInternalTicket(ticket.id)}
+                                      disabled={internalActionLoading === ticket.id}
+                                      title="Assign this ticket to me"
+                                      className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-semibold text-gray-700 transition-colors hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-50 dark:border-slate-700 dark:text-slate-300"
+                                    >
+                                      {internalActionLoading === ticket.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserCheck className="h-3.5 w-3.5" />}
+                                      Assign to me
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => {
+                                      setSelectedInternalTicket(ticket);
+                                      fetchInternalTicketDetail(ticket.id);
+                                      setView('detail');
+                                    }}
+                                    className="inline-flex items-center gap-1.5 rounded-lg border border-brand-blue/30 px-3 py-1.5 text-xs font-semibold text-brand-blue transition-colors hover:bg-brand-blue/5"
+                                  >
+                                    <Eye className="h-3.5 w-3.5" />
+                                    View
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           );
@@ -1986,9 +3348,20 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   </div>
 
                   {filteredInternalTickets.length === 0 && (
-                    <div className="text-center py-8 sm:py-12">
-                      <Inbox className="w-10 h-10 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 text-gray-400" />
-                      <p className="text-xs sm:text-sm text-gray-600">No tickets found</p>
+                    <div className="py-10 text-center sm:py-12">
+                      <Inbox className="mx-auto mb-3 h-10 w-10 text-gray-300 dark:text-slate-600 sm:h-12 sm:w-12" />
+                      <p className="text-sm font-medium text-gray-700 dark:text-slate-300">
+                        {internalFilterAssignment === 'unassigned' && filterStatus === 'all' && !searchQuery && teamCategoryFilter === 'all'
+                          ? 'No unassigned tickets 🎉'
+                          : internalFilterAssignment === 'mine' && filterStatus === 'all' && !searchQuery && teamCategoryFilter === 'all'
+                            ? 'Nothing is assigned to you right now'
+                            : 'No tickets match these filters'}
+                      </p>
+                      <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+                        {internalFilterAssignment === 'unassigned' || internalFilterAssignment === 'mine'
+                          ? 'New requests from your team will show up here.'
+                          : 'Try changing or clearing the filters above.'}
+                      </p>
                     </div>
                   )}
                 </>
@@ -2010,153 +3383,438 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
         )}
 
         {/* Team Ticket Detail View */}
-        {activeTab === 'team' && isAdmin && view === 'detail' && selectedInternalTicket && (
-          <div className="max-w-5xl mx-auto">
-            <button
-              onClick={() => setView('tickets')}
-              className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 hover:text-gray-900 mb-4 sm:mb-6"
-            >
-              <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              Back to Tickets
-            </button>
+        {activeTab === 'team' && isAdmin && view === 'detail' && selectedInternalTicket && (() => {
+          const t = selectedInternalTicket;
+          const listIndex = sortedInternalTickets.findIndex(x => x.id === t.id);
+          const prevInternal = listIndex > 0 ? sortedInternalTickets[listIndex - 1] : null;
+          const nextInternal = listIndex >= 0 && listIndex < sortedInternalTickets.length - 1 ? sortedInternalTickets[listIndex + 1] : null;
+          const openInternal = (x: InternalTicket) => {
+            setSelectedInternalTicket(x);
+            fetchInternalTicketDetail(x.id);
+          };
+          const responses = t.responses || [];
+          const descriptionText = (t.description || '').trim();
+          const descriptionAlreadyInReplies = responses[0]?.user_role === 'user' && responses[0].message.trim() === descriptionText;
+          const thread: InternalTicket['responses'] = descriptionText && !descriptionAlreadyInReplies
+            ? [{ id: `${t.id}-description`, user_id: t.created_by?.id || '', user_name: t.created_by?.name, user_role: 'user', message: t.description, created_at: t.created_at }, ...responses]
+            : responses;
+          const detailTab = detailTabState.id === t.id && detailTabState.tab === 'activity' ? 'activity' : 'conversation';
+          const statusLabel = t.status.charAt(0).toUpperCase() + t.status.slice(1).replace('-', ' ');
+          const priorityLabel = internalPriorities.find(p => p.value === t.priority)?.label || t.priority;
+          const busy = internalActionLoading === t.id;
+          const nameOf = (r: InternalTicket['responses'][number]) => r.user_name || (r.user_role === 'admin' ? 'Admin' : 'User');
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+          const copyId = () => {
+            navigator.clipboard?.writeText(t.ticket_number)
+              .then(() => toast.success('Ticket ID copied'))
+              .catch(() => toast.error('Could not copy ticket ID'));
+          };
+          const downloadInternalTranscript = () => {
+            const lines = [
+              `Ticket ${t.ticket_number}: ${t.title}`,
+              `Status: ${statusLabel}`,
+              `Priority: ${priorityLabel}`,
+              `Category: ${getInternalCategoryLabel(t.category)}`,
+              `Submitted by: ${t.created_by?.name || '-'}${t.created_by?.email ? ` (${t.created_by.email})` : ''}`,
+              `Assigned to: ${t.assigned_to?.name || 'Not assigned'}`,
+              `Created: ${formatIST(t.created_at)}`,
+              `Last updated: ${formatIST(t.updated_at)}`,
+              '',
+              'Conversation:',
+              ...(thread.length ? thread.flatMap(r => [`[${formatIST(r.created_at)}] ${nameOf(r)}${r.user_role === 'admin' ? ' (Admin)' : ''}:`, r.message, '']) : ['No messages yet.']),
+            ];
+            const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${t.ticket_number}-transcript.txt`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+          };
+
+          const activity = [
+            { time: t.created_at, icon: Ticket, title: `Ticket created by ${t.created_by?.name || 'a team member'}`, detail: `${getInternalCategoryLabel(t.category)} · ${priorityLabel} priority` },
+            ...responses.map(r => ({
+              time: r.created_at,
+              icon: MessageSquare,
+              title: `${nameOf(r)}${r.user_role === 'admin' ? ' (Admin)' : ''} replied`,
+              detail: r.message.length > 120 ? `${r.message.slice(0, 120)}…` : r.message,
+            })),
+            ...(t.assigned_to ? [{ time: '', icon: UserCheck, title: `Assigned to ${t.assigned_to.name}`, detail: '' }] : []),
+            { time: t.updated_at, icon: Clock, title: `Current status: ${statusLabel}`, detail: 'As of last update' },
+          ];
+
+          const adminTemplates: { group: string; items: { label: string; text: string }[] }[] = [
+            {
+              group: 'Acknowledge',
+              items: [
+                { label: 'Looking into it', text: 'Hi,\n\nThanks for raising this. I am looking into it and will update you shortly.' },
+                { label: 'Assigned to me', text: 'Hi,\n\nI have picked up this ticket and will be handling it from here.' },
+                { label: 'Investigating', text: 'Hi,\n\nWe are still investigating this. I will share an update as soon as I have more information.' },
+              ],
+            },
+            {
+              group: 'Ask for details',
+              items: [
+                { label: 'Need more details', text: 'Hi,\n\nCould you share a few more details?\n- What were you trying to do?\n- What happened instead?\n- When did it start?' },
+                { label: 'Steps to reproduce', text: 'Hi,\n\nCould you list the exact steps that lead to this issue?\n1. \n2. \n3. ' },
+                { label: 'Error message', text: 'Hi,\n\nCould you paste the exact error message you see, if any?' },
+              ],
+            },
+            {
+              group: 'Access & permissions',
+              items: [
+                { label: 'Access granted', text: 'Hi,\n\nThe requested access has been granted. Please sign out and sign back in, then let me know if it works.' },
+                { label: 'Needs approval', text: 'Hi,\n\nThis request needs approval from your manager. I will update you once it is approved.' },
+              ],
+            },
+            {
+              group: 'Wrap up',
+              items: [
+                { label: 'Resolved — please confirm', text: 'Hi,\n\nThis should now be resolved. Please confirm on your side, and reply here if anything is still not working.' },
+                { label: 'Closing (no response)', text: 'Hi,\n\nI have not heard back for a while, so I will close this ticket. Feel free to reopen it if you still need help.' },
+              ],
+            },
+          ];
+
+          const cardCls = 'rounded-xl border border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-900';
+          const toolBtn = 'flex h-8 w-8 items-center justify-center rounded-md text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100';
+          const actionBtn = 'flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60';
+          const infoRow = (Icon: typeof Ticket, label: string, value: React.ReactNode) => (
+            <div className="flex items-center gap-3 py-2">
+              <Icon className="h-4 w-4 shrink-0 text-gray-400 dark:text-slate-500" />
+              <span className="w-24 shrink-0 text-sm text-gray-500 dark:text-slate-400">{label}</span>
+              <div className="min-w-0 flex-1 text-sm font-medium text-gray-900 dark:text-slate-100">{value}</div>
+            </div>
+          );
+
+          return (
+          <div>
+            {/* Back + previous / next */}
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <button
+                onClick={() => setView('tickets')}
+                className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-brand-blue dark:text-slate-400"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back to Tickets
+              </button>
+              {sortedInternalTickets.length > 1 && listIndex >= 0 && (
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => prevInternal && openInternal(prevInternal)}
+                    disabled={!prevInternal}
+                    className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                    Previous
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => nextInternal && openInternal(nextInternal)}
+                    disabled={!nextInternal}
+                    className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                  >
+                    Next
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
               {/* Main Content */}
-              <div className="lg:col-span-2 space-y-4 sm:space-y-6">
+              <div className={`${cardCls} p-4 sm:p-5 lg:col-span-2`}>
                 {/* Ticket Header */}
-                <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6">
-                  <div className="flex items-start justify-between mb-3 sm:mb-4">
-                    <div>
-                      <span className="text-2xs sm:text-xs text-gray-600 block mb-1 sm:mb-2">{selectedInternalTicket.ticket_number}</span>
-                      <h2 className="text-sm sm:text-base md:text-lg font-semibold text-gray-900 mb-2 sm:mb-3">{selectedInternalTicket.title}</h2>
-                      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                        {getInternalStatusBadge(selectedInternalTicket.status)}
-                        {getInternalPriorityBadge(selectedInternalTicket.priority)}
-                        <span className="text-2xs sm:text-xs text-gray-600">
-                          {getInternalCategoryLabel(selectedInternalTicket.category)}
-                        </span>
-                      </div>
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-400">
+                      <span>{t.ticket_number}</span>
+                      <button type="button" onClick={copyId} aria-label="Copy ticket ID" className="rounded p-0.5 hover:bg-gray-100 hover:text-brand-blue dark:hover:bg-slate-800">
+                        <Copy className="h-3.5 w-3.5" />
+                      </button>
                     </div>
-                  </div>
-                  <div className="pt-3 sm:pt-4 border-t border-gray-200">
-                    <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 flex-wrap">
-                      <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                      <span>Submitted by <strong>{selectedInternalTicket.created_by?.name}</strong></span>
-                      {selectedInternalTicket.created_by?.email && (
-                        <span className="text-gray-500 truncate text-2xs sm:text-xs">({selectedInternalTicket.created_by.email})</span>
+                    <h2 className="mt-1 break-words text-xl font-bold tracking-tight text-gray-900 dark:text-slate-50 sm:text-2xl">{t.title}</h2>
+                    <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                      {getInternalStatusBadge(t.status)}
+                      {getInternalPriorityBadge(t.priority)}
+                      <span className="rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700 dark:bg-slate-800 dark:text-slate-300">
+                        {getInternalCategoryLabel(t.category)}
+                      </span>
+                      {!t.assigned_to && t.status !== 'closed' && (
+                        <span className="rounded border border-warning-line bg-warning-subtle px-2 py-0.5 text-xs text-warning-strong">Unassigned</span>
+                      )}
+                      {isAwaitingTeamResponse(t) && <AwaitingTeamTag />}
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs text-gray-600 dark:text-slate-400 sm:text-sm">
+                      <User className="h-4 w-4 shrink-0 text-brand-blue" />
+                      <span>Submitted by <strong className="text-gray-900 dark:text-slate-100">{t.created_by?.name}</strong></span>
+                      {t.created_by?.email && (
+                        <span className="truncate text-xs text-gray-500 dark:text-slate-500">({t.created_by.email})</span>
                       )}
                     </div>
                   </div>
-                </div>
-
-                {/* Conversation */}
-                <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6">
-                  <h3 className="text-sm sm:text-base font-semibold text-gray-900 mb-4 sm:mb-6">Conversation</h3>
-
-                  <div className="space-y-4 sm:space-y-6">
-                    {selectedInternalTicket.responses?.map((response) => (
-                      <div
-                        key={response.id}
-                        className={`${
-                          response.user_role === 'admin'
-                            ? 'bg-gray-100 border-gray-300'
-                            : 'bg-brand-blue/5 border-brand-blue/20'
-                        } border rounded-lg p-3 sm:p-4 md:p-5`}
-                      >
-                        <div className="flex items-start gap-2.5 sm:gap-4 mb-2 sm:mb-3">
-                          {response.user_role === 'admin' ? (
-                            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-700 rounded-full flex items-center justify-center text-white flex-shrink-0 text-xs sm:text-sm font-medium">
-                              A
-                            </div>
-                          ) : (
-                            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-brand-blue rounded-full flex items-center justify-center text-white flex-shrink-0 text-xs sm:text-sm font-medium">
-                              {response.user_name?.charAt(0) || 'U'}
-                            </div>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between mb-1 gap-2">
-                              <span className="text-xs sm:text-sm font-medium text-gray-900 truncate">
-                                {response.user_role === 'admin' ? `${response.user_name} (Admin)` : response.user_name}
-                              </span>
-                              <span className="text-2xs sm:text-xs text-gray-600 whitespace-nowrap flex-shrink-0">{formatISTDate(response.created_at)}</span>
-                            </div>
-                            <p className="text-xs sm:text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{response.message}</p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Reply Box */}
-                  {selectedInternalTicket.status !== 'closed' && (
-                    <div className="mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-gray-200">
-                      <Label className="mb-1.5">Reply to User</Label>
-                      <Textarea
-                        value={replyMessage}
-                        onChange={(e) => setReplyMessage(e.target.value)}
-                        placeholder="Type your response..."
-                        rows={3}
-                      />
-                      <div className="flex justify-end mt-2 sm:mt-3">
-                        <Button
-                          variant="primary"
-                          onClick={handleSendInternalReply}
-                          disabled={!replyMessage.trim()}
-                          icon={<MessageSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
-                        >
-                          Send Reply
-                        </Button>
+                  <div className="flex shrink-0 flex-row gap-4 sm:flex-col sm:gap-2 sm:border-l sm:border-gray-200 sm:pl-5 dark:sm:border-slate-700">
+                    <div className="flex items-start gap-2">
+                      <Calendar className="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-slate-500" />
+                      <div>
+                        <div className="text-[11px] text-gray-500 dark:text-slate-400">Created</div>
+                        <div className="text-xs font-medium text-gray-900 dark:text-slate-100">{formatIST(t.created_at)}</div>
                       </div>
                     </div>
-                  )}
+                    <div className="flex items-start gap-2">
+                      <Clock className="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-slate-500" />
+                      <div>
+                        <div className="text-[11px] text-gray-500 dark:text-slate-400">Last Updated</div>
+                        <div className="text-xs font-medium text-gray-900 dark:text-slate-100">{formatIST(t.updated_at)}</div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
+
+                {/* Conversation / Activity Log tabs */}
+                <div className="mt-5 flex gap-1 border-b border-gray-200 dark:border-slate-700">
+                  {[
+                    { id: 'conversation' as const, label: 'Conversation', icon: MessageSquare },
+                    { id: 'activity' as const, label: 'Activity Log', icon: History },
+                  ].map(tab => {
+                    const TabIcon = tab.icon;
+                    return (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setDetailTabState({ id: t.id, tab: tab.id })}
+                        className={`-mb-px inline-flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-sm font-semibold transition-colors ${
+                          detailTab === tab.id
+                            ? 'border-brand-blue text-brand-blue'
+                            : 'border-transparent text-gray-500 hover:text-gray-800 dark:text-slate-400 dark:hover:text-slate-200'
+                        }`}
+                      >
+                        <TabIcon className="h-4 w-4" />
+                        {tab.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {detailTab === 'conversation' ? (
+                  <>
+                    <div className="mt-4 space-y-3">
+                      {thread.length === 0 && (
+                        <p className="py-6 text-center text-sm text-gray-500 dark:text-slate-400">No messages yet.</p>
+                      )}
+                      {thread.map((response) => {
+                        const fromAdmin = response.user_role === 'admin';
+                        // Messages the signed-in admin sent sit on the right; everyone else on the left.
+                        const mine = !!authUser?.id && response.user_id === authUser.id;
+                        return (
+                          <div
+                            key={response.id}
+                            className={`w-fit min-w-[240px] max-w-[90%] rounded-xl border p-3 sm:max-w-[75%] sm:p-4 ${
+                              mine ? 'ml-auto rounded-tr-sm' : 'mr-auto rounded-tl-sm'
+                            } ${
+                              fromAdmin
+                                ? 'border-gray-200 bg-gray-50 dark:border-slate-700/60 dark:bg-slate-800/50'
+                                : 'border-brand-blue/15 bg-brand-blue/[0.06] dark:bg-brand-blue/10'
+                            }`}
+                          >
+                            <div className={`flex items-start gap-3 ${mine ? 'flex-row-reverse' : ''}`}>
+                              <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white ${fromAdmin ? 'bg-gray-700 dark:bg-slate-600' : 'bg-brand-blue'}`}>
+                                {(response.user_name || (fromAdmin ? 'A' : 'U')).charAt(0).toUpperCase()}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="mb-1 flex items-center justify-between gap-2">
+                                  <div className="flex min-w-0 items-center gap-2">
+                                    <span className="truncate text-sm font-semibold text-gray-900 dark:text-slate-50">{nameOf(response)}</span>
+                                    {fromAdmin ? (
+                                      <span className="rounded-full bg-gray-200 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600 dark:bg-slate-700 dark:text-slate-300">Admin</span>
+                                    ) : (
+                                      <span className="rounded-full bg-brand-blue/10 px-1.5 py-0.5 text-[10px] font-semibold text-brand-blue">Requester</span>
+                                    )}
+                                  </div>
+                                  <span className="shrink-0 whitespace-nowrap text-[11px] text-gray-500 dark:text-slate-400">{formatIST(response.created_at)}</span>
+                                </div>
+                                <div className="space-y-1 text-sm leading-relaxed text-gray-700 dark:text-slate-300">{renderFormattedMessage(response.message)}</div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Reply Box */}
+                    {t.status !== 'closed' && (
+                      <div className="mt-4 border-t border-gray-100 pt-4 dark:border-slate-700/60">
+                        <div className="mb-1.5 flex items-center justify-between">
+                          <Label className="text-sm font-semibold">Reply to User</Label>
+                          <div className="relative">
+                            <button
+                              type="button"
+                              onClick={() => { setTemplateMenuOpen(o => !o); setEmojiMenuOpen(false); }}
+                              aria-expanded={templateMenuOpen}
+                              className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-blue hover:underline sm:text-sm"
+                            >
+                              <FileText className="h-4 w-4" />
+                              Use Template
+                            </button>
+                            {templateMenuOpen && (
+                              <>
+                                <button type="button" aria-hidden="true" tabIndex={-1} className="fixed inset-0 z-10 cursor-default" onClick={() => setTemplateMenuOpen(false)} />
+                                <div className="absolute right-0 z-20 mt-1 max-h-80 w-64 overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg [scrollbar-width:thin] dark:border-slate-700 dark:bg-slate-900">
+                                  {adminTemplates.map(group => (
+                                    <div key={group.group} className="py-1">
+                                      <p className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">{group.group}</p>
+                                      {group.items.map(tpl => (
+                                        <button
+                                          key={tpl.label}
+                                          type="button"
+                                          title={tpl.text}
+                                          onClick={() => {
+                                            setReplyMessage(prev => (prev.trim() ? `${prev.trimEnd()}\n\n${tpl.text}` : tpl.text));
+                                            lastReplySel.current = null;
+                                            setTemplateMenuOpen(false);
+                                            requestAnimationFrame(() => replyRef.current?.focus());
+                                          }}
+                                          className="block w-full px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 hover:text-brand-blue dark:text-slate-300 dark:hover:bg-slate-800"
+                                        >
+                                          {tpl.label}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  ))}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        <Textarea
+                          ref={replyRef}
+                          value={replyMessage}
+                          onChange={(e) => setReplyMessage(e.target.value)}
+                          onSelect={(e) => { lastReplySel.current = { start: e.currentTarget.selectionStart, end: e.currentTarget.selectionEnd }; }}
+                          placeholder="Type your response..."
+                          rows={4}
+                        />
+                        <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          {/* Toolbar */}
+                          <div className="flex flex-wrap items-center gap-0.5">
+                            <button type="button" onClick={() => wrapSelection('**', '**', 'bold text')} aria-label="Bold" title="Bold" className={toolBtn}><Bold className="h-4 w-4" /></button>
+                            <button type="button" onClick={() => wrapSelection('_', '_', 'italic text')} aria-label="Italic" title="Italic" className={toolBtn}><Italic className="h-4 w-4" /></button>
+                            <button type="button" onClick={() => prefixLines(() => '- ')} aria-label="Bulleted list" title="Bulleted list" className={toolBtn}><List className="h-4 w-4" /></button>
+                            <button type="button" onClick={() => prefixLines(i => `${i + 1}. `)} aria-label="Numbered list" title="Numbered list" className={toolBtn}><ListOrdered className="h-4 w-4" /></button>
+                            <button type="button" onClick={() => wrapSelection('[', '](https://)', 'link text')} aria-label="Insert link" title="Insert link" className={toolBtn}><Link2 className="h-4 w-4" /></button>
+                            <div className="relative">
+                              <button type="button" onClick={() => { setEmojiMenuOpen(o => !o); setTemplateMenuOpen(false); }} aria-label="Insert emoji" title="Insert emoji" aria-expanded={emojiMenuOpen} className={toolBtn}><Smile className="h-4 w-4" /></button>
+                              {emojiMenuOpen && (
+                                <>
+                                  <button type="button" aria-hidden="true" tabIndex={-1} className="fixed inset-0 z-10 cursor-default" onClick={() => setEmojiMenuOpen(false)} />
+                                  <div className="absolute bottom-full left-0 z-20 mb-1 max-h-64 w-[17.5rem] overflow-y-auto rounded-lg border border-gray-200 bg-white p-2 shadow-lg [scrollbar-width:thin] dark:border-slate-700 dark:bg-slate-900">
+                                    {EMOJI_GROUPS.map(group => (
+                                      <div key={group.group} className="mb-1.5 last:mb-0">
+                                        <p className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">{group.group}</p>
+                                        <div className="grid grid-cols-8 gap-0.5">
+                                          {group.items.map(em => (
+                                            <button
+                                              key={em}
+                                              type="button"
+                                              aria-label={`Insert ${em}`}
+                                              data-emoji={em}
+                                              onClick={handleEmojiPick}
+                                              style={{ fontFamily: EMOJI_FONT_STACK }}
+                                              className="flex h-8 w-8 items-center justify-center rounded-md text-xl leading-none hover:bg-gray-100 dark:hover:bg-slate-800"
+                                            >
+                                              {em}
+                                            </button>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          <Button
+                            variant="primary"
+                            onClick={handleSendInternalReply}
+                            disabled={!replyMessage.trim()}
+                            icon={<Send className="h-4 w-4" />}
+                            className="w-full sm:w-auto"
+                          >
+                            Send Reply
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <ol className="relative mt-4 space-y-4 border-l border-gray-200 pl-5 dark:border-slate-700">
+                    {activity.map((item, idx) => {
+                      const ItemIcon = item.icon;
+                      return (
+                        <li key={idx} className="relative">
+                          <span className="absolute -left-[31px] flex h-6 w-6 items-center justify-center rounded-full bg-white text-brand-blue ring-1 ring-gray-200 dark:bg-slate-900 dark:ring-slate-700">
+                            <ItemIcon className="h-3.5 w-3.5" />
+                          </span>
+                          <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+                            <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">{item.title}</p>
+                            {item.time && <span className="text-[11px] text-gray-500 dark:text-slate-400">{formatIST(item.time)}</span>}
+                          </div>
+                          {item.detail && <p className="mt-0.5 break-words text-xs text-gray-600 dark:text-slate-400">{item.detail}</p>}
+                        </li>
+                      );
+                    })}
+                  </ol>
+                )}
               </div>
 
               {/* Sidebar */}
-              <div className="space-y-4 sm:space-y-6">
+              <div className="space-y-4">
                 {/* Ticket Info */}
-                <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6">
-                  <h4 className="text-xs sm:text-sm font-semibold text-gray-900 mb-3 sm:mb-4">Ticket Information</h4>
-
-                  <div className="space-y-3 sm:space-y-4">
-                    <div>
-                      <div className="text-2xs sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Created</div>
-                      <div className="text-xs sm:text-sm text-gray-900">{formatIST(selectedInternalTicket.created_at)}</div>
-                    </div>
-
-                    <div>
-                      <div className="text-2xs sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Last Updated</div>
-                      <div className="text-xs sm:text-sm text-gray-900">{formatIST(selectedInternalTicket.updated_at)}</div>
-                    </div>
-
-                    <div>
-                      <div className="text-2xs sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Assigned To</div>
-                      {selectedInternalTicket.assigned_to ? (
-                        <div className="flex items-center gap-2">
-                          <div className="w-5 h-5 sm:w-6 sm:h-6 bg-gray-700 rounded-full flex items-center justify-center text-white text-2xs sm:text-xs flex-shrink-0">
-                            {selectedInternalTicket.assigned_to.name.charAt(0)}
-                          </div>
-                          <div className="text-xs sm:text-sm text-gray-900">{selectedInternalTicket.assigned_to.name}</div>
-                        </div>
-                      ) : (
-                        <span className="text-xs sm:text-sm text-warning-strong">Not assigned</span>
-                      )}
-                    </div>
-
-                    <div>
-                      <div className="text-2xs sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Responses</div>
-                      <div className="text-xs sm:text-sm text-gray-900">{selectedInternalTicket.responses?.length || 0} messages</div>
-                    </div>
+                <div className={`${cardCls} p-4`}>
+                  <h4 className="mb-1 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-slate-50">
+                    <Ticket className="h-4 w-4 text-brand-blue" />
+                    Ticket Information
+                  </h4>
+                  <div className="divide-y divide-gray-100 dark:divide-slate-700/60">
+                    {infoRow(Tag, 'Ticket ID', (
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="truncate">{t.ticket_number}</span>
+                        <button type="button" onClick={copyId} aria-label="Copy ticket ID" className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-brand-blue dark:hover:bg-slate-800">
+                          <Copy className="h-3.5 w-3.5" />
+                        </button>
+                      </span>
+                    ))}
+                    {infoRow(Circle, 'Status', getInternalStatusBadge(t.status))}
+                    {infoRow(Inbox, 'Category', getInternalCategoryLabel(t.category))}
+                    {infoRow(User, 'Requester', t.created_by?.name || '-')}
+                    {infoRow(UserCheck, 'Assigned To', t.assigned_to ? (
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-blue text-2xs text-white">{t.assigned_to.name.charAt(0)}</span>
+                        <span className="truncate">{t.assigned_to.name}</span>
+                      </span>
+                    ) : (
+                      <span className="text-warning-strong">Not assigned</span>
+                    ))}
+                    {infoRow(Calendar, 'Created', formatIST(t.created_at))}
+                    {infoRow(Clock, 'Last Updated', formatIST(t.updated_at))}
+                    {infoRow(MessageSquare, 'Responses', `${responses.length} message${responses.length === 1 ? '' : 's'}`)}
                   </div>
                 </div>
 
-                {/* Update Priority */}
-                {selectedInternalTicket.status !== 'closed' && (
-                  <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6">
-                    <h4 className="text-xs sm:text-sm font-semibold text-gray-900 mb-3 sm:mb-4">Update Priority</h4>
+                {/* Update Priority — saves on change, as before */}
+                {t.status !== 'closed' && (
+                  <div className={`${cardCls} p-4`}>
+                    <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-slate-50">
+                      <Flag className="h-4 w-4 text-brand-blue" />
+                      Update Priority
+                    </h4>
                     <select
-                      value={selectedInternalTicket.priority}
-                      onChange={(e) => handleUpdateInternalPriority(selectedInternalTicket.id, e.target.value as InternalTicketPriority)}
+                      value={t.priority}
+                      onChange={(e) => handleUpdateInternalPriority(t.id, e.target.value as InternalTicketPriority)}
                       className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                     >
                       {internalPriorities.map(p => (
@@ -2166,76 +3824,72 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   </div>
                 )}
 
-                {/* Actions */}
-                <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6">
-                  <h4 className="text-xs sm:text-sm font-semibold text-gray-900 mb-3 sm:mb-4">Actions</h4>
-
+                {/* Actions — same actions and conditions as before */}
+                <div className={`${cardCls} p-4`}>
+                  <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-slate-50">
+                    <Settings2 className="h-4 w-4 text-brand-blue" />
+                    Actions
+                  </h4>
                   <div className="space-y-2">
-                    {!selectedInternalTicket.assigned_to && selectedInternalTicket.status !== 'closed' && (
+                    {!t.assigned_to && t.status !== 'closed' && (
                       <button
-                        onClick={() => handleAssignInternalTicket(selectedInternalTicket.id)}
-                        disabled={internalActionLoading === selectedInternalTicket.id}
-                        className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-brand-blue text-white rounded-lg ring-1 ring-white/10 shadow-md hover:-translate-y-0.5 hover:shadow-lg transition-all transition-colors text-xs sm:text-sm text-left flex items-center gap-1.5 sm:gap-2 disabled:bg-gray-400"
+                        onClick={() => handleAssignInternalTicket(t.id)}
+                        disabled={busy}
+                        className={`${actionBtn} bg-brand-blue text-white shadow-sm shadow-brand-blue/25 hover:bg-brand-blue-2`}
                       >
-                        {internalActionLoading === selectedInternalTicket.id ? (
-                          <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" />
-                        ) : (
-                          <UserCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                        )}
+                        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserCheck className="h-4 w-4 flex-shrink-0" />}
                         Assign to Me
                       </button>
                     )}
 
-                    {(selectedInternalTicket.status === 'open' || selectedInternalTicket.status === 'in-progress') && (
+                    {(t.status === 'open' || t.status === 'in-progress') && (
                       <button
-                        onClick={() => handleResolveInternalTicket(selectedInternalTicket.id)}
-                        disabled={internalActionLoading === selectedInternalTicket.id}
-                        className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-success text-white rounded-lg hover:bg-success transition-colors text-xs sm:text-sm text-left flex items-center gap-1.5 sm:gap-2 disabled:bg-success/60"
+                        onClick={() => handleResolveInternalTicket(t.id)}
+                        disabled={busy}
+                        className={`${actionBtn} ${t.assigned_to ? 'bg-success text-white hover:opacity-90' : 'border border-success-line bg-success-subtle text-success-strong hover:opacity-90'}`}
                       >
-                        {internalActionLoading === selectedInternalTicket.id ? (
-                          <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" />
-                        ) : (
-                          <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                        )}
+                        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4 flex-shrink-0" />}
                         Mark as Resolved
                       </button>
                     )}
 
-                    {(selectedInternalTicket.status === 'resolved' || selectedInternalTicket.status === 'closed') && (
+                    {(t.status === 'resolved' || t.status === 'closed') && (
                       <button
-                        onClick={() => handleReopenInternalTicket(selectedInternalTicket.id)}
-                        disabled={internalActionLoading === selectedInternalTicket.id}
-                        className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-xs sm:text-sm text-left flex items-center gap-1.5 sm:gap-2 disabled:bg-gray-50"
+                        onClick={() => handleReopenInternalTicket(t.id)}
+                        disabled={busy}
+                        className={`${actionBtn} border border-gray-200 bg-gray-50 text-gray-800 hover:bg-gray-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700`}
                       >
-                        {internalActionLoading === selectedInternalTicket.id ? (
-                          <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" />
-                        ) : (
-                          <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                        )}
+                        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4 flex-shrink-0" />}
                         Reopen Ticket
                       </button>
                     )}
 
-                    {selectedInternalTicket.status !== 'closed' && (
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
                       <button
-                        onClick={() => handleCloseInternalTicket(selectedInternalTicket.id)}
-                        disabled={internalActionLoading === selectedInternalTicket.id}
-                        className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-destructive-subtle text-destructive rounded-lg hover:bg-destructive-subtle transition-colors text-xs sm:text-sm text-left flex items-center gap-1.5 sm:gap-2 disabled:bg-destructive-subtle"
+                        onClick={downloadInternalTranscript}
+                        className={`${actionBtn} border border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700`}
                       >
-                        {internalActionLoading === selectedInternalTicket.id ? (
-                          <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" />
-                        ) : (
-                          <XCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                        )}
-                        Close Ticket
+                        <Download className="h-4 w-4 flex-shrink-0" />
+                        Transcript
                       </button>
-                    )}
+                      {t.status !== 'closed' && (
+                        <button
+                          onClick={() => handleCloseInternalTicket(t.id)}
+                          disabled={busy}
+                          className={`${actionBtn} border border-destructive-line bg-destructive-subtle text-destructive hover:opacity-90`}
+                        >
+                          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4 flex-shrink-0" />}
+                          Close Ticket
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        )}
+          );
+        })()}
       </div>
       </div>
       </div>

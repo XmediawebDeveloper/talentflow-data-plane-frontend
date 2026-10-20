@@ -1,15 +1,7 @@
 'use client';
 
-import { Loader2, AlertTriangle } from 'lucide-react';
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogAction,
-} from '@/components/ui/alert-dialog';
+import { AlertTriangle, Trash2 } from 'lucide-react';
+import AppModal from '@/components/ui/app-modal';
 
 interface DeleteConfirmDialogProps {
   open: boolean;
@@ -27,39 +19,29 @@ export default function DeleteConfirmDialog({
   isDeleting = false,
 }: DeleteConfirmDialogProps) {
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="max-w-md max-h-[90dvh] rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-2xl flex flex-col">
-        <AlertDialogHeader className="shrink-0">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-destructive-subtle ring-1 ring-destructive-line">
-              <AlertTriangle className="w-5 h-5 text-destructive" />
-            </div>
-            <AlertDialogTitle>Delete Team</AlertDialogTitle>
-          </div>
-        </AlertDialogHeader>
-        <div className="flex-1 overflow-y-auto">
-          <AlertDialogDescription className="text-left">
-            Are you sure you want to delete <span className="font-semibold text-gray-900 dark:text-slate-50">&quot;{teamName}&quot;</span>?
-            This action cannot be undone. All team data will be permanently removed.
-          </AlertDialogDescription>
-        </div>
-        <AlertDialogFooter className="shrink-0">
-          <AlertDialogAction
-            onClick={onConfirm}
-            disabled={isDeleting}
-            className="bg-destructive text-white hover:opacity-90 focus:ring-destructive/40"
-          >
-            {isDeleting ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                Deleting...
-              </>
-            ) : (
-              'Delete Team'
-            )}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <AppModal
+      open={open}
+      onCancel={() => onOpenChange(false)}
+      cancelDisabled={isDeleting}
+      size="sm"
+      zIndexClass="z-50"
+      icon={<AlertTriangle />}
+      title="Delete Team"
+      actions={[
+        {
+          label: isDeleting ? 'Deleting...' : 'Delete Team',
+          onClick: onConfirm,
+          variant: 'destructive',
+          disabled: isDeleting,
+          loading: isDeleting,
+          icon: <Trash2 className="h-4 w-4" />,
+        },
+      ]}
+    >
+      <p className="text-sm text-gray-600 dark:text-slate-400">
+        Are you sure you want to delete <span className="font-semibold text-gray-900 dark:text-slate-50">&quot;{teamName}&quot;</span>?
+        This action cannot be undone. All team data will be permanently removed.
+      </p>
+    </AppModal>
   );
 }

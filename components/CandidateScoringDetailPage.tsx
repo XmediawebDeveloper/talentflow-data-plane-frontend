@@ -1,7 +1,8 @@
 'use client';
 
 import { RESUME_EMAIL_SHARE_ENABLED } from '@/lib/constants/featureFlags';
-import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, Briefcase, GraduationCap, Star, Calendar, Zap, FileText, AlertCircle, Download, Clock, Building2, ChevronLeft, ChevronRight, ChevronDown, Code, Languages, BarChart3, CheckSquare, MessageSquare, Minus, ThumbsUp, ThumbsDown, Loader2, Sparkles, UserPlus, History, File, HardDrive, User, X, Eye, Share2, Paperclip, Send, Plus } from 'lucide-react';
+import { CREATE_SEND_BUTTON_CLASS, CANDIDATE_ACTION_BUTTON_CLASS } from '@/lib/constants/createSendActions';
+import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, Briefcase, GraduationCap, Star, Calendar, Zap, FileText, AlertCircle, Download, Clock, Building2, ChevronLeft, ChevronRight, ChevronDown, Code, Languages, BarChart3, CheckSquare, MessageSquare, Minus, ThumbsUp, ThumbsDown, Loader2, UserPlus, History, File, HardDrive, User, X, Eye, Share2, Paperclip, Send, Plus, ClipboardList, Video } from 'lucide-react';
 import DetailedScorecardTab from './DetailedScorecardTab';
 import { Button } from '@/components/ui/button';
 import { Tooltip } from '@/components/ui/tooltip';
@@ -130,6 +131,22 @@ interface ScoredResume {
  *  white, brand-blue outline + text, filling solid brand-blue on hover. */
 const HEADER_ACTION_BTN =
   'inline-flex items-center justify-center gap-2 h-10 px-4 text-sm font-semibold whitespace-nowrap rounded-lg border-2 border-brand-blue/60 bg-white text-brand-blue shadow-sm cursor-pointer transition-colors hover:bg-brand-blue hover:text-white hover:border-brand-blue focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-brand-blue disabled:hover:border-brand-blue/60';
+/** HEADER_ACTION_BTN when the user lacks the permission: shown, greyed, no hover colour. */
+const HEADER_ACTION_BTN_LOCKED =
+  'inline-flex items-center justify-center gap-2 h-10 px-4 text-sm font-semibold whitespace-nowrap rounded-lg border-2 border-gray-200 bg-gray-50 text-gray-400 shadow-sm cursor-not-allowed opacity-60';
+/** Create / Send / candidate action button when the user lacks the permission. */
+const CREATE_SEND_BUTTON_LOCKED_CLASS =
+  'flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium whitespace-nowrap bg-gray-50 border border-gray-200 text-gray-400 cursor-not-allowed opacity-60';
+
+/** Email / phone / location chip — the resume view's contact badge
+ *  (resume-view/[id]), on this card's white instead of its tinted one. */
+const CONTACT_BADGE =
+  'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white text-xs text-gray-700 ring-1 ring-brand-blue/10';
+
+/** Technical / soft skill chip — the resume view's compact skill badge
+ *  (resume-view/[id]); wraps with its siblings in a `flex-wrap gap-1.5` row. */
+const SKILL_BADGE =
+  'inline-flex items-center px-2 py-0.5 bg-brand-blue/5 text-brand-blue rounded-md text-xs ring-1 ring-brand-blue/20';
 
 const DETAIL_TABS = ['overview', 'scoretable', 'personalinfo', 'viewjd'] as const;
 type DetailTab = typeof DETAIL_TABS[number];
@@ -187,6 +204,20 @@ interface CandidateScoringDetailPageProps {
    * dropdown only previews versions.
    */
   onSelectScore?: (scoreId: string, resumeVersion: number) => void;
+  /**
+   * Job Details → Scored Resumes → View Result: this page shows the score of
+   * the one resume version that was scored, so its version is a plain badge
+   * for reference — no dropdown to switch versions.
+   */
+  versionReadOnly?: boolean;
+  /**
+   * Job Details → Scored Resumes → View Result: the header's actions laid out
+   * flat — Create / Send Assessment and Create / Send AI Interview as their own
+   * buttons (no Invite ▾ menu), View Resume as an eye icon, and Download
+   * Scorecard labelled "Scorecard". Takes effect only with `onOpenInviteDialog`,
+   * whose two entries are exactly those two buttons.
+   */
+  inlineHeaderActions?: boolean;
 }
 
 /**
@@ -207,7 +238,7 @@ function byNewestVersion(a: any, b: any): number {
   return bTime - aTime;
 }
 
-export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, onMinimize, currentIndex, totalCount, onPrev, onNext, jobPager, breadcrumbItems, assessmentConfigured, aiInterviewConfigured, allowCreateInviteTarget, onOpenInviteDialog, onSelectScore }: CandidateScoringDetailPageProps) {
+export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, onMinimize, currentIndex, totalCount, onPrev, onNext, jobPager, breadcrumbItems, assessmentConfigured, aiInterviewConfigured, allowCreateInviteTarget, onOpenInviteDialog, onSelectScore, versionReadOnly = false, inlineHeaderActions = false }: CandidateScoringDetailPageProps) {
   const { isTenantAdmin, user, hasPermissionCode } = useAuth();
   const { hasPlanFeature, isPlanLocked } = usePlanLock();
   const canExport = isTenantAdmin || (user?.permissions?.canExport ?? false);
@@ -258,7 +289,10 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   // (see ScoredResumesTable.tsx's canCreateAssessments), which this page had
   // missed: previously, disabling Resume Scoring's "Invite" permission had
   // no effect on this button.
-  const mayInviteAssessment = isTenantAdmin || hasPermissionCode('scoring:invite');
+  // Resume Scoring → "Invite to Assessment" (separate from "Invite to AI
+  // Interview"); the Assessment module's own Invite is what the server checks.
+  const mayInviteAssessment =
+    isTenantAdmin || (hasPermissionCode('scoring:invite_assessment') && hasPermissionCode('assessments:invite'));
   // Same scoring:invite gate as Assessment above — this page lives on the
   // Resume Scoring surface, so disabling that module's "Invite" permission
   // should turn off BOTH invite targets reachable from it, not just
@@ -267,8 +301,8 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   // required alongside it, since that is what the AI Interview invite
   // endpoints actually enforce server-side.
   const mayInviteAIInterview =
-    (isTenantAdmin || hasPermissionCode('scoring:invite')) &&
-    hasPermission('canInviteAIInterviews');
+    isTenantAdmin ||
+    (hasPermissionCode('scoring:invite_ai_interview') && hasPermission('canInviteAIInterviews'));
   const canInvite = mayInviteAssessment || mayInviteAIInterview;
   // Plan gates DISABLE the entry (hover explains), they never hide it:
   // permission decides what is shown, the plan only whether it is clickable.
@@ -315,6 +349,11 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   // opening a menu whose every entry dead-ends in "create one first".
   // A missing target still opens the menu - to offer creating it.
   const inviteDisabled = !canInviteAssessment && !canInviteAIInterview && !assessmentMissing && !aiInterviewMissing;
+  /* See `inlineHeaderActions`. Each flat button keeps its menu entry's gate,
+     and why it is disabled, as a tooltip. */
+  const flatHeaderActions = inlineHeaderActions && viaInviteDialog;
+  const inviteBlockedReason = (may: boolean, planLocked: boolean) =>
+    !may ? 'You do not have permission to invite candidates' : planLocked ? PLAN_LOCKED_MESSAGE : undefined;
 
   const [showInviteMenu, setShowInviteMenu] = useState(false);
   const inviteMenuRef = useRef<HTMLDivElement>(null);
@@ -970,6 +1009,24 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
     }
   };
 
+  /* Flat header (`inlineHeaderActions`): View Resume as a small eye inside the
+     resume version badge, its name in the tooltip and accessible label.
+     `joined` draws the divider from the "Version N" text beside it. */
+  const renderViewResumeEye = (joined: boolean) => (
+    <button
+      type="button"
+      onClick={handleViewResume}
+      disabled={loadingResumeDetail}
+      title="View Resume"
+      aria-label="View Resume"
+      className={`inline-flex items-center justify-center px-1.5 ${joined ? 'border-l border-blue-200' : 'py-1'} hover:bg-blue-100 transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-blue/40 disabled:cursor-not-allowed disabled:opacity-60`}
+    >
+      {loadingResumeDetail
+        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+        : <Eye className="w-3.5 h-3.5" />}
+    </button>
+  );
+
   /* Share Resume — the dialog the resume table and the resume page open, so a
      scored candidate's resume goes out the same way it does anywhere else. The
      file's details are already on `fullResumeData`, and the eye reuses View
@@ -1191,7 +1248,7 @@ Best regards`);
      "+ Create ..." below - the same pair as the landing page's Actions menu. */
   const renderCreateInviteItems = (kind: InviteHandoffKind) => {
     const what = kind === 'assessment' ? 'AI Assessment' : 'AI Interview';
-    const Icon = kind === 'assessment' ? Mail : Sparkles;
+    const Icon = kind === 'assessment' ? ClipboardList : Video;
     return (
       <>
         <button
@@ -1454,16 +1511,27 @@ Best regards`);
           {/* Row 1: candidate identity. The record pager that used to sit on
               the right moved into the breadcrumb bar, as on job-details. */}
           <div className="flex items-start justify-between gap-4 mb-3">
-            {/* pl-3 = the contact badges' own inset, so the name, the years
+            {/* pl-2.5 = the contact badges' own inset, so the name, the years
                 and the email / phone icons below start on one vertical line. */}
-            <div className="min-w-0 pl-3">
+            <div className="min-w-0 pl-2.5">
               <h1 className="text-lg sm:text-xl text-gray-900 font-semibold mb-2 truncate">{resume.candidateName}</h1>
               <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <p className="text-base sm:text-lg text-gray-700 font-medium">{resume.title || resume.experience || 'Candidate'}</p>
-                {resume.resumeVersion && (resumeVersions.length === 0 ? (
-                  <span className="inline-flex items-center px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md text-xs sm:text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200">
-                    Version {resume.resumeVersion}
-                  </span>
+                {resume.resumeVersion && (versionReadOnly || resumeVersions.length === 0 ? (
+                  flatHeaderActions ? (
+                    /* Flat: View Resume as a small eye joined to the version
+                       badge — the resume it opens is that version. */
+                    <span className="inline-flex items-stretch rounded-md text-xs sm:text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200 overflow-hidden">
+                      <span className="inline-flex items-center px-2 sm:px-2.5 py-0.5 sm:py-1">
+                        Version {resume.resumeVersion}
+                      </span>
+                      {renderViewResumeEye(true)}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md text-xs sm:text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                      Version {resume.resumeVersion}
+                    </span>
+                  )
                 ) : (
                   /* Version dropdown — Job Details' JD version picker, for the
                      resume: a version scored for this job opens that score; one
@@ -1530,6 +1598,13 @@ Best regards`);
                     )}
                   </div>
                 ))}
+                {/* Flat, with no plain version badge to join: the same eye as
+                    a badge of its own beside the version picker (or title). */}
+                {flatHeaderActions && !(resume.resumeVersion && (versionReadOnly || resumeVersions.length === 0)) && (
+                  <span className="inline-flex items-stretch rounded-md bg-blue-50 text-blue-700 border border-blue-200 overflow-hidden">
+                    {renderViewResumeEye(false)}
+                  </span>
+                )}
               </div>
             </div>
             {/* Top right of the header: this candidate's other scored jobs, in
@@ -1551,18 +1626,20 @@ Best regards`);
           {/* Row 2: contact badges and actions share one line — badges left,
               actions right (Invite primary > View Resume > Download quiet). */}
           <div className="flex flex-wrap items-center gap-2 mb-4 sm:mb-6 text-sm text-gray-600">
-            <span className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200 min-w-0 max-w-full">
-              <Mail className="w-4 h-4 text-gray-800 flex-shrink-0" />
-              <span className={`truncate ${resume.email ? 'text-gray-900' : 'text-gray-400'}`}>{resume.email || '-'}</span>
+            {/* Compact contact badges — the resume view's own chip
+                (resume-view/[id]), not button-sized boxes. */}
+            <span className={`${CONTACT_BADGE} min-w-0 max-w-full`}>
+              <Mail className="w-3.5 h-3.5 text-brand-blue flex-shrink-0" />
+              <span className={`truncate ${resume.email ? '' : 'text-gray-400'}`}>{resume.email || '-'}</span>
             </span>
-            <span className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200">
-              <Phone className="w-4 h-4 text-success flex-shrink-0" />
-              <span className={`whitespace-nowrap ${resume.phone ? 'text-gray-900' : 'text-gray-400'}`}>{resume.phone || '-'}</span>
+            <span className={CONTACT_BADGE}>
+              <Phone className="w-3.5 h-3.5 text-brand-blue flex-shrink-0" />
+              <span className={`whitespace-nowrap ${resume.phone ? '' : 'text-gray-400'}`}>{resume.phone || '-'}</span>
             </span>
             {resume.location && (
-              <span className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200 min-w-0">
-                <MapPin className="w-4 h-4 text-destructive flex-shrink-0" />
-                <span className="text-gray-900 truncate">{resume.location}</span>
+              <span className={`${CONTACT_BADGE} min-w-0`}>
+                <MapPin className="w-3.5 h-3.5 text-brand-blue flex-shrink-0" />
+                <span className="truncate">{resume.location}</span>
               </span>
             )}
 
@@ -1571,12 +1648,17 @@ Best regards`);
             <div className="flex flex-wrap items-center gap-2 ml-auto">
               {/* Share leads the group: sending the resume on is a step that
                   usually comes before inviting anyone to anything. */}
-              {RESUME_EMAIL_SHARE_ENABLED && canShareResume && viewResumeId && (
+              {RESUME_EMAIL_SHARE_ENABLED && viewResumeId && (
                 <button
                   type="button"
-                  onClick={openShareModal}
-                  title="Share resume"
-                  className={HEADER_ACTION_BTN}
+                  onClick={() => { if (!canShareResume) return; openShareModal(); }}
+                  aria-disabled={!canShareResume}
+                  title={canShareResume ? 'Share resume' : 'You do not have permission to share resumes'}
+                  className={
+                    !canShareResume
+                      ? (flatHeaderActions ? CREATE_SEND_BUTTON_LOCKED_CLASS : HEADER_ACTION_BTN_LOCKED)
+                      : (flatHeaderActions ? CANDIDATE_ACTION_BUTTON_CLASS : HEADER_ACTION_BTN)
+                  }
                 >
                   <Share2 className="w-4 h-4 flex-shrink-0" />
                   Share
@@ -1587,12 +1669,41 @@ Best regards`);
                   the trigger stays visible and non-clickable, with a tooltip
                   naming the reason, matching every other disabled action on
                   this page (Export, Download Scorecard, etc.) instead of the
-                  button disappearing outright when nobody can use it. */}
+                  button disappearing outright when nobody can use it.
+                  Flat (`inlineHeaderActions`): the menu's two entries as their
+                  own buttons, same handlers and gates, no Invite ▾. */}
+              {flatHeaderActions ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => { if (!mayInviteAssessment) return; handleInviteForAssessment(); }}
+                    disabled={mayInviteAssessment && !canInviteAssessment}
+                    aria-disabled={!mayInviteAssessment}
+                    title={inviteBlockedReason(mayInviteAssessment, assessmentPlanLocked)}
+                    className={mayInviteAssessment ? CREATE_SEND_BUTTON_CLASS.assessment : CREATE_SEND_BUTTON_LOCKED_CLASS}
+                  >
+                    <ClipboardList className="w-4 h-4 flex-shrink-0" />
+                    Create / Send Assessment
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { if (!mayInviteAIInterview) return; handleInviteForAIInterview(); }}
+                    disabled={mayInviteAIInterview && !canInviteAIInterview}
+                    aria-disabled={!mayInviteAIInterview}
+                    title={inviteBlockedReason(mayInviteAIInterview, aiInterviewPlanLocked)}
+                    className={mayInviteAIInterview ? CREATE_SEND_BUTTON_CLASS.interview : CREATE_SEND_BUTTON_LOCKED_CLASS}
+                  >
+                    <Video className="w-4 h-4 flex-shrink-0" />
+                    Create / Send AI Interview
+                  </button>
+                </>
+              ) : (
               <div className="relative" ref={inviteMenuRef}>
                 <button
                   type="button"
                   onClick={() => canInvite && setShowInviteMenu(!showInviteMenu)}
-                  disabled={inviteDisabled}
+                  disabled={inviteDisabled && canInvite}
+                  aria-disabled={!canInvite}
                   title={
                     inviteDisabled
                       ? (!canInvite
@@ -1604,7 +1715,7 @@ Best regards`);
                   }
                   aria-haspopup="menu"
                   aria-expanded={showInviteMenu}
-                  className={HEADER_ACTION_BTN}
+                  className={canInvite ? HEADER_ACTION_BTN : HEADER_ACTION_BTN_LOCKED}
                 >
                   <UserPlus className="w-4 h-4 flex-shrink-0" />
                   Invite
@@ -1614,23 +1725,30 @@ Best regards`);
                 {showInviteMenu && canInvite && (
                   <div
                     role="menu"
-                    className="absolute right-0 top-full mt-2 w-64 max-w-[calc(100vw-1.5rem)] bg-white rounded-xl border border-gray-200 shadow-lg shadow-gray-900/10 py-1.5 z-30"
+                    // Anchor left on mobile (the action row wraps and the button
+                    // sits near the left edge, so right-0 pushed a 256px menu off
+                    // the left of the viewport); keep the original right-0 from sm
+                    // up, where the actions are right-aligned on one line.
+                    className="absolute left-0 right-auto sm:left-auto sm:right-0 top-full mt-2 w-64 max-w-[calc(100vw-1.5rem)] bg-white rounded-xl border border-gray-200 shadow-lg shadow-gray-900/10 py-1.5 z-30"
                   >
                     {/* Each entry stays visible for anyone permitted to use
                         it and goes disabled when this JD has nothing to
                         invite to, so the next step is discoverable and the
                         tooltip can name what's blocking it. */}
                     {mayInviteAssessment && assessmentMissing && renderCreateInviteItems('assessment')}
-                    {mayInviteAssessment && !assessmentMissing && (
+                    {!assessmentMissing && (
                       <button
                         role="menuitem"
-                        onClick={() => handleInviteForAssessment()}
-                        disabled={!canInviteAssessment}
-                        title={assessmentPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAssessment ? 'No published assessment for this job yet' : undefined}
-                        className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-brand-blue/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                        onClick={() => { if (!mayInviteAssessment) return; handleInviteForAssessment(); }}
+                        disabled={mayInviteAssessment && !canInviteAssessment}
+                        aria-disabled={!mayInviteAssessment}
+                        title={!mayInviteAssessment ? 'You do not have permission to invite candidates to an assessment' : assessmentPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAssessment ? 'No published assessment for this job yet' : undefined}
+                        className={`w-full flex items-start gap-3 px-3 py-2.5 text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent ${
+                          mayInviteAssessment ? 'hover:bg-brand-blue/5' : 'opacity-60 cursor-not-allowed'
+                        }`}
                       >
                         <span className="mt-0.5 w-8 h-8 rounded-lg bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
-                          <Mail className="w-4 h-4 text-brand-blue" />
+                          <ClipboardList className="w-4 h-4 text-brand-blue" />
                         </span>
                         <span className="min-w-0">
                           <span className="block text-sm font-medium text-gray-900">{viaInviteDialog ? 'Create / Send Assessment' : 'Assessment'}</span>
@@ -1638,16 +1756,19 @@ Best regards`);
                       </button>
                     )}
                     {mayInviteAIInterview && aiInterviewMissing && renderCreateInviteItems('interview')}
-                    {mayInviteAIInterview && !aiInterviewMissing && (
+                    {!aiInterviewMissing && (
                       <button
                         role="menuitem"
-                        onClick={handleInviteForAIInterview}
-                        disabled={!canInviteAIInterview}
-                        title={aiInterviewPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAIInterview ? 'No published AI interview for this job yet' : undefined}
-                        className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-brand-blue/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                        onClick={() => { if (!mayInviteAIInterview) return; handleInviteForAIInterview(); }}
+                        disabled={mayInviteAIInterview && !canInviteAIInterview}
+                        aria-disabled={!mayInviteAIInterview}
+                        title={!mayInviteAIInterview ? 'You do not have permission to invite candidates to an AI interview' : aiInterviewPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAIInterview ? 'No published AI interview for this job yet' : undefined}
+                        className={`w-full flex items-start gap-3 px-3 py-2.5 text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent ${
+                          mayInviteAIInterview ? 'hover:bg-brand-blue/5' : 'opacity-60 cursor-not-allowed'
+                        }`}
                       >
                         <span className="mt-0.5 w-8 h-8 rounded-lg bg-brand-cyan/10 flex items-center justify-center flex-shrink-0">
-                          <Sparkles className="w-4 h-4 text-brand-cyan" />
+                          <Video className="w-4 h-4 text-brand-cyan" />
                         </span>
                         <span className="min-w-0">
                           <span className="block text-sm font-medium text-gray-900">{viaInviteDialog ? 'Create / Send AI Interview' : 'AI Interview'}</span>
@@ -1657,31 +1778,43 @@ Best regards`);
                   </div>
                 )}
               </div>
+              )}
+
+              {/* Flat: View Resume is the eye on the resume version badge
+                  (renderViewResumeEye), not a button here. */}
+              {!flatHeaderActions && (
+                <button
+                  type="button"
+                  onClick={handleViewResume}
+                  disabled={loadingResumeDetail}
+                  className={HEADER_ACTION_BTN}
+                >
+                  {loadingResumeDetail
+                    ? <Loader2 className="w-4 h-4 flex-shrink-0 animate-spin" />
+                    : <Eye className="w-4 h-4 flex-shrink-0" />}
+                  View Resume
+                </button>
+              )}
 
               <button
                 type="button"
-                onClick={handleViewResume}
-                disabled={loadingResumeDetail}
-                className={HEADER_ACTION_BTN}
+                onClick={() => { if (!canExport) return; handleDownloadScorecard(); }}
+                aria-disabled={!canExport}
+                title={canExport ? 'Download scorecard PDF' : 'You do not have permission to download the scorecard'}
+                className={
+                  !canExport
+                    ? (flatHeaderActions ? CREATE_SEND_BUTTON_LOCKED_CLASS : HEADER_ACTION_BTN_LOCKED)
+                    : (flatHeaderActions ? CANDIDATE_ACTION_BUTTON_CLASS : HEADER_ACTION_BTN)
+                }
               >
-                {loadingResumeDetail
-                  ? <Loader2 className="w-4 h-4 flex-shrink-0 animate-spin" />
-                  : <Eye className="w-4 h-4 flex-shrink-0" />}
-                View Resume
+                <Download className="w-4 h-4 flex-shrink-0" />
+                {flatHeaderActions ? 'Scorecard' : (
+                  <>
+                    <span className="hidden lg:inline">Download Scorecard</span>
+                    <span className="lg:hidden">Scorecard</span>
+                  </>
+                )}
               </button>
-
-              {canExport && (
-                <button
-                  type="button"
-                  onClick={handleDownloadScorecard}
-                  title="Download scorecard PDF"
-                  className={HEADER_ACTION_BTN}
-                >
-                  <Download className="w-4 h-4 flex-shrink-0" />
-                  <span className="hidden lg:inline">Download Scorecard</span>
-                  <span className="lg:hidden">Scorecard</span>
-                </button>
-              )}
             </div>
           </div>
 
@@ -1709,14 +1842,18 @@ Best regards`);
               <span className="hidden sm:inline text-gray-400">|</span>
               {/* The title is the shortcut into the View JD tab — recruiters
                   reading a score reach for the JD from here constantly. */}
-              <span className="text-xs sm:text-sm font-normal text-gray-700 truncate">
+              {/* min-w-0 + wrapping (not truncate): the inline JD-code / title /
+                  version badges are whitespace-nowrap and can't shrink, so a
+                  nowrap+truncate parent overflowed the card on mobile instead of
+                  clipping — let the group wrap to a second line below sm. */}
+              <span className="text-xs sm:text-sm font-normal text-gray-700 min-w-0 break-words">
                 <span className="font-bold text-gray-800">Job Title :</span>{' '}
                 {/* Read as one: "EDG 267 High Court Judge v3.0" - the job's
                     ID, its title, its version, the ID and version in the JD
                     page header's own chips (`JobDetailView`). Both come from
                     the list row, else from the JD this page already loaded. */}
                 {(resume.jobCode || jdDetails?.job_id) && (
-                  <span className="inline-flex items-center px-2 py-0.5 mr-1.5 bg-blue-600 text-white rounded-md text-xs font-semibold font-mono tracking-wide align-middle whitespace-nowrap">
+                  <span className="inline-flex items-center px-2 py-0.5 mr-1.5 bg-brand-blue text-white rounded-md text-xs font-semibold font-mono tracking-wide align-middle whitespace-nowrap">
                     {resume.jobCode || jdDetails?.job_id}
                   </span>
                 )}
@@ -1729,7 +1866,7 @@ Best regards`);
                   {jobTitle}
                 </button>
                 {(resume.jobVersion ?? jdDetails?.version_number) != null && (
-                  <span className="inline-flex items-center px-2.5 py-0.5 ml-1.5 bg-purple-600 text-white rounded-full text-xs font-medium align-middle whitespace-nowrap">
+                  <span className="inline-flex items-center px-2.5 py-0.5 ml-1.5 bg-brand-orange-deep text-white rounded-full text-xs font-medium align-middle whitespace-nowrap">
                     v{resume.jobVersion ?? jdDetails?.version_number}.0
                   </span>
                 )}
@@ -2141,7 +2278,7 @@ Best regards`);
                         {(edu.institution || edu.school) && (
                           <div className="text-gray-700 mb-1">{edu.institution || edu.school}</div>
                         )}
-                        <div className="flex items-center gap-4 text-sm text-gray-600">
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-gray-600">
                           {edu.location && (
                             <span className="flex items-center gap-1">
                               <MapPin className="w-3 h-3" />
@@ -2177,70 +2314,47 @@ Best regards`);
                 )}
               </div>
 
-              {/* Skills */}
-              {(fullResumeData.skills && fullResumeData.skills.length > 0) ||
-               (fullResumeData.technicalSkills && fullResumeData.technicalSkills.length > 0) ||
-               (fullResumeData.softSkills && fullResumeData.softSkills.length > 0) ||
-               matchedSkills.length > 0 ? (
-                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
-                  <div className="flex items-center gap-2 mb-6">
-                    <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
-                      <Code className="w-4 h-4 text-brand-blue" />
+              {/* Skills — compact chips, the resume view's own (resume-view/[id]).
+                  Blank entries are dropped, so a resume with only one category
+                  (or no Soft Skills) shows just that group, never an empty
+                  heading. General skills, then matched skills, stand in only
+                  when neither category is present. */}
+              {(() => {
+                const clean = (list?: string[]) =>
+                  (list || []).filter((s) => typeof s === 'string' && s.trim().length > 0);
+                const technical = clean(fullResumeData.technicalSkills);
+                const soft = clean(fullResumeData.softSkills);
+                const general = technical.length || soft.length ? [] : clean(fullResumeData.skills);
+                const fallback = technical.length || soft.length || general.length ? [] : clean(matchedSkills);
+                const groups = [
+                  { label: 'Technical Skills', items: technical },
+                  { label: 'Soft Skills', items: soft },
+                  { label: null, items: general.length ? general : fallback },
+                ].filter((g) => g.items.length > 0);
+                if (groups.length === 0) return null;
+                return (
+                  <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
+                    <div className="flex items-center gap-2 mb-6">
+                      <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                        <Code className="w-4 h-4 text-brand-blue" />
+                      </div>
+                      <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Skills</h3>
                     </div>
-                    <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Skills</h3>
+                    <div className="space-y-5">
+                      {groups.map((group) => (
+                        <div key={group.label ?? 'skills'}>
+                          {group.label && <h4 className="font-medium text-gray-900 mb-3">{group.label}</h4>}
+                          <div className="flex flex-wrap gap-1.5">
+                            {group.items.map((skill, index) => (
+                              <span key={index} className={SKILL_BADGE}>{skill}</span>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-
-                  {/* Technical Skills */}
-                  {fullResumeData.technicalSkills && fullResumeData.technicalSkills.length > 0 && (
-                    <div className="mb-6">
-                      <h4 className="font-medium text-gray-900 mb-4">Technical Skills</h4>
-                      <div className="flex flex-wrap gap-2">
-                        {fullResumeData.technicalSkills.map((skill: string, index: number) => (
-                          <span key={index} className="px-3 py-1.5 bg-brand-blue/5 text-brand-blue rounded-lg text-sm ring-1 ring-brand-blue/20">
-                            {skill}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Soft Skills */}
-                  {fullResumeData.softSkills && fullResumeData.softSkills.length > 0 && (
-                    <div className="mb-6">
-                      <h4 className="font-medium text-gray-900 mb-4">Soft Skills</h4>
-                      <div className="flex flex-wrap gap-2">
-                        {fullResumeData.softSkills.map((skill: string, index: number) => (
-                          <span key={index} className="px-3 py-1.5 bg-brand-blue/5 text-brand-blue rounded-lg text-sm ring-1 ring-brand-blue/20">
-                            {skill}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* General Skills - only show if no technical/soft skills */}
-                  {fullResumeData.skills && fullResumeData.skills.length > 0 && !fullResumeData.technicalSkills?.length && !fullResumeData.softSkills?.length && (
-                    <div className="flex flex-wrap gap-2">
-                      {fullResumeData.skills.map((skill: string, index: number) => (
-                        <span key={index} className="px-3 py-1.5 bg-brand-blue/5 text-brand-blue rounded-lg text-sm ring-1 ring-brand-blue/20">
-                          {skill}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Fallback to matched skills if no specific skills available */}
-                  {!fullResumeData.skills?.length && !fullResumeData.technicalSkills?.length && !fullResumeData.softSkills?.length && matchedSkills.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {matchedSkills.map((skill, index) => (
-                        <span key={index} className="px-3 py-1.5 bg-brand-blue/5 text-brand-blue rounded-lg text-sm ring-1 ring-brand-blue/20">
-                          {skill}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ) : null}
+                );
+              })()}
 
               {/* Certifications */}
               {fullResumeData.certifications && fullResumeData.certifications.length > 0 && (
@@ -2826,7 +2940,7 @@ Best regards`);
                         <button
                           type="button"
                           onClick={() => setShowJdNavConfirm(true)}
-                          className="inline-flex items-center px-2 py-0.5 bg-blue-600 text-white rounded-md text-xs font-semibold font-mono tracking-wide hover:bg-blue-700 transition-colors cursor-pointer"
+                          className="inline-flex items-center px-2 py-0.5 bg-brand-blue text-white rounded-md text-xs font-semibold font-mono tracking-wide hover:bg-brand-blue-2 transition-colors cursor-pointer"
                         >
                           {jdDetails.job_id}
                         </button>
@@ -2896,7 +3010,7 @@ Best regards`);
                       <span className="text-gray-300">•</span>
                       <span>By {jdDetails.created_by_name || 'System'}</span>
                       <span className="text-gray-300">•</span>
-                      <span className="inline-flex items-center px-2.5 py-1 bg-purple-600 text-white rounded-full text-xs font-medium">
+                      <span className="inline-flex items-center px-2.5 py-1 bg-brand-orange-deep text-white rounded-full text-xs font-medium">
                         {/* Job version (version_number), not current_version — the republish counter. */}
                         v{jdDetails.version_number && jdDetails.version_number > 0 ? jdDetails.version_number : 1}.0
                       </span>

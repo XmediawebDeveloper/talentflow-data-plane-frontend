@@ -496,7 +496,7 @@ export default function BulkScoringProgressModal({
           <div className="p-4 sm:p-5">
           {/* Top row: icon+title and action buttons */}
           <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0">
+            <div className="flex items-start sm:items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
               <div className="w-9 h-9 sm:w-11 sm:h-11 bg-brand-blue/10 rounded-xl flex items-center justify-center flex-shrink-0">
                 <ClipboardList className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
               </div>
@@ -509,7 +509,7 @@ export default function BulkScoringProgressModal({
                 {/* Line 1: JD ID · title — the job named once, with its ID up
                     front. No version here: the table's Job Version column
                     carries it per row. */}
-                <div className="flex items-center gap-2 min-w-0">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
                   {scopedToJobTitle && headerJob!.code && (
                     <JobIdBadge className="flex-shrink-0">{headerJob!.code}</JobIdBadge>
                   )}
@@ -749,8 +749,15 @@ export default function BulkScoringProgressModal({
                 className="w-28 sm:w-32 px-2.5 py-1.5 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-900 text-black text-xs"
               >
                 <option value="all">All Sources</option>
-                {/* Only show Internal DB option if user has permission */}
-                {hasInternalDBAccess && <option value="internal-db">Shared Database</option>}
+                {/* Shared Database option: always listed, greyed out (disabled,
+                    hover reason) when the user has no Internal DB access. */}
+                <option
+                  value="internal-db"
+                  disabled={!hasInternalDBAccess}
+                  title={!hasInternalDBAccess ? 'You do not have permission to view the Shared Database' : undefined}
+                >
+                  Shared Database
+                </option>
                 <option value="my-resumes">My Resumes</option>
               </select>
             </div>
@@ -897,7 +904,7 @@ export default function BulkScoringProgressModal({
               {/* Desktop table. The breakpoint moved from the <table> to the
                   shell — an empty shell left mounted on phones still drew its
                   own scroll box around nothing. */}
-              <div className="tf-table-shell tf-table-shell--compact tf-table-shell--fill hidden sm:block flex-1 min-h-0">
+              <div className="tf-table-shell tf-table-shell--compact tf-table-shell--fill hidden lg:block flex-1 min-h-0">
                 <table className="w-full">
                   {/* One job (the header names it — JD ID, title, version):
                       only Job Version stays as a column. Several jobs: Job ID
@@ -1078,7 +1085,7 @@ export default function BulkScoringProgressModal({
 
               {/* Mobile card list — the only scroller below `sm`, where the
                   shell above is display:none. */}
-              <div className="sm:hidden flex-1 min-h-0 overflow-y-auto space-y-2 pt-3 scrollbar-visible">
+              <div className="lg:hidden flex-1 min-h-0 overflow-y-auto space-y-2 pt-3 scrollbar-visible">
                 {pagedData.map((item) => (
                   <div
                     key={item.id}
@@ -1128,7 +1135,7 @@ export default function BulkScoringProgressModal({
                     )}
                     {/* Footer: Source + Date + Match */}
                     <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-1.5 min-w-0">
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs border bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700">
                           {item.source === 'Internal DB' ? <Database className="w-3 h-3" /> : <FolderOpen className="w-3 h-3" />}
                           {item.source}

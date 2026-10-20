@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { toast } from 'sonner';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import AIInterviewDetailsView from '@/components/ai-interview/AIInterviewDetailsView';
@@ -175,22 +175,37 @@ function AIInterviewDetailsContent() {
     fetchAllIds();
   }, [pagerList, interviewId]);
 
-  const fetchConfig = async () => {
+  /* Bumped by every fetchConfig run, so a slower response for an interview
+     Prev / Next has already left (or an older refresh) can't overwrite the
+     newer one. */
+  const fetchSeqRef = useRef(0);
+  /* `showSkeleton` only for opening an interview. A refresh after an action
+     on the page (onRefresh) re-reads in place: swapping the page for the
+     skeleton unmounted it, closing any dialog the action came from and
+     dropping the tab's scroll and state. */
+  const fetchConfig = async (showSkeleton = true) => {
+    const seq = ++fetchSeqRef.current;
+    const isStale = () => seq !== fetchSeqRef.current;
     try {
-      setIsLoading(true);
+      if (showSkeleton) setIsLoading(true);
       const response = await aiInterviewService.get(interviewId);
+      if (isStale()) return;
       if (response) {
         setConfig(response);
       } else {
         setError('AI Interview config not found');
       }
     } catch (err: any) {
+      if (isStale()) return;
       console.error('[TalentFlow] Failed to fetch AI interview config:', err);
-      setError(err.message || 'Failed to load AI interview config');
+      // A failed refresh keeps the page that is already showing.
+      if (showSkeleton) setError(err.message || 'Failed to load AI interview config');
+      else toast.error(err.message || 'Failed to refresh AI interview config');
     } finally {
-      setIsLoading(false);
+      if (!isStale()) setIsLoading(false);
     }
   };
+  const refreshConfig = () => fetchConfig(false);
 
   useEffect(() => {
     if (interviewId) {
@@ -273,7 +288,7 @@ function AIInterviewDetailsContent() {
     <AIInterviewDetailsView
       config={config}
       onBack={handleBack}
-      onRefresh={fetchConfig}
+      onRefresh={refreshConfig}
       currentIndex={currentIndex}
       totalCount={allIds.length}
       onPrev={currentIndex > 0 ? () => goTo(allIds[currentIndex - 1]) : undefined}

@@ -18,11 +18,19 @@ interface ScoreTableModalProps {
   /** Fallback readable JD code (e.g. "JD-105") for a single-job host, whose
    *  rows don't carry their own `jobCode` — same pattern as `jobId` above. */
   jobCode?: string;
+  /** Fallback JD version for a single-job host, whose rows don't carry their
+   *  own `jobVersion` — same pattern as `jobCode` above. */
+  jobVersion?: number | null;
   jobTitle: string;
   onClose: () => void;
   /** View by Candidates: steps through this candidate's other scored jobs,
    *  shown before the close button. */
   jobPager?: { page: number; total: number; onPageChange: (page: number) => void };
+  /** Lay the header out as candidate (name + candidate ID), then the job role,
+   *  then the job and resume versions this score belongs to. Each value comes
+   *  from the host's records; one it does not have is left out. Off by
+   *  default — the one-line header stays. */
+  header?: { candidateId?: string | null; jobVersion?: number | null; resumeVersion?: number | null };
 }
 
 /**
@@ -30,7 +38,7 @@ interface ScoreTableModalProps {
  * CandidateScoringDetailPage's Score Table tab renders, opened in place as a
  * popup instead of navigating away to that page.
  */
-export default function ScoreTableModal({ resume, jobId, jobCode, jobTitle, onClose, jobPager }: ScoreTableModalProps) {
+export default function ScoreTableModal({ resume, jobId, jobCode, jobVersion, jobTitle, onClose, jobPager, header }: ScoreTableModalProps) {
   const [detail, setDetail] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -116,6 +124,12 @@ export default function ScoreTableModal({ resume, jobId, jobCode, jobTitle, onCl
     return 'bg-destructive';
   };
 
+  /* The JD version this score was made against: the row's own (cross-job
+     hosts), then the scoring record fetched above (`jd_version_number`, the
+     field Resume Scoring reads), then the single-job host's version — the one
+     these scores were fetched for. */
+  const scoredJobVersion = resume.jobVersion || detail?.jd_version_number || jobVersion || null;
+
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-6xl h-[90dvh] flex flex-col overflow-hidden">
@@ -124,6 +138,39 @@ export default function ScoreTableModal({ resume, jobId, jobCode, jobTitle, onCl
             <div className="w-10 h-10 rounded-xl bg-brand-blue flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
               <BarChart3 className="w-5 h-5 text-white" />
             </div>
+            {header ? (
+              /* Candidate (name + ID), then the job role, then the versions. */
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                  <h2 className="text-lg font-semibold text-gray-900 tracking-tight truncate min-w-0">
+                    {resume.candidateName || 'Candidate'}
+                  </h2>
+                  {header.candidateId && (
+                    <span className="inline-flex items-center whitespace-nowrap text-xs font-mono font-medium bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 px-2 py-0.5 rounded flex-shrink-0">
+                      {header.candidateId}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5 text-sm text-gray-500 min-w-0 flex-wrap">
+                  {(resume.jobCode || jobCode) && (
+                    <span className="px-2 py-0.5 rounded-md text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 flex-shrink-0">
+                      {resume.jobCode || jobCode}
+                    </span>
+                  )}
+                  {jobTitle && <span className="truncate min-w-0">{jobTitle}</span>}
+                  {header.jobVersion != null && (
+                    <span className="px-2 py-0.5 rounded-md text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 flex-shrink-0">
+                      v{header.jobVersion}
+                    </span>
+                  )}
+                  {header.resumeVersion != null && (
+                    <span className="px-2 py-0.5 rounded-md text-xs font-semibold text-gray-700 bg-gray-100 ring-1 ring-gray-200 flex-shrink-0">
+                      Resume V{header.resumeVersion}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ) : (
             <div className="min-w-0">
               <h2 className="text-lg font-semibold text-gray-900 tracking-tight truncate">Score Table</h2>
               {/* Candidate · Job ID · Job Title · Job Version — the ID and
@@ -136,13 +183,14 @@ export default function ScoreTableModal({ resume, jobId, jobCode, jobTitle, onCl
                   </span>
                 )}
                 {jobTitle && <span className="truncate">{jobTitle}</span>}
-                {resume.jobVersion && (
+                {scoredJobVersion != null && (
                   <span className="px-2 py-0.5 rounded-md text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 flex-shrink-0">
-                    V{resume.jobVersion}
+                    V{scoredJobVersion}
                   </span>
                 )}
               </div>
             </div>
+            )}
           </div>
           <div className="flex items-center gap-3 flex-shrink-0">
             {jobPager && jobPager.total > 1 && (
@@ -233,6 +281,8 @@ export default function ScoreTableModal({ resume, jobId, jobCode, jobTitle, onCl
               getScoreColor={getScoreColor}
               getScoreBgColor={getScoreBgColor}
               getProgressBarColor={getProgressBarColor}
+              /* Each criterion opens on its own ⌄, beside Expand all. */
+              rowExpand
             />
           )}
         </div>

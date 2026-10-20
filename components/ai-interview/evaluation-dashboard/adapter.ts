@@ -312,7 +312,27 @@ function isUndeliveredHistoryRow(q: any): boolean {
   return rt === 'not_asked'
     || rt === 'not_delivered'
     || rt === 'unasked'
-    || rt === 'auto_skipped_by_coverage';
+    || rt === 'auto_skipped_by_coverage'
+    || !!q?.not_delivered
+    // The backend's un-reached padding row. Older evaluations could carry a
+    // runtime skip label on it (mis-bound to a silence-skipped question), which
+    // rendered it as asked + "auto-skipped" with a 0.0 score.
+    || /^\(not asked\b.*planned question\b/i.test(String(q?.question || '').trim());
+}
+
+/** The row's response type, except a skip label is overridden when the row
+ *  holds the candidate's REAL answer. Ending the interview right after
+ *  answering filed the question as not_answered / skipped while the answer was
+ *  in the transcript (and restored into `answer`), so Question Analysis showed
+ *  an answered question as "Skipped". Placeholders ("[SKIPPED]", "[NOT ASKED]")
+ *  and the End-Interview control line are not answers. */
+function effectiveResponseType(responseType: unknown, answer: unknown): string {
+  const rt = String(responseType || '').toLowerCase();
+  if (rt !== 'skipped' && rt !== 'not_answered' && rt !== 'timeout') return rt;
+  const ans = String(answer || '').trim();
+  if (!ans || ans.startsWith('[')) return rt;
+  if (/wrap up the interview|end (the )?interview/i.test(ans)) return rt;
+  return 'answered';
 }
 
 /** Build cluster data from config (authoritative) + scores from ai_evaluation. */
@@ -364,6 +384,9 @@ function buildClustersFromConfig(
   const assignedSkillSet = new Set<string>();
   for (const q of questionHistory) {
     if (isUndeliveredHistoryRow(q)) continue;
+    // HR questions never probe technical skills — an HR row can carry the next
+    // Must-Have slot's skills when the HR round closes on its last question.
+    if (String(q?.round_type || '').toLowerCase() === 'hr' || q?.hr_question_id) continue;
     const a = q?.assigned_skills;
     if (Array.isArray(a)) {
       for (const s of a) {
@@ -399,10 +422,22 @@ function buildClustersFromConfig(
   //  A skill counts as delivered if ANY entry for it was delivered: Sanity
   //  Testing is asked on delivered Q5 AND recovered onto un-reached Q9, and the
   //  delivered occurrence is what matters.
+  //  Entries on HR questions are ignored: HR never probes a skill, but older
+  //  evaluations tagged HR turns with skills from their wording (an unanswered
+  //  "Are you willing to work night shift" → FRMS) and showed them Covered.
+  //  A technical question that was asked counts even if it went unanswered
+  //  (Covered = asked; product rule confirmed 2026-10-17).
+  const hrQuestionNumbers = new Set<string>();
+  for (const q of questionHistory) {
+    if (String(q?.round_type || '').toLowerCase() === 'hr' || q?.hr_question_id) {
+      hrQuestionNumbers.add(String(q?.question_number ?? ''));
+    }
+  }
   const qsmDelivered = new Set<string>();
   const qsmSeen = new Set<string>();
-  for (const entries of Object.values((eval_?.question_skill_map || {}) as Record<string, any>)) {
+  for (const [qnum, entries] of Object.entries((eval_?.question_skill_map || {}) as Record<string, any>)) {
     if (!Array.isArray(entries)) continue;
+    if (hrQuestionNumbers.has(String(qnum))) continue;
     for (const e of entries) {
       const k = String(e?.skill || '').toLowerCase().trim();
       if (!k) continue;
@@ -1084,7 +1119,7 @@ function buildPerQuestionDetailsFromGroups(
       // Without these an un-reached question (a selected HR question the
       // candidate never got to — HR rows carry no assigned_skills, so this
       // builder is the one picked) rendered as answered with "[NOT ASKED]".
-      responseType: String(g?.response_type || matched?.response_type || '').toLowerCase(),
+      responseType: effectiveResponseType(g?.response_type || matched?.response_type, mainA),
       skipSource: String(matched?.skip_source || '').toLowerCase(),
       notDelivered: isUndeliveredHistoryRow(g) || isUndeliveredHistoryRow(matched) || !!matched?.not_delivered,
       skills: mainSkills,
@@ -1611,7 +1646,7 @@ function buildPerQuestionDetailsFromHistory(
       // Carry the response type + skip source so the UI can distinguish
       // "Skipped" (candidate pressed Skip → skip_source='candidate') from
       // "Not Answered" (silence / timer / auto advance with no reply).
-      responseType: String(q?.response_type || '').toLowerCase(),
+      responseType: effectiveResponseType(q?.response_type, q?.answer),
       skipSource: String(q?.skip_source || '').toLowerCase(),
       skills,
       questionScore,
@@ -2940,7 +2975,14 @@ export function buildDashboardData(params: {
     const askedNumOf = new Map<PerQuestionDetail, number>();
     ranked.forEach(({ row }, rank) => askedNumOf.set(row, rank + 1));
     for (const key of ['mth', 'nth', 'hr'] as const) {
-      buckets[key] = buckets[key].map((row, idx) => ({ ...row, qNum: idx + 1, askedNum: askedNumOf.get(row) }));
+      buckets[key] = buckets[key].map((row, idx) => ({
+        ...row,
+        qNum: idx + 1,
+        askedNum: askedNumOf.get(row),
+        // Never asked → never scored (older evaluations stored a recovered
+        // score on these slots). Adds 0 to its section's planned-count average.
+        ...(row.notDelivered ? { questionScore: 0 } : {}),
+      }));
     }
 
     return [...buckets.mth, ...buckets.nth, ...buckets.hr];

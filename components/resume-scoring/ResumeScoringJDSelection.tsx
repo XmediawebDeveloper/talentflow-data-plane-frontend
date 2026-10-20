@@ -1,7 +1,7 @@
 'use client';
 
 import JobIdBadge from '@/components/jobs/JobIdBadge';
-import { ArrowLeft, Briefcase, Plus, Building2, MapPin, Clock, TrendingUp, Calendar, User, Sparkles, ClipboardList } from 'lucide-react';
+import { ArrowLeft, Briefcase, Plus, Building2, MapPin, Clock, TrendingUp, Calendar, User, Sparkles, ClipboardList, Search } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -12,6 +12,10 @@ import { formatEmploymentType } from '@/lib/utils/jobOpeningDisplay';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import JDVersionHistory from '@/components/JDVersionHistory';
 import { Skeleton } from '@/components/ui/skeleton';
+import { PageHeader } from '@/components/ui/page-header';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 
 export default function ResumeScoringJDSelection() {
   const router = useRouter();
@@ -25,7 +29,14 @@ export default function ResumeScoringJDSelection() {
   const loadJDs = useCallback(async () => {
     try {
       setLoadingJds(true);
-      const result = await jdService.list({ status: 'published', page: 1, page_size: 50 });
+      // Probe for the total, then pull every published JD in one request —
+      // the same pattern the Resume Scoring page uses for its job list. A
+      // flat page_size of 50 silently dropped every JD past the 50th.
+      const params = { status: 'published' as const };
+      const probe = await jdService.list({ ...params, page: 1, page_size: 1 });
+      const result = probe.total > (probe.items || []).length
+        ? await jdService.list({ ...params, page: 1, page_size: probe.total })
+        : probe;
       setJds(result.items || []);
     } catch (error) {
       console.error('Failed to load JDs:', error);
@@ -60,59 +71,52 @@ export default function ResumeScoringJDSelection() {
               { label: 'Select Job Description' },
             ]}
           />
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => router.push('/dashboard')}
-              className="p-2 hover:bg-brand-blue/5 rounded-lg transition-colors"
-            >
-              <ArrowLeft className="w-5 h-5 text-gray-600" />
-            </button>
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
-                <ClipboardList className="w-5 h-5 text-brand-blue" />
-              </div>
-              <div>
-                <h1 className="text-gray-900 text-lg font-semibold tracking-tight">Select Job Description</h1>
-                <p className="text-sm text-gray-500 inline-flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-brand-blue" />
-                  Select a job and let AI score candidates.
-                </p>
-              </div>
+        {/* Header — shared PageHeader (User Management uniform) */}
+        <PageHeader
+          icon={<ClipboardList className="h-5 w-5" />}
+          title="Select Job Description"
+          description={
+            <span className="inline-flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-brand-blue" />
+              Select a job and let AI score candidates.
+            </span>
+          }
+          actions={
+            <div className="flex items-center gap-2 sm:justify-end">
+              <Button
+                variant="secondary"
+                onClick={() => router.push('/dashboard')}
+                icon={<ArrowLeft className="w-4 h-4" />}
+                aria-label="Back to Dashboard" title="Back to Dashboard"
+              >
+                Back
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => {
+                  if (!canCreateJD) return;
+                  router.push('/recruitment/jd-creation?from=resume-scoring');
+                }}
+                aria-disabled={!canCreateJD}
+                className={!canCreateJD ? 'opacity-60 cursor-not-allowed' : ''}
+                title={!canCreateJD ? 'You do not have permission to create job descriptions' : undefined}
+                icon={<Plus className="w-4 h-4" />}
+              >
+                Create New Job
+              </Button>
             </div>
-          </div>
-          <button
-            onClick={() => {
-              if (!canCreateJD) {
-                toast.error('You do not have permission to create job descriptions');
-                return;
-              }
-              router.push('/recruitment/jd-creation?from=resume-scoring');
-            }}
-            aria-disabled={!canCreateJD}
-            title={!canCreateJD ? 'You do not have permission to create job descriptions' : undefined}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm border rounded-lg transition-colors whitespace-nowrap ${
-              canCreateJD
-                ? 'border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
-                : 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed opacity-60'
-            }`}
-          >
-            <Plus className="w-4 h-4" />
-            Create New Job
-          </button>
-        </div>
+          }
+        />
 
-        {/* Search */}
-        <div className="mb-5">
-          <input
+        {/* Search — shared Input (User Management uniform) */}
+        <div className="mb-5 relative w-full sm:max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-slate-500" />
+          <Input
             type="text"
             placeholder="Search job descriptions..."
             value={jdSearch}
             onChange={e => setJdSearch(e.target.value)}
-            // Shared filter-input chrome — matches the Job Openings search box
-            // (h-9, gray-200 border, brand-blue focus + hover, placeholder tone).
-            className="w-full h-9 px-4 text-sm text-black dark:text-slate-100 placeholder:text-gray-400 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg transition-colors hover:border-brand-blue/40 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+            className="pl-10"
           />
         </div>
 
@@ -122,7 +126,7 @@ export default function ResumeScoringJDSelection() {
             {Array.from({ length: 5 }).map((_, i) => (
               <div
                 key={i}
-                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 sm:p-5 bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5"
+                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 sm:p-5 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5"
               >
                 <div className="flex items-start gap-4 flex-1 min-w-0">
                   <Skeleton className="w-10 h-10 rounded-xl flex-shrink-0 mt-0.5" />
@@ -149,31 +153,20 @@ export default function ResumeScoringJDSelection() {
             ))}
           </div>
         ) : filteredJds.length === 0 ? (
-          <div className="text-center py-10 sm:py-16 bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 px-4">
-            <div className="w-20 h-20 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 mx-auto mb-4 flex items-center justify-center">
-              <Briefcase className="w-10 h-10 text-brand-blue" />
-            </div>
-            <p className="text-gray-700 mb-2 text-sm font-medium">No published job descriptions found</p>
-            <p className="text-xs sm:text-sm text-gray-500 mb-4">Create and publish a JD first to score resumes against it</p>
-            <button
-              onClick={() => {
-                if (!canCreateJD) {
-                  toast.error('You do not have permission to create job descriptions');
-                  return;
-                }
-                router.push('/recruitment/jd-creation?from=resume-scoring');
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+            <EmptyState
+              icon={Briefcase}
+              title="No published job descriptions found"
+              description="Create and publish a JD first to score resumes against it."
+              action={{
+                label: 'Create Job Description',
+                disabledReason: !canCreateJD ? 'You do not have permission to create job descriptions' : undefined,
+                onClick: () => {
+                  if (!canCreateJD) return;
+                  router.push('/recruitment/jd-creation?from=resume-scoring');
+                },
               }}
-              aria-disabled={!canCreateJD}
-              title={!canCreateJD ? 'You do not have permission to create job descriptions' : undefined}
-              className={`inline-flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm rounded-lg transition-colors ${
-                canCreateJD
-                  ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
-                  : 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-60'
-              }`}
-            >
-              <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-              Create Job Description
-            </button>
+            />
           </div>
         ) : (
           <div className="space-y-3">
@@ -189,7 +182,7 @@ export default function ResumeScoringJDSelection() {
               return (
                 <div
                   key={jd.id}
-                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 sm:p-5 bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 transition-all"
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 sm:p-5 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 transition-all"
                 >
                   {/* Left: icon + info */}
                   <div className="flex items-start gap-4 flex-1 min-w-0">
@@ -259,15 +252,19 @@ export default function ResumeScoringJDSelection() {
 
                   {/* Right: action */}
                   <div className="flex items-center gap-2 flex-shrink-0 sm:ml-4">
-                    {canViewScoring ? (
-                      <button
-                        onClick={() => handleSelectJd(jd)}
-                        className="inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors w-full sm:w-auto justify-center"
-                      >
-                        <ClipboardList className="w-4 h-4" />
-                        Score Resumes
-                      </button>
-                    ) : null}
+                    <button
+                      onClick={() => { if (!canViewScoring) return; handleSelectJd(jd); }}
+                      aria-disabled={!canViewScoring}
+                      title={!canViewScoring ? 'You do not have permission to score resumes' : undefined}
+                      className={`inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium rounded-lg transition-colors w-full sm:w-auto justify-center ${
+                        canViewScoring
+                          ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
+                          : 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-60'
+                      }`}
+                    >
+                      <ClipboardList className="w-4 h-4" />
+                      Score Resumes
+                    </button>
                   </div>
                 </div>
               );

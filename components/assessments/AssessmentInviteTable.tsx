@@ -15,6 +15,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { InviteSourceValue, assessmentInviteSource } from '@/components/AIInterviewInviteTable';
 import { formatScore, SCORE_CELL_TEXT } from '@/lib/utils/score';
+import { timelineEvents, buildInvitationRowActions, InvitationActionsMenu } from '@/components/AssessmentInviteActions';
 
 /**
  * The candidate list for an ASSESSMENT invite tracker.
@@ -69,7 +70,9 @@ export const isInviteExpired = (inv: any): boolean => {
  *  (used by the Invite Tracking popup / Invitation Status tab), not a copy of
  *  it. */
 export const isBulkResendable = (inv: any): boolean =>
-  ['sent', 'expired'].includes(inv.status)
+  // 'pending' = a Copy Link invite (link minted, no email yet). It shows as
+  // Invited, so it gets a checkbox like any other invite that went out.
+  ['sent', 'pending', 'expired'].includes(inv.status)
   && !inv.started_at
   && !inv.completed_at;
 
@@ -160,7 +163,7 @@ export const InviteStatusBadge = ({ inv }: { inv: any }) => {
   if (s === 'sent' || inv.sent_at) {
     return <span className={`${base} bg-status-invited/10 text-status-invited ring-status-invited/20`}><Mail className="w-3 h-3" /> Invited</span>;
   }
-  return <span className={`${base} bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-gray-200 dark:ring-slate-700`}><Clock className="w-3 h-3" /> Pending</span>;
+  return <span className={`${base} bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-gray-200 dark:ring-slate-700`} title="Link created — no email sent yet"><Mail className="w-3 h-3" /> Invited</span>;
 };
 
 /* The popup's own value for this class, kept beside the markup that uses it. */
@@ -189,6 +192,11 @@ export interface AssessmentInviteTableProps {
   canOpenResult: (inv: any) => boolean;
   onOpenResult: (inv: any) => void;
   onResend: (inv: any) => void;
+  /** Revoke / Edit (revoked → Save & Send). Optional: a host that does not
+   *  wire them simply does not offer those actions. Copy Link needs no prop. */
+  onRevoke?: (inv: any) => void;
+  onEdit?: (inv: any) => void;
+  revokingId?: string | null;
 
   /** The inline email editor. Held by the host, because the request it sends
    *  and the toasts it raises belong with the rest of that flow. */
@@ -214,6 +222,9 @@ export default function AssessmentInviteTable({
   canOpenResult,
   onOpenResult,
   onResend,
+  onRevoke,
+  onEdit,
+  revokingId,
   editingEmailId,
   newEmailValue,
   onNewEmailChange,
@@ -373,72 +384,23 @@ export default function AssessmentInviteTable({
                       </div>
                     </td>
                         <td className="py-3 px-4 align-top text-xs text-gray-500 dark:text-slate-500 hidden md:table-cell">
+                          {/* Same trail the Track Invites popup prints (timelineEvents). */}
                           <div className="space-y-1">
-                            {invitation.sent_at && (
-                              <div className="flex items-center gap-2">
-                                <Mail className="w-3 h-3 text-status-invited flex-shrink-0" />
-                                <span className="text-status-invited">Invited: {formatIST(invitation.sent_at)}</span>
+                            {timelineEvents(invitation).length === 0 ? (
+                              <div className="flex items-center gap-2 whitespace-nowrap">
+                                <Clock className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                                <span>Created: {formatIST(invitation.created_at)}</span>
+                              </div>
+                            ) : (
+                              timelineEvents(invitation).map(({ label, at, Icon, tone }, i) => (
+                                <div key={`${label}-${i}`} className="flex items-center gap-2 whitespace-nowrap">
+                                  <Icon className={`w-3 h-3 flex-shrink-0 ${tone}`} />
+                                  <span className={tone}>{label}: {formatIST(at)}</span>
+                                </div>
+                              ))
+                            )}
                           </div>
-                        )}
-                        {invitation.bounced_at && (
-                          <div className="flex items-center gap-2">
-                            <RefreshCw className="w-3 h-3 text-destructive flex-shrink-0" />
-                            <span className="text-destructive">Bounced: {formatIST(invitation.bounced_at)}</span>
-                          </div>
-                        )}
-                        {invitation.opened_at && (
-                          <div className="flex items-center gap-2">
-                            <Monitor className="w-3 h-3 text-status-progress flex-shrink-0" />
-                            <span className="text-status-progress">System Check: {formatIST(invitation.opened_at)}</span>
-                          </div>
-                        )}
-                        {invitation.started_at && (
-                          <div className="flex items-center gap-2">
-                            <Play className="w-3 h-3 text-status-progress flex-shrink-0" />
-                            <span className="text-status-progress">Started: {formatIST(invitation.started_at)}</span>
-                          </div>
-                        )}
-                        {invitation.completed_at && (
-                          <div className="flex items-center gap-2">
-                            <CheckCircle className="w-3 h-3 text-status-completed flex-shrink-0" />
-                            <span className="text-status-completed">Completed: {formatIST(invitation.completed_at)}</span>
-                          </div>
-                        )}
-                        {invitation.terminated_at && !invitation.completed_at && (
-                          <div className="flex items-center gap-2">
-                            <Ban className="w-3 h-3 text-destructive flex-shrink-0" />
-                            <span className="text-destructive">Terminated: {formatIST(invitation.terminated_at)}</span>
-                          </div>
-                        )}
-                        {/* Expired-at timestamp — shown when the link
-                            has expired (status='expired' or clock-based
-                            expiry on a never-started invite). The
-                            expires_at column holds the deadline; we
-                            surface it as the moment of expiry. */}
-                        {(() => {
-                          const s = (invitation.status || '').toLowerCase();
-                          const clockExpired = !invitation.started_at
-                            && !invitation.unit_consumed
-                            && invitation.expires_at
-                            && new Date(invitation.expires_at) < new Date();
-                          const isExpired = !invitation.completed_at
-                            && (s === 'expired' || clockExpired);
-                          if (!isExpired || !invitation.expires_at) return null;
-                          return (
-                            <div className="flex items-center gap-2">
-                              <Clock className="w-3 h-3 text-status-expired flex-shrink-0" />
-                              <span className="text-status-expired">Expired at: {formatIST(invitation.expires_at)}</span>
-                            </div>
-                          );
-                        })()}
-                        {!invitation.sent_at && !invitation.started_at && (
-                          <div className="flex items-center gap-2">
-                            <Clock className="w-3 h-3 text-gray-400 flex-shrink-0" />
-                            <span>Created: {formatIST(invitation.created_at)}</span>
-                          </div>
-                        )}
-                      </div>
-                    </td>
+                        </td>
                     <td className="py-3 px-4 align-top">
                       {/* Status is the badge alone. Expiry is resolved inside
                           renderInviteStatusBadge, so a lapsed invite renders one Expired
@@ -587,73 +549,22 @@ export default function AssessmentInviteTable({
                           </div>
                         </div>
                       ) : (() => {
-                        const isCompleted = invitation.status === 'completed' || !!invitation.completed_at;
-                        // The host decides which rows open the details page; a
-                        // terminated one does (no scores, but the recording and
-                        // the Integrity Check are there).
-                        const isTerminatedOpenable = !isCompleted && canOpenResult(invitation);
-                        const isBounced = invitation.status === 'bounced';
-                        // Action rules by status: Invited/Expired → Resend only;
-                        // System Check ('opened') and In Progress → no menu at all;
-                        // Completed → View Results only. Edit Email survives only
-                        // where fixing the address is the point — a failed invite
-                        // (mistyped address) or a bounce.
-                        const canResend = ['sent', 'failed', 'expired'].includes(invitation.status)
-                          && !invitation.started_at
-                          && !invitation.completed_at;
-                        const canEditEmail = invitation.status === 'failed'
-                          && !invitation.started_at
-                          && !invitation.completed_at;
-
-                        // Nothing actionable — render no trigger rather than an
-                        // empty menu the user can open onto nothing.
-                        if (!isCompleted && !isTerminatedOpenable && !isBounced && !canResend) return null;
-
-                        return (
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button
-                                aria-label="Actions"
-                                title="Actions"
-                                className="p-2 text-gray-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-gray-700 dark:hover:text-slate-200 rounded transition-colors"
-                              >
-                                <MoreVertical className="w-4 h-4" />
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-44">
-                              {(isCompleted || isTerminatedOpenable) && (
-                                // Completed-but-no-attempt is a rare orphaned
-                                // invitation: disabled, so we never silently drop
-                                // the user on the aggregate results page.
-                                <DropdownMenuItem
-                                  className={assessmentDropdownMenuItemClass}
-                                  disabled={!invitation.attempt_id}
-                                  onSelect={() => onOpenResult(invitation)}
-                                >
-                                  <Eye className="w-3.5 h-3.5 text-menu-icon-view" />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>
-                                    {isCompleted ? 'View Results' : 'View Details'}
-                                  </span>
-                                </DropdownMenuItem>
-                              )}
-                              {canResend && (
-                                <DropdownMenuItem className={assessmentDropdownMenuItemClass} onSelect={() => onResend(invitation)}>
-                                  <Mail className="w-3.5 h-3.5 text-menu-icon-share" />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>Resend</span>
-                                </DropdownMenuItem>
-                              )}
-                              {(isBounced || canEditEmail) && (
-                                <DropdownMenuItem
-                                  className={assessmentDropdownMenuItemClass}
-                                  onSelect={() => onStartEditEmail(invitation)}
-                                >
-                                  <Pencil className="w-3.5 h-3.5 text-menu-icon-edit" />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>{isBounced ? 'Change Email' : 'Edit Email'}</span>
-                                </DropdownMenuItem>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        );
+                        /* The same toolkit — and so the same rules — as the
+                           Invite Status Tracking popup: Copy Link, View
+                           Results/Details, Resend, Edit Email, Edit, Revoke. */
+                        const actions = buildInvitationRowActions(invitation, {
+                          onResend,
+                          onEditEmail: onStartEditEmail,
+                          onEdit,
+                          onRevoke,
+                          revokingId,
+                          onViewResult: canOpenResult(invitation) || invitation.status === 'completed' || !!invitation.completed_at
+                            ? onOpenResult
+                            : undefined,
+                        });
+                        // Nothing actionable — no trigger rather than an empty menu.
+                        if (actions.length === 0) return null;
+                        return <InvitationActionsMenu actions={actions} />;
                       })()}
                     </td>
                   </tr>

@@ -24,6 +24,9 @@ export interface CandidateInterviewInfo {
   status: string;
   consent_accepted_at?: string;
   system_check_passed: boolean;
+  /** Pre-interview step the candidate last reached, saved server-side by the
+   *  session-lease heartbeat — where a reopened link resumes after OTP. */
+  resume_step?: string | null;
   available_languages?: string[];
   selected_language?: string | null;
   // JD info for Step 2 (JD Review)
@@ -138,6 +141,9 @@ export const candidateAIInterviewService = {
     token: string,
     clientId: string,
     action: 'acquire' | 'release' = 'acquire',
+    /** Resumable pre-interview step this browser is on; the server saves it
+     *  (while this browser holds the lease) as the reopen resume point. */
+    step?: string,
   ): Promise<{
     held: boolean;
     blocked: boolean;
@@ -155,7 +161,7 @@ export const candidateAIInterviewService = {
       stale_window_seconds?: number;
     }>(
       `/candidate/ai-interview/${token}/session-lease`,
-      { client_id: clientId, action },
+      { client_id: clientId, action, ...(step ? { step } : {}) },
     );
     return response.data;
   },
@@ -421,10 +427,30 @@ export const candidateAIInterviewService = {
     return response.data;
   },
 
+  /**
+   * The candidate's own identity photo (captured at the Identity step), served
+   * back so the face-identity reference survives a page reload. null when there
+   * is none / the interview is over.
+   */
+  async getIdentityPhoto(token: string): Promise<Blob | null> {
+    try {
+      const response = await candidateApi.get<Blob>(
+        `/candidate/ai-interview/${token}/identity-photo`,
+        { responseType: 'blob' },
+      );
+      return response.data && response.data.size > 0 ? response.data : null;
+    } catch {
+      return null;
+    }
+  },
+
+  // Both OTP calls carry this browser's client id, so the server binds the code
+  // to the browser that asked for it: Chrome and Edge each get their own code,
+  // and one browser's code never opens the interview in another.
   async sendOtp(token: string, email: string): Promise<{ message: string }> {
     const response = await candidateApi.post<{ message: string }>(
       `/candidate/ai-interview/${token}/send-otp`,
-      { email },
+      { email, client_id: getAiClientSessionId(token) },
     );
     return response.data;
   },
@@ -432,7 +458,7 @@ export const candidateAIInterviewService = {
   async verifyOtp(token: string, email: string, otp: string): Promise<{ verified: boolean; message: string }> {
     const response = await candidateApi.post<{ verified: boolean; message: string }>(
       `/candidate/ai-interview/${token}/verify-otp`,
-      { email, otp },
+      { email, otp, client_id: getAiClientSessionId(token) },
     );
     return response.data;
   },

@@ -4,8 +4,8 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import OrganizationTabs from '@/components/organization/OrganizationTabs';
 import CreateRoleForm from './CreateRoleForm';
 import EditRoleForm from './EditRoleForm';
-import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
+import { Tooltip } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
 import { PageHeader } from '@/components/ui/page-header';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
@@ -29,6 +29,14 @@ import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { formatIST } from '@/lib/utils/dateUtils';
 import authService from '@/lib/services/authService';
+import { getPermissionDisplaySections } from '@/lib/constants/permissionCategories';
+import PermissionSectionsView, {
+  AlwaysOnPermissionsNote,
+  countGrantedPermissions,
+  fetchRoleShownCounts,
+  withAlwaysOnPermissions,
+} from './PermissionSectionsView';
+import AppModal from '@/components/ui/app-modal';
 import rbacService from '@/lib/services/rbacService';
 import {
   Permission,
@@ -37,10 +45,16 @@ import {
 } from '@/lib/types/rbac';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { useBreadcrumbOffset } from '@/components/ai-interview/AIInterviewStepIndicator';
 
 type TabType = 'roles' | 'audit';
 
 const protectedRoleCodes = ['admin', 'recruiter', 'billing_manager', 'viewer'];
+
+// Shown on the locked Edit / Delete controls of default roles.
+const DEFAULT_ROLE_EDIT_LOCKED_MESSAGE =
+  "Default roles can't be edited. Assign this role to a user, then change that user's permissions in Users → Edit User.";
+const DEFAULT_ROLE_DELETE_LOCKED_MESSAGE = "Default roles can't be deleted.";
 
 const getActionBadgeClass = (action: string) => {
   if (action.includes('create')) {
@@ -58,6 +72,8 @@ const getRoleBadgeClass = (isSystem: boolean) =>
     : 'bg-brand-cyan/15 text-brand-blue ring-1 ring-brand-cyan/20';
 
 export default function RoleManagement() {
+  // Org tab bar pins just below the sticky breadcrumb (measured height).
+  const [orgCrumbRef, orgCrumbHeight] = useBreadcrumbOffset();
   const router = useRouter();
   const dialog = useGlobalDialog();
   const { hasPermission } = useAuth();
@@ -67,13 +83,18 @@ export default function RoleManagement() {
   const canManageRoles = hasPermission('canManagePermissionsRoles');
   const [activeTab, setActiveTab] = useState<TabType>('roles');
   const [roles, setRoles] = useState<RoleListItem[]>([]);
+  // Per-role count shown in the lists — the SAME number the role popup and Edit
+  // User show: tickable permissions + the 2 always-on ones (Standard User = 2).
+  // The list API only returns a raw DB total, so each role's codes are fetched.
+  const [roleShownCounts, setRoleShownCounts] = useState<Record<number, number>>({});
+  const shownCountFor = (role: RoleListItem) => roleShownCounts[role.id] ?? role.permission_count;
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [viewingRole, setViewingRole] = useState<RoleListItem | null>(null);
   const [viewingRolePermissions, setViewingRolePermissions] = useState<Permission[]>([]);
-  // CRUD is inline (side panels), not full-page redirects — per UI/UX guidelines.
+  // CRUD is inline (popups), not full-page redirects — per UI/UX guidelines.
   const [createOpen, setCreateOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<RoleListItem | null>(null);
   // Two-step drill-in: 'cards' shows only the 4 stat tiles; clicking one expands
@@ -136,6 +157,8 @@ export default function RoleManagement() {
       ]);
       setRoles(rolesData.roles);
       setPermissions(permissionsData.permissions);
+      // Fill in the popup-matching counts (failures fall back to the raw total).
+      setRoleShownCounts(await fetchRoleShownCounts(rolesData.roles.map((r) => r.id)));
     } catch (error) {
       console.error('Failed to load roles and permissions:', error);
       toast.error('Failed to load roles and permissions');
@@ -181,31 +204,38 @@ export default function RoleManagement() {
     )
     .sort((a, b) => (b.user_count || 0) - (a.user_count || 0));
 
-  // Permissions Catalog view: grouped by module so admins can scan capabilities
-  // by area. Search applies to code/name/description so a quick filter works.
-  const filteredPermissions = permissions.filter((p) => {
-    const q = searchQuery.toLowerCase();
-    return (
-      p.code.toLowerCase().includes(q) ||
-      p.name.toLowerCase().includes(q) ||
-      (p.description || '').toLowerCase().includes(q) ||
-      p.module.toLowerCase().includes(q)
-    );
-  });
-  const permissionsByModule = filteredPermissions.reduce<Record<string, Permission[]>>((acc, p) => {
-    (acc[p.module] ||= []).push(p);
-    return acc;
-  }, {});
+  // Permissions Catalog view: the same sections and labels as the Edit User /
+  // Edit Role screens (lib/constants/permissionCategories.ts), never raw DB
+  // module names or codes. Search matches the section name or the label.
+  const tenantPermissionCodes = new Set(permissions.map((p) => p.code));
+  const permissionsBySection = getPermissionDisplaySections()
+    .map((section) => {
+      const q = searchQuery.toLowerCase();
+      const sectionMatches = section.name.toLowerCase().includes(q);
+      return {
+        ...section,
+        items: section.items.filter(
+          (item) =>
+            tenantPermissionCodes.has(item.code) &&
+            (sectionMatches || item.label.toLowerCase().includes(q))
+        ),
+      };
+    })
+    .filter((section) => section.items.length > 0);
+  const filteredPermissionsCount = permissionsBySection.reduce((sum, section) => sum + section.items.length, 0);
 
   const systemRolesCount = roles.filter((role) => role.is_system).length;
   const customRolesCount = roles.length - systemRolesCount;
   const assignedUsersCount = roles.reduce((sum, role) => sum + (role.user_count || 0), 0);
-  const managedPermissionsCount = permissions.length;
+  const managedPermissionsCount = getPermissionDisplaySections().reduce(
+    (sum, section) => sum + section.items.filter((item) => tenantPermissionCodes.has(item.code)).length,
+    0
+  );
 
   const handleDeleteRole = async (roleId: number) => {
     const role = roles.find((item) => item.id === roleId);
     if (role?.is_system) {
-      toast.error('System roles cannot be deleted');
+      toast.error(DEFAULT_ROLE_DELETE_LOCKED_MESSAGE);
       return;
     }
 
@@ -238,6 +268,11 @@ export default function RoleManagement() {
       console.error('Error loading role permissions:', error);
       toast.error('Failed to load role permissions');
     }
+  };
+
+  const closeViewingRole = () => {
+    setViewingRole(null);
+    setViewingRolePermissions([]);
   };
 
   const handleEditRole = (role: RoleListItem) => {
@@ -356,22 +391,19 @@ export default function RoleManagement() {
     );
   };
 
-  const groupedPermissions = viewingRolePermissions.reduce((acc, permission) => {
-    const moduleName = permission.module || 'other';
-    if (!acc[moduleName]) {
-      acc[moduleName] = [];
-    }
-    acc[moduleName].push(permission);
-    return acc;
-  }, {} as Record<string, Permission[]>);
+  // Role details popup: shared read-only view (same sections/labels as Edit User).
+  // Includes the always-on pair every user gets, so this matches Edit User
+  // (Standard User = 2, not 0).
+  const viewingRoleCodes = withAlwaysOnPermissions(viewingRolePermissions.map((p) => p.code));
+  const viewingRoleShownCount = countGrantedPermissions(viewingRoleCodes);
 
   return (
     <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
-        <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Roles & Permissions' }]} />
-        <OrganizationTabs />
-        <div className="-mt-5 rounded-b-xl border border-t-0 border-gray-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 p-4 sm:p-5">
+        <PageBreadcrumb barRef={orgCrumbRef} className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Roles & Permissions' }]} />
+        <OrganizationTabs stickyTop={orgCrumbHeight} />
+        <div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 p-4 sm:p-5 lg:-mt-5 lg:rounded-t-none lg:border-t-0">
         <PageHeader
           icon={<Shield className="h-5 w-5" />}
           title="Role Management"
@@ -380,10 +412,7 @@ export default function RoleManagement() {
             <Button
               variant="primary"
               onClick={() => {
-                if (!canManageRoles) {
-                  toast.error('You do not have permission to manage roles');
-                  return;
-                }
+                if (!canManageRoles) return;
                 setCreateOpen(true);
               }}
               aria-disabled={!canManageRoles}
@@ -430,19 +459,21 @@ export default function RoleManagement() {
               <StatsCard
                 label="Total Roles"
                 value={roles.length}
+                loading={isLoading}
                 icon={Shield}
                 tone="neutral"
-                sparkVariant={0}
+                sparkline={false}
                 onClick={() => openListView('roles-all')}
                 active={pageView === 'list' && listView === 'roles-all'}
                 showClickArrow
               />
               <StatsCard
-                label="System Roles"
+                label="Default Roles"
                 value={systemRolesCount}
+                loading={isLoading}
                 icon={Lock}
                 tone="neutral"
-                sparkVariant={1}
+                sparkline={false}
                 onClick={() => openListView('roles-system')}
                 active={pageView === 'list' && listView === 'roles-system'}
                 showClickArrow
@@ -450,9 +481,10 @@ export default function RoleManagement() {
               <StatsCard
                 label="Assigned Users"
                 value={assignedUsersCount}
+                loading={isLoading}
                 icon={Users}
                 tone="neutral"
-                sparkVariant={2}
+                sparkline={false}
                 onClick={() => openListView('users')}
                 active={pageView === 'list' && listView === 'users'}
                 showClickArrow
@@ -460,9 +492,10 @@ export default function RoleManagement() {
               <StatsCard
                 label="Permissions Catalog"
                 value={managedPermissionsCount}
+                loading={isLoading}
                 icon={Sparkles}
                 tone="neutral"
-                sparkVariant={3}
+                sparkline={false}
                 onClick={() => openListView('permissions')}
                 active={pageView === 'list' && listView === 'permissions'}
                 showClickArrow
@@ -480,7 +513,7 @@ export default function RoleManagement() {
                   <input
                     aria-label={listView === 'permissions' ? 'Search permissions' : 'Search roles'}
                     type="text"
-                    placeholder={listView === 'permissions' ? 'Search by permission code, name or module' : 'Search by role name or code'}
+                    placeholder={listView === 'permissions' ? 'Search by permission or section' : 'Search by role name or code'}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-3 pl-10 pr-4 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
@@ -491,10 +524,10 @@ export default function RoleManagement() {
                   {listView === 'permissions' ? (
                     <>
                       <span className="inline-flex items-center rounded-full bg-gray-50 dark:bg-slate-800/50 px-3 py-1.5 ring-1 ring-gray-200 dark:ring-slate-700">
-                        {filteredPermissions.length} visible permissions
+                        {filteredPermissionsCount} visible permissions
                       </span>
                       <span className="inline-flex items-center rounded-full bg-brand-orange/10 px-3 py-1.5 text-brand-orange-deep ring-1 ring-brand-orange/20">
-                        {Object.keys(permissionsByModule).length} modules
+                        {permissionsBySection.length} sections
                       </span>
                     </>
                   ) : listView === 'users' ? (
@@ -515,7 +548,7 @@ export default function RoleManagement() {
                         {customRolesCount} custom
                       </span>
                       <span className="inline-flex items-center rounded-full bg-brand-teal/10 px-3 py-1.5 text-brand-teal ring-1 ring-brand-teal/20">
-                        {systemRolesCount} system
+                        {systemRolesCount} default
                       </span>
                     </>
                   )}
@@ -528,7 +561,7 @@ export default function RoleManagement() {
               <div className="flex items-center justify-between gap-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-4 sm:px-6">
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50">Roles Directory</h2>
-                  <p className="text-sm text-gray-500 dark:text-slate-500">Review access levels, inheritance, and role usage across the organization.</p>
+                  <p className="text-sm text-gray-500 dark:text-slate-500">Review access levels and role usage across the organization.</p>
                 </div>
               </div>
 
@@ -552,10 +585,8 @@ export default function RoleManagement() {
                         <tr className="text-left">
                           <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Role</th>
                           <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Type</th>
-                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Inheritance</th>
-                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Permissions</th>
+                          <th className="px-6 py-4 text-center text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Permissions</th>
                           <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Users</th>
-                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Priority</th>
                           <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500 text-right tf-sticky-col">Actions</th>
                         </tr>
                       </thead>
@@ -576,32 +607,23 @@ export default function RoleManagement() {
                                       </span>
                                     )}
                                   </div>
-                                  <p className="mt-1 truncate text-xs font-medium uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">{role.code}</p>
                                   <p className="mt-2 line-clamp-2 break-words text-sm text-gray-500 dark:text-slate-500">{role.description || 'No description provided.'}</p>
                                 </div>
                               </div>
                             </td>
                             <td className="px-6 py-5">
                               <Badge variant={role.is_system ? 'muted' : 'secondary'}>
-                                {role.is_system ? 'System role' : 'Custom role'}
+                                {role.is_system ? 'Default role' : 'Custom role'}
                               </Badge>
                             </td>
-                            <td className="px-6 py-5 text-sm text-gray-600 dark:text-slate-400">
-                              {role.parent_role_name ? role.parent_role_name : <span className="text-gray-400 dark:text-slate-500">Independent</span>}
-                            </td>
-                            <td className="px-6 py-5">
-                              <Badge variant="info">
-                                {role.permission_count} permissions
-                              </Badge>
+                            <td className="px-6 py-5 text-center">
+                              <Badge variant="info">{shownCountFor(role)}</Badge>
                             </td>
                             <td className="px-6 py-5">
                               <div className="inline-flex items-center gap-2 rounded-full bg-gray-50 dark:bg-slate-800/50 px-3 py-1.5 ring-1 ring-gray-200 dark:ring-slate-700">
                                 <Users className="h-4 w-4 text-gray-400 dark:text-slate-500" />
                                 <span className="text-sm font-medium text-gray-700 dark:text-slate-300">{role.user_count}</span>
                               </div>
-                            </td>
-                            <td className="px-6 py-5">
-                              <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">{role.priority}</span>
                             </td>
                             <td className="px-6 py-5 tf-sticky-col">
                               <div className="flex items-center justify-end gap-2">
@@ -616,10 +638,7 @@ export default function RoleManagement() {
                                 {!protectedRoleCodes.includes(role.code) ? (
                                   <button
                                     onClick={() => {
-                                      if (!canManageRoles) {
-                                        toast.error('You do not have permission to manage roles');
-                                        return;
-                                      }
+                                      if (!canManageRoles) return;
                                       handleEditRole(role);
                                     }}
                                     aria-disabled={!canManageRoles}
@@ -634,17 +653,20 @@ export default function RoleManagement() {
                                     <Pencil className="h-4 w-4" />
                                   </button>
                                 ) : (
-                                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-300" title="Protected role">
-                                    <Lock className="h-4 w-4" />
-                                  </span>
+                                  <Tooltip content={DEFAULT_ROLE_EDIT_LOCKED_MESSAGE}>
+                                    <span
+                                      tabIndex={0}
+                                      aria-label={DEFAULT_ROLE_EDIT_LOCKED_MESSAGE}
+                                      className="inline-flex h-10 w-10 cursor-not-allowed items-center justify-center rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-300"
+                                    >
+                                      <Lock className="h-4 w-4" />
+                                    </span>
+                                  </Tooltip>
                                 )}
                                 {!role.is_system ? (
                                   <button
                                     onClick={() => {
-                                      if (!canManageRoles) {
-                                        toast.error('You do not have permission to manage roles');
-                                        return;
-                                      }
+                                      if (!canManageRoles) return;
                                       handleDeleteRole(role.id);
                                     }}
                                     aria-disabled={!canManageRoles}
@@ -659,9 +681,15 @@ export default function RoleManagement() {
                                     <Ban className="h-4 w-4" />
                                   </button>
                                 ) : (
-                                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-300" title="System roles cannot be deleted">
-                                    <Lock className="h-4 w-4" />
-                                  </span>
+                                  <Tooltip content={DEFAULT_ROLE_DELETE_LOCKED_MESSAGE}>
+                                    <span
+                                      tabIndex={0}
+                                      aria-label={DEFAULT_ROLE_DELETE_LOCKED_MESSAGE}
+                                      className="inline-flex h-10 w-10 cursor-not-allowed items-center justify-center rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-300"
+                                    >
+                                      <Lock className="h-4 w-4" />
+                                    </span>
+                                  </Tooltip>
                                 )}
                               </div>
                             </td>
@@ -686,10 +714,9 @@ export default function RoleManagement() {
                               <div className="flex flex-wrap items-center gap-2">
                                 <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">{role.name}</h3>
                                 <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-2xs font-medium ${role.is_system ? 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-1 ring-gray-200 dark:ring-slate-700' : 'bg-brand-cyan/10 text-brand-blue ring-1 ring-brand-cyan/20'}`}>
-                                  {role.is_system ? 'System' : 'Custom'}
+                                  {role.is_system ? 'Default role' : 'Custom role'}
                                 </span>
                               </div>
-                              <p className="mt-1 text-xs font-medium uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">{role.code}</p>
                               <p className="mt-2 text-sm text-gray-500 dark:text-slate-500">{role.description || 'No description provided.'}</p>
                             </div>
                           </div>
@@ -703,19 +730,11 @@ export default function RoleManagement() {
                         <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
                           <div className="rounded-xl bg-gray-50 dark:bg-slate-800/50 px-3 py-2 ring-1 ring-gray-100 dark:ring-slate-700/60">
                             <div className="text-xs text-gray-500 dark:text-slate-500">Permissions</div>
-                            <div className="mt-1 font-semibold text-gray-900 dark:text-slate-50">{role.permission_count}</div>
+                            <div className="mt-1 font-semibold text-gray-900 dark:text-slate-50">{shownCountFor(role)}</div>
                           </div>
                           <div className="rounded-xl bg-gray-50 dark:bg-slate-800/50 px-3 py-2 ring-1 ring-gray-100 dark:ring-slate-700/60">
                             <div className="text-xs text-gray-500 dark:text-slate-500">Users</div>
                             <div className="mt-1 font-semibold text-gray-900 dark:text-slate-50">{role.user_count}</div>
-                          </div>
-                          <div className="rounded-xl bg-gray-50 dark:bg-slate-800/50 px-3 py-2 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                            <div className="text-xs text-gray-500 dark:text-slate-500">Priority</div>
-                            <div className="mt-1 font-semibold text-gray-900 dark:text-slate-50">{role.priority}</div>
-                          </div>
-                          <div className="rounded-xl bg-gray-50 dark:bg-slate-800/50 px-3 py-2 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                            <div className="text-xs text-gray-500 dark:text-slate-500">Inherits</div>
-                            <div className="mt-1 font-semibold text-gray-900 dark:text-slate-50">{role.parent_role_name || 'Independent'}</div>
                           </div>
                         </div>
 
@@ -727,13 +746,22 @@ export default function RoleManagement() {
                             <Eye className="h-4 w-4" />
                             View permissions
                           </button>
+                          {protectedRoleCodes.includes(role.code) && (
+                            <button
+                              type="button"
+                              onClick={() => toast.info(DEFAULT_ROLE_EDIT_LOCKED_MESSAGE)}
+                              aria-disabled
+                              title={DEFAULT_ROLE_EDIT_LOCKED_MESSAGE}
+                              className="inline-flex cursor-not-allowed items-center gap-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 px-3 py-2 text-sm font-medium text-gray-300"
+                            >
+                              <Lock className="h-4 w-4" />
+                              Edit
+                            </button>
+                          )}
                           {!protectedRoleCodes.includes(role.code) && (
                             <button
                               onClick={() => {
-                                if (!canManageRoles) {
-                                  toast.error('You do not have permission to manage roles');
-                                  return;
-                                }
+                                if (!canManageRoles) return;
                                 handleEditRole(role);
                               }}
                               aria-disabled={!canManageRoles}
@@ -751,10 +779,7 @@ export default function RoleManagement() {
                           {!role.is_system && (
                             <button
                               onClick={() => {
-                                if (!canManageRoles) {
-                                  toast.error('You do not have permission to manage roles');
-                                  return;
-                                }
+                                if (!canManageRoles) return;
                                 handleDeleteRole(role.id);
                               }}
                               aria-disabled={!canManageRoles}
@@ -807,7 +832,7 @@ export default function RoleManagement() {
                         <tr className="text-left">
                           <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Role</th>
                           <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Type</th>
-                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Permissions</th>
+                          <th className="px-6 py-4 text-center text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Permissions</th>
                           <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500 text-right">Users</th>
                         </tr>
                       </thead>
@@ -821,16 +846,15 @@ export default function RoleManagement() {
                                 </span>
                                 <div className="min-w-0">
                                   <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">{role.name}</p>
-                                  <p className="mt-0.5 text-xs font-medium uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">{role.code}</p>
                                 </div>
                               </div>
                             </td>
                             <td className="px-6 py-4">
                               <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${role.is_system ? 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-1 ring-gray-200 dark:ring-slate-700' : 'bg-brand-cyan/10 text-brand-blue ring-1 ring-brand-cyan/20'}`}>
-                                {role.is_system ? 'System' : 'Custom'}
+                                {role.is_system ? 'Default role' : 'Custom role'}
                               </span>
                             </td>
-                            <td className="px-6 py-4 text-sm text-gray-700 dark:text-slate-300">{role.permission_count}</td>
+                            <td className="px-6 py-4 text-center text-sm text-gray-700 dark:text-slate-300">{shownCountFor(role)}</td>
                             <td className="px-6 py-4 text-right">
                               <span className="inline-flex items-center rounded-full bg-brand-teal/10 px-3 py-1 text-sm font-semibold text-brand-teal ring-1 ring-brand-teal/20">
                                 {role.user_count}
@@ -851,14 +875,14 @@ export default function RoleManagement() {
                 <div className="flex items-center justify-between gap-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-4 sm:px-6">
                   <div>
                     <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50">Permissions Catalog</h2>
-                    <p className="text-sm text-gray-500 dark:text-slate-500">All permissions available to assign, grouped by module.</p>
+                    <p className="text-sm text-gray-500 dark:text-slate-500">All permissions available to assign, grouped by section.</p>
                   </div>
                 </div>
                 {isLoading ? (
                   <div className="flex items-center justify-center py-20 tf-loader-center">
                     <Loader2 className="h-8 w-8 animate-spin text-brand-blue" />
                   </div>
-                ) : filteredPermissions.length === 0 ? (
+                ) : filteredPermissionsCount === 0 ? (
                   <div className="px-6 py-16 text-center">
                     <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-orange/10 ring-1 ring-brand-orange/15">
                       <Sparkles className="h-6 w-6 text-brand-orange-deep" />
@@ -868,25 +892,16 @@ export default function RoleManagement() {
                   </div>
                 ) : (
                   <div className="divide-y divide-gray-100 dark:divide-slate-700/60">
-                    {Object.entries(permissionsByModule)
-                      .sort(([a], [b]) => a.localeCompare(b))
-                      .map(([module, perms]) => (
-                        <div key={module} className="px-4 py-4 sm:px-6">
+                    {permissionsBySection.map((section) => (
+                        <div key={section.id} className="px-4 py-4 sm:px-6">
                           <div className="mb-3 flex items-center justify-between">
-                            <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-gray-700 dark:text-slate-300">{module.replace(/_/g, ' ')}</h3>
-                            <span className="text-xs text-gray-500 dark:text-slate-500">{perms.length} {perms.length === 1 ? 'permission' : 'permissions'}</span>
+                            <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-gray-700 dark:text-slate-300">{section.name}</h3>
+                            <span className="text-xs text-gray-500 dark:text-slate-500">{section.items.length} {section.items.length === 1 ? 'permission' : 'permissions'}</span>
                           </div>
                           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                            {perms.map((p) => (
-                              <div key={p.id} className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-gray-50/60 dark:bg-slate-800/40 p-3 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-                                <div className="flex items-start justify-between gap-2">
-                                  <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">{p.name}</p>
-                                  <span className="text-2xs font-medium uppercase tracking-[0.14em] text-gray-400 dark:text-slate-500 whitespace-nowrap">{p.action}</span>
-                                </div>
-                                <p className="mt-1 font-mono text-2xs text-brand-blue">{p.code}</p>
-                                {p.description && (
-                                  <p className="mt-2 text-xs text-gray-500 dark:text-slate-500">{p.description}</p>
-                                )}
+                            {section.items.map((item) => (
+                              <div key={item.code} className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-gray-50/60 dark:bg-slate-800/40 p-3 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+                                <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">{item.label}</p>
                               </div>
                             ))}
                           </div>
@@ -991,41 +1006,24 @@ export default function RoleManagement() {
       </div>
       </div>
 
-      {viewingRole && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
-          <div className="max-h-[90dvh] w-full max-w-[95vw] sm:max-w-4xl rounded-3xl border border-white/40 bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-black/5 flex flex-col">
-            <div className="relative overflow-hidden bg-brand-blue px-5 py-5 text-white sm:px-6 shrink-0 rounded-t-3xl">
-              <div className="pointer-events-none absolute -top-10 right-0 h-40 w-40 rounded-full bg-white/10 blur-3xl" />
-              <div className="relative flex items-start justify-between gap-4">
-                <div className="flex min-w-0 items-start gap-3">
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15">
-                    <Eye className="h-5 w-5 text-white" />
-                  </span>
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="truncate text-xl font-semibold">{viewingRole.name}</h2>
-                      <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-2xs font-medium ${getRoleBadgeClass(viewingRole.is_system)}`}>
-                        {viewingRole.is_system ? 'System role' : 'Custom role'}
-                      </span>
-                    </div>
-                    <p className="mt-2 max-w-2xl text-sm text-white/80">{viewingRole.description || 'No description provided.'}</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => {
-                    setViewingRole(null);
-                    setViewingRolePermissions([]);
-                  }}
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 text-white transition-colors hover:bg-white/15"
-                  aria-label="Close permissions modal"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-              <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <AppModal
+        open={!!viewingRole}
+        onCancel={closeViewingRole}
+        size="lg"
+        icon={<Eye />}
+        title={viewingRole?.name}
+        subtitle={viewingRole?.description || 'No description provided.'}
+        headerExtra={
+          viewingRole && (
+            <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-2xs font-medium ${getRoleBadgeClass(viewingRole.is_system)}`}>
+              {viewingRole.is_system ? 'Default role' : 'Custom role'}
+            </span>
+          )
+        }
+      >
+        {viewingRole && (
+          <>
+              <div className="mb-6 grid gap-4 sm:grid-cols-3">
                 <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 shadow-sm ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
                   <div className="text-xs uppercase tracking-[0.18em] text-gray-400 dark:text-slate-500">Role Code</div>
                   <div className="mt-2 text-sm font-semibold text-gray-900 dark:text-slate-50">{viewingRole.code}</div>
@@ -1036,99 +1034,33 @@ export default function RoleManagement() {
                 </div>
                 <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 shadow-sm ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
                   <div className="text-xs uppercase tracking-[0.18em] text-gray-400 dark:text-slate-500">Permissions</div>
-                  <div className="mt-2 text-sm font-semibold text-gray-900 dark:text-slate-50">{viewingRolePermissions.length}</div>
-                </div>
-                <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 shadow-sm ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-                  <div className="text-xs uppercase tracking-[0.18em] text-gray-400 dark:text-slate-500">Inheritance</div>
-                  <div className="mt-2 text-sm font-semibold text-gray-900 dark:text-slate-50">{viewingRole.parent_role_name || 'Independent'}</div>
+                  <div className="mt-2 text-sm font-semibold text-gray-900 dark:text-slate-50">{viewingRoleShownCount}</div>
                 </div>
               </div>
 
-              {viewingRolePermissions.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 px-6 py-16 text-center">
-                  <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
-                    <Shield className="h-6 w-6 text-brand-blue" />
-                  </div>
-                  <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">No permissions allocated</h3>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-slate-500">This role does not currently expose any explicit permissions.</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {Object.entries(groupedPermissions).map(([moduleName, modulePermissions]) => (
-                    <section
-                      key={moduleName}
-                      className="overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm ring-1 ring-black/[0.02] dark:ring-white/[0.02]"
-                    >
-                      <div className="flex items-center justify-between gap-3 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-3 sm:px-5">
-                        <div>
-                          <h3 className="text-sm font-semibold capitalize text-gray-900 dark:text-slate-50">{moduleName.replace(/_/g, ' ')}</h3>
-                          <p className="text-xs text-gray-500 dark:text-slate-500">{modulePermissions.length} permission{modulePermissions.length !== 1 ? 's' : ''}</p>
-                        </div>
-                      </div>
-                      <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
-                        {modulePermissions.map((permission) => (
-                          <div
-                            key={permission.id}
-                            className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-gradient-to-br from-white to-gray-50 dark:from-slate-900 dark:to-slate-800/50 p-4 transition-colors hover:border-brand-blue/15"
-                          >
-                            <div className="flex items-start gap-3">
-                              <span
-                                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ring-1 ${
-                                  permission.action === 'read'
-                                    ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/15'
-                                    : permission.action === 'create'
-                                    ? 'bg-brand-teal/10 text-brand-teal ring-brand-teal/15'
-                                    : permission.action === 'update'
-                                    ? 'bg-brand-cyan/10 text-brand-cyan ring-brand-cyan/15'
-                                    : permission.action === 'delete'
-                                    ? 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/15'
-                                    : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-gray-200 dark:ring-slate-700'
-                                }`}
-                              >
-                                <span className="text-xs font-semibold uppercase">{permission.action?.[0] || 'P'}</span>
-                              </span>
-                              <div className="min-w-0">
-                                <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">{permission.name}</p>
-                                <p className="mt-1 text-xs uppercase tracking-[0.14em] text-gray-400 dark:text-slate-500">{permission.code}</p>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </section>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+              <AlwaysOnPermissionsNote />
+              <PermissionSectionsView codes={viewingRoleCodes} showAll />
+          </>
+        )}
+      </AppModal>
       </div>
 
-      {/* Create Role — inline side panel (CRUD is not a full-page redirect) */}
-      <Sheet open={createOpen} onOpenChange={setCreateOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-4xl overflow-y-auto p-4 sm:p-6">
-          <CreateRoleForm
-            embedded
-            onCancel={() => setCreateOpen(false)}
-            onSuccess={() => { setCreateOpen(false); loadData(); }}
-          />
-        </SheetContent>
-      </Sheet>
-
-      {/* Edit Role — inline side panel */}
-      <Sheet open={!!editingRole} onOpenChange={(open) => { if (!open) setEditingRole(null); }}>
-        <SheetContent side="right" className="w-full sm:max-w-4xl overflow-y-auto p-4 sm:p-6">
-          {editingRole && (
-            <EditRoleForm
-              roleId={editingRole.id}
-              embedded
-              onCancel={() => setEditingRole(null)}
-              onSuccess={() => { setEditingRole(null); loadData(); }}
-            />
-          )}
-        </SheetContent>
-      </Sheet>
+      {/* Create / Edit Role — popups laid out like Edit User (AppModal inside the form) */}
+      {createOpen && (
+        <CreateRoleForm
+          embedded
+          onCancel={() => setCreateOpen(false)}
+          onSuccess={() => { setCreateOpen(false); loadData(); }}
+        />
+      )}
+      {editingRole && (
+        <EditRoleForm
+          roleId={editingRole.id}
+          embedded
+          onCancel={() => setEditingRole(null)}
+          onSuccess={() => { setEditingRole(null); loadData(); }}
+        />
+      )}
     </main>
   );
 }

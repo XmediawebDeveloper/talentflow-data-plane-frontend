@@ -1,7 +1,6 @@
 'use client';
 
 import { Users, Briefcase, FileText, ArrowUpRight, Shield } from 'lucide-react';
-import { toast } from 'sonner';
 import { Team } from '@/lib/services/teamService';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -14,7 +13,7 @@ interface TeamCardProps {
 
 export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false }: TeamCardProps) {
   return (
-    <div className="group flex flex-col overflow-hidden rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-[border-color,box-shadow,transform] hover:-translate-y-0.5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10">
+    <div className="group flex flex-col overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-[border-color,box-shadow,transform] hover:-translate-y-0.5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10">
       {/* Header */}
       <div className="flex items-start justify-between gap-3 border-b border-gray-100 dark:border-slate-700/60 p-5">
         <div className="flex min-w-0 items-start gap-3">
@@ -35,22 +34,22 @@ export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false 
 
       {/* Body */}
       <div className="flex flex-1 flex-col p-5">
-        <div className="grid grid-cols-3 gap-3">
-          <div className="rounded-lg bg-gray-50 dark:bg-slate-800/50 p-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+          <div className="min-w-0 rounded-lg bg-gray-50 dark:bg-slate-800/50 p-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
             <Users className="h-4 w-4 text-gray-500 dark:text-slate-400" />
-            <p className="mt-1.5 text-2xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">{team.member_count}</p>
+            <p className="mt-1.5 text-2xl font-semibold tracking-tight tabular-nums break-words text-gray-900 dark:text-slate-50">{team.member_count}</p>
             <p className="text-xs text-gray-600 dark:text-slate-400">Members</p>
           </div>
 
-          <div className="rounded-lg bg-gray-50 dark:bg-slate-800/50 p-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
+          <div className="min-w-0 rounded-lg bg-gray-50 dark:bg-slate-800/50 p-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
             <Briefcase className="h-4 w-4 text-gray-500 dark:text-slate-400" />
-            <p className="mt-1.5 text-2xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">{team.active_jobs_count}</p>
+            <p className="mt-1.5 text-2xl font-semibold tracking-tight tabular-nums break-words text-gray-900 dark:text-slate-50">{team.active_jobs_count}</p>
             <p className="text-xs text-gray-600 dark:text-slate-400">Active Jobs</p>
           </div>
 
-          <div className="rounded-lg bg-gray-50 dark:bg-slate-800/50 p-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
+          <div className="min-w-0 rounded-lg bg-gray-50 dark:bg-slate-800/50 p-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
             <FileText className="h-4 w-4 text-gray-500 dark:text-slate-400" />
-            <p className="mt-1.5 text-2xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">{team.resumes_count}</p>
+            <p className="mt-1.5 text-2xl font-semibold tracking-tight tabular-nums break-words text-gray-900 dark:text-slate-50">{team.resumes_count}</p>
             <p className="text-xs text-gray-600 dark:text-slate-400">Resumes</p>
           </div>
         </div>
@@ -62,7 +61,7 @@ export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false 
                 {team.members.slice(0, 4).map((member) => (
                   <div
                     key={member.id}
-                    className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-white dark:border-slate-900 bg-gradient-to-br from-brand-blue-2 to-brand-blue text-xs font-semibold text-white shadow-sm"
+                    className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-white dark:border-slate-900 bg-brand-blue text-xs font-semibold text-white shadow-sm"
                     title={member.name}
                   >
                     {member.initials}
@@ -91,17 +90,14 @@ export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false 
           </button>
           <button
             onClick={() => {
-              if (!canManage) {
-                toast.error('You do not have permission to manage this team');
-                return;
-              }
+              if (!canManage) return;
               onManageTeam(team.id);
             }}
             aria-disabled={!canManage}
             title={!canManage ? 'You do not have permission to manage this team' : ''}
             className={`flex-1 rounded-lg border px-4 py-2.5 text-sm font-medium transition-all ${
               canManage
-                ? 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:border-brand-cyan/20 hover:bg-brand-cyan/[0.04] hover:text-brand-blue'
+                ? 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:border-brand-blue/30 hover:bg-brand-blue/[0.04] hover:text-brand-blue'
                 : 'border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800 text-gray-300 dark:text-slate-600 cursor-not-allowed opacity-60'
             }`}
           >
@@ -115,7 +111,7 @@ export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false 
 
 export function TeamCardSkeleton() {
   return (
-    <div className="flex flex-col overflow-hidden rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+    <div className="flex flex-col overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
       <div className="flex items-start justify-between gap-3 border-b border-gray-100 dark:border-slate-700/60 p-5">
         <div className="flex items-start gap-3">
           <Skeleton className="h-11 w-11 rounded-xl" />

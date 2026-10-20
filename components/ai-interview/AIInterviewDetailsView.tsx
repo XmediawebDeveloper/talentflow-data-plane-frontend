@@ -17,7 +17,12 @@ import { Badge } from '@/components/ui/badge';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { useUrlTab } from '@/lib/hooks/useUrlTab';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
-import { aiInterviewDraftResumeHref } from '@/lib/utils/aiInterviewDraftResume';
+import {
+  interviewVersionOrdinal as storedInterviewVersionOrdinal,
+  interviewDuplicateBlockedReason,
+  interviewEditBlockedReason,
+} from '@/lib/utils/aiInterviewVersion';
+import { aiInterviewDraftResumeHref, aiInterviewConfigureHref, markUnsavedVersion } from '@/lib/utils/aiInterviewDraftResume';
 import { jdService, type JDLineageVersion, type JDResponse } from '@/lib/services/jdService';
 import JDIdentityHeader from '@/components/jobs/JDIdentityHeader';
 import JDOverviewSections from '@/components/jobs/JDOverviewSections';
@@ -150,7 +155,7 @@ function getTimedModeAllocation(nthEnabled: boolean, hrEnabled: boolean) {
 interface AIInterviewDetailsViewProps {
   config: AIInterviewResponse;
   onBack: () => void;
-  onRefresh?: () => void;
+  onRefresh?: () => void | Promise<void>;
   currentIndex?: number;
   totalCount?: number;
   onPrev?: () => void;
@@ -361,6 +366,16 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
     }
   }, [config.id]);
 
+  /* A send / copied link from the Share dialog: reload the activity list, the
+     header's invite counts and the Invites-tab tracker at once, instead of
+     leaving them stale until the tracker's next poll or a page refresh. */
+  const [inviteRefreshTick, setInviteRefreshTick] = useState(0);
+  const refreshAfterInvite = useCallback(() => {
+    loadActivity();
+    void onRefresh?.();
+    setInviteRefreshTick((t) => t + 1);
+  }, [loadActivity, onRefresh]);
+
   // Always load activity on mount (needed for invite count in header)
   useEffect(() => {
     if (configureOnly) return;
@@ -486,18 +501,24 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
       || bucket[0];
   }, [siblingConfigsByJdId]);
 
-  /** This config's own position among every interview authored against its
-   *  job version, oldest first — the "Interview Version" badge's number. */
-  const interviewVersionOrdinal = useMemo(() => {
-    if (!config.jd_id) return 1;
-    const bucket = siblingConfigsByJdId.get(config.jd_id);
-    if (!bucket || bucket.length === 0) return 1;
-    const sorted = [...bucket].sort(
-      (a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime(),
-    );
-    const idx = sorted.findIndex((c) => c.id === config.id);
-    return idx >= 0 ? idx + 1 : 1;
-  }, [siblingConfigsByJdId, config.jd_id, config.id]);
+  /** This config's version among every interview authored against its job
+   *  version - the "Interview Version" badge's number. The stored number wins;
+   *  creation order is the fallback for a row that has none yet. */
+  const interviewVersionOrdinal = useMemo(
+    () => storedInterviewVersionOrdinal(config, siblingConfigsByJdId.get(config.jd_id || '') ?? []),
+    [siblingConfigsByJdId, config],
+  );
+
+  /** Every version of this interview, any status - what Duplicate's draft and
+   *  cap rules are judged against. */
+  const lineageConfigs = useMemo(
+    () => (config.jd_id ? siblingConfigsByJdId.get(config.jd_id) ?? [] : []),
+    [siblingConfigsByJdId, config.jd_id],
+  );
+  const duplicateBlockedReason = interviewDuplicateBlockedReason(config, lineageConfigs, canCreateAIInterviews);
+  const editBlockedReason = !canUpdateAIInterviews
+    ? 'You do not have permission to edit AI interviews'
+    : interviewEditBlockedReason(config);
 
   // Lazy-fetch the full JD record when the View JD tab is opened — cached
   // per config.jd_id so switching tabs (or back to it) doesn't re-fetch.
@@ -535,11 +556,19 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   };
 
   const handleDuplicate = async () => {
+    if (duplicateBlockedReason) {
+      toast.error(duplicateBlockedReason);
+      return;
+    }
     setActionLoading(true);
     try {
       const result = await aiInterviewService.clone(config.id);
-      toast.success(`Config duplicated: ${result.cloned_title}`);
-      onRefresh?.();
+      await onRefresh?.();
+      toast.success(`New version created as a draft: ${result.cloned_title}`);
+      // Open the new draft straight in Configure so it can be edited at once.
+      // Unsaved until Save as Draft: Discard anywhere in the wizard deletes it.
+      markUnsavedVersion(result.cloned_id);
+      router.push(aiInterviewConfigureHref(result.cloned_id, config.jd_id || ''));
     } catch (error: any) {
       toast.error(error.message || 'Failed to duplicate config');
     } finally {
@@ -551,8 +580,8 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
     setActionLoading(true);
     try {
       await aiInterviewService.archive(config.id);
+      await onRefresh?.();
       toast.success('Config archived');
-      onRefresh?.();
     } catch (error: any) {
       toast.error(error.message || 'Failed to archive');
     } finally {
@@ -571,12 +600,12 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
     setActionLoading(true);
     try {
       const restored = await aiInterviewService.unarchive(config.id);
+      await onRefresh?.();
       toast.success(
         restored.status === 'draft'
           ? 'Configuration restored to Draft'
           : 'Configuration restored to Active'
       );
-      onRefresh?.();
     } catch (error: any) {
       toast.error(error.message || 'Failed to unarchive');
     } finally {
@@ -1410,12 +1439,8 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   </div>
                 )}
 
-                {/* Interview Version — static. An AI interview config is one
-                    evolving record, not a family of standalone records the
-                    way an assessment is, so there is nothing for this badge
-                    to switch to; it states the fact (this config's ordinal
-                    among every interview authored against its job version)
-                    and stops there. */}
+                {/* Interview Version - this version's number within its
+                    interview (V1 is the original, V2.. are duplicates). */}
                 <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-brand-blue text-white rounded-full text-xs font-medium whitespace-nowrap">
                   Interview Version
                   <span aria-hidden className="text-white/50">&middot;</span>
@@ -1433,10 +1458,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   variant="primary"
                   size="sm"
                   onClick={() => {
-                    if (!canShareAIInterviews) {
-                      toast.error('You do not have permission to invite candidates to an AI interview');
-                      return;
-                    }
+                    if (!canShareAIInterviews) return;
                     setShowShareModal(true);
                   }}
                   aria-disabled={!canShareAIInterviews}
@@ -1447,15 +1469,47 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   Invite
                 </Button>
               )}
+              {/* Edit + Duplicate - the Assessment Details pair. Edit is open only
+                  while nobody has been invited to THIS version; once someone
+                  has, it is locked and Duplicate (which then opens up) makes
+                  the next version. */}
+              {config.status === 'published' && config.jd_id && (
+                <>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={editBlockedReason ? undefined : () => router.push(aiInterviewConfigureHref(config.id, config.jd_id || ''))}
+                    disabled={!!editBlockedReason && canUpdateAIInterviews}
+                    aria-disabled={!!editBlockedReason}
+                    aria-label="Edit AI interview"
+                    title={editBlockedReason || 'Edit this version'}
+                    className={`h-8 w-8 px-0 flex-shrink-0 ${!canUpdateAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    <Pencil className="w-4 h-4 text-menu-icon-edit" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={duplicateBlockedReason ? undefined : handleDuplicate}
+                    disabled={(!!duplicateBlockedReason && canCreateAIInterviews) || actionLoading}
+                    aria-disabled={!!duplicateBlockedReason}
+                    aria-label="Duplicate as a new version"
+                    title={duplicateBlockedReason || 'Duplicate as a new version'}
+                    className={!canCreateAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}
+                    icon={<Copy className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-menu-icon-download" />}
+                  >
+                    Duplicate
+                  </Button>
+                </>
+              )}
               {config.status === 'draft' && config.jd_id && (
                 <Button
                   variant="primary"
                   size="sm"
                   onClick={() => {
-                    if (!canUpdateAIInterviews) {
-                      toast.error('You do not have permission to edit AI interviews');
-                      return;
-                    }
+                    if (!canUpdateAIInterviews) return;
                     // Resumes at the step the draft was left on.
                     router.push(aiInterviewDraftResumeHref(config));
                   }}
@@ -1486,7 +1540,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={handleUnarchive}
+                  onClick={canArchiveAIInterviews ? handleUnarchive : undefined}
                   disabled={actionLoading}
                   aria-disabled={!canArchiveAIInterviews}
                   title={!canArchiveAIInterviews ? 'You do not have permission to unarchive AI interviews' : ''}
@@ -2237,6 +2291,10 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
               jdTitle={config.jd_title || config.position || 'Untitled'}
               jdShortId={config.jd_short_id}
               hideVersionDetails
+              // Resend / revoke / edit here also change the activity list and
+              // the header's invite counts — refresh both at once.
+              onChanged={async () => { await Promise.all([loadActivity(), onRefresh?.()]); }}
+              refreshSignal={inviteRefreshTick}
               // Completed rows offer View Result — swap the popup for the
               // same inline candidate result view the Results tab opens.
               onViewResult={(inv) => handleCandidateClick(inv.id)}
@@ -2255,7 +2313,8 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
           config={config}
           interviewVersion={interviewVersionOrdinal}
           onClose={() => setShowShareModal(false)}
-          onInviteSent={() => { loadActivity(); }}
+          onInvitesChanged={refreshAfterInvite}
+          onInviteSent={refreshAfterInvite}
         />
       )}
 

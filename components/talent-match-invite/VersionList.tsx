@@ -14,8 +14,9 @@ import { VersionPill } from '@/components/assessments/AllAssessmentsTable';
 import { formatIST } from '@/lib/utils/dateUtils';
 import {
   KIND_LABEL,
-  MAX_VERSIONS_PER_TYPE,
+  MAX_VERSIONS,
   nextVersionNumber,
+  versionCapMessage,
   versionActions,
   type VersionAction,
   type InviteKind,
@@ -51,19 +52,20 @@ const INITIAL_VISIBLE = 3;
 
 /** "3 of 5 used" with its bar — the popup's version heading carries it. */
 export function VersionUsage({ kind, used }: { kind: InviteKind; used: number }) {
-  const atCap = used >= MAX_VERSIONS_PER_TYPE;
+  const max = MAX_VERSIONS[kind];
+  const atCap = used >= max;
   return (
     <div className="flex items-center gap-2 shrink-0">
-      <span className="text-xs text-gray-600 dark:text-slate-400 whitespace-nowrap tabular-nums">{used} of {MAX_VERSIONS_PER_TYPE} used</span>
+      <span className="text-xs text-gray-600 dark:text-slate-400 whitespace-nowrap tabular-nums">{used} of {max} used</span>
       <div
         className="h-1.5 w-16 sm:w-24 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden"
         role="progressbar"
         aria-valuemin={0}
-        aria-valuemax={MAX_VERSIONS_PER_TYPE}
+        aria-valuemax={max}
         aria-valuenow={used}
         aria-label={`${KIND_LABEL[kind].singular} versions used`}
       >
-        <div className={`h-full rounded-full ${atCap ? 'bg-brand-orange' : 'bg-brand-blue'}`} style={{ width: `${Math.min(100, (used / MAX_VERSIONS_PER_TYPE) * 100)}%` }} />
+        <div className={`h-full rounded-full ${atCap ? 'bg-brand-orange' : 'bg-brand-blue'}`} style={{ width: `${Math.min(100, (used / max) * 100)}%` }} />
       </div>
     </div>
   );
@@ -119,13 +121,13 @@ export default function VersionList({
   const label = KIND_LABEL[kind];
   const every = allVersions ?? versions;
   const used = every.length;
-  const atCap = used >= MAX_VERSIONS_PER_TYPE;
+  const atCap = used >= MAX_VERSIONS[kind];
   const latestId = every[0]?.id;
   /* The New version / Create button (and its cap and Draft-gate notes): v1 is
      configured in a popup, later versions are a draft copy of the latest
-     opened there. AI interviews have one version per job for now, so their
-     popup offers only the v1 Create. */
-  const showCreate = kind === 'assessment' || used === 0;
+     opened there. An AI interview is one per job version: v1 is its only
+     fresh create, and New version duplicates it up to the cap, where the limit
+     note takes the button's place — the same in both popups. */
   /* Both popups show the newest INITIAL_VISIBLE versions; the rest sit
      behind "+N more versions". */
   const [expanded, setExpanded] = useState(false);
@@ -158,7 +160,7 @@ export default function VersionList({
           <div className="text-sm font-medium text-gray-700 dark:text-slate-300">
             {used === 0 ? `No ${label.singular.toLowerCase()} for this job yet` : `No live ${label.singular.toLowerCase()} for this job version`}
           </div>
-          {used === 0 && showCreate && (
+          {used === 0 && (
             <div className="text-xs text-gray-500 dark:text-slate-400">
               {kind === 'assessment'
                 ? 'Create v1 — configure it here, and it appears in this list.'
@@ -170,7 +172,11 @@ export default function VersionList({
         <div className="space-y-2.5" role="radiogroup" aria-label={`${label.singular} versions`}>
           {shown.map((v) => {
             const selected = selectedId === v.id;
-            const why = v.sendable ? undefined : v.status === 'draft' ? 'Publish this version to send it' : `${v.statusLabel} versions cannot be sent`;
+            const why = v.sendable
+              ? undefined
+              : v.revoked
+                ? 'Invites for this version have been revoked. Create a new version to start fresh.'
+                : v.status === 'draft' ? 'Publish this version to send it' : `${v.statusLabel} versions cannot be sent`;
             const pick = () => { if (v.sendable) onSelect(selected ? null : v.id); };
             const actions = versionActions(v, every, perms).filter((a) => !(hideDuplicate && a.action === 'duplicate'));
             return (
@@ -310,9 +316,9 @@ export default function VersionList({
         </button>
       )}
 
-      {!showCreate ? null : atCap ? (
+      {atCap ? (
         <p role="status" className="rounded-lg border border-brand-orange/30 bg-brand-orange/10 px-3 py-2 text-xs font-medium text-brand-orange-deep">
-          Maximum {MAX_VERSIONS_PER_TYPE} versions reached. Manage existing versions to continue.
+          {versionCapMessage(kind)}
         </p>
       ) : (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">

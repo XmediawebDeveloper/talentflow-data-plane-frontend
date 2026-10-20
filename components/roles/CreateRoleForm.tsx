@@ -1,16 +1,32 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import AppModal, { MODAL_FOOTER_BUTTON_CLASS, MODAL_FOOTER_ROW_CLASS } from '@/components/ui/app-modal';
+import { Input } from '@/components/ui/input';
+import PermissionTilesEditor from '@/components/roles/PermissionTilesEditor';
+import { PermissionSectionsSkeleton } from '@/components/roles/PermissionSectionsView';
+import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   Shield,
-  Check,
   Sparkles,
   ArrowUpRight,
   Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { askTurnOnWithDependents, askUnlockEntryPoint, usePermissionChangeDialog } from '@/components/roles/PermissionChangeDialog';
+import {
+  forgetTurnOff,
+  rememberTurnOff,
+  TurnOffMemory,
+  getAllCatalogCodes,
+  labelOf,
+  planTurnOff,
+  planTurnOn,
+  isGroupFullyOn,
+  withRequired,
+  withoutOrphanEntryPoints,
+} from '@/lib/permissions/permissionRules';
 import rbacService from '@/lib/services/rbacService';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { PageHeader } from '@/components/ui/page-header';
@@ -26,44 +42,15 @@ import {
   type CustomPermissionSubCategory,
 } from '@/lib/constants/permissionCategories';
 
-const getPermissionDependencies = (code: string): string[] => {
-  for (const category of CUSTOM_PERMISSION_CATEGORIES) {
-    if (category.dependencies && category.dependencies[code]) {
-      return category.dependencies[code];
-    }
-  }
-  return [];
-};
-
-/** The reverse of getPermissionDependencies: every action code that declares
- *  `code` as one of ITS dependencies. Used to block unchecking a permission
- *  that something else currently selected still relies on — mirrors
- *  getBlockingPermissions in components/users/UserManagement.tsx, so the
- *  per-role and per-user permission editors enforce the same rule the same
- *  way instead of one silently allowing an inconsistent combination. */
-const getPermissionsDependingOn = (code: string): string[] => {
-  const dependents: string[] = [];
-  CUSTOM_PERMISSION_CATEGORIES.forEach((category) => {
-    if (!category.dependencies) return;
-    Object.entries(category.dependencies).forEach(([action, deps]) => {
-      if (deps.includes(code)) dependents.push(action);
-    });
-  });
-  return dependents;
-};
-
-const getPermissionDisplayName = (code: string): string => {
-  for (const category of CUSTOM_PERMISSION_CATEGORIES) {
-    if (category.viewCode === code) return category.name;
-    const action = category.actions?.find((a) => a.code === code);
-    if (action) return action.label;
-    for (const sub of category.subCategories || []) {
-      if (sub.viewCode === code) return `View ${sub.name}`;
-      const subAction = sub.actions.find((a) => a.code === code);
-      if (subAction) return `${subAction.label} (${sub.name})`;
-    }
-  }
-  return code;
+/** Codes loaded into the editor (existing role / "Copy permissions from"): the
+ *  catalogue part is completed with what it needs and stripped of entry points
+ *  whose main is off, so the form never shows an entry point it can't use.
+ *  Codes with no tile (legacy) are kept untouched so a save doesn't drop them. */
+const normalizeRoleCodes = (codes: Iterable<string>): Set<string> => {
+  const catalog = new Set(getAllCatalogCodes());
+  const all = Array.from(codes);
+  const fromCatalog = withoutOrphanEntryPoints(withRequired(all.filter((c) => catalog.has(c))));
+  return new Set([...fromCatalog, ...all.filter((c) => !catalog.has(c))]);
 };
 
 const getAllCustomPermissionCodes = (): string[] => {
@@ -161,6 +148,8 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
     parent_role_id: undefined as number | undefined,
   });
   const [selectedPermissionCodes, setSelectedPermissionCodes] = useState<Set<string>>(new Set());
+  // Compact confirm popup for cascading permission changes (shared with Edit User).
+  const { ask, dialog } = usePermissionChangeDialog();
   // Which required fields the user has left, so an error shows the moment a
   // field is touched (and updates live as they keep typing) instead of only
   // after Create is pressed.
@@ -220,114 +209,132 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
     return ids;
   };
 
-  const handlePermissionToggle = (code: string) => {
-    const dependencies = getPermissionDependencies(code);
-    const found = findCategoryForAction(code);
-    const isSelected = selectedPermissionCodes.has(code);
+  // Same rules as Edit User (lib/permissions/permissionRules.ts): needs are
+  // turned on with a permission, a main offers its entry points, turning off
+  // cascades with a confirm, and entry points are locked while their main is off.
+  // What each turn-off took with it, so turning it on again can restore it.
+  const turnOffMemory = useRef<TurnOffMemory>(new Map());
 
-    if (isSelected) {
-      // Disabling — block if another still-enabled permission requires this
-      // one, the same guard components/users/UserManagement.tsx already
-      // applies to per-user overrides, so both editors refuse the same
-      // inconsistent combination instead of only one of them catching it.
-      const blockers = getPermissionsDependingOn(code).filter((dependent) => selectedPermissionCodes.has(dependent));
-      if (blockers.length > 0) {
-        toast.warning(
-          `Cannot disable "${getPermissionDisplayName(code)}" — it's required by ${blockers.map(getPermissionDisplayName).join(', ')}. Disable that permission first.`,
-        );
-        return;
-      }
+  const applyTurnOn = async (codes: string[], label: string) => {
+    const plan = planTurnOn(codes, selectedPermissionCodes);
+    if (codes.length === 1 && plan.skippedLocked.includes(codes[0])) {
+      // Locked entry point: offer to turn on its main (and what it needs).
+      const next = await askUnlockEntryPoint(ask, codes[0], selectedPermissionCodes);
+      if (next) setSelectedPermissionCodes(next);
+      return;
     }
-
-    setSelectedPermissionCodes((prev) => {
-      const next = new Set(prev);
-
-      if (!isSelected) {
-        next.add(code);
-        dependencies.forEach((dependencyCode) => {
-          next.add(dependencyCode);
-          const dependencyCategory = findCategoryForAction(dependencyCode);
-          if (dependencyCategory) {
-            const dependencyViewCode = dependencyCategory.subCategory?.viewCode || dependencyCategory.category.viewCode;
-            if (dependencyViewCode) next.add(dependencyViewCode);
-          }
-        });
-
-        if (found) {
-          const viewCode = found.subCategory?.viewCode || found.category.viewCode;
-          if (viewCode) next.add(viewCode);
-        }
-      } else {
-        next.delete(code);
-        if (found) {
-          const viewCode = found.subCategory?.viewCode || found.category.viewCode;
-          if (viewCode) {
-            const stillHasActions = hasAnyActionSelected(next, found.category, found.subCategory);
-            if (!stillHasActions) next.delete(viewCode);
-          }
-        }
+    // Something other sections depend on (View Job Description…): offer
+    // [Only this] [Restore previous] [Turn on all].
+    const withDeps = await askTurnOnWithDependents(ask, codes, label, selectedPermissionCodes, turnOffMemory.current);
+    if (withDeps !== undefined) {
+      if (withDeps) {
+        forgetTurnOff(turnOffMemory.current, withDeps);
+        setSelectedPermissionCodes(withDeps);
       }
-
-      return next;
+      return;
+    }
+    const entryCount = plan.offeredEntryPoints.reduce((n, g) => n + g.entries.length, 0);
+    const needAsk = entryCount > 0 || (codes.length > 1 && plan.skippedLocked.length > 0);
+    if (!needAsk) {
+      setSelectedPermissionCodes(plan.only);
+      if (plan.autoRequired.length > 0) {
+        toast.info(`Also turned on: ${plan.autoRequired.map(labelOf).join(', ')} — needed by "${label}"`);
+      }
+      return;
+    }
+    const summary =
+      entryCount === 0
+        ? 'Some permissions here can only be turned on after their main permission in another section.'
+        : plan.offeredEntryPoints.length === 1
+          ? `"${labelOf(plan.offeredEntryPoints[0].main)}" can also be started from ${entryCount} other section${entryCount === 1 ? '' : 's'}. Turn those on too?`
+          : `${plan.offeredEntryPoints.length} of these permissions can also be started from other sections (${entryCount} places). Turn those on too?`;
+    const choice = await ask({
+      title: `Turn on "${label}"?`,
+      tone: 'on',
+      summary,
+      details: [
+        { heading: 'Can also be started from', codes: plan.offeredEntryPoints.flatMap((g) => g.entries) },
+        { heading: 'Also turned on (needed)', codes: plan.autoRequired },
+        { heading: 'Not turned on (their main permission is off)', codes: plan.skippedLocked },
+      ],
+      actions:
+        entryCount === 0
+          ? [{ id: 'only', label: 'Turn on' }]
+          : [
+              { id: 'only', label: 'Only this', variant: 'secondary' },
+              { id: 'all', label: 'Turn on all' },
+            ],
     });
+    if (!choice) return;
+    const turnedOn = choice === 'all' ? plan.all : plan.only;
+    forgetTurnOff(turnOffMemory.current, turnedOn);
+    setSelectedPermissionCodes(turnedOn);
+  };
+
+  const applyTurnOff = async (codes: string[], label: string) => {
+    const plan = planTurnOff(codes, selectedPermissionCodes);
+    let next = plan.next;
+    // A section's View goes with its last action (as before) — but only when
+    // nothing else still needs that View.
+    codes.forEach((code) => {
+      const found = findCategoryForAction(code);
+      if (!found) return;
+      const viewCode = found.subCategory?.viewCode || found.category.viewCode;
+      if (!viewCode || !next.has(viewCode) || hasAnyActionSelected(next, found.category, found.subCategory)) return;
+      const trial = planTurnOff([viewCode], next);
+      if (trial.entryPointsOff.length === 0 && trial.dependentsOff.length === 0) next = trial.next;
+    });
+    const extra = plan.entryPointsOff.length + plan.dependentsOff.length;
+    if (extra === 0) {
+      rememberTurnOff(turnOffMemory.current, codes, selectedPermissionCodes, next);
+      setSelectedPermissionCodes(next);
+      return;
+    }
+    const parts: string[] = [];
+    if (plan.entryPointsOff.length) {
+      parts.push(`${plan.entryPointsOff.length} permission${plan.entryPointsOff.length === 1 ? '' : 's'} from other modules`);
+    }
+    if (plan.dependentsOff.length) {
+      parts.push(`${plan.dependentsOff.length} permission${plan.dependentsOff.length === 1 ? '' : 's'} that need${plan.dependentsOff.length === 1 ? 's' : ''} it`);
+    }
+    const choice = await ask({
+      title: `Turn off "${label}"?`,
+      tone: 'off',
+      summary: `This will also turn off ${parts.join(' and ')}.`,
+      details: [
+        { heading: 'Permissions from other modules', codes: plan.entryPointsOff },
+        { heading: 'Also turned off (they need it)', codes: plan.dependentsOff },
+      ],
+      actions: [{ id: 'off', label: 'Turn off', variant: 'destructive' }],
+    });
+    if (choice !== 'off') return;
+    rememberTurnOff(turnOffMemory.current, codes, selectedPermissionCodes, next);
+    setSelectedPermissionCodes(next);
+  };
+
+  const handlePermissionToggle = (code: string) => {
+    if (selectedPermissionCodes.has(code)) {
+      void applyTurnOff([code], labelOf(code));
+    } else {
+      void applyTurnOn([code], labelOf(code));
+    }
   };
 
   const handleSelectAll = () => {
     const allCodes = getAllCustomPermissionCodes();
     const allSelected = allCodes.every((code) => selectedPermissionCodes.has(code));
-    setSelectedPermissionCodes(allSelected ? new Set() : new Set(allCodes));
+    setSelectedPermissionCodes(allSelected ? new Set() : withRequired(allCodes));
   };
 
-  const getAllCodesForCategory = (category: CustomPermissionCategory): string[] => {
-    const codes: string[] = [];
-    if (category.viewCode) codes.push(category.viewCode);
-    if (category.actions) {
-      category.actions.forEach((action) => codes.push(action.code));
+  // Section / sub-section checkbox: everything selected -> turn ALL off;
+  // anything less (none or some) -> turn ALL on. Entry points whose main is
+  // off can't be selected, so they don't block "everything selected".
+  const handleSelectAllGroup = (codes: string[], label: string) => {
+    if (isGroupFullyOn(codes, selectedPermissionCodes)) {
+      void applyTurnOff(codes, label);
+    } else {
+      void applyTurnOn(codes.filter((code) => !selectedPermissionCodes.has(code)), label);
     }
-    if (category.subCategories) {
-      category.subCategories.forEach((subCategory) => {
-        if (subCategory.viewCode) codes.push(subCategory.viewCode);
-        subCategory.actions.forEach((action) => codes.push(action.code));
-      });
-    }
-    return codes;
-  };
-
-  const handleSelectAllCategory = (category: CustomPermissionCategory) => {
-    const categoryCodes = getAllCodesForCategory(category);
-    const allSelected = categoryCodes.every((code) => selectedPermissionCodes.has(code));
-
-    setSelectedPermissionCodes((prev) => {
-      const next = new Set(prev);
-      if (allSelected) {
-        categoryCodes.forEach((code) => next.delete(code));
-      } else {
-        categoryCodes.forEach((code) => next.add(code));
-        categoryCodes.forEach((code) => {
-          const dependencies = getPermissionDependencies(code);
-          dependencies.forEach((dependencyCode) => {
-            next.add(dependencyCode);
-            const dependencyCategory = findCategoryForAction(dependencyCode);
-            if (dependencyCategory) {
-              const dependencyViewCode = dependencyCategory.subCategory?.viewCode || dependencyCategory.category.viewCode;
-              if (dependencyViewCode) next.add(dependencyViewCode);
-            }
-          });
-        });
-      }
-      return next;
-    });
-  };
-
-  const isCategoryAllSelected = (category: CustomPermissionCategory): boolean => {
-    const categoryCodes = getAllCodesForCategory(category);
-    return categoryCodes.length > 0 && categoryCodes.every((code) => selectedPermissionCodes.has(code));
-  };
-
-  const isCategorySomeSelected = (category: CustomPermissionCategory): boolean => {
-    const categoryCodes = getAllCodesForCategory(category);
-    const selectedCount = categoryCodes.filter((code) => selectedPermissionCodes.has(code)).length;
-    return selectedCount > 0 && selectedCount < categoryCodes.length;
   };
 
   const handleParentRoleChange = async (parentRoleId: string) => {
@@ -338,7 +345,7 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
       try {
         const parentRole = await rbacService.getRoleById(roleId);
         if (parentRole.permissions) {
-          const codes = new Set(parentRole.permissions.map((permission) => permission.code));
+          const codes = normalizeRoleCodes(parentRole.permissions.map((permission) => permission.code));
           setSelectedPermissionCodes(codes);
           toast.success(`Loaded ${codes.size} permissions from ${parentRole.name}`);
         }
@@ -382,232 +389,115 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
     }
   };
 
-  const renderPermissionPill = (
-    code: string,
-    label: string,
-    isSelected: boolean,
-    hasDependencies: boolean,
-    onClick: () => void
-  ) => (
-    <button
-      key={code}
-      type="button"
-      onClick={onClick}
-      className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-all ${
-        isSelected
-          ? 'border-brand-blue bg-brand-blue text-white shadow-md shadow-brand-blue/20'
-          : 'border-gray-200 bg-white text-gray-700 hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue'
-      }`}
-    >
-      <span>{label}</span>
-      {hasDependencies && (
-        <span className={`text-2xs ${isSelected ? 'text-white/80' : 'text-gray-400'}`} title="Auto-enables dependencies">
-          *
-        </span>
-      )}
-    </button>
-  );
-
   const renderPermissionCategories = () => {
     const allCodes = getAllCustomPermissionCodes();
     const allSelected = allCodes.every((code) => selectedPermissionCodes.has(code));
-    const someSelected = selectedPermissionCodes.size > 0 && !allSelected;
+    const activeCount = allCodes.filter((code) => selectedPermissionCodes.has(code)).length;
 
     return (
-      <div className="space-y-4">
-        <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 ring-1 ring-black/[0.02]">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h3 className="text-sm font-semibold text-gray-900">Permission Library</h3>
-              <p className="text-xs text-gray-500">
-                {selectedPermissionCodes.size} of {allCodes.length} permissions selected
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={handleSelectAll}
-              className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-all ${
-                allSelected
-                  ? 'border-brand-blue bg-brand-blue text-white shadow-md shadow-brand-blue/20'
-                  : someSelected
-                  ? 'border-brand-cyan/30 bg-brand-cyan/10 text-brand-blue'
-                  : 'border-gray-200 bg-white text-gray-700 hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue'
-              }`}
-            >
-              <span className={`flex h-4 w-4 items-center justify-center rounded border ${allSelected || someSelected ? 'border-white/50 bg-white/20' : 'border-gray-300 bg-white'}`}>
-                {(allSelected || someSelected) && <Check className="h-3 w-3" />}
-              </span>
-              Select all permissions
-            </button>
+      <div>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-slate-400">
+            <Shield className="h-3.5 w-3.5 text-brand-blue" />
+            Permissions
+          </label>
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="secondary" size="sm" onClick={handleSelectAll} className="min-w-[96px]">
+              {allSelected ? 'Deselect all' : 'Select all'}
+            </Button>
+            <span className="rounded-full bg-brand-blue/10 px-2 py-0.5 text-xs font-semibold text-brand-blue ring-1 ring-brand-blue/20">
+              {activeCount} active
+            </span>
           </div>
         </div>
-
-        {CUSTOM_PERMISSION_CATEGORIES.map((category) => {
-          const categoryAllSelected = isCategoryAllSelected(category);
-          const categorySomeSelected = isCategorySomeSelected(category);
-          const categoryCodes = getAllCodesForCategory(category);
-          const categorySelectedCount = categoryCodes.filter((code) => selectedPermissionCodes.has(code)).length;
-
-          return (
-            <section
-              key={category.id}
-              className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm ring-1 ring-black/[0.02]"
-            >
-              <div className="flex flex-col gap-3 border-b border-gray-100 bg-gray-50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-                <div className="flex items-start gap-3">
-                  <button
-                    type="button"
-                    onClick={() => handleSelectAllCategory(category)}
-                    className={`mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded border transition-colors ${
-                      categoryAllSelected
-                        ? 'border-brand-blue bg-brand-blue text-white'
-                        : categorySomeSelected
-                        ? 'border-brand-cyan bg-brand-cyan text-white'
-                        : 'border-gray-300 bg-white hover:border-brand-blue/40'
-                    }`}
-                    aria-label={`Select all permissions for ${category.name}`}
-                  >
-                    {(categoryAllSelected || categorySomeSelected) && <Check className="h-3 w-3" />}
-                  </button>
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-sm font-semibold text-gray-900">{category.name}</h3>
-                      {category.isMenuToggle && (
-                        <span className="inline-flex items-center rounded-full bg-brand-orange/10 px-2.5 py-1 text-2xs font-medium text-brand-orange-deep ring-1 ring-brand-orange/15">
-                          Menu toggle
-                        </span>
-                      )}
-                    </div>
-                    {category.description && (
-                      <p className="mt-1 text-xs text-gray-500">{category.description}</p>
-                    )}
-                  </div>
-                </div>
-                <span className="inline-flex items-center rounded-full bg-gray-50 px-3 py-1.5 text-xs text-gray-500 ring-1 ring-gray-200">
-                  {categorySelectedCount}/{categoryCodes.length} selected
-                </span>
-              </div>
-
-              <div className="space-y-5 p-4 sm:p-5">
-                {category.actions && (
-                  <div className="flex flex-wrap gap-2">
-                    {category.viewCode &&
-                      renderPermissionPill(
-                        category.viewCode,
-                        'View',
-                        selectedPermissionCodes.has(category.viewCode),
-                        false,
-                        () => {
-                          const viewCode = category.viewCode!;
-                          setSelectedPermissionCodes((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(viewCode)) {
-                              const hasActions = (category.actions || []).some((action) => next.has(action.code));
-                              if (!hasActions) next.delete(viewCode);
-                            } else {
-                              next.add(viewCode);
-                            }
-                            return next;
-                          });
-                        }
-                      )}
-                    {category.actions.map((action) =>
-                      renderPermissionPill(
-                        action.code,
-                        action.label,
-                        selectedPermissionCodes.has(action.code),
-                        getPermissionDependencies(action.code).length > 0,
-                        () => handlePermissionToggle(action.code)
-                      )
-                    )}
-                  </div>
-                )}
-
-                {category.subCategories && (
-                  <div className="space-y-4">
-                    {category.subCategories.map((subCategory) => (
-                      <div key={subCategory.name} className="rounded-xl border border-gray-100 bg-gray-50/70 p-4">
-                        <div className="mb-3 flex flex-wrap items-center gap-2">
-                          <span className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
-                            {subCategory.name}
-                          </span>
-                          {subCategory.viewCode && selectedPermissionCodes.has(subCategory.viewCode) && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-brand-teal/10 px-2.5 py-1 text-2xs font-medium text-brand-teal ring-1 ring-brand-teal/15">
-                              <Check className="h-3 w-3" />
-                              View enabled
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {subCategory.viewCode &&
-                            renderPermissionPill(
-                              subCategory.viewCode,
-                              'View',
-                              selectedPermissionCodes.has(subCategory.viewCode),
-                              false,
-                              () => {
-                                const viewCode = subCategory.viewCode!;
-                                setSelectedPermissionCodes((prev) => {
-                                  const next = new Set(prev);
-                                  if (next.has(viewCode)) {
-                                    const hasActions = subCategory.actions.some((action) => next.has(action.code));
-                                    if (!hasActions) next.delete(viewCode);
-                                  } else {
-                                    next.add(viewCode);
-                                  }
-                                  return next;
-                                });
-                              }
-                            )}
-                          {subCategory.actions.map((action) =>
-                            renderPermissionPill(
-                              action.code,
-                              action.label,
-                              selectedPermissionCodes.has(action.code),
-                              getPermissionDependencies(action.code).length > 0,
-                              () => handlePermissionToggle(action.code)
-                            )
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </section>
-          );
-        })}
-
-        <div className="rounded-xl border border-brand-blue/15 bg-brand-blue/[0.04] p-4 text-sm text-gray-600">
-          <span className="font-semibold text-gray-900">View permission</span> is automatically enabled when any action in the same category is selected.
-        </div>
-
-        {selectedPermissionCodes.size > 0 && (
-          <div className="rounded-xl border border-brand-teal/15 bg-brand-teal/[0.06] p-4">
-            <div className="mb-3 text-sm font-semibold text-gray-900">
-              Selected permissions ({selectedPermissionCodes.size})
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {Array.from(selectedPermissionCodes)
-                .sort()
-                .map((code) => (
-                  <span
-                    key={code}
-                    className="inline-flex items-center rounded-full bg-white px-2.5 py-1 text-xs font-medium text-brand-teal ring-1 ring-brand-teal/15"
-                  >
-                    {code}
-                  </span>
-                ))}
-            </div>
-          </div>
-        )}
+        <PermissionTilesEditor
+          selected={selectedPermissionCodes}
+          onToggleCode={handlePermissionToggle}
+          onToggleGroup={handleSelectAllGroup}
+        />
       </div>
     );
   };
 
+  // Opened from Role Management: a popup laid out like Edit User (no side panel).
+  if (embedded) {
+    return (
+      <>
+        {dialog}
+        <AppModal
+          open
+          size="lg"
+          zIndexClass="z-50"
+          onCancel={handleClose}
+          cancelDisabled={isSaving}
+          icon={<Shield />}
+          title="Create Role"
+          subtitle="Name the role, then choose its permissions"
+          actions={[
+            {
+              label: 'Create Role',
+              onClick: handleSubmit,
+              disabled: isSaving || isLoading,
+              icon: isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : undefined,
+            },
+          ]}
+        >
+          <div className="space-y-4 sm:space-y-5">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">Role Name <span className="text-brand-orange">*</span></label>
+                <Input
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value.toUpperCase() })}
+                  onBlur={() => setTouched((prev) => ({ ...prev, name: true }))}
+                  placeholder="e.g. SENIOR RECRUITER"
+                  aria-invalid={!!showError('name')}
+                />
+                {showError('name') && <span className="mt-1.5 block text-xs font-medium text-destructive">{fieldErrors.name}</span>}
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">Role Code <span className="text-brand-orange">*</span></label>
+                <Input
+                  value={formData.code}
+                  onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+                  onBlur={() => setTouched((prev) => ({ ...prev, code: true }))}
+                  placeholder="e.g. senior_recruiter"
+                  aria-invalid={!!showError('code')}
+                />
+                {showError('code') && <span className="mt-1.5 block text-xs font-medium text-destructive">{fieldErrors.code}</span>}
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">Description</label>
+                <Input
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  placeholder="What this role is for"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">Copy permissions from</label>
+                <select
+                  value={formData.parent_role_id || ''}
+                  onChange={(e) => handleParentRoleChange(e.target.value)}
+                  className="flex h-10 w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-gray-900 dark:text-slate-50 outline-none focus:border-brand-blue/40 focus:ring-2 focus:ring-brand-blue/20"
+                >
+                  <option value="">None</option>
+                  {roles.map((r) => (<option key={r.id} value={r.id}>{r.name}</option>))}
+                </select>
+              </div>
+            </div>
+            {isLoading ? <PermissionSectionsSkeleton sections={3} Skeleton={Skeleton} /> : renderPermissionCategories()}
+          </div>
+        </AppModal>
+      </>
+    );
+  }
+
   if (isLoading) {
     // Skeleton mirroring the role builder: gradient hero, the Role Details form
-    // card (Name/Code, Description, Priority/Inherits, Permissions) and the
+    // card (Name/Code, Description, Copy permissions from, Permissions) and the
     // right-hand summary sidebar.
     return (
       <main className={embedded ? '' : 'flex-1 overflow-x-clip bg-slate-50'}>
@@ -657,6 +547,7 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
 
   return (
     <main className={embedded ? '' : 'flex-1 overflow-x-clip bg-slate-50'}>
+      {dialog}
       <div className={embedded ? 'w-full' : 'mx-auto w-full max-w-[1400px]'}>
       <div className={embedded ? 'w-full' : 'p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl'}>
         {!embedded && (
@@ -675,7 +566,7 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
         <PageHeader
           icon={<Shield className="h-5 w-5" />}
           title="Create New Role"
-          description="Define a role that fits your dashboard's access model, including inheritance, operational priority, and detailed feature permissions."
+          description="Define a role that fits your dashboard's access model, including inheritance and detailed feature permissions."
           actions={
             <div className="grid grid-cols-2 gap-2 sm:min-w-[260px]">
               <div className="rounded-xl border border-gray-100 bg-white px-3 py-2">
@@ -706,9 +597,9 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
                   <input
                     type="text"
                     value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value.toUpperCase() })}
                     onBlur={() => setTouched((prev) => ({ ...prev, name: true }))}
-                    placeholder="e.g. Senior Recruiter"
+                    placeholder="e.g. SENIOR RECRUITER"
                     aria-invalid={!!showError('name')}
                     className={showError('name') ? fieldErrorClassName : fieldClassName}
                   />
@@ -748,21 +639,9 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
               </label>
 
               <div className="grid gap-5 md:grid-cols-2">
-                <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-gray-700">Priority</span>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={formData.priority}
-                    onChange={(e) => setFormData({ ...formData, priority: parseInt(e.target.value, 10) || 0 })}
-                    className={fieldClassName}
-                  />
-                  <span className="mt-2 block text-xs text-gray-500">Higher priority roles take precedence in overlap scenarios.</span>
-                </label>
 
                 <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-gray-700">Inherits From</span>
+                  <span className="mb-2 block text-sm font-medium text-gray-700">Copy permissions from</span>
                   <select
                     value={formData.parent_role_id || ''}
                     onChange={(e) => handleParentRoleChange(e.target.value)}
@@ -775,7 +654,7 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
                       </option>
                     ))}
                   </select>
-                  <span className="mt-2 block text-xs text-gray-500">Selecting a parent role preloads its permissions into this role.</span>
+                  <span className="mt-2 block text-xs text-gray-500">Copies that role&apos;s permissions into this role as a starting point. Later changes to that role won&apos;t affect this one.</span>
                 </label>
               </div>
 
@@ -788,18 +667,22 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
               </div>
             </div>
 
-            <div className="flex flex-col gap-3 border-t border-gray-100 px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
-              <Button variant="secondary" onClick={handleClose} disabled={isSaving}>
+            <div className="border-t border-gray-100 px-5 py-4 sm:px-6">
+              <div className={MODAL_FOOTER_ROW_CLASS}>
+              <Button variant="secondary" size="md" onClick={handleClose} disabled={isSaving} className={MODAL_FOOTER_BUTTON_CLASS}>
                 Cancel
               </Button>
               <Button
                 variant="primary"
+                size="md"
+                className={MODAL_FOOTER_BUTTON_CLASS}
                 onClick={handleSubmit}
                 disabled={isSaving}
                 icon={isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUpRight className="h-4 w-4" />}
               >
                 Create Role
               </Button>
+              </div>
             </div>
           </section>
 
@@ -825,9 +708,9 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
                   <div className="mt-1 text-sm font-semibold text-gray-900">{formData.code || 'not-set'}</div>
                 </div>
                 <div className="rounded-xl bg-gray-50 px-4 py-3 ring-1 ring-gray-100">
-                  <div className="text-xs uppercase tracking-[0.16em] text-gray-400">Inheritance</div>
+                  <div className="text-xs uppercase tracking-[0.16em] text-gray-400">Copied from</div>
                   <div className="mt-1 text-sm font-semibold text-gray-900">
-                    {roles.find((role) => role.id === formData.parent_role_id)?.name || 'Independent'}
+                    {roles.find((role) => role.id === formData.parent_role_id)?.name || 'None'}
                   </div>
                 </div>
                 <div className="rounded-xl bg-gray-50 px-4 py-3 ring-1 ring-gray-100">

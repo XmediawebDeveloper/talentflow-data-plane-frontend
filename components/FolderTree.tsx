@@ -256,6 +256,9 @@ interface FolderTreeProps {
   canCreateFolder?: boolean;
   canRenameFolder?: boolean;
   canDeleteFolder?: boolean;
+  /** Upload permission for the per-row "Upload to Folder" item (visible but
+   *  greyed out with a hover reason when `false`). Defaults to `true`. */
+  canUploadToFolder?: boolean;
   /** Leaves "Delete Folder" out of the per-row (+) menu. For pickers that
    *  offer the folder actions but keep deleting (and deciding where the
    *  folder's resumes go) on the Resume Database page. */
@@ -284,6 +287,7 @@ export default function FolderTree({
   canCreateFolder = true,
   canRenameFolder = true,
   canDeleteFolder = true,
+  canUploadToFolder = true,
   hideDeleteFolder = false,
   collapsible = false,
 }: FolderTreeProps) {
@@ -505,10 +509,7 @@ export default function FolderTree({
     // Ignore if parentId is an event object (from onClick handler)
     const actualParentId = typeof parentId === 'string' ? parentId : undefined;
 
-    if (!canCreateFolder) {
-      toast.error('You do not have permission to create folders');
-      return;
-    }
+    if (!canCreateFolder) return;
 
     if (newFolderName.trim()) {
       // Check depth limit if creating a subfolder
@@ -534,7 +535,6 @@ export default function FolderTree({
 
   const handleRename = (folderId: string) => {
     if (!canRenameFolder) {
-      toast.error('You do not have permission to rename folders');
       setRenamingFolderId(null);
       return;
     }
@@ -697,14 +697,17 @@ export default function FolderTree({
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
+                if (!canUploadToFolder) return;
                 if (onUploadToFolder) {
                   onUploadToFolder?.(folder.id);
                 }
                 closeFolderMenu();
               }}
-              className={folderMenuItemClass}
+              aria-disabled={!canUploadToFolder}
+              title={!canUploadToFolder ? 'You do not have permission to upload resumes' : undefined}
+              className={canUploadToFolder ? folderMenuItemClass : `${folderMenuItemClass} !text-gray-400 dark:!text-slate-600 cursor-not-allowed opacity-60`}
             >
-              <Upload className="w-4 h-4 text-menu-icon-download" />
+              <Upload className={`w-4 h-4 ${canUploadToFolder ? 'text-menu-icon-download' : ''}`} />
               <span className={MENU_ITEM_SCALE_CLASS}>Upload to Folder</span>
             </button>
             <button
@@ -712,11 +715,7 @@ export default function FolderTree({
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                if (!canCreateSubfolder) {
-                  toast.error(subfolderDisabledReason);
-                  closeFolderMenu();
-                  return;
-                }
+                if (!canCreateSubfolder) return;
                 setCreatingSubFolderFor(folder.id);
                 setIsCreatingFolder(false);
                 closeFolderMenu();
@@ -725,7 +724,7 @@ export default function FolderTree({
               className={`group w-full text-left px-4 py-2 text-sm transition-colors flex items-center gap-2 ${
                 canCreateSubfolder
                   ? 'text-gray-700 dark:text-slate-300'
-                  : 'text-gray-400 dark:text-slate-600 cursor-not-allowed'
+                  : 'text-gray-400 dark:text-slate-600 cursor-not-allowed opacity-60'
               }`}
               title={subfolderDisabledReason}
             >
@@ -744,18 +743,14 @@ export default function FolderTree({
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  if (!canRenameFolder) {
-                    toast.error('You do not have permission to rename folders');
-                    closeFolderMenu();
-                    return;
-                  }
+                  if (!canRenameFolder) return;
                   setRenameValue(folder.name);
                   setRenamingFolderId(folder.id);
                   closeFolderMenu();
                 }}
                 aria-disabled={!canRenameFolder}
                 title={!canRenameFolder ? 'You do not have permission to rename folders' : ''}
-                className={canRenameFolder ? folderMenuItemClass : `${folderMenuItemClass} text-gray-400 dark:text-slate-600 cursor-not-allowed`}
+                className={canRenameFolder ? folderMenuItemClass : `${folderMenuItemClass} !text-gray-400 dark:!text-slate-600 cursor-not-allowed opacity-60`}
               >
                 <Edit2 className={`w-4 h-4 ${canRenameFolder ? 'text-menu-icon-edit' : ''}`} />
                 <span className={MENU_ITEM_SCALE_CLASS}>Rename Folder</span>
@@ -770,17 +765,13 @@ export default function FolderTree({
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    if (!canDeleteFolder) {
-                      toast.error('You do not have permission to delete folders');
-                      closeFolderMenu();
-                      return;
-                    }
+                    if (!canDeleteFolder) return;
                     onDeleteFolder?.(folder.id);
                     closeFolderMenu();
                   }}
                   aria-disabled={!canDeleteFolder}
                   title={!canDeleteFolder ? 'You do not have permission to delete folders' : ''}
-                  className={canDeleteFolder ? folderMenuItemRedClass : `${folderMenuItemRedClass} !text-gray-400 dark:!text-slate-600 cursor-not-allowed`}
+                  className={canDeleteFolder ? folderMenuItemRedClass : `${folderMenuItemRedClass} !text-gray-400 dark:!text-slate-600 cursor-not-allowed opacity-60`}
                 >
                   <Trash2 className="w-4 h-4" />
                   <span className={MENU_ITEM_SCALE_CLASS}>Delete Folder</span>
@@ -932,16 +923,13 @@ export default function FolderTree({
           <button
             type="button"
             onClick={() => {
-              if (!canCreateFolder) {
-                toast.error('You do not have permission to create folders');
-                return;
-              }
+              if (!canCreateFolder) return;
               setIsCreatingFolder(true);
             }}
             aria-disabled={!canCreateFolder}
             title={!canCreateFolder ? 'You do not have permission to create folders' : ''}
             className={`text-sm flex items-center gap-1 ${
-              canCreateFolder ? 'text-blue-600 hover:text-blue-700' : 'text-gray-400 cursor-not-allowed'
+              canCreateFolder ? 'text-blue-600 hover:text-blue-700' : 'text-gray-400 cursor-not-allowed opacity-60'
             }`}
           >
             <Plus className="w-4 h-4" />
