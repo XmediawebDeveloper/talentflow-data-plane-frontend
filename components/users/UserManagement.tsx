@@ -1632,17 +1632,19 @@ export default function UserManagement() {
   // hides the word next to the switch on tablet widths so the table fits.
   const renderUserStatus = (user: (typeof users)[number], compact = false) => (
     <>
-    {/* Toggle Switch for Active/Inactive — requires users:disable */}
-    {(user.role || '').toLowerCase() !== 'tenant_admin' && user.id !== currentUserId && canDisableUser ? (
+    {/* Toggle Switch for Active/Inactive — requires users:disable. Without
+        it the switch stays visible but greyed (hover tooltip, no-op click). */}
+    {(user.role || '').toLowerCase() !== 'tenant_admin' && user.id !== currentUserId ? (
       <div className="flex items-center gap-2">
         <button
-          onClick={() => handleToggleActive(user)}
+          onClick={() => { if (canDisableUser) handleToggleActive(user); }}
+          aria-disabled={!canDisableUser}
           className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:ring-offset-2 ring-1 ring-inset ${
             user.is_active
               ? 'bg-success ring-success-line shadow-sm'
               : 'bg-gray-300 ring-black/5'
-          }`}
-          title={user.is_active ? 'Active - Click to deactivate' : 'Inactive - Click to activate'}
+          } ${!canDisableUser ? 'cursor-not-allowed opacity-60 grayscale' : ''}`}
+          title={!canDisableUser ? 'You do not have permission to activate or deactivate users' : user.is_active ? 'Active - Click to deactivate' : 'Inactive - Click to activate'}
         >
           <span
             className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
@@ -2791,26 +2793,29 @@ export default function UserManagement() {
             >
               Dependencies
             </Button>
-            {/* RBAC01: Check user limits before showing Add User button — also requires users:create */}
-            {canCreateUser && (
-              <Button
-                variant="primary"
-                icon={<Plus className="w-4 h-4" />}
-                onClick={() => {
-                  if (isAtLimit) {
-                    if (isTrial) {
-                      toast.error('User limit reached. Add-on seat purchases are only available for paid subscriptions. Please upgrade your plan.');
-                    } else {
-                      setShowAddSeatsModal(true);
-                    }
-                    return;
+            {/* RBAC01: Check user limits before showing Add User button — also
+                requires users:create (greyed with a hover tooltip, never hidden). */}
+            <Button
+              variant="primary"
+              icon={<Plus className="w-4 h-4" />}
+              aria-disabled={!canCreateUser}
+              title={!canCreateUser ? 'You do not have permission to invite users' : undefined}
+              className={!canCreateUser ? 'opacity-60 cursor-not-allowed' : undefined}
+              onClick={() => {
+                if (!canCreateUser) return;
+                if (isAtLimit) {
+                  if (isTrial) {
+                    toast.error('User limit reached. Add-on seat purchases are only available for paid subscriptions. Please upgrade your plan.');
+                  } else {
+                    setShowAddSeatsModal(true);
                   }
-                  setIsCreateModalOpen(true);
-                }}
-              >
-                {isAtLimit && !isTrial ? 'Buy More Seats' : 'Invite User'}
-              </Button>
-            )}
+                  return;
+                }
+                setIsCreateModalOpen(true);
+              }}
+            >
+              {isAtLimit && !isTrial ? 'Buy More Seats' : 'Invite User'}
+            </Button>
           </div>
         }
       />

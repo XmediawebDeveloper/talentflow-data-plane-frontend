@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { toast } from 'sonner';
 import {
   BarChart3,
   TrendingUp,
@@ -311,10 +310,7 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
               variant="primary"
               size="sm"
               onClick={() => {
-                if (!canExport) {
-                  toast.error('You do not have permission to export team analytics');
-                  return;
-                }
+                if (!canExport) return;
                 setShowExportModal(true);
               }}
               aria-disabled={!canExport}

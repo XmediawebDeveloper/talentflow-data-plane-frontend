@@ -2843,7 +2843,6 @@ export default function ResumeScoringPage({
                   variant="primary"
                   onClick={() => {
                     if (!canRunScoring) {
-                      toast.error('You do not have permission to score resumes');
                       return;
                     }
                     /* Already on this job's own page — skip the job
@@ -2935,7 +2934,6 @@ export default function ResumeScoringPage({
              resumes exist — the header above already has one. */
           onScoreResumesFromEmptyState={() => {
             if (!canRunScoring) {
-              toast.error('You do not have permission to score resumes');
               return;
             }
             const jobForPicker: LineageJob = {
@@ -3318,7 +3316,6 @@ export default function ResumeScoringPage({
                 variant="primary"
                 onClick={() => {
                   if (!canRunScoring) {
-                    toast.error('You do not have permission to score resumes');
                     return;
                   }
                   setViewMode('new');
@@ -3809,11 +3806,12 @@ export default function ResumeScoringPage({
                     {/* Export — every score of the ticked jobs (verdict
                         pill applied), all versions. */}
                     <DropdownMenuItem
-                      className={`${itemCls} ${!canExportScores ? 'text-gray-400 opacity-60' : ''}`}
+                      className={`${itemCls} ${!canExportScores ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
+                      aria-disabled={!canExportScores || undefined}
+                      title={!canExportScores ? 'You do not have permission to export' : undefined}
                       onSelect={(e) => {
                         if (!canExportScores) {
                           e.preventDefault();
-                          toast.error('You do not have permission to export');
                           return;
                         }
                         if (guard()) setShowJobExportModal(true);
@@ -3823,12 +3821,13 @@ export default function ResumeScoringPage({
                       <span className={MENU_ITEM_SCALE_CLASS}>Export</span>
                     </DropdownMenuItem>
                     <DropdownMenuItem
-                      className={`${itemCls} ${!jobActionPerms.canDownloadScorecard ? 'text-gray-400 opacity-60' : ''}`}
+                      className={`${itemCls} ${!jobActionPerms.canDownloadScorecard ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
                       disabled={jobBulkDownloading}
+                      aria-disabled={!jobActionPerms.canDownloadScorecard || undefined}
+                      title={!jobActionPerms.canDownloadScorecard ? 'You do not have permission to download the scorecard' : undefined}
                       onSelect={(e) => {
                         if (!jobActionPerms.canDownloadScorecard) {
                           e.preventDefault();
-                          toast.error('You do not have permission to download the scorecard');
                           return;
                         }
                         if (guard()) setJobBulkAction('download');
@@ -3858,10 +3857,10 @@ export default function ResumeScoringPage({
                             target: assessmentTarget,
                             itemClass: itemCls,
                             allowed: jobActionPerms.canCreateAssessments,
+                            deniedReason: jobActionPerms.assessmentDeniedReason,
                             onInvite: (e) => {
                               if (!jobActionPerms.canCreateAssessments) {
                                 e.preventDefault();
-                                toast.error(jobActionPerms.assessmentDeniedReason);
                                 return;
                               }
                               if (guard()) setJobBulkAction('assessment');
@@ -3873,10 +3872,10 @@ export default function ResumeScoringPage({
                             target: interviewTarget,
                             itemClass: itemCls,
                             allowed: jobActionPerms.mayInviteAIInterview,
+                            deniedReason: jobActionPerms.aiInterviewDeniedReason,
                             onInvite: (e) => {
                               if (!jobActionPerms.mayInviteAIInterview) {
                                 e.preventDefault();
-                                toast.error(jobActionPerms.aiInterviewDeniedReason);
                                 return;
                               }
                               if (guard()) setJobBulkAction('interview');
@@ -4673,11 +4672,9 @@ export default function ResumeScoringPage({
               description="Start scoring resumes against job descriptions to see your results here. Our AI will analyze and rank candidates based on job fit."
               action={{
                 label: 'Score Resumes Now',
+                disabledReason: !canRunScoring ? 'You do not have permission to score resumes' : undefined,
                 onClick: () => {
-                  if (!canRunScoring) {
-                    toast.error('You do not have permission to score resumes');
-                    return;
-                  }
+                  if (!canRunScoring) return;
                   setViewMode('new');
                   setSelectedJob('');
                   setResumeSource(null);
@@ -5583,7 +5580,6 @@ export default function ResumeScoringPage({
           onSelectionChange={handleJobPicked}
           onProceed={() => {
             if (!canRunScoring) {
-              toast.error('You do not have permission to score resumes');
               return;
             }
             setShowResumeSelectionModal(true);

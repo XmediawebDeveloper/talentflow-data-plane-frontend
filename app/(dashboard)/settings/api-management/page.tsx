@@ -209,10 +209,7 @@ export default function ApiManagementPage() {
             <Button
               variant="primary"
               onClick={() => {
-                if (!canManage) {
-                  toast.error('You do not have permission to create API keys');
-                  return;
-                }
+                if (!canManage) return;
                 setShowCreateModal(true);
               }}
               aria-disabled={!canManage}
@@ -237,10 +234,7 @@ export default function ApiManagementPage() {
               <Button
                 variant="primary"
                 onClick={() => {
-                  if (!canManage) {
-                    toast.error('You do not have permission to create API keys');
-                    return;
-                  }
+                  if (!canManage) return;
                   setShowCreateModal(true);
                 }}
                 aria-disabled={!canManage}
@@ -298,10 +292,7 @@ export default function ApiManagementPage() {
                       variant="secondary"
                       size="sm"
                       onClick={() => {
-                        if (!canManage) {
-                          toast.error('You do not have permission to regenerate API keys');
-                          return;
-                        }
+                        if (!canManage) return;
                         regenerateKey(apiKey.id);
                       }}
                       disabled={regeneratingId === apiKey.id || !canManage}
@@ -314,10 +305,7 @@ export default function ApiManagementPage() {
                       variant="destructive"
                       size="sm"
                       onClick={() => {
-                        if (!canManage) {
-                          toast.error('You do not have permission to delete API keys');
-                          return;
-                        }
+                        if (!canManage) return;
                         deleteKey(apiKey.id);
                       }}
                       disabled={deletingId === apiKey.id || !canManage}

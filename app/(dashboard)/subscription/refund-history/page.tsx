@@ -336,10 +336,7 @@ export default function RefundHistoryPage() {
           <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => {
-              if (!canExportRefundHistory) {
-                toast.error('You do not have permission to export refund history');
-                return;
-              }
+              if (!canExportRefundHistory) return;
               setShowExportModal(true);
             }}
             disabled={loading || filteredRefunds.length === 0 || !canExportRefundHistory}

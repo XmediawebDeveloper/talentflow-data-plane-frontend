@@ -459,7 +459,8 @@ function AssessmentDetailsContent() {
           onBack={handleBack}
           onEdit={handleEdit}
           onPreview={() => setShowPreviewModal(true)}
-          onShare={canInvite ? () => setShowShareModal(true) : undefined}
+          onShare={() => setShowShareModal(true)}
+          canShare={canInvite}
           onViewResults={handleViewResults}
           onRefresh={fetchAssessment}
           currentIndex={currentIndex}

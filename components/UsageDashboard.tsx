@@ -18,6 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import PermissionLockedOverlay from '@/components/shared/PermissionLockedOverlay';
 
 // Addon interface
 interface Addon {
@@ -1179,10 +1180,7 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
                           <button
                             key={quota.quota_type}
                             onClick={() => {
-                              if (!canPurchaseAddons) {
-                                toast.error('You do not have permission to purchase add-ons');
-                                return;
-                              }
+                              if (!canPurchaseAddons) return;
                               if (isAddonPurchaseBlocked) {
                                 setAddonPurchaseError(
                                   subscriptionSummary?.is_trial
@@ -1386,7 +1384,8 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
         )}
 
         {/* Add-ons Section */}
-        {canPurchaseAddons && (
+        {/* Never hidden for missing permission — greyed with a hover tooltip. */}
+        <PermissionLockedOverlay locked={!canPurchaseAddons} message="You do not have permission to purchase add-ons">
         <div className="flex flex-col gap-4 rounded-xl border border-gray-100 bg-white p-4 shadow-sm dark:border-slate-700/60 dark:bg-slate-900 sm:p-5" data-section="addons">
           {/* Section Header */}
           <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
@@ -1611,7 +1610,7 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
             </div>
           )}
         </div>
-        )}
+        </PermissionLockedOverlay>
         </div>
       </div>
       </div>

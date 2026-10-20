@@ -844,7 +844,8 @@ export default function JobOpeningsPage() {
         quotaInfo={quotaInfo}
         initialStatusFilter={activeFilter}
         forceListView={forceListView}
-        configHref={canManageMasters ? '/recruitment/job-openings/config' : undefined}
+        configHref="/recruitment/job-openings/config"
+        configDisabled={!canManageMasters}
       />
 
       {/* Archive confirm — the same component the Job Details page renders, so

@@ -227,6 +227,7 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       { code: 'assessments:share', label: 'Share' },
       { code: 'assessments:download_report', label: 'Download Report' },
       { code: 'assessments:batch_download', label: 'Batch Download' },
+      { code: 'assessments:view_question_bank', label: 'HR Question Bank View' },
       { code: 'assessments:add_question', label: 'HR Question Bank Add' },
       { code: 'assessments:edit_question', label: 'HR Question Bank Edit' },
       { code: 'assessments:delete_question', label: 'HR Question Bank Delete' },
@@ -249,9 +250,15 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     // Assessment section off (and HR Question Bank, which needs Assessment View).
     dependencies: {
       'assessments:read': ['jd:read'],
-      'assessments:create': ['jd:read'],
+      // Creating picks the HR questions from the bank, so Create needs
+      // HR Question Bank View (2026-10-20).
+      'assessments:create': ['jd:read', 'assessments:view_question_bank'],
       'assessments:update': ['jd:read'],
-      'assessments:add_question': ['assessments:update'],
+      'assessments:add_question': ['assessments:update', 'assessments:view_question_bank'],
+      // HR Question Bank Add / Edit / Delete need HR Question Bank View — you
+      // can't change questions you can't see.
+      'assessments:edit_question': ['assessments:view_question_bank'],
+      'assessments:delete_question': ['assessments:view_question_bank'],
     },
   },
   {
@@ -268,6 +275,7 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       { code: 'ai_interview:delete', label: 'Delete' },
       // HR questions picked from / added to the HR Question Bank inside the
       // AI Interview builder — same three as Assessment's.
+      { code: 'ai_interview:view_question_bank', label: 'HR Question Bank View' },
       { code: 'ai_interview:add_question', label: 'HR Question Bank Add' },
       { code: 'ai_interview:edit_question', label: 'HR Question Bank Edit' },
       { code: 'ai_interview:delete_question', label: 'HR Question Bank Delete' },
@@ -302,14 +310,17 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     // viewing, editing, inviting, publishing, archiving, or deleting.
     dependencies: {
       'ai_interview:read': ['jd:read', 'my_resumes:read'],
-      'ai_interview:create': ['jd:read', 'my_resumes:read'],
+      // Creating picks the HR questions from the bank (2026-10-20).
+      'ai_interview:create': ['jd:read', 'my_resumes:read', 'ai_interview:view_question_bank'],
       'ai_interview:update': ['my_resumes:read'],
       'ai_interview:invite': ['my_resumes:read'],
       'ai_interview:publish': ['my_resumes:read'],
       'ai_interview:archive': ['my_resumes:read'],
       'ai_interview:delete': ['my_resumes:read'],
       // Adding a question edits the interview (mirrors assessments:add_question).
-      'ai_interview:add_question': ['ai_interview:update'],
+      'ai_interview:add_question': ['ai_interview:update', 'ai_interview:view_question_bank'],
+      'ai_interview:edit_question': ['ai_interview:view_question_bank'],
+      'ai_interview:delete_question': ['ai_interview:view_question_bank'],
     },
   },
   {
@@ -322,19 +333,10 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       { code: 'hr_question_bank:update', label: 'Edit' },
       { code: 'hr_question_bank:delete', label: 'Delete' },
     ],
-    // Rule: HR Question Bank requires Assessment view access
-    // (app/services/permission_dependencies.py: hr_question_bank:read ->
-    // assessments:read) — the bank's questions are reused when building
-    // assessments, so viewing it without Assessment access makes no sense.
-    // Keyed on this category's own view code (dependency lookups work the
-    // same for a view code as for any action code), since the requirement
-    // applies the moment the module is viewed at all, not just on a
-    // particular action within it. Previously undeclared, so disabling
-    // Assessment view access gave no warning that it breaks HR Question
-    // Bank too.
-    dependencies: {
-      'hr_question_bank:read': ['assessments:read'],
-    },
+    // No longer needs View Assessment (2026-10-20): the bank is shared by
+    // Assessment AND AI Interview, and each of those has its own "HR Question
+    // Bank View/Add/Edit/Delete". Turning Assessment off must not take the
+    // shared bank (and AI Interview's use of it) with it.
   },
   {
     id: 'analytics',

@@ -413,10 +413,7 @@ export default function RoleManagement() {
             <Button
               variant="primary"
               onClick={() => {
-                if (!canManageRoles) {
-                  toast.error('You do not have permission to manage roles');
-                  return;
-                }
+                if (!canManageRoles) return;
                 setCreateOpen(true);
               }}
               aria-disabled={!canManageRoles}
@@ -642,10 +639,7 @@ export default function RoleManagement() {
                                 {!protectedRoleCodes.includes(role.code) ? (
                                   <button
                                     onClick={() => {
-                                      if (!canManageRoles) {
-                                        toast.error('You do not have permission to manage roles');
-                                        return;
-                                      }
+                                      if (!canManageRoles) return;
                                       handleEditRole(role);
                                     }}
                                     aria-disabled={!canManageRoles}
@@ -673,10 +667,7 @@ export default function RoleManagement() {
                                 {!role.is_system ? (
                                   <button
                                     onClick={() => {
-                                      if (!canManageRoles) {
-                                        toast.error('You do not have permission to manage roles');
-                                        return;
-                                      }
+                                      if (!canManageRoles) return;
                                       handleDeleteRole(role.id);
                                     }}
                                     aria-disabled={!canManageRoles}
@@ -771,10 +762,7 @@ export default function RoleManagement() {
                           {!protectedRoleCodes.includes(role.code) && (
                             <button
                               onClick={() => {
-                                if (!canManageRoles) {
-                                  toast.error('You do not have permission to manage roles');
-                                  return;
-                                }
+                                if (!canManageRoles) return;
                                 handleEditRole(role);
                               }}
                               aria-disabled={!canManageRoles}
@@ -792,10 +780,7 @@ export default function RoleManagement() {
                           {!role.is_system && (
                             <button
                               onClick={() => {
-                                if (!canManageRoles) {
-                                  toast.error('You do not have permission to manage roles');
-                                  return;
-                                }
+                                if (!canManageRoles) return;
                                 handleDeleteRole(role.id);
                               }}
                               aria-disabled={!canManageRoles}

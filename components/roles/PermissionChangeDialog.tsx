@@ -163,7 +163,8 @@ export function usePermissionChangeDialog() {
     <AppModal
       open={!!opts}
       onCancel={() => close(null)}
-      size={opts?.size ?? 'sm'}
+      // Long lists get the wider popup so tiles sit two per row.
+      size={opts?.size ?? (detailCount > 6 ? 'md' : 'sm')}
       zIndexClass="z-[70]"
       icon={opts?.tone === 'on' ? <ShieldCheck /> : <ShieldAlert />}
       title={opts?.title ?? ''}
@@ -174,9 +175,14 @@ export function usePermissionChangeDialog() {
         <div className="space-y-3 text-sm text-gray-700 dark:text-slate-300">
           <div>{opts.summary}</div>
           {detailCount > 0 && (
+            <p className="text-xs text-gray-500 dark:text-slate-400">
+              All {detailCount} are listed below{detailCount > 6 ? ' — scroll to see every one' : ''}.
+            </p>
+          )}
+          {detailCount > 0 && (
             // Always shown (no expander), grouped section by section, scrolling
             // inside a fixed-height box so long lists never grow the popup.
-            <div className="max-h-72 space-y-4 overflow-y-auto rounded-xl border border-gray-200 dark:border-slate-700 p-3">
+            <div className="max-h-[min(55vh,30rem)] space-y-4 overflow-y-auto rounded-xl border border-gray-200 dark:border-slate-700 p-3">
               {opts.details!.filter((g) => g.codes.length > 0).map((g) => {
                 const bySection = new Map<string, string[]>();
                 g.codes.forEach((code) => {
@@ -185,10 +191,14 @@ export function usePermissionChangeDialog() {
                 });
                 return (
                   <div key={g.heading} className="space-y-2.5">
-                    <p className="text-2xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-500">{g.heading}</p>
+                    <p className="text-2xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-500">
+                      {g.heading} <span className="text-gray-400 dark:text-slate-600">· {g.codes.length}</span>
+                    </p>
                     {Array.from(bySection.entries()).map(([section, codes]) => (
                       <div key={section}>
-                        <p className="mb-1.5 text-xs font-semibold text-gray-800 dark:text-slate-200">{section}</p>
+                        <p className="mb-1.5 text-xs font-semibold text-gray-800 dark:text-slate-200">
+                          {section} <span className="font-normal text-gray-500 dark:text-slate-500">({codes.length})</span>
+                        </p>
                         {/* Same tile look as the Edit User permission grid. */}
                         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                           {codes.map((code) => {
